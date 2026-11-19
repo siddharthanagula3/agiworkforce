@@ -16,6 +16,43 @@ export function isPersonalGrantPlan(
   return ownership?.subscription_source === 'manual' && ownership.billing_owner === 'personal';
 }
 
+export type PlanPeriodEndKind = 'renews' | 'trial' | 'ends' | 'period';
+
+export interface PlanPeriodEndSubject extends VisibleBillingOwnership {
+  status?: string | null;
+  cancel_at_period_end?: boolean;
+}
+
+const RENEWING_BILLING_SOURCES: ReadonlySet<MeSubscriptionSource> = new Set([
+  'stripe',
+  'apple',
+  'google',
+]);
+
+/**
+ * A plan granted without a purchase carries a period end that nothing
+ * enforces, so it gets no renewal or end date unless it is set to end.
+ */
+export function planPeriodEndKind(
+  subject: PlanPeriodEndSubject | null | undefined,
+  options: { endingSoon?: boolean } = {},
+): PlanPeriodEndKind | null {
+  if (!subject) return null;
+  const status = (subject.status ?? '').trim().toLowerCase();
+  const endingSoon = options.endingSoon ?? subject.cancel_at_period_end === true;
+  const source = subject.subscription_source;
+  if (source === 'manual') {
+    if (endingSoon) return 'ends';
+    return status === 'trialing' ? 'trial' : null;
+  }
+  if (endingSoon || status === 'canceled' || status === 'cancelled') return 'ends';
+  if (status === 'trialing') return 'trial';
+  if (status === 'active' && source !== undefined && RENEWING_BILLING_SOURCES.has(source)) {
+    return 'renews';
+  }
+  return 'period';
+}
+
 export function billingOwnerPlanChangeMessage(
   ownership: VisibleBillingOwnership | null | undefined,
 ): string {

@@ -1,3 +1,4 @@
+import { MAX_CHAT_ATTACHMENT_BYTES } from '@agiworkforce/cloud-contracts';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FolderCandidate } from '../folderCandidates';
 import { readFolderFiles } from '../readFolderFiles';
@@ -129,7 +130,7 @@ describe('readFolderFiles', () => {
   });
 
   it('drops a file that grew beyond the upload limit after discovery', async () => {
-    invokeMock.mockResolvedValue(new Uint8Array(12 * 1024 * 1024 + 1));
+    invokeMock.mockResolvedValue(new Uint8Array(MAX_CHAT_ATTACHMENT_BYTES + 1));
 
     const approved = await readCandidates([candidate({ relativePath: 'grew.bin' })]);
 

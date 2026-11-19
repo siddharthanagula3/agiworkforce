@@ -1,6 +1,10 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { getRoutingSlotModel } from '@agiworkforce/types';
+import {
+  classifyManagedQuotaErrorCode,
+  getRoutingSlotModel,
+  type ManagedQuotaBlockPresentation,
+} from '@agiworkforce/types';
 import { isSupportedLanguage } from '@agiworkforce/i18n';
 import type { RequestAuthority } from '@/lib/identity/request-authority';
 
@@ -14,6 +18,7 @@ const RECORDER_TIMESLICE_MS = 100;
 const LOCALE_SUBTAG_SEPARATOR = '-';
 
 export type VoiceInputMode = 'idle' | 'listening' | 'transcribing' | 'error';
+export type AllowanceRefusal = 'plan' | 'organization';
 
 export interface VoiceInputState {
   mode: VoiceInputMode;
@@ -23,6 +28,7 @@ export interface VoiceInputState {
   microphoneId: string;
   captureStream: MediaStream | null;
   canRetryTranscription: boolean;
+  allowanceRefusal: AllowanceRefusal | null;
 }
 
 interface VoiceInputActions {
@@ -95,6 +101,7 @@ const HTTP_TOO_MANY_REQUESTS = 429;
 const HTTP_SERVER_ERROR = 500;
 
 const VOICE_ALLOWANCE_USED_CODE = 'voice_minutes_monthly_limit_reached';
+const ORGANIZATION_SPEND_CAP_CODE = 'organization_spend_cap_reached';
 
 class TranscriptionError extends Error {
   constructor(
@@ -115,29 +122,64 @@ async function readTranscriptionErrorCode(response: Response): Promise<string | 
   }
 }
 
-function transcriptionErrorMessage(error: unknown): string {
-  if (error instanceof TranscriptionError) {
-    if (error.status === HTTP_UNAUTHORIZED || error.status === HTTP_FORBIDDEN) {
-      return 'Sign in again to use voice input. Your recording was not saved.';
-    }
-    if (error.status === HTTP_PAYMENT_REQUIRED) {
-      return 'Voice input needs an active plan. Nothing was charged for this recording.';
-    }
-    if (error.status === HTTP_PAYLOAD_TOO_LARGE) {
-      return 'That recording was too long to transcribe. Try a shorter one.';
-    }
-    if (error.code === VOICE_ALLOWANCE_USED_CODE) {
-      return 'This month’s voice minutes are used up. Upgrade for more, or type instead.';
-    }
-    if (error.status === HTTP_TOO_MANY_REQUESTS) {
-      return 'Too many recordings just now. Wait a moment, then try again.';
-    }
-    if (error.status >= HTTP_SERVER_ERROR) {
-      return 'Transcription is unavailable right now. Your recording was not saved. Try again shortly.';
-    }
-    return 'That recording could not be transcribed. Try again, or type instead.';
+const PLAN_REQUIRED_MESSAGE =
+  'Voice input needs an active plan. Nothing was charged for this recording.';
+const VOICE_MINUTES_USED_MESSAGE = 'This month’s voice minutes are used up. Type instead.';
+const USAGE_LIMIT_MESSAGE = 'You’ve reached your usage limit. Type instead, or try again later.';
+const ORGANIZATION_LIMIT_MESSAGE = 'Your organization has reached its usage limit. Type instead.';
+const PLAN_CAPABILITY_FEATURES: ReadonlySet<ManagedQuotaBlockPresentation['feature']> = new Set([
+  'model_access',
+  'paid_capability',
+]);
+
+interface TranscriptionFailure {
+  message: string;
+  allowanceRefusal: AllowanceRefusal | null;
+}
+
+function retryable(message: string): TranscriptionFailure {
+  return { message, allowanceRefusal: null };
+}
+
+function refusedByPlan(message: string): TranscriptionFailure {
+  return { message, allowanceRefusal: 'plan' };
+}
+
+function allowanceBlock(error: TranscriptionError): ManagedQuotaBlockPresentation | null {
+  const block = classifyManagedQuotaErrorCode(error.code);
+  return block && block.kind !== 'rate_limit' ? block : null;
+}
+
+function describeTranscriptionFailure(error: unknown): TranscriptionFailure {
+  if (!(error instanceof TranscriptionError)) {
+    return retryable('Could not reach transcription. Check your connection and try again.');
   }
-  return 'Could not reach transcription. Check your connection and try again.';
+  if (error.status === HTTP_UNAUTHORIZED || error.status === HTTP_FORBIDDEN) {
+    return retryable('Sign in again to use voice input. Your recording was not saved.');
+  }
+  if (error.code === VOICE_ALLOWANCE_USED_CODE) return refusedByPlan(VOICE_MINUTES_USED_MESSAGE);
+  if (error.code === ORGANIZATION_SPEND_CAP_CODE) {
+    return { message: ORGANIZATION_LIMIT_MESSAGE, allowanceRefusal: 'organization' };
+  }
+  const block = allowanceBlock(error);
+  if (block) {
+    return refusedByPlan(
+      PLAN_CAPABILITY_FEATURES.has(block.feature) ? PLAN_REQUIRED_MESSAGE : USAGE_LIMIT_MESSAGE,
+    );
+  }
+  if (error.status === HTTP_PAYMENT_REQUIRED) return refusedByPlan(PLAN_REQUIRED_MESSAGE);
+  if (error.status === HTTP_PAYLOAD_TOO_LARGE) {
+    return retryable('That recording was too long to transcribe. Try a shorter one.');
+  }
+  if (error.status === HTTP_TOO_MANY_REQUESTS) {
+    return retryable('Too many recordings just now. Wait a moment, then try again.');
+  }
+  if (error.status >= HTTP_SERVER_ERROR) {
+    return retryable(
+      'Transcription is unavailable right now. Your recording was not saved. Try again shortly.',
+    );
+  }
+  return retryable('That recording could not be transcribed. Try again, or type instead.');
 }
 
 function getBestMimeType(): string {
@@ -213,6 +255,7 @@ export const useVoiceInputStore = create<VoiceInputState & VoiceInputActions>()(
       microphoneId: '',
       captureStream: null,
       canRetryTranscription: false,
+      allowanceRefusal: null,
 
       startListening: async (owner) => {
         if (!owner.isCurrent()) return;
@@ -225,7 +268,13 @@ export const useVoiceInputStore = create<VoiceInputState & VoiceInputActions>()(
         const { microphoneId } = get();
         rt.failedRecording = null;
 
-        set({ mode: 'listening', error: null, transcript: '', canRetryTranscription: false });
+        set({
+          mode: 'listening',
+          error: null,
+          transcript: '',
+          canRetryTranscription: false,
+          allowanceRefusal: null,
+        });
 
         try {
           const stream = await navigator.mediaDevices.getUserMedia({
@@ -321,11 +370,14 @@ export const useVoiceInputStore = create<VoiceInputState & VoiceInputActions>()(
           set({ transcript: text, mode: 'idle' });
         } catch (err) {
           if (generation !== rt.generation || rt.owner !== owner || !owner.isCurrent()) return;
-          rt.failedRecording = blob;
+          const failure = describeTranscriptionFailure(err);
+          const refused = failure.allowanceRefusal !== null;
+          rt.failedRecording = refused ? null : blob;
           set({
             mode: 'error',
-            error: transcriptionErrorMessage(err),
-            canRetryTranscription: true,
+            error: failure.message,
+            canRetryTranscription: !refused,
+            allowanceRefusal: failure.allowanceRefusal,
           });
         }
       },
@@ -347,10 +399,14 @@ export const useVoiceInputStore = create<VoiceInputState & VoiceInputActions>()(
           set({ transcript: text, mode: 'idle', canRetryTranscription: false });
         } catch (err) {
           if (generation !== rt.generation || rt.owner !== owner || !owner.isCurrent()) return;
+          const failure = describeTranscriptionFailure(err);
+          const refused = failure.allowanceRefusal !== null;
+          if (refused) rt.failedRecording = null;
           set({
             mode: 'error',
-            error: transcriptionErrorMessage(err),
-            canRetryTranscription: true,
+            error: failure.message,
+            canRetryTranscription: !refused,
+            allowanceRefusal: failure.allowanceRefusal,
           });
         }
       },
@@ -362,7 +418,9 @@ export const useVoiceInputStore = create<VoiceInputState & VoiceInputActions>()(
         rt.generation += 1;
         previous?.retire();
         rt.failedRecording = null;
-        if (get().canRetryTranscription) set({ canRetryTranscription: false });
+        if (get().canRetryTranscription || get().allowanceRefusal !== null) {
+          set({ canRetryTranscription: false, allowanceRefusal: null });
+        }
         releaseCapture();
         set({ mode: 'idle', transcript: '', error: null, captureStream: null });
       },

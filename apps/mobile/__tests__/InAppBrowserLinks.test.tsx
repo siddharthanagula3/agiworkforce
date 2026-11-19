@@ -145,6 +145,7 @@ describe('CollapsibleSources citations route through the in-app browser', () => 
       />,
     );
 
+    fireEvent.press(screen.getByLabelText('View 1 source'));
     fireEvent.press(screen.getByLabelText('Source 1: An article'));
 
     expect(mockOpenBrowserAsync).toHaveBeenCalledWith(
@@ -159,6 +160,7 @@ describe('CollapsibleSources citations route through the in-app browser', () => 
       <CollapsibleSources sources={[{ url: 'javascript:alert(1)', title: 'Bad' }]} />,
     );
 
+    fireEvent.press(screen.getByLabelText('View 1 source'));
     fireEvent.press(screen.getByLabelText('Source 1: Bad'));
 
     expect(mockOpenBrowserAsync).not.toHaveBeenCalled();

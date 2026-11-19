@@ -10,6 +10,8 @@ export interface MobileArtifact {
   language?: string;
   content: string;
   ageLabel: string;
+  createdAt?: string;
+  editedAt?: string;
   sourceLabel: string;
   accentColor: string;
   previewLines: string[];

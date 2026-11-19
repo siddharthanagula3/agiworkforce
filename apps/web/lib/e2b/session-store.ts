@@ -7,6 +7,7 @@ import type {
 import { logger } from '@/lib/logger';
 import { secureToken } from '@/lib/secure-random';
 import { getKeyValueStore } from '@/lib/server/key-value';
+import type { StagedStorageRecord } from '@/lib/e2b/types';
 import type { CloudCodeNetworkAccess } from '@agiworkforce/types';
 
 export interface StoredContext {
@@ -26,6 +27,8 @@ export interface E2BSession {
   computeMicrousdPerSecond?: number;
   /** The credit reservation this sandbox's seconds are settled against. */
   computeReservation?: SandboxComputeReservationRecord;
+  /** Large chat files already streamed into this sandbox, by asset id. */
+  stagedStorage?: StagedStorageRecord;
 }
 
 export interface E2BSessionScope {

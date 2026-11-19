@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-11-11
+Last updated: 2026-11-15
 
 ## Monorepo Shape
 
@@ -147,6 +147,106 @@ Generated files need:
 - TTL/retention metadata,
 - preview derivative,
 - deletion behavior.
+
+## Chat File Uploads
+
+A chat file of 25 MiB or less (`maxBytes` in
+`packages/contracts/cloud-contracts/src/chat-attachment-policy.json`) goes
+inline into the turn, as every compiled client expects. A larger file, up to
+`largeFiles.maxBytes` (500 MiB), takes a separate path built for the web and
+the shared upload client. On 2026-11-15 `CHAT_LARGE_FILES_ENABLED` is unset
+everywhere, migration 0422 is unapplied (`appliedThrough` 421) and no scanner
+speaks protocol 2, so no client is offered a large file. The phone keeps 25 MiB in mobile 0.0.1.
+
+**Who is offered it.** `readChatLargeFileReadiness`
+(`apps/web/lib/server/chat-file-intake/readiness.ts`) answers ready only when
+each check passes, in order: `CHAT_LARGE_FILES_ENABLED` is `on` (an
+environment variable, not a row in the rollout flag store); the plan's
+`maxChatFileBytes` is above the inline limit; the caller can send parts
+straight to storage (`storageReachableForLargeFiles` in
+`apps/web/lib/server/upload-transport.ts`); 0422 is present; and the scanner
+answers `/v2/capability` with protocol 2, cached for 60 s per instance and in
+the shared key-value store. With the flag unset it makes no query and no
+fetch. `/api/me` publishes the larger limits only to a client that sends
+`large-chat-files-v1` in `x-agi-client-capabilities`; the web sends it from
+`apps/web/shared/services/me-request.ts`.
+
+**The intake.** One row per large file in `chat_file_intakes`, moved through
+`awaiting_parts`, `uploaded`, `inspecting`, `scanning`, `sealing` and
+`sealed` (or `rejected`, `failed`, `cancelled`) by compare-and-set
+transitions with leases (`apps/web/lib/server/chat-file-intake/`):
+
+1. The client hashes the file with an incremental SHA-256, then creates it
+   (`POST /api/files/uploads`, kind `chat-large-file`). Create charges the
+   daily large-file byte budget, then runs one transaction under a per-user
+   advisory lock: it inserts the row, then checks the in-flight count against
+   the plan's `maxConcurrentChatFileIntakes` and the storage left. A refusal
+   rolls back, aborts the multipart upload and refunds.
+2. The client sends parts (8 MiB for a file above 100 MiB, otherwise 5 MiB)
+   straight to private storage on presigned URLs; the server never relays a large file's part.
+3. Complete answers `202` with the intake id, and a Vercel Workflow run
+   inspects the first 256,000 bytes, asks the scanner to fetch and scan the
+   object (`/v2/scans` in `services/upload-scanner`, within an hourly source
+   byte budget), and seals: a conditional copy to the sealed key and a
+   `media_assets` row inserted with `scanned_sha256` by
+   `insertScannedChatFileMediaAsset`. The 0422 insert trigger refuses a chat
+   file above 25 MiB whose `scanned_sha256` is missing or differs from its
+   content hash, and the sandbox reads a large file's storage key only
+   through `listScannedChatFileAssets` in
+   `apps/web/lib/server/media-assets.ts`, which checks the same equality.
+4. The client polls the intake until it is ready or refused. A cancel before
+   the `202` ends the row `cancelled: client` and refunds the bytes not yet
+   stored.
+
+The cron `sweep-chat-file-intakes` runs every 5 minutes whenever 0422 is
+present, with the flag on or off: it re-dispatches rows past their lease,
+cancels uploads idle for 2 hours, fails rows with no progress for 24 hours,
+purges their objects and deletes orphaned preparations.
+
+**In a turn.** A sealed file is prepared once into text by kind
+(`apps/web/lib/server/chat-file-preparation/`) and a keyword index. A turn
+that holds one gets a card per file, excerpts within a per-turn ledger of file
+tokens, and the `open_file` and `search_files` tools. Each provider call of
+the turn, research calls included, is a step of that ledger, and the ledger
+and the file tools survive an approval checkpoint. Code execution stages the
+file into the sandbox from storage on demand, up to 1 GiB per sandbox. Hydration
+decides inline or prepared from the stored `byte_size`, so a build that holds
+this path reads a large file correctly even with the flag off.
+
+**Downloads.** `GET /api/files/:id` answers `302` to a 300-second presigned
+GET, typed `application/octet-stream`, only for the owner's sealed large chat
+file and only for a browser navigation without `Sec-Purpose` or a request with
+the capability token. Every other read above 30 MiB keeps the `413`, so a
+client that reads a download whole into memory is never sent one.
+
+**Rollback and degradation.** The first web deploy that holds this path is the
+rollback floor: `scripts/release/rollback.mjs` refuses an older target once
+`scripts/config/rollback-floor.json` names it (it holds `{"web": null}` until
+then). Without 0422 every route and reader behaves as before it. With the
+flag off no large create is admitted while sealed files keep the prepared
+path. An older scanner without `/v2/capability` stops the web offering large
+files within 60 s. Open gaps are rows in `audit/registers/known-flaws.md`.
+
+## Stored Assistant Text
+
+Provider citation markup is cleaned from stored assistant text when it is
+read, not only when it streams. `withoutStoredCitationMarkup` in
+`apps/web/lib/server/stored-assistant-text.ts`, over `stripCitationMarkup`
+from `packages/ai/provider-protocol`, is applied by the conversation,
+message, sync, search and share routes, the organisation shared-session
+service and the resume floor in `assistant-turn-persistence.ts`. The share
+route compares and publishes the cleaned text. A continuation rewrites the
+stored row to its cleaned form when it is admitted, keeping the same
+revision (`assistant-content-edits.ts`). The fence-edit route applies an edit
+to the cleaned text, so a client whose copy of the block still holds markup
+is refused as a changed block until it reopens the chat.
+
+Tool call ids are unique within a turn. The tool loop reserves every id
+already used in the turn's messages and gives a repeated id a fresh one, used
+everywhere the call appears. A durable research run carries its own ids
+across a hand-off in the checkpoint's optional `toolCallIds`; a checkpoint
+without the field still parses, and the strict schema means a build older
+than the field cannot resume one that has it.
 
 ## Enterprise Control Plane
 

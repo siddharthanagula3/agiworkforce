@@ -63,6 +63,8 @@ vi.mock('@/lib/server/object-storage-runtime', () => ({
 }));
 
 import { logger } from '@/lib/logger';
+import { relaySegmentKey } from '@/app/api/files/uploads/relay-segments';
+import { RESUMABLE_UPLOAD_SESSION_TTL_MS } from '@/app/api/files/uploads/resumable-upload';
 import { GET } from '../route';
 
 const DAY_MS = 24 * 60 * 60 * 1_000;
@@ -167,6 +169,82 @@ describe('purge-deleted-media feedback screenshot sweep', () => {
     expect(logger.error).toHaveBeenCalledWith(
       { error: 'relation does not exist' },
       'Abandoned feedback screenshot sweep failed',
+    );
+  });
+});
+
+describe('purge-deleted-media abandoned relay segment sweep', () => {
+  const upload = { userId: 'user-1', organizationId: null, uploadId: 'upload-1' };
+  const abandoned = relaySegmentKey(upload, 1, 0);
+  const inFlight = relaySegmentKey({ ...upload, uploadId: 'upload-2' }, 1, 0);
+  const attachment = 'chat-attachments/user-1/1_report.pdf';
+
+  async function storeSegment(key: string, writtenAtMs: number): Promise<void> {
+    mocks.store.clock.now = writtenAtMs;
+    await mocks.store.current?.put({
+      bucket: 'agi-private',
+      key,
+      body: new Uint8Array([1]),
+      contentType: 'application/octet-stream',
+    });
+  }
+
+  it('removes a segment older than an upload session and keeps one an upload can still join', async () => {
+    const now = Date.now();
+    await storeSegment(abandoned, now - RESUMABLE_UPLOAD_SESSION_TTL_MS - 1);
+    await storeSegment(attachment, now - 3 * RESUMABLE_UPLOAD_SESSION_TTL_MS);
+    await storeSegment(inFlight, now - RESUMABLE_UPLOAD_SESSION_TTL_MS + 60_000);
+    mocks.store.clock.now = now;
+
+    const body = await (await GET(request())).json();
+
+    expect(body.relaySegments).toEqual({ supported: true, listed: 2, deleted: 1, failed: 0 });
+    expect(await mocks.store.current?.head('agi-private', abandoned)).toBeNull();
+    expect(await mocks.store.current?.head('agi-private', inFlight)).not.toBeNull();
+    expect(await mocks.store.current?.head('agi-private', attachment)).not.toBeNull();
+  });
+
+  it('lists past segments an upload can still join to reach abandoned ones that sort after them', async () => {
+    const now = Date.now();
+    const young = Array.from({ length: 1_200 }, (_, index) =>
+      relaySegmentKey(
+        { userId: 'user-0', organizationId: null, uploadId: `upload-${index}` },
+        1,
+        0,
+      ),
+    );
+    for (const key of young) await storeSegment(key, now - 60_000);
+    await storeSegment(abandoned, now - RESUMABLE_UPLOAD_SESSION_TTL_MS - 1);
+    mocks.store.clock.now = now;
+    const listObjects = vi.spyOn(mocks.store.current!, 'listObjects');
+
+    const body = await (await GET(request())).json();
+
+    expect(young.every((key) => key < abandoned)).toBe(true);
+    expect(body.relaySegments).toEqual({
+      supported: true,
+      listed: young.length + 1,
+      deleted: 1,
+      failed: 0,
+    });
+    expect(await mocks.store.current?.head('agi-private', abandoned)).toBeNull();
+    for (const [bucket, prefix, limit] of listObjects.mock.calls) {
+      expect([bucket, prefix]).toEqual(['agi-private', 'relay-segments/']);
+      expect(limit).toBeGreaterThan(0);
+    }
+    expect(listObjects.mock.calls.length).toBeGreaterThan(1);
+  });
+
+  it('still purges deleted media when the segment listing fails', async () => {
+    vi.spyOn(mocks.store.current!, 'listObjects').mockRejectedValue(new Error('storage down'));
+
+    const response = await GET(request());
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ relaySegments: null });
+    expect(logger.error).toHaveBeenCalledWith(
+      { error: 'storage down' },
+      'Abandoned relay segment sweep failed',
     );
   });
 });

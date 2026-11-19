@@ -21,7 +21,8 @@ vi.mock('@agiworkforce/compliance', async (importOriginal) => {
   };
 });
 
-import { freeModelRefusedInRegion, resolveWebCloudModelRoute } from './request-processor';
+import { freeModelRefusedInRegion } from './request-processor';
+import { resolveWebCloudModelRoute } from '@/lib/server/managed-cloud-routing/routing-request';
 
 const FREE_TIER = 'free';
 const TASK_TYPES = [

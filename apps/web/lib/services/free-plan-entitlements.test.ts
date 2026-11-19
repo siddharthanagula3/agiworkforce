@@ -15,10 +15,10 @@ import {
 
 describe('managed cloud resource entitlements', () => {
   it.each([
-    ['free', 1, 0],
-    ['basic', 5, 5],
-    ['pro', 25, 25],
-    ['team', 25, 25],
+    ['free', 5, 0],
+    ['basic', null, 5],
+    ['pro', null, 25],
+    ['team', null, 25],
     ['max', null, null],
     ['max_15x', null, null],
     ['enterprise', null, null],
@@ -41,8 +41,11 @@ describe('managed cloud resource entitlements', () => {
   );
 
   it('builds plan-specific, user-safe limit messages', () => {
+    expect(getProjectLimitErrorMessage('free')).toBe(
+      'Your Free plan includes 5 project folders. Upgrade your plan to add more, or delete an existing folder to make room.',
+    );
     expect(getProjectLimitErrorMessage('basic')).toBe(
-      'Your Basic plan includes 5 project folders. Upgrade your plan to add more, or delete an existing folder to make room.',
+      'Basic accounts have no Project limit from your plan. This request hit an account-level limit; contact support if it persists.',
     );
     expect(getCustomRemoteMcpLimitErrorMessage('team')).toBe(
       'Team accounts can add up to 25 custom connectors. Remove one or upgrade to add another.',
@@ -61,9 +64,9 @@ describe('managed cloud resource entitlements', () => {
 
   describe('file storage quota', () => {
     it.each([
-      ['free', 100 * 1024 ** 2],
-      ['basic', 1024 ** 3],
-      ['pro', 10 * 1024 ** 3],
+      ['free', 500 * 1024 ** 2],
+      ['basic', 4 * 1024 ** 3],
+      ['pro', 20 * 1024 ** 3],
       ['team', 25 * 1024 ** 3],
     ] as const)('caps %s at a finite byte allowance', (plan, expected) => {
       expect(getFileStorageLimitBytes(plan)).toBe(expected);

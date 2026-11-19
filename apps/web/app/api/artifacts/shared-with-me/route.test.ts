@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+import {
+  ARTIFACTS_SHARED_WITH_ME_PATH,
+  ArtifactsSharedWithMeResponseSchema,
+  artifactsSharedWithMePath,
+} from '@agiworkforce/cloud-contracts';
 import { createError } from '@/lib/errors';
 import { encodeKeysetCursor } from '@/lib/identity/pagination';
 
@@ -132,6 +137,51 @@ describe('GET /api/artifacts/shared-with-me', () => {
     expect(serialized).not.toContain('owner@example.com');
     expect(serialized).not.toContain('owner-1');
     expect(serialized).not.toContain(ARTIFACT_ID.slice(0, -2));
+  });
+
+  it('answers in the shared contract shape the phone and web parse', async () => {
+    mocks.getUser.mockResolvedValueOnce(verifiedUser());
+    mocks.query.mockResolvedValueOnce([sharedRow(1), sharedRow(2), sharedRow(3)]);
+    const shared = ArtifactsSharedWithMeResponseSchema.parse(
+      await (await GET(request('?limit=2'))).json(),
+    );
+    expect(shared.items.map((item) => item.title)).toEqual(['Shared 1', 'Shared 2']);
+    expect(shared.hasMore).toBe(true);
+    expect(shared.emailVerified).toBe(true);
+    expect(shared.nextCursor).toEqual(expect.any(String));
+
+    mocks.getUser.mockResolvedValueOnce({
+      id: 'viewer-1',
+      primaryEmail: 'viewer@example.com',
+      primaryEmailVerification: 'unverified',
+    });
+    const unverified = ArtifactsSharedWithMeResponseSchema.parse(
+      await (await GET(request())).json(),
+    );
+    expect(unverified).toEqual({
+      items: [],
+      hasMore: false,
+      nextCursor: null,
+      emailVerified: false,
+    });
+  });
+
+  it('serves the path the shared contract builds for the next page', async () => {
+    mocks.getUser.mockResolvedValue(verifiedUser());
+    mocks.query.mockResolvedValueOnce([sharedRow(1), sharedRow(2)]);
+    const first = ArtifactsSharedWithMeResponseSchema.parse(
+      await (await GET(request('?limit=1'))).json(),
+    );
+    const nextPath = artifactsSharedWithMePath(first.nextCursor);
+    expect(nextPath.startsWith(ARTIFACTS_SHARED_WITH_ME_PATH)).toBe(true);
+
+    mocks.query.mockResolvedValueOnce([sharedRow(2)]);
+    const second = await GET(
+      new NextRequest(`http://localhost${nextPath}&limit=1`, { method: 'GET' }),
+    );
+    expect(second.status).toBe(200);
+    const [, params] = mocks.query.mock.calls[1] as [string, unknown[]];
+    expect(params.slice(3)).toEqual([sharedRow(1).page_sort_key, sharedRow(1).id]);
   });
 
   it('pages with a keyset cursor', async () => {

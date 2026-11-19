@@ -335,6 +335,31 @@ const ALLOWLIST = [
       'signing salt of that connector trigger, which the route uses only to verify the ' +
       'signature before anything about the trigger or its owner is touched',
   },
+  {
+    match: /lib\/server\/chat-file-intake\/store\.ts$/,
+    tables: ['chat_file_intakes'],
+    functions: [
+      'listIdleAwaitingPartsIntakes',
+      'listStalledIntakes',
+      'listUnpurgedTerminalIntakes',
+      'listPrunableUnsealedSealingIntakes',
+      'pruneTerminalIntakes',
+    ],
+    reason:
+      "the intake sweeper's fleet sweeps: the idle, stalled and unpurged listings and the prune " +
+      'of ended rows past retention run for every owner at once from the cron, with no caller to ' +
+      'constrain by. Every statement that later acts on a listed row goes through a store bound ' +
+      'to the user id that row names, and the prune deletes only ended rows whose objects are gone.',
+  },
+  {
+    match: /lib\/server\/chat-file-preparation\/progress-store\.ts$/,
+    tables: ['chat_file_preparations'],
+    functions: ['failStalledPreparations'],
+    reason:
+      'the intake sweeper ends preparations whose cursor has not moved within the stall window ' +
+      'as a fleet sweep, whoever owns them, with no caller to constrain by. Every statement ' +
+      'that acts on a row after the orphan listing carries the owner the listing returned.',
+  },
   { match: /api\/admin\//, reason: 'platform-admin routes are deliberately cross-user' },
   { match: /api\/health/, reason: 'health probe touches no user data' },
   { match: /api\/releases/, reason: 'release metadata is global, not user-owned' },

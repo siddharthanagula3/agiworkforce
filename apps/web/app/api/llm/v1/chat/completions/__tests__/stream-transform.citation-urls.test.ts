@@ -29,7 +29,6 @@ vi.mock('@/lib/services/llm-cost-calculator', () => ({
   resolveCacheRates: vi.fn(() => ({ read: 0, write5m: 0, write1h: 0 })),
 }));
 vi.mock('@/lib/cost-tracker', () => ({
-  recordModelUsage: vi.fn(),
   toOtelAttributes: vi.fn(() => ({})),
 }));
 vi.mock('@/lib/services/free-trial-service', () => ({
@@ -50,6 +49,7 @@ vi.mock('@/lib/services/free-trial-service', () => ({
 
 const persistence = vi.hoisted(() => ({
   TRUNCATED_ASSISTANT_TURN_REASON: 'stream_cancelled',
+  wireFinishReason: vi.fn(() => null),
   canPersistAssistantTurn: vi.fn(() => true),
   persistAssistantTurn: vi.fn(async () => undefined),
   patchAssistantTurnSourceUrls: vi.fn(async (_params: unknown) => undefined),

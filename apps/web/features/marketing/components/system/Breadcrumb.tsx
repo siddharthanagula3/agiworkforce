@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { PageLink } from '@shared/components/layout/EmbeddedPage';
 
 export interface BreadcrumbItem {
   label: string;
@@ -16,9 +16,9 @@ export function Breadcrumb({ items }: { items: readonly BreadcrumbItem[] }) {
             aria-current={index === lastIndex ? 'page' : undefined}
           >
             {item.href && index !== lastIndex ? (
-              <Link href={item.href} className="agi-ds-crumb-link">
+              <PageLink href={item.href} className="agi-ds-crumb-link">
                 {item.label}
-              </Link>
+              </PageLink>
             ) : (
               <span className="agi-ds-crumb-text">{item.label}</span>
             )}

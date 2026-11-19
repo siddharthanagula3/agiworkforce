@@ -67,6 +67,18 @@ vi.mock('@/app/api/settings/team/team-admin-access', async () => ({
   requireTeamAdminAccess: vi.fn().mockResolvedValue({ maxMembers: null }),
 }));
 
+vi.mock('@/lib/services/entitlement-resolution', async () => {
+  const types = await vi.importActual<TypesModule>('@agiworkforce/types');
+  return {
+    ...(await vi.importActual<EntitlementResolutionModule>(
+      '@/lib/services/entitlement-resolution',
+    )),
+    resolveEntitledPlanTier: vi.fn(
+      async () => types.billingPlanCapabilityWireTiers('managed_api')[0],
+    ),
+  };
+});
+
 process.env['CSRF_SECRET'] = 'audit-trail-step-up-secret-long-enough';
 
 import { NextRequest } from 'next/server';
@@ -84,6 +96,8 @@ type CsrfModule = typeof import('@/lib/csrf');
 type ApiAuthModule = typeof import('@/lib/api-auth');
 type RlsDbModule = typeof import('@/lib/server/rls-db');
 type ApiKeyServiceModule = typeof import('@/lib/services/api-key-service');
+type EntitlementResolutionModule = typeof import('@/lib/services/entitlement-resolution');
+type TypesModule = typeof import('@agiworkforce/types');
 type TeamAdminAccessModule = typeof import('@/app/api/settings/team/team-admin-access');
 
 const SECURITY_LOG_INSERT = /INSERT INTO security_audit_logs/i;
@@ -471,6 +485,7 @@ describe('PATCH /api/settings/team/[memberId] writes member_role_changed', () =>
             organization_id: organizationId,
             user_id: calls === 1 ? 'user_admin' : 'user_target',
             role: calls === 1 ? 'owner' : 'member',
+            status: 'active',
             provisioning_source: 'manual',
             provisioned_at: null,
             joined_at: '2026-01-01T00:00:00Z',

@@ -5,6 +5,7 @@ import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 import { computeContextBudget } from '@/src/features/memory/services/contextBudgeter';
 import type { ChatMessage } from '@/types/chat';
 import { ContextDetailsSheet } from './ContextDetailsSheet';
@@ -30,60 +31,72 @@ export function ContextWarningChip({
     <>
       <View
         style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          paddingHorizontal: 12,
-          paddingVertical: 7,
           backgroundColor: colors.warningSurface,
           borderTopWidth: 1,
           borderTopColor: colors.warningBorder,
-          gap: 8,
         }}
         accessibilityRole="alert"
         accessibilityLabel="Context warning"
       >
-        <Pressable
-          onPress={() => setDetailsOpen(true)}
-          accessibilityRole="button"
-          accessibilityLabel="Chat is getting long. View what is in context"
-          testID="context-warning-details"
-          style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, minHeight: 32 }}
+        <View
+          testID="context-warning-chip.content"
+          style={{
+            ...contentColumn('reading'),
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            paddingHorizontal: 12,
+            paddingVertical: 7,
+            gap: 8,
+          }}
         >
-          <AlertTriangle size={13} color={colors.agentWarning} strokeWidth={2} />
-          <Text
-            style={{
-              fontSize: typeScale.caption,
-              color: colors.agentWarning,
-              fontWeight: '500',
-              flex: 1,
-            }}
-            numberOfLines={1}
-          >
-            Chat is getting long. Start a fresh chat for faster responses.
-          </Text>
-        </Pressable>
-
-        {onStartFreshChat && (
           <Pressable
-            onPress={onStartFreshChat}
-            style={{
-              paddingHorizontal: 10,
-              paddingVertical: 3,
-              borderRadius: 12,
-              borderWidth: 1,
-              borderColor: colors.warningBorder,
-            }}
+            onPress={() => setDetailsOpen(true)}
             accessibilityRole="button"
-            accessibilityLabel="Start fresh chat"
+            accessibilityLabel="Chat is getting long. View what is in context"
+            testID="context-warning-details"
+            hitSlop={{ top: 6, bottom: 6 }}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, minHeight: 32 }}
           >
+            <AlertTriangle size={13} color={colors.agentWarning} strokeWidth={2} />
             <Text
-              style={{ fontSize: typeScale.caption, color: colors.agentWarning, fontWeight: '600' }}
+              style={{
+                fontSize: typeScale.caption,
+                color: colors.agentWarning,
+                fontWeight: '500',
+                flex: 1,
+              }}
+              numberOfLines={1}
             >
-              New chat
+              Chat is getting long. Start a fresh chat for faster responses.
             </Text>
           </Pressable>
-        )}
+
+          {onStartFreshChat && (
+            <Pressable
+              onPress={onStartFreshChat}
+              style={{
+                paddingHorizontal: 10,
+                paddingVertical: 3,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: colors.warningBorder,
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Start fresh chat"
+            >
+              <Text
+                style={{
+                  fontSize: typeScale.caption,
+                  color: colors.agentWarning,
+                  fontWeight: '600',
+                }}
+              >
+                New chat
+              </Text>
+            </Pressable>
+          )}
+        </View>
       </View>
       <ContextDetailsSheet
         visible={detailsOpen}

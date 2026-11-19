@@ -76,6 +76,7 @@ import {
   applyToolResultSecretPolicy,
   hasPrivateContext,
   hasUntrustedContext,
+  toolCallIdsIn,
 } from './tool-loop';
 import {
   batchIntroducesUntrustedContent,
@@ -84,6 +85,7 @@ import {
 } from './tool-call-gate';
 import { classifyToolLoopInputs } from './tool-loop-routing';
 import { toolRiskTier } from './tool-metadata';
+import { applyAttachmentTurnStep, cardMarkerOf } from './attachment-turn-budget';
 import { retargetMessagesToModel } from './managed-failover';
 import {
   decisionTimeConnectorLevel,
@@ -96,6 +98,10 @@ import {
   type ToolApprovalPolicy,
 } from '@shared/types/toolApprovalPolicy';
 import { armProviderDeadlines } from './provider-deadlines';
+import {
+  RESEARCH_CHECKPOINT_MAX_TOOL_CALL_ID_LENGTH,
+  RESEARCH_CHECKPOINT_MAX_TOOL_CALL_IDS,
+} from '@/lib/workflows/cloud-agent-workflow-input';
 import {
   PROVIDER_FIRST_TOKEN_DEADLINE_MS,
   PROVIDER_STREAM_DEADLINE_MS,
@@ -158,7 +164,7 @@ import {
   createAgentEventStreamEmitter,
   createPublicTextDeltaProjector,
 } from './agent-event-stream';
-import { displaySourceSnippet } from '@/lib/sources/display-snippet';
+import { displaySourceSnippet } from '@agiworkforce/unified-chat/message-sources';
 
 // ─── Bounds ───────────────────────────────────────────────────────────────────
 
@@ -360,6 +366,7 @@ export interface ResearchLoopCheckpoint {
   lastTurnError: string | null;
   sensitiveSourceAvailable: boolean;
   untrustedContentInContext: boolean;
+  toolCallIds?: string[];
 }
 
 export interface ResearchInvocationLimits {
@@ -1106,11 +1113,37 @@ export function rankResearchResults(
   }));
 }
 
+const RANDOM_TOOL_CALL_ID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/**
+ * The ids only stop a later stream from reusing one, so the list is bounded to
+ * what the checkpoint schema accepts. Random v4 ids go first: no provider
+ * numbering can repeat them. The earliest of the rest are kept, because a
+ * provider that numbers calls per stream reuses its lowest numbers most.
+ */
+export function checkpointToolCallIds(
+  runIds: Iterable<string>,
+  threadIds: ReadonlySet<string>,
+): string[] {
+  const ids = [...runIds].filter(
+    (id) =>
+      id.length > 0 &&
+      id.length <= RESEARCH_CHECKPOINT_MAX_TOOL_CALL_ID_LENGTH &&
+      !threadIds.has(id),
+  );
+  if (ids.length <= RESEARCH_CHECKPOINT_MAX_TOOL_CALL_IDS) return ids;
+  return ids
+    .filter((id) => !RANDOM_TOOL_CALL_ID.test(id))
+    .slice(0, RESEARCH_CHECKPOINT_MAX_TOOL_CALL_IDS);
+}
+
 async function* collectTurn(
   stream: ReadableStream,
   sources: Pick<SourceAggregator, 'add'>,
   forwardContent: boolean,
   queryText: string,
+  takenToolCallIds: ReadonlySet<string>,
   emitPublicText?: (delta: string) => string,
 ): AsyncGenerator<string, TurnResult> {
   const reader = stream.getReader();
@@ -1229,6 +1262,7 @@ async function* collectTurn(
   if (publicTextTail && emitPublicText) yield emitPublicText(publicTextTail);
 
   const toolCalls: ResearchToolCall[] = [];
+  const turnToolCallIds = new Set(takenToolCallIds);
   for (const [, tc] of toolCallAccum) {
     if (!tc.name) continue;
     let args: Record<string, unknown> = {};
@@ -1237,7 +1271,10 @@ async function* collectTurn(
     } catch {
       args = { _raw: tc.argsJson };
     }
-    toolCalls.push({ id: tc.id || crypto.randomUUID(), name: tc.name, args });
+    let id = tc.id || crypto.randomUUID();
+    if (turnToolCallIds.has(id)) id = crypto.randomUUID();
+    turnToolCallIds.add(id);
+    toolCalls.push({ id, name: tc.name, args });
   }
 
   return {
@@ -1406,11 +1443,20 @@ const CHART_DIRECTIVE =
   'Chart only figures the report states and cites, keep their citations in the sentence that introduces the chart,' +
   ' and never estimate or invent a value to complete one. Leave the chart out when the figures are not comparable.';
 
+const REPORT_ONLY_DIRECTIVE =
+  ' Your reply is shown to the person as the report exactly as you write it:' +
+  ' begin with the report itself, and write nothing about how you are writing it,' +
+  ' such as sources you could not match to claims or steps you will not take.';
+
+const ATTACHED_FILES_IN_PART_DIRECTIVE =
+  " Not all of the attached files' text is included above, so say in the report that it is based on part of the attached files.";
+
 function synthesisDirective(
   sources: SourceAggregator,
   cutShortReason: string | null,
   droppedSteps: readonly ResearchStep[] = [],
   deliverable: ResearchDeliverableSpec = DEFAULT_RESEARCH_DELIVERABLE,
+  attachedFilesSentInPart = false,
 ): string {
   const sourceList =
     sources.size > 0 ? `\n\nSources gathered (cite as [n]):\n${sources.toPromptList()}` : '';
@@ -1435,6 +1481,8 @@ function synthesisDirective(
     ' Do not end with a Sources or References list and never paste a raw URL into the report:' +
     ' the app renders the numbered sources beside the report from the numbers you cite.' +
     ' Do not include the markers or your raw notes in the report.' +
+    REPORT_ONLY_DIRECTIVE +
+    (attachedFilesSentInPart ? ATTACHED_FILES_IN_PART_DIRECTIVE : '') +
     cutShort +
     sourceList +
     dropped
@@ -2082,6 +2130,13 @@ export async function* runResearchLoop(
   const messages: ProcessedRequest['llmRequest']['messages'] = resume
     ? resume.messages.map((message) => ({ ...message }))
     : [...baseRequest.messages];
+  /**
+   * Some providers number tool calls per stream, so a later step can reuse an
+   * id an earlier step already gave to a different call. Clients and the next
+   * request match calls by id, so every id the run has handed out is kept here.
+   */
+  const runToolCallIds = toolCallIdsIn(messages);
+  for (const id of resume?.toolCallIds ?? []) runToolCallIds.add(id);
 
   // §24 File sources. Seeded before planning so the plan already knows what the
   // account holds, and added to the aggregator so the report cites a saved file
@@ -2200,19 +2255,58 @@ export async function* runResearchLoop(
       ) + statusProgress(phase, label),
     );
 
+  const largeFileTurn = processed.largeFileTurn;
+  /**
+   * Every research call resends the thread, attached files included, so each
+   * one is a step of the turn's file ledger. The step processing already built
+   * and charged is sent as is. The step is applied to the thread without the
+   * call's own directives, so the ledger's note of files left out lands on a
+   * user message the thread keeps, and the rewrite is copied back so later
+   * calls start from what the ledger left.
+   */
+  function chargeLargeFileStep(turnMessages: typeof messages): void {
+    if (!largeFileTurn) return;
+    if (largeFileTurn.pendingStepAllowance !== undefined) {
+      delete largeFileTurn.pendingStepAllowance;
+      return;
+    }
+    const thread = turnMessages.slice(0, messages.length);
+    applyAttachmentTurnStep(thread, largeFileTurn);
+    thread.forEach((message, index) => {
+      messages[index] = message;
+      turnMessages[index] = message;
+    });
+  }
+
+  function attachedFilesSentInPart(turnMessages: typeof messages): boolean {
+    if (!largeFileTurn) return false;
+    if (largeFileTurn.readingClosed) return true;
+    return turnMessages.some((message) =>
+      (message.multimodal_content ?? []).some((part) => cardMarkerOf(part)?.partial === true),
+    );
+  }
+
   /** Run one provider turn, forwarding per collectTurn rules. */
   async function* runTurn(
     kind: string,
     turnMessages: typeof messages,
     forwardContent: boolean,
-    turnOptions: { withoutTools?: boolean } = {},
+    turnOptions: { withoutTools?: boolean; closingDirective?: () => string } = {},
   ): AsyncGenerator<Uint8Array, ResearchTurn> {
     // Bound accumulated tool-result history so a long multi-round research run can't
     // overflow the model context window (shared with the main tool loop). In place +
     // message-preserving, so tool_call/result pairing stays valid.
     trimToolResultHistory(turnMessages);
-    // The planning turn must not search: it plans the searches the gathering
-    // rounds then really run, so offering tools would burn search budget here.
+    chargeLargeFileStep(turnMessages);
+    // Built after the charge, which decides how much of the attached files the
+    // directive can say were sent.
+    if (turnOptions.closingDirective) {
+      turnMessages.push({ role: 'user', content: turnOptions.closingDirective() });
+    }
+    // The planning and synthesis turns must not search: planning plans the
+    // searches the gathering rounds then really run, and the synthesis turn's
+    // text is the report itself, so a search or page read there would put the
+    // model's narration of it into the report.
     const stepRequest = turnOptions.withoutTools
       ? { ...baseRequest, tools: undefined, messages: turnMessages }
       : { ...baseRequest, messages: turnMessages };
@@ -2244,6 +2338,7 @@ export async function* runResearchLoop(
     }
     mergeObservedProviderUsage(observedUsage, record.usage);
     if (record.searchEvents > 0) untrustedContentInContext = true;
+    for (const call of record.toolCalls) runToolCallIds.add(call.id);
     const { sourceAdds: _sourceAdds, usage: _usage, ...turn } = record;
     return turn;
   }
@@ -2344,6 +2439,7 @@ export async function* runResearchLoop(
       recordingAggregator(sources, sourceAdds),
       forwardContent,
       userQuery,
+      new Set([...runToolCallIds, ...toolCallIdsIn(stepRequest.messages)]),
       (delta) => eventStream.emit({ type: 'text-delta', delta }),
     );
     try {
@@ -3056,6 +3152,7 @@ export async function* runResearchLoop(
         lastTurnError,
         sensitiveSourceAvailable,
         untrustedContentInContext,
+        toolCallIds: checkpointToolCallIds(runToolCallIds, toolCallIdsIn(messages)),
       });
       handedOff = true;
       return true;
@@ -3339,22 +3436,18 @@ export async function* runResearchLoop(
     yield status('synthesizing', 'Writing report');
     try {
       if (yield* flushCancellationIfRequested()) return;
-      const synthesis = yield* runTurn(
-        'synthesis',
-        [
-          ...messages,
-          {
-            role: 'user',
-            content: synthesisDirective(
-              sources,
-              cutShortReason,
-              plan.filter((step) => step.status === 'dropped'),
-              deliverable,
-            ),
-          },
-        ],
-        true,
-      );
+      const synthesisMessages: typeof messages = [...messages];
+      const synthesis = yield* runTurn('synthesis', synthesisMessages, true, {
+        withoutTools: true,
+        closingDirective: () =>
+          synthesisDirective(
+            sources,
+            cutShortReason,
+            plan.filter((step) => step.status === 'dropped'),
+            deliverable,
+            attachedFilesSentInPart(synthesisMessages),
+          ),
+      });
       if (yield* flushCancellationIfRequested()) return;
       // Empty-synthesis guarantee: a run must NEVER end as a silent empty
       // message (an empty body also skips client persistence, so the whole

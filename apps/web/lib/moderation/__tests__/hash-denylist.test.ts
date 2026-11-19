@@ -92,6 +92,37 @@ describe('matchDenylistedSha256', () => {
   });
 });
 
+describe('matchDenylistedSha256 against matchDenylistedUpload', () => {
+  const OTHER = new TextEncoder().encode('some-other-file');
+
+  it.each([
+    ['nothing configured', undefined, false],
+    ['a labelled entry', `ncmec:${DIGEST}`, true],
+    ['an unlabelled entry', DIGEST, true],
+    ['an uppercase entry among others', `\n${DIGEST.toUpperCase()}\n${'a'.repeat(64)}\n`, true],
+    ['a list that holds only other digests', 'a'.repeat(64), false],
+  ])(
+    'gives the answer of the upload matcher for the same bytes with %s',
+    (_label, list, matchesBytes) => {
+      if (list === undefined) delete process.env['MODERATION_HASH_DENYLIST'];
+      else process.env['MODERATION_HASH_DENYLIST'] = list;
+
+      expect(matchDenylistedSha256(sha256Hex(BYTES)).matched).toBe(matchesBytes);
+      expect(matchDenylistedSha256(sha256Hex(OTHER)).matched).toBe(false);
+      for (const bytes of [BYTES, OTHER]) {
+        expect(matchDenylistedSha256(sha256Hex(bytes))).toEqual(matchDenylistedUpload(bytes));
+      }
+    },
+  );
+
+  it('matches nothing for a value that is not a digest, even when the list is full', () => {
+    process.env['MODERATION_HASH_DENYLIST'] = `ncmec:${DIGEST}`;
+    for (const value of ['', 'not-a-digest', DIGEST.slice(1), `${DIGEST}0`]) {
+      expect(matchDenylistedSha256(value).matched).toBe(false);
+    }
+  });
+});
+
 describe('sha256Hex', () => {
   it('agrees with node crypto', () => {
     expect(sha256Hex(BYTES)).toBe(DIGEST);

@@ -1,7 +1,15 @@
 import { View } from 'react-native';
-import { Brain, LockKeyhole, MessageSquareText, Sparkles } from 'lucide-react-native';
+import {
+  Brain,
+  LockKeyhole,
+  MessageSquareText,
+  Sparkles,
+  TriangleAlert,
+  X,
+} from 'lucide-react-native';
 import { SENSITIVE_MEMORY_SUBJECTS } from '@agiworkforce/context';
 import { Text } from '@/components/ui/Text';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { SettingsGroup, SettingsSwitchRow } from '@/src/features/settings/Common';
 import { HelpArticleLink } from '@/src/features/support/HelpArticleLink';
 import { useThemeColors } from '@/src/ui/theme';
@@ -17,7 +25,10 @@ export interface MemoryControlsCardProps {
   onReferencePastChatsChange: (enabled: boolean) => void;
   onGenerateMemoryFromHistoryChange: (enabled: boolean) => void;
   onIncludeSensitiveTopicsChange: (enabled: boolean) => void;
+  deletionWarning?: { onTryAgain: () => void; onDismiss: () => void } | null;
 }
+
+export const DELETION_WARNING_MESSAGE = "Deletion didn't finish. Some memories may still be saved.";
 
 const SENSITIVE_TOPICS_DESCRIPTION = `Let AGI remember your ${SENSITIVE_MEMORY_SUBJECTS} from chats, not only when you say "Remember that" or add them yourself.`;
 
@@ -31,6 +42,7 @@ export function MemoryControlsCard({
   onReferencePastChatsChange,
   onGenerateMemoryFromHistoryChange,
   onIncludeSensitiveTopicsChange,
+  deletionWarning,
 }: MemoryControlsCardProps) {
   const colors = useThemeColors();
 
@@ -74,7 +86,7 @@ export function MemoryControlsCard({
           label="Generate memory from chat history"
           description="Learn lasting details from chats, except temporary ones."
           icon={Sparkles}
-          value={memoryEnabled && generateMemoryFromHistory}
+          value={generateMemoryFromHistory}
           onValueChange={onGenerateMemoryFromHistoryChange}
           disabled={!memoryEnabled}
         />
@@ -82,11 +94,60 @@ export function MemoryControlsCard({
           label="Include sensitive topics in memory"
           description={SENSITIVE_TOPICS_DESCRIPTION}
           icon={LockKeyhole}
-          value={memoryEnabled && includeSensitiveTopics}
+          value={includeSensitiveTopics}
           onValueChange={onIncludeSensitiveTopicsChange}
           disabled={!memoryEnabled}
-          isLast
+          isLast={!deletionWarning}
         />
+        {deletionWarning ? (
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 10,
+              paddingLeft: 14,
+              borderTopWidth: 1,
+              borderTopColor: colors.border,
+            }}
+          >
+            <TriangleAlert size={18} color={colors.agentError} />
+            <View accessibilityLiveRegion="polite" style={{ flex: 1, minWidth: 0, paddingTop: 10 }}>
+              <Text style={{ color: colors.textPrimary, fontSize: typeScale.footnote }}>
+                {DELETION_WARNING_MESSAGE}
+              </Text>
+              <Pressable
+                onPress={deletionWarning.onTryAgain}
+                accessibilityRole="button"
+                accessibilityLabel="Try again"
+                style={{ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' }}
+              >
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontSize: typeScale.footnote,
+                    fontWeight: '600',
+                  }}
+                >
+                  Try again
+                </Text>
+              </Pressable>
+            </View>
+            <Pressable
+              onPress={deletionWarning.onDismiss}
+              accessibilityRole="button"
+              accessibilityLabel="Dismiss"
+              style={{
+                width: 44,
+                height: 44,
+                alignItems: 'center',
+                justifyContent: 'center',
+                alignSelf: 'flex-start',
+              }}
+            >
+              <X size={18} color={colors.textSecondary} />
+            </Pressable>
+          </View>
+        ) : null}
       </SettingsGroup>
       {/*
         Retention is stated per trust boundary: turning memory off must not read

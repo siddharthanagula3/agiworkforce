@@ -28,16 +28,23 @@ jest.mock('@/src/features/auth/services/cloudAccountSession', () => ({
 }));
 
 jest.mock('@/lib/safeOpenURL', () => ({
-  openUntrustedUrlInAppBrowser: jest.fn().mockResolvedValue(true),
+  openInAppBrowser: jest.fn().mockResolvedValue(true),
 }));
 
 import React from 'react';
 import { Alert } from 'react-native';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';
+import {
+  actionMenuLabels,
+  actionMenuMessage,
+  actionMenuTitle,
+  chooseActionMenuItem,
+} from '@/test-utils/actionMenu';
 import { api } from '@/services/api';
 import { ApiHttpError } from '@/services/apiErrors';
 import { managedCloudProjects } from '@/services/managedCloudProjects';
-import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
+import { openInAppBrowser } from '@/lib/safeOpenURL';
 import { useCloudProjectStore, type CloudProject } from '@/stores/projects/cloudProjectStore';
 import { useCloudMemoryStore, type CloudMemoryEntry } from '@/stores/memory/cloudMemoryStore';
 import {
@@ -49,6 +56,10 @@ import { helpArticleUrl } from '@/src/features/support/HelpArticleLink';
 
 const PROJECT_ID = '0190a000-0000-7000-8000-000000000001';
 const OTHER_PROJECT_ID = '0190a000-0000-7000-8000-000000000002';
+const PHONE_METRICS: Metrics = {
+  frame: { x: 0, y: 0, width: 393, height: 852 },
+  insets: { top: 59, right: 0, bottom: 34, left: 0 },
+};
 
 function project(): CloudProject {
   return {
@@ -283,7 +294,7 @@ describe('ProjectSettingsScreen', () => {
   it('opens the projects help article', () => {
     render(<ProjectSettingsScreen projectId={PROJECT_ID} />);
     fireEvent.press(screen.getByLabelText('How projects work'));
-    expect(openUntrustedUrlInAppBrowser).toHaveBeenCalledWith(helpArticleUrl('projects'));
+    expect(openInAppBrowser).toHaveBeenCalledWith(helpArticleUrl('projects'));
   });
 });
 
@@ -349,17 +360,19 @@ describe('ProjectSettingsScreen sharing', () => {
   it('lists who has access and lets the owner change one person', async () => {
     (api.get as jest.Mock).mockResolvedValue(overview([invitedShare]));
     (api.patch as jest.Mock).mockResolvedValue({});
-    const alert = jest.spyOn(Alert, 'alert');
-    render(<ProjectSettingsScreen projectId={PROJECT_ID} />);
+    render(
+      <SafeAreaProvider initialMetrics={PHONE_METRICS}>
+        <ProjectSettingsScreen projectId={PROJECT_ID} />
+      </SafeAreaProvider>,
+    );
 
     expect(await screen.findByLabelText('Alex, Can edit. Change access')).toBeTruthy();
     fireEvent.press(screen.getByLabelText('Vic, No access. Change access'));
-    const buttons = (alert.mock.calls.at(-1)?.[2] ?? []) as Array<{
-      text: string;
-      onPress?: () => void;
-    }>;
-    expect(buttons.map((button) => button.text)).toEqual(['Can view', 'No access', 'Cancel']);
-    buttons.find((button) => button.text === 'Can view')?.onPress?.();
+    expect(actionMenuTitle()).toBe('Vic');
+    expect(actionMenuMessage()).toBe('Choose what Vic can do in Launch plan.');
+    expect(actionMenuLabels()).toEqual(['Can view', 'No access']);
+    expect(screen.getByTestId('conversation-action-cancel')).toBeTruthy();
+    chooseActionMenuItem('Can view');
     expect(api.patch).toHaveBeenCalledWith(
       `/api/settings/organization/shared/projects/${PROJECT_ID}`,
       { userId: 'user-3', access: 'read' },

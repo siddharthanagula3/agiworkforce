@@ -245,6 +245,39 @@ describe('git changes item', () => {
   });
 });
 
+describe('web page item', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.mocked(vscode.window.showInputBox).mockResolvedValue(undefined);
+  });
+
+  it('stops reading an endless page at its byte cap and gives the fetch a time limit', async () => {
+    let pulls = 0;
+    const endless = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulls += 1;
+        if (pulls > 200) {
+          controller.error(new Error('the page body was read without a limit'));
+          return;
+        }
+        controller.enqueue(new TextEncoder().encode('a'.repeat(64 * 1024)));
+      },
+    });
+    const fetchMock = vi.fn(
+      async (_url: string, _init?: RequestInit) =>
+        new Response(endless, { headers: { 'content-type': 'text/plain' } }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    vi.mocked(vscode.window.showInputBox).mockResolvedValue('https://example.test/huge');
+
+    const attachment = await buildContextAttachment('url');
+
+    expect(attachment?.text).toContain('... (truncated)');
+    expect(pulls).toBeLessThan(200);
+    expect(fetchMock.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
+  });
+});
+
 describe('menu ordering', () => {
   it('publishes every kind once, in a stable order', async () => {
     const items = await resolveContextMenuState();

@@ -28,11 +28,23 @@ import {
   wirePlanOf,
 } from '@agiworkforce/types';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import type {
-  MeDisabledFeature,
-  MeResponse,
-  MeWorkspaceDataRegion,
+import {
+  CLIENT_CAPABILITIES_REQUEST_HEADER,
+  LARGE_CHAT_FILES_CAPABILITY,
+  chatAttachmentLimitsToWire,
+  hasClientCapability,
+  managedCloudChatMessageLimitsWire,
+  type ChatAttachmentLimits,
+  type MeDisabledFeature,
+  type MeResponse,
+  type MeWorkspaceDataRegion,
 } from '@agiworkforce/cloud-contracts';
+import {
+  chatAttachmentLimitsForPlan,
+  resolveChatAttachmentLimits,
+} from '@/lib/server/attachment-allowance';
+import { chatLargeFilesMayBeOffered } from '@/lib/server/chat-file-intake/readiness';
+import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 import { e2bCutoverEnabled } from '@/lib/e2b/gate';
 import { webSearchBackendConfigured } from '@/lib/web-search/web-search-tool';
 import {
@@ -49,6 +61,7 @@ import {
 import { getCapabilityLimitResets } from '@/lib/server/capability-limit-resets';
 import { resolveCloudCodeExecutionPolicy } from '@/lib/server/code-execution-policy';
 import { getIdentityUser } from '@/lib/server/identity';
+import { IDENTITY_LOOKUP_TIMEOUT_MS } from '@/lib/server/identity-timeouts';
 import { provisionEnterpriseSignIn } from '@/lib/server/sso/jit-provisioning';
 import { linkPendingScimUsersAtSignIn } from '@/lib/server/scim/scim-sign-in-linking';
 import { resolveOrgMembership } from '@/lib/services/org-sharing-service';
@@ -74,8 +87,6 @@ import {
   rolloutRingKey,
   type ReleaseChannel,
 } from '@/lib/feature-flags/rollout-rings';
-
-const IDENTITY_LOOKUP_TIMEOUT_MS = 1500;
 
 function epochSeconds(value: string | Date | null | undefined): number | null {
   if (!value) return null;
@@ -331,6 +342,10 @@ async function handleGetMe(request: NextRequest) {
       capability_handshake: toWireCapabilityHandshake(capability_handshake),
       disabled_features: await closedFeatures(killSwitches?.closedCapabilities ?? []),
       workspace_data_region: await workspaceDataRegion(db, membership?.organizationId ?? null),
+      attachment_limits: chatAttachmentLimitsToWire(
+        await chatAttachmentLimitsFor(request, userId, effectiveTier),
+      ),
+      message_limits: managedCloudChatMessageLimitsWire(),
     };
     return NextResponse.json(responseBody);
   } catch (error) {
@@ -342,6 +357,36 @@ async function handleGetMe(request: NextRequest) {
     );
     throw error;
   }
+}
+
+/**
+ * Large file limits go only to a build that declared it handles intakes, and
+ * are measured in the workspace its uploads would be stored in. Anything that
+ * stops them answers today's limits.
+ */
+async function chatAttachmentLimitsFor(
+  request: NextRequest,
+  userId: string,
+  planTier: string,
+): Promise<ChatAttachmentLimits> {
+  const today = chatAttachmentLimitsForPlan(planTier);
+  if (!chatLargeFilesMayBeOffered({ request, planTier })) return today;
+  const capabilities = request.headers.get(CLIENT_CAPABILITIES_REQUEST_HEADER);
+  if (!hasClientCapability(capabilities, LARGE_CHAT_FILES_CAPABILITY)) return today;
+  let organizationId: string | null;
+  try {
+    organizationId = await resolveActiveOrganizationId(getNeonDb(), userId, request);
+  } catch (error) {
+    logger.warn({ userId, error }, '[chat-files] workspace unreadable; inline limits are offered');
+    return today;
+  }
+  return resolveChatAttachmentLimits({
+    db: createClaimedUserScopedDb(getNeonDb(), { userId, organizationId }),
+    userId,
+    organizationId,
+    planTier,
+    request,
+  });
 }
 
 async function workspaceDataRegion(

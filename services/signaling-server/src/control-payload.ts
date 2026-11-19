@@ -30,6 +30,7 @@ export const CODE_SESSION_CONTROL_ACTIONS = [
   'code.approval.respond',
   'code.session.start',
   'code.session.history',
+  'code.question.respond',
   'code.sessions',
   'code.session.snapshot',
   'code.session.event',

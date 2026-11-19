@@ -401,10 +401,6 @@ export function buildArtifactCspMeta(extraScriptSources: readonly string[] = [])
   )}">`;
 }
 
-export function escapeForInlineScript(source: string): string {
-  return source.replace(/<\/(script)/gi, '<\\/$1').replace(/\x3c!--/g, '<\\!--');
-}
-
 const SANDBOX_CSP_META = buildArtifactCspMeta();
 
 export function buildSandboxSrcDoc(html: string): string {

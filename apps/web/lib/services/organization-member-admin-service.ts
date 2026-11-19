@@ -168,7 +168,7 @@ export async function resolveAuthority(
     return { actorId: administrator.actorId, role: null, permissions: administrator.scopes };
   }
   const requester = await readMemberRow(tx, organizationId, administrator.userId);
-  if (!requester) {
+  if (!requester || requester.status !== 'active') {
     throw createError.forbidden('You are not a member of this organization');
   }
   const permissions = await requireMemberPermission(
@@ -219,6 +219,24 @@ async function assertKeyMayActOn(
       'A workspace API key can change or remove only active members and viewers whose roles grant no admin permissions. Do this in the workspace console.',
     )
     .asUserSafe();
+}
+
+async function assertMemberMayActOn(
+  administrator: MemberAdministrator,
+  authority: Authority,
+  organizationId: string,
+  target: MemberRow,
+  request?: Request,
+): Promise<void> {
+  if (administrator.kind !== 'member' || target.role === 'owner') return;
+  await assertMembershipRoleWithinActor({
+    organizationId,
+    actorUserId: authority.actorId,
+    subject: target.user_id,
+    actorPermissions: authority.permissions,
+    role: target.role,
+    request,
+  });
 }
 
 async function assertOwnerInvariant(
@@ -285,6 +303,13 @@ export async function changeMemberRole(
       await assertKeyMayActOn(tx, input.administrator, input.organizationId, target);
 
       await assertOwnerInvariant(tx, input.organizationId, authority.role, target, input.role);
+      await assertMemberMayActOn(
+        input.administrator,
+        authority,
+        input.organizationId,
+        target,
+        input.request,
+      );
 
       await tx.execute(
         `update public.organization_members
@@ -324,6 +349,7 @@ export async function removeMember(
       await assertKeyMayActOn(tx, input.administrator, input.organizationId, target);
 
       await assertOwnerInvariant(tx, input.organizationId, authority.role, target, null);
+      await assertMemberMayActOn(input.administrator, authority, input.organizationId, target);
 
       await tx.execute(
         `delete from public.organization_members

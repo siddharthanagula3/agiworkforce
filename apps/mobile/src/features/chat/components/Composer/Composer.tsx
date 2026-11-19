@@ -25,6 +25,8 @@ interface ComposerProps {
   selectedSkillName?: string;
   onClearSelectedSkill?: () => void;
   exhaustedUsageRecovery?: WorkUsageRecovery | null;
+  onRefusedSendChange?: (refused: boolean) => void;
+  onHasTextChange?: (hasText: boolean) => void;
 }
 
 export function Composer({
@@ -49,6 +51,8 @@ export function Composer({
   selectedSkillName,
   onClearSelectedSkill,
   exhaustedUsageRecovery,
+  onRefusedSendChange,
+  onHasTextChange,
 }: ComposerProps) {
   return (
     <ChatInput
@@ -73,6 +77,8 @@ export function Composer({
       selectedSkillName={selectedSkillName}
       onClearSelectedSkill={onClearSelectedSkill}
       exhaustedUsageRecovery={exhaustedUsageRecovery}
+      onRefusedSendChange={onRefusedSendChange}
+      onHasTextChange={onHasTextChange}
     />
   );
 }

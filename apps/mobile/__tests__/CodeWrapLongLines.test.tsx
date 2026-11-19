@@ -48,6 +48,11 @@ jest.mock('@/lib/mmkv', () => ({
   },
 }));
 
+jest.mock('@/lib/v1FeatureFlags', () => {
+  const actual = jest.requireActual('@/lib/v1FeatureFlags');
+  return { FEATURES: { ...actual.FEATURES } };
+});
+
 jest.mock('@/lib/clipboard', () => ({ copyToClipboard: jest.fn().mockResolvedValue(true) }));
 jest.mock('@/src/lib/Capabilities', () => ({ useCapability: () => true }));
 jest.mock('../src/features/chat/components/MathBlock', () => ({ MathBlock: () => null }));
@@ -74,6 +79,16 @@ function ancestorWithProp(node: ReactTestInstance, prop: string): unknown {
 }
 
 const LONG_LINE = 'const veryLongName = computeSomethingThatIsFarWiderThanAPhoneScreen(argument);';
+
+const setRemoteFeatures = (enabled: boolean) => {
+  const { FEATURES } = jest.requireMock('@/lib/v1FeatureFlags');
+  FEATURES.companion = enabled;
+  FEATURES.dispatch = enabled;
+};
+
+afterEach(() => {
+  setRemoteFeatures(false);
+});
 
 beforeEach(() => {
   useCodePreferences.setState({ wrapLongLines: false });
@@ -122,6 +137,7 @@ describe('code settings page', () => {
   });
 
   it('links to the Remote control settings page in Cloud', () => {
+    setRemoteFeatures(true);
     useChatAppModeStore.setState({ appMode: 'cloud' });
     const screen = render(<CodeSettingsScreen />);
 
@@ -130,7 +146,16 @@ describe('code settings page', () => {
     expect(mockPush).toHaveBeenCalledWith('/(app)/settings/remote-control');
   });
 
+  it('offers no Remote control link in Cloud while version 1 ships with Remote hidden', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    const screen = render(<CodeSettingsScreen />);
+
+    expect(screen.queryByLabelText('Remote control')).toBeNull();
+    expect(screen.getByTestId('code-wrap-long-lines')).toBeTruthy();
+  });
+
   it('offers no Remote control link in Local', () => {
+    setRemoteFeatures(true);
     const screen = render(<CodeSettingsScreen />);
 
     expect(screen.queryByLabelText('Remote control')).toBeNull();

@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import { PageLink } from '@shared/components/layout/EmbeddedPage';
 import { useEffect, useId, useRef } from 'react';
 
 import { CANONICAL_POLICY_ROUTES } from '@/lib/legal-constants';
@@ -45,9 +45,9 @@ export function AuthAgeConfirmation({
       </h2>
       <AuthAgeField gate={gate} disabled={disabled} />
       <div className={AUTH_FIELD_AID_CLASS}>
-        <Link href={TERMS_ELIGIBILITY_HREF} className={AUTH_FIELD_AID_LINK_CLASS}>
+        <PageLink href={TERMS_ELIGIBILITY_HREF} className={AUTH_FIELD_AID_LINK_CLASS}>
           {copy.text('flow.age.terms', 'Age requirements')}
-        </Link>
+        </PageLink>
       </div>
     </div>
   );

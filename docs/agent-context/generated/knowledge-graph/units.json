@@ -2320,9 +2320,9 @@
       "lanes": [
         "release-ci"
       ],
-      "files": 52,
+      "files": 53,
       "roles": {
-        "config": 41,
+        "config": 42,
         "doc": 8,
         "other": 3
       }
@@ -2360,13 +2360,13 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": [],
-      "files": 355,
+      "files": 358,
       "roles": {
         "config": 1,
         "doc": 6,
         "other": 3,
-        "source": 314,
-        "test": 31
+        "source": 315,
+        "test": 33
       }
     },
     {
@@ -2411,15 +2411,15 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 1941,
+      "files": 1978,
       "roles": {
         "asset": 59,
         "config": 22,
         "doc": 1,
         "other": 24,
-        "source": 1180,
+        "source": 1204,
         "style": 2,
-        "test": 653
+        "test": 666
       }
     },
     {
@@ -2457,7 +2457,7 @@
       "lanes": [
         "chrome-extension"
       ],
-      "files": 609,
+      "files": 610,
       "roles": {
         "asset": 12,
         "config": 6,
@@ -2465,7 +2465,7 @@
         "other": 31,
         "source": 243,
         "style": 3,
-        "test": 311
+        "test": 312
       }
     },
     {
@@ -2504,14 +2504,14 @@
       "lanes": [
         "vscode-extension"
       ],
-      "files": 398,
+      "files": 400,
       "roles": {
         "asset": 3,
         "config": 5,
         "doc": 8,
         "other": 4,
         "source": 191,
-        "test": 187
+        "test": 189
       }
     },
     {
@@ -2551,16 +2551,16 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 1762,
+      "files": 2480,
       "roles": {
         "asset": 4,
-        "config": 12,
+        "config": 14,
         "doc": 4,
         "generated": 1,
-        "other": 46,
-        "source": 956,
+        "other": 49,
+        "source": 1227,
         "style": 1,
-        "test": 738
+        "test": 1180
       }
     },
     {
@@ -2615,17 +2615,17 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 8405,
+      "files": 8646,
       "roles": {
-        "asset": 57,
-        "config": 93,
+        "asset": 58,
+        "config": 94,
         "doc": 51,
         "generated": 2,
-        "migration": 746,
+        "migration": 752,
         "other": 37,
-        "source": 3556,
+        "source": 3618,
         "style": 37,
-        "test": 3826
+        "test": 3997
       }
     },
     {
@@ -2671,13 +2671,13 @@
       "lanes": [
         "rust-runtime-protocol"
       ],
-      "files": 817,
+      "files": 828,
       "roles": {
         "config": 13,
         "generated": 4,
         "other": 1,
-        "source": 762,
-        "test": 37
+        "source": 771,
+        "test": 39
       }
     },
     {
@@ -2694,12 +2694,12 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": [],
-      "files": 246,
+      "files": 262,
       "roles": {
         "asset": 1,
         "config": 21,
-        "doc": 178,
-        "generated": 45,
+        "doc": 182,
+        "generated": 57,
         "other": 1
       }
     },
@@ -2887,11 +2887,11 @@
       "lanes": [
         "provider-routing"
       ],
-      "files": 38,
+      "files": 40,
       "roles": {
         "config": 3,
-        "source": 20,
-        "test": 15
+        "source": 21,
+        "test": 16
       }
     },
     {
@@ -3420,11 +3420,11 @@
       "lanes": [
         "provider-routing"
       ],
-      "files": 37,
+      "files": 39,
       "roles": {
         "config": 3,
         "source": 11,
-        "test": 23
+        "test": 25
       }
     },
     {
@@ -3899,11 +3899,11 @@
         "apps/extension-vscode"
       ],
       "lanes": [],
-      "files": 12,
+      "files": 17,
       "roles": {
         "config": 3,
-        "source": 7,
-        "test": 2
+        "source": 9,
+        "test": 5
       }
     },
     {
@@ -4008,11 +4008,11 @@
       "lanes": [
         "contracts-types"
       ],
-      "files": 179,
+      "files": 219,
       "roles": {
         "config": 13,
-        "source": 104,
-        "test": 62
+        "source": 121,
+        "test": 85
       }
     },
     {
@@ -4043,12 +4043,12 @@
       "lanes": [
         "database-compliance"
       ],
-      "files": 33,
+      "files": 34,
       "roles": {
         "config": 3,
         "other": 1,
         "source": 16,
-        "test": 13
+        "test": 14
       }
     },
     {
@@ -4268,12 +4268,12 @@
       "lanes": [
         "contracts-types"
       ],
-      "files": 963,
+      "files": 981,
       "roles": {
         "config": 29,
-        "generated": 629,
-        "source": 174,
-        "test": 131
+        "generated": 636,
+        "source": 177,
+        "test": 139
       }
     },
     {
@@ -4370,16 +4370,17 @@
         "apps/extension-vscode",
         "apps/mobile",
         "apps/web",
-        "packages/client/sync"
+        "packages/client/sync",
+        "packages/ui/unified-chat"
       ],
       "lanes": [
         "chat-artifacts"
       ],
-      "files": 15,
+      "files": 22,
       "roles": {
         "config": 3,
-        "source": 7,
-        "test": 5
+        "source": 11,
+        "test": 8
       }
     },
     {
@@ -4666,11 +4667,11 @@
         "packages/ui/unified-chat"
       ],
       "lanes": [],
-      "files": 77,
+      "files": 79,
       "roles": {
         "config": 5,
         "source": 42,
-        "test": 30
+        "test": 32
       }
     },
     {
@@ -4941,24 +4942,78 @@
       "status": "active",
       "entry": [
         ".",
+        "./activity-kinds",
+        "./activity-status",
         "./agi-work-progress",
+        "./answer-document",
+        "./answer-form-model",
+        "./answer-surfaces",
+        "./answer-ui",
+        "./artifact-download",
+        "./artifact-edit-request",
         "./artifact-sandbox",
+        "./artifact-selection-request",
         "./assistant-fence",
         "./assistant-fence-edits",
         "./capabilities",
+        "./checklist-labels",
+        "./citation-markers",
+        "./citation-publisher",
+        "./code-execution-result",
+        "./code-file-name",
+        "./compact-tool-summary",
+        "./complete-inline-tokens",
         "./composer-editor",
         "./composer-editor.css",
+        "./connector-step-sentence",
         "./continuation-seam",
         "./continue-generation",
+        "./deck-insights",
+        "./deck-model",
+        "./deck-request",
+        "./filename",
+        "./follow-ups",
+        "./highlight-languages",
+        "./html-entities",
         "./ime-composition",
         "./markdown-document",
+        "./markdown-headings",
+        "./markdown-image-sources",
         "./math-markup",
+        "./mcp-app",
+        "./message-format",
+        "./message-format-cards",
+        "./message-sources",
+        "./model-escalation",
+        "./model-info",
         "./model-picker",
         "./network-error",
+        "./place-facts",
+        "./preprocess-math",
+        "./presentation-slides",
+        "./react-preview-document",
+        "./regenerate-replay",
+        "./report-sources",
+        "./research-plan",
+        "./research-report",
+        "./rich-blocks",
+        "./sanitize-svg",
         "./shiki-highlighter",
+        "./split-markdown-blocks",
         "./src/index.ts",
+        "./stream-tail-context",
+        "./streaming-table-hold",
+        "./study-set",
+        "./svg-gallery",
         "./tabular",
-        "./task-display"
+        "./task-display",
+        "./task-list",
+        "./text-direction",
+        "./tool-failure",
+        "./turn-citations",
+        "./web-search-notice",
+        "./workbook-cell-formats",
+        "./workbook-number-formats"
       ],
       "agentsDoc": "AGENTS.md",
       "checks": [
@@ -4974,6 +5029,7 @@
         "packages/ai/search",
         "packages/client/client-runtime",
         "packages/contracts/types",
+        "packages/platform/artifacts",
         "packages/platform/utils",
         "packages/ui/design-tokens",
         "packages/ui/ui"
@@ -4988,12 +5044,12 @@
       "lanes": [
         "chat-artifacts"
       ],
-      "files": 454,
+      "files": 529,
       "roles": {
         "config": 3,
-        "source": 210,
+        "source": 244,
         "style": 3,
-        "test": 238
+        "test": 279
       }
     },
     {
@@ -5010,10 +5066,10 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": [],
-      "files": 18,
+      "files": 19,
       "roles": {
         "config": 1,
-        "other": 16,
+        "other": 17,
         "source": 1
       }
     },
@@ -5031,13 +5087,13 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": [],
-      "files": 727,
+      "files": 731,
       "roles": {
-        "config": 67,
+        "config": 68,
         "doc": 1,
         "other": 21,
-        "source": 380,
-        "test": 258
+        "source": 381,
+        "test": 260
       }
     },
     {
@@ -5059,13 +5115,13 @@
       "lanes": [
         "backend-services"
       ],
-      "files": 93,
+      "files": 96,
       "roles": {
         "config": 6,
         "doc": 1,
         "other": 4,
-        "source": 31,
-        "test": 51
+        "source": 32,
+        "test": 53
       }
     },
     {
@@ -5090,13 +5146,13 @@
       "lanes": [
         "backend-services"
       ],
-      "files": 23,
+      "files": 32,
       "roles": {
         "config": 3,
         "doc": 1,
         "other": 5,
-        "source": 7,
-        "test": 7
+        "source": 10,
+        "test": 13
       }
     },
     {

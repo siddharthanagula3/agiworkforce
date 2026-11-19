@@ -482,7 +482,7 @@ vi.mock('@shared/components/agi/SidebarWordmark', () => ({
   SidebarWordmark: () => <div data-testid="wordmark" />,
 }));
 
-const toastState = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
+const toastState = vi.hoisted(() => Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }));
 
 vi.mock('sonner', () => ({ toast: toastState }));
 
@@ -1332,6 +1332,39 @@ describe('WebAppShell answers a row action the server refused', () => {
       expect(toastState.error).toHaveBeenCalledWith(sessionRowActionFailureMessage('restore')),
     );
   });
+
+  it.each([
+    [true, { archived: false, pinned: true }],
+    [false, { archived: false }],
+  ] as const)(
+    'Undo after archiving a chat with pinned %s restores it as it was',
+    async (isPinned, restored) => {
+      shellState.conversations = [
+        {
+          id: 'c1',
+          title: 'Quarterly revenue model',
+          updatedAt: new Date().toISOString(),
+          isPinned,
+        },
+      ];
+      toastState.mockClear();
+      renderShell();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Row archive' }));
+      await waitFor(() =>
+        expect(toastState).toHaveBeenCalledWith('Chat archived', expect.anything()),
+      );
+      const options = toastState.mock.lastCall?.[1] as {
+        action: { label: string; onClick: () => void };
+      };
+      expect(options.action.label).toBe('Undo');
+      options.action.onClick();
+
+      await waitFor(() => expect(shellState.updateConversation).toHaveBeenCalledTimes(2));
+      expect(shellState.updateConversation).toHaveBeenNthCalledWith(1, 'c1', { archived: true });
+      expect(shellState.updateConversation).toHaveBeenNthCalledWith(2, 'c1', restored);
+    },
+  );
 
   it('stays quiet when the server accepts the change', async () => {
     renderShell();

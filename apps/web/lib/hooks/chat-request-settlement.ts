@@ -15,6 +15,7 @@ export interface ChatRequestSettlement {
 export interface ChatRequestSettlements {
   begin: (conversationId: string, messageId: string) => ChatRequestSettlement;
   observe: (conversationId: string) => { isCurrent: () => boolean; release: () => void };
+  isBusyWithOtherMessage: (conversationId: string, messageId: string) => boolean;
   dispose: () => void;
 }
 
@@ -24,6 +25,7 @@ export function createChatRequestSettlements(
 ): ChatRequestSettlements {
   const latest = new Map<string, ChatRequestSettlement>();
   const writers = new Map<string, ChatRequestSettlement>();
+  const ownedMessages = new WeakMap<ChatRequestSettlement, ReadonlySet<string>>();
   const observers = new Map<string, Set<() => void>>();
   const invalidateObservers = (conversationId: string) => {
     for (const invalidate of observers.get(conversationId) ?? []) invalidate();
@@ -109,6 +111,7 @@ export function createChatRequestSettlements(
       };
       latest.set(conversationId, request);
       writers.set(messageKey(messageId), request);
+      ownedMessages.set(request, ownedMessageIds);
       return request;
     },
     observe: (conversationId) => {
@@ -129,6 +132,12 @@ export function createChatRequestSettlements(
           }
         },
       };
+    },
+    isBusyWithOtherMessage: (conversationId, messageId) => {
+      const current = latest.get(conversationId);
+      return (
+        current !== undefined && current.isCurrent() && !ownedMessages.get(current)?.has(messageId)
+      );
     },
     dispose: () => {
       for (const request of latest.values()) request.controller.abort();

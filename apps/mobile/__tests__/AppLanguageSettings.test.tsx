@@ -18,7 +18,16 @@ jest.mock('expo', () => ({
 
 jest.mock('expo-router', () => ({
   useRouter: () => ({ push: mockPush }),
+  Redirect: ({ href }: { href: string }) => {
+    const RN = jest.requireActual('react-native');
+    return <RN.Text testID="redirect">{href}</RN.Text>;
+  },
 }));
+
+jest.mock('@/lib/v1FeatureFlags', () => {
+  const actual = jest.requireActual('@/lib/v1FeatureFlags');
+  return { ...actual, FEATURES: { ...actual.FEATURES, appLanguage: true } };
+});
 
 jest.mock('lucide-react-native', () => {
   const icon = jest.fn().mockReturnValue(null);
@@ -81,6 +90,9 @@ jest.mock('../src/features/settings/Common', () => {
 });
 
 import AppLanguageScreen from '../src/features/settings/general/AppLanguageScreen';
+import { FEATURES } from '@/lib/v1FeatureFlags';
+
+const mockFeatures = FEATURES as { appLanguage: boolean };
 
 function applyPreference(code: string) {
   mockPreference.value = code;
@@ -90,6 +102,7 @@ function applyPreference(code: string) {
 describe('App language settings', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockFeatures.appLanguage = true;
     mockPreference.value = 'device';
     mockSetLanguage.mockImplementation(async (code) => {
       applyPreference(code);
@@ -173,5 +186,19 @@ describe('App language settings', () => {
 
     expect(await screen.findByText('Could not change the language. Try again.')).toBeTruthy();
     warn.mockRestore();
+  });
+});
+
+describe('App language while version 1 does not offer one', () => {
+  afterEach(() => {
+    mockFeatures.appLanguage = true;
+  });
+
+  it('sends a link to the picker back to General without offering a language', () => {
+    mockFeatures.appLanguage = false;
+    render(<AppLanguageScreen />);
+
+    expect(screen.getByTestId('redirect').props.children).toBe('/(app)/settings/general');
+    expect(screen.queryAllByRole('radio')).toHaveLength(0);
   });
 });

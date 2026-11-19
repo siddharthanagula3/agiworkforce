@@ -126,12 +126,13 @@ describe('settleStreamBilling call sites report client cancellation', () => {
   });
 
   it('never persists a partial answer without settling the tokens it kept', () => {
-    for (const marker of ['llm_stream_threw_mid_stream', 'async cancel()']) {
+    for (const [marker, persistCall] of [
+      ['llm_stream_threw_mid_stream', 'persistAssistantTurnSnapshot(true, request.signal.aborted)'],
+      ['async cancel()', 'persistAssistantTurnSnapshot(true, true)'],
+    ] as const) {
       const start = STREAM_TRANSFORM.indexOf(marker);
       const region = STREAM_TRANSFORM.slice(start, start + 2_000);
-      expect(region, `${marker} keeps the partial turn`).toContain(
-        'persistAssistantTurnSnapshot(true)',
-      );
+      expect(region, `${marker} keeps the partial turn`).toContain(persistCall);
       expect(region, `${marker} must settle billing`).toContain('settleStreamBilling({');
     }
   });

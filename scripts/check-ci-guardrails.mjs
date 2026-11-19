@@ -362,7 +362,7 @@ requireIncludes('.github/workflows/release-cli.yml', 'group: release-cli-${{ git
 requireIncludes('.github/workflows/release-cli.yml', 'cancel-in-progress: false');
 requireIncludes(
   '.github/workflows/release-cli.yml',
-  'softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3',
+  'softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4',
 );
 requireIncludes('.github/workflows/release-cli.yml', 'generate_release_notes: true');
 requireNotIncludes('.github/workflows/release-cli.yml', 'body_path: CHANGELOG.md');
@@ -516,8 +516,9 @@ requireNotIncludes('apps/mobile/eas.json', '"appleId": "$APPLE_ID"');
 requireIncludes('.github/workflows/release-mobile.yml', "- 'v-mobile-*'");
 requireIncludes('.github/workflows/release-mobile.yml', 'name: mobile-store-release');
 requireIncludes('.github/workflows/release-mobile.yml', "EAS_CLI_VERSION: '21.4.0'");
-requireIncludes('.github/workflows/release-mobile.yml', 'release:ios:prod -- --auto-submit');
-requireIncludes('.github/workflows/release-mobile.yml', 'release:android:prod -- --auto-submit');
+requireIncludes('.github/workflows/release-mobile.yml', 'release:ios:prod --auto-submit');
+requireIncludes('.github/workflows/release-mobile.yml', 'release:android:prod --auto-submit');
+requireNotIncludes('.github/workflows/release-mobile.yml', ' -- --auto-submit');
 requireIncludes('.github/workflows/release-mobile.yml', 'release:verify-associations');
 requireIncludes(
   '.github/workflows/release-mobile.yml',
@@ -762,8 +763,8 @@ requireIncludes(
 /**
  * Every native lane is main-only, and nothing said so.
  *
- * `rust-desktop-cli`, `clippy-all-features`, `macos-smoke` and `windows-smoke`
- * all carry `github.ref == 'refs/heads/main'`, so `cargo test --locked` at any scope,
+ * `rust-desktop-cli`, `clippy-all-features`, `macos-smoke`, `windows-smoke`
+ * and `native-gpui` all carry `github.ref == 'refs/heads/main'`, so `cargo test --locked` at any scope,
  * every crate under `crates/*`, and macOS and Windows compilation happen after
  * a merge rather than at review. That is a deliberate, commented cost decision:
  * a full native build is the slowest thing in CI by an order of magnitude, and
@@ -773,7 +774,7 @@ requireIncludes(
  * `native_changed` half and not the `github.ref` half, so the trade-off could
  * be widened or narrowed with nothing failing either way, and a reader of these
  * checks would conclude native code was gated on pull requests. Pinning it
- * makes the four move together and makes a change to any of them deliberate.
+ * makes them move together and makes a change to any of them deliberate.
  *
  * Changing this is a CI spend decision, not a code fix. What it would cost is
  * one native build per pull request that touches Rust; what it buys is catching
@@ -784,6 +785,7 @@ const NATIVE_MAIN_ONLY_JOBS = [
   'clippy-all-features',
   'macos-smoke',
   'windows-smoke',
+  'native-gpui',
 ];
 const NATIVE_MAIN_ONLY_CONDITION =
   "if: needs.scope.outputs.native_changed == 'true' && github.ref == 'refs/heads/main'";

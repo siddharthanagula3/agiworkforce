@@ -2,9 +2,10 @@ import { SELECTED_ROUTE } from './fixtures/model-mocks';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 type ScanModule0 = typeof import('@agiworkforce/routing');
 
-vi.mock('@/lib/server/side-call-training-policy', () => ({
-  sideCallRoutingRequest: async (_db: unknown, _userId: string, request: unknown) => request,
-}));
+vi.mock('@/lib/server/managed-cloud-routing/policy-source', async () => {
+  const { supportPolicySource } = await import('./fixtures/model-mocks');
+  return { productionPolicySource: supportPolicySource };
+});
 
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
@@ -35,6 +36,7 @@ vi.mock('@/lib/services/cogs-ledger-service', () => ({
   recordCacheHitCostEvent: (...args: unknown[]) => recordCacheHitCostEventMock(...args),
 }));
 
+import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { callSupportModel } from '../answer/model-route';
 
 const originalEnabled = process.env['SUPPORT_AGENT_ENABLED'];
@@ -79,6 +81,19 @@ describe('support agent COGS recording', () => {
         sourceRef: expect.stringContaining('support:'),
       }),
     );
+    const [event] = recordSettledProviderCostMock.mock.calls[0] as [
+      { providerEstimatedCostMicrousd: number },
+    ];
+    const exactMicrousd = LLMCostCalculator.calculateCostMicrousd(
+      SELECTED_ROUTE.provider,
+      SELECTED_ROUTE.modelKey,
+      { promptTokens: 120, completionTokens: 40, totalTokens: 160 },
+      undefined,
+      SELECTED_ROUTE.routeId,
+    );
+    expect(exactMicrousd).toBeGreaterThan(0);
+    expect(exactMicrousd).toBeLessThan(10_000);
+    expect(event.providerEstimatedCostMicrousd).toBe(exactMicrousd);
   });
 
   it('records a zero-charge COGS event for an anonymous caller', async () => {

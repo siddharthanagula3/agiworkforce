@@ -2,7 +2,9 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { markdownRenderedText } from '@agiworkforce/unified-chat/markdown-document';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { withoutStoredCitationMarkupRow } from '@/lib/server/stored-assistant-text';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -100,6 +102,7 @@ type SuggestionRow = {
 };
 
 const CONTEXT_LENGTH = 50;
+const SNIPPET_WINDOW_CHARS = 2000;
 
 type ScopedDb = Awaited<ReturnType<typeof getUserScopedDb>>['db'];
 
@@ -178,6 +181,45 @@ function extractMatch(
     before: text.substring(beforeStart, matchIndex),
     after: text.substring(matchEnd, afterEnd),
   };
+}
+
+function collapseWhitespace(text: string): string {
+  return text.replace(/\s+/g, ' ').trim();
+}
+
+function plainSnippetText(markdown: string): string {
+  return collapseWhitespace(markdownRenderedText(markdown));
+}
+
+function snippetWindow(content: string, query: string): string {
+  const at = Math.max(content.toLowerCase().indexOf(query.toLowerCase()), 0);
+  const matchEnd = at + query.length;
+  let start = Math.max(0, at - SNIPPET_WINDOW_CHARS);
+  if (start > 0) {
+    const lineStart = content.indexOf('\n', start);
+    if (lineStart !== -1 && lineStart < at) start = lineStart + 1;
+    else if (/[\uDC00-\uDFFF]/.test(content.charAt(start))) start += 1;
+  }
+  let end = Math.min(content.length, matchEnd + SNIPPET_WINDOW_CHARS);
+  if (end < content.length) {
+    const lineEnd = content.lastIndexOf('\n', end);
+    if (lineEnd > matchEnd) end = lineEnd;
+    else if (/[\uD800-\uDBFF]/.test(content.charAt(end - 1))) end -= 1;
+  }
+  return content.slice(start, end);
+}
+
+function messageMatch(
+  content: string,
+  query: string,
+): { matched: string; before: string; after: string } {
+  const window = snippetWindow(content, query);
+  const plain = plainSnippetText(window);
+  const lowerQuery = query.toLowerCase();
+  if (!plain.toLowerCase().includes(lowerQuery) && window.toLowerCase().includes(lowerQuery)) {
+    return extractMatch(collapseWhitespace(window), query);
+  }
+  return extractMatch(plain, query);
 }
 
 async function handleGet(request: NextRequest) {
@@ -407,8 +449,9 @@ async function handleGet(request: NextRequest) {
     };
   });
 
-  const messageResults = messageRows.map((m) => {
-    const match = extractMatch(m.content, q);
+  const messageResult = (stored: MessageRow) => {
+    const m = withoutStoredCitationMarkupRow(stored);
+    const match = messageMatch(m.content, q);
     return {
       type: 'message' as const,
       sessionId: m.conversation_id,
@@ -423,7 +466,7 @@ async function handleGet(request: NextRequest) {
       contextAfter: match.after,
       newChatHref: newChatHrefFor('message', m.id, match),
     };
-  });
+  };
 
   const projectResults = projectRows.map((p) => {
     const matchText = p.name + (p.description ? ` ${p.description}` : '');
@@ -462,19 +505,23 @@ async function handleGet(request: NextRequest) {
     };
   });
 
-  const allResults = [...sessionResults, ...messageResults]
+  const allResults = [
+    ...sessionResults.map((result) => ({ updatedAt: result.updatedAt, build: () => result })),
+    ...messageRows.map((row) => ({ updatedAt: row.updated_at, build: () => messageResult(row) })),
+  ]
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-    .slice(0, limit);
+    .slice(0, limit)
+    .map((hit) => hit.build());
 
   const matchedConversationIds = new Set<string>([
     ...sessionResults.map((s) => s.sessionId),
-    ...messageResults.map((m) => m.sessionId),
+    ...messageRows.map((m) => m.conversation_id),
   ]);
 
   const stats = {
-    totalResults: sessionResults.length + messageResults.length,
+    totalResults: sessionResults.length + messageRows.length,
     sessionMatches: matchedConversationIds.size,
-    messageMatches: messageResults.length,
+    messageMatches: messageRows.length,
     projectMatches: projectResults.length,
     fileMatches: fileResults.length,
     documentMatches: documents.length,

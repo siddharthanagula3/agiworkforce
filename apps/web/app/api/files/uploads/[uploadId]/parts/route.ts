@@ -3,6 +3,7 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import {
   ManagedCloudResumableUploadPartsRequestSchema,
+  RESUMABLE_UPLOAD_RELAY_SEGMENT_BYTES,
   managedCloudResumableUploadSessionPath,
   type ManagedCloudResumableUploadSignedPart,
 } from '@agiworkforce/cloud-contracts';
@@ -12,10 +13,16 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
-import { uploadNeedsSameOriginRelay } from '@/lib/server/upload-transport';
+import {
+  storageReachableForLargeFiles,
+  uploadNeedsSameOriginRelay,
+} from '@/lib/server/upload-transport';
+import { touchPartRequest } from '@/lib/server/chat-file-intake/store';
 import {
   RESUMABLE_PART_URL_TTL_SECONDS,
   assertSessionPartNumber,
+  isChatLargeFileSession,
+  largeFileNeedsDirectUpload,
   readResumableUploadSession,
   resumableUploadTarget,
   sessionPartLength,
@@ -24,7 +31,7 @@ import {
 type RouteContext = { params: Promise<{ uploadId: string }> };
 
 async function handleSignParts(request: NextRequest, context: RouteContext): Promise<NextResponse> {
-  const { userId, organizationId } = await getUserScopedDb(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
   const { uploadId } = await context.params;
 
   const csrfError = await requireCsrfToken(request);
@@ -49,7 +56,21 @@ async function handleSignParts(request: NextRequest, context: RouteContext): Pro
   );
 
   const target = resumableUploadTarget();
-  const relay = uploadNeedsSameOriginRelay(request);
+  const largeFile = isChatLargeFileSession(session);
+  const relay = !largeFile && uploadNeedsSameOriginRelay(request);
+  if (largeFile) {
+    if (!storageReachableForLargeFiles(request)) throw largeFileNeedsDirectUpload();
+    const open = await touchPartRequest(db, {
+      userId,
+      stagingKey: session.key,
+      nowMs: Date.now(),
+    });
+    if (!open) {
+      throw createError
+        .notFound('This upload is no longer open. Start it again to finish the file.')
+        .asUserSafe();
+    }
+  }
   const parts = await Promise.all(
     partNumbers.map(async (partNumber): Promise<ManagedCloudResumableUploadSignedPart> => {
       if (relay) {
@@ -63,6 +84,7 @@ async function handleSignParts(request: NextRequest, context: RouteContext): Pro
           url: url.toString(),
           method: 'PUT',
           headers: { 'x-csrf-token': request.headers.get('x-csrf-token') ?? '' },
+          segmentBytes: RESUMABLE_UPLOAD_RELAY_SEGMENT_BYTES,
         };
       }
       return {

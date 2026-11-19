@@ -165,6 +165,38 @@ pub trait DeveloperSessionHost: Send + Sync {
     ) -> Result<WorkspaceFileWriteResponse, DeveloperSessionHostError> {
         Err(unsupported(method::WORKSPACE_FILE_WRITE))
     }
+    async fn workspace_file_create(
+        &self,
+        _: WorkspaceFileCreateParams,
+    ) -> Result<WorkspaceFileResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::WORKSPACE_FILE_CREATE))
+    }
+    async fn workspace_file_rename(
+        &self,
+        _: WorkspaceFileRenameParams,
+    ) -> Result<WorkspaceFileRenameResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::WORKSPACE_FILE_RENAME))
+    }
+    async fn workspace_file_delete(
+        &self,
+        _: WorkspaceFileDeleteParams,
+    ) -> Result<WorkspaceFileDeleteResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::WORKSPACE_FILE_DELETE))
+    }
+    async fn code_draft_read(
+        &self,
+        _: agiworkforce_protocol::code_drafts::CodeDraftParams,
+    ) -> Result<agiworkforce_protocol::code_drafts::CodeDraftSnapshot, DeveloperSessionHostError>
+    {
+        Err(unsupported(method::CODE_DRAFT_READ))
+    }
+    async fn code_draft_write(
+        &self,
+        _: agiworkforce_protocol::code_drafts::CodeDraftWriteParams,
+    ) -> Result<agiworkforce_protocol::code_drafts::CodeDraftWriteResponse, DeveloperSessionHostError>
+    {
+        Err(unsupported(method::CODE_DRAFT_WRITE))
+    }
     async fn workspace_file_recovery_read(
         &self,
         _: WorkspaceFileParams,
@@ -1171,6 +1203,11 @@ pub const METHOD_EFFECTS: &[(&str, MethodEffect)] = &[
     (method::WORKSPACE_FILES_LIST, MethodEffect::ReadsForOwner),
     (method::WORKSPACE_FILE_READ, MethodEffect::ReadsForOwner),
     (method::WORKSPACE_FILE_WRITE, MethodEffect::ChangesState),
+    (method::WORKSPACE_FILE_CREATE, MethodEffect::ChangesState),
+    (method::WORKSPACE_FILE_RENAME, MethodEffect::ChangesState),
+    (method::WORKSPACE_FILE_DELETE, MethodEffect::ChangesState),
+    (method::CODE_DRAFT_READ, MethodEffect::ReadsForOwner),
+    (method::CODE_DRAFT_WRITE, MethodEffect::ChangesState),
     (
         method::WORKSPACE_FILE_RECOVERY_READ,
         MethodEffect::ReadsForOwner,
@@ -1398,6 +1435,25 @@ pub const METHOD_EFFECTS: &[(&str, MethodEffect)] = &[
     (method::TRUST_REVOKE, MethodEffect::GrantsTrust),
     (method::MCP_AUTH_REQUIRED, MethodEffect::Notification),
     (method::THREAD_PLAN, MethodEffect::Notification),
+    (method::THREAD_STARTED, MethodEffect::Notification),
+    (method::THREAD_FORKED, MethodEffect::Notification),
+    (method::THREAD_RELOADED, MethodEffect::Notification),
+    (method::THREAD_ARCHIVED, MethodEffect::Notification),
+    (method::THREAD_UNARCHIVED, MethodEffect::Notification),
+    (method::THREAD_REWOUND, MethodEffect::Notification),
+    (method::THREAD_DELETED, MethodEffect::Notification),
+    (method::THREAD_WRITER_CHANGED, MethodEffect::Notification),
+    (method::TURN_STEERED, MethodEffect::Notification),
+    (method::MCP_LOADING, MethodEffect::Notification),
+    (method::MCP_READY, MethodEffect::Notification),
+    (method::MCP_UNAVAILABLE, MethodEffect::Notification),
+    (method::MCP_CHANGED, MethodEffect::Notification),
+    (method::SKILLS_CHANGED, MethodEffect::Notification),
+    (method::PLUGINS_CHANGED, MethodEffect::Notification),
+    (method::HOOKS_CHANGED, MethodEffect::Notification),
+    (method::MEMORY_ADDED, MethodEffect::Notification),
+    (method::WORKTREE_CREATED, MethodEffect::Notification),
+    (method::WORKTREE_REMOVED, MethodEffect::Notification),
 ];
 
 /// How `method` is classified, or `None` for one [`METHOD_EFFECTS`] does not
@@ -1538,6 +1594,11 @@ pub fn runs_detached(method: &str) -> bool {
             | method::TERMINAL_CLOSE
             | method::WORKSPACE_FILE_READ
             | method::WORKSPACE_FILE_WRITE
+            | method::WORKSPACE_FILE_CREATE
+            | method::WORKSPACE_FILE_RENAME
+            | method::WORKSPACE_FILE_DELETE
+            | method::CODE_DRAFT_READ
+            | method::CODE_DRAFT_WRITE
             | method::WORKSPACE_FILE_RECOVERY_READ
             | method::WORKSPACE_FILE_RECOVERY_WRITE
             | method::WORKSPACE_FILE_RECOVERY_LIST
@@ -2136,6 +2197,61 @@ impl DeveloperSessionProcessor {
                 };
                 self.host
                     .workspace_file_write(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::WORKSPACE_FILE_CREATE => {
+                let params = match parse_params::<WorkspaceFileCreateParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .workspace_file_create(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::WORKSPACE_FILE_RENAME => {
+                let params = match parse_params::<WorkspaceFileRenameParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .workspace_file_rename(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::WORKSPACE_FILE_DELETE => {
+                let params = match parse_params::<WorkspaceFileDeleteParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .workspace_file_delete(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::CODE_DRAFT_READ => {
+                let params = match parse_params::<agiworkforce_protocol::code_drafts::CodeDraftParams>(
+                    &request,
+                ) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .code_draft_read(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::CODE_DRAFT_WRITE => {
+                let params = match parse_params::<
+                    agiworkforce_protocol::code_drafts::CodeDraftWriteParams,
+                >(&request)
+                {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .code_draft_write(params)
                     .await
                     .map(serde_json::to_value)
             }

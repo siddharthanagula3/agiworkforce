@@ -46,6 +46,7 @@ import {
   CLOUD_CODE_GOAL_COMMANDS,
   CLOUD_CODE_TURN_STEP_BOUNDS,
   cloudCodeRepositoryLabel,
+  describeCloudCodeRuntime,
   isBillingPlanTier,
   isCloudCodeTurnStepBound,
   isFreeBillingPlanTier,
@@ -128,7 +129,7 @@ import {
   type LocalProviderSetup,
 } from '../local-code';
 import { LocalModelChip } from './LocalModelChip';
-import { describeRuntime, runtimeHelpText, type HarnessModelChoice } from '../code-runtime';
+import { runtimeHelpText, type HarnessModelChoice } from '../code-runtime';
 import { useCodeRepositories, type CodeRepositoryState } from '../hooks/use-code-repositories';
 import { useCodeBranches } from '../hooks/use-code-branches';
 import {
@@ -328,7 +329,7 @@ function EnvironmentSettings({
             <optgroup label={CODE_COPY.harnessGroup}>
               {harnesses.map((runtime) => (
                 <option key={runtime.id} value={runtime.id}>
-                  {describeRuntime(runtime)}
+                  {describeCloudCodeRuntime(runtime)}
                 </option>
               ))}
             </optgroup>
@@ -337,7 +338,7 @@ function EnvironmentSettings({
             <optgroup label={CODE_COPY.imageGroup}>
               {images.map((runtime) => (
                 <option key={runtime.id} value={runtime.id}>
-                  {describeRuntime(runtime)}
+                  {describeCloudCodeRuntime(runtime)}
                 </option>
               ))}
             </optgroup>
@@ -1780,6 +1781,8 @@ export function CodeComposer({
     },
   });
   const startDictation = dictation.start;
+  const router = useGuardedRouter();
+  const requestUpgrade = () => openUpgrade((href) => router.push(href));
   const [commandIndex, setCommandIndex] = useState(0);
   const [dismissedCommandQuery, setDismissedCommandQuery] = useState<string | null>(null);
   const cloudTurn = !showChips || draft.environment === 'cloud';
@@ -1946,10 +1949,12 @@ export function CodeComposer({
                 bars={dictation.bars}
                 error={dictation.error}
                 reducedMotion={dictation.reducedMotion}
+                usageLimited={dictation.usageLimited}
                 onCancel={dictation.cancel}
                 onStop={dictation.stop}
                 onSend={dictation.send}
                 onRetry={dictation.retry}
+                onUpgrade={requestUpgrade}
               />
             ) : (
               <>
@@ -1987,18 +1992,22 @@ export function CodeComposer({
                 </button>
                 <span className={styles['controlSpacer']} />
                 {draft.environment === 'local' ? (
-                  local.models.length > 0 && (
+                  (local.models.length > 0 || local.setups.length > 0) && (
                     <LocalModelChip
                       choices={local.models}
                       setups={local.setups}
                       selected={local.modelId}
                       unreachable={local.modelUnreachable}
-                      disabled={disabled || busy}
+                      disabled={busy}
                       onSelect={local.onModelChange}
                     />
                   )
                 ) : (
-                  <ComposerFooter inline showStyleSelector={false} />
+                  <ComposerFooter
+                    inline
+                    showStyleSelector={false}
+                    onUpgradeRequest={requestUpgrade}
+                  />
                 )}
                 <UsageRing contextTokens={contextTokens} contextWindow={contextWindow} />
               </>

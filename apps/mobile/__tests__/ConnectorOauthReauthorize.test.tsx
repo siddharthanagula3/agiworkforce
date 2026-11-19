@@ -86,6 +86,7 @@ jest.mock('@/src/features/auth/services/cloudAccountSession', () => ({
 }));
 
 jest.mock('@/services/connectors', () => ({
+  fetchConnectorAccounts: jest.fn(async () => []),
   connectConnector: jest.fn(),
   fetchConnectorCalls: jest.fn(async () => []),
   deleteCustomConnector: jest.fn(),

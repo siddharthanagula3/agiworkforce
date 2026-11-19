@@ -1,5 +1,5 @@
 import { buildMetadata } from '@/lib/seo/metadata';
-import Link from 'next/link';
+import { PageLink } from '@shared/components/layout/EmbeddedPage';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import {
@@ -506,13 +506,13 @@ export default function SecurityPage() {
                     </h2>
                     <Prose>
                       Named third parties and their regions are listed on{' '}
-                      <Link href="/subprocessors" className="agi-ds-link">
+                      <PageLink href="/subprocessors" className="agi-ds-link">
                         /subprocessors
-                      </Link>
+                      </PageLink>
                       . Processing terms are on{' '}
-                      <Link href="/dpa" className="agi-ds-link">
+                      <PageLink href="/dpa" className="agi-ds-link">
                         /dpa
-                      </Link>
+                      </PageLink>
                       .
                     </Prose>
                   </div>
@@ -619,9 +619,12 @@ export default function SecurityPage() {
                     </h2>
                     <Prose>
                       Email{' '}
-                      <Link href={contactMailto(CONTACT_SUBJECTS.security)} className="agi-ds-link">
+                      <PageLink
+                        href={contactMailto(CONTACT_SUBJECTS.security)}
+                        className="agi-ds-link"
+                      >
                         {CONTACT_EMAIL}
-                      </Link>{' '}
+                      </PageLink>{' '}
                       with <strong>{CONTACT_SUBJECTS.security}</strong> in the subject line. This is
                       the monitored mailbox for security reports.
                     </Prose>

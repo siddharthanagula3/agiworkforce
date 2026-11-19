@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { buildSandboxedHtml, __ARTIFACT_SANDBOX_INTERNALS } from './artifact-sandbox';
+import { ARTIFACT_CSP_CONTENT, buildSandboxedHtml } from './artifact-sandbox';
 
-const { CSP_META } = __ARTIFACT_SANDBOX_INTERNALS;
+const CSP_META = `<meta http-equiv="Content-Security-Policy" content="${ARTIFACT_CSP_CONTENT}">`;
 const HOSTILE_BUDGET_MS = 2000;
 
 function timed<T>(run: () => T): { value: T; ms: number } {
@@ -33,27 +33,26 @@ describe('buildSandboxedHtml on hostile markup', () => {
 });
 
 describe('buildSandboxedHtml on real-shaped markup', () => {
-  it('drops only the artifact-supplied policy and puts ours straight after <head>', () => {
+  it('drops only the artifact-supplied policy and puts ours straight after the doctype', () => {
     const html =
       '<!DOCTYPE html><html lang="en"><HEAD data-x="1"><meta charset="utf-8">' +
       '<META HTTP-EQUIV="Content-Security-Policy" content="default-src *">' +
       '<meta name="viewport" content="width=device-width"><title>t</title></HEAD><body>x</body></html>';
     expect(buildSandboxedHtml(html)).toBe(
-      '<!DOCTYPE html><html lang="en"><HEAD data-x="1">\n' +
-        `${CSP_META}<meta charset="utf-8">` +
+      `<!DOCTYPE html>${CSP_META}<html lang="en"><HEAD data-x="1"><meta charset="utf-8">` +
         '<meta name="viewport" content="width=device-width"><title>t</title></HEAD><body>x</body></html>',
     );
   });
 
-  it('adds a head after <html> when the document has none', () => {
+  it('puts the policy ahead of <html> when the document has no doctype', () => {
     expect(buildSandboxedHtml('<html lang="en"><body>x</body></html>')).toBe(
-      `<html lang="en"><head>${CSP_META}</head><body>x</body></html>`,
+      `${CSP_META}<html lang="en"><body>x</body></html>`,
     );
   });
 
-  it('adds html, head and body around a bare doctype document', () => {
+  it('puts the policy straight after the doctype of a bare doctype document', () => {
     expect(buildSandboxedHtml('<!doctype html>\n<p>x</p>')).toBe(
-      `<!doctype html><html><head>${CSP_META}</head><body>\n<p>x</p></body></html>`,
+      `<!doctype html>${CSP_META}\n<p>x</p>`,
     );
   });
 
@@ -69,10 +68,10 @@ describe('buildSandboxedHtml on real-shaped markup', () => {
   it('keeps text around an empty angle pair when it removes a policy tag', () => {
     const html =
       '<html><head>a<>b<meta http-equiv="Content-Security-Policy" content="x">c<</head></html>';
-    expect(buildSandboxedHtml(html)).toBe(`<html><head>\n${CSP_META}a<>bc<</head></html>`);
+    expect(buildSandboxedHtml(html)).toBe(`${CSP_META}<html><head>a<>bc<</head></html>`);
   });
 
-  it('treats a head tag with no closing bracket as text and adds a head after <html>', () => {
-    expect(buildSandboxedHtml('<html><head')).toBe(`<html><head>${CSP_META}</head><head`);
+  it('leaves a head tag with no closing bracket as text behind the policy', () => {
+    expect(buildSandboxedHtml('<html><head')).toBe(`${CSP_META}<html><head`);
   });
 });

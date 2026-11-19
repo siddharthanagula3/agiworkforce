@@ -40,8 +40,6 @@ function makeProps(
   };
 }
 
-const BASIC_USAGE_LINE = '5x more usage per session than Free.';
-
 // ---------------------------------------------------------------------------
 // Test suite
 // ---------------------------------------------------------------------------
@@ -98,6 +96,12 @@ describe('InlinePaywallCard', () => {
       ).toBeInTheDocument();
       expect(screen.queryByText(/more usage per session/)).toBeNull();
       expect(screen.queryByText(/credits per 5 hours/)).toBeNull();
+    });
+
+    it('compares Basic with no plan, since Free now has more usage than Basic', () => {
+      render(<InlinePaywallCard {...makeProps({ requiredTier: 'basic' })} />);
+      expect(screen.queryByText(/more usage/)).toBeNull();
+      expect(screen.queryByText(/than Free/)).toBeNull();
     });
 
     it('states no plan usage when the way out is not a plan', () => {
@@ -334,13 +338,13 @@ describe('InlinePaywallCard', () => {
     it('does not render a reason paragraph when reason is omitted', () => {
       const { container } = render(<InlinePaywallCard {...makeProps()} />);
       const paras = [...container.querySelectorAll('p.text-muted-foreground')];
-      expect(paras.map((para) => para.textContent)).toEqual([BASIC_USAGE_LINE]);
+      expect(paras.map((para) => para.textContent)).toEqual([]);
     });
 
     it('does not render a reason paragraph when reason is an empty string', () => {
       const { container } = render(<InlinePaywallCard {...makeProps({ reason: '' })} />);
       const paras = [...container.querySelectorAll('p.text-muted-foreground')];
-      expect(paras.map((para) => para.textContent)).toEqual([BASIC_USAGE_LINE]);
+      expect(paras.map((para) => para.textContent)).toEqual([]);
     });
 
     it('renders reason text when reason is a non-empty string', () => {

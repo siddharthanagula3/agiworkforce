@@ -2,7 +2,7 @@ import 'server-only';
 
 import { createHash } from 'node:crypto';
 import { openAIWireRequestToChatRequest } from '@agiworkforce/provider-protocol';
-import { estimateTokens, resolveAutoRoute } from '@agiworkforce/routing';
+import { estimateTokens } from '@agiworkforce/routing';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   MEMORY_SUMMARY_MAX_LINES,
@@ -16,13 +16,12 @@ import {
   buildServerProviderAdapter,
   toGenericUpstreamError,
 } from '@/lib/services/provider-adapter-service';
-import { dispatchProviderForSelectedRoute } from '@/lib/services/aggregator-routing';
 import {
   reserveBackgroundUsage,
   type BackgroundUsageLease,
 } from '@/lib/services/background-usage-lease';
 import { fingerprintManagedUsageRequest } from '@/lib/services/managed-usage-request-service';
-import { sideCallRoutingRequest } from '@/lib/server/side-call-training-policy';
+import { admitManagedCloudRoute } from '@/lib/server/managed-cloud-routing/admission';
 import { getKeyValueStore } from '@/lib/server/key-value';
 import { logger } from '@/lib/logger';
 
@@ -178,20 +177,12 @@ export async function generateMemorySummary(
     };
   }
 
-  const routing = await sideCallRoutingRequest(input.db, input.userId, {
-    selection: 'auto',
-    taskType: 'simple_chat',
-    subscriptionTier: 'free',
-    trustMode: 'managed_cloud',
-    runtimeProfileId: 'web/cloud-chat',
+  const admission = await admitManagedCloudRoute({
+    kind: 'utility',
+    account: { db: input.db, userId: input.userId, organizationId: input.organizationId },
   });
-  if (!routing) return null;
-  const route = resolveAutoRoute(routing);
-  if (route.status === 'unavailable') {
-    logger.warn({ code: route.code, userId: input.userId }, '[memory-summary] no managed route');
-    return null;
-  }
-  const dispatchProvider = dispatchProviderForSelectedRoute(route);
+  if (admission.status === 'refused') return null;
+  const { route, dispatchProvider } = admission;
   const content = memoryListContent(input.memories);
   const chatRequest = openAIWireRequestToChatRequest({
     model: route.providerModelId,

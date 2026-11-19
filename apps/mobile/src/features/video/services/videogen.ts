@@ -5,6 +5,7 @@ import {
 } from '@agiworkforce/types';
 
 import { api } from '@/services/api';
+import { ensureCloudSendConsent } from '@/services/llmGate';
 import { resolveGeneratedVideoUri } from './videoUri';
 import { createManagedMediaIdempotencyKey } from '@agiworkforce/utils/managed-media-idempotency';
 import type { ManagedMediaVideoGenerationRequest } from '@agiworkforce/cloud-contracts';
@@ -33,6 +34,16 @@ export interface VideoGenStatusResponse {
 export interface GeneratedVideo {
   videoUrl: string;
   thumbnailUrl?: string;
+}
+
+export class VideoGenerationFailedError extends Error {
+  constructor(
+    message: string,
+    readonly publicMessage: string | null,
+  ) {
+    super(message);
+    this.name = 'VideoGenerationFailedError';
+  }
 }
 
 export const VIDEO_POLL_INTERVAL_MS = 5_000;
@@ -80,6 +91,7 @@ export async function startVideoGeneration(
   if (!request.prompt.trim()) {
     throw new Error('Video generation requires a non-empty prompt');
   }
+  await ensureCloudSendConsent();
 
   const idempotencyKey = createManagedMediaIdempotencyKey({
     surface: 'mobile',
@@ -152,7 +164,11 @@ export async function generateVideo(
 
     if (status.status === 'completed') return generatedVideoFromStatus(status);
     if (status.status === 'failed' || status.status === 'timeout') {
-      throw new Error(status.error || `Video generation ${status.status}`);
+      const publicMessage = status.error?.trim() || null;
+      throw new VideoGenerationFailedError(
+        publicMessage ?? `Video generation ${status.status}`,
+        publicMessage,
+      );
     }
     if (Date.now() >= deadline) {
       throw new Error('Video generation timed out. The task may still finish; try again.');

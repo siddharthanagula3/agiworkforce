@@ -196,8 +196,9 @@ export default function ApiDocsPage() {
                 the catalog, <code>inference:write</code> for chat completions, audio transcriptions
                 and route preview, <code>usage:read</code> for the credit balance. Every operation
                 in the bundle names the credential and the scope it accepts. API key access is
-                included with {MANAGED_API_PLANS}; on any other plan the gateway refuses the key
-                with <code>managed_api_plan_required</code>.
+                included with {MANAGED_API_PLANS}. On any other plan the developer console issues no
+                keys, and the gateway refuses an existing key with{' '}
+                <code>managed_api_plan_required</code>.
               </p>
             }
             points={[

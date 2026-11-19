@@ -11,6 +11,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { fileTextPreviewKind } from '@/lib/server/file-text-preview';
+import { hasLibraryThumbnail, libraryThumbnailPath } from '@/lib/server/library-thumbnail';
 import { RESOURCE_RECOVERY_WINDOW_DAYS } from '@/lib/resources/deletion-policies';
 import { listLibraryAssets, type LibraryAssetRow } from '@/lib/server/media-assets';
 import { readFileStorageMeter } from '@/lib/server/file-storage';
@@ -72,6 +73,7 @@ function toLibraryItem(row: LibraryAssetRow): LibraryItem {
     kind: row.kind,
     byte_count: row.byteSize,
     uri: `/api/files/${row.id}`,
+    ...(hasLibraryThumbnail(row) ? { thumbnail_uri: libraryThumbnailPath(row.id) } : {}),
     surface: surface === 'artifact' || surface === 'file' ? surface : 'file',
     previewable: previewableForRow(row),
     origin: origin === 'upload' || origin === 'uploaded' ? 'uploaded' : 'generated',
@@ -98,6 +100,47 @@ async function readLibraryDownloadMeter(
       : { usedBytes: usage.usedBytes, limitBytes: usage.limitBytes };
   } catch (error) {
     logger.warn({ error, userId }, 'Library download meter could not be read');
+    return null;
+  }
+}
+
+interface LibraryStorageBreakdown {
+  documentsBytes: number;
+  imagesBytes: number;
+}
+
+async function readLibraryStorageBreakdown(
+  db: DatabaseAdapter,
+  userId: string,
+  organizationId: string | null,
+): Promise<LibraryStorageBreakdown | null> {
+  try {
+    const [row] = await db.query<{
+      documents_bytes: string | number | null;
+      images_bytes: string | number | null;
+    }>(
+      `select
+         coalesce(sum(m.byte_size) filter (
+           where not (m.kind = 'image' or lower(m.mime_type) like 'image/%')
+             and not (m.kind = 'video' or lower(m.mime_type) like 'video/%')
+         ), 0) as documents_bytes,
+         coalesce(sum(m.byte_size) filter (
+           where m.kind = 'image' or lower(m.mime_type) like 'image/%'
+         ), 0) as images_bytes
+       from public.media_assets m
+       where m.user_id = $1
+         and m.organization_id is not distinct from $2::uuid
+         and not m.temporary_chat
+         and m.deleted_at is null`,
+      [userId, organizationId],
+    );
+    const documentsBytes = Number(row?.documents_bytes);
+    const imagesBytes = Number(row?.images_bytes);
+    return Number.isFinite(documentsBytes) && Number.isFinite(imagesBytes)
+      ? { documentsBytes, imagesBytes }
+      : null;
+  } catch (error) {
+    logger.warn({ error, userId }, 'Library storage breakdown could not be read');
     return null;
   }
 }
@@ -149,10 +192,18 @@ async function handleListLibrary(request: NextRequest): Promise<NextResponse> {
   const storage =
     offset === 0 && !deleted ? await readFileStorageMeter({ db, userId, organizationId }) : null;
   const downloads = offset === 0 && !deleted ? await readLibraryDownloadMeter(db, userId) : null;
+  const breakdown =
+    offset === 0 && !deleted ? await readLibraryStorageBreakdown(db, userId, organizationId) : null;
   const response: LibraryListResponse = {
     ...body,
     ...(storage?.usedBytes != null ? { storage_used_bytes: storage.usedBytes } : {}),
     ...(storage?.limitBytes != null ? { storage_limit_bytes: storage.limitBytes } : {}),
+    ...(breakdown
+      ? {
+          storage_documents_bytes: breakdown.documentsBytes,
+          storage_images_bytes: breakdown.imagesBytes,
+        }
+      : {}),
     ...(downloads
       ? { download_used_bytes: downloads.usedBytes, download_limit_bytes: downloads.limitBytes }
       : {}),

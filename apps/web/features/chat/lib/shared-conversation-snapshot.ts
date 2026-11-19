@@ -1,4 +1,8 @@
-import { computeDerivedArtifactId, extractCodeBlocks } from '@agiworkforce/artifacts';
+import {
+  computeDerivedArtifactId,
+  extractCodeBlocks,
+  legacyArtifactIdAdoptions,
+} from '@agiworkforce/artifacts';
 import type { ArtifactData } from '@features/chat/components/artifacts/ArtifactPreview';
 
 type SnapshotArtifactType = ArtifactData['type'];
@@ -64,11 +68,24 @@ export function snapshotArtifacts(
   artifacts: readonly SnapshotArtifactSource[],
 ): SnapshotArtifact[] {
   const blocks = extractCodeBlocks(content);
-  return artifacts.flatMap((artifact) => {
-    const block = blocks.find(
-      (candidate) =>
-        computeDerivedArtifactId(conversationId, messageId, candidate.ordinal) === artifact.id,
+  const blockWithId = (id: string) =>
+    blocks.find(
+      (candidate) => computeDerivedArtifactId(conversationId, messageId, candidate.ordinal) === id,
     );
+  let adoptedIds: Map<string, string> | undefined;
+  const savedIds = new Set(artifacts.map((artifact) => artifact.id));
+  return artifacts.flatMap((artifact) => {
+    let block = blockWithId(artifact.id);
+    if (!block) {
+      adoptedIds ??= new Map(
+        legacyArtifactIdAdoptions(content, { conversationId, messageId }).map(
+          ({ id, legacyId }) => [legacyId, id],
+        ),
+      );
+      const adoptedId = adoptedIds.get(artifact.id);
+      if (adoptedId && savedIds.has(adoptedId)) return [];
+      if (adoptedId) block = blockWithId(adoptedId);
+    }
     if (block && block.content === artifact.content.trim()) return [];
     return [
       {

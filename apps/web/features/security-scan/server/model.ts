@@ -2,7 +2,7 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { openAIWireRequestToChatRequest } from '@agiworkforce/provider-protocol';
-import { estimateTokens, resolveAutoRoute } from '@agiworkforce/routing';
+import { estimateTokens } from '@agiworkforce/routing';
 import {
   clampEffortToEntitlement,
   getModelEffortOptions,
@@ -13,11 +13,7 @@ import { resolveWireMode } from '@/app/api/llm/v1/chat/completions/lib/adapter-p
 import { drainToLlmResponse } from '@/app/api/llm/v1/chat/completions/lib/adapter-response';
 import { logger } from '@/lib/logger';
 import { orderInstructionBlocks } from '@/lib/prompts/instruction-precedence';
-import {
-  sideCallProviderAllowed,
-  sideCallRoutingRequest,
-} from '@/lib/server/side-call-training-policy';
-import { dispatchProviderForSelectedRoute } from '@/lib/services/aggregator-routing';
+import { admitManagedCloudRoute } from '@/lib/server/managed-cloud-routing/admission';
 import {
   reserveBackgroundUsage,
   type BackgroundUsageLease,
@@ -79,28 +75,18 @@ export interface SecurityScanModelInput {
 export async function resolveSecurityScanModel(
   input: SecurityScanModelInput,
 ): Promise<SecurityScanModel> {
-  const routing = await sideCallRoutingRequest(input.db, input.userId, {
-    selection: input.selection ?? 'auto',
-    taskType: 'coding',
-    subscriptionTier: input.planTier,
-    trustMode: 'managed_cloud',
-    runtimeProfileId: 'web/cloud-chat',
+  const admission = await admitManagedCloudRoute({
+    kind: 'background',
+    account: { db: input.db, userId: input.userId, organizationId: input.organizationId },
+    planTier: input.planTier,
+    need: { ...(input.selection ? { selection: input.selection } : {}), taskType: 'coding' },
   });
-  if (!routing) throw new SecurityScanNoRouteError();
-  const decision = resolveAutoRoute(routing);
-  if (decision.status === 'unavailable') {
-    logger.warn({ code: decision.code }, '[security-scan] no managed route available');
-    throw new SecurityScanNoRouteError();
-  }
-  const route = decision;
+  if (admission.status === 'refused') throw new SecurityScanNoRouteError();
+  const { route, dispatchProvider } = admission;
   const effort =
     input.effort && getModelEffortOptions(route.modelKey).includes(input.effort)
       ? clampEffortToEntitlement(route.modelKey, input.effort, input.planTier)
       : undefined;
-  const dispatchProvider = dispatchProviderForSelectedRoute(route);
-  if (!(await sideCallProviderAllowed(input.db, input.userId, dispatchProvider))) {
-    throw new SecurityScanNoRouteError();
-  }
 
   async function call(modelCall: SecurityScanModelCall): Promise<SecurityScanModelAnswer> {
     let lease: BackgroundUsageLease;

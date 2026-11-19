@@ -47,6 +47,7 @@ import {
   type E2BExecutor,
   type ExecutionResult,
   type SandboxFileEntry,
+  type StagedStorageRecord,
 } from './types';
 import { e2bExecutionEnabled } from './gate';
 import { e2bChatTemplate } from './chat-template';
@@ -316,6 +317,9 @@ function notebookOutputs(
   }
   return outputs;
 }
+
+const isTemplateError = (err: unknown): boolean =>
+  err instanceof Error && err.name === 'TemplateError';
 
 const fail = (err: unknown): ExecutionResult => ({
   ok: false,
@@ -1045,6 +1049,7 @@ export const getE2BExecutor = tracedCodeAction(
     let sandbox: SandboxInstance;
     let sandboxId: string;
     const contexts: Record<string, StoredContext> = { ...(existingSession?.contexts ?? {}) };
+    let stagedStorage: StagedStorageRecord = { ...(existingSession?.stagedStorage ?? {}) };
 
     if (scope && existingSession) {
       try {
@@ -1066,6 +1071,7 @@ export const getE2BExecutor = tracedCodeAction(
         const replacementRefusal = await holdSandboxLifetime();
         if (replacementRefusal) return unavailable(replacementRefusal);
         for (const key of Object.keys(contexts)) delete contexts[key];
+        stagedStorage = {};
         const fresh = await createFresh();
         if (!fresh) return abandonReservation('sandbox_create_failed');
         sandbox = fresh;
@@ -1119,8 +1125,18 @@ export const getE2BExecutor = tracedCodeAction(
     const intervalMicrousdPerSecond =
       continuedInterval?.computeMicrousdPerSecond ?? computeMicrousdPerSecond;
     let intervalHandedToPause = false;
-    async function persistSession(): Promise<void> {
+    async function mergeStagedStorage(forget: ReadonlySet<string>): Promise<void> {
+      if (!scope) return;
+      const stored = await getE2BSession(scope);
+      if (stored?.sandboxId !== sandboxId || !stored.stagedStorage) return;
+      const others = Object.fromEntries(
+        Object.entries(stored.stagedStorage).filter(([assetId]) => !forget.has(assetId)),
+      );
+      stagedStorage = { ...others, ...stagedStorage };
+    }
+    async function persistSession(forget: ReadonlySet<string> = new Set()): Promise<void> {
       if (!scope || intervalHandedToPause) return;
+      await mergeStagedStorage(forget);
       const session: E2BSession = {
         sandboxId,
         contexts,
@@ -1132,6 +1148,7 @@ export const getE2BExecutor = tracedCodeAction(
           ? {}
           : { computeMicrousdPerSecond: intervalMicrousdPerSecond }),
         ...(computeReservation === undefined ? {} : { computeReservation }),
+        ...(Object.keys(stagedStorage).length === 0 ? {} : { stagedStorage }),
       };
       await saveE2BSession(scope, session);
     }
@@ -1252,6 +1269,33 @@ export const getE2BExecutor = tracedCodeAction(
         } catch (err) {
           return fail(err);
         }
+      },
+      async writeFileStream({ path, content, signal }): Promise<ExecutionResult> {
+        try {
+          await sandbox.files.write(path, content, { signal });
+          return { ok: true, output: `Wrote ${path}` };
+        } catch (err) {
+          return isTemplateError(err) ? { ...fail(err), unavailable: true } : fail(err);
+        }
+      },
+      async removeFile(path, options): Promise<ExecutionResult> {
+        try {
+          if (options?.requestTimeoutMs === undefined) await sandbox.files.remove(path);
+          else await sandbox.files.remove(path, { requestTimeoutMs: options.requestTimeoutMs });
+          return { ok: true, output: `Removed ${path}` };
+        } catch (err) {
+          return fail(err);
+        }
+      },
+      storageStaging: {
+        async load() {
+          await mergeStagedStorage(new Set());
+          return { ...stagedStorage };
+        },
+        async save(record, forget = []) {
+          stagedStorage = { ...record };
+          await persistSession(new Set(forget));
+        },
       },
       async createFolder({ path }): Promise<ExecutionResult> {
         try {

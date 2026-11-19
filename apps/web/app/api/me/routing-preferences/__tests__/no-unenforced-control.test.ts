@@ -8,8 +8,8 @@ const WEB_ROOT = join(__dirname, '../../../../..');
  * A switch that persists and changes nothing is a dead control.
  *
  * This guard used to assert that the resolver read NEITHER routing preference,
- * and refused any control for either. `us_only` is now threaded through
- * `buildWebCloudAutoRoutingRequest` into the resolver, which is AGI-8, so half
+ * and refused any control for either. `us_only` is now threaded through the
+ * managed cloud routing request into the resolver, which is AGI-8, so half
  * of that premise is gone. The guarantee is inverted rather than deleted: the
  * enforced preference is pinned as enforced, and the rule that a control may
  * not ship ahead of its enforcement now applies to the one still waiting for
@@ -49,16 +49,18 @@ function sourceFiles(dir: string): string[] {
   return found;
 }
 
-function requestProcessor(): string {
-  return readFileSync(
-    join(WEB_ROOT, 'app/api/llm/v1/chat/completions/lib/request-processor.ts'),
-    'utf8',
-  );
+const ROUTING_SOURCES = [
+  'app/api/llm/v1/chat/completions/lib/request-processor.ts',
+  'lib/server/managed-cloud-routing/routing-request.ts',
+];
+
+function routingSource(): string {
+  return ROUTING_SOURCES.map((file) => readFileSync(join(WEB_ROOT, file), 'utf8')).join('\n');
 }
 
 function routerReads(keys: readonly string[]): boolean {
-  const processor = requestProcessor();
-  return keys.some((key) => processor.includes(key));
+  const source = routingSource();
+  return keys.some((key) => source.includes(key));
 }
 
 describe('a routing preference control may not ship ahead of its enforcement', () => {

@@ -45,8 +45,11 @@ jest.mock('lucide-react-native', () => {
   const { Text } = require('react-native');
   const icon = ({ testID }: { testID?: string }) => <Text testID={testID}>icon</Text>;
   return {
+    Clock: icon,
     Cpu: icon,
+    Lightbulb: icon,
     Plane: icon,
+    Settings: icon,
     Shield: icon,
   };
 });
@@ -121,6 +124,7 @@ jest.mock('@/services/modelDownload', () => {
   return {
     ModelDownloadError,
     downloadModel: (...args: unknown[]) => mockDownloadModel(...args),
+    excludeModelFilesFromBackup: jest.fn().mockResolvedValue(undefined),
     cancelDownload: (...args: unknown[]) => mockCancelDownload(...args),
     assertDownloadAllowed: jest.fn().mockResolvedValue(undefined),
   };

@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder
-Last updated: 2026-11-13
+Last updated: 2026-11-18
 
 Only actions that need the founder: an account, a credential, a signature, a
 paid decision, or a call the founder reserves. Engineering work is never listed
@@ -70,14 +70,90 @@ Undecided calls from that round are in [`open-questions.md`](open-questions.md).
   reviewer notes and `apps/mobile/__tests__/ios-store-submission-config.test.ts` describe that build
   and the test is green again. Every remaining console, credential, device and decision step is in
   `docs/runbooks/mobile-store-first-release.md`, in order.
+- The gates the 2026-11-16 work added. The full list is runbook section 2, which also holds the
+  minimum age, the first iOS credentials, the review account, export compliance and the sales check:
+  1. Merge pull request 602 once its checks pass. The work is committed there,
+     not on `main`, and the tagged release builds the store binaries from `main`.
+  2. Deploy the web app, and apply migrations 0422, 0423 and 0424 to production with it. What the
+     phone needs from that deploy is listed in section 4.2 of the runbook; nothing on the pull request
+     is deployed, and account deletion does not complete without 0423.
+  3. Run the first store build and check that `apps/mobile/native/ios/AGIFoundationModels.swift`
+     compiles on the store image `macos-tahoe-26.5-xcode-26.6` (`apps/mobile/eas.json`). Every build
+     so far was a simulator build made with Xcode 27.1.
+  4. On a real iPhone, check the built-in Apple model in Local, Help and Support opened inside the
+     app against production, and that one ordinary tap toggles Reduce sensitive content (runbook
+     sections 11.1 and 11.2).
+  5. Decide iPad (runbook D2). The build supports iPad, so App Store Connect requires a 13-inch iPad
+     screenshot and App Review can test on iPad. A layout pass for iPad was made on 2026-11-17, but
+     only the first-run screen has been seen on an iPad: the simulator control needs your access
+     grant for the iPad simulator before the prepared iPad round and the iPad screenshots can run.
+     Developers report that an update cannot drop iPad once a universal version is approved.
 - Phone sign-in to Cloud works in production from `main` (`568584454a`, part of the release
   `e822c4fda6` live since 2026-11-13). The local branch `hotfix/mobile-native-session`
   (`a8e278c62e`) is no longer served.
-- No store build can start before 2026-11-12: the Expo patch update the release check requires is
-  held by the seven-day package-age rule until then (`MOBILE-EXPO-PATCH-LAG-2026-11-10`, runbook
-  step 7 item 1).
 - `codex/mobile-store-release` (2026-10-17) is not needed for this: its free-first idea was
   reimplemented on current code. Whether to keep or delete that branch is yours.
+
+## [Search] Queue again the documents indexing failed on since 2026-11-09
+
+**Why founder assistance is required**
+It changes production rows, which only the founder does. From 2026-11-09 until the fix in pull
+request 602, every changed or new retrieval document failed to index and was dropped after five
+attempts (`WEB-RETRIEVAL-INDEX-BACKLOG-SINCE-2026-11-09-01` in `audit/registers/known-flaws.md`).
+**Exact action** After the deploy that carries pull request 602, run as the database owner role
+(it bypasses row-level security). Step 1 only reads; step 2 queues 25 documents per 10-minute sweep
+so new documents keep half of each sweep's 50. The SQL ran on a local Postgres on 2026-11-18, not
+on production.
+
+```sql
+-- 1. Preview: how many are stuck, by kind.
+select source_kind,
+       count(*)                              as stuck,
+       count(*) filter (where attempts >= 5) as never_retried_again,
+       min(updated_at)                       as first_failure,
+       max(updated_at)                       as last_failure
+  from public.retrieval_documents
+ where status = 'failed'
+   and last_error = 'This source could not be indexed. Retry indexing to try again.'
+   and updated_at >= timestamptz '2026-11-09 00:00:00+00'
+ group by source_kind
+ order by stuck desc;
+
+-- 2. Queue them again.
+begin;
+with stuck as (
+  select id, row_number() over (order by updated_at, id) as n
+    from public.retrieval_documents
+   where status = 'failed'
+     and last_error = 'This source could not be indexed. Retry indexing to try again.'
+     and updated_at >= timestamptz '2026-11-09 00:00:00+00'
+), queued as (
+  update public.retrieval_documents d
+     set status = 'pending',
+         attempts = 0,
+         last_error = null,
+         lease_expires_at = null,
+         workflow_run_id = null,
+         next_attempt_at = now() + make_interval(mins => (10 * ((s.n - 1) / 25))::int),
+         updated_at = now()
+    from stuck s
+   where d.id = s.id
+     and d.status = 'failed'
+  returning d.next_attempt_at
+)
+select count(*) as queued, min(next_attempt_at) as first_run, max(next_attempt_at) as last_run
+  from queued;
+-- Check the count against step 1, then commit; (or rollback;)
+```
+
+**Where** The production database, after the web deploy.
+**Needed input** Run it, and decide whether to credit the embedding charges of the failed attempts.
+**How to verify completion** Step 1 run again later returns no rows, and a file from that window is
+found by search.
+**What remains after founder action** Nothing in code; the register row closes once search finds
+the requeued documents.
+**Impact** NON-BLOCKING (search misses documents from that window until this runs)
+**Status** FOUNDER ACTION REQUIRED after the deploy
 
 ## [Legal] Register a DMCA designated agent (decision 32)
 
@@ -120,7 +196,13 @@ Each line is one approval; engineering edits the page and its claim test after i
   cookie controls.
 - Decision 37: DEF-2262, DEF-3308 upload retention (kept with the chat until it is deleted); DEF-1206,
   DEF-1207 confirm live voice keeps the transcript and no audio, then the voice-retention line and its
-  Learn more target; DEF-3366 confirm whether de-identified or promotional-route copies survive
+  Learn more target; the live voice disclosure wording, now in
+  `apps/mobile/src/features/voice/components/VoiceOnboardingSheet.tsx` (`VOICE_DISCLOSURE.live`), the
+  Voice mode row of `apps/mobile/src/features/settings/cloud-privacy/DataUseScreen.tsx`, both
+  `LISTING-METADATA` files, `android/data-safety.json`, the Audio Data entry of
+  `ios/PrivacyInfo.xcprivacy` and both reviewer notes under `apps/mobile/store-listing/`, needs the
+  lawyer review recorded on 2026-11-13 (`docs/decisions/2026-11-13-founder-decisions.md`) before it
+  is final; DEF-3366 confirm whether de-identified or promotional-route copies survive
   deletion, then the retention statement.
 - Decision 38, approve first: DEF-2366, DEF-0161 notice that feedback and reports may be reviewed;
   DEF-1828 warning on approvals that read untrusted content or send data out; DEF-1174 the mobile
@@ -1315,3 +1397,81 @@ version 16 adds, so the run above measures regressions against version 6, not th
 Engineering adds those rows before the next version is measured.
 **Impact** NOT BLOCKING. Production keeps serving version 6 until this is done.
 **Status** FOUNDER ACTION REQUIRED
+
+## [Mobile] Confirm or reverse hiding two-step setup in AGI Mobile (D-2026-09-28-01)
+
+**Why founder assistance is required**
+D-2026-09-28-01 in `docs/decisions/2026-09-27-founder-decisions.md` keeps the authenticator app and
+backup code controls visible, saying "Temporarily unavailable", while the identity plan that provides
+them is not bought. On 2026-11-16 AGI Mobile was changed to hide them instead, ahead of its first App
+Store submission: while setup is unavailable, an account without two-factor sees no two-factor
+section, and an enrolled account keeps Authenticator app, Backup codes and Turn off two-factor but not
+Generate new backup codes. The web app still follows the decision. Changing a recorded decision is
+your call.
+
+**Exact action** Confirm the phone change, or reverse it so the phone shows "Temporarily unavailable"
+like the web app.
+**Where** `apps/mobile/src/features/settings/account-security/TwoFactorSection.tsx`, pinned by
+`apps/mobile/__tests__/AccountSecurityScreen.test.tsx`; the help article
+`apps/web/content/support/account-security.md`, which now describes both apps.
+**Needed input** Confirm or reverse.
+**How to verify completion** D-2026-09-28-01 describes what each app does, and the phone test pins
+that behaviour.
+**What remains after founder action** If confirmed, D-2026-09-28-01 is amended to name the phone's
+behaviour, and the mobile cell of S86.04 in `audit/ledger/ecosystem-capability-ledger.jsonl`, which
+still cites "Temporarily unavailable", is updated. If reversed, engineering restores the rows on the
+phone, and the help article and its claim in `apps/web/content/support/support-claims.json` return to
+one wording for both apps.
+**Impact** NON-BLOCKING.
+**Status** FOUNDER DECISION REQUIRED
+
+## [Mobile] Calls left open by the AGI Mobile 0.0.1 release work (2026-11-16)
+
+**Why founder assistance is required**
+The work on pull request 602 made or met these calls while building and testing AGI Mobile 0.0.1.
+Each is a plan, policy, privacy or disclosure call the founder reserves. Where a call was taken so
+the work could continue, it says "taken, reversible". The steps that gate the App Store submission
+are under "[Mobile] First store release: the steps only you can take" above.
+
+1. **Paid allowances against Free.** Free now allows 200 credits per five hours, 1,500 a week and
+   2,000 a month, above Basic in every window and above Premium and Team per week and per five hours
+   (`PLAN-PAID-ALLOWANCES-BELOW-FREE-01` in `audit/registers/known-flaws.md`). Set the paid
+   allowances before sales open on 2027-01-01.
+2. **The Local wellbeing instruction** (taken, reversible). It was removed from Local Mode because
+   it made the small on-device model refuse harmless messages. Whether Local needs one again waits
+   for an on-device evaluation (runbook D21).
+3. **Privacy policy wording for Read aloud, and its date.** Counsel reviews it
+   (`MOBILE-READ-ALOUD-PRIVACY-COPY-01`).
+4. **Follow-up suggestion chips.** They are written by the default Free model, an OpenAI model, so
+   the answer text of a chat on an Anthropic model also reaches OpenAI. The privacy page does not say
+   so.
+5. **The image bound for the fast OpenAI model.** The Free budget costs its pictures by the
+   provider's largest documented figure, because the model is not in the provider's table.
+6. **Payment text one tap from phone Help.** The legal pages keep their payment sections and the
+   status page has a Payments check and a Billing row
+   (`MOBILE-HELP-LINKED-PAGES-PURCHASE-TEXT-01`).
+7. **Two sentences in the phone build.** The delete-account confirmation says what happens to a
+   plan bought on the web, and a Cloud run's detail sheet says "Metered against your free trial
+   allowance" while the plan is called Free elsewhere (runbook D22).
+8. **Scanner exceptions.** An allowlist entry for
+   `apps/web/lib/server/chat-file-preparation/__tests__/text-stream.test.ts` in
+   `scripts/semgrep-allowlist.json` (expires 2027-02-28), and two medium CodeQL alerts, 1017 and
+   1018, left open as not defects.
+9. **Saving a finished answer on the server when no client is connected.** Not built. The phone
+   recovers an answer that finished while it was closed when it is opened again.
+10. **Store answers.** Opting out of Vision Pro and Mac in App Store Connect (runbook 8.7);
+    Apple's Parental Controls answer (runbook D13); export compliance with counsel (runbook D9). The minimum age is
+    under "[Trust & Safety] Minimum-age policy" above.
+
+**Exact action** Answer each item above.
+**Where** The runbook `docs/runbooks/mobile-store-first-release.md` (section 4.1) and the register
+rows named above.
+**Needed input** One answer per item.
+**How to verify completion** Each item has a recorded decision; an item that changes the phone build
+is in the build that is submitted.
+**What remains after founder action** Engineering changes the copy, the allowances or the build for
+each call that is reversed or changed.
+**Impact** Items 2 and 7 change the phone build, so a change to either needs a new build; item 10
+is answered before the App Store submission (runbook sections 8.5, 8.6 and 8.7). The other items do not
+change the phone build.
+**Status** FOUNDER DECISION REQUIRED

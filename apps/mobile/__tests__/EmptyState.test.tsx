@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 
+import { StyleSheet } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
 
 const mockClerkState: {
@@ -40,6 +41,17 @@ jest.mock('lucide-react-native', () => {
     { get: (target, prop) => target[prop as keyof typeof target] ?? icon },
   );
 });
+
+jest.mock('@/lib/v1FeatureFlags', () => {
+  const actual = jest.requireActual('@/lib/v1FeatureFlags');
+  return { FEATURES: { ...actual.FEATURES } };
+});
+
+const setRemoteFeatures = (enabled: boolean) => {
+  const { FEATURES } = jest.requireMock('@/lib/v1FeatureFlags');
+  FEATURES.companion = enabled;
+  FEATURES.dispatch = enabled;
+};
 
 const mockStorageGetString = jest.fn().mockReturnValue(undefined);
 const mockStorageSet = jest.fn();
@@ -118,6 +130,18 @@ describe('ChatEmptyState', () => {
     it('gives the greeting the column width so a long greeting wraps instead of running off screen', () => {
       const { getByTestId } = render(<ChatEmptyState />);
       expect(getByTestId('chat-empty-greeting-frame')).toHaveStyle({ alignSelf: 'stretch' });
+    });
+
+    it('scrolls a greeting taller than its space at the largest text size instead of pushing the composer down', () => {
+      const { getByTestId } = render(<ChatEmptyState />);
+      const frame = getByTestId('chat-empty-state');
+      expect(frame.type).toBe('RCTScrollView');
+      expect(frame).toHaveStyle({ flex: 1 });
+      expect(StyleSheet.flatten(frame.props.contentContainerStyle)).toMatchObject({
+        flexGrow: 1,
+        justifyContent: 'center',
+      });
+      expect(frame.props.keyboardShouldPersistTaps).toBe('handled');
     });
 
     it('shows "Ask anything" when no display name is set', () => {
@@ -224,6 +248,14 @@ describe('ChatEmptyState', () => {
   });
 
   describe('pairing banner gate', () => {
+    beforeEach(() => {
+      setRemoteFeatures(true);
+    });
+
+    afterEach(() => {
+      setRemoteFeatures(false);
+    });
+
     it('does not show pairing banner without a pairing handler', () => {
       mockStorageGetString.mockReturnValue(undefined);
 
@@ -246,6 +278,19 @@ describe('ChatEmptyState', () => {
         <ChatEmptyState showPairingBanner onPairDesktop={jest.fn()} />,
       );
       expect(queryByText('Pair your desktop?')).toBeNull();
+    });
+
+    it('hides the pairing banner while version 1 ships with Remote hidden', () => {
+      setRemoteFeatures(false);
+      mockStorageGetString.mockReturnValue(undefined);
+
+      const { getByText, queryByText, queryByLabelText } = render(
+        <ChatEmptyState showPairingBanner onPairDesktop={jest.fn()} />,
+      );
+
+      expect(getByText(greeting())).toBeTruthy();
+      expect(queryByText('Pair your desktop?')).toBeNull();
+      expect(queryByLabelText('Pair your desktop')).toBeNull();
     });
 
     it('invokes the Desktop-pairing action from the banner', () => {

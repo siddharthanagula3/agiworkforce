@@ -2,8 +2,10 @@ jest.mock('@/src/features/billing/nativePurchaseAvailability', () => ({
   NATIVE_PURCHASES_AVAILABLE: true,
 }));
 import React from 'react';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
-import { StyleSheet } from 'react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { Alert, FlatList, Platform, ScrollView, StyleSheet } from 'react-native';
+import { READING_COLUMN_MAX_WIDTH } from '@/src/shared/layout/contentColumn';
+import { HEADER_TEXT_SCALE_LIMIT } from '@/src/features/chat/components/WorkModeSwitch';
 
 const mockPush = jest.fn();
 const mockBack = jest.fn();
@@ -27,6 +29,7 @@ jest.mock('expo-haptics', () => ({
 
 jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: ({ children }: { children: React.ReactNode }) => children,
+  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
 
 jest.mock('../src/features/voice/components/VoiceInputButton', () => ({
@@ -58,6 +61,7 @@ jest.mock('lucide-react-native', () => {
     Pause: icon,
     Play: icon,
     ListFilter: icon,
+    MoreHorizontal: icon,
     Plus: icon,
     Trash2: icon,
     X: icon,
@@ -94,8 +98,15 @@ import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useWaitlistStore } from '../src/features/waitlist/store';
 import { useScheduleStore } from '../src/features/schedules/store';
 import { useTierStore } from '../src/features/billing/store';
+import { zonedDateAndTimeToIso } from '../src/features/schedules/timing';
+import { describeScheduleDeletion } from '../src/features/schedules/deleteConfirmation';
 
 describe('Schedules screen Cloud boundary', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+    jest.useRealTimers();
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
     mockFetchSchedules.mockResolvedValue(undefined);
@@ -253,6 +264,78 @@ describe('Schedules screen Cloud boundary', () => {
     expect(queryByText('Weekly rollup')).toBeNull();
   });
 
+  it('keeps the filter chip row at its own height so the schedule list cannot squeeze or stretch it', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    useScheduleStore.setState({
+      schedules: [
+        {
+          id: 'schedule-active',
+          name: 'Morning briefing',
+          prompt: 'Summarize inbox',
+          model: 'test-model-fixture',
+          recurrence: 'daily' as const,
+          cronExpression: undefined,
+          scheduledAt: null,
+          timeOfDay: '09:00',
+          timezone: 'UTC',
+          lastRunAt: null,
+          nextRunAt: null,
+          lastRunStatus: null,
+          isActive: true,
+          createdAt: '2026-07-17T09:00:00.000Z',
+          updatedAt: '2026-07-17T09:00:00.000Z',
+        },
+      ],
+    });
+
+    const { UNSAFE_getAllByType } = render(<SchedulesScreen />);
+
+    const row = UNSAFE_getAllByType(ScrollView).find((node) => node.props.horizontal);
+    expect(row?.props.style).toMatchObject({ flexGrow: 0, flexShrink: 0 });
+  });
+
+  it('holds the chip row and the schedule list to the reading column on a wide pane', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    useScheduleStore.setState({
+      schedules: [
+        {
+          id: 'schedule-active',
+          name: 'Morning briefing',
+          prompt: 'Summarize inbox',
+          model: 'test-model-fixture',
+          recurrence: 'daily' as const,
+          cronExpression: undefined,
+          scheduledAt: null,
+          timeOfDay: '09:00',
+          timezone: 'UTC',
+          lastRunAt: null,
+          nextRunAt: null,
+          lastRunStatus: null,
+          isActive: true,
+          createdAt: '2026-07-17T09:00:00.000Z',
+          updatedAt: '2026-07-17T09:00:00.000Z',
+        },
+      ],
+    });
+
+    const { UNSAFE_getAllByType, UNSAFE_getByType } = render(<SchedulesScreen />);
+
+    const row = UNSAFE_getAllByType(ScrollView).find((node) => node.props.horizontal);
+    expect(StyleSheet.flatten(row?.props.style)).toMatchObject({
+      width: '100%',
+      maxWidth: READING_COLUMN_MAX_WIDTH,
+      alignSelf: 'center',
+    });
+    expect(
+      StyleSheet.flatten(UNSAFE_getByType(FlatList).props.contentContainerStyle),
+    ).toMatchObject({
+      width: '100%',
+      maxWidth: READING_COLUMN_MAX_WIDTH,
+      alignSelf: 'center',
+      paddingHorizontal: 16,
+    });
+  });
+
   it('filters the list to completed schedules by their finished status', () => {
     useChatAppModeStore.setState({ appMode: 'cloud' });
     const base = {
@@ -287,6 +370,54 @@ describe('Schedules screen Cloud boundary', () => {
     fireEvent.press(getByLabelText('Filter schedules: Paused'));
     expect(getByText('Weekly rollup')).toBeTruthy();
     expect(queryByText('One time reminder')).toBeNull();
+  });
+
+  it('asks before deleting from the More menu, naming the loss, and deletes only after the destructive button', () => {
+    jest.useFakeTimers();
+    jest.replaceProperty(Platform, 'OS', 'android');
+    const deleteSchedule = jest.fn(async () => true);
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    useScheduleStore.setState({
+      schedules: [
+        {
+          id: 's-active',
+          name: 'Morning briefing',
+          prompt: 'Summarize inbox',
+          model: 'test-model-fixture',
+          recurrence: 'daily',
+          scheduledAt: null,
+          timeOfDay: '09:00',
+          timezone: 'UTC',
+          isActive: true,
+          status: 'active',
+          actionType: 'agent',
+          lastRunAt: null,
+          nextRunAt: null,
+          lastRunStatus: null,
+          createdAt: '2026-07-17T09:00:00.000Z',
+          updatedAt: '2026-07-17T09:00:00.000Z',
+        },
+      ],
+      deleteSchedule,
+    });
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+
+    const { getByLabelText } = render(<SchedulesScreen />);
+    fireEvent.press(getByLabelText('More actions for Morning briefing'));
+    fireEvent.press(getByLabelText('Delete'));
+    act(() => {
+      jest.runOnlyPendingTimers();
+    });
+
+    expect(alert).toHaveBeenCalledTimes(1);
+    const [title, message, buttons] = alert.mock.calls[0];
+    expect(title).toBe('Delete schedule?');
+    expect(message).toBe(describeScheduleDeletion('Morning briefing'));
+    expect(deleteSchedule).not.toHaveBeenCalled();
+
+    const destructive = buttons?.find((button) => button.style === 'destructive');
+    destructive?.onPress?.();
+    expect(deleteSchedule).toHaveBeenCalledWith('s-active');
   });
 
   it('says so when no schedule has completed', () => {
@@ -412,6 +543,24 @@ describe('Schedules screen Cloud boundary', () => {
     expect(mockPush).toHaveBeenCalledWith('/(app)/schedules/runs');
   });
 
+  it('keeps the header title in the row, capped and on one line, so it never runs under the buttons', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    const { getByTestId, getByRole } = render(<SchedulesScreen />);
+
+    const header = getByTestId('schedules-header');
+    expect(String(header.props.className)).toMatch(/\bmin-h-12\b/);
+    const title = getByRole('header', { name: 'Scheduled' });
+    expect(title.props.maxFontSizeMultiplier).toBe(HEADER_TEXT_SCALE_LIMIT);
+    expect(title.props.numberOfLines).toBe(1);
+    expect(title.props.adjustsFontSizeToFit).toBe(true);
+    let node = title.parent;
+    while (node && node.props?.testID !== 'schedules-header') {
+      expect(StyleSheet.flatten(node.props?.style)?.position).not.toBe('absolute');
+      node = node.parent;
+    }
+    expect(node?.props?.testID).toBe('schedules-header');
+  });
+
   describe('composer send', () => {
     const SENTENCE = 'Summarize my inbox every day at 8am';
     const typeIntoComposer = (utils: ReturnType<typeof render>, text: string) =>
@@ -473,6 +622,20 @@ describe('Schedules screen Cloud boundary', () => {
       expect(createSchedule).not.toHaveBeenCalled();
     });
 
+    it('keeps the unsent task text in the composer when the sheet is closed without creating', () => {
+      const createSchedule = jest.fn(async () => true);
+      useScheduleStore.setState({ createSchedule });
+      const utils = render(<SchedulesScreen />);
+
+      typeIntoComposer(utils, SENTENCE);
+      fireEvent.press(utils.getByLabelText('Continue scheduling task'));
+      fireEvent.press(utils.getByLabelText('Close quick schedule'));
+
+      expect(utils.queryByText('Quick Schedule')).toBeNull();
+      expect(utils.getByLabelText('Schedule a task').props.value).toBe(SENTENCE);
+      expect(createSchedule).not.toHaveBeenCalled();
+    });
+
     it('does not read a time out of an unrelated "at" in the text', () => {
       const utils = render(<SchedulesScreen />);
 
@@ -481,6 +644,48 @@ describe('Schedules screen Cloud boundary', () => {
 
       expect(utils.queryByText('Daily at 09:00')).toBeNull();
       expect(utils.getAllByDisplayValue('Look at my inbox').length).toBe(2);
+    });
+
+    it('creates a one-time task for a calendar date instead of a daily one', async () => {
+      const createSchedule = jest.fn(async () => true);
+      useScheduleStore.setState({ createSchedule });
+      const utils = render(<SchedulesScreen />);
+
+      typeIntoComposer(utils, 'Pay rent on January 5 2031 at 9am');
+      fireEvent.press(utils.getByLabelText('Continue scheduling task'));
+
+      expect(utils.getByText('Once on Jan 5, 2031 at 09:00')).toBeTruthy();
+      expect(utils.queryByText('Daily at 09:00')).toBeNull();
+      pressCreateInSheet(utils);
+
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      await waitFor(() =>
+        expect(createSchedule).toHaveBeenCalledWith(
+          expect.objectContaining({
+            recurrence: 'once',
+            timeOfDay: '09:00',
+            scheduledAt: zonedDateAndTimeToIso('2031-01-05', '09:00', timezone),
+            timezone,
+          }),
+        ),
+      );
+    });
+
+    it('says when the time it was given cannot be read', () => {
+      const utils = render(<SchedulesScreen />);
+
+      typeIntoComposer(utils, 'Summarize my inbox');
+      fireEvent.press(utils.getByLabelText('Continue scheduling task'));
+      fireEvent.changeText(
+        utils.getByPlaceholderText('e.g. "Every day at 9am"'),
+        'next Friday at 9am',
+      );
+
+      expect(
+        utils.getByText(
+          'Could not understand the schedule. Try "Every day at 9am" or "January 5 at 9am".',
+        ),
+      ).toBeTruthy();
     });
 
     it('keeps the text and shows the failure when the confirmed creation fails', async () => {

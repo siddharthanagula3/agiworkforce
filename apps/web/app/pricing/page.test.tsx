@@ -1203,8 +1203,8 @@ describe('PricingPage', () => {
 
     column('free', {
       usage: 'compareFreeUsage',
-      projects: '1',
-      storage: '100 MB',
+      projects: '5',
+      storage: '500 MB',
       downloads: '775 MB',
       attachment: '25 MB',
       customMcp: NOT_INCLUDED,
@@ -1214,20 +1214,20 @@ describe('PricingPage', () => {
       training: 'Not by AGI. Free model providers may.',
     });
     column('basic', {
-      usage: '5x more usage per session than Free',
-      projects: '5',
-      storage: '1 GB',
+      usage: INCLUDED,
+      projects: 'noSetLimit',
+      storage: '4 GB',
       downloads: '1 GB',
       attachment: '25 MB',
       customMcp: '5',
       chats: '1',
-      scheduledTasks: '2',
+      scheduledTasks: '3',
       sandboxes: '5 at once, 24 h each',
     });
     column('pro', {
       usage: '5x more usage than Basic',
-      projects: '25',
-      storage: '10 GB',
+      projects: 'noSetLimit',
+      storage: '20 GB',
       downloads: '3 GB',
       attachment: '25 MB',
       customMcp: '25',
@@ -1244,7 +1244,7 @@ describe('PricingPage', () => {
       attachment: '25 MB',
       customMcp: 'noSetLimit',
       chats: '5',
-      scheduledTasks: '10',
+      scheduledTasks: '15',
       sandboxes: '20 at once, 24 h each',
       proFeatures: true,
     });
@@ -1265,13 +1265,13 @@ describe('PricingPage', () => {
     showBusinessPlans();
     column('team', {
       usage: 'Same usage as Premium for every seat',
-      projects: '25',
+      projects: 'noSetLimit',
       storage: '25 GB',
       downloads: '3.3 GB',
       attachment: '25 MB',
       customMcp: '25',
       chats: '3',
-      scheduledTasks: '5',
+      scheduledTasks: '10',
       sandboxes: '10 at once, 24 h each',
       proFeatures: true,
       teamAdmin: true,
@@ -1560,10 +1560,9 @@ describe('PricingPage', () => {
 
     const cardOf = (name: string) =>
       within(screen.getByRole('heading', { name }).closest('article')!);
-    expect(cardOf('Basic').queryByText('5x more usage per session than Free')).toBeNull();
-    expect(comparisonRow('compareRowManagedUsage').cells['Basic']).toBe(
-      '5x more usage per session than Free',
-    );
+    expect(cardOf('Basic').queryByText(/than Free/)).toBeNull();
+    expect(comparisonRow('compareRowManagedUsage').cells['Basic']).toBe(INCLUDED);
+    expect(screen.queryByText(/more usage per session than Free/)).toBeNull();
     expect(cardOf('Premium').getByText('cardExpandedUsage')).toBeVisible();
     expect(cardOf('Max').getByText('cardExtendedUsage')).toBeVisible();
     expect(cardOf('Ultra').getByText('cardHighestUsage')).toBeVisible();

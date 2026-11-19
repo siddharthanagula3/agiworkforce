@@ -4,13 +4,21 @@ import {
   type PluginInstallationWire,
 } from '@agiworkforce/cloud-contracts';
 import {
-  featuredPlugins,
+  PLUGIN_PERMISSIONS_COPY,
+  addedPluginRows,
+  addedPluginsCountLabel,
   indexInstallations,
+  installedTilePlan,
+  pluginTileLetter,
+  pluginInstallPermissionsMessage,
   pluginCategories,
   pluginCompatibility,
   pluginIncludes,
+  pluginRowControl,
+  pluginShelfCategories,
   pluginStateLabel,
   pluginWorksWith,
+  popularPlugins,
   recommendedPlugins,
   versionMoveSummary,
   versionSwitchSummary,
@@ -58,8 +66,35 @@ describe('plugins model', () => {
   ];
   const installed = indexInstallations([INSTALLATION]);
 
-  it('features verified, installable plugins people install, most installed first', () => {
-    expect(featuredPlugins(entries, installed).map((entry) => entry.id)).toEqual(['b', 'a']);
+  it('lists the verified, installable plugins people install most, installed ones included', () => {
+    expect(popularPlugins(entries).map((entry) => entry.id)).toEqual(['installed', 'b', 'a']);
+  });
+
+  it('shows at most six popular plugins, most installed first', () => {
+    const many = Array.from({ length: 9 }, (_, index) =>
+      pluginEntry({ id: `p${index}`, name: `P${index}`, installs: index + 1 }),
+    );
+    expect(popularPlugins(many).map((entry) => entry.id)).toEqual([
+      'p8',
+      'p7',
+      'p6',
+      'p5',
+      'p4',
+      'p3',
+    ]);
+  });
+
+  it('picks the row control from the install state and what the phone can install', () => {
+    expect(pluginRowControl(entries[0]!, undefined)).toBe('install');
+    expect(pluginRowControl(entries[0]!, INSTALLATION)).toBe('more');
+    expect(pluginRowControl(entries[4]!, undefined)).toBe('none');
+    expect(pluginRowControl(pluginEntry({ status: 'preview' }), undefined)).toBe('none');
+  });
+
+  it('lists each permission under the permissions explanation', () => {
+    expect(pluginInstallPermissionsMessage(['read mail', 'send mail'])).toBe(
+      `${PLUGIN_PERMISSIONS_COPY}\n\n• read mail\n• send mail`,
+    );
   });
 
   it('recommends plugins that use a connector the person already connected', () => {
@@ -74,6 +109,10 @@ describe('plugins model', () => {
   it('explains why a plugin cannot install on mobile', () => {
     expect(pluginCompatibility(pluginEntry({})).installable).toBe(true);
     expect(pluginCompatibility(pluginEntry({ webInstallable: false })).warning).toMatch(/Desktop/);
+    expect(pluginCompatibility(pluginEntry({ webInstallable: false }))).toEqual({
+      installable: false,
+      warning: 'Runs in the Desktop app and the CLI. Cloud chats on this device cannot load it.',
+    });
     expect(pluginCompatibility(pluginEntry({ status: 'preview' }))).toEqual({
       installable: false,
       warning: 'Coming later. This plugin is not published yet.',
@@ -116,7 +155,47 @@ describe('plugins model', () => {
   });
 
   it('lists categories from stats and entries', () => {
-    expect(pluginCategories(entries, { Design: 2 })).toEqual(['Design', 'Productivity']);
+    expect(pluginCategories(entries, { design: 2 })).toEqual([
+      { key: 'design', value: 'design', label: 'Design' },
+      { key: 'productivity', value: 'Productivity', label: 'Productivity' },
+    ]);
+  });
+
+  it('groups categories that differ only in case into one option', () => {
+    const mixed = [
+      pluginEntry({ id: 'a', category: 'Developer' }),
+      pluginEntry({ id: 'b', category: 'developer' }),
+      pluginEntry({ id: 'c', category: ' DEVELOPER ' }),
+      pluginEntry({ id: 'd', category: 'data-analysis' }),
+    ];
+    expect(pluginCategories(mixed, { developer: 3, 'data-analysis': 1 })).toEqual([
+      { key: 'data-analysis', value: 'data-analysis', label: 'Data analysis' },
+      { key: 'developer', value: 'Developer', label: 'Developer' },
+    ]);
+  });
+
+  it('picks the three largest categories that have at least three plugins for shelves', () => {
+    expect(
+      pluginShelfCategories({
+        finance: 5,
+        developer: 4,
+        design: 3,
+        writing: 2,
+        'data-analysis': 9,
+      }),
+    ).toEqual([
+      { key: 'data-analysis', value: 'data-analysis', label: 'Data analysis' },
+      { key: 'finance', value: 'finance', label: 'Finance' },
+      { key: 'developer', value: 'developer', label: 'Developer' },
+    ]);
+  });
+
+  it('breaks shelf ties by label and skips blank or small categories', () => {
+    expect(pluginShelfCategories({ b: 3, a: 3, ' ': 8, c: 2 }).map((option) => option.key)).toEqual(
+      ['a', 'b'],
+    );
+    expect(pluginShelfCategories(undefined)).toEqual([]);
+    expect(pluginShelfCategories({ finance: 2 })).toEqual([]);
   });
 
   it('acknowledges only the permissions a version adds', () => {
@@ -174,5 +253,78 @@ describe('plugins model', () => {
     expect(
       pluginDirectoryHref({ search: ' mail ', category: 'Sales', sort: 'name', source: 'partner' }),
     ).toBe('/api/plugins?search=mail&category=Sales&source=partner&sort=name');
+  });
+
+  describe('installed tiles and the Added list', () => {
+    const at = (pluginId: string, installedAt: string, enabled = true): PluginInstallationWire => ({
+      pluginId,
+      installedVersion: '1.0.0',
+      enabled,
+      installedAt,
+      updatedAt: installedAt,
+    });
+
+    it('puts the five newest installations first and counts the rest', () => {
+      const plan = installedTilePlan(
+        ['a', 'b', 'c', 'd', 'e', 'f', 'g'].map((id, index) =>
+          at(id, `2026-10-0${index + 1}T00:00:00.000Z`),
+        ),
+      );
+      expect(plan.tiles.map((tile) => tile.pluginId)).toEqual(['g', 'f', 'e', 'd', 'c']);
+      expect(plan.overflow).toBe(2);
+    });
+
+    it('has no overflow at the limit and sorts a bad date last', () => {
+      const plan = installedTilePlan([
+        at('old', 'not a date'),
+        at('new', '2026-10-02T00:00:00.000Z'),
+      ]);
+      expect(plan.tiles.map((tile) => tile.pluginId)).toEqual(['new', 'old']);
+      expect(plan.overflow).toBe(0);
+      expect(installedTilePlan([])).toEqual({ tiles: [], overflow: 0 });
+    });
+
+    it('takes the first letter of the name, as a capital', () => {
+      expect(pluginTileLetter('docs kit')).toBe('D');
+      expect(pluginTileLetter('  Mail')).toBe('M');
+      expect(pluginTileLetter('')).toBe('?');
+    });
+
+    it('sorts the rows A to Z regardless of case, names Turned off and failed rows, and filters', () => {
+      const installations = [
+        at('zeta', '2026-10-01T00:00:00.000Z'),
+        at('alpha', '2026-10-01T00:00:00.000Z', false),
+        at('broken', '2026-10-01T00:00:00.000Z'),
+        at('mid', '2026-10-01T00:00:00.000Z'),
+      ];
+      const details = new Map([
+        [
+          'zeta',
+          { status: 'loaded' as const, entry: pluginEntry({ id: 'zeta', name: 'Zeta kit' }) },
+        ],
+        [
+          'alpha',
+          { status: 'loaded' as const, entry: pluginEntry({ id: 'alpha', name: 'alpha kit' }) },
+        ],
+        ['mid', { status: 'loaded' as const, entry: pluginEntry({ id: 'mid', name: 'Mid kit' }) }],
+        ['broken', { status: 'failed' as const }],
+      ]);
+      expect(addedPluginRows(installations, details)).toEqual([
+        { id: 'alpha', name: 'alpha kit', meta: 'Turned off' },
+        { id: 'broken', name: 'broken', meta: 'Could not load' },
+        { id: 'mid', name: 'Mid kit', meta: null },
+        { id: 'zeta', name: 'Zeta kit', meta: null },
+      ]);
+      expect(addedPluginRows(installations, details, ' KIT ').map((row) => row.id)).toEqual([
+        'alpha',
+        'mid',
+        'zeta',
+      ]);
+    });
+
+    it('writes the count only when something is added', () => {
+      expect(addedPluginsCountLabel(0)).toBeNull();
+      expect(addedPluginsCountLabel(28)).toBe('28 added');
+    });
   });
 });

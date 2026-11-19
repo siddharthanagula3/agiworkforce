@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { AGI_WORK_MODE } from '@agiworkforce/types';
 import { UPDATE_WORK_PLAN_REVIEW_SQL } from '../lib/work-plan-review';
+import { mergeJsonbObjectSql } from '@/lib/server/jsonb-object-merge';
 
 const ORGANIZATION_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const CONVERSATION_ID = '11111111-1111-4111-8111-111111111111';
@@ -108,8 +109,8 @@ describe('message operations require an active-workspace parent', () => {
       agiWorkPlanDeclined: false,
     });
     expect(params.slice(1)).toEqual([MESSAGE_ID, CONVERSATION_ID, 'null']);
-    expect(UPDATE_WORK_PLAN_REVIEW_SQL).toMatch(
-      /metadata = coalesce\(metadata, '\{\}'::jsonb\) \|\|/,
+    expect(UPDATE_WORK_PLAN_REVIEW_SQL).toContain(
+      `set metadata = ${mergeJsonbObjectSql('metadata', '$1::jsonb')}`,
     );
     expect(UPDATE_WORK_PLAN_REVIEW_SQL).toMatch(/role = 'assistant' and deleted_at is null/);
     expect(UPDATE_WORK_PLAN_REVIEW_SQL).not.toMatch(/set content|active_leaf|parent_id/);

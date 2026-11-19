@@ -14,6 +14,7 @@ import {
   strategyUsesSemantic,
   type SearchCandidate,
   type SearchChunkMetadata,
+  type SearchHit,
   type SearchMode,
   type SearchProvider,
   type SearchRequest,
@@ -388,13 +389,15 @@ export async function readIndexedSourceText(
 
   let text = '';
   let covered = -1;
+  let previousStart = -1;
   for (const row of rows) {
-    if (row.start_offset === null || covered < 0) {
+    if (row.start_offset === null || covered < 0 || row.start_offset <= previousStart) {
       text += (text ? '\n\n' : '') + row.content;
     } else {
       text += row.content.slice(Math.max(0, covered - row.start_offset));
     }
     covered = row.end_offset ?? -1;
+    previousStart = row.start_offset ?? -1;
     if (text.length > request.maxChars) break;
   }
   const truncated =
@@ -407,6 +410,31 @@ export async function readIndexedSourceText(
     truncated,
     googleUserData: rows.some((row) => row.google_user_data !== false),
   };
+}
+
+const ATTACHED_FILE_KINDS: readonly SearchSourceKind[] = ['library_file'];
+
+/**
+ * Passages from the files attached to one conversation, ranked by full text
+ * alone: a chat file is indexed by keyword only, so a query embedding would be
+ * paid for and match nothing.
+ */
+export async function searchAttachedFiles(
+  scope: Omit<RetrievalSearchScope, 'semantic' | 'includeHealthSpaces'>,
+  request: { text: string; assetIds: readonly string[]; limit: number; maxPerSource?: number },
+): Promise<SearchHit[]> {
+  if (request.assetIds.length === 0) return [];
+  const { hits } = await createPostgresSearchProvider({ ...scope, semantic: false }).search({
+    text: request.text,
+    kinds: ATTACHED_FILE_KINDS,
+    sourceIds: request.assetIds,
+    limit: request.limit,
+    ...(request.maxPerSource !== undefined ? { maxPerSource: request.maxPerSource } : {}),
+    match: 'any_term',
+    mode: 'private_knowledge',
+    strategy: 'keyword',
+  });
+  return hits;
 }
 
 /**

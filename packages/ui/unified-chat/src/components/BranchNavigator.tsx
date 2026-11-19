@@ -2,11 +2,6 @@ import { memo, useMemo } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@agiworkforce/ui';
 import { cn } from '../lib/utils';
-import {
-  useCheckpointStore,
-  selectBranches,
-  selectActiveBranchId,
-} from '../stores/checkpointStore';
 
 export interface BranchItem {
   id: string;
@@ -98,35 +93,3 @@ BranchNavigatorComponent.displayName = 'BranchNavigator';
 
 export const BranchNavigator = memo(BranchNavigatorComponent);
 export default BranchNavigator;
-
-export interface BranchNavigatorContainerProps {
-  conversationId: string;
-  messageId: string;
-  onSwitch: (branchId: string) => void;
-}
-
-export function BranchNavigatorContainer({
-  conversationId,
-  messageId,
-  onSwitch,
-}: BranchNavigatorContainerProps) {
-  const branches = useCheckpointStore(selectBranches(conversationId));
-  const activeBranchId = useCheckpointStore(selectActiveBranchId(conversationId));
-
-  const branchItems: BranchItem[] = branches.map((b) => ({
-    id: b.id,
-    name: b.name,
-    forkPointMessageId: b.rootMessageId,
-  }));
-
-  if (!activeBranchId) return null;
-
-  return (
-    <BranchNavigator
-      branches={branchItems}
-      activeBranchId={activeBranchId}
-      onSwitch={onSwitch}
-      messageId={messageId}
-    />
-  );
-}

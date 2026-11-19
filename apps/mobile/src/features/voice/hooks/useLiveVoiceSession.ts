@@ -17,6 +17,7 @@ import { executionModeForConversation } from '@/src/features/chat/utils/conversa
 import { getRemoteChatDisabledReason } from '@/services/remoteChatGate';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { requestMicrophoneOnlyPermission } from '@/src/features/voice/services/voiceInput';
+import { isMicPermissionRequestPending } from '@/src/features/voice/services/micPermissionRequest';
 import {
   applyAudioRoute,
   audioRouteNotAppliedMessage,
@@ -55,6 +56,12 @@ function startFailureMessage(error: unknown): string {
 }
 
 export type LiveVoiceStatus = 'idle' | 'connecting' | 'live' | 'error';
+
+const liveVoiceSessionEnders = new Set<() => void>();
+
+export function endLiveVoiceSessions(): void {
+  for (const end of [...liveVoiceSessionEnders]) end();
+}
 
 const RECONNECT_MAX_ATTEMPTS = 3;
 const RECONNECT_BASE_MS = 1_000;
@@ -294,6 +301,10 @@ export function useLiveVoiceSession({
       authority.assertCurrent();
       const permission = await requestMicrophoneOnlyPermission();
       authority.assertCurrent();
+      if (AppState.currentState === 'background') {
+        end();
+        authority.assertCurrent();
+      }
       if (!permission) {
         throw new module.LiveVoiceSessionError(
           LIVE_VOICE_MESSAGE.microphoneDenied,
@@ -461,8 +472,8 @@ export function useLiveVoiceSession({
       setBackendBusy(false);
       endedRef.current(LIVE_VOICE_MESSAGE.sessionEnded);
     });
-    const appState = AppState.addEventListener('change', (nextState) => {
-      if (nextState !== 'background' || cancelled) return;
+    const end = () => {
+      if (cancelled) return;
       retire();
       setStatus('idle');
       setAssistantSpeaking(false);
@@ -470,9 +481,16 @@ export function useLiveVoiceSession({
       setApprovals([]);
       setToolActivity([]);
       endedRef.current(LIVE_VOICE_MESSAGE.sessionEnded);
+    };
+    liveVoiceSessionEnders.add(end);
+    const appState = AppState.addEventListener('change', (nextState) => {
+      if (nextState !== 'background') return;
+      if (isMicPermissionRequestPending() && ownedSession === null) return;
+      end();
     });
 
     return () => {
+      liveVoiceSessionEnders.delete(end);
       retire();
       if (authorityRef.current === authority) authorityRef.current = null;
       accountSubscription();

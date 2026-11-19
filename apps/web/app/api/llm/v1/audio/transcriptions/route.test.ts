@@ -374,6 +374,14 @@ describe('POST /api/llm/v1/audio/transcriptions, on the Free monthly voice allow
         outputTokens: 100,
       }),
     });
+    const cost = mocks.providerCost.mock.calls[0]![0] as {
+      actualCostCents: number;
+      providerEstimatedCostMicrousd: number;
+    };
+    expect(cost.providerEstimatedCostMicrousd).toBeGreaterThan(0);
+    expect(cost.providerEstimatedCostMicrousd).toBeLessThan(10_000);
+    expect(cost.providerEstimatedCostMicrousd % 10_000).not.toBe(0);
+    expect(cost.actualCostCents).toBe(Math.round(cost.providerEstimatedCostMicrousd / 10_000));
     expect(mocks.assertTierUnitAllowance).not.toHaveBeenCalled();
     expect(mocks.reserve).not.toHaveBeenCalled();
     expect(mocks.providerStarted).not.toHaveBeenCalled();

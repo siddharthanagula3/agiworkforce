@@ -3,7 +3,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, View } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { useRouter } from 'expo-router';
-import { useUser } from '@clerk/expo';
 import {
   AlertTriangle,
   BookOpen,
@@ -17,19 +16,21 @@ import {
   Shield,
   ShieldCheck,
   Trash2,
-  UserRound,
   type LucideIcon,
 } from 'lucide-react-native';
 import {
   BANK_ACCOUNTS_CONNECTOR_ID,
+  connectorAccessSentence,
   connectorCategoryToolName,
   connectorCredentialsPath,
+  connectorRiskClass,
   isConnectorCategoryToolName,
   type ConnectorToolCategory,
 } from '@agiworkforce/cloud-contracts';
 
 import { Text } from '@/components/ui/Text';
 import { ConnectorConsentNotes, ConnectorHealthCard } from './ConnectorTrustSections';
+import { askConnectorConsent } from './connectorConsent';
 import { ConnectorCallLog } from './ConnectorCallLog';
 import { LinkedBanks } from './LinkedBanks';
 import { FEATURES } from '@/lib/v1FeatureFlags';
@@ -61,7 +62,7 @@ import {
 import { useAuthStore } from '@/src/features/auth/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
-import { CapabilityUnavailable, useCapability } from '@/src/lib/Capabilities';
+import { CapabilityUnavailable, useCapabilityDenialReason } from '@/src/lib/Capabilities';
 import {
   CloudAccountRequired,
   CloudSyncBlockedBanner,
@@ -72,8 +73,18 @@ import {
 } from '@/src/features/settings/Common';
 import { cardRadius, useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { codeFontFamily } from '@/src/ui/theme/codeFont';
 import { ConnectorApiKeySheet } from './ConnectorApiKeySheet';
+import {
+  CONNECTORS_COMING_SOON_DETAIL,
+  CONNECTORS_COMING_SOON_LABEL,
+  connectorReleased,
+} from '@agiworkforce/types';
 import { connectorFailureMessage } from './connectorFailureMessage';
+import { connectorAuthorizationNotice } from './connectorAuthorizationOutcome';
+import { ConnectorAccountRows } from './ConnectorAccountSummary';
+
+const CONNECTOR_PERMISSION_ACCESS_LABELS = { read: 'Read', write: 'Write' } as const;
 import { ConnectorLogo } from './ConnectorLogo';
 import { connectionStatus, formatConnectorName } from './connectorStatus';
 
@@ -92,6 +103,14 @@ const SIGN_IN_LABELS: Record<ConnectorListing['authMode'], string> = {
   none: 'Not needed',
   unknown: 'Checked on connect',
 };
+
+function listingAccessNote(listing: ConnectorListing): string {
+  const riskClass = connectorRiskClass(listing.id);
+  const access = connectorAccessSentence(riskClass);
+  return riskClass && listing.toolNames.length === 0
+    ? `${access} ${listing.name} lists its tools once it is connected.`
+    : access;
+}
 
 const CONNECTABLE_NOW: ReadonlySet<ConnectorListing['connectable']> = new Set([
   'connect',
@@ -227,7 +246,7 @@ function PermissionRow({
               color: colors.textMuted,
               fontSize: typeScale.caption,
               marginTop: 3,
-              fontFamily: 'monospace',
+              fontFamily: codeFontFamily,
             }}
           >
             {toolName}
@@ -316,30 +335,20 @@ function PermissionRow({
 }
 
 function announceInAppAuthorization(name: string, outcome: InAppConnectorAuthorization): void {
-  if (outcome === 'connected' || outcome === 'dismissed') return;
-  if (outcome === 'denied') {
-    Alert.alert(
-      `${name} was not connected`,
-      'The authorization was declined. Nothing was connected.',
-    );
-    return;
-  }
-  Alert.alert(
-    `Could not connect ${name}`,
-    'The authorization did not finish. Nothing was connected. Try again in a moment.',
-  );
+  const notice = connectorAuthorizationNotice(name, outcome);
+  if (notice) Alert.alert(notice.title, notice.body);
 }
 
 export default function ConnectorDetailScreen({ connectorId }: { connectorId: string }) {
   const colors = useThemeColors();
   const router = useRouter();
-  const { user: clerkUser } = useUser();
   const isClerkLoaded = useAuthStore((state) => state.isClerkLoaded);
   const isClerkSignedIn = useAuthStore((state) => state.isClerkSignedIn);
   const clerkUserId = useAuthStore((state) => state.clerkUserId);
   const appMode = useChatAppModeStore((state) => state.appMode);
   const setAppMode = useChatAppModeStore((state) => state.setAppMode);
-  const connectorsSwitchedOn = useCapability('canUseConnectors');
+  const connectorsDenial = useCapabilityDenialReason('canUseConnectors');
+  const connectorsSwitchedOn = connectorsDenial === null;
   const [connection, setConnection] = useState<ConnectedConnector | null>(null);
   const [listing, setListing] = useState<ConnectorListing | null>(null);
   const [permissions, setPermissions] = useState<ConnectorToolPermission[] | null>(null);
@@ -358,7 +367,7 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
 
   const validConnectorId = connectorId.length > 0 && connectorId.length <= 200 ? connectorId : null;
   const isCloudModeActive = appMode === 'cloud';
-  const accountEmail = clerkUser?.primaryEmailAddress?.emailAddress ?? 'AGI Cloud account';
+  const hasPermissionSentences = (connection?.grantedPermissions?.length ?? 0) > 0;
   const connectorName =
     connection?.name || listing?.name || formatConnectorName(validConnectorId ?? connectorId);
   const status = connection ? connectionStatus(connection) : null;
@@ -550,9 +559,16 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
     if (!account || !isActionCurrent(account)) return;
     const targetConnectorId = validConnectorId;
     const name = connectorName;
+    const providerSignIn = listing?.authMode === 'oauth';
     setConnecting(true);
     void (async () => {
       try {
+        const allowed = await askConnectorConsent({
+          id: targetConnectorId,
+          name,
+          providerSignIn,
+        });
+        if (!allowed || !isActionCurrent(account)) return;
         const result = await connectConnector(targetConnectorId);
         if (!isActionCurrent(account)) return;
         if (result.kind === 'connected') {
@@ -593,7 +609,7 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
         if (isActionCurrent(account)) setConnecting(false);
       }
     })();
-  }, [connecting, connectorName, isActionCurrent, load, validConnectorId]);
+  }, [connecting, connectorName, isActionCurrent, listing?.authMode, load, validConnectorId]);
 
   const handleKeySaved = useCallback(() => {
     setCredentialsPath(null);
@@ -701,7 +717,7 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
   if (!connectorsSwitchedOn) {
     return (
       <SettingsScreenShell title="Connector" backHref="/(app)/connectors">
-        <CapabilityUnavailable label="Connectors" />
+        <CapabilityUnavailable label="Connectors" reason={connectorsDenial} />
       </SettingsScreenShell>
     );
   }
@@ -867,7 +883,7 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
           ) : null}
 
           <SettingsGroup>
-            <SettingsRow label="Account" value={accountEmail} icon={UserRound} />
+            <ConnectorAccountRows connectorId={connection.connectorId} />
             {listing?.publisher ? (
               <SettingsRow label="Publisher" value={listing.publisher} icon={Building2} />
             ) : null}
@@ -880,9 +896,11 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
               label="Connected"
               value={formatConnectedAt(connection.connectedAt)}
               icon={Link2}
-              isLast={!(connection.scopes && connection.scopes.length > 0)}
+              isLast={
+                !(connection.scopes && connection.scopes.length > 0) || hasPermissionSentences
+              }
             />
-            {connection.scopes && connection.scopes.length > 0 ? (
+            {connection.scopes && connection.scopes.length > 0 && !hasPermissionSentences ? (
               <SettingsRow
                 label="Granted access"
                 value={connection.scopes.join(', ')}
@@ -891,6 +909,23 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
               />
             ) : null}
           </SettingsGroup>
+
+          {hasPermissionSentences ? (
+            <>
+              <SectionHeading title="Granted access" />
+              <SettingsGroup>
+                {connection.grantedPermissions!.map((permission, index, all) => (
+                  <SettingsRow
+                    key={permission.scope}
+                    label={permission.sentence}
+                    value={CONNECTOR_PERMISSION_ACCESS_LABELS[permission.access]}
+                    icon={ShieldCheck}
+                    isLast={index === all.length - 1}
+                  />
+                ))}
+              </SettingsGroup>
+            </>
+          ) : null}
 
           {connection.source === 'oauth' ? (
             <View style={{ marginBottom: 18, gap: 10 }}>
@@ -1210,7 +1245,13 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
             </Text>
           ) : null}
 
-          {CONNECTABLE_NOW.has(listing.connectable) ? (
+          {!connectorReleased(listing.id) ? (
+            <SettingsInfo
+              title={CONNECTORS_COMING_SOON_LABEL}
+              body={CONNECTORS_COMING_SOON_DETAIL}
+              icon={Plug}
+            />
+          ) : CONNECTABLE_NOW.has(listing.connectable) ? (
             <Pressable
               disabled={connecting}
               onPress={connect}
@@ -1249,14 +1290,7 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
             />
           </SettingsGroup>
 
-          <SectionHeading
-            title="What it can do"
-            body={
-              listing.toolNames.length > 0
-                ? undefined
-                : `${listing.name} lists its tools once it is connected.`
-            }
-          />
+          <SectionHeading title="What it can do" body={listingAccessNote(listing)} />
           {listing.toolNames.length > 0 ? (
             <SettingsGroup>
               {listing.toolNames.map((toolName, index) => (

@@ -1,6 +1,7 @@
 import { createHighlighterCore, type HighlighterCore } from 'shiki/core';
 import { createJavaScriptRegexEngine } from 'shiki/engine/javascript';
 import type { CSSProperties } from 'react';
+import { resolveHighlightLanguage, type LanguageId } from './highlightLanguages';
 
 export const LANGUAGE_LOADERS = {
   bash: () => import('@shikijs/langs/bash'),
@@ -50,69 +51,7 @@ export const LANGUAGE_LOADERS = {
   xml: () => import('@shikijs/langs/xml'),
   yaml: () => import('@shikijs/langs/yaml'),
   zig: () => import('@shikijs/langs/zig'),
-} as const;
-
-export type LanguageId = keyof typeof LANGUAGE_LOADERS;
-
-const LANGUAGE_ALIASES: Readonly<Record<string, LanguageId>> = {
-  'c++': 'cpp',
-  'c#': 'csharp',
-  cc: 'cpp',
-  cfg: 'ini',
-  cjs: 'javascript',
-  cmd: 'bash',
-  conf: 'ini',
-  console: 'bash',
-  cs: 'csharp',
-  cts: 'typescript',
-  cxx: 'cpp',
-  dockerfile: 'docker',
-  dotnet: 'csharp',
-  ex: 'elixir',
-  exs: 'elixir',
-  golang: 'go',
-  gql: 'graphql',
-  hcl: 'terraform',
-  hs: 'haskell',
-  htm: 'html',
-  js: 'javascript',
-  json5: 'json',
-  jsonc: 'json',
-  jsonl: 'json',
-  kt: 'kotlin',
-  kts: 'kotlin',
-  make: 'makefile',
-  md: 'markdown',
-  mdx: 'markdown',
-  mjs: 'javascript',
-  mts: 'typescript',
-  node: 'javascript',
-  objc: 'objective-c',
-  patch: 'diff',
-  pl: 'perl',
-  properties: 'ini',
-  protobuf: 'proto',
-  ps: 'powershell',
-  ps1: 'powershell',
-  pwsh: 'powershell',
-  py: 'python',
-  python3: 'python',
-  rb: 'ruby',
-  rs: 'rust',
-  sass: 'scss',
-  sh: 'bash',
-  shell: 'bash',
-  shellscript: 'bash',
-  svg: 'xml',
-  tex: 'latex',
-  tf: 'terraform',
-  tfvars: 'terraform',
-  ts: 'typescript',
-  udiff: 'diff',
-  xsl: 'xml',
-  yml: 'yaml',
-  zsh: 'bash',
-} as const;
+} as const satisfies Record<LanguageId, () => Promise<unknown>>;
 
 export const LIGHT_THEME_LOADER = () => import('@shikijs/themes/github-light-high-contrast');
 
@@ -231,12 +170,6 @@ function remember(key: string, code: string, lines: readonly HighlightedLine[]):
 
 export function clearHighlightCache(): void {
   lineCache.clear();
-}
-
-export function resolveHighlightLanguage(language: string): LanguageId | null {
-  const normalized = language.trim().toLowerCase();
-  if (normalized in LANGUAGE_LOADERS) return normalized as LanguageId;
-  return LANGUAGE_ALIASES[normalized] ?? null;
 }
 
 function toStyleProperty(property: string): string {

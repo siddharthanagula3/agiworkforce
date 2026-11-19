@@ -66,7 +66,12 @@ export interface ShellPolicyVerdict {
   decision: ShellPolicyDecision;
   program: string;
   reason:
-    'always-refused' | 'denied-by-policy' | 'allowed-by-policy' | 'not-listed' | 'unparseable';
+    | 'always-refused'
+    | 'denied-by-policy'
+    | 'allowed-by-policy'
+    | 'allowed-name-by-path'
+    | 'not-listed'
+    | 'unparseable';
   message?: string;
 }
 
@@ -218,6 +223,17 @@ export function parseCommandLine(command: string): string[] | null {
   return argv.length === 0 ? null : argv;
 }
 
+function namesPath(program: string): boolean {
+  return program.includes('/') || program.includes('\\');
+}
+
+/**
+ * An allowed name covers the program PATH finds for it. A command that reaches
+ * its program by a path may be starting any file with that name, so it is asked
+ * about, as `allowed-name-by-path`, unless the host finds the path to be that
+ * same program. A refusal matches on the name alone, however the program is
+ * reached.
+ */
 export function evaluateShellPolicy(policy: ShellPolicy, command: string): ShellPolicyVerdict {
   const argv = parseCommandLine(command);
   const raw = argv?.[0];
@@ -250,7 +266,9 @@ export function evaluateShellPolicy(policy: ShellPolicy, command: string): Shell
     };
   }
   if (normalized.allow.includes(program)) {
-    return { decision: 'allow', program, reason: 'allowed-by-policy' };
+    return namesPath(raw)
+      ? { decision: 'ask', program, reason: 'allowed-name-by-path' }
+      : { decision: 'allow', program, reason: 'allowed-by-policy' };
   }
   return { decision: 'ask', program, reason: 'not-listed' };
 }

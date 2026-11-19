@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
+import { Platform } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
 
 const mockPush = jest.fn();
@@ -121,5 +122,44 @@ describe('Voice settings', () => {
     expect(getByText('Foreground conversations only')).toBeTruthy();
     expect(getByText('Voice stops when AGI leaves the screen or the device locks.')).toBeTruthy();
     expect(queryByRole('switch', { name: /background conversations/i })).toBeNull();
+  });
+
+  describe('Open Voice Companion', () => {
+    const originalOS = Platform.OS;
+    const originalVersion = Platform.Version;
+    const runOn = (os: 'ios' | 'android', version: number | string) => {
+      Object.defineProperty(Platform, 'OS', { get: () => os, configurable: true });
+      Object.defineProperty(Platform, 'Version', { get: () => version, configurable: true });
+    };
+
+    afterEach(() => {
+      Object.defineProperty(Platform, 'OS', { get: () => originalOS, configurable: true });
+      Object.defineProperty(Platform, 'Version', {
+        get: () => originalVersion,
+        configurable: true,
+      });
+    });
+
+    it('is not offered on Android API 32, where the companion cannot hear anything', () => {
+      runOn('android', 32);
+      const { queryByRole } = render(<VoiceSettingsScreen />);
+
+      expect(queryByRole('button', { name: 'Open Voice Companion' })).toBeNull();
+    });
+
+    it.each([
+      ['Android API 33', 'android', 33],
+      ['iOS', 'ios', '18.0'],
+    ] as const)('opens the companion on %s', (_label, os, version) => {
+      runOn(os, version);
+      const { getByRole } = render(<VoiceSettingsScreen />);
+
+      fireEvent.press(getByRole('button', { name: 'Open Voice Companion' }));
+
+      expect(mockPush).toHaveBeenCalledWith({
+        pathname: '/(app)/voice',
+        params: { returnTo: '/(app)/settings/voice' },
+      });
+    });
   });
 });

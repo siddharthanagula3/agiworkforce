@@ -462,6 +462,7 @@ export function deriveRunOutcome(
     if (entry.kind !== 'tool' && entry.kind !== 'progress') continue;
     if (entry.kind === 'progress' && entry.progressId === PLAN_OVERVIEW_PROGRESS_ID) continue;
     if (entry.status === 'pending' || entry.status === 'running') continue;
+    if (entry.kind === 'tool' && entry.approval?.decision === 'denied') continue;
     attempted += 1;
     if (entry.status === 'failed') failed += 1;
   }
@@ -675,7 +676,19 @@ function applyAgentEvent(
         ? toolUnavailableNotice(rawFailure, event.name)
         : undefined;
       const unavailable = failureSummary !== undefined;
-      if (index >= 0) {
+      const declinedEntry = index >= 0 ? next.entries[index] : undefined;
+      if (
+        !event.isError &&
+        declinedEntry?.kind === 'tool' &&
+        declinedEntry.approval?.decision === 'denied'
+      ) {
+        next.entries = updateAt<AgentActivityToolEntry>(next.entries, index, (entry) => ({
+          ...entry,
+          output: event.output,
+          elapsedMs: event.elapsedMs ?? Math.max(0, envelope.emittedAtMs - entry.startedAtMs),
+          completedAtMs: envelope.emittedAtMs,
+        }));
+      } else if (index >= 0) {
         next.entries = updateAt<AgentActivityToolEntry>(next.entries, index, (entry) => ({
           ...entry,
           name: event.name,
@@ -755,11 +768,23 @@ function applyAgentEvent(
         ...(event.riskLevel !== undefined ? { riskLevel: event.riskLevel } : {}),
       };
       if (index >= 0) {
-        next.entries = updateAt<AgentActivityToolEntry>(next.entries, index, (entry) => ({
-          ...entry,
-          approval,
-          status: 'awaiting-approval',
-        }));
+        next.entries = updateAt<AgentActivityToolEntry>(next.entries, index, (entry) => {
+          if (entry.approval?.decision === undefined && entry.completedAtMs === undefined) {
+            return { ...entry, approval, status: 'awaiting-approval' };
+          }
+          return {
+            kind: 'tool',
+            id: entry.id,
+            toolCallId: entry.toolCallId,
+            name: event.name,
+            category: event.category,
+            summary: event.summary,
+            input: event.input,
+            status: 'awaiting-approval',
+            approval,
+            startedAtMs: envelope.emittedAtMs,
+          };
+        });
       } else {
         next.entries = [
           ...next.entries,

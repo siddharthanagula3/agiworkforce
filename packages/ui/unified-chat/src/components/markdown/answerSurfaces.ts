@@ -635,6 +635,8 @@ export function parseTimeline(source: string): TimelineStep[] {
   });
 }
 
+export const MODES_NOTE = 'These cards describe display modes. They do not change this chat.';
+
 export function parseModes(source: string): TitledBody[] {
   return parseCards(source);
 }

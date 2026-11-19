@@ -196,6 +196,7 @@ function meter(input: {
     unitBasis: 'token',
     units: input.inputTokens,
     providerCostCents: cost.cents,
+    providerEstimatedCostMicrousd: cost.microusd,
     billedCents: 0,
     sourceRef: input.context.decisionId,
     surface: input.context.surface,

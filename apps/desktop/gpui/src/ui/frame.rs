@@ -58,6 +58,8 @@ impl Desktop {
         }
         self.save_draft(cx);
         self.code_settings.visible = false;
+        self.host_defaults.visible = false;
+        self.mcp.visible = false;
         self.code_worktrees.visible = false;
         self.editor.visible = false;
         self.terminal.visible = false;
@@ -69,7 +71,7 @@ impl Desktop {
         cx.notify();
     }
 
-    fn nav_button(
+    pub(super) fn nav_button(
         &self,
         id: impl Into<SharedString>,
         label: impl Into<SharedString>,
@@ -258,6 +260,28 @@ impl Desktop {
                         cx,
                     ));
                 }
+                if self.capabilities.as_ref().is_some_and(|caps| caps.mcp) {
+                    sidebar = sidebar.child(self.nav_button(
+                        "mcp-servers",
+                        "MCP servers",
+                        UiAction::McpServers,
+                        self.mcp.visible && !self.editor.visible && !self.terminal.visible,
+                        palette,
+                        cx,
+                    ));
+                }
+                if self.capabilities.as_ref().is_some_and(|caps| caps.settings) {
+                    sidebar = sidebar.child(self.nav_button(
+                        "host-defaults",
+                        "New session defaults",
+                        UiAction::HostDefaults,
+                        self.host_defaults.visible
+                            && !self.editor.visible
+                            && !self.terminal.visible,
+                        palette,
+                        cx,
+                    ));
+                }
                 if self
                     .capabilities
                     .as_ref()
@@ -346,26 +370,52 @@ impl Desktop {
                         .disabled(!interactive || searching),
                 );
                 if interactive && !searching {
-                    sidebar = sidebar.child(self.nav_button(
-                        "search-sessions",
-                        "Search",
-                        UiAction::SearchSessions,
-                        false,
-                        palette,
-                        cx,
-                    ));
+                    sidebar = sidebar
+                        .child(self.nav_button(
+                            "search-sessions",
+                            "Search",
+                            UiAction::SearchSessions,
+                            false,
+                            palette,
+                            cx,
+                        ))
+                        .child(self.nav_button(
+                            "toggle-archived-sessions",
+                            if self.code_sessions.include_archived {
+                                "Hide archived"
+                            } else {
+                                "Show archived"
+                            },
+                            UiAction::ToggleArchivedSessions,
+                            false,
+                            palette,
+                            cx,
+                        ));
                 }
             }
             let results = self.code_search.results();
             let rows = match results {
                 Some((_, hits)) => hits
                     .iter()
-                    .map(|hit| (hit.thread.id.clone(), crate::code_search::hit_label(hit)))
+                    .map(|hit| {
+                        (
+                            hit.thread.id.clone(),
+                            crate::code_sessions::row_label(
+                                &hit.thread,
+                                crate::code_search::hit_label(hit),
+                            ),
+                        )
+                    })
                     .collect::<Vec<_>>(),
                 None => self
                     .threads
                     .iter()
-                    .map(|thread| (thread.id.clone(), thread.title.clone()))
+                    .map(|thread| {
+                        (
+                            thread.id.clone(),
+                            crate::code_sessions::row_label(thread, thread.title.clone()),
+                        )
+                    })
                     .collect(),
             };
             if searching {
@@ -487,6 +537,7 @@ impl Desktop {
                 ));
             }
         }
+        let sidebar = self.extension_nav(sidebar, palette, cx);
         sidebar
             .child(recent)
             .child(self.nav_button(
@@ -553,6 +604,10 @@ impl Desktop {
             "Account".into()
         } else if self.code_worktrees.visible {
             "Worktrees".into()
+        } else if self.mcp.visible {
+            "MCP servers".into()
+        } else if self.host_defaults.visible {
+            "New session defaults".into()
         } else if self.code_settings.visible {
             "Code settings".into()
         } else if self.changes.visible {
@@ -640,7 +695,12 @@ impl Desktop {
         if self.terminal.visible || self.editor.visible || self.account.visible {
             return None;
         }
-        if (self.code_settings.visible || self.code_worktrees.visible) && !self.cloud.visible {
+        if (self.code_settings.visible
+            || self.host_defaults.visible
+            || self.mcp.visible
+            || self.code_worktrees.visible)
+            && !self.cloud.visible
+        {
             return None;
         }
         if self.cloud.visible {

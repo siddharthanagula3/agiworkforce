@@ -90,9 +90,9 @@ import {
   CODE_LIMITS,
   CODE_TURN_STEP_HINTS,
   continueLocalSessionInVsCodeHref,
-  localSessionResumeCommand,
 } from '../code-surface';
 import {
+  LOCAL_CLI_PROGRAM,
   LOCAL_CODE_COPY,
   LOCAL_FAILURE_ACTION_LABELS,
   LOCAL_REVIEW_COMMAND,
@@ -111,20 +111,24 @@ import {
   localCleanupFailuresLine,
   localDeleteSessionConsequence,
   localFailureAction,
-  localModelChoices,
   localModelLabel,
+  localModelPlanLine,
   localModelSetup,
   localProviderSetups,
   localRetryPrompt,
   localSessionContext,
+  localSessionResumeCommand,
   localSkippedFilesLine,
+  localSessionModels,
   localTakeOverConsequence,
-  startingModelId,
   localTranscriptItems,
   localTurnIsRunning,
   nextCycledAgentMode,
+  withPlanTurnFailure,
   type LocalFailureAction,
 } from '../local-code';
+import { openUpgrade } from '@shared/lib/app-commands';
+import { useGuardedRouter } from '@shared/hooks/use-guarded-router';
 import { SIMULATOR_PANE_COPY } from '../simulator-pane';
 import {
   useLocalSession,
@@ -225,6 +229,16 @@ export interface LocalSessionPanelProps {
   session: LocalDeveloperSession;
   group: Pick<DeveloperSessionGroup, 'name' | 'branch' | 'sessions' | 'worktree'>;
   runtimeModels: DeveloperRuntimeModels | null;
+  /** The account's plan, when the page knows it, so a refusal it causes is said as one. */
+  planTier?: string | null;
+  /** The CLI as a terminal on this computer names it, for a sign-in command to copy. */
+  cliProgram?: string;
+  /**
+   * Opens a new session in this folder on a model the session cannot switch
+   * to, because it sits in another trust boundary. Absent where no new
+   * session can start in the folder.
+   */
+  onNewSessionWith?: (modelId: string) => void;
   /** The models are the last ones read for this folder: the latest read failed. */
   modelsStale?: boolean;
   verbose: boolean;
@@ -338,6 +352,19 @@ function QuestionPrompt({
   );
 }
 
+function UpgradeButton() {
+  const router = useGuardedRouter();
+  return (
+    <button
+      type="button"
+      className={styles['secondaryButton']}
+      onClick={() => openUpgrade((href) => router.push(href))}
+    >
+      {LOCAL_FAILURE_ACTION_LABELS.upgrade}
+    </button>
+  );
+}
+
 function FailureAction({
   action,
   onRetry,
@@ -346,6 +373,8 @@ function FailureAction({
   onRetry: () => void;
 }) {
   const [copied, setCopied] = useState(false);
+
+  if (action.kind === 'upgrade') return <UpgradeButton />;
 
   if (action.kind === 'copy') {
     return (
@@ -371,11 +400,14 @@ function FailureAction({
 function CopyOffer({
   offer,
   className,
+  label = LOCAL_FAILURE_ACTION_LABELS.copy,
 }: {
   offer: NonNullable<LocalFailureAction>;
   className?: string;
+  label?: string;
 }) {
   const [copied, setCopied] = useState(false);
+  if (offer.kind === 'upgrade') return <UpgradeButton />;
   if (offer.kind !== 'copy') return null;
 
   return (
@@ -386,7 +418,7 @@ function CopyOffer({
         void navigator.clipboard.writeText(offer.text).then(() => setCopied(true));
       }}
     >
-      {copied ? LOCAL_FAILURE_ACTION_LABELS.copied : LOCAL_FAILURE_ACTION_LABELS.copy}
+      {copied ? LOCAL_FAILURE_ACTION_LABELS.copied : label}
     </button>
   );
 }
@@ -395,6 +427,9 @@ export function LocalSessionPanel({
   session,
   group,
   runtimeModels,
+  planTier = null,
+  cliProgram = LOCAL_CLI_PROGRAM,
+  onNewSessionWith,
   modelsStale = false,
   verbose,
   initialPrompt,
@@ -533,7 +568,7 @@ export function LocalSessionPanel({
     });
   };
   const vsCodeHref = continueLocalSessionInVsCodeHref(session);
-  const resumeCommand = localSessionResumeCommand(session.id);
+  const resumeCommand = localSessionResumeCommand(session.id, cliProgram);
   const worktree = group.worktree ?? null;
   const [reviewRequested, setReviewOpen] = useState(false);
   const reviewOpen = canReview && reviewRequested;
@@ -791,20 +826,29 @@ export function LocalSessionPanel({
     submitting.current = false;
   }, [draft, attached]);
   const endRef = useRef<HTMLDivElement>(null);
-  const choices = localModelChoices(runtimeModels, group.sessions);
-  const setups = localProviderSetups(runtimeModels);
-  const preferredModel = startingModelId(runtimeModels, group.sessions);
-  const activeModel = model === '' ? (preferredModel ?? '') : model;
-  const activeSetup = localModelSetup(runtimeModels, model === '' ? session.model : model);
-  const readyModel = preferredModel;
+  const sessionModels = localSessionModels(
+    runtimeModels,
+    group.sessions,
+    session.trustMode,
+    planTier,
+  );
+  const choices = sessionModels.here;
+  const elsewhere = onNewSessionWith === undefined ? [] : sessionModels.elsewhere;
+  const setups = localProviderSetups(runtimeModels, cliProgram);
+  const readyModel = sessionModels.ready;
+  const readyElsewhere = onNewSessionWith === undefined ? undefined : sessionModels.readyElsewhere;
+  const activeModel = model === '' ? (readyModel ?? '') : model;
+  const activeModelId = model === '' ? session.model : model;
+  const activeSetup = localModelSetup(runtimeModels, activeModelId, cliProgram);
 
   const running = localTurnIsRunning(state.turn);
   const busy = running || state.sending;
   const hasDraft = draft.trim() !== '' || images.attachments.length > 0;
   const [firstApproval] = state.approvals;
   const [firstQuestion] = state.questions;
-  const items = localTranscriptItems(state.messages, state.turn);
-  const failureAction = state.turn.failure ? localFailureAction(state.turn.failure) : null;
+  const turn = withPlanTurnFailure(state.turn, planTier);
+  const items = localTranscriptItems(state.messages, turn, cliProgram);
+  const failureAction = turn.failure ? localFailureAction(turn.failure, cliProgram) : null;
   const retryPrompt = localRetryPrompt(state.turn, state.messages);
   const queueKeys = (event: ReactKeyboardEvent<HTMLTextAreaElement>): boolean => {
     if (event.key === 'Escape' && running && !state.stopping) {
@@ -1336,13 +1380,19 @@ export function LocalSessionPanel({
               {activeSetup !== null && (
                 <div className={styles['notice']} role="status">
                   <span className={styles['hintText']}>
-                    {LOCAL_CODE_COPY.modelNeedsSetup(
-                      localModelLabel(model === '' ? session.model : model) ?? activeSetup.label,
-                      activeSetup.label,
-                    )}
+                    {activeSetup.offer?.kind === 'upgrade'
+                      ? localModelPlanLine(
+                          activeSetup,
+                          localModelLabel(activeModelId) ?? activeSetup.label,
+                          planTier,
+                        )
+                      : LOCAL_CODE_COPY.modelNeedsSetup(
+                          localModelLabel(activeModelId) ?? activeSetup.label,
+                          activeSetup.label,
+                        )}
                   </span>
                   {activeSetup.offer !== null && <CopyOffer offer={activeSetup.offer} />}
-                  {readyModel !== undefined && (
+                  {readyModel !== undefined ? (
                     <button
                       type="button"
                       className={styles['secondaryButton']}
@@ -1350,6 +1400,19 @@ export function LocalSessionPanel({
                     >
                       {LOCAL_CODE_COPY.switchToReadyModel}
                     </button>
+                  ) : (
+                    readyElsewhere !== undefined &&
+                    onNewSessionWith !== undefined && (
+                      <button
+                        type="button"
+                        className={styles['secondaryButton']}
+                        onClick={() => onNewSessionWith(readyElsewhere)}
+                      >
+                        {LOCAL_CODE_COPY.newSessionWith(
+                          localModelLabel(readyElsewhere) ?? readyElsewhere,
+                        )}
+                      </button>
+                    )
                   )}
                 </div>
               )}
@@ -1467,7 +1530,10 @@ export function LocalSessionPanel({
                     <span>{CODE_COPY.resumeInTerminal}</span>
                     <pre>{resumeCommand}</pre>
                     <div className={styles['noticeActions']}>
-                      <CopyOffer offer={{ kind: 'copy', text: resumeCommand }} />
+                      <CopyOffer
+                        offer={{ kind: 'copy', text: resumeCommand }}
+                        label={LOCAL_FAILURE_ACTION_LABELS.copyCommand}
+                      />
                       {vsCodeHref !== null && (
                         <a className={styles['secondaryButton']} href={vsCodeHref}>
                           <ArrowRight size={HEADER_GLYPH_SIZE} aria-hidden="true" />
@@ -1675,14 +1741,16 @@ export function LocalSessionPanel({
                       }
                     />
                   )}
-                  {choices.length > 0 && (
+                  {(choices.length > 0 || setups.length > 0 || elsewhere.length > 0) && (
                     <LocalModelChip
                       choices={choices}
                       setups={setups}
+                      elsewhere={elsewhere}
                       selected={activeModel}
                       unreachable={activeSetup !== null}
                       disabled={busy}
                       onSelect={setModel}
+                      onNewSession={onNewSessionWith}
                     />
                   )}
                   <LocalTurnControls

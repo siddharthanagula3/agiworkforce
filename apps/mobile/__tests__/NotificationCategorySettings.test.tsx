@@ -41,6 +41,17 @@ jest.mock('@/services/preferences', () => ({
   patchPreferenceNamespace: jest.fn().mockResolvedValue(undefined),
 }));
 
+const mockFeatures = { companion: false };
+jest.mock('@/lib/v1FeatureFlags', () => {
+  const actual = jest.requireActual('@/lib/v1FeatureFlags');
+  return {
+    ...actual,
+    FEATURES: new Proxy(actual.FEATURES, {
+      get: (target, key) => (key === 'companion' ? mockFeatures.companion : target[key]),
+    }),
+  };
+});
+
 jest.mock('expo-status-bar', () => ({ StatusBar: () => null }));
 
 jest.mock('react-native-safe-area-context', () => {
@@ -62,12 +73,16 @@ jest.mock('lucide-react-native', () => {
     CheckSquare: icon,
     ChevronRight: icon,
     Clock: icon,
+    Code2: icon,
     CloudOff: icon,
+    Gauge: icon,
     Info: icon,
     Mail: icon,
     MessageSquare: icon,
     Moon: icon,
     Sparkles: icon,
+    Sunrise: icon,
+    Telescope: icon,
     Vibrate: icon,
     X: icon,
   };
@@ -84,6 +99,10 @@ import {
 } from '../src/features/auth/services/cloudAccountSession';
 
 describe('notification category settings', () => {
+  beforeAll(async () => {
+    await useNotificationPrefsStore.persist.rehydrate();
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
     __resetCloudAccountSessionForTests();
@@ -96,8 +115,12 @@ describe('notification category settings', () => {
           tasks: true,
           scheduled_tasks: true,
           product_updates: false,
+          research: true,
+          code: true,
           product: false,
+          usage_resets: true,
         },
+        announcedPushGroups: [],
         vibrationEnabled: {
           critical: true,
           high: true,
@@ -123,13 +146,68 @@ describe('notification category settings', () => {
     expect(screen.getByLabelText('Task and approval updates. Push')).toBeTruthy();
     expect(screen.getByLabelText('Scheduled tasks. Push')).toBeTruthy();
     expect(screen.getByLabelText('Product updates. Off')).toBeTruthy();
-    expect(screen.getByLabelText('Service status. Off')).toBeTruthy();
+    expect(screen.queryByLabelText('Service status. Off')).toBeNull();
+    expect(screen.queryByText('Service status')).toBeNull();
     fireEvent.press(screen.getByLabelText('Task and approval updates. Push'));
 
     expect(mockPush).toHaveBeenCalledWith({
       pathname: '/(app)/settings/notifications/[category]',
       params: { category: 'tasks' },
     });
+  });
+
+  it('lists research and AGI Code only after this device has received their notices', async () => {
+    const screen = render(<NotificationPreferencesScreen />);
+    await screen.findByText('Your device is delivering notifications');
+
+    expect(screen.queryByText('Research complete')).toBeNull();
+    expect(screen.queryByText('AGI Code')).toBeNull();
+
+    act(() => {
+      useNotificationPrefsStore.getState().notePushTypeReceived('research_completed');
+    });
+
+    expect(screen.getByText('When a research report is ready')).toBeTruthy();
+    expect(screen.queryByText('AGI Code')).toBeNull();
+
+    act(() => {
+      useNotificationPrefsStore.getState().setCategoryEnabled('tasks', false);
+      useNotificationPrefsStore.getState().notePushTypeReceived('code_session_completed');
+    });
+
+    expect(screen.getByLabelText('Research complete. Push')).toBeTruthy();
+    expect(screen.getByLabelText('AGI Code. Off')).toBeTruthy();
+    expect(screen.getByText('When a coding session finishes or needs you')).toBeTruthy();
+
+    fireEvent.press(screen.getByLabelText('AGI Code. Off'));
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/(app)/settings/notifications/[category]',
+      params: { category: 'code' },
+    });
+  });
+
+  it.each(['research', 'code'])(
+    'has no switch page for %s before this device has received its notices',
+    (category) => {
+      const before = useNotificationPrefsStore.getState().categoryEnabled;
+      const screen = render(<NotificationCategoryDetailScreen category={category} />);
+
+      expect(screen.getByText('Notification category not found')).toBeTruthy();
+      expect(useNotificationPrefsStore.getState().categoryEnabled).toEqual(before);
+    },
+  );
+
+  it('turns research notices off on their own, leaving task and approval updates on', () => {
+    act(() => {
+      useNotificationPrefsStore.getState().notePushTypeReceived('research_completed');
+    });
+    const screen = render(<NotificationCategoryDetailScreen category="research" />);
+
+    expect(screen.getByText('Research complete')).toBeTruthy();
+    fireEvent(screen.getByRole('switch'), 'valueChange', false);
+
+    expect(useNotificationPrefsStore.getState().categoryEnabled.research).toBe(false);
+    expect(useNotificationPrefsStore.getState().categoryEnabled.tasks).toBe(true);
   });
 
   it('opens the list of recent notifications, which no longer has a side panel row', async () => {
@@ -142,24 +220,26 @@ describe('notification category settings', () => {
     mockUnreadCount = 0;
   });
 
-  it('labels the break reminder as a once-a-day threshold, not a repeating interval', async () => {
-    act(() => {
-      useNotificationPrefsStore.setState({ breakReminderMinutes: 30 });
-    });
+  it('shows quiet hours as one row that opens Time and focus', async () => {
     const screen = render(<NotificationPreferencesScreen />);
     await screen.findByText('Your device is delivering notifications');
 
-    expect(screen.getByLabelText('Break reminder, currently After 30 min today')).toBeTruthy();
-    expect(screen.getByText('After 30 min today')).toBeTruthy();
-    expect(screen.queryByText(/^Every /)).toBeNull();
+    expect(screen.getByLabelText('Quiet hours. Off')).toBeTruthy();
+    expect(screen.queryByLabelText('Enable Quiet Hours')).toBeNull();
+    expect(screen.queryByText('Break Reminder')).toBeNull();
+    expect(screen.queryByLabelText(/^Break reminder/)).toBeNull();
 
     act(() => {
-      useNotificationPrefsStore.setState({ breakReminderMinutes: 120 });
+      useNotificationPrefsStore.setState({
+        quietHours: { ...useNotificationPrefsStore.getState().quietHours, enabled: true },
+      });
     });
-    expect(screen.getByText('After 2 hr today')).toBeTruthy();
-    act(() => {
-      useNotificationPrefsStore.setState({ breakReminderMinutes: null });
-    });
+    expect(screen.getByLabelText('Quiet hours. On')).toBeTruthy();
+    expect(screen.queryByLabelText('Monday quiet hours')).toBeNull();
+
+    fireEvent.press(screen.getByLabelText('Quiet hours. On'));
+
+    expect(mockPush).toHaveBeenCalledWith('/(app)/settings/time-and-focus');
   });
 
   it('blocks the per-device category rows while the device denies notifications', async () => {
@@ -181,12 +261,51 @@ describe('notification category settings', () => {
     expect(row).toBeDisabled();
     fireEvent.press(row);
     expect(mockPush).not.toHaveBeenCalled();
-    expect(screen.getAllByText('Blocked')).toHaveLength(5);
+    expect(screen.getAllByText('Blocked')).toHaveLength(4);
     expect(
       await screen.findByText(
         'Saved, but this device stays silent until notifications are allowed.',
       ),
     ).toBeTruthy();
+  });
+
+  it('lists Service status only once the companion that sends it is available', async () => {
+    mockFeatures.companion = true;
+    try {
+      const screen = render(<NotificationPreferencesScreen />);
+      await screen.findByText('Your device is delivering notifications');
+      expect(screen.getByLabelText('Service status. Off')).toBeTruthy();
+    } finally {
+      mockFeatures.companion = false;
+    }
+  });
+
+  it.each(['product', 'status', 'usage_resets'])(
+    'has no device switch page for %s while nothing on this device can control it',
+    (category) => {
+      const before = useNotificationPrefsStore.getState().categoryEnabled;
+      const screen = render(<NotificationCategoryDetailScreen category={category} />);
+
+      expect(screen.getByText('Notification category not found')).toBeTruthy();
+      expect(useNotificationPrefsStore.getState().categoryEnabled).toEqual(before);
+    },
+  );
+
+  it('does not mention a paired companion while the companion is hidden', () => {
+    const screen = render(<NotificationCategoryDetailScreen category="tasks" />);
+
+    expect(screen.getByText('Push to this device.')).toBeTruthy();
+    expect(screen.queryByText(/companion/i)).toBeNull();
+  });
+
+  it('mentions a paired companion once the companion is available', () => {
+    mockFeatures.companion = true;
+    try {
+      const screen = render(<NotificationCategoryDetailScreen category="tasks" />);
+      expect(screen.getByText('Push to this device or a paired companion.')).toBeTruthy();
+    } finally {
+      mockFeatures.companion = false;
+    }
   });
 
   it('changes the live Push preference without creating an inert Email preference', () => {
@@ -208,17 +327,22 @@ describe('notification category settings', () => {
     ['errors', 'tasks', 'Task and approval updates'],
     ['status', 'product', 'Service status'],
   ] as const)('opens the %s link from the old taxonomy on %s', (legacy, current, label) => {
-    const screen = render(<NotificationCategoryDetailScreen category={legacy} />);
+    mockFeatures.companion = current === 'product';
+    try {
+      const screen = render(<NotificationCategoryDetailScreen category={legacy} />);
 
-    expect(screen.getByText(label)).toBeTruthy();
-    expect(screen.queryByText('Notification category not found')).toBeNull();
+      expect(screen.getByText(label)).toBeTruthy();
+      expect(screen.queryByText('Notification category not found')).toBeNull();
 
-    fireEvent(screen.getByRole('switch'), 'valueChange', current === 'product');
+      fireEvent(screen.getByRole('switch'), 'valueChange', current === 'product');
 
-    expect(useNotificationPrefsStore.getState().categoryEnabled[current]).toBe(
-      current === 'product',
-    );
-    expect(useNotificationPrefsStore.getState().categoryEnabled).not.toHaveProperty(legacy);
+      expect(useNotificationPrefsStore.getState().categoryEnabled[current]).toBe(
+        current === 'product',
+      );
+      expect(useNotificationPrefsStore.getState().categoryEnabled).not.toHaveProperty(legacy);
+    } finally {
+      mockFeatures.companion = false;
+    }
   });
 
   it('opens the scheduled tasks switch on its own, leaving task and approval updates on', () => {
@@ -242,6 +366,59 @@ describe('notification category settings', () => {
 
     expect(useNotificationPrefsStore.getState().categoryEnabled.product_updates).toBe(true);
     expect(useNotificationPrefsStore.getState().categoryEnabled.product).toBe(false);
+  });
+
+  describe('a category that is on while the device cannot deliver it', () => {
+    const notifications = () =>
+      require('@/services/notifications') as {
+        enablePushNotifications: jest.Mock;
+        getPushDeliveryStatus: jest.Mock;
+      };
+
+    it('says the device has not been asked and asks only when the person chooses to', async () => {
+      notifications().getPushDeliveryStatus.mockResolvedValueOnce('undetermined');
+      notifications().enablePushNotifications.mockResolvedValueOnce('granted');
+      const screen = render(<NotificationCategoryDetailScreen category="tasks" />);
+
+      expect(
+        await screen.findByText('Notifications are not turned on for this device yet.'),
+      ).toBeTruthy();
+      expect(notifications().enablePushNotifications).not.toHaveBeenCalled();
+
+      await act(async () => {
+        fireEvent.press(screen.getByLabelText('Turn on notifications'));
+      });
+
+      expect(notifications().enablePushNotifications).toHaveBeenCalledTimes(1);
+      expect(screen.queryByText('Notifications are not turned on for this device yet.')).toBeNull();
+      expect(screen.queryByLabelText('Turn on notifications')).toBeNull();
+    });
+
+    it('sends a device that blocks notifications to Settings instead of asking', async () => {
+      const { Linking } = require('react-native');
+      const openSettings = jest.spyOn(Linking, 'openSettings').mockResolvedValue(undefined);
+      notifications().getPushDeliveryStatus.mockResolvedValueOnce('denied');
+      const screen = render(<NotificationCategoryDetailScreen category="tasks" />);
+
+      expect(await screen.findByText('This device is blocking notifications.')).toBeTruthy();
+      await act(async () => {
+        fireEvent.press(screen.getByLabelText('Open Settings'));
+      });
+
+      expect(openSettings).toHaveBeenCalledTimes(1);
+      expect(notifications().enablePushNotifications).not.toHaveBeenCalled();
+      openSettings.mockRestore();
+    });
+
+    it('says nothing about the device for a category that is off', async () => {
+      notifications().getPushDeliveryStatus.mockResolvedValueOnce('undetermined');
+      const screen = render(<NotificationCategoryDetailScreen category="product_updates" />);
+
+      await act(async () => {});
+
+      expect(screen.queryByText('Notifications are not turned on for this device yet.')).toBeNull();
+      expect(screen.queryByLabelText('Turn on notifications')).toBeNull();
+    });
   });
 
   it('rejects an unknown dynamic category without mutating preferences', () => {

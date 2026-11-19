@@ -12,36 +12,23 @@ import {
   isSupportedRuntimeVersion,
 } from '../developer-session-versioning';
 
+import { DEVELOPER_SESSION_TABLE } from '../generated/protocol/DeveloperSessionTable';
+
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '../../../../..');
 
-function rustSource(relativePath: string): string {
-  return readFileSync(join(REPO_ROOT, relativePath), 'utf8');
-}
-
-function rustConstant(source: string, name: string): number {
-  const match = new RegExp(`pub const ${name}: [iu]32 = (-?\\d+);`).exec(source);
-  expect(match, `${name} must be a literal Rust constant`).not.toBeNull();
-  return Number(match?.[1]);
-}
-
 describe('developer-session versioning mirrors the Rust protocol', () => {
-  const developerSession = rustSource('crates/agiworkforce-protocol/src/developer_session.rs');
-  const agentEvents = rustSource('crates/agiworkforce-protocol/src/agent_events.rs');
-
   it('speaks the protocol and event schema the CLI serves', () => {
-    expect(DEVELOPER_SESSION_PROTOCOL_VERSION).toBe(
-      rustConstant(developerSession, 'DEVELOPER_SESSION_PROTOCOL_VERSION'),
-    );
-    expect(AGENT_EVENT_SCHEMA_VERSION).toBe(
-      rustConstant(agentEvents, 'AGENT_EVENT_SCHEMA_VERSION'),
-    );
+    expect(DEVELOPER_SESSION_PROTOCOL_VERSION).toBe(DEVELOPER_SESSION_TABLE.protocolVersion);
+    expect(AGENT_EVENT_SCHEMA_VERSION).toBe(DEVELOPER_SESSION_TABLE.agentEventSchemaVersion);
     expect(PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE).toBe(
-      rustConstant(developerSession, 'PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE'),
+      DEVELOPER_SESSION_TABLE.errorCodes.PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE,
     );
   });
 
   it('never requires a runtime newer than the CLI this tree builds', () => {
-    const cliVersion = /^version = "([^"]+)"$/mu.exec(rustSource('apps/cli/Cargo.toml'))?.[1];
+    const cliVersion = /^version = "([^"]+)"$/mu.exec(
+      readFileSync(join(REPO_ROOT, 'apps/cli/Cargo.toml'), 'utf8'),
+    )?.[1];
     expect(cliVersion).toBeDefined();
     expect(isSupportedRuntimeVersion(cliVersion as string)).toBe(true);
   });

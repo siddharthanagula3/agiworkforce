@@ -37,6 +37,8 @@ impl Desktop {
         }
         self.code_worktrees.visible = true;
         self.code_settings.visible = false;
+        self.host_defaults.visible = false;
+        self.mcp.visible = false;
         self.editor.visible = false;
         self.terminal.visible = false;
         self.terminal.epoch = uuid::Uuid::new_v4();

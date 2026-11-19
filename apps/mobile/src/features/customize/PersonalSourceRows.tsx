@@ -38,13 +38,26 @@ const LOAD_FAILED = 'Could not load your email and calendar sources.';
 
 const ICONS = { email: Mail, calendar: CalendarDays } as const;
 
-interface LoadedSources {
+export interface LoadedSources {
   listings: ConnectorListing[];
   connections: ConnectedConnector[];
   deviceCalendarGranted: boolean;
 }
 
-function usePersonalSourceData(enabled: boolean) {
+export function buildPersonalSourceRows(data: LoadedSources): PersonalSourceRowModel[] {
+  return SOURCES.map((source) => buildPersonalSourceRow({ source, ...data })).filter(
+    (row): row is PersonalSourceRowModel => row !== null,
+  );
+}
+
+export function usePersonalSourcesEnabled(): boolean {
+  const isCloudMode = useChatAppModeStore((s) => s.appMode === 'cloud');
+  const isSignedIn = useAuthStore((s) => s.isClerkSignedIn);
+  const connectorsAllowed = useCapability('canUseConnectors');
+  return FEATURES.connectors && isCloudMode && isSignedIn && connectorsAllowed;
+}
+
+export function usePersonalSourceData(enabled: boolean) {
   const [data, setData] = useState<LoadedSources | null>(null);
   const [failed, setFailed] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -187,10 +200,7 @@ function OptionRow({
 
 export function PersonalSourceRows() {
   const router = useRouter();
-  const isCloudMode = useChatAppModeStore((s) => s.appMode === 'cloud');
-  const isSignedIn = useAuthStore((s) => s.isClerkSignedIn);
-  const connectorsAllowed = useCapability('canUseConnectors');
-  const enabled = FEATURES.connectors && isCloudMode && isSignedIn && connectorsAllowed;
+  const enabled = usePersonalSourcesEnabled();
   const { data, failed, loading, retry } = usePersonalSourceData(enabled);
   const [expanded, setExpanded] = useState<ConnectorPersonalSource | null>(null);
 
@@ -211,9 +221,7 @@ export function PersonalSourceRows() {
     return loading ? <LoadingRows count={2} /> : null;
   }
 
-  const rows = SOURCES.map((source) => buildPersonalSourceRow({ source, ...data })).filter(
-    (row): row is PersonalSourceRowModel => row !== null,
-  );
+  const rows = buildPersonalSourceRows(data);
 
   return (
     <>

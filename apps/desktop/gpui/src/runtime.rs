@@ -197,7 +197,11 @@ impl RuntimeSession {
         self.events.take()
     }
 
-    pub async fn list_sessions(&mut self, cursor: Option<String>) -> Result<ThreadListResponse> {
+    pub async fn list_sessions(
+        &mut self,
+        cursor: Option<String>,
+        include_archived: bool,
+    ) -> Result<ThreadListResponse> {
         let workspace = self
             .workspace
             .as_ref()
@@ -210,7 +214,7 @@ impl RuntimeSession {
                     cursor,
                     limit: Some(self.settings.session_page_size),
                     cwd: Some(workspace.to_string_lossy().into_owned()),
-                    include_archived: false,
+                    include_archived,
                     include_cloud: false,
                 },
             )
@@ -218,7 +222,11 @@ impl RuntimeSession {
         Ok(response)
     }
 
-    pub async fn search_sessions(&mut self, query: String) -> Result<ThreadSearchResponse> {
+    pub async fn search_sessions(
+        &mut self,
+        query: String,
+        include_archived: bool,
+    ) -> Result<ThreadSearchResponse> {
         anyhow::ensure!(
             self.workspace.is_some(),
             "This connection has no coding workspace"
@@ -230,7 +238,7 @@ impl RuntimeSession {
                 ThreadSearchParams {
                     query,
                     limit: Some(self.settings.session_page_size),
-                    include_archived: false,
+                    include_archived,
                 },
             )
             .await?;

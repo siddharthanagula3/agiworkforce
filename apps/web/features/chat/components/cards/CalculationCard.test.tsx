@@ -14,4 +14,23 @@ describe('CalculationCard derived result', () => {
     const result = container.querySelector('.mt-1.text-2xl');
     expect(result?.textContent).toContain('3');
   });
+
+  it('never shows the code fences of the answer it was made from', () => {
+    const { container } = render(
+      <CalculationCard
+        content={[
+          '## Totals',
+          '',
+          '```python',
+          'result = 1 + 2',
+          '```',
+          '',
+          'Total: 7 apples',
+        ].join('\n')}
+      />,
+    );
+
+    expect(container.textContent).not.toMatch(/```|python|result = 1/);
+    expect(container.querySelector('.mt-1.text-2xl')?.textContent).toContain('7');
+  });
 });

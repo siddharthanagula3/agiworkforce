@@ -50,6 +50,7 @@ export type SupportAnswer = SupportAnswerOk | SupportAbstention;
 export interface SupportViewer {
   isSignedIn: boolean;
   userId: string | null;
+  organizationId?: string | null;
   planTier: string | null;
 }
 

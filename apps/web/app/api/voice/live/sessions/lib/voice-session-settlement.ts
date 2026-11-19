@@ -161,6 +161,7 @@ async function recordFreeAllowanceSessionCost(
       provider: record.provider,
       model,
       actualCostCents: ledgerCentsFromMicrousd(providerCostMicrousd),
+      providerEstimatedCostMicrousd: providerCostMicrousd,
       customerCanonicalMicrousd: 0,
       sourceRef: `free_voice_allowance:${record.userId}:${record.id}`,
       taskOutcome: 'delivered',

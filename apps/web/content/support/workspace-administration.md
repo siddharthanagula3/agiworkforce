@@ -4,7 +4,7 @@ title: Administering a workspace
 path: /workspace
 category: administration
 tags: admin, administration, workspace console, members, seats, invite, audit log, usage analytics, sharing, legal hold, retention, api keys, spend limit, create workspace, switch workspace, leave workspace, delete workspace, successor, owner
-updated: 2026-11-11
+updated: 2026-11-16
 description: How to create, switch, leave and delete a workspace, use its console and what members see.
 scope: public
 ---
@@ -33,24 +33,38 @@ settings. Its sections are:
 - **Usage**: managed cloud spend by member, model and provider.
 - **Data**: legal holds, and the record of what retention has deleted.
 - **Audit**: administrative and policy events, with export and SIEM streaming.
+
+{{#purchase}}
 - **Billing**: plan, seats, and where workspace billing is managed.
+
+{{/purchase}}
 
 ## Creating a workspace
 
 Settings, Workspace is where a workspace is created: give it a name, and a slug
-made of lowercase letters, numbers and hyphens. Creating one needs a
-{{PLAN.team}} or {{PLAN.enterprise}} plan, and on any other plan the page says
-so in place of the form.
+made of lowercase letters, numbers and hyphens.
+
+{{#purchase}}
+
+Creating one needs a {{PLAN.team}} or {{PLAN.enterprise}} plan, and on any other
+plan the page says so in place of the form.
+
+{{/purchase}}
 
 An account owns one workspace at most. A second attempt is refused with "You
 already own a workspace. Switch to it from the account menu." Other workspaces
 are joined by invitation. A slug another workspace already uses is refused with
 "That organization slug is already taken".
 
+{{#purchase}}
+
 A new workspace starts with the seats you paid for. When the seat count cannot
 be read, nothing is created: "Your purchased seats could not be verified. No
-organization was created; please try again." A workspace that is created opens
-straight away, and the app reloads inside it.
+organization was created; please try again."
+
+{{/purchase}}
+
+A workspace that is created opens straight away, and the app reloads inside it.
 
 ## Switching between workspaces
 
@@ -93,9 +107,15 @@ nothing.
 Nothing is erased on the day you ask. Deletion is scheduled 14 days ahead, and
 the owner can cancel it from the same page until then; after the scheduled date
 a cancellation is refused. A daily job then erases the workspace's
-conversations, projects, files, connectors and API keys for every member. Two
+conversations, projects, files, connectors and API keys for every member.
+
+{{#purchase}}
+
+Two
 records are kept rather than erased: billing history is anonymised, and the
 workspace's audit trail stays with its reference to the workspace removed.
+
+{{/purchase}}
 
 A workspace under an active legal hold cannot be scheduled for deletion. The
 request is refused and names how many holds are active, and each one has to be
@@ -104,9 +124,15 @@ too: the workspace stays scheduled and nothing is erased while the hold lasts.
 
 ## What members see
 
-Members do not see the console. A member on a workspace-managed plan sees
+Members do not see the console.
+
+{{#purchase}}
+
+A member on a workspace-managed plan sees
 read-only billing in their own settings, saying the plan is managed by the
 organization and to contact an administrator to change it.
+
+{{/purchase}}
 
 ## Directory provisioning
 

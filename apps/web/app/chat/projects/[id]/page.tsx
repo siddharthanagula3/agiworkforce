@@ -43,6 +43,8 @@ import {
 } from '@/features/projects/lib/project-chat-handoff';
 import { SchedulesEntitlementLoading, SchedulesPage } from '@/features/schedules';
 import { WebAppShell } from '@shared/components/layout/WebAppShell';
+import { useGuardedRouter } from '@shared/hooks/use-guarded-router';
+import { openUpgrade } from '@shared/lib/app-commands';
 import { toUserMessage } from '@/lib/user-error-message';
 import { useBillingStore } from '@/shared/stores/web-auth-store';
 
@@ -97,6 +99,7 @@ const HEALTH_RECORDS_HREF = '/settings/connections';
 
 export default function ProjectDetailPage() {
   const router = useRouter();
+  const upgradeRouter = useGuardedRouter();
   const params = useParams<{ id: string }>();
   const projectId = params?.id;
   const {
@@ -257,6 +260,11 @@ export default function ProjectDetailPage() {
       router.push(projectChatHandoffHref(project.id, handoffId));
     },
     [project, router, setActiveProject],
+  );
+
+  const handleUpgradeRequest = useCallback(
+    () => openUpgrade((href) => upgradeRouter.push(href)),
+    [upgradeRouter],
   );
 
   const handleDeleteProject = useCallback(
@@ -1075,6 +1083,7 @@ export default function ProjectDetailPage() {
           >
             <ChatComposerNew
               onSend={handleProjectSend}
+              onUpgradeRequest={handleUpgradeRequest}
               projectId={project.id}
               placeholder={`New chat in ${project.name}`}
             />

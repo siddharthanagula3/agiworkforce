@@ -1,15 +1,10 @@
 'use client';
 
-import type { AgentEventSource, ManagedMemoryCitations } from '@agiworkforce/types';
+import type { ManagedMemoryCitations } from '@agiworkforce/types';
+import type { MessageResearchSource } from '@agiworkforce/unified-chat/message-sources';
 import { create } from 'zustand';
 
-export interface ResearchSource extends AgentEventSource {
-  favicon?: string;
-  /** When the page was published, when the search backend reported it. */
-  publishedDate?: string;
-  retrievedAt?: string;
-  citationIndex?: number;
-}
+export type ResearchSource = MessageResearchSource;
 
 interface ResearchPanelState {
   panelOpen: boolean;

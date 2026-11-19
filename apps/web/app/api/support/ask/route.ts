@@ -14,6 +14,7 @@ import { toSupportAgentAccountFacts } from '@/lib/support/account/agent-facts';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { resolveSupportAccountContext } from '@/lib/support/account/context-resolver';
 import { getCurrentUserRlsDb } from '@/lib/server/rls-db';
+import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 import { toModelSafeAccountFacts } from '@/lib/support/account/model-safe-facts';
 import { listAvailableSupportActions } from '@/lib/support/actions/catalog';
 import {
@@ -120,6 +121,9 @@ async function handleAsk(request: NextRequest) {
   const signals = askerScope
     ? await resolveAccountSignals(askerScope.db, askerScope.userId)
     : ANONYMOUS_SIGNALS;
+  const organizationId = askerScope
+    ? await resolveActiveOrganizationId(askerScope.db, askerScope.userId, request)
+    : null;
 
   const answer = await answerSupportQuestion({
     question: parsed.data.message,
@@ -128,6 +132,7 @@ async function handleAsk(request: NextRequest) {
     viewer: {
       isSignedIn: identity.userId !== null,
       userId: identity.userId,
+      organizationId,
       planTier: signals.planTier,
     },
     accountFacts: signals.accountFacts,

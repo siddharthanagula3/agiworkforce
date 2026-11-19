@@ -2131,10 +2131,10 @@ describe.runIf(process.platform === 'darwin' && existsSync(SEATBELT_EXECUTABLE))
         root: at,
         relativePath: '',
         command: `${gitBinary} ${args}`,
-        policy: { allow: ['git'], deny: [] },
+        policy: { allow: [], deny: [] },
         sandbox: seatbelt,
         network: 'deny',
-        approve: vi.fn().mockResolvedValue(false),
+        approve: vi.fn().mockResolvedValue({ approved: true, allowNetwork: false }),
         emit: () => undefined,
       });
     }
@@ -2354,9 +2354,9 @@ describe.runIf(process.platform === 'darwin' && existsSync(SEATBELT_EXECUTABLE))
           root,
           relativePath: '',
           command: '/usr/bin/git --version',
-          policy: { allow: ['git'], deny: [] },
+          policy: { allow: [], deny: [] },
           sandbox: seatbelt,
-          approve: vi.fn().mockResolvedValue(false),
+          approve: vi.fn().mockResolvedValue({ approved: true, allowNetwork: false }),
           emit: () => undefined,
         });
 

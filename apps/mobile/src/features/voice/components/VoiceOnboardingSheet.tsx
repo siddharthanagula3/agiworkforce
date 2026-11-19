@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { Modal, View } from 'react-native';
+import { Modal, ScrollView, View } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { X, AudioLines, Info } from 'lucide-react-native';
@@ -9,6 +9,7 @@ import Svg, { Defs, LinearGradient, Stop, Circle } from 'react-native-svg';
 import { Text } from '@/components/ui/Text';
 import { colors, motion } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 import { useSheetSlideIn } from '@/src/shared/hooks/useSheetSlideIn';
 import { useSettingsStore } from '@/stores/settingsStore';
 
@@ -65,7 +66,7 @@ export type VoiceOnboardingPurpose = 'voice' | 'dictation';
 
 export const VOICE_DISCLOSURE: Record<VoiceOnboardingMode, string> = {
   'on-device': 'Your voice is transcribed on this device and never recorded.',
-  live: 'Your voice streams to AGI Cloud and only the transcript is saved.',
+  live: 'Your audio streams directly between this device and the voice provider. The transcript is saved to the chat.',
 };
 
 const INTRO: Record<VoiceOnboardingPurpose, { title: string; body: string }> = {
@@ -125,6 +126,7 @@ export function VoiceOnboardingSheet({
         <Animated.View
           style={[
             {
+              ...contentColumn('reading'),
               flex: 1,
               marginTop: insets.top + 8,
               backgroundColor: colors.surfaceElevated,
@@ -155,31 +157,40 @@ export function VoiceOnboardingSheet({
             </PressableBox>
           </View>
 
-          <View style={{ flex: 1, minHeight: 120, alignItems: 'center', justifyContent: 'center' }}>
-            <IntroOrb />
-          </View>
-
-          <Text
-            style={{
-              color: colors.textPrimary,
-              fontSize: typeScale.largeTitle,
-              fontWeight: '700',
-              textAlign: 'center',
-              marginBottom: 28,
-            }}
-            accessibilityRole="header"
+          <ScrollView
+            testID="voice-onboarding-body"
+            style={{ flex: 1 }}
+            contentContainerStyle={{ flexGrow: 1 }}
+            alwaysBounceVertical={false}
           >
-            {INTRO[purpose].title}
-          </Text>
+            <View
+              style={{ flex: 1, minHeight: 120, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <IntroOrb />
+            </View>
 
-          <View style={{ gap: 22, marginBottom: 32 }}>
-            <FeatureRow icon={<AudioLines size={22} color={colors.textMuted} />}>
-              {INTRO[purpose].body}
-            </FeatureRow>
-            <FeatureRow icon={<Info size={22} color={colors.textMuted} />}>
-              {VOICE_DISCLOSURE[mode]}
-            </FeatureRow>
-          </View>
+            <Text
+              style={{
+                color: colors.textPrimary,
+                fontSize: typeScale.largeTitle,
+                fontWeight: '700',
+                textAlign: 'center',
+                marginBottom: 28,
+              }}
+              accessibilityRole="header"
+            >
+              {INTRO[purpose].title}
+            </Text>
+
+            <View style={{ gap: 22, marginBottom: 32 }}>
+              <FeatureRow icon={<AudioLines size={22} color={colors.textMuted} />}>
+                {INTRO[purpose].body}
+              </FeatureRow>
+              <FeatureRow icon={<Info size={22} color={colors.textMuted} />}>
+                {VOICE_DISCLOSURE[mode]}
+              </FeatureRow>
+            </View>
+          </ScrollView>
 
           <PressableBox
             onPress={handleContinue}

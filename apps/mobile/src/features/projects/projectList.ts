@@ -13,13 +13,12 @@ export interface DisplayProject {
   accentId?: string | null;
 }
 
-export type ProjectSort = 'recent' | 'name' | 'active';
+export type ProjectSort = 'recent' | 'name';
 export type ProjectFilter = 'all' | 'mine' | 'shared' | 'archived';
 
 export const SORT_LABELS: Record<ProjectSort, string> = {
   recent: 'Recently updated',
   name: 'Name',
-  active: 'Active first',
 };
 
 export const FILTER_LABELS: Record<ProjectFilter, string> = {
@@ -76,16 +75,12 @@ export function pinnedFirst<T extends { pinned?: boolean }>(items: readonly T[])
 export function sortDisplayProjects(
   projects: readonly DisplayProject[],
   sort: ProjectSort,
-  activeProjectId: string | null,
 ): DisplayProject[] {
   const sorted = [...projects];
   if (sort === 'name') {
     sorted.sort((a, b) => a.name.localeCompare(b.name));
   } else {
     sorted.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
-    if (sort === 'active') {
-      sorted.sort((a, b) => Number(b.id === activeProjectId) - Number(a.id === activeProjectId));
-    }
   }
   return pinnedFirst(sorted);
 }

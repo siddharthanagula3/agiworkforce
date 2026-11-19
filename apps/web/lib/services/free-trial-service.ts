@@ -35,6 +35,7 @@ import {
   type FreeModelPromotionReservation,
 } from '@/lib/server/free-model-promotion';
 import { settleFreeModelPromotionTurn } from '@/lib/server/free-model-promotion-ledger';
+import { withoutNativeDocumentData } from '@/app/api/llm/v1/chat/completions/lib/media-input';
 
 export const FREE_TRIAL_INTERNAL_USAGE_POLICY = Object.freeze({
   fiveHourBudgetMicrousd: getPlanFiveHourUsageBudgetMicrousd('free'),
@@ -181,18 +182,40 @@ type FreeTrialBudgetResult =
   | { ok: false; code: 'budget_reached' }
   | Extract<FreeModelPromotionFit, { ok: false }>;
 
+const PROMPT_FRAMING_TOKENS = 64;
+
+// An image or a PDF page is billed by its pixels, so its base64 length says
+// nothing about its cost; the catalogue's per-image bound does. A PDF's text
+// layer stays bounded by the bytes of its complete extracted text.
 export function estimateConservativeFreeInputTokens(input: {
   model: string;
   messages: unknown;
   tools?: unknown;
 }): number {
   const payload = { messages: input.messages, ...(input.tools ? { tools: input.tools } : {}) };
-  const serializedBytes = new TextEncoder().encode(JSON.stringify(payload)).byteLength;
-  if (!containsImageInput(payload)) return serializedBytes + 64;
-
   const metadata = getModelMetadataById(input.model);
-  const modelInputCeiling = metadata?.contextWindow;
-  return Math.max(serializedBytes + 64, modelInputCeiling ?? 1_000_000);
+  const imageTokenCeiling = metadata?.imageInput?.maxInputTokensPerImage;
+
+  if (imageTokenCeiling === undefined) {
+    const serializedBytes = utf8ByteLength(JSON.stringify(payload));
+    if (!containsImageInput(payload)) return serializedBytes + PROMPT_FRAMING_TOKENS;
+    return Math.max(serializedBytes + PROMPT_FRAMING_TOKENS, metadata?.contextWindow ?? 1_000_000);
+  }
+
+  const pageImageTokenCeiling =
+    metadata?.documentInput?.maxInputTokensPerPageImage ?? imageTokenCeiling;
+  let imageTokens = 0;
+  const serializedWithoutEncodedMedia = JSON.stringify(payload, (_key, value: unknown) => {
+    if (isImageInputPart(value)) {
+      imageTokens += imageTokenCeiling;
+      return { type: 'image_url' };
+    }
+    const document = withoutNativeDocumentData(value);
+    if (!document) return value;
+    imageTokens += document.pageCount * pageImageTokenCeiling;
+    return document.part;
+  });
+  return utf8ByteLength(serializedWithoutEncodedMedia) + PROMPT_FRAMING_TOKENS + imageTokens;
 }
 
 export function fitFreeTrialOutputBudget(input: {
@@ -1032,10 +1055,19 @@ function toNonNegativeInteger(value: number | string): number {
   return Math.max(0, Math.floor(parsed));
 }
 
+function utf8ByteLength(text: string): number {
+  return new TextEncoder().encode(text).byteLength;
+}
+
+function isImageInputPart(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  return record['type'] === 'image_url' && Boolean(record['image_url']);
+}
+
 function containsImageInput(value: unknown): boolean {
   if (Array.isArray(value)) return value.some(containsImageInput);
   if (!value || typeof value !== 'object') return false;
-  const record = value as Record<string, unknown>;
-  if (record['type'] === 'image_url' && record['image_url']) return true;
-  return Object.values(record).some(containsImageInput);
+  if (isImageInputPart(value)) return true;
+  return Object.values(value as Record<string, unknown>).some(containsImageInput);
 }

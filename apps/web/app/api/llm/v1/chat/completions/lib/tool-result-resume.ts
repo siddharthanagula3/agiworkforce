@@ -24,6 +24,7 @@ import type { getUserScopedDb } from '@/lib/server/rls-db';
 import type { AuthGateSuccess } from './auth-gate';
 import { withManagedTurnSlot } from './turn-slot';
 import { processRequest, type ProcessedRequest } from './request-processor';
+import { settleRefusedFreeTrial } from './settle-refused-free-trial';
 import { loadMcpToolDefs, type ResumeApproval } from './tool-loop';
 import { loadUserConnectorToolDefs } from '@/lib/user-connector-tools';
 import { connectorsAllowedForTurn } from '@/lib/connectors/connector-capability';
@@ -262,6 +263,7 @@ export async function continueToolResultResume(input: {
               );
             });
           }
+          await settleRefusedFreeTrial(processed, 'tool_discovery_failed');
 
           throw error;
         }
@@ -355,6 +357,7 @@ export async function continueToolResultResume(input: {
           usage: { reason: 'workflow_start_failed' },
         }).catch(() => undefined);
       }
+      await settleRefusedFreeTrial(processed, 'workflow_start_failed');
 
       logger.error(
         { error, userId, requestId: processed.requestId, runId: claim.checkpoint.runId },

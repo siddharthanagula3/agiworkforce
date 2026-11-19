@@ -1,4 +1,9 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
+jest.mock('@/lib/v1FeatureFlags', () => {
+  const actual = jest.requireActual('@/lib/v1FeatureFlags');
+  return { FEATURES: { ...actual.FEATURES, companion: true, dispatch: true } };
+});
+
 jest.mock('@/src/features/billing/nativePurchaseAvailability', () => ({
   NATIVE_PURCHASES_AVAILABLE: true,
 }));

@@ -466,7 +466,7 @@ const MINUTE_MS = 60_000;
 /**
  * Absolute per-user safety ceiling for live managed sandboxes.
  *
- * Plan tiers can grant fewer slots, but no plan may exceed five. Managed turns
+ * Plan tiers can grant fewer slots, but no plan may exceed this. Managed turns
  * can still run in parallel without a sandbox, so this bounds stateful compute
  * cost without turning the chat-concurrency dimension into the same setting.
  */
@@ -536,11 +536,28 @@ export interface BillingPlanProductLimits {
   maxAttachmentBytes: number;
   maxAttachmentsPerMessage: number;
   dailyAttachmentUploads: BillingPlanLimit;
+  maxChatFileBytes: number;
+  dailyChatFileUploadBytes: number;
+  maxConcurrentChatFileIntakes: number;
 }
 
-const FREE_ATTACHMENTS_PER_MESSAGE = 10;
+const ATTACHMENTS_PER_MESSAGE = 20;
 
-const PAID_ATTACHMENTS_PER_MESSAGE = 20;
+const BYTES_PER_MIB = 1024 ** 2;
+
+const PAID_CHAT_FILE_BYTES = 500 * BYTES_PER_MIB;
+
+const NO_LARGE_CHAT_FILES = {
+  maxChatFileBytes: MAX_ATTACHMENT_BYTES,
+  dailyChatFileUploadBytes: 0,
+  maxConcurrentChatFileIntakes: 0,
+} as const;
+
+const PAID_LARGE_CHAT_FILES = {
+  maxChatFileBytes: PAID_CHAT_FILE_BYTES,
+  dailyChatFileUploadBytes: 25 * BYTES_PER_GIB,
+  maxConcurrentChatFileIntakes: 5,
+} as const;
 
 const MAX_PLAN_PRODUCT_LIMITS: BillingPlanProductLimits = {
   projects: 'unlimited',
@@ -552,11 +569,12 @@ const MAX_PLAN_PRODUCT_LIMITS: BillingPlanProductLimits = {
   maxSandboxes: MAX_MANAGED_SANDBOXES_PER_USER,
   sandboxTtlMs: MANAGED_SANDBOX_LONGEST_RUN_MS,
   maxConnectorTools: 300,
-  maxScheduledTasks: 10,
+  maxScheduledTasks: 15,
   codeHarnessDailyCeilingCents: 2500,
   maxAttachmentBytes: MAX_ATTACHMENT_BYTES,
-  maxAttachmentsPerMessage: PAID_ATTACHMENTS_PER_MESSAGE,
+  maxAttachmentsPerMessage: ATTACHMENTS_PER_MESSAGE,
   dailyAttachmentUploads: 'unlimited',
+  ...PAID_LARGE_CHAT_FILES,
 };
 
 export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
@@ -575,8 +593,9 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     maxScheduledTasks: 0,
     codeHarnessDailyCeilingCents: 0,
     maxAttachmentBytes: MAX_ATTACHMENT_BYTES,
-    maxAttachmentsPerMessage: FREE_ATTACHMENTS_PER_MESSAGE,
+    maxAttachmentsPerMessage: ATTACHMENTS_PER_MESSAGE,
     dailyAttachmentUploads: 'unlimited',
+    ...NO_LARGE_CHAT_FILES,
   },
   byok: {
     projects: 'unlimited',
@@ -591,12 +610,13 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     maxScheduledTasks: 0,
     codeHarnessDailyCeilingCents: 0,
     maxAttachmentBytes: MAX_ATTACHMENT_BYTES,
-    maxAttachmentsPerMessage: FREE_ATTACHMENTS_PER_MESSAGE,
+    maxAttachmentsPerMessage: ATTACHMENTS_PER_MESSAGE,
     dailyAttachmentUploads: 'unlimited',
+    ...NO_LARGE_CHAT_FILES,
   },
   free: {
-    projects: 1,
-    knowledgeStorageBytes: 104857600,
+    projects: 5,
+    knowledgeStorageBytes: 500 * BYTES_PER_MIB,
     monthlyDownloadBytes: FREE_DAILY_CAPS.egressBytes * DAYS_IN_LONGEST_MONTH,
     customMcpServers: 0,
     maxConcurrentTurns: 1,
@@ -607,12 +627,13 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     maxScheduledTasks: 0,
     codeHarnessDailyCeilingCents: 0,
     maxAttachmentBytes: MAX_ATTACHMENT_BYTES,
-    maxAttachmentsPerMessage: FREE_ATTACHMENTS_PER_MESSAGE,
+    maxAttachmentsPerMessage: ATTACHMENTS_PER_MESSAGE,
     dailyAttachmentUploads: 5,
+    ...NO_LARGE_CHAT_FILES,
   },
   basic: {
-    projects: 5,
-    knowledgeStorageBytes: 1073741824,
+    projects: 'unlimited',
+    knowledgeStorageBytes: 4 * BYTES_PER_GIB,
     monthlyDownloadBytes: BYTES_PER_GIB,
     customMcpServers: 5,
     maxConcurrentTurns: 1,
@@ -620,15 +641,18 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     maxSandboxes: 5,
     sandboxTtlMs: MANAGED_SANDBOX_LONGEST_RUN_MS,
     maxConnectorTools: 50,
-    maxScheduledTasks: 2,
+    maxScheduledTasks: 3,
     codeHarnessDailyCeilingCents: 100,
     maxAttachmentBytes: MAX_ATTACHMENT_BYTES,
-    maxAttachmentsPerMessage: PAID_ATTACHMENTS_PER_MESSAGE,
+    maxAttachmentsPerMessage: ATTACHMENTS_PER_MESSAGE,
     dailyAttachmentUploads: 'unlimited',
+    ...PAID_LARGE_CHAT_FILES,
+    dailyChatFileUploadBytes: 2 * BYTES_PER_GIB,
+    maxConcurrentChatFileIntakes: 3,
   },
   pro: {
-    projects: 25,
-    knowledgeStorageBytes: 10737418240,
+    projects: 'unlimited',
+    knowledgeStorageBytes: 20 * BYTES_PER_GIB,
     monthlyDownloadBytes: 3 * BYTES_PER_GIB,
     customMcpServers: 25,
     maxConcurrentTurns: 3,
@@ -639,8 +663,11 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     maxScheduledTasks: 5,
     codeHarnessDailyCeilingCents: 500,
     maxAttachmentBytes: MAX_ATTACHMENT_BYTES,
-    maxAttachmentsPerMessage: PAID_ATTACHMENTS_PER_MESSAGE,
+    maxAttachmentsPerMessage: ATTACHMENTS_PER_MESSAGE,
     dailyAttachmentUploads: 'unlimited',
+    ...PAID_LARGE_CHAT_FILES,
+    dailyChatFileUploadBytes: 10 * BYTES_PER_GIB,
+    maxConcurrentChatFileIntakes: 3,
   },
   max: MAX_PLAN_PRODUCT_LIMITS,
   max_15x: {
@@ -656,11 +683,13 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     maxScheduledTasks: 25,
     codeHarnessDailyCeilingCents: 7500,
     maxAttachmentBytes: MAX_ATTACHMENT_BYTES,
-    maxAttachmentsPerMessage: PAID_ATTACHMENTS_PER_MESSAGE,
+    maxAttachmentsPerMessage: ATTACHMENTS_PER_MESSAGE,
     dailyAttachmentUploads: 'unlimited',
+    ...PAID_LARGE_CHAT_FILES,
+    dailyChatFileUploadBytes: 50 * BYTES_PER_GIB,
   },
   team: {
-    projects: 25,
+    projects: 'unlimited',
     knowledgeStorageBytes: 26843545600,
     monthlyDownloadBytes: downloadCapBytes(BILLING_PLAN_PRICING.team.monthlyPriceUsd),
     customMcpServers: 25,
@@ -669,11 +698,12 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     maxSandboxes: 10,
     sandboxTtlMs: MANAGED_SANDBOX_LONGEST_RUN_MS,
     maxConnectorTools: 150,
-    maxScheduledTasks: 5,
+    maxScheduledTasks: 10,
     codeHarnessDailyCeilingCents: 500,
     maxAttachmentBytes: MAX_ATTACHMENT_BYTES,
-    maxAttachmentsPerMessage: PAID_ATTACHMENTS_PER_MESSAGE,
+    maxAttachmentsPerMessage: ATTACHMENTS_PER_MESSAGE,
     dailyAttachmentUploads: 'unlimited',
+    ...PAID_LARGE_CHAT_FILES,
   },
   team_premium: {
     ...MAX_PLAN_PRODUCT_LIMITS,
@@ -693,8 +723,10 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     maxScheduledTasks: 'custom',
     codeHarnessDailyCeilingCents: 'custom',
     maxAttachmentBytes: MAX_ATTACHMENT_BYTES,
-    maxAttachmentsPerMessage: PAID_ATTACHMENTS_PER_MESSAGE,
+    maxAttachmentsPerMessage: ATTACHMENTS_PER_MESSAGE,
     dailyAttachmentUploads: 'unlimited',
+    ...PAID_LARGE_CHAT_FILES,
+    dailyChatFileUploadBytes: 50 * BYTES_PER_GIB,
   },
 });
 
@@ -717,9 +749,28 @@ export const MAX_PLAN_ATTACHMENT_BYTES = Math.max(
   ...Object.values(BILLING_PLAN_PRODUCT_LIMITS).map((limits) => limits.maxAttachmentBytes),
 );
 
+export const MAX_PLAN_CHAT_FILE_BYTES = Math.max(
+  ...Object.values(BILLING_PLAN_PRODUCT_LIMITS).map((limits) => limits.maxChatFileBytes),
+);
+
 /** The largest single file a plan may upload; an unknown plan may upload nothing. */
 export function getPlanMaxAttachmentBytes(plan: string | null | undefined): number {
   return getBillingPlanProductLimits(plan)?.maxAttachmentBytes ?? 0;
+}
+
+/** The largest chat file a plan may upload, large path included; an unknown plan may upload nothing. */
+export function getPlanMaxChatFileBytes(plan: string | null | undefined): number {
+  return getBillingPlanProductLimits(plan)?.maxChatFileBytes ?? 0;
+}
+
+/** Bytes of large chat files a plan may start in a UTC day; zero when it has no large path. */
+export function getPlanDailyChatFileUploadBytes(plan: string | null | undefined): number {
+  return getBillingPlanProductLimits(plan)?.dailyChatFileUploadBytes ?? 0;
+}
+
+/** Large chat file intakes a plan may have in flight at once; zero when it has no large path. */
+export function getPlanMaxConcurrentChatFileIntakes(plan: string | null | undefined): number {
+  return getBillingPlanProductLimits(plan)?.maxConcurrentChatFileIntakes ?? 0;
 }
 
 export function getPlanMaxAttachmentsPerMessage(plan: string | null | undefined): number {

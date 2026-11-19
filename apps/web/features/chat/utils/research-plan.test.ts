@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  completedResearchSteps,
-  parseResearchPlanEvent,
-  parseResearchPlanQuestions,
-  researchAnswersGuidance,
-} from './research-plan';
+import { completedResearchSteps, parseResearchPlanEvent } from './research-plan';
 
 const WIRE_STEP = {
   id: 'plan-1',
@@ -118,24 +113,5 @@ describe('completedResearchSteps', () => {
 
   it('handles an absent plan', () => {
     expect(completedResearchSteps(undefined)).toEqual([]);
-  });
-});
-
-describe('clarifying questions on the research plan', () => {
-  it('reads up to three questions from the plan event', () => {
-    expect(
-      parseResearchPlanQuestions({
-        steps: [],
-        questions: [' Which country? ', '', 7, 'B?', 'C?', 'D?'],
-      }),
-    ).toEqual(['Which country?', 'B?', 'C?']);
-    expect(parseResearchPlanQuestions({ steps: [] })).toEqual([]);
-  });
-
-  it('turns only the answered questions into guidance for the run', () => {
-    expect(researchAnswersGuidance(['Which country?', 'New or used?'], ['Norway', ' '])).toBe(
-      'Q: Which country?\nA: Norway',
-    );
-    expect(researchAnswersGuidance(['Which country?'], [''])).toBeNull();
   });
 });

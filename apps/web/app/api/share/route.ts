@@ -9,6 +9,7 @@ import {
   type ConversationSharesRevoked,
 } from '@agiworkforce/cloud-contracts';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { stripCitationMarkup } from '@agiworkforce/provider-protocol';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { readJsonBody } from '@/lib/read-json-body';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -26,6 +27,7 @@ import { TEMPORARY_CHAT_SHARE_REFUSAL } from '@/lib/temporary-chat-policy';
 import { SITE_URL } from '@/lib/seo/site';
 import { withoutSystemMessages } from '@features/chat/lib/shared-conversation-snapshot';
 import { clientMessageRole } from '@/lib/server/client-message-role';
+import { withoutStoredCitationMarkup } from '@/lib/server/stored-assistant-text';
 import {
   redactSecretsFromValue,
   SecretRedactionIncompleteError,
@@ -219,7 +221,32 @@ interface VerifiedSnapshot {
 
 function transcriptKey(role: unknown, content: unknown): string | null {
   if (typeof role !== 'string' || typeof content !== 'string') return null;
-  return `${role}\u0000${content.trim()}`;
+  const text = role === 'assistant' ? stripCitationMarkup(content) : content;
+  return `${role}\u0000${text.trim()}`;
+}
+
+function plainArtifactContent(content: string): string {
+  return stripCitationMarkup(content).trim();
+}
+
+function withoutSnapshotCitationMarkup(
+  messages: Array<Record<string, unknown>>,
+): Array<Record<string, unknown>> {
+  return withoutStoredCitationMarkup(messages).map((message) => {
+    const artifacts = message['artifacts'];
+    if (!Array.isArray(artifacts)) return message;
+    return {
+      ...message,
+      artifacts: artifacts.map((artifact: unknown) => {
+        if (!artifact || typeof artifact !== 'object') return artifact;
+        const record = artifact as Record<string, unknown>;
+        const content = record['content'];
+        return typeof content === 'string'
+          ? { ...record, content: stripCitationMarkup(content) }
+          : artifact;
+      }),
+    };
+  });
 }
 
 function snapshotArtifactContents(messages: Array<Record<string, unknown>>): string[] {
@@ -231,7 +258,7 @@ function snapshotArtifactContents(messages: Array<Record<string, unknown>>): str
         artifact && typeof artifact === 'object'
           ? (artifact as Record<string, unknown>)['content']
           : undefined;
-      return typeof content === 'string' ? content.trim() : '';
+      return typeof content === 'string' ? plainArtifactContent(content) : '';
     });
   });
 }
@@ -288,9 +315,9 @@ async function artifactsMatchStored(
     [conversationId, userId, organizationId],
   );
   const artifactContents = new Set(
-    storedArtifacts.map((artifact) => (artifact.content ?? '').trim()),
+    storedArtifacts.map((artifact) => plainArtifactContent(artifact.content ?? '')),
   );
-  const messageContents = stored.map((row) => row.content ?? '');
+  const messageContents = withoutStoredCitationMarkup([...stored]).map((row) => row.content ?? '');
   return claimed.every(
     (content) =>
       content.length > 0 &&
@@ -414,9 +441,10 @@ async function inspectSnapshot(
   conversationId: string | undefined,
   messages: Array<Record<string, unknown>>,
 ): Promise<SanitizedMessages> {
+  const plainMessages = withoutSnapshotCitationMarkup(messages);
   const outbound = await inspectOutboundContent({
     channel: 'share',
-    value: messages,
+    value: plainMessages,
     userId,
     organizationId: null,
     ...(conversationId ? { resourceId: conversationId } : {}),
@@ -428,7 +456,7 @@ async function inspectSnapshot(
   }
 
   try {
-    return sanitizeMessages(messages);
+    return sanitizeMessages(plainMessages);
   } catch (error) {
     if (error instanceof SecretRedactionIncompleteError) {
       logger.error(

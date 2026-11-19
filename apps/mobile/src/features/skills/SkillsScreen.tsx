@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, RefreshControl, TextInput, View, type ListRenderItemInfo } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, BookOpen, Cloud, RefreshCw, Search, Sparkles, X } from 'lucide-react-native';
 import * as DocumentPicker from 'expo-document-picker';
@@ -37,6 +37,7 @@ import {
 } from './service';
 import { useMobileSkillSelectionStore } from './selectionStore';
 import { NewSkillSheet } from './NewSkillSheet';
+import { enableSkillCodeExecution } from './skillRequirements';
 
 const SOURCE_LABELS: Record<ManagedSkillSource, string> = {
   bundled: 'Built in',
@@ -664,7 +665,12 @@ export function SkillsScreen() {
   const handleUseSkill = useCallback(
     (skill: ManagedSkillSummary) => {
       if (!clerkUserId || !isSkillInstalled(skill, installed)) return;
-      selectSkill({ ownerId: clerkUserId, name: skill.name });
+      selectSkill({
+        ownerId: clerkUserId,
+        name: skill.name,
+        ...(skill.requiredTools ? { requiredTools: skill.requiredTools } : {}),
+      });
+      enableSkillCodeExecution(skill.requiredTools, conversationId);
       if (returnToConversation()) return;
       if (returnTo === 'composer' && router.canGoBack()) {
         router.back();
@@ -672,7 +678,7 @@ export function SkillsScreen() {
       }
       router.push('/(app)/(tabs)/chat' as Parameters<typeof router.push>[0]);
     },
-    [clerkUserId, installed, returnTo, returnToConversation, router, selectSkill],
+    [clerkUserId, conversationId, installed, returnTo, returnToConversation, router, selectSkill],
   );
 
   const handleToggleInstall = useCallback(
@@ -783,6 +789,19 @@ export function SkillsScreen() {
     void load('initial', controller.signal);
     return () => controller.abort();
   }, [canLoad, clerkUserId, load, reloadKey]);
+
+  const leftScreen = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (leftScreen.current) {
+        leftScreen.current = false;
+        setReloadKey((key) => key + 1);
+      }
+      return () => {
+        leftScreen.current = true;
+      };
+    }, []),
+  );
 
   const filteredSkills = useMemo(() => {
     const normalized = query.trim().toLowerCase();

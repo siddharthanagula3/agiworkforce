@@ -3,7 +3,10 @@ import {
   type LibraryItem,
   type ManagedMediaImageAspectRatio,
 } from '@agiworkforce/cloud-contracts';
-import { libraryItemToFile } from '@features/chat/components/Composer/ComposerFilesMenu';
+import {
+  LibraryFileError,
+  libraryItemToFile,
+} from '@features/chat/components/Composer/ComposerFilesMenu';
 import { readPersistedDraft } from '@features/chat/components/Composer/composer-draft-storage';
 import { composerTextWithIncoming } from '@agiworkforce/utils/composer-incoming';
 import { PENDING_CONVERSATION_KEY, useChatStore } from '@shared/stores/web-chat-store';
@@ -13,6 +16,21 @@ export type LibraryHandoffMode = 'chat' | 'agiwork';
 let stagedAttachments: File[] | null = null;
 
 const ASPECT_RATIO_TOLERANCE = 0.02;
+const PAYLOAD_TOO_LARGE_STATUS = 413;
+
+export const LIBRARY_FILE_TOO_LARGE_MESSAGE =
+  'This file is too large to add from the Library. Download it, then add it from your device.';
+
+export async function readLibraryItemFile(item: LibraryItem): Promise<File> {
+  try {
+    return await libraryItemToFile(item);
+  } catch (error) {
+    if (error instanceof LibraryFileError && error.status === PAYLOAD_TOO_LARGE_STATUS) {
+      throw new Error(LIBRARY_FILE_TOO_LARGE_MESSAGE);
+    }
+    throw error;
+  }
+}
 
 function stageNewChatDraft(incoming: string): void {
   const store = useChatStore.getState();
@@ -39,7 +57,7 @@ export async function stageLibraryItemForNewChat(
   item: LibraryItem,
   options: { workMode: LibraryHandoffMode; draft?: string },
 ): Promise<void> {
-  const file = await libraryItemToFile(item);
+  const file = await readLibraryItemFile(item);
   stagedAttachments = [file];
   const store = useChatStore.getState();
   store.setComposerToggles({ workMode: options.workMode }, PENDING_CONVERSATION_KEY);
@@ -58,7 +76,7 @@ export async function stageLibraryItemForImageRemix(item: LibraryItem): Promise<
   if (!item.mime_type.toLowerCase().startsWith('image/')) {
     throw new Error('Only an image can be remixed.');
   }
-  const file = await libraryItemToFile(item);
+  const file = await readLibraryItemFile(item);
   stagedAttachments = [file];
   const store = useChatStore.getState();
   store.setComposerToggles(

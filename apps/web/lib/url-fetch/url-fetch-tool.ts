@@ -281,13 +281,46 @@ export function extractHtmlTitle(html: string): string | undefined {
   return title || undefined;
 }
 
-const META_ATTR = /(?<![a-zA-Z0-9:-])([a-zA-Z][a-zA-Z0-9:-]*)\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
+const ATTR_NAME_START = /[a-zA-Z]/;
+const ATTR_NAME_CHAR = /[a-zA-Z0-9:-]/;
 
+function skipWhitespace(source: string, from: number): number {
+  let at = from;
+  while (at < source.length && WHITESPACE_CHAR.test(source[at]!)) at += 1;
+  return at;
+}
+
+function quotedValueAfter(source: string, from: number): { start: number; end: number } | null {
+  const equals = skipWhitespace(source, from);
+  if (source[equals] !== '=') return null;
+  const open = skipWhitespace(source, equals + 1);
+  const quote = source[open];
+  if (quote !== '"' && quote !== "'") return null;
+  const close = source.indexOf(quote, open + 1);
+  return close === -1 ? null : { start: open + 1, end: close };
+}
+
+// A name run that no quoted value follows is skipped whole. Retrying it from
+// each of its characters, as `[a-zA-Z][a-zA-Z0-9:-]*\s*=` did, is quadratic on
+// an attacker's `<meta aaaa...>` (js/polynomial-redos).
 function metaTagAttrs(tagSource: string): Record<string, string> {
   const attrs: Record<string, string> = {};
-  for (const match of tagSource.matchAll(META_ATTR)) {
-    const name = match[1]?.toLowerCase();
-    if (name) attrs[name] = match[2] ?? match[3] ?? '';
+  let cursor = 0;
+  while (cursor < tagSource.length) {
+    if (!ATTR_NAME_START.test(tagSource[cursor]!)) {
+      cursor += 1;
+      continue;
+    }
+    let nameEnd = cursor + 1;
+    while (nameEnd < tagSource.length && ATTR_NAME_CHAR.test(tagSource[nameEnd]!)) nameEnd += 1;
+    const value = quotedValueAfter(tagSource, nameEnd);
+    if (!value) {
+      cursor = nameEnd;
+      continue;
+    }
+    const name = tagSource.slice(cursor, nameEnd).toLowerCase();
+    attrs[name] = tagSource.slice(value.start, value.end);
+    cursor = value.end + 1;
   }
   return attrs;
 }
@@ -346,7 +379,12 @@ export function extractPageDescription(html: string): string | undefined {
 }
 
 const JSON_LD_DATE_KEYS = ['datePublished', 'dateCreated', 'uploadDate'] as const;
-const JSON_LD_TYPE = 'application/ld+json';
+// Fixed-width on purpose: without a quantifier there is nothing to backtrack
+// into, where `<script[^>]+type=...>[\s\S]*?</script>` rescanned to end-of-input
+// from every unterminated `<script` (js/polynomial-redos).
+const SCRIPT_OPEN = /<script/gi;
+const SCRIPT_CLOSE = /<\/script>/gi;
+const JSON_LD_TYPE = /[^>]type=["']application\/ld\+json["']/i;
 
 /**
  * When the page says it was published, taken from the metadata it publishes
@@ -368,19 +406,20 @@ export function extractPagePublishedDate(html: string): string | undefined {
 }
 
 export function jsonLdPublishedDate(html: string): string | undefined {
-  const lower = asciiLower(html);
   let cursor = 0;
   while (cursor < html.length) {
-    const open = findOpenTag(lower, 'script', cursor);
-    if (open === -1) return undefined;
-    const gt = html.indexOf('>', open);
+    SCRIPT_OPEN.lastIndex = cursor;
+    if (!SCRIPT_OPEN.exec(html)) return undefined;
+    const attrsStart = SCRIPT_OPEN.lastIndex;
+    const gt = html.indexOf('>', attrsStart);
     if (gt === -1) return undefined;
     cursor = gt + 1;
-    if (metaTagAttrs(html.slice(open, cursor))['type']?.toLowerCase() !== JSON_LD_TYPE) continue;
-    const close = findCloseTag(lower, 'script', cursor);
+    if (!JSON_LD_TYPE.test(html.slice(attrsStart, gt))) continue;
+    SCRIPT_CLOSE.lastIndex = cursor;
+    const close = SCRIPT_CLOSE.exec(html);
     if (!close) return undefined;
-    const body = html.slice(cursor, close.start);
-    cursor = close.end;
+    cursor = SCRIPT_CLOSE.lastIndex;
+    const body = html.slice(gt + 1, close.index);
     for (const key of JSON_LD_DATE_KEYS) {
       const found = new RegExp(`"${key}"\\s*:\\s*"([^"]{4,40})"`).exec(body);
       if (found?.[1]) return found[1];

@@ -1,6 +1,12 @@
 {
   "maxBytes": 26214400,
-  "allowedMimePrefixes": ["application/pdf", "text/", "application/json", "application/xml"],
+  "allowedMimePrefixes": [
+    "application/pdf",
+    "text/",
+    "application/json",
+    "application/xml",
+    "application/x-ipynb+json"
+  ],
   "imageMimeTypes": [
     "image/png",
     "image/jpeg",
@@ -33,7 +39,13 @@
     "go",
     "java",
     "html",
-    "css"
+    "css",
+    "ipynb",
+    "rb",
+    "sh",
+    "yml",
+    "yaml",
+    "toml"
   ],
   "maxTextPreviewChars": 200000,
   "fixedExtensions": ["pdf"]

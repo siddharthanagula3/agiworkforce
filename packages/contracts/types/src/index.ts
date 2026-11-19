@@ -105,6 +105,7 @@ export * from './user';
 export * from './billing-catalog';
 
 export * from './product-names';
+export * from './account-session-label';
 export * from './billing-plan-catalog';
 export * from './product-plan';
 export * from './credits';
@@ -124,6 +125,7 @@ export * from './interactive-cards';
 export * from './answer-ui';
 export * from './places-search';
 export * from './project-file-citations';
+export * from './past-chat-citations';
 export * from './project-templates';
 export * from './web-search-citations';
 export * from './search-provider';
@@ -282,9 +284,18 @@ export {
 
 export {
   AUTH_ROUTE_PREFIXES,
+  EMBEDDABLE_ACCOUNT_PAGE_PATHS,
+  EMBEDDABLE_PAGE_PREFIXES,
+  EMBEDDABLE_RECOVERY_PAGE_PATHS,
+  EMBEDDED_PAGE_PARAM,
+  EMBEDDED_PAGE_PARAM_VALUE,
   PRODUCT_ROUTE_PREFIXES,
   SESSION_AUTH_ROUTE_PREFIXES,
+  hasEmbeddedPageMarker,
   isAuthPath,
+  isEmbeddableAccountPagePath,
+  isEmbeddablePagePath,
+  isEmbeddableRecoveryPagePath,
   isProductPath,
   routeMatcherPatterns,
   type AuthRoutePrefix,
@@ -427,3 +438,4 @@ export * from './chart-spec';
 export * from './connector-connect-required';
 export * from './image-jobs';
 export * from './media-jobs';
+export * from './media-aspect';

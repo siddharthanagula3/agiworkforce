@@ -17,10 +17,7 @@ import {
 import { cn } from '@shared/lib/utils';
 import { useVoiceSession, type VoiceTranscriptTurn } from '@features/chat/hooks/use-voice-session';
 import { LIVE_VOICES } from '@features/chat/lib/live-voices';
-import {
-  useVoiceSessionStore,
-  type VoiceIntelligence,
-} from '@features/chat/stores/voice-session-store';
+import { useVoiceSessionStore } from '@features/chat/stores/voice-session-store';
 import { formatVoiceCallTime, VOICE_SESSION_STATUS } from '@agiworkforce/unified-chat';
 import { liveVoiceOutputRef } from '@features/chat/hooks/use-voice-session';
 import { useDesktopHost } from '@/features/desktop-host/lib/host';
@@ -36,7 +33,7 @@ import { VoiceComposer } from './VoiceComposer';
 import { voiceStatusAnnouncement } from './voice-announcements';
 import { appendVoiceCaption, type VoiceCaptionLine } from './voice-captions';
 import { VoiceOrb } from './VoiceOrb';
-import { VoiceSettingsModal } from './VoiceSettingsModal';
+import { VoiceSettingsModal, type VoiceChatIntelligence } from './VoiceSettingsModal';
 
 const LABEL = {
   sending: 'Sending',
@@ -154,7 +151,7 @@ export interface VoiceModeSurfaceProps {
   onNewChat: () => void;
   onOpenLibrary: () => void;
   onOpenConnectors: () => void;
-  onIntelligenceChange: (intelligence: VoiceIntelligence) => void;
+  chatIntelligence?: VoiceChatIntelligence | undefined;
   /** Where a live camera frame goes. Without a sink the control is not offered. */
   onVisualFrame?: (frame: VisualFrame) => void;
 }
@@ -172,7 +169,7 @@ export function VoiceModeSurface({
   onNewChat,
   onOpenLibrary,
   onOpenConnectors,
-  onIntelligenceChange,
+  chatIntelligence,
   onVisualFrame,
 }: VoiceModeSurfaceProps) {
   const handleCaption = useCallback((turn: VoiceTranscriptTurn) => {
@@ -196,8 +193,6 @@ export function VoiceModeSurface({
   const setDockOpen = useVoiceSessionStore((store) => store.setDockOpen);
   const settingsOpen = useVoiceSessionStore((store) => store.settingsOpen);
   const setSettingsOpen = useVoiceSessionStore((store) => store.setSettingsOpen);
-  const intelligence = useVoiceSessionStore((store) => store.intelligence);
-  const setIntelligence = useVoiceSessionStore((store) => store.setIntelligence);
   const language = useVoiceSessionStore((store) => store.language);
   const setLanguage = useVoiceSessionStore((store) => store.setLanguage);
   const voice = useVoiceSessionStore((store) => store.voice);
@@ -292,14 +287,6 @@ export function VoiceModeSurface({
     setTyped('');
   }, [submitTyped, typed]);
 
-  const handleIntelligenceChange = useCallback(
-    (next: VoiceIntelligence) => {
-      setIntelligence(next);
-      onIntelligenceChange(next);
-    },
-    [onIntelligenceChange, setIntelligence],
-  );
-
   const orb = (
     <VoiceOrb
       status={status}
@@ -340,6 +327,18 @@ export function VoiceModeSurface({
       >
         {LABEL.upgrade}
       </button>
+      <button type="button" onClick={exit} className={LIMIT_ACTION_CLASS}>
+        {LABEL.continueInText}
+      </button>
+    </div>
+  ) : status === VOICE_SESSION_STATUS.error && !managed ? (
+    <div
+      role="alert"
+      data-testid="voice-unavailable"
+      className="flex items-center gap-2 text-sm text-[var(--chat-text-secondary)]"
+    >
+      <CircleAlert className="h-4 w-4 shrink-0" aria-hidden="true" />
+      <span className="min-w-0">{error}</span>
       <button type="button" onClick={exit} className={LIMIT_ACTION_CLASS}>
         {LABEL.continueInText}
       </button>
@@ -652,11 +651,10 @@ export function VoiceModeSurface({
         reducedMotion={session.reducedMotion}
         voices={LIVE_VOICES}
         voiceUri={voice}
-        intelligence={intelligence}
+        chatIntelligence={chatIntelligence}
         language={language}
         onOpenChange={setSettingsOpen}
         onVoiceChange={setVoice}
-        onIntelligenceChange={handleIntelligenceChange}
         onLanguageChange={setLanguage}
         audioOutput={<AudioRoutePicker audioRef={liveVoiceOutputRef} className="self-start" />}
       />

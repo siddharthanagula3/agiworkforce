@@ -55,6 +55,7 @@ import {
   readActiveAudioRoute,
 } from '@/src/features/voice/services/audioRoute';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { sitsInColumn } from '../test-utils/sheetColumn';
 
 describe('audio route contract', () => {
   it('gives each route a category that actually changes the routing', () => {
@@ -159,5 +160,13 @@ describe('AudioRoutePicker', () => {
     Object.defineProperty(Platform, 'OS', { value: 'android', configurable: true });
     const { toJSON } = render(<AudioRoutePicker />);
     expect(toJSON()).toBeNull();
+  });
+
+  it('stops the route sheet at the reading column on a wide window', () => {
+    const { getByTestId } = render(<AudioRoutePicker />);
+
+    fireEvent.press(getByTestId('audio-route-trigger'));
+
+    expect(sitsInColumn(getByTestId('audio-route-sheet'), 'reading')).toBe(true);
   });
 });

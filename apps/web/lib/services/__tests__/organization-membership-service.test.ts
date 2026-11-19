@@ -11,7 +11,7 @@ vi.mock('@/lib/services/org-entitlements', () => ({
 }));
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { leaveOrganization } from '../organization-membership-service';
+import { leaveOrganization, requireOrganizationOwner } from '../organization-membership-service';
 
 const ORG_A = '11111111-1111-4111-8111-111111111111';
 
@@ -270,5 +270,38 @@ describe('leaveOrganization', () => {
     ).rejects.toMatchObject({ statusCode: 403 });
     expect(h.query).toHaveBeenCalledTimes(4);
     expectNoOwnershipChange(h);
+  });
+});
+
+describe('requireOrganizationOwner', () => {
+  function dbHolding(status: string, role: 'owner' | 'admin' = 'owner') {
+    const row = { ...member(role), status };
+    const query = vi.fn(async (sql: string) =>
+      String(sql).includes("status = 'active'") && status !== 'active' ? [] : [row],
+    );
+    return { query } as unknown as DatabaseAdapter;
+  }
+
+  it('returns the membership of an active owner', async () => {
+    await expect(
+      requireOrganizationOwner(dbHolding('active'), 'user-1', ORG_A, 'delete this workspace'),
+    ).resolves.toMatchObject({ role: 'owner', organization_id: ORG_A });
+  });
+
+  it('refuses an owner whose membership is suspended', async () => {
+    await expect(
+      requireOrganizationOwner(dbHolding('suspended'), 'user-1', ORG_A, 'delete this workspace'),
+    ).rejects.toMatchObject({ statusCode: 403 });
+  });
+
+  it('still refuses an active member who is not the owner', async () => {
+    await expect(
+      requireOrganizationOwner(
+        dbHolding('active', 'admin'),
+        'user-1',
+        ORG_A,
+        'delete this workspace',
+      ),
+    ).rejects.toMatchObject({ statusCode: 403 });
   });
 });

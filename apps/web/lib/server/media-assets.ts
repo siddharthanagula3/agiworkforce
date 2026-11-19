@@ -228,6 +228,67 @@ export async function insertMediaAsset(
   return insertMediaAssetRow(db, p, p.organizationId);
 }
 
+export interface InsertScannedChatFileMediaAssetParams {
+  userId: string;
+  organizationId: string | null;
+  kind: MediaKind;
+  mimeType: string;
+  byteSize: number;
+  storagePathname: string;
+  conversationId: string | null;
+  temporaryChat: boolean;
+  /** The hash the scanner's verdict carried; stored as both the content and the scanned hash. */
+  scannedSha256: string;
+  metadata: Record<string, unknown>;
+}
+
+/**
+ * The only statement that inserts a chat file above the inline limit. Migration
+ * 0422 refuses such a row unless `scanned_sha256` equals `content_sha256`, so
+ * both come from the one verdict hash. It runs inside the seal's transaction,
+ * which may roll back, so the stored bytes are recorded by the seal after it
+ * commits.
+ *
+ * A file in a conversation is temporary only while the conversation still is,
+ * read under a share lock: a Keep that committed first is seen, and one that
+ * commits later waits for this row and then saves it with the rest.
+ */
+export async function insertScannedChatFileMediaAsset(
+  p: InsertScannedChatFileMediaAssetParams,
+  db: MediaAssetQueryClient,
+): Promise<string> {
+  const rows = await db.query<{ id: string }>(
+    `insert into public.media_assets
+       (user_id, organization_id, kind, mime_type, byte_size, storage_url, storage_pathname,
+        metadata, conversation_id, content_sha256, scanned_sha256, temporary_chat)
+     values ($1, $2, $3, $4, $5, $6, $6, $7::jsonb, $8, $9, $9,
+       case
+         when $8::uuid is null then $10::boolean
+         else exists (
+           select 1 from public.web_conversations c
+            where c.id = $8::uuid and coalesce(c.is_temporary, false)
+            for share of c
+         )
+       end)
+     returning id`,
+    [
+      p.userId,
+      p.organizationId,
+      p.kind,
+      p.mimeType,
+      p.byteSize,
+      p.storagePathname,
+      JSON.stringify(p.metadata),
+      p.conversationId,
+      p.scannedSha256,
+      p.temporaryChat,
+    ],
+  );
+  const id = rows[0]?.id;
+  if (!id) throw new Error('The scanned chat file insert returned no identity.');
+  return id;
+}
+
 export async function insertMediaAssetsAtomically(
   assets: readonly InsertMediaAssetParams[],
   db: DatabaseAdapter,
@@ -499,6 +560,10 @@ export async function latestConversationImageAssetId(
  * Scoped to the uploader and their active workspace: recognising a repeat
  * across accounts would tell one user that another holds the same file, which
  * is a disclosure the storage saving does not justify.
+ *
+ * Given a conversation, its current temporary flag decides which copies match,
+ * as it does for the seal's insert: an upload that began in a temporary chat
+ * kept since then matches saved files, not temporary ones.
  */
 export async function getMediaAssetByContentHash(
   userId: string,
@@ -506,6 +571,7 @@ export async function getMediaAssetByContentHash(
   organizationId: string | null,
   db: MediaAssetQueryClient,
   temporaryChat = false,
+  conversationId: string | null = null,
 ): Promise<MediaAssetForServing | null> {
   const rows = await db.query<Record<string, unknown>>(
     `select id, user_id, organization_id, kind, mime_type, byte_size, storage_url, storage_pathname,
@@ -514,11 +580,17 @@ export async function getMediaAssetByContentHash(
       where user_id = $1
         and organization_id is not distinct from $3::uuid
         and content_sha256 = $2
-        and temporary_chat = $4
+        and temporary_chat = case
+          when $5::uuid is null then $4::boolean
+          else exists (
+            select 1 from public.web_conversations c
+             where c.id = $5::uuid and coalesce(c.is_temporary, false)
+          )
+        end
         and deleted_at is null
       order by created_at asc
       limit 1`,
-    [userId, contentSha256, organizationId, temporaryChat],
+    [userId, contentSha256, organizationId, temporaryChat, conversationId],
   );
   const row = rows[0];
   if (!row) return null;
@@ -569,6 +641,53 @@ export async function getMediaAssetByStoragePathname(
     metadata: (row['metadata'] as Record<string, unknown> | null) ?? {},
     deletedAt: null,
   };
+}
+
+export interface ScannedChatFileAsset {
+  id: string;
+  mimeType: string;
+  byteSize: number | null;
+  storagePathname: string | null;
+  filename: string | null;
+  source: string | null;
+}
+
+/**
+ * The caller's live chat files among `ids` whose scan verdict hash equals their
+ * content hash, read with the owner. A row with no verdict, or one whose bytes
+ * changed after the scan, is left out. It names a column migration 0422 adds,
+ * so the caller checks that schema first.
+ */
+export async function listScannedChatFileAssets(
+  owner: { userId: string; organizationId: string | null },
+  ids: readonly string[],
+  chatFile: { source: string; keyPrefix: string },
+  db: MediaAssetQueryClient,
+): Promise<ScannedChatFileAsset[]> {
+  const uniqueIds = [...new Set(ids)];
+  if (uniqueIds.length === 0) return [];
+  const rows = await db.query<Record<string, unknown>>(
+    `select id, mime_type, byte_size, storage_pathname, metadata->>'filename' as file_name,
+            metadata->>'source' as source, scanned_sha256 = content_sha256 as scan_verified
+       from public.media_assets
+      where id = any($1::uuid[])
+        and user_id = $2
+        and organization_id is not distinct from $3::uuid
+        and deleted_at is null
+        and scanned_sha256 = content_sha256
+        and (metadata->>'source' = $4 or storage_pathname like ($5::text || '%'))`,
+    [uniqueIds, owner.userId, owner.organizationId, chatFile.source, chatFile.keyPrefix],
+  );
+  return rows
+    .filter((row) => row['scan_verified'] === true)
+    .map((row) => ({
+      id: String(row['id']),
+      mimeType: String(row['mime_type']),
+      byteSize: row['byte_size'] == null ? null : Number(row['byte_size']),
+      storagePathname: (row['storage_pathname'] as string | null) ?? null,
+      filename: (row['file_name'] as string | null) ?? null,
+      source: (row['source'] as string | null) ?? null,
+    }));
 }
 
 export async function softDeleteMediaAsset(

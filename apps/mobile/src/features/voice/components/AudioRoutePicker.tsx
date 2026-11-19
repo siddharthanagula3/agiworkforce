@@ -5,6 +5,7 @@ import { Bluetooth, Check, Headphones, Volume2, Waves } from 'lucide-react-nativ
 import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 import { useSettingsStore } from '@/stores/settingsStore';
 import {
   AUDIO_ROUTES,
@@ -92,6 +93,7 @@ export function AudioRoutePicker({ compact = false }: { compact?: boolean }) {
             accessibilityLabel="Audio route"
             testID="audio-route-sheet"
             style={{
+              ...contentColumn('reading'),
               backgroundColor: colors.surfaceElevated,
               borderTopLeftRadius: 24,
               borderTopRightRadius: 24,

@@ -22,7 +22,7 @@ import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { useChatStore } from '@/stores/chatStore';
 import { useModelStore } from '@/src/features/model-picker/store';
-import { CapabilityUnavailable, useCapability } from '@/src/lib/Capabilities';
+import { CapabilityUnavailable, useCapabilityDenialReason } from '@/src/lib/Capabilities';
 import { IMAGE_CAPTURE_QUALITY } from '@/src/features/media/image-normalization';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 import { useFullScreenChrome } from '@/src/features/chat/chrome/fullScreenChrome';
@@ -34,7 +34,8 @@ export default function CameraScreen() {
   const c = useThemeColors();
   const styles = useMemo(() => createStyles(c), [c]);
   const [permission, requestPermission] = useCameraPermissions();
-  const cameraAllowed = useCapability('canUseCamera');
+  const cameraDenial = useCapabilityDenialReason('canUseCamera');
+  const cameraAllowed = cameraDenial === null;
   const params = useLocalSearchParams<{ imageUri?: string; question?: string }>();
 
   const [flashMode, setFlashMode] = useState<FlashMode>('off');
@@ -51,7 +52,6 @@ export default function CameraScreen() {
   const createConversation = useChatStore((s) => s.createConversation);
   const sendMessage = useChatStore((s) => s.sendMessage);
   const openConversationId = useChatStore((s) => s.currentConversationId);
-  const selectedModel = useModelStore((s) => s.selectedModel);
 
   useEffect(() => {
     if (!permission?.granted || capturedUri || cameraReady) {
@@ -113,6 +113,7 @@ export default function CameraScreen() {
 
     setIsSending(true);
     try {
+      if (!openConversationId) useModelStore.getState().endConversationModel();
       const conversationId = openConversationId ?? (await createConversation('Vision Analysis'));
 
       const attachment: Attachment = {
@@ -123,9 +124,12 @@ export default function CameraScreen() {
       };
 
       const messageContent = promptText.trim() || 'What do you see in this image?';
-      const accepted = await sendMessage(conversationId, messageContent, selectedModel, [
-        attachment,
-      ]);
+      const accepted = await sendMessage(
+        conversationId,
+        messageContent,
+        useModelStore.getState().selectedModel,
+        [attachment],
+      );
       if (!accepted) {
         Alert.alert('Send failed', 'The image could not be sent. Check your model and try again.');
         setIsSending(false);
@@ -150,7 +154,6 @@ export default function CameraScreen() {
     openConversationId,
     createConversation,
     sendMessage,
-    selectedModel,
     promptText,
     router,
   ]);
@@ -182,7 +185,7 @@ export default function CameraScreen() {
   if (!cameraAllowed) {
     return (
       <SafeAreaView style={styles.permissionContainer}>
-        <CapabilityUnavailable label="The camera" onDismiss={handleClose} />
+        <CapabilityUnavailable label="The camera" reason={cameraDenial} onDismiss={handleClose} />
       </SafeAreaView>
     );
   }

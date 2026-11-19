@@ -2,6 +2,26 @@ import { createHash } from 'node:crypto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { RETRIEVAL_EMBEDDING_DIMENSIONS } from '@agiworkforce/data-layer/search';
+import { CHAT_LARGE_FILE_POLICY, MAX_CHAT_ATTACHMENT_BYTES } from '@/lib/chat-attachment-policy';
+import {
+  ChatFileSchemaReachedError,
+  createSchemaAbsentDb,
+} from '@/lib/server/chat-file-intake/__tests__/schema-absent-db';
+import {
+  BUCKET,
+  FakePreparationDb,
+  createCountingStorage,
+  type CountingStorage,
+} from '@/lib/server/chat-file-preparation/__tests__/preparation-harness';
+import {
+  pagesIndexKey,
+  preparationKeyPrefix,
+  serializePagesIndex,
+  textSegmentKey,
+  type PreparedPageEntry,
+} from '@/lib/server/chat-file-preparation/derived-keys';
+
+type SchemaModule = typeof import('@/lib/server/chat-file-intake/schema');
 
 const mocks = vi.hoisted(() => ({ embed: vi.fn() }));
 
@@ -9,6 +29,14 @@ vi.mock('@/lib/logger', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
+vi.mock('@/lib/server/chat-file-intake/schema', async (importOriginal) => {
+  const actual = await importOriginal<SchemaModule>();
+  return {
+    ...actual,
+    chatFileSchemaReady: (db: Parameters<typeof actual.chatFileSchemaReady>[0]) =>
+      actual.chatFileSchemaReady(db),
+  };
+});
 vi.mock('@/lib/services/retrieval-embedding-service', async (importOriginal) => {
   class RetrievalEmbeddingError extends Error {
     constructor(
@@ -31,6 +59,8 @@ const {
   contentDigest,
   indexRetrievalDocument,
   prepareChunks,
+  preparedChatFileChunkCap,
+  requestMediaAssetReindex,
   reserveDueRetrievalDocuments,
 } = await import('../retrieval-index-service');
 const { RetrievalEmbeddingError } = await import('@/lib/services/retrieval-embedding-service');
@@ -60,11 +90,20 @@ interface FakeOptions {
   failChunkInsert?: boolean;
 }
 
+/** The real adapters refuse a transaction opened inside another; a fake that allowed it hid one. */
+function insideTransaction(db: object): DatabaseAdapter {
+  return {
+    ...db,
+    transaction: async () => {
+      throw new Error('A transaction cannot be opened inside another transaction.');
+    },
+  } as unknown as DatabaseAdapter;
+}
+
 function fakeDb(options: FakeOptions = {}) {
   const statements: Array<{ sql: string; params: unknown[]; transaction: boolean }> = [];
-  let depth = 0;
-  const run = async (sql: string, params: unknown[] = []) => {
-    statements.push({ sql, params, transaction: depth > 0 });
+  const run = async (sql: string, params: unknown[] = [], transaction = false) => {
+    statements.push({ sql, params, transaction });
     if (options.failChunkInsert && sql.includes('insert into retrieval_chunks')) {
       throw new Error('insert failed');
     }
@@ -90,20 +129,18 @@ function fakeDb(options: FakeOptions = {}) {
     }
     return [];
   };
-  const db = {
-    query: vi.fn(run),
+  const statementsOn = (transaction: boolean) => ({
+    query: vi.fn((sql: string, params?: unknown[]) => run(sql, params, transaction)),
     execute: vi.fn(async (sql: string, params: unknown[] = []) => {
-      await run(sql, params);
+      await run(sql, params, transaction);
       return sql.includes('update retrieval_documents') ? (options.settledRows ?? 1) : 1;
     }),
-    transaction: vi.fn(async <T>(callback: (tx: DatabaseAdapter) => Promise<T>) => {
-      depth += 1;
-      try {
-        return await callback(db as unknown as DatabaseAdapter);
-      } finally {
-        depth -= 1;
-      }
-    }),
+  });
+  const db = {
+    ...statementsOn(false),
+    transaction: vi.fn(async <T>(callback: (tx: DatabaseAdapter) => Promise<T>) =>
+      callback(insideTransaction({ ...db, ...statementsOn(true) })),
+    ),
     withUser: vi.fn(),
     withOrg: vi.fn(),
     dispose: vi.fn(),
@@ -311,6 +348,18 @@ describe('indexRetrievalDocument', () => {
     expect(failure?.params[2]).toBeNull();
   });
 
+  it('keeps the retry delay of a much-retried document within a day, a value the interval can hold', async () => {
+    const { db, statements } = fakeDb({
+      claimed: { ...DOCUMENT, attempts: 40 },
+      failChunkInsert: true,
+    });
+
+    await indexRetrievalDocument(db, DOCUMENT.id, 'run-1');
+
+    const failure = statements.filter((entry) => entry.sql.includes("then 'indexed'")).at(-1);
+    expect(failure?.params[10]).toBe(24 * 60);
+  });
+
   it('skips a document another run holds', async () => {
     const { db } = fakeDb({ claimed: null });
     expect(await indexRetrievalDocument(db, DOCUMENT.id, 'run-2')).toEqual({ kind: 'skipped' });
@@ -347,7 +396,7 @@ describe('developer session documents', () => {
         return 1;
       }),
       transaction: vi.fn(async <T>(callback: (tx: DatabaseAdapter) => Promise<T>) =>
-        callback(db as unknown as DatabaseAdapter),
+        callback(insideTransaction(db)),
       ),
       withUser: vi.fn(),
       withOrg: vi.fn(),
@@ -455,7 +504,7 @@ describe('Google provenance at actual embedding dispatch', () => {
           query,
           execute: vi.fn(async () => 1),
           transaction: vi.fn(async <T>(callback: (tx: DatabaseAdapter) => Promise<T>) =>
-            callback(db as unknown as DatabaseAdapter),
+            callback(insideTransaction(db)),
           ),
         };
         await expect(
@@ -470,4 +519,563 @@ describe('Google provenance at actual embedding dispatch', () => {
       }
     },
   );
+});
+
+describe('library_file documents of large chat files', () => {
+  const ASSET_ID = '55555555-5555-4555-8555-555555555555';
+  const OWNER = 'user-1';
+  const LIBRARY_DOCUMENT = {
+    ...DOCUMENT,
+    id: '66666666-6666-4666-8666-666666666666',
+    source_kind: 'library_file',
+    source_id: ASSET_ID,
+  };
+  const SENTENCE = 'The harbor lantern report covers the meadow quarter in detail. ';
+
+  interface LibraryAsset {
+    kind: string;
+    mime_type: string;
+    prompt: string | null;
+    file_name: string | null;
+    byte_size: number | null;
+  }
+
+  const LARGE_FILE: LibraryAsset = {
+    kind: 'file',
+    mime_type: 'text/plain',
+    prompt: null,
+    file_name: 'ledger.txt',
+    byte_size: MAX_CHAT_ATTACHMENT_BYTES + 1,
+  };
+
+  function textOf(chars: number): string {
+    return SENTENCE.repeat(Math.ceil(chars / SENTENCE.length)).slice(0, chars);
+  }
+
+  async function seedPreparation(
+    prep: FakePreparationDb,
+    storage: CountingStorage,
+    options: {
+      assetId?: string;
+      text?: string;
+      kind?: string;
+      pages?: PreparedPageEntry[];
+      indexedChars?: number;
+      withText?: boolean;
+    },
+  ): Promise<void> {
+    const assetId = options.assetId ?? ASSET_ID;
+    const prefix = preparationKeyPrefix(OWNER, assetId, 1);
+    const derived: string[] = [];
+    const text = options.text ?? '';
+    if (options.withText !== false) {
+      const key = textSegmentKey(prefix, 1);
+      await storage.memory.put({
+        bucket: BUCKET,
+        key,
+        body: Buffer.from(text, 'utf8'),
+        contentType: 'text/plain',
+      });
+      derived.push(key);
+    }
+    if (options.pages) {
+      const key = pagesIndexKey(prefix, 1);
+      await storage.memory.put({
+        bucket: BUCKET,
+        key,
+        body: Buffer.from(serializePagesIndex(options.pages), 'utf8'),
+        contentType: 'application/json',
+      });
+      derived.push(key);
+    }
+    const id = `row-${assetId}`;
+    prep.rows.set(id, {
+      id,
+      media_asset_id: assetId,
+      user_id: OWNER,
+      organization_id: null,
+      kind: options.kind ?? 'text',
+      state: 'ready',
+      preparer_version: 1,
+      cursor: {},
+      segments_ready: options.withText === false ? 0 : 1,
+      pages_read: options.pages?.length ?? 0,
+      page_count: options.pages?.length ?? null,
+      sheet_count: null,
+      indexed_chars: String(options.indexedChars ?? 0),
+      derived_keys: derived,
+      coverage:
+        options.withText === false
+          ? { segmentChars: [], textChars: 0 }
+          : { segmentChars: [text.length], textChars: text.length },
+      error: null,
+      updated_at: new Date(),
+    });
+  }
+
+  function libraryDb(options: {
+    asset: LibraryAsset | null;
+    claimed?: Record<string, unknown>;
+    schemaAbsent?: boolean;
+  }) {
+    const prep = new FakePreparationDb();
+    const storage = createCountingStorage();
+    const statements: Array<{ sql: string; params: unknown[] }> = [];
+    const run = async (sql: string, params: unknown[] = []): Promise<unknown[]> => {
+      statements.push({ sql, params });
+      if (/chat_file_|to_regclass|information_schema/.test(sql)) return prep.query(sql, params);
+      if (sql.includes('external_resource_references')) return [{ google: false }];
+      if (sql.includes("set status = 'indexing'")) return [options.claimed ?? LIBRARY_DOCUMENT];
+      if (sql.includes('from media_assets')) return options.asset ? [options.asset] : [];
+      return [];
+    };
+    const delegate = {
+      query: vi.fn(run),
+      execute: vi.fn(async (sql: string, params: unknown[] = []) => {
+        await run(sql, params);
+        return 1;
+      }),
+      transaction: vi.fn(async <T>(callback: (tx: DatabaseAdapter) => Promise<T>) =>
+        callback(insideTransaction(delegate)),
+      ),
+      withUser: vi.fn(),
+      withOrg: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const db = options.schemaAbsent
+      ? createSchemaAbsentDb(delegate as unknown as DatabaseAdapter)
+      : (delegate as unknown as DatabaseAdapter);
+    return { db, prep, storage, statements };
+  }
+
+  function insertedChunks(statements: Array<{ sql: string; params: unknown[] }>) {
+    const inserts = statements.filter((entry) =>
+      entry.sql.includes('insert into retrieval_chunks'),
+    );
+    return {
+      contents: inserts.flatMap((entry) => entry.params[10] as string[]),
+      starts: inserts.flatMap((entry) => entry.params[8] as number[]),
+      ends: inserts.flatMap((entry) => entry.params[9] as number[]),
+      metadata: inserts.flatMap((entry) =>
+        (entry.params[11] as string[]).map((json) => JSON.parse(json)),
+      ),
+      embeddings: inserts.flatMap((entry) => entry.params[12] as Array<string | null>),
+    };
+  }
+
+  function namesChatFileSchema(statements: Array<{ sql: string }>): boolean {
+    return statements.some((entry) => /chat_file_|to_regclass|scanned_sha256/.test(entry.sql));
+  }
+
+  function embedEverything() {
+    mocks.embed.mockImplementation(async ({ texts }: { texts: string[] }) => ({
+      vectors: texts.map(() => vector()),
+      model: 'embedding-model',
+      routeId: 'route',
+    }));
+  }
+
+  it('a small library_file indexes exactly as today', async () => {
+    embedEverything();
+    const asset = { ...LARGE_FILE, file_name: 'notes.txt', byte_size: 2_048 };
+    const { db, statements } = libraryDb({ asset, schemaAbsent: true });
+
+    const outcome = await indexRetrievalDocument(db, LIBRARY_DOCUMENT.id, 'run-1');
+
+    expect(outcome).toEqual({ kind: 'indexed', chunkCount: 1, semantic: true });
+    expect(namesChatFileSchema(statements)).toBe(false);
+    expect(insertedChunks(statements).contents).toEqual(['notes.txt']);
+    expect(mocks.embed).toHaveBeenCalledTimes(1);
+  });
+
+  it('a large library_file against a database without the chat file schema indexes its title as today', async () => {
+    embedEverything();
+    const { db, statements } = libraryDb({ asset: LARGE_FILE, schemaAbsent: true });
+
+    const outcome = await indexRetrievalDocument(db, LIBRARY_DOCUMENT.id, 'run-1');
+
+    expect(outcome).toEqual({ kind: 'indexed', chunkCount: 1, semantic: true });
+    expect(insertedChunks(statements).contents).toEqual(['ledger.txt']);
+  });
+
+  it('a large file with no preparation row keeps the title-only text', async () => {
+    embedEverything();
+    const { db, statements } = libraryDb({ asset: LARGE_FILE });
+
+    const outcome = await indexRetrievalDocument(db, LIBRARY_DOCUMENT.id, 'run-1');
+
+    expect(outcome).toEqual({ kind: 'indexed', chunkCount: 1, semantic: true });
+    expect(insertedChunks(statements).contents).toEqual(['ledger.txt']);
+  });
+
+  it('a generated-media library_file is indexed unchanged and never asks for the chat file schema', async () => {
+    embedEverything();
+    const asset: LibraryAsset = {
+      kind: 'video',
+      mime_type: 'video/mp4',
+      prompt: 'A red fox crossing a snowy field',
+      file_name: null,
+      byte_size: 90 * 1024 * 1024,
+    };
+    const { db, statements } = libraryDb({ asset });
+
+    const outcome = await indexRetrievalDocument(db, LIBRARY_DOCUMENT.id, 'run-1');
+
+    expect(outcome).toEqual({ kind: 'indexed', chunkCount: 1, semantic: true });
+    expect(namesChatFileSchema(statements)).toBe(false);
+    expect(insertedChunks(statements).contents).toEqual([
+      'video\n\nA red fox crossing a snowy field',
+    ]);
+  });
+
+  it('indexes 2,000,000 characters of prepared text in about 1,670 keyword-only chunks and nothing past the cap', async () => {
+    const indexedCap = CHAT_LARGE_FILE_POLICY.preparation.maxIndexedChars;
+    expect(preparedChatFileChunkCap()).toBe(1_669);
+    for (const body of ['x'.repeat(indexedCap), textOf(indexedCap)]) {
+      mocks.embed.mockClear();
+      const { db, prep, storage, statements } = libraryDb({ asset: LARGE_FILE });
+      await seedPreparation(prep, storage, { text: `${body}zebramarker past the cap` });
+
+      const outcome = await indexRetrievalDocument(db, LIBRARY_DOCUMENT.id, 'run-1', {
+        preparation: { storage },
+      });
+
+      expect(outcome).toMatchObject({ kind: 'indexed', semantic: false });
+      const chunks = insertedChunks(statements);
+      expect(chunks.contents.length).toBeGreaterThan(1_500);
+      expect(chunks.contents.length).toBeLessThanOrEqual(preparedChatFileChunkCap());
+      expect(chunks.contents[0]).toBe('ledger.txt');
+      expect(chunks.contents.some((content) => content.includes('zebramarker'))).toBe(false);
+      expect(Math.max(...chunks.ends)).toBe(indexedCap);
+      expect(prep.rowForAsset(ASSET_ID)?.['indexed_chars']).toBe(String(indexedCap));
+      expect(mocks.embed).not.toHaveBeenCalled();
+      if (body.startsWith('x')) expect(chunks.contents).toHaveLength(1_668);
+    }
+  });
+
+  it('spends no embedding on a chat file and settles it as succeeded with no embedding model', async () => {
+    const { db, prep, storage, statements } = libraryDb({ asset: LARGE_FILE });
+    await seedPreparation(prep, storage, { text: textOf(5_000) });
+
+    const outcome = await indexRetrievalDocument(db, LIBRARY_DOCUMENT.id, 'run-1', {
+      preparation: { storage },
+    });
+
+    expect(outcome).toMatchObject({ kind: 'indexed', semantic: false });
+    expect(mocks.embed).not.toHaveBeenCalled();
+    expect(insertedChunks(statements).embeddings.every((literal) => literal === null)).toBe(true);
+    const settle = statements.find((entry) => entry.sql.includes("then 'indexed'"));
+    expect(settle?.params[1]).toBe(true);
+    expect(settle?.params[5]).toBe(true);
+    expect(settle?.params[6]).toBeNull();
+    expect(settle?.params[8]).toBeNull();
+  });
+
+  it('treats an unchanged digest of a keyword-only chat file as a no-op', async () => {
+    const first = libraryDb({ asset: LARGE_FILE });
+    const text = textOf(5_000);
+    await seedPreparation(first.prep, first.storage, { text });
+    await indexRetrievalDocument(first.db, LIBRARY_DOCUMENT.id, 'run-1', {
+      preparation: { storage: first.storage },
+    });
+    const digest = first.statements.find((entry) => entry.sql.includes("then 'indexed'"))
+      ?.params[4];
+    expect(typeof digest).toBe('string');
+
+    const second = libraryDb({
+      asset: LARGE_FILE,
+      claimed: { ...LIBRARY_DOCUMENT, content_sha256: digest, embedding_model: null },
+    });
+    await seedPreparation(second.prep, second.storage, { text, indexedChars: text.length });
+
+    const outcome = await indexRetrievalDocument(second.db, LIBRARY_DOCUMENT.id, 'run-2', {
+      preparation: { storage: second.storage },
+    });
+
+    expect(outcome).toEqual({ kind: 'unchanged' });
+    expect(mocks.embed).not.toHaveBeenCalled();
+    expect(
+      second.statements.some((entry) => entry.sql.includes('insert into retrieval_chunks')),
+    ).toBe(false);
+    expect(second.statements.some((entry) => entry.sql.includes('set indexed_chars'))).toBe(false);
+  });
+
+  it('records the indexed characters on an unchanged run when an earlier record was lost', async () => {
+    const first = libraryDb({ asset: LARGE_FILE });
+    const text = textOf(5_000);
+    await seedPreparation(first.prep, first.storage, { text });
+    await indexRetrievalDocument(first.db, LIBRARY_DOCUMENT.id, 'run-1', {
+      preparation: { storage: first.storage },
+    });
+    const digest = first.statements.find((entry) => entry.sql.includes("then 'indexed'"))
+      ?.params[4];
+
+    const second = libraryDb({
+      asset: LARGE_FILE,
+      claimed: { ...LIBRARY_DOCUMENT, content_sha256: digest, embedding_model: null },
+    });
+    await seedPreparation(second.prep, second.storage, { text, indexedChars: 0 });
+
+    const outcome = await indexRetrievalDocument(second.db, LIBRARY_DOCUMENT.id, 'run-2', {
+      preparation: { storage: second.storage },
+    });
+
+    expect(outcome).toEqual({ kind: 'unchanged' });
+    expect(second.prep.rowForAsset(ASSET_ID)?.['indexed_chars']).toBe(String(text.length));
+  });
+
+  it('a reindex asked for while the file is being indexed leaves the document stale, so it runs again', async () => {
+    const prep = new FakePreparationDb();
+    const storage = createCountingStorage();
+    const text = textOf(5_000);
+    await seedPreparation(prep, storage, { text });
+    const document = { status: 'pending', workflowRunId: null as string | null };
+    let reindexedMidRun = false;
+
+    const nextStatus = (sql: string, params: unknown[]): string => {
+      const body = /set status = case([\s\S]*?)end,/.exec(sql)?.[1] ?? '';
+      for (const [, condition, result] of body.matchAll(/when\s+(.+?)\s+then\s+(\S+)/g)) {
+        const flag = /^\$(\d+)::boolean$/.exec(condition!);
+        const holds = flag
+          ? params[Number(flag[1]) - 1] === true
+          : /'(\w+)'/.exec(condition!)?.[1] === document.status;
+        if (holds)
+          return result!.endsWith('status') ? document.status : result!.replaceAll("'", '');
+      }
+      return /else\s+'(\w+)'/.exec(body)?.[1] ?? document.status;
+    };
+
+    const run = async (sql: string, params: unknown[] = []): Promise<unknown[]> => {
+      if (/chat_file_|to_regclass|information_schema/.test(sql)) return prep.query(sql, params);
+      if (sql.includes('external_resource_references')) return [{ google: false }];
+      if (sql.includes("set status = 'indexing'")) {
+        if (!['pending', 'stale', 'failed'].includes(document.status)) return [];
+        document.status = 'indexing';
+        document.workflowRunId = String(params[1]);
+        return [{ ...LIBRARY_DOCUMENT, status: 'indexing' }];
+      }
+      if (sql.includes('where d.media_asset_id = $1::uuid')) {
+        document.status = nextStatus(sql, params);
+        return [{ id: LIBRARY_DOCUMENT.id }];
+      }
+      if (sql.includes("then 'indexed'")) {
+        if (!['indexing', 'stale'].includes(document.status)) return [];
+        if (params[12] !== document.workflowRunId) return [];
+        document.status = nextStatus(sql, params);
+        return [{}];
+      }
+      if (sql.includes("metadata->>'filename' as file_name")) {
+        if (!reindexedMidRun) {
+          reindexedMidRun = true;
+          await requestMediaAssetReindex(db, { assetId: ASSET_ID, ownerUserId: OWNER });
+        }
+        return [LARGE_FILE];
+      }
+      return [];
+    };
+    const adapter = {
+      query: vi.fn(run),
+      execute: vi.fn(
+        async (sql: string, params: unknown[] = []) => (await run(sql, params)).length,
+      ),
+      transaction: vi.fn(async <T>(callback: (tx: DatabaseAdapter) => Promise<T>) =>
+        callback(insideTransaction(adapter)),
+      ),
+      withUser: vi.fn(),
+      withOrg: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const db = adapter as unknown as DatabaseAdapter;
+
+    const first = await indexRetrievalDocument(db, LIBRARY_DOCUMENT.id, 'run-1', {
+      preparation: { storage },
+    });
+
+    expect(reindexedMidRun).toBe(true);
+    expect(first).toMatchObject({ kind: 'indexed' });
+    expect(document.status).toBe('stale');
+
+    const second = await indexRetrievalDocument(db, LIBRARY_DOCUMENT.id, 'run-2', {
+      preparation: { storage },
+    });
+    expect(second).toMatchObject({ kind: 'indexed' });
+    expect(document.status).toBe('indexed');
+  });
+
+  it('stops indexing once the person has used the per-user indexed character cap', async () => {
+    const { db, prep, storage, statements } = libraryDb({ asset: LARGE_FILE });
+    await seedPreparation(prep, storage, { text: textOf(5_000) });
+    await seedPreparation(prep, storage, {
+      assetId: '77777777-7777-4777-8777-777777777777',
+      text: 'other file',
+      indexedChars: CHAT_LARGE_FILE_POLICY.preparation.maxIndexedCharsPerUser,
+    });
+
+    const outcome = await indexRetrievalDocument(db, LIBRARY_DOCUMENT.id, 'run-1', {
+      preparation: { storage },
+    });
+
+    expect(outcome).toEqual({ kind: 'indexed', chunkCount: 1, semantic: false });
+    expect(insertedChunks(statements).contents).toEqual(['ledger.txt']);
+    expect(prep.rowForAsset(ASSET_ID)?.['indexed_chars']).toBe('0');
+  });
+
+  it('indexes only what is left of the per-user cap', async () => {
+    const { db, prep, storage, statements } = libraryDb({ asset: LARGE_FILE });
+    await seedPreparation(prep, storage, { text: textOf(5_000) });
+    await seedPreparation(prep, storage, {
+      assetId: '77777777-7777-4777-8777-777777777777',
+      text: 'other file',
+      indexedChars: CHAT_LARGE_FILE_POLICY.preparation.maxIndexedCharsPerUser - 1_000,
+    });
+
+    await indexRetrievalDocument(db, LIBRARY_DOCUMENT.id, 'run-1', { preparation: { storage } });
+
+    expect(Math.max(...insertedChunks(statements).ends)).toBe(1_000);
+    expect(prep.rowForAsset(ASSET_ID)?.['indexed_chars']).toBe('1000');
+  });
+
+  it('stamps each chunk with the page it starts on', async () => {
+    const { db, prep, storage, statements } = libraryDb({
+      asset: { ...LARGE_FILE, mime_type: 'application/pdf', file_name: 'report.pdf' },
+    });
+    const text = textOf(6_000);
+    await seedPreparation(prep, storage, {
+      text,
+      kind: 'pdf',
+      pages: [
+        { page: 1, start: 0, end: 3_000, hasText: true },
+        { page: 2, start: 3_000, end: 6_000, hasText: true },
+      ],
+    });
+
+    await indexRetrievalDocument(db, LIBRARY_DOCUMENT.id, 'run-1', { preparation: { storage } });
+
+    const chunks = insertedChunks(statements);
+    const textChunks = chunks.metadata.slice(1);
+    const starts = chunks.starts.slice(1);
+    expect(textChunks[0]).toMatchObject({ page: 1 });
+    textChunks.forEach((metadata, index) => {
+      expect(metadata).toMatchObject({ page: starts[index]! >= 3_000 ? 2 : 1 });
+    });
+  });
+
+  it('writes prepared text holding NUL characters in a form Postgres stores', async () => {
+    const { db, prep, storage, statements } = libraryDb({ asset: LARGE_FILE });
+    await seedPreparation(prep, storage, { text: `alpha\u0000beta ${textOf(2_000)}` });
+
+    await indexRetrievalDocument(db, LIBRARY_DOCUMENT.id, 'run-1', { preparation: { storage } });
+
+    const contents = insertedChunks(statements).contents;
+    expect(contents[1]?.startsWith('alphabeta ')).toBe(true);
+    expect(contents.some((content) => content.includes('\u0000'))).toBe(false);
+  });
+
+  it('writes prepared text holding NUL and cut inside a surrogate pair in a form Postgres stores', async () => {
+    const { db, prep, storage, statements } = libraryDb({ asset: LARGE_FILE });
+    const text = `alpha\u0000beta ${'\u{1F600}'.repeat(4_000)}`;
+    await seedPreparation(prep, storage, { text });
+
+    const outcome = await indexRetrievalDocument(db, LIBRARY_DOCUMENT.id, 'run-1', {
+      preparation: { storage },
+    });
+
+    expect(outcome).toMatchObject({ kind: 'indexed' });
+    const chunks = insertedChunks(statements);
+    expect(chunks.contents.length).toBeGreaterThan(2);
+    expect(chunks.contents.every((content) => content.isWellFormed())).toBe(true);
+    expect(chunks.contents.some((content) => content.includes('\ufffd'))).toBe(true);
+    expect(chunks.contents.some((content) => content.includes('\u0000'))).toBe(false);
+    expect(chunks.contents[1]?.startsWith('alphabeta ')).toBe(true);
+  });
+
+  it('leaves out a window of prepared text made only of NUL characters, so no chunk is empty', async () => {
+    const { db, prep, storage, statements } = libraryDb({ asset: LARGE_FILE });
+    await seedPreparation(prep, storage, { text: `alpha ${'\u0000'.repeat(4_000)} omega` });
+
+    const outcome = await indexRetrievalDocument(db, LIBRARY_DOCUMENT.id, 'run-1', {
+      preparation: { storage },
+    });
+
+    expect(outcome).toMatchObject({ kind: 'indexed' });
+    const chunks = insertedChunks(statements);
+    expect(chunks.contents.every((content) => content.trim().length > 0)).toBe(true);
+    expect(chunks.contents.some((content) => content.includes('alpha'))).toBe(true);
+    expect(chunks.contents.some((content) => content.includes('omega'))).toBe(true);
+    expect(chunks.contents.some((content) => content.includes('\u0000'))).toBe(false);
+  });
+
+  it('records a failed attempt with backoff when prepared text cannot be read', async () => {
+    const { db, prep, statements } = libraryDb({ asset: LARGE_FILE });
+    await seedPreparation(prep, createCountingStorage(), { text: textOf(1_000) });
+
+    const outcome = await indexRetrievalDocument(db, LIBRARY_DOCUMENT.id, 'run-1', {
+      preparation: { storage: createCountingStorage() },
+    });
+
+    expect(outcome).toMatchObject({ kind: 'failed' });
+    const settle = statements.filter((entry) => entry.sql.includes("then 'indexed'")).at(-1);
+    expect(settle?.params[1]).toBe(false);
+    expect(settle?.params[2]).toBeNull();
+    expect(statements.some((entry) => entry.sql.includes('insert into retrieval_chunks'))).toBe(
+      false,
+    );
+  });
+
+  it('a schema-absent database refuses any statement naming the chat file tables', async () => {
+    const { db } = libraryDb({ asset: LARGE_FILE, schemaAbsent: true });
+    await expect(db.query('select 1 from public.chat_file_preparations')).rejects.toBeInstanceOf(
+      ChatFileSchemaReachedError,
+    );
+  });
+});
+
+describe('requestMediaAssetReindex', () => {
+  const ASSET_ID = '55555555-5555-4555-8555-555555555555';
+
+  it('resets an existing document to pending only for a live, non-temporary asset of the owner', async () => {
+    const query = vi.fn(async () => [{ id: 'doc-1' }]);
+
+    const id = await requestMediaAssetReindex({ query } as never, {
+      assetId: ASSET_ID,
+      ownerUserId: 'user-1',
+    });
+
+    expect(id).toBe('doc-1');
+    const [sql, params] = query.mock.calls[0] as unknown as [string, unknown[]];
+    expect(sql).toContain("then 'stale' else 'pending'");
+    expect(sql).toContain('not a.temporary_chat');
+    expect(sql).toContain('a.deleted_at is null');
+    expect(params).toEqual([ASSET_ID, 'user-1']);
+    expect(query).toHaveBeenCalledTimes(1);
+  });
+
+  it('creates the library_file document when the asset has none', async () => {
+    const query = vi
+      .fn<(sql: string, params: unknown[]) => Promise<Array<{ id: string }>>>()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ id: 'doc-2' }]);
+
+    const id = await requestMediaAssetReindex({ query } as never, {
+      assetId: ASSET_ID,
+      ownerUserId: 'user-1',
+    });
+
+    expect(id).toBe('doc-2');
+    const [sql, params] = query.mock.calls[1]!;
+    expect(sql).toContain("'library_file'");
+    expect(sql).toContain('not a.temporary_chat');
+    expect(sql).toContain('on conflict (source_kind, source_id)');
+    expect(params).toEqual([ASSET_ID, 'user-1']);
+  });
+
+  it('answers null for an asset that is gone, temporary or not the owner', async () => {
+    const query = vi.fn(async () => []);
+    expect(
+      await requestMediaAssetReindex({ query } as never, {
+        assetId: ASSET_ID,
+        ownerUserId: 'user-2',
+      }),
+    ).toBeNull();
+  });
 });

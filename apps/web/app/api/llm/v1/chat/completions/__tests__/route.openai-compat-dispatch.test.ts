@@ -8,7 +8,8 @@ import {
   requireProviderDefaultModel,
 } from '@agiworkforce/types';
 import { SKILL_TOOL_NAME } from '@agiworkforce/skills';
-import { resolveWebCloudModelRoute } from '../lib/request-processor';
+import { isMemoryTool, memoryToolDefinitions } from '@/lib/server/tools/memory-tools';
+import { resolveWebCloudModelRoute } from '@/lib/server/managed-cloud-routing/routing-request';
 import { createError } from '@/lib/errors';
 import { CloudAgentCapabilityRefusedError } from '@/lib/workflows/cloud-agent-capability-refusal';
 type ScanModule0 = typeof import('@/lib/server/terms');
@@ -991,6 +992,57 @@ describe('Managed Web AGI Work dispatch', () => {
     } finally {
       skillCatalogMocks.bundled = false;
     }
+  });
+
+  function arrangeMemoryOnTurn(): void {
+    arrangePaidAgenticTurn();
+    rlsMocks.getUserScopedDb.mockResolvedValue({
+      organizationId: null,
+      db: {
+        query: vi.fn(async (sql: string) =>
+          sql.includes("settings -> 'capabilities'") ? [{ capabilities: { memory: true } }] : [],
+        ),
+      },
+      userId: 'user-1',
+    });
+    workflowRouteMocks.start.mockResolvedValue(durableWorkflowStream());
+    providerRequests.length = 0;
+  }
+
+  function memoryTurnRequest(content: string): NextRequest {
+    return makeRequest(ZHIPU_MODEL_ID, undefined, true, {
+      messages: [{ role: 'user', content }],
+    });
+  }
+
+  it('keeps a plain message inline with Memory on and sends it without the memory tools', async () => {
+    arrangeMemoryOnTurn();
+
+    const response = await POST(memoryTurnRequest('hi'));
+    await response.text();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('X-AGI-Tool-Loop')).toBeNull();
+    expect(workflowRouteMocks.createRun).not.toHaveBeenCalled();
+    expect(providerRequests).toHaveLength(1);
+    expect(offeredToolNames(providerRequests[0]).filter(isMemoryTool)).toEqual([]);
+  });
+
+  it('starts the tool loop with the memory tools for a message that asks to remember something', async () => {
+    arrangeMemoryOnTurn();
+
+    const response = await POST(memoryTurnRequest('Remember that I prefer metric units.'));
+    await response.text();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('X-AGI-Tool-Loop')).not.toBeNull();
+    expect(workflowRouteMocks.createRun).toHaveBeenCalledTimes(1);
+    const started = workflowRouteMocks.start.mock.calls[0]![0] as {
+      processed: { llmRequest: unknown };
+    };
+    expect(offeredToolNames(started.processed.llmRequest).filter(isMemoryTool)).toEqual(
+      memoryToolDefinitions().map((tool) => tool.function.name),
+    );
   });
 });
 

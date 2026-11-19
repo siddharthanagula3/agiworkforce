@@ -1,81 +1,30 @@
-import os
 import sys
-import math
-from PIL import Image, ImageDraw
+from PIL import Image
 
-def draw_agi_mark(draw, cx, cy, scale, base_color, accent_color):
-    """Draw the twelve-spoke AGI mark centred on (cx, cy).
-
-    `scale` maps the shared 24x24 SVG viewbox (see components/ui/AgiMark.tsx)
-    onto pixels, so the geometry stays identical to the in-app mark.
-    """
-    inner_r = 4.6 * scale
-    outer_r = 9.0 * scale
-    stroke_w = 1.5 * scale
-
-    spoke_count = 12
-
-    for idx in range(spoke_count):
-        angle = idx * (360.0 / spoke_count)
-        rad = math.radians(angle)
-
-        x1 = cx + inner_r * math.sin(rad)
-        y1 = cy - inner_r * math.cos(rad)
-        x2 = cx + outer_r * math.sin(rad)
-        y2 = cy - outer_r * math.cos(rad)
-
-        # Accent spoke at 12 o'clock (index 0); the other eleven use the base ink.
-        color = accent_color if idx == 0 else base_color
-
-        # Draw line with rounded linecaps. Since ImageDraw.line in PIL doesn't
-        # support linecap style natively, we draw circles at the endpoints of the line
-        # with the same diameter as the stroke width to simulate 'round' linecaps.
-        draw.line([x1, y1, x2, y2], fill=color, width=int(round(stroke_w)))
-        draw.ellipse([x1 - stroke_w/2, y1 - stroke_w/2, x1 + stroke_w/2, y1 + stroke_w/2], fill=color)
-        draw.ellipse([x2 - stroke_w/2, y2 - stroke_w/2, x2 + stroke_w/2, y2 + stroke_w/2], fill=color)
+# The App Store icon is the brand tile from the web app, made square and
+# opaque. The tile has rounded, transparent corners; Apple accepts no
+# transparency in an app icon and applies its own corner mask, and the build
+# fills transparent pixels with white, which shows as white slivers where the
+# tile's corner and the system mask differ. The corners are filled with the
+# tile's own colour, read from the artwork so the two cannot drift.
+IOS_ICON_SIZE = 1024
+IOS_ICON_SOURCE = 'apps/web/public/logo.png'
+IOS_ICON_OUTPUT = 'apps/mobile/assets/icon.png'
 
 
-def generate_agi_logo(width, height, is_opaque, output_path):
-    # We use 4x supersampling for high-quality antialiasing
-    super_w = width * 4
-    super_h = height * 4
-
-    if is_opaque:
-        # Solid dark background (#0f0f0f)
-        img = Image.new('RGBA', (super_w, super_h), (15, 15, 15, 255))
-    else:
-        # Transparent background
-        img = Image.new('RGBA', (super_w, super_h), (0, 0, 0, 0))
-
-    draw = ImageDraw.Draw(img)
-
-    # SVG base viewbox is 24x24, center is (12, 12)
-    cx = super_w / 2.0
-    cy = super_h / 2.0
-
-    # Scale factor mapping SVG coordinates [0, 24] to super resolution
-    scale = super_w / 24.0
-
-    draw_agi_mark(draw, cx, cy, scale, (244, 244, 244, 255), (251, 191, 36, 255))
-
-    # Resize back down to target resolution with Lanczos interpolation
-    final_img = img.resize((width, height), Image.Resampling.LANCZOS)
-    
-    # If opaque, save as RGB (no alpha channel)
-    if is_opaque:
-        final_img = final_img.convert('RGB')
-        
-    # Ensure directory exists
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    final_img.save(output_path, 'PNG')
-    print(f"Generated logo asset: {output_path} ({width}x{height})")
-
-def generate_icons():
-    # 1. iOS App Icon (opaque background)
-    generate_agi_logo(1024, 1024, is_opaque=True, output_path='apps/mobile/assets/icon.png')
-
-    # 2. Android Adaptive Icon Foreground (transparent background)
-    generate_agi_logo(1024, 1024, is_opaque=False, output_path='apps/mobile/assets/adaptive-icon.png')
+def generate_ios_icon():
+    tile = Image.open(IOS_ICON_SOURCE).convert('RGBA')
+    tile_colour = tile.getpixel((tile.width // 2, 0))
+    if tile_colour[3] != 255:
+        raise SystemExit(f"{IOS_ICON_SOURCE} has no opaque tile colour at its top edge")
+    square = Image.new('RGBA', tile.size, tile_colour)
+    square.alpha_composite(tile)
+    final_img = square.convert('RGB').resize(
+        (IOS_ICON_SIZE, IOS_ICON_SIZE),
+        Image.Resampling.LANCZOS,
+    )
+    final_img.save(IOS_ICON_OUTPUT, 'PNG')
+    print(f"Generated iOS app icon: {IOS_ICON_OUTPUT} ({IOS_ICON_SIZE}x{IOS_ICON_SIZE})")
 
 
 # Android draws a status-bar icon from the alpha channel alone and tints it
@@ -107,11 +56,11 @@ def generate_notification_icon():
     print(f"Generated notification icon: {output_path} ({size}x{size})")
 
 
-# Run from the repository root and name the target: `icons` or `notification`.
-# Regenerating the icons rewrites shipped store artwork, so there is
-# deliberately no default.
+# Run from the repository root and name the target: `ios-icon` or
+# `notification`. Regenerating an icon rewrites shipped store artwork, so
+# there is deliberately no default.
 TARGETS = {
-    'icons': generate_icons,
+    'ios-icon': generate_ios_icon,
     'notification': generate_notification_icon,
 }
 

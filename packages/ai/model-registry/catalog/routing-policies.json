@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "release": {
-    "policyVersion": 40,
+    "policyVersion": 41,
     "records": [
       {
         "version": 1,
@@ -359,6 +359,14 @@
         "channel": "internal",
         "effectiveOn": "2026-11-13",
         "reason": "joins the two lineages so one version carries both: chat.system@15 with the identity, serving model, chat setup, Settings and account guidance, disclosure and response language of chat.system@11. Defines the sections the assembler already asked for that no version held (reference sources, source links, memory outcomes, action receipts, writing cards and artifact apps) in the wording of the 2026-10-15 audit version, and retires artifact_runtime, artifact_runtime_connectors and email_and_writing_blocks for the sections sent only to a surface that renders them. Adds tone, mistakes, hard limits, wellbeing, professional advice, evenhandedness, copyright and consent before an action with consequences, written from the structure of published assistant prompts, and states the sandbox network allowlist in tool.execute_code. Deterministic tests verify assembly and immutability; model quality is unmeasured for this version, so it enters on internal and takes no customer traffic until a canary advance carries an eval quality signal"
+      },
+      {
+        "version": 41,
+        "artifact": "prompt",
+        "id": "chat.system@17",
+        "channel": "internal",
+        "effectiveOn": "2026-11-16",
+        "reason": "chat.system@16 plus what a turn renders when the account turned the Artifacts or Inline visualizations switch off under Settings, Capabilities: inline block guidance with the artifact sentences or the chart, mermaid and cards fences left out, a version for surfaces without rich inline controls that no longer points at artifacts, and one line per switch that is off telling the model to answer in ordinary code, tables and lists. Artifacts stay on while cloud code execution is on. Every other section renders as chat.system@16, and with both switches on every version renders as before. Deterministic tests verify assembly per switch and immutability; model quality is unmeasured for this version, so it enters on internal and takes no customer traffic until a canary advance carries an eval quality signal"
       }
     ]
   },
@@ -431,8 +439,14 @@
       "byok": "premium"
     },
     "tierAllowedSlots": {
-      "free": ["free_workhorse", "free_workhorse_fast"],
-      "basic": ["workhorse_general", "reasoning_economy", "coding_fast", "vision_fast"],
+      "free": ["free_workhorse", "free_workhorse_fast", "fast_anthropic"],
+      "basic": [
+        "workhorse_general",
+        "reasoning_economy",
+        "coding_fast",
+        "vision_fast",
+        "fast_anthropic"
+      ],
       "pro": [
         "workhorse_general",
         "general_balanced",
@@ -447,7 +461,8 @@
         "search_premium",
         "computer_use_balanced",
         "image_generation",
-        "vision_fast"
+        "vision_fast",
+        "fast_anthropic"
       ],
       "max": [
         "workhorse_general",
@@ -467,7 +482,8 @@
         "computer_use_balanced",
         "computer_use_premium",
         "image_generation",
-        "vision_fast"
+        "vision_fast",
+        "fast_anthropic"
       ],
       "enterprise": [
         "workhorse_general",
@@ -487,7 +503,8 @@
         "computer_use_balanced",
         "computer_use_premium",
         "image_generation",
-        "vision_fast"
+        "vision_fast",
+        "fast_anthropic"
       ],
       "byok": [
         "workhorse_general",
@@ -507,7 +524,8 @@
         "computer_use_balanced",
         "computer_use_premium",
         "image_generation",
-        "vision_fast"
+        "vision_fast",
+        "fast_anthropic"
       ]
     },
     "providerPolicies": {
@@ -780,6 +798,9 @@
       },
       "free_workhorse_fast": {
         "modelKey": "family:openai/gpt-fast"
+      },
+      "fast_anthropic": {
+        "modelKey": "family:anthropic/claude-haiku"
       },
       "general_fast": {
         "modelKey": "family:openai/gpt-fast"

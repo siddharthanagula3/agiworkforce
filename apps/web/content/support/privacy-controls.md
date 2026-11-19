@@ -4,7 +4,7 @@ title: Privacy controls in Settings
 path: /privacy
 category: privacy
 tags: privacy, data controls, telemetry, crash reports, training, retention, where is my data, encryption, sell data, anonymized usage
-updated: 2026-10-12
+updated: 2026-11-16
 description: What is stored where, how diagnostics and temporary chats work and how to manage your data and sessions.
 scope: public
 ---
@@ -19,9 +19,10 @@ are encrypted in transit, and at rest by the database and object-storage vendors
 that hold them, as a property of those vendors' platforms and not a layer AGI
 adds. AGI does not sell your
 data, and does not use customer conversation content to train AGI-owned models.
-The {{PLAN.free}} plan is served by free capacity from model providers, AGI picks the
-provider for the default model, and some of those providers' terms may allow
-training on what you send; to keep your chats out of training, turn on
+On the {{PLAN.free}} plan, AGI picks the provider for the default model, a chat
+on another model the plan includes goes to that model's provider, and some
+providers' terms may allow training on what you send; to keep your chats out of
+training, turn on
 **Only use models that do not train on your chats** in Settings, Privacy.
 
 ## Diagnostics

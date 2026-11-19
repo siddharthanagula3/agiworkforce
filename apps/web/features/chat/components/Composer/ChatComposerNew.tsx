@@ -166,7 +166,6 @@ import {
   getBillingPlanPricing,
   getModels,
   getPlanMaxAttachmentBytes,
-  getPlanMaxAttachmentsPerMessage,
   isExecutableVideoModel,
   isFreeBillingPlanTier,
   normalizeBillingPlanTier,
@@ -223,12 +222,12 @@ import { useClipboardDraftLifetime } from './use-clipboard-draft-lifetime';
 import type { DraftReplacement } from '@features/chat/hooks/use-conversation-draft-sync';
 import { modelSupportsResearch } from '@features/chat/lib/research-capability-gate';
 import { routeVisualRequest } from '@features/chat/components/artifacts/structuredVisualArtifact';
+import { composerAttachmentLimits } from '@features/chat/lib/composer-attachment-limits';
 import { useCoworkFolderStore, supportsDirectoryPicker } from '@shared/stores/cowork-folder-store';
 import {
   MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH,
   MANAGED_MEDIA_MAX_IMAGE_REFERENCES,
   MANAGED_OFFICE_FILE_TOOL_NAME,
-  MAX_CHAT_ATTACHMENT_BYTES,
   chatAttachmentSizeLabel,
   cloudAgentRunSteerProgressId,
   isCloudAgentRunSteerProgressId,
@@ -910,9 +909,11 @@ const ChatComposerNewComponent = ({
   const editingQueuedIdRef = useRef<string | null>(null);
   const wasLoadingRef = useRef(false);
   const attachmentPlanTier = useBillingStore((s) => normalizeBillingPlanTier(s.subscription?.tier));
-  const attachmentsPerMessage = getPlanMaxAttachmentsPerMessage(attachmentPlanTier);
+  const publishedAttachmentLimits = useBillingStore((s) => s.attachmentLimits);
+  const attachmentLimits = composerAttachmentLimits(publishedAttachmentLimits, attachmentPlanTier);
+  const attachmentsPerMessage = attachmentLimits.maxFilesPerMessage;
   const attachLimitNote = `Up to ${attachmentsPerMessage} files, ${chatAttachmentSizeLabel(
-    Math.min(MAX_CHAT_ATTACHMENT_BYTES, getPlanMaxAttachmentBytes(attachmentPlanTier)),
+    attachmentLimits.maxFileBytes,
   )} each`;
   const deferredSendRef = useRef(false);
   const {
@@ -939,6 +940,9 @@ const ChatComposerNewComponent = ({
     clearAll: clearAttachmentDraft,
   } = useAttachments({
     maxFiles: attachmentsPerMessage,
+    maxFileSize: attachmentLimits.maxFileBytes,
+    maxImageSize: attachmentLimits.maxImageBytes,
+    maxTotalBytes: attachmentLimits.maxMessageBytes,
     planFileLimitBytes: getPlanMaxAttachmentBytes(attachmentPlanTier),
     planLabel: getBillingPlanPricing(attachmentPlanTier).label,
     onError: (message) => setLocalNotice(message),
@@ -5830,6 +5834,8 @@ const ChatComposerNewComponent = ({
               onStop={dictation.stop}
               onSend={dictation.send}
               onRetry={dictation.retry}
+              usageLimited={dictation.usageLimited}
+              onUpgrade={onUpgradeRequest}
             />
           )}
 

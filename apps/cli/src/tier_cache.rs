@@ -970,6 +970,410 @@ pub fn load_jwt() -> Option<String> {
 // ---------------------------------------------------------------------------
 
 #[cfg(test)]
+pub(crate) mod plan_conformance {
+    use super::*;
+    use serde_json::{json, Map, Value};
+    use std::collections::BTreeMap;
+    use std::sync::Mutex;
+
+    const RECORDED: &str = include_str!(
+        "../../../packages/contracts/types/src/__tests__/fixtures/plan-tier-conformance.json"
+    );
+    const FIXTURE_PATH: &str = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../packages/contracts/types/src/__tests__/fixtures/plan-tier-conformance.json"
+    );
+    const CATALOG: &str = include_str!("../../../packages/contracts/types/src/models.json");
+    const REGISTRY: &str =
+        include_str!("../../../packages/ai/model-registry/generated/registry.json");
+    const MANAGED_TRUST_MODE: &str = "managed_cloud";
+    const UPDATE_ENV: &str = "AGI_UPDATE_PLAN_CONFORMANCE";
+    const CHAT_MODEL_TYPES: [&str; 5] = ["chat", "code", "reasoning", "multimodal", "search"];
+    const NAMED_SLOTS: [&str; 3] = ["economy", "pro_additions", "flagship_additions"];
+    const SAMPLE_SEPARATOR: char = '@';
+
+    static UPDATE_LOCK: Mutex<()> = Mutex::new(());
+
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    pub(crate) enum Scope {
+        Spelling,
+        Model,
+    }
+
+    impl Scope {
+        fn name(self) -> &'static str {
+            match self {
+                Scope::Spelling => "spelling",
+                Scope::Model => "model",
+            }
+        }
+    }
+
+    #[derive(Clone, Copy)]
+    pub(crate) struct OwnedCopy {
+        pub id: &'static str,
+        pub scope: Scope,
+        pub question: &'static str,
+        pub source: &'static str,
+        pub per_sample: bool,
+    }
+
+    pub(crate) struct ModelSample {
+        pub selection: String,
+        pub model_id: String,
+    }
+
+    pub(crate) struct Probe<'a> {
+        pub copy: &'a str,
+        pub spelling: Option<&'a str>,
+        pub model: Option<&'a ModelSample>,
+    }
+
+    fn updating() -> bool {
+        std::env::var(UPDATE_ENV).is_ok_and(|value| value == "1")
+    }
+
+    fn fixture() -> Value {
+        let text = if updating() {
+            std::fs::read_to_string(FIXTURE_PATH).expect("plan conformance fixture should read")
+        } else {
+            RECORDED.to_string()
+        };
+        serde_json::from_str(&text).expect("plan conformance fixture should parse")
+    }
+
+    fn object<'a>(value: &'a Value, key: &str) -> &'a Map<String, Value> {
+        value[key]
+            .as_object()
+            .unwrap_or_else(|| panic!("plan conformance fixture has no {key} object"))
+    }
+
+    pub(crate) fn order_universe() -> Vec<String> {
+        fixture()["orderUniverse"]
+            .as_array()
+            .expect("plan conformance fixture has no orderUniverse")
+            .iter()
+            .map(|tier| tier.as_str().expect("tier name").to_string())
+            .collect()
+    }
+
+    pub(crate) fn model_samples() -> Vec<ModelSample> {
+        let catalog: Value = serde_json::from_str(CATALOG).expect("models.json should parse");
+        let models = catalog["models"].as_object().expect("models object");
+        let tier_models = |slot: &str| -> Vec<String> {
+            catalog["tierAllowedModels"][slot]
+                .as_array()
+                .expect("tierAllowedModels slot")
+                .iter()
+                .map(|id| id.as_str().expect("model id").to_string())
+                .collect()
+        };
+        let named_free =
+            |id: &String| models[id.as_str()]["tierPolicy"]["minTier"].as_str() == Some("free");
+        let economy = tier_models("economy");
+        let named: Vec<String> = NAMED_SLOTS
+            .iter()
+            .flat_map(|slot| tier_models(slot))
+            .collect();
+        let price = |id: &String| {
+            models[id.as_str()]["inputCost"]
+                .as_f64()
+                .expect("inputCost")
+                + models[id.as_str()]["outputCost"]
+                    .as_f64()
+                    .expect("outputCost")
+        };
+        let registry: Value = serde_json::from_str(REGISTRY).expect("registry.json should parse");
+        let managed_model_keys: Vec<&str> = registry["routes"]
+            .as_object()
+            .expect("registry routes")
+            .values()
+            .filter(|route| {
+                route["selectable"].as_bool() == Some(true)
+                    && route["trustModes"].as_array().is_some_and(|modes| {
+                        modes
+                            .iter()
+                            .any(|mode| mode.as_str() == Some(MANAGED_TRUST_MODE))
+                    })
+            })
+            .filter_map(|route| route["modelKey"].as_str())
+            .collect();
+        let mut unnamed: Vec<String> = models
+            .keys()
+            .filter(|id| {
+                !named.contains(id)
+                    && managed_model_keys.contains(&id.as_str())
+                    && models[id.as_str()]["modelType"]
+                        .as_str()
+                        .is_some_and(|kind| CHAT_MODEL_TYPES.contains(&kind))
+            })
+            .cloned()
+            .collect();
+        unnamed.sort_by(|left, right| {
+            price(left)
+                .total_cmp(&price(right))
+                .then_with(|| left.cmp(right))
+        });
+        let fixture = fixture();
+        object(&fixture, "modelRows")
+            .keys()
+            .map(|selection| {
+                let model_id = match selection.as_str() {
+                    "economy_named_free" => economy.iter().find(|id| named_free(id)).cloned(),
+                    "economy_named_not_free" => economy.iter().find(|id| !named_free(id)).cloned(),
+                    "pro_addition" => tier_models("pro_additions").into_iter().next(),
+                    "flagship_addition" => tier_models("flagship_additions").into_iter().next(),
+                    "unnamed_routed_cheapest" => unnamed.first().cloned(),
+                    "unnamed_routed_median" => unnamed.get(unnamed.len() / 2).cloned(),
+                    "unnamed_routed_dearest" => unnamed.last().cloned(),
+                    other => panic!("plan conformance fixture names an unknown sample {other}"),
+                }
+                .unwrap_or_else(|| panic!("the catalog has no model for sample {selection}"));
+                ModelSample {
+                    selection: selection.clone(),
+                    model_id,
+                }
+            })
+            .collect()
+    }
+
+    fn answer_keys<'a>(
+        copy: &OwnedCopy,
+        samples: &'a [ModelSample],
+    ) -> Vec<(String, Option<&'a ModelSample>)> {
+        if copy.per_sample {
+            samples
+                .iter()
+                .map(|sample| {
+                    (
+                        format!("{}{SAMPLE_SEPARATOR}{}", copy.id, sample.selection),
+                        Some(sample),
+                    )
+                })
+                .collect()
+        } else {
+            vec![(copy.id.to_string(), None)]
+        }
+    }
+
+    fn copy_of(answer_key: &str) -> &str {
+        answer_key
+            .split(SAMPLE_SEPARATOR)
+            .next()
+            .unwrap_or(answer_key)
+    }
+
+    fn sorted(value: Value) -> Value {
+        match value {
+            Value::Object(map) => Value::Object(
+                map.into_iter()
+                    .collect::<BTreeMap<_, _>>()
+                    .into_iter()
+                    .map(|(key, inner)| (key, sorted(inner)))
+                    .collect(),
+            ),
+            Value::Array(items) => Value::Array(items.into_iter().map(sorted).collect()),
+            other => other,
+        }
+    }
+
+    fn record(copies: &[OwnedCopy], answer: &dyn Fn(&Probe) -> Value) {
+        let _guard = UPDATE_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let samples = model_samples();
+        let mut fixture = fixture();
+        for copy in copies {
+            fixture["copies"][copy.id] = json!({
+                "language": "rust",
+                "scope": copy.scope.name(),
+                "question": copy.question,
+                "source": copy.source,
+            });
+        }
+        let spellings: Vec<String> = object(&fixture, "rows").keys().cloned().collect();
+        for spelling in &spellings {
+            let answers = fixture["rows"][spelling.as_str()]["answers"]
+                .as_object_mut()
+                .expect("row answers");
+            answers.retain(|key, _| !copies.iter().any(|copy| copy.id == copy_of(key)));
+            for copy in copies.iter().filter(|copy| copy.scope == Scope::Spelling) {
+                for (key, sample) in answer_keys(copy, &samples) {
+                    let probe = Probe {
+                        copy: copy.id,
+                        spelling: Some(spelling),
+                        model: sample,
+                    };
+                    answers.insert(key, answer(&probe));
+                }
+            }
+        }
+        for sample in &samples {
+            let answers = fixture["modelRows"][sample.selection.as_str()]["answers"]
+                .as_object_mut()
+                .expect("model row answers");
+            answers.retain(|key, _| !copies.iter().any(|copy| copy.id == copy_of(key)));
+            for copy in copies.iter().filter(|copy| copy.scope == Scope::Model) {
+                let probe = Probe {
+                    copy: copy.id,
+                    spelling: None,
+                    model: Some(sample),
+                };
+                answers.insert(copy.id.to_string(), answer(&probe));
+            }
+        }
+        let text = serde_json::to_string_pretty(&sorted(fixture))
+            .expect("plan conformance fixture should serialise");
+        std::fs::write(FIXTURE_PATH, format!("{text}\n"))
+            .expect("plan conformance fixture should write");
+    }
+
+    fn compare(
+        label: String,
+        key: &str,
+        recorded: &Map<String, Value>,
+        actual: Value,
+    ) -> Option<String> {
+        match recorded.get(key) {
+            Some(value) if *value == actual => None,
+            other => Some(format!(
+                "{label} {key}: recorded {}, now {actual}",
+                other.map_or("nothing".to_string(), Value::to_string)
+            )),
+        }
+    }
+
+    pub(crate) fn conform(copies: &[OwnedCopy], answer: &dyn Fn(&Probe) -> Value) {
+        if updating() {
+            record(copies, answer);
+            return;
+        }
+        let samples = model_samples();
+        let fixture = fixture();
+        let mut drifted: Vec<String> = Vec::new();
+        for (spelling, row) in object(&fixture, "rows") {
+            let recorded = row["answers"].as_object().expect("row answers");
+            for copy in copies.iter().filter(|copy| copy.scope == Scope::Spelling) {
+                for (key, sample) in answer_keys(copy, &samples) {
+                    let probe = Probe {
+                        copy: copy.id,
+                        spelling: Some(spelling),
+                        model: sample,
+                    };
+                    drifted.extend(compare(
+                        format!("{spelling:?}"),
+                        &key,
+                        recorded,
+                        answer(&probe),
+                    ));
+                }
+            }
+            for key in recorded.keys() {
+                let expected = copies
+                    .iter()
+                    .filter(|copy| copy.scope == Scope::Spelling && copy.id == copy_of(key))
+                    .flat_map(|copy| answer_keys(copy, &samples))
+                    .any(|(expected, _)| expected == *key);
+                if !expected && copies.iter().any(|copy| copy.id == copy_of(key)) {
+                    drifted.push(format!(
+                        "{spelling:?} {key}: recorded but no longer answered"
+                    ));
+                }
+            }
+        }
+        for sample in &samples {
+            let recorded = fixture["modelRows"][sample.selection.as_str()]["answers"]
+                .as_object()
+                .expect("model row answers");
+            for copy in copies.iter().filter(|copy| copy.scope == Scope::Model) {
+                let probe = Probe {
+                    copy: copy.id,
+                    spelling: None,
+                    model: Some(sample),
+                };
+                drifted.extend(compare(
+                    sample.selection.clone(),
+                    copy.id,
+                    recorded,
+                    answer(&probe),
+                ));
+            }
+        }
+        assert!(
+            drifted.is_empty(),
+            "{} recorded plan answers drifted; regenerate with {UPDATE_ENV}=1:\n{}",
+            drifted.len(),
+            drifted.join("\n")
+        );
+    }
+
+    const COPIES: [OwnedCopy; 4] = [
+        OwnedCopy {
+            id: "cli.parse",
+            scope: Scope::Spelling,
+            question: "identity",
+            source: "apps/cli/src/tier_cache.rs parse_tier_str, as the wire slug",
+            per_sample: false,
+        },
+        OwnedCopy {
+            id: "cli.recognised",
+            scope: Scope::Spelling,
+            question: "recognised",
+            source: "apps/cli/src/tier_cache.rs parse_tier_str is some",
+            per_sample: false,
+        },
+        OwnedCopy {
+            id: "cli.routingBucket",
+            scope: Scope::Spelling,
+            question: "modelBucket",
+            source: "apps/cli/src/tier_cache.rs UserTier::managed_auto_routing_tier",
+            per_sample: false,
+        },
+        OwnedCopy {
+            id: "cli.atLeast",
+            scope: Scope::Spelling,
+            question: "order",
+            source: "apps/cli/src/tier_cache.rs tier_rank over the fixture's order universe",
+            per_sample: false,
+        },
+    ];
+
+    fn at_least(parsed: &UserTier) -> Value {
+        let rank = tier_rank(parsed);
+        order_universe()
+            .into_iter()
+            .filter(|required| {
+                let required = parse_tier_str(required)
+                    .unwrap_or_else(|| panic!("order universe tier {required} should parse"));
+                rank >= tier_rank(&required)
+            })
+            .map(Value::from)
+            .collect()
+    }
+
+    fn answer(probe: &Probe) -> Value {
+        let spelling = probe.spelling.expect("tier answers are per spelling");
+        let parsed = parse_tier_str(spelling);
+        match probe.copy {
+            "cli.parse" => parsed
+                .as_ref()
+                .map_or(Value::Null, |tier| json!(tier_to_str(tier))),
+            "cli.recognised" => json!(parsed.is_some()),
+            "cli.routingBucket" => parsed
+                .as_ref()
+                .map_or(Value::Null, |tier| json!(tier.managed_auto_routing_tier())),
+            "cli.atLeast" => parsed.as_ref().map_or(Value::Null, at_least),
+            other => panic!("tier_cache does not own the {other} answer"),
+        }
+    }
+
+    #[test]
+    fn the_cli_tier_parser_rank_and_routing_bucket_answer_as_recorded_for_every_spelling() {
+        conform(&COPIES, &answer);
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
 

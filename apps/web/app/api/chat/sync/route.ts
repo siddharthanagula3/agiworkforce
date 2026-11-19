@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { stripCitationMarkup } from '@agiworkforce/provider-protocol';
+import type { ArtifactType } from '@agiworkforce/types';
 import { markSyncedConversationsGoogleUserData } from '@/lib/connectors/google-user-data';
 import {
   CHAT_SYNC_CONVERSATIONS_SCOPE,
@@ -22,7 +24,13 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { withIsoTimestamps } from '@/lib/server/iso-timestamps';
 import { withClientMessageRole } from '@/lib/server/client-message-role';
+import {
+  withoutStoredCitationMarkup,
+  withoutStoredCitationMarkupRow,
+} from '@/lib/server/stored-assistant-text';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { jsonbObjectSql } from '@/lib/server/jsonb-object-merge';
+import { withObjectMessageMetadata } from '@/lib/server/message-metadata-repair';
 import { buildChatSyncGateResponse } from '@/lib/managed-compute-gate';
 import { assertFreeDailyAllowance } from '@/lib/services/tier-unit-quota-service';
 import { unpublishArtifactsForConversations } from '@/lib/services/published-artifact-service';
@@ -30,8 +38,13 @@ import { revokeSharesOfDeletedConversations } from '@/lib/services/shared-sessio
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { scheduleArtifactIndexing } from '@/app/api/chat/conversations/[id]/messages/lib/index-artifacts';
 import { EXPLICIT_ARTIFACT_DERIVATION_POLICY } from '@agiworkforce/artifacts';
-import { ASSISTANT_CONTENT_EDIT_METADATA_KEY } from '@/features/chat/lib/assistant-content-edit-contract';
+import { ASSISTANT_CONTENT_EDIT_METADATA_KEY } from '@agiworkforce/cloud-contracts';
 import { SYNC_ASSISTANT_CONTENT_PRESERVED_METADATA_SQL } from '@/lib/server/assistant-content-edits';
+import {
+  recordStoppedRunAssistantTurn,
+  recordedTurnEndingKeptSql,
+  referencedCloudAgentRunId,
+} from '@/app/api/llm/v1/chat/completions/lib/stopped-run-turn';
 import {
   lockConversationThread,
   setActiveLeaf,
@@ -45,6 +58,18 @@ const MAX_ARTIFACTS_PULL = 500;
 type ConversationDelta = ConversationWireDelta;
 type MessageDelta = MessageWireDelta;
 type ArtifactDelta = ArtifactWireDelta;
+
+const PROSE_ARTIFACT_TYPES: ReadonlySet<string> = new Set<ArtifactType>(['document', 'markdown']);
+
+function withObjectMetadata(message: MessageDelta, userId: string): MessageDelta {
+  return withObjectMessageMetadata(message, { userId, conversationId: message.conversation_id });
+}
+
+function withoutStoredCitationMarkupArtifact(artifact: ArtifactDelta): ArtifactDelta {
+  if (!PROSE_ARTIFACT_TYPES.has(artifact.artifact_type)) return artifact;
+  const content = stripCitationMarkup(artifact.content);
+  return content === artifact.content ? artifact : { ...artifact, content };
+}
 
 async function assertProjectsBelongToActiveWorkspace(
   db: Awaited<ReturnType<typeof getUserScopedDb>>['db'],
@@ -167,8 +192,12 @@ async function handlePull(request: NextRequest) {
     return NextResponse.json(
       ChatSyncPullResponseSchema.parse({
         conversations: withIsoTimestamps(conversations),
-        messages: withIsoTimestamps(messages).map(withClientMessageRole),
-        artifacts: withIsoTimestamps(artifacts),
+        messages: withIsoTimestamps(
+          withoutStoredCitationMarkup(
+            messages.map((message) => withObjectMetadata(message, userId)),
+          ),
+        ).map(withClientMessageRole),
+        artifacts: withIsoTimestamps(artifacts.map(withoutStoredCitationMarkupArtifact)),
         cursor,
         hasMore,
       }),
@@ -186,6 +215,10 @@ type BatchRow<T> = {
   current: T | null;
 };
 
+const SYNC_PUSHED_MESSAGE_METADATA_SQL = jsonbObjectSql(
+  recordedTurnEndingKeptSql('existing', SYNC_ASSISTANT_CONTENT_PRESERVED_METADATA_SQL),
+);
+
 const PUSH_MESSAGES_SQL = `
           with input as materialized (
             select (item ->> 'id')::uuid as id,
@@ -197,7 +230,7 @@ const PUSH_MESSAGES_SQL = `
                    item ? 'inputTokens' as has_input_tokens,
                    coalesce((item ->> 'outputTokens')::integer, 0) as output_tokens,
                    item ? 'outputTokens' as has_output_tokens,
-                   coalesce(item -> 'metadata', '{}'::jsonb) as metadata,
+                   ${jsonbObjectSql("item -> 'metadata'")} as metadata,
                    item ? 'metadata' as has_metadata,
                    (item ->> 'baseVersion')::bigint as base_version,
                    coalesce((item ->> 'isDeleted')::boolean, false) as should_delete,
@@ -214,7 +247,7 @@ const PUSH_MESSAGES_SQL = `
                    provider = case when incoming.has_provider then incoming.provider else existing.provider end,
                    input_tokens = case when incoming.has_input_tokens then incoming.input_tokens else existing.input_tokens end,
                    output_tokens = case when incoming.has_output_tokens then incoming.output_tokens else existing.output_tokens end,
-                   metadata = ${SYNC_ASSISTANT_CONTENT_PRESERVED_METADATA_SQL},
+                   metadata = ${SYNC_PUSHED_MESSAGE_METADATA_SQL},
                    updated_at = now()
               from input as incoming, web_conversations as parent
              where not incoming.should_delete
@@ -232,7 +265,7 @@ const PUSH_MESSAGES_SQL = `
                  or (incoming.has_provider and existing.provider is distinct from incoming.provider)
                  or (incoming.has_input_tokens and existing.input_tokens is distinct from incoming.input_tokens)
                  or (incoming.has_output_tokens and existing.output_tokens is distinct from incoming.output_tokens)
-                   or (incoming.has_metadata and coalesce(existing.metadata, '{}'::jsonb) is distinct from ${SYNC_ASSISTANT_CONTENT_PRESERVED_METADATA_SQL})
+                   or (incoming.has_metadata and coalesce(existing.metadata, '{}'::jsonb) is distinct from ${SYNC_PUSHED_MESSAGE_METADATA_SQL})
                )
             returning existing.id, existing.server_version
           ), inserted as (
@@ -290,7 +323,7 @@ const PUSH_MESSAGES_SQL = `
                    and (not incoming.has_provider or existing.provider is not distinct from incoming.provider)
                    and (not incoming.has_input_tokens or existing.input_tokens = incoming.input_tokens)
                    and (not incoming.has_output_tokens or existing.output_tokens = incoming.output_tokens)
-                   and (not incoming.has_metadata or coalesce(existing.metadata, '{}'::jsonb) = ${SYNC_ASSISTANT_CONTENT_PRESERVED_METADATA_SQL})
+                   and (not incoming.has_metadata or coalesce(existing.metadata, '{}'::jsonb) = ${SYNC_PUSHED_MESSAGE_METADATA_SQL})
                  )
                )
           ), applied_rows as materialized (
@@ -673,12 +706,16 @@ async function handlePush(request: NextRequest) {
     if (messages.length > 0) {
       await markSyncedConversationsGoogleUserData(db, userId, organizationId ?? null, messages);
       const rows = await pushMessages(db, userId, messages);
-      collectBatchRows(
-        rows.map((row) =>
-          row.current ? { ...row, current: withClientMessageRole(row.current) } : row,
-        ),
-        applied.messages,
-        conflicts.messages,
+      collectBatchRows(rows, applied.messages, conflicts.messages);
+      conflicts.messages = conflicts.messages.map((conflict) =>
+        conflict.current
+          ? {
+              ...conflict,
+              current: withClientMessageRole(
+                withoutStoredCitationMarkupRow(withObjectMetadata(conflict.current, userId)),
+              ),
+            }
+          : conflict,
       );
 
       // Device sync (desktop/mobile) is another real path that writes
@@ -703,11 +740,13 @@ async function handlePush(request: NextRequest) {
         const stored = await db.query<{
           id: string;
           conversation_id: string;
+          organization_id: string | null;
           content: string;
           metadata: Record<string, unknown> | null;
         }>(
           `select message.id::text as id,
                   message.conversation_id::text as conversation_id,
+                  conversation.organization_id::text as organization_id,
                   message.content,
                   message.metadata
              from web_messages as message
@@ -731,6 +770,21 @@ async function handlePush(request: NextRequest) {
               : {}),
           });
         }
+        await Promise.all(
+          stored.flatMap((row) => {
+            const metadata = row.metadata ?? {};
+            const runId = referencedCloudAgentRunId(metadata);
+            if (!runId || 'finishReason' in metadata) return [];
+            return [
+              recordStoppedRunAssistantTurn({
+                userId,
+                organizationId: row.organization_id ?? null,
+                runId,
+                messageId: row.id,
+              }),
+            ];
+          }),
+        );
       }
     }
 
@@ -823,6 +877,11 @@ async function handlePush(request: NextRequest) {
         [userId, JSON.stringify(artifacts)],
       );
       collectBatchRows(rows, applied.artifacts, conflicts.artifacts);
+      conflicts.artifacts = conflicts.artifacts.map((conflict) =>
+        conflict.current
+          ? { ...conflict, current: withoutStoredCitationMarkupArtifact(conflict.current) }
+          : conflict,
+      );
       if (applied.artifacts.length > 0) {
         await db.query(RECORD_ARTIFACT_VERSIONS_SQL, [
           userId,

@@ -94,10 +94,14 @@ jest.mock('@/services/preferences', () => ({
 const mockFetchDirectory = jest.fn();
 const mockBrowseListings = jest.fn();
 const mockAddCustom = jest.fn();
+const mockStartOAuth = jest.fn();
+const mockAuthorizeInApp = jest.fn();
 jest.mock('@/services/connectors', () => ({
   fetchConnectorDirectory: (...args: unknown[]) => mockFetchDirectory(...args),
   browseConnectorListings: (...args: unknown[]) => mockBrowseListings(...args),
   addCustomConnector: (...args: unknown[]) => mockAddCustom(...args),
+  startConnectorOAuth: (...args: unknown[]) => mockStartOAuth(...args),
+  authorizeConnectorInApp: (...args: unknown[]) => mockAuthorizeInApp(...args),
 }));
 
 import CloudConnectorsScreen from '../app/(app)/settings/cloud-connectors';
@@ -164,7 +168,7 @@ describe('Cloud Connectors screen, shipped-feature state', () => {
     const { getByLabelText, queryByText } = render(<CloudConnectorsScreen />);
 
     await waitFor(() => expect(getByLabelText('Notion, Notion Labs. Not connected')).toBeTruthy());
-    expect(getByLabelText('Slack, Slack Technologies. Not connected')).toBeTruthy();
+    expect(getByLabelText('Slack, Slack Technologies. Coming soon')).toBeTruthy();
     expect(queryByText('Connectors, AGI Cloud')).toBeNull();
     expect(mockFetchDirectory).toHaveBeenCalledTimes(1);
     expect(mockBrowseListings).toHaveBeenCalledWith({ search: '', category: null, cursor: null });
@@ -180,6 +184,18 @@ describe('Cloud Connectors screen, shipped-feature state', () => {
 
     expect(await findByText('No connectors found')).toBeTruthy();
     expect(getByText(/still being indexed/)).toBeTruthy();
+  });
+
+  it('keeps the indexing note off the Connected filter and says nothing is connected', async () => {
+    mockFetchDirectory.mockResolvedValue({ connectors: [], available: [] });
+    mockBrowseListings.mockResolvedValue({ ...page([]), stats: { bootstrapComplete: false } });
+    const { findByText, getByLabelText, queryByText } = render(<CloudConnectorsScreen />);
+
+    expect(await findByText(/still being indexed/)).toBeTruthy();
+    fireEvent.press(getByLabelText('Connected connectors'));
+    expect(await findByText('No connectors connected yet.')).toBeTruthy();
+    expect(queryByText(/still being indexed/)).toBeNull();
+    expect(queryByText('No connectors found')).toBeNull();
   });
 
   it('shows only No connectors found once the directory is indexed', async () => {
@@ -258,7 +274,7 @@ describe('Cloud Connectors screen, shipped-feature state', () => {
     screen.rerender(<CloudConnectorsScreen />);
     await waitFor(() => expect(mockFetchDirectory).toHaveBeenCalledTimes(2));
     await waitFor(() =>
-      expect(screen.getByLabelText('Slack, Slack Technologies. Not connected')).toBeTruthy(),
+      expect(screen.getByLabelText('Slack, Slack Technologies. Coming soon')).toBeTruthy(),
     );
 
     await act(async () => {
@@ -279,7 +295,7 @@ describe('Cloud Connectors screen, shipped-feature state', () => {
       await Promise.resolve();
     });
 
-    expect(screen.getByLabelText('Slack, Slack Technologies. Not connected')).toBeTruthy();
+    expect(screen.getByLabelText('Slack, Slack Technologies. Coming soon')).toBeTruthy();
     expect(screen.queryByLabelText(/^Slack, Slack Technologies\. Connected/)).toBeNull();
     expect(screen.queryByText('Account A Slack')).toBeNull();
   });
@@ -341,6 +357,147 @@ describe('Cloud Connectors screen, shipped-feature state', () => {
     await waitFor(() => expect(getByLabelText('Notion, Notion Labs. Not responding')).toBeTruthy());
     expect(getByText('Not responding')).toBeTruthy();
     expect(getAllByLabelText(/^Notion, Notion Labs\./)).toHaveLength(1);
+  });
+
+  it('marks an unreleased connector Coming soon and keeps the released one connectable', async () => {
+    const { getByLabelText, getByText, queryByText } = render(<CloudConnectorsScreen />);
+
+    await waitFor(() =>
+      expect(getByLabelText('Slack, Slack Technologies. Coming soon')).toBeTruthy(),
+    );
+    expect(getByText('Coming soon')).toBeTruthy();
+    expect(queryByText('Slack for your team.')).toBeNull();
+    expect(getByText('Notion for your team.')).toBeTruthy();
+    expect(getByLabelText('Notion, Notion Labs. Not connected')).toBeTruthy();
+  });
+
+  it('announces an expired connection once, and Reconnect starts its authorization', async () => {
+    const expired = {
+      id: 'expired-linear',
+      connectorId: 'linear',
+      authType: 'oauth',
+      connectedAt: '2026-07-26T10:00:00.000Z',
+      updatedAt: '2026-07-26T10:00:00.000Z',
+      source: 'oauth',
+      name: 'Linear',
+      needsReauthorization: true,
+    };
+    mockFetchDirectory.mockResolvedValue({ connectors: [expired], available: [] });
+    mockStartOAuth.mockResolvedValue({
+      authorizeUrl: 'https://linear.app/oauth/authorize?state=s',
+      appReturn: true,
+    });
+    mockAuthorizeInApp.mockResolvedValue('connected');
+
+    const first = render(<CloudConnectorsScreen />);
+    expect(await first.findByText('Linear needs to be reconnected')).toBeTruthy();
+    expect(first.getAllByTestId('connector-health-notice')).toHaveLength(1);
+
+    await act(async () => {
+      fireEvent.press(first.getByLabelText('Reconnect Linear'));
+    });
+    expect(mockStartOAuth).toHaveBeenCalledWith('linear');
+    expect(mockAuthorizeInApp).toHaveBeenCalledWith('https://linear.app/oauth/authorize?state=s');
+    await waitFor(() => expect(first.queryByTestId('connector-health-notice')).toBeNull());
+    first.unmount();
+
+    const again = render(<CloudConnectorsScreen />);
+    await waitFor(() =>
+      expect(again.getByLabelText('Linear. Authorization expired, reconnect')).toBeTruthy(),
+    );
+    expect(again.queryByTestId('connector-health-notice')).toBeNull();
+  });
+
+  it('announces a not-responding connection with no Reconnect, and Dismiss closes it', async () => {
+    mockFetchDirectory.mockResolvedValue({
+      connectors: [
+        {
+          id: 'quiet-canva',
+          connectorId: 'canva',
+          authType: 'oauth',
+          connectedAt: '2026-07-26T10:00:00.000Z',
+          updatedAt: '2026-07-26T10:00:00.000Z',
+          source: 'oauth',
+          name: 'Canva',
+          health: 'not-responding',
+        },
+      ],
+      available: [],
+    });
+    const view = render(<CloudConnectorsScreen />);
+
+    expect(await view.findByText('Canva could not answer')).toBeTruthy();
+    expect(view.queryByLabelText('Reconnect Canva')).toBeNull();
+    fireEvent.press(view.getByLabelText('Dismiss the notice about Canva'));
+    expect(view.queryByTestId('connector-health-notice')).toBeNull();
+    expect(mockStartOAuth).not.toHaveBeenCalled();
+  });
+
+  it('words the health notices as web does and Try again checks the connection again', async () => {
+    const { connectorOutcomeNotice } = require('@agiworkforce/cloud-contracts');
+    const quietCanva = (health: 'not-responding' | 'connected') => ({
+      connectors: [
+        {
+          id: 'retry-canva',
+          connectorId: 'canva',
+          authType: 'oauth',
+          connectedAt: '2026-07-26T10:00:00.000Z',
+          updatedAt: '2026-07-26T10:00:00.000Z',
+          source: 'oauth',
+          name: 'Canva',
+          health,
+        },
+        {
+          id: 'retry-linear',
+          connectorId: 'linear',
+          authType: 'oauth',
+          connectedAt: '2026-07-26T10:00:00.000Z',
+          updatedAt: '2026-07-26T10:00:00.000Z',
+          source: 'oauth',
+          name: 'Linear',
+          needsReauthorization: true,
+        },
+      ],
+      available: [],
+    });
+    mockFetchDirectory.mockResolvedValueOnce(quietCanva('not-responding'));
+    const view = render(<CloudConnectorsScreen />);
+
+    const unavailable = connectorOutcomeNotice({
+      connectorId: 'canva',
+      connectorLabel: 'Canva',
+      toolName: 'its last request',
+      failure: 'unavailable',
+    });
+    const expired = connectorOutcomeNotice({
+      connectorId: 'linear',
+      connectorLabel: 'Linear',
+      toolName: 'its last request',
+      failure: 'authorization',
+    });
+    expect(await view.findByText(unavailable.title)).toBeTruthy();
+    expect(view.getByText(unavailable.detail)).toBeTruthy();
+    expect(view.getByText(expired.title)).toBeTruthy();
+    expect(view.getByText(expired.detail)).toBeTruthy();
+    expect(view.getByLabelText('Reconnect Linear')).toBeTruthy();
+    expect(view.queryByText(/is not responding/)).toBeNull();
+    expect(mockFetchDirectory).toHaveBeenCalledTimes(1);
+
+    mockFetchDirectory.mockResolvedValueOnce(quietCanva('not-responding'));
+    await act(async () => {
+      fireEvent.press(view.getByLabelText('Try again Canva'));
+    });
+    await waitFor(() => expect(mockFetchDirectory).toHaveBeenCalledTimes(2));
+    expect(await view.findByText(unavailable.title)).toBeTruthy();
+
+    mockFetchDirectory.mockResolvedValueOnce(quietCanva('connected'));
+    await act(async () => {
+      fireEvent.press(view.getByLabelText('Try again Canva'));
+    });
+    await waitFor(() => expect(mockFetchDirectory).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(view.queryByText(unavailable.title)).toBeNull());
+    expect(view.getAllByTestId('connector-health-notice')).toHaveLength(1);
+    expect(mockStartOAuth).not.toHaveBeenCalled();
   });
 
   it('opens the detail route for a registry listing instead of connecting from the list', async () => {

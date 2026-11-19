@@ -60,6 +60,10 @@ import {
   setChineseHqProviderConsent,
 } from '@/services/providerConsent';
 import {
+  __resetCloudAccountSessionForTests,
+  activateCloudAccount,
+} from '@/src/features/auth/services/cloudAccountSession';
+import {
   ProviderConsentBanner,
   PROVIDER_CONSENT_ENABLE_TEST_ID,
 } from '@/src/features/chat/components/ProviderConsentBanner';
@@ -84,6 +88,8 @@ function routingAllowed(providerId: string): boolean {
 
 beforeEach(() => {
   mockStorage.clear();
+  __resetCloudAccountSessionForTests();
+  activateCloudAccount('person-a');
 });
 
 function acceptDisclosureOnly() {

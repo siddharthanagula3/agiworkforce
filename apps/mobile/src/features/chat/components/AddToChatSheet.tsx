@@ -49,6 +49,7 @@ import {
   getModelMetadataById,
   getVideoAspectOptionsForModel,
   getVideoQualityOptionsForModel,
+  isAutoModeModelId,
   providerLabels,
   videoGenerationCostMicrousd,
   type ModelMetadata,
@@ -60,6 +61,7 @@ import {
   type ChatOutputFormat,
   supportsManagedMediaImageEdit,
 } from '@agiworkforce/cloud-contracts';
+import { isWebSearchAvailable } from '@agiworkforce/search';
 import { supportedVideoDurationSecs } from '@/src/features/video/services/videogen';
 import { Text } from '@/components/ui/Text';
 import { Switch } from '@/components/ui/Switch';
@@ -83,6 +85,8 @@ import { useModelStore } from '@/src/features/model-picker/store';
 import { useTierStore } from '@/src/features/billing/store';
 import { useTheme, useThemeColors, sheetRadius } from '@/src/ui/theme';
 import { radii, typeScale } from '@/src/ui/theme/tokens';
+import { contentColumnInset } from '@/src/shared/layout/contentColumn';
+import { useResponsiveLayout } from '@/src/shared/hooks/useResponsiveLayout';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { executionModeForConversation } from '@/src/features/chat/utils/conversationMode';
 import { recentMobileFiles } from '@/src/features/search/mobileGlobalSearch';
@@ -91,28 +95,38 @@ import {
   type LibraryPickerScope,
 } from '@/src/features/library/useLibraryPickerScope';
 import { fetchLibraryPage } from '@/src/features/library/libraryClient';
+import { useLibraryThumbnail } from '@/src/features/library/useLibraryThumbnail';
 import { useCapability } from '@/src/lib/Capabilities';
+import {
+  useBottomSheetPresence,
+  useHardwareBackDismiss,
+  useSystemScreenSheet,
+} from '@/src/shared/hooks/useHardwareBackDismiss';
 import { useMobileSkillSelectionStore } from '@/src/features/skills/selectionStore';
 import { useOutputFormatStore } from '@/src/features/chat/store/outputFormatStore';
+import { AuthorizedImage } from '@/src/features/image/components/AuthorizedImage';
 import type { Attachment } from './AttachmentPreview';
 
 interface AddToChatSheetProps {
   destinationKey: string;
-  onCamera: () => void;
-  onPhotos: () => void;
+  onCamera: () => void | Promise<void>;
+  onPhotos: () => void | Promise<void>;
   onPasteImage?: () => void;
-  onFile: () => void;
+  onFile: () => void | Promise<void>;
   onOpenCloudAccess: () => void;
   onOpenStyleSelector: () => void;
   onOpenProjectPicker: () => void;
   onAttachFromLibrary: (attachment: Attachment) => void;
   onOpenSkills?: () => void;
+  onStartComposerRoundTrip?: () => void;
   offersOutputFormat?: boolean;
+  conversationProjectId?: string | null;
 }
 
 const MAX_SHEET_HEIGHT_FRACTION = 0.85;
 const NESTED_ROW_INDENT = 28;
 const LIBRARY_PICKER_SIZE = 12;
+const LIBRARY_PICK_HEIGHT = 70;
 export const LOCAL_ATTACH_NOTE =
   'On-device models read the text in photos, not the picture itself.';
 const CLOUD_ATTACH_RETENTION_NOTE =
@@ -125,7 +139,30 @@ interface LibraryPick {
   fileName: string;
   subtitle: string;
   isImage: boolean;
+  thumbnailUri?: string;
   attachment: Attachment;
+}
+
+function LibraryPickPicture({ pick }: { pick: LibraryPick }) {
+  const { uri, fallBackToFullFile } = useLibraryThumbnail({
+    id: pick.id,
+    uri: pick.attachment.uri,
+    thumbnailUri: pick.thumbnailUri,
+  });
+  const handleUnavailableChange = useCallback(
+    (unavailable: boolean) => {
+      if (unavailable) fallBackToFullFile();
+    },
+    [fallBackToFullFile],
+  );
+  return (
+    <AuthorizedImage
+      uri={uri}
+      name={pick.attachment.fileName}
+      onUnavailableChange={handleUnavailableChange}
+      style={{ width: '100%', height: '100%' }}
+    />
+  );
 }
 
 type CloudLibraryState =
@@ -152,13 +189,16 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     onOpenProjectPicker,
     onAttachFromLibrary,
     onOpenSkills,
+    onStartComposerRoundTrip,
     offersOutputFormat = false,
+    conversationProjectId,
   },
   ref,
 ) {
   const router = useRouter();
   const { colors: themeColors } = useTheme();
   const { height: windowHeight } = useWindowDimensions();
+  const { contentWidth } = useResponsiveLayout();
   const cameraAllowed = useCapability('canUseCamera');
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const isTemporaryChat = useSettingsStore((s) => s.isTemporaryChat);
@@ -193,8 +233,18 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     selectedModelMetadata?.capabilities?.research === true &&
     selectedModelMetadata?.capabilities?.search === true &&
     grantedCapabilities.includes('canUseDeepResearch');
+  const genericWebSearchAvailable = useTierStore((s) => s.genericWebSearchAvailable);
   const showWebSearchToggle =
-    FEATURES.webSearch && appMode === 'cloud' && grantedCapabilities.includes('canUseWebSearch');
+    FEATURES.webSearch &&
+    appMode === 'cloud' &&
+    grantedCapabilities.includes('canUseWebSearch') &&
+    (isAutoModeModelId(selectedModel) ||
+      isWebSearchAvailable({
+        provider: selectedModelMetadata?.provider,
+        modelSupportsNativeSearch: selectedModelMetadata?.capabilities?.search,
+        modelSupportsTools: selectedModelMetadata?.capabilities?.tools,
+        genericBackendConfigured: genericWebSearchAvailable,
+      }));
   const codeExecutionAvailable = useTierStore((s) => s.codeExecutionAvailable);
   const showRunCodeToggle =
     FEATURES.codeExecution &&
@@ -307,10 +357,12 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
   const localProjects = useProjectStore((s) => s.projects);
   const cloudActiveProjectId = useCloudProjectStore((s) => s.activeProjectId);
   const cloudProjects = useCloudProjectStore((s) => s.projects);
-  const activeProjectId = appMode === 'cloud' ? cloudActiveProjectId : localActiveProjectId;
+  const scopedProjectId = appMode === 'cloud' ? cloudActiveProjectId : localActiveProjectId;
+  const activeProjectId =
+    conversationProjectId === undefined ? scopedProjectId : conversationProjectId;
   const activeProject = activeProjectId
     ? ((appMode === 'cloud' ? cloudProjects : localProjects).find(
-        (p) => p.id === activeProjectId,
+        (p) => p.id === activeProjectId && !('deletedAt' in p && p.deletedAt !== null),
       ) ?? null)
     : null;
   const localLibraryPicks = useMemo((): LibraryPick[] => {
@@ -358,6 +410,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
               fileName: asset.fileName,
               subtitle: asset.sourceLabel,
               isImage: asset.kind === 'image',
+              ...(asset.thumbnailUri ? { thumbnailUri: asset.thumbnailUri } : {}),
               attachment: {
                 id: `library-${asset.id}`,
                 uri: asset.uri,
@@ -400,24 +453,46 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     }
   }, [hapticsEnabled]);
 
+  // Handing off to another sheet keeps this one on screen while it animates
+  // out, so without this the tapped row sat inert for the whole handoff and
+  // read as a dead control.
+  const [handoff, setHandoff] = useState<'style' | 'project' | null>(null);
+  const [expanded, setExpanded] = useState<'file' | 'connectors' | null>(null);
+
+  const sheetRef = useRef<BottomSheet>(null);
   const closeSheet = useCallback(() => {
     libraryRequest.current += 1;
-    if (ref && 'current' in ref && ref.current) {
-      ref.current.close();
-    }
-  }, [ref]);
+    sheetRef.current?.close();
+  }, []);
+  const [presented, sheetPresence] = useBottomSheetPresence();
+  useHardwareBackDismiss(presented, closeSheet);
+  const handleSheetClosed = useCallback(() => {
+    libraryRequest.current += 1;
+    setHandoff(null);
+    setExpanded(null);
+  }, []);
+  const handleSheetUnmount = useCallback(() => {
+    sheetPresence.onClose();
+    setIsOpen(false);
+    handleSheetClosed();
+  }, [handleSheetClosed, sheetPresence]);
+  const sheet = useSystemScreenSheet({
+    forwardedRef: ref,
+    sheetRef,
+    closeSheet,
+    onUnmount: handleSheetUnmount,
+  });
+  const launchSystemScreen = sheet.launch;
 
   const handleCamera = useCallback(() => {
     haptic();
-    closeSheet();
-    onCamera();
-  }, [haptic, closeSheet, onCamera]);
+    launchSystemScreen(onCamera);
+  }, [haptic, launchSystemScreen, onCamera]);
 
   const handlePhotos = useCallback(() => {
     haptic();
-    closeSheet();
-    onPhotos();
-  }, [haptic, closeSheet, onPhotos]);
+    launchSystemScreen(onPhotos);
+  }, [haptic, launchSystemScreen, onPhotos]);
 
   const [clipboardImage, setClipboardImage] = useState(false);
   useEffect(() => {
@@ -439,9 +514,8 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
 
   const handleFile = useCallback(() => {
     haptic();
-    closeSheet();
-    onFile();
-  }, [haptic, closeSheet, onFile]);
+    launchSystemScreen(onFile);
+  }, [haptic, launchSystemScreen, onFile]);
 
   const handleAttachFromLibrary = useCallback(
     (pick: LibraryPick, request?: number) => {
@@ -454,11 +528,6 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     [appMode, closeSheet, haptic, onAttachFromLibrary, pickerScope],
   );
 
-  // Handing off to another sheet keeps this one on screen while it animates
-  // out, so without this the tapped row sat inert for the whole handoff and
-  // read as a dead control.
-  const [handoff, setHandoff] = useState<'style' | 'project' | null>(null);
-  const [expanded, setExpanded] = useState<'file' | 'connectors' | null>(null);
   const toggleExpanded = useCallback(
     (section: 'file' | 'connectors') => {
       haptic();
@@ -515,8 +584,9 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
   const handleStudy = useCallback(() => {
     haptic();
     closeSheet();
+    onStartComposerRoundTrip?.();
     router.push('/(app)/study');
-  }, [haptic, closeSheet, router]);
+  }, [haptic, closeSheet, onStartComposerRoundTrip, router]);
 
   const handleConnectors = useCallback(() => {
     haptic();
@@ -525,8 +595,9 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
       return;
     }
     closeSheet();
+    onStartComposerRoundTrip?.();
     router.push('/(app)/connectors' as Parameters<typeof router.push>[0]);
-  }, [haptic, onOpenCloudAccess, closeSheet, router]);
+  }, [haptic, onOpenCloudAccess, closeSheet, onStartComposerRoundTrip, router]);
 
   const renderBackdrop = useCallback(
     (props: React.ComponentProps<typeof BottomSheetBackdrop>) => (
@@ -537,17 +608,21 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
 
   const cardBg = themeColors.neutralSurface;
   const dividerColor = themeColors.borderLight;
+  if (!sheet.mounted) return null;
   return (
     <BottomSheet
-      ref={ref}
-      index={-1}
+      key={sheet.generation}
+      ref={sheetRef}
+      index={sheet.index}
       accessible={false}
+      style={{ marginHorizontal: contentColumnInset('reading', contentWidth) }}
+      onAnimate={sheetPresence.onAnimate}
+      onClose={sheetPresence.onClose}
       onChange={(index) => {
+        sheetPresence.onChange(index);
         setIsOpen(index >= 0);
         if (index < 0) {
-          libraryRequest.current += 1;
-          setHandoff(null);
-          setExpanded(null);
+          handleSheetClosed();
           return;
         }
         if (onPasteImage) void clipboardHasImage().then(setClipboardImage);
@@ -741,70 +816,92 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={{ paddingHorizontal: 20, gap: 10 }}
               >
-                {libraryPicks.map((pick) => (
-                  <PressableBox
-                    key={pick.id}
-                    onPress={() =>
-                      handleAttachFromLibrary(
-                        pick,
-                        cloudLibrary.status === 'ready' ? cloudLibrary.request : undefined,
-                      )
-                    }
-                    accessibilityRole="button"
-                    accessibilityLabel={`Attach ${pick.fileName} from Library`}
-                    style={{
-                      width: 176,
-                      minHeight: 70,
-                      padding: 12,
-                      borderRadius: 14,
-                      backgroundColor: cardBg,
-                      borderWidth: 1,
-                      borderColor: dividerColor,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: 10,
-                    }}
-                  >
-                    <View
+                {libraryPicks.map((pick) =>
+                  pick.isImage ? (
+                    <PressableBox
+                      key={pick.id}
+                      testID={`add-to-chat-library-image-${pick.id}`}
+                      onPress={() =>
+                        handleAttachFromLibrary(
+                          pick,
+                          cloudLibrary.status === 'ready' ? cloudLibrary.request : undefined,
+                        )
+                      }
+                      accessibilityRole="button"
+                      accessibilityLabel={`Attach ${pick.fileName} from Library`}
                       style={{
-                        width: 34,
-                        height: 34,
-                        borderRadius: 11,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        backgroundColor: themeColors.accentSurface,
+                        width: LIBRARY_PICK_HEIGHT,
+                        height: LIBRARY_PICK_HEIGHT,
+                        borderRadius: 14,
+                        overflow: 'hidden',
+                        backgroundColor: cardBg,
+                        borderWidth: 1,
+                        borderColor: dividerColor,
                       }}
                     >
-                      {pick.isImage ? (
-                        <ImageIcon size={18} color={themeColors.teal} />
-                      ) : (
+                      <LibraryPickPicture pick={pick} />
+                    </PressableBox>
+                  ) : (
+                    <PressableBox
+                      key={pick.id}
+                      onPress={() =>
+                        handleAttachFromLibrary(
+                          pick,
+                          cloudLibrary.status === 'ready' ? cloudLibrary.request : undefined,
+                        )
+                      }
+                      accessibilityRole="button"
+                      accessibilityLabel={`Attach ${pick.fileName} from Library`}
+                      style={{
+                        width: 176,
+                        minHeight: LIBRARY_PICK_HEIGHT,
+                        padding: 12,
+                        borderRadius: 14,
+                        backgroundColor: cardBg,
+                        borderWidth: 1,
+                        borderColor: dividerColor,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 10,
+                      }}
+                    >
+                      <View
+                        style={{
+                          width: 34,
+                          height: 34,
+                          borderRadius: 11,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          backgroundColor: themeColors.accentSurface,
+                        }}
+                      >
                         <FileText size={18} color={themeColors.teal} />
-                      )}
-                    </View>
-                    <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text
-                        numberOfLines={2}
-                        style={{
-                          color: themeColors.textPrimary,
-                          fontSize: typeScale.footnote,
-                          fontWeight: '600',
-                        }}
-                      >
-                        {pick.fileName}
-                      </Text>
-                      <Text
-                        numberOfLines={1}
-                        style={{
-                          color: themeColors.textMuted,
-                          fontSize: typeScale.caption,
-                          marginTop: 3,
-                        }}
-                      >
-                        {pick.subtitle}
-                      </Text>
-                    </View>
-                  </PressableBox>
-                ))}
+                      </View>
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text
+                          numberOfLines={2}
+                          style={{
+                            color: themeColors.textPrimary,
+                            fontSize: typeScale.footnote,
+                            fontWeight: '600',
+                          }}
+                        >
+                          {pick.fileName}
+                        </Text>
+                        <Text
+                          numberOfLines={1}
+                          style={{
+                            color: themeColors.textMuted,
+                            fontSize: typeScale.caption,
+                            marginTop: 3,
+                          }}
+                        >
+                          {pick.subtitle}
+                        </Text>
+                      </View>
+                    </PressableBox>
+                  ),
+                )}
               </ScrollView>
             )}
           </View>

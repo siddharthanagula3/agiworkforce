@@ -333,6 +333,16 @@ impl Desktop {
                 palette,
                 cx,
             ));
+            let mut writes = Vec::new();
+            if crate::cloud_new_chat_defaults::attempt(
+                crate::cloud_new_chat_defaults::current(),
+                &mut writes,
+            )
+            .is_err()
+                && writes.is_empty()
+            {
+                panel = panel.child(gpui::text!(crate::cloud_new_chat_defaults::UNAVAILABLE));
+            }
         }
         let project_id = self
             .cloud
@@ -737,6 +747,7 @@ impl Desktop {
                 palette,
                 cx,
             ));
+            footer = footer.children(self.capture_composer_controls(palette, cx));
         }
         if self.cloud.pending_turn.is_some() && self.cloud.turn.is_none() && !self.cloud.loading {
             footer = footer.child(self.compact_button(
@@ -793,8 +804,12 @@ impl Desktop {
             footer = footer.child(self.render_cloud_model_select(palette, cx));
         }
         Some(
-            crate::native_frame::footer(footer.into_any_element(), &self.contracts)
-                .into_any_element(),
+            crate::native_frame::footer(
+                self.capture_drop_target(footer, palette, cx)
+                    .into_any_element(),
+                &self.contracts,
+            )
+            .into_any_element(),
         )
     }
 }

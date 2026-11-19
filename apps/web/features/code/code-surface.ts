@@ -529,15 +529,6 @@ export function continueLocalSessionInVsCodeHref(session: {
   }
 }
 
-const SHELL_SAFE_ARGUMENT = /^[A-Za-z0-9._:-]+$/;
-
-export function localSessionResumeCommand(sessionId: string): string {
-  const argument = SHELL_SAFE_ARGUMENT.test(sessionId)
-    ? sessionId
-    : `'${sessionId.replace(/'/g, `'\\''`)}'`;
-  return `agi --resume ${argument}`;
-}
-
 export function parseExtraHosts(value: string): string[] {
   return value
     .split(',')

@@ -81,7 +81,7 @@ describe('Office markup extraction keeps its output for well-formed documents', 
     expect(text).toMatchInlineSnapshot(`
       "## Sheet: Q3 & Q4
       Row 1: A: Region | B: Total
-      Row 2: A: North & South <East> AB | B: 1500.5 | C: =B2*2 (3001)
+      Row 2: A: North & South <East> AB | B: 1500.5 | C: =B2*2 (3001) | D: not calculated
       Row 3: A: Inline & plain | B: =CONCATENATE(A3,"x") (Inline&x)
       Row 5: B: 7
       Row 7: E: Línea 3 ✓
@@ -100,12 +100,12 @@ describe('Office markup extraction keeps its output for well-formed documents', 
     expect(table).toMatchInlineSnapshot(`
       {
         "complete": false,
-        "csv": ""Region","Total","",""
-      "North & South <East> AB","1500.5","3001",""
-      "Inline & plain","Inline&x","",""
-      "","7","",""
-      "","","","Línea 3 ✓"
-      "=SUM(B2:B5)","","",""",
+        "csv": ""Region","Total","","",""
+      "North & South <East> AB","1500.5","3001","not calculated",""
+      "Inline & plain","Inline&x","","",""
+      "","7","","",""
+      "","","","","Línea 3 ✓"
+      "=SUM(B2:B5)","","","",""",
       }
     `);
   });
@@ -377,13 +377,20 @@ describe('Office markup extraction reads empty elements and unusual references',
     );
   });
 
-  it('keeps a numeric entity that is not a character as literal text', async () => {
+  it('refuses a numeric entity outside Unicode with a RangeError rather than reading on', async () => {
     const deck = await archive({
-      'ppt/slides/slide1.xml': `${XML_HEAD}<p:sld><a:p><a:r><a:t>a&#99999999;b &#1114112;c &#xD800;d &#xDFFF;e &#x10FFFF;f &#65;</a:t></a:r></a:p></p:sld>`,
+      'ppt/slides/slide1.xml': `${XML_HEAD}<p:sld><a:p><a:r><a:t>a&#99999999;b &#1114112;c</a:t></a:r></a:p></p:sld>`,
+    });
+    await expect(extractOfficeDocumentText(deck, 'entities.pptx', 'pptx')).rejects.toThrow(
+      RangeError,
+    );
+  });
+
+  it('decodes the highest code point and a plain numeric entity', async () => {
+    const deck = await archive({
+      'ppt/slides/slide1.xml': `${XML_HEAD}<p:sld><a:p><a:r><a:t>e &#x10FFFF;f &#65;</a:t></a:r></a:p></p:sld>`,
     });
     const text = await extractOfficeDocumentText(deck, 'entities.pptx', 'pptx');
-    expect(text).toBe(
-      `## Slide 1\na&#99999999;b &#1114112;c &#xD800;d &#xDFFF;e ${String.fromCodePoint(0x10ffff)}f A`,
-    );
+    expect(text).toBe(`## Slide 1\ne ${String.fromCodePoint(0x10ffff)}f A`);
   });
 });

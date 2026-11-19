@@ -8,6 +8,7 @@ import { API_URL, TIMEOUTS } from '@/lib/constants';
 import { getDeviceId } from '@/lib/deviceId';
 import { storage } from '@/lib/mmkv';
 import { api } from '@/services/api';
+import { ensureCloudSendConsent } from '@/services/llmGate';
 import { secureFetch } from '@/services/secureFetch';
 import {
   assertCloudAccountEpochCurrent,
@@ -148,10 +149,16 @@ async function storeFreshToken(owner: OrdinaryOperationOwner): Promise<void> {
     ),
   );
   assertOrdinaryOwnerCurrent(owner);
+  const replacingEnabledToken = isAskFromSiriEnabled();
   await SecureStore.setItemAsync(ASK_INTENT_KEYCHAIN_KEY, response.token, KEYCHAIN_OPTIONS);
+  if (!replacingEnabledToken && !isOrdinaryOwnerCurrent(owner)) {
+    storage.set(PENDING_REVOKE_KEY, REVOKE_WHOLE_INSTALL);
+    await SecureStore.deleteItemAsync(ASK_INTENT_KEYCHAIN_KEY, KEYCHAIN_OPTIONS);
+  }
   assertOrdinaryOwnerCurrent(owner);
   storage.set(TOKEN_ID_KEY, response.tokenId);
   storage.delete(PENDING_REVOKE_KEY);
+  storage.set(ENABLED_KEY, true);
 }
 
 async function forgetLocalToken(): Promise<void> {
@@ -169,11 +176,10 @@ async function revokePath(tokenId: string | undefined): Promise<string> {
 export async function enableAskFromSiri(): Promise<void> {
   if (!askFromSiriSupported()) return;
   const owner = captureOrdinaryOwner();
+  await ensureCloudSendConsent();
   await enqueueOrdinaryOperation(owner, async () => {
     assertCloudAccountEpochCurrent(owner.account);
     await storeFreshToken(owner);
-    assertOrdinaryOwnerCurrent(owner);
-    storage.set(ENABLED_KEY, true);
   });
 }
 
@@ -184,7 +190,11 @@ export async function disableAskFromSiri(): Promise<void> {
     try {
       const path = await revokePath(tokenId);
       assertOrdinaryOwnerCurrent(owner);
-      await api.delete<unknown>(path, { accountEpoch: owner.account });
+      await api.delete<unknown>(path, {
+        accountEpoch: owner.account,
+        timeout: TIMEOUTS.SIGN_OUT_CLEANUP,
+        withdrawalControl: true,
+      });
       assertOrdinaryOwnerCurrent(owner);
       storage.delete(PENDING_REVOKE_KEY);
     } catch (error) {
@@ -196,6 +206,56 @@ export async function disableAskFromSiri(): Promise<void> {
       if (isOrdinaryOwnerCurrent(owner)) await forgetLocalToken();
     }
   });
+}
+
+let publishingWhenForgotten: Promise<void> | null = null;
+
+async function keychainMayHoldToken(): Promise<boolean> {
+  try {
+    return (
+      typeof (await SecureStore.getItemAsync(ASK_INTENT_KEYCHAIN_KEY, KEYCHAIN_OPTIONS)) ===
+      'string'
+    );
+  } catch {
+    return true;
+  }
+}
+
+export async function forgetAskFromSiriOnDevice(): Promise<void> {
+  if (!askFromSiriSupported()) return;
+  lifecycleGeneration += 1;
+  rotationAttempt = null;
+  rotatedOwner = null;
+  publishingWhenForgotten = ordinaryTail;
+  const recordedToken =
+    isAskFromSiriEnabled() ||
+    readString(TOKEN_ID_KEY) !== undefined ||
+    readString(PENDING_REVOKE_KEY) !== undefined;
+  if (recordedToken) storage.set(PENDING_REVOKE_KEY, REVOKE_WHOLE_INSTALL);
+  storage.delete(TOKEN_ID_KEY);
+  if (!recordedToken && (await keychainMayHoldToken())) {
+    storage.set(PENDING_REVOKE_KEY, REVOKE_WHOLE_INSTALL);
+  }
+  await SecureStore.deleteItemAsync(ASK_INTENT_KEYCHAIN_KEY, KEYCHAIN_OPTIONS);
+  storage.set(ENABLED_KEY, false);
+}
+
+export async function revokeForgottenAskFromSiri(): Promise<void> {
+  const publishing = publishingWhenForgotten;
+  publishingWhenForgotten = null;
+  if (publishing) {
+    await publishing;
+    await SecureStore.deleteItemAsync(ASK_INTENT_KEYCHAIN_KEY, KEYCHAIN_OPTIONS);
+  }
+  const account = captureCloudAccountEpoch();
+  if (account === null || readString(PENDING_REVOKE_KEY) !== REVOKE_WHOLE_INSTALL) return;
+  const generation = lifecycleGeneration;
+  await api.delete<unknown>(await revokePath(REVOKE_WHOLE_INSTALL), {
+    accountEpoch: account,
+    timeout: TIMEOUTS.SIGN_OUT_CLEANUP,
+    withdrawalControl: true,
+  });
+  if (generation === lifecycleGeneration) storage.delete(PENDING_REVOKE_KEY);
 }
 
 export async function settleAskIntentOnLaunch(): Promise<void> {

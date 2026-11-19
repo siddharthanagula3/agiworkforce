@@ -5,6 +5,7 @@ import {
   buildWorkspaceAccessGateResponse,
   buildWorkspaceFeatureGateResponse,
 } from '@/lib/managed-compute-gate';
+import { refuseBlockedSchedulePrompt } from './prompt-secret-policy';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -118,6 +119,7 @@ async function handleCreateSchedule(request: NextRequest) {
   );
   if (featureGate) return featureGate;
   const body = await requestObject(request);
+  await refuseBlockedSchedulePrompt(userId, body);
 
   try {
     const schedule = await db.transaction(async (tx) => {

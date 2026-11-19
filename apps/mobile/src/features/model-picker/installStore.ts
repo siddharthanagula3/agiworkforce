@@ -8,7 +8,9 @@ import {
   hasRunnableGgufArtifacts,
   hasSufficientRAMForMultimodal,
   isMultimodalModel,
+  refreshCapabilities,
   tier2LoadModel,
+  type DeviceCapabilities,
 } from '@agiworkforce/local-llm';
 import type { ExecutorchPreset, OnDeviceModel } from '@agiworkforce/types';
 import {
@@ -21,6 +23,7 @@ import {
   assertDownloadAllowed,
   cancelDownload,
   downloadModel,
+  excludeModelFilesFromBackup,
   ModelDownloadError,
 } from '@/services/modelDownload';
 import type { ModelDownloadErrorKind } from '@/services/modelDownload';
@@ -31,9 +34,24 @@ import {
   recordInstalledModel,
 } from '@/storage/installedModels';
 import type { InstalledModel } from '@/storage/types';
-import { isAutoMode, isCloudManagedModelId } from './service';
+import {
+  DEFAULT_LOCAL_MODEL_ID,
+  getSelectableModelById,
+  isAutoMode,
+  isCloudManagedModelId,
+} from './service';
 import type { ModelDef } from './service';
 import { useModelStore } from './store';
+import {
+  isTemporarySystemModelState,
+  platformSystemModelId,
+  readSystemModelNativeStatus,
+  settleSystemModelState,
+  systemModelState,
+  systemModelUnavailableNote,
+  useSystemModelSession,
+  type UnusableSystemModelState,
+} from './systemModelAvailability';
 
 export type ModelInstallStatus =
   'ready' | 'download_required' | 'downloading' | 'failed' | 'unavailable' | 'locked';
@@ -72,6 +90,7 @@ export interface ModelInstallJob {
 interface ModelInstallState {
   installedModelIds: string[];
   readySystemModelIds: string[];
+  systemModelStates: Record<string, UnusableSystemModelState>;
   totalRAMMB: number | null;
   allowCellularDownloads: boolean;
   jobs: Record<string, ModelInstallJob>;
@@ -114,10 +133,21 @@ function isBuiltIn(model: ModelDef): boolean {
   return model.surface === 'local' && (model.fileSizeBytes ?? 0) <= 0;
 }
 
+const SYSTEM_MODEL_NOT_CHECKED = 'This system model is not available on this device yet.';
+
+function systemModelNote(
+  model: ModelDef,
+  systemModelStates: Record<string, UnusableSystemModelState>,
+): string {
+  const state = systemModelStates[model.id];
+  return state ? systemModelUnavailableNote(state, model.name) : SYSTEM_MODEL_NOT_CHECKED;
+}
+
 function defaultStatusForModel(
   model: ModelDef,
   installedModelIds: string[],
   readySystemModelIds: string[],
+  systemModelStates: Record<string, UnusableSystemModelState>,
   totalRAMMB: number | null,
 ): ModelInstallJob {
   if (model.availability === 'locked') {
@@ -135,7 +165,7 @@ function defaultStatusForModel(
     return {
       status: 'unavailable',
       progress: 0,
-      error: 'This system model is not available on this device yet.',
+      error: systemModelNote(model, systemModelStates),
     };
   }
 
@@ -221,33 +251,110 @@ export function pickReadyLocalModelId(
   return readySystemModelIds[0] ?? installedModelIds[0] ?? null;
 }
 
-// Resolve the local model to run now: the given id when it is on disk, else a
-// ready one.
-export function readyLocalModelIdOr(fallbackModelId: string): string {
-  const { installedModelIds, readySystemModelIds, jobs } = useModelInstallStore.getState();
+type LocalReadiness = Pick<
+  ModelInstallState,
+  'installedModelIds' | 'readySystemModelIds' | 'systemModelStates' | 'jobs'
+>;
+
+// A system model that was checked and cannot answer is not on this device in
+// any useful sense, so it gives way even when nothing else is ready.
+function readyLocalReplacement(modelId: string, readiness: LocalReadiness): string | null {
   return (
     pickReadyLocalModelId(
-      fallbackModelId,
-      installedModelIds,
-      readySystemModelIds,
-      jobs[fallbackModelId]?.status === 'downloading',
-    ) ?? fallbackModelId
+      modelId,
+      readiness.installedModelIds,
+      readiness.readySystemModelIds,
+      readiness.jobs[modelId]?.status === 'downloading',
+    ) ?? (readiness.systemModelStates[modelId] ? DEFAULT_LOCAL_MODEL_ID : null)
   );
 }
 
-function activateReadyLocalModel(
-  installedModelIds: readonly string[],
-  readySystemModelIds: readonly string[],
-  jobs: Record<string, ModelInstallJob>,
-): void {
-  const { selectedModel, setModel } = useModelStore.getState();
-  const replacement = pickReadyLocalModelId(
-    selectedModel,
-    installedModelIds,
-    readySystemModelIds,
-    jobs[selectedModel]?.status === 'downloading',
-  );
-  if (replacement) setModel(replacement);
+// Resolve the local model to run now: the given id when it is on disk, else a
+// ready one.
+export function readyLocalModelIdOr(fallbackModelId: string): string {
+  return readyLocalReplacement(fallbackModelId, useModelInstallStore.getState()) ?? fallbackModelId;
+}
+
+// A system model that is only turned off or still preparing stays the person's
+// choice for new chats; this chat moves to a model that can answer now.
+function moveOffLocalModel(modelId: string, readiness: LocalReadiness): void {
+  const replacement = readyLocalReplacement(modelId, readiness);
+  if (!replacement) return;
+  const models = useModelStore.getState();
+  const remembered = models.newChatModels.local;
+  models.setModel(replacement);
+  const state = readiness.systemModelStates[modelId];
+  if (state && isTemporarySystemModelState(state) && remembered === modelId) {
+    useModelStore.setState((current) => ({
+      newChatModels: { ...current.newChatModels, local: modelId },
+    }));
+  }
+}
+
+function activateReadyLocalModel(readiness: LocalReadiness): void {
+  moveOffLocalModel(useModelStore.getState().selectedModel, readiness);
+}
+
+// Subscribed on first use, not at import: the model store's own imports reach
+// this module before that store exists.
+let followingLocalModelSelection = false;
+
+function followLocalModelSelection(): void {
+  if (followingLocalModelSelection) return;
+  followingLocalModelSelection = true;
+  useModelStore.subscribe((state, previous) => {
+    if (state.selectedModel === previous.selectedModel || state.conversationModelShown) return;
+    const readiness = useModelInstallStore.getState();
+    if (readiness.systemModelStates[state.selectedModel]) {
+      moveOffLocalModel(state.selectedModel, readiness);
+    }
+  });
+}
+
+async function systemModelStatesFor(cachedCaps: DeviceCapabilities | null): Promise<{
+  caps: DeviceCapabilities | null;
+  states: Record<string, UnusableSystemModelState>;
+}> {
+  const modelId = platformSystemModelId();
+  const model = modelId ? getSelectableModelById(modelId) : undefined;
+  if (!model) return { caps: cachedCaps, states: {} };
+  let caps = cachedCaps;
+  try {
+    caps = await refreshCapabilities();
+  } catch {
+    caps = cachedCaps;
+  }
+  const checked =
+    systemModelState(model.id, caps, null) === 'ready'
+      ? 'ready'
+      : systemModelState(model.id, caps, await readSystemModelNativeStatus());
+  const state = settleSystemModelState(model.id, checked);
+  return { caps, states: state === 'ready' ? {} : { [model.id]: state } };
+}
+
+function withdrawFailedSystemModel(modelId: string): void {
+  const model = getSelectableModelById(modelId);
+  if (!model) return;
+  followLocalModelSelection();
+  useModelInstallStore.setState((state) => {
+    const { [modelId]: _removed, ...jobs } = state.jobs;
+    return {
+      installedModelIds: state.installedModelIds.filter((id) => id !== modelId),
+      readySystemModelIds: state.readySystemModelIds.filter((id) => id !== modelId),
+      systemModelStates: { ...state.systemModelStates, [modelId]: 'failed' },
+      jobs,
+    };
+  });
+  const models = useModelStore.getState();
+  const replacement = readyLocalReplacement(modelId, useModelInstallStore.getState());
+  if (!replacement) return;
+  if (models.selectedModel === modelId && !models.conversationModelShown) {
+    models.setModel(replacement);
+    return;
+  }
+  if (models.newChatModels.local === modelId) {
+    useModelStore.setState({ newChatModels: { ...models.newChatModels, local: replacement } });
+  }
 }
 
 export const useModelInstallStore = create<ModelInstallState>()(
@@ -255,6 +362,7 @@ export const useModelInstallStore = create<ModelInstallState>()(
     (set, get) => ({
       installedModelIds: [],
       readySystemModelIds: [],
+      systemModelStates: {},
       totalRAMMB: null,
       allowCellularDownloads: false,
       jobs: {},
@@ -265,21 +373,32 @@ export const useModelInstallStore = create<ModelInstallState>()(
       },
 
       hydrateInstalledModels: async () => {
-        const [recorded, caps] = await Promise.all([
+        followLocalModelSelection();
+        void excludeModelFilesFromBackup();
+        const [recorded, cachedCaps] = await Promise.all([
           listInstalledModels().catch(() => []),
           getCapabilities().catch(() => null),
         ]);
         const installed = await liveInstalledModels(recorded).catch(() => recorded);
+        const { caps, states: systemModelStates } = await systemModelStatesFor(cachedCaps);
         const systemModel = getSystemModelForTier1Runtime(caps?.tier1Runtime ?? null);
-        const readySystemModelIds = systemModel ? [systemModel.id] : [];
+        const readySystemModelIds =
+          systemModel && !systemModelStates[systemModel.id] ? [systemModel.id] : [];
         const installedModelIds = installed.map((model) => model.id);
-        set({
-          installedModelIds,
-          readySystemModelIds,
-          totalRAMMB: caps?.totalRAMMB ?? null,
+        set((state) => {
+          const jobs = { ...state.jobs };
+          for (const modelId of Object.keys(systemModelStates)) delete jobs[modelId];
+          for (const modelId of readySystemModelIds) delete jobs[modelId];
+          return {
+            installedModelIds,
+            readySystemModelIds,
+            systemModelStates,
+            jobs,
+            totalRAMMB: cachedCaps?.totalRAMMB ?? caps?.totalRAMMB ?? null,
+          };
         });
         pushCellularConsentToNative(get().allowCellularDownloads);
-        activateReadyLocalModel(installedModelIds, readySystemModelIds, get().jobs);
+        activateReadyLocalModel(get());
       },
 
       prepareModel: async (model, observer) => {
@@ -312,7 +431,7 @@ export const useModelInstallStore = create<ModelInstallState>()(
         if (isBuiltIn(model)) {
           const isReady = get().readySystemModelIds.includes(model.id);
           if (!isReady) {
-            const error = 'This system model is not available on this device yet.';
+            const error = systemModelNote(model, get().systemModelStates);
             set((state) => ({
               jobs: { ...state.jobs, [model.id]: { status: 'unavailable', progress: 0, error } },
             }));
@@ -404,6 +523,7 @@ export const useModelInstallStore = create<ModelInstallState>()(
               await deleteExecutorchPresetFiles(preset).catch(() => undefined);
               throw new ModelDownloadError('cancelled', 'Download was cancelled.');
             }
+            await excludeModelFilesFromBackup();
             await recordInstalledModel(installedRecordFor(model));
           } else {
             await installGgufModel(
@@ -474,7 +594,7 @@ export const useModelInstallStore = create<ModelInstallState>()(
             jobs: rest,
           };
         });
-        activateReadyLocalModel(get().installedModelIds, get().readySystemModelIds, get().jobs);
+        activateReadyLocalModel(get());
       },
 
       statusForModel: (model) => {
@@ -484,6 +604,7 @@ export const useModelInstallStore = create<ModelInstallState>()(
             model,
             get().installedModelIds,
             get().readySystemModelIds,
+            get().systemModelStates,
             get().totalRAMMB,
           )
         );
@@ -501,3 +622,9 @@ export const useModelInstallStore = create<ModelInstallState>()(
 );
 
 rehydrateWhenMmkvReady(useModelInstallStore, 'model-install');
+
+useSystemModelSession.subscribe((state, previous) => {
+  for (const modelId of state.failedModelIds) {
+    if (!previous.failedModelIds.includes(modelId)) withdrawFailedSystemModel(modelId);
+  }
+});

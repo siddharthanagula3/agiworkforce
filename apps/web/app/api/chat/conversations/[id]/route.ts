@@ -8,6 +8,8 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { withIsoTimestamps } from '@/lib/server/iso-timestamps';
 import { withClientMessageRole } from '@/lib/server/client-message-role';
+import { withObjectMessageMetadata } from '@/lib/server/message-metadata-repair';
+import { withoutStoredCitationMarkup } from '@/lib/server/stored-assistant-text';
 import { UpdateConversationSchema } from '@/lib/validations/chat';
 import { killE2BSession } from '@/lib/e2b/runtime';
 import { unpublishArtifactsForConversations } from '@/lib/services/published-artifact-service';
@@ -147,9 +149,13 @@ async function handleGetConversation(request: NextRequest, context: RouteContext
 
     const response = NextResponse.json({
       conversation,
-      messages: withIsoTimestamps(messages).map((message) =>
-        ManagedCloudMessageWireSchema.parse(withClientMessageRole(message)),
-      ),
+      messages: withIsoTimestamps(
+        withoutStoredCitationMarkup(
+          messages.map((message) =>
+            withObjectMessageMetadata(message, { userId, conversationId: id }),
+          ),
+        ),
+      ).map((message) => ManagedCloudMessageWireSchema.parse(withClientMessageRole(message))),
       total,
       hasMore,
     });

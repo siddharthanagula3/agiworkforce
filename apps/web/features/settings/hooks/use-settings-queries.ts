@@ -10,6 +10,7 @@ import { useCallback, useEffect, useRef, type ReactElement } from 'react';
 import { useRouter } from 'next/navigation';
 import { signedOutRedirectUrl, useSignOut } from '@/lib/identity/client';
 import { isDesktopHost } from '@/features/desktop-host/lib/host';
+import { useEmbeddedSignInPath } from '@shared/components/layout/EmbeddedPage';
 import {
   useQuery,
   useMutation,
@@ -85,7 +86,16 @@ export interface APIKeyMutationScope {
   readonly onStepUpRequired: () => void;
 }
 
-export class APIKeyMutationRejectedError extends Error {}
+export type APIKeyRefusalRecovery = 'upgrade';
+
+export class APIKeyMutationRejectedError extends Error {
+  readonly recovery: APIKeyRefusalRecovery | null;
+
+  constructor(message: string, recovery: APIKeyRefusalRecovery | null = null) {
+    super(message);
+    this.recovery = recovery;
+  }
+}
 
 async function sendOwnedAPIKeyRequest(
   scope: APIKeyMutationScope,
@@ -116,10 +126,11 @@ async function readOwnedAPIKeyReceipt(
 ): Promise<unknown> {
   scope.request.assertCurrent();
   if (!response.ok) {
-    const message = await readApiError(response);
+    const refusal = await readApiErrorBody(response);
     scope.request.assertCurrent();
+    const message = apiErrorMessage(refusal, response.status);
     if (response.status >= 400 && response.status < 500)
-      throw new APIKeyMutationRejectedError(message);
+      throw new APIKeyMutationRejectedError(message, apiErrorRecovery(refusal));
     throw new Error(message);
   }
   const body: unknown = await response.json();
@@ -502,6 +513,7 @@ export function useDeleteAccount(): UseMutationResult<
   const logout = useAuthStore((s) => s.logout);
   const identitySignOut = useSignOut();
   const router = useRouter();
+  const embeddedSignInPath = useEmbeddedSignInPath();
   const { withStepUp, dialog } = useStepUp();
   const mounted = useRef(true);
   const receiptSession = useRef<SessionAuthority | null>(null);
@@ -576,8 +588,10 @@ export function useDeleteAccount(): UseMutationResult<
     if (!session?.isCurrent()) return;
     // `signedOutRedirectUrl` is what decides where this lands: the marketing
     // home in a browser, the sign-in route inside the desktop shell, which does
-    // not host the marketing site and would open it in a browser instead.
-    const destination = signedOutRedirectUrl(SITE_HOME_PATH, isDesktopHost());
+    // not host the marketing site and would open it in a browser instead. The
+    // account page the phone app opens lands on its own sign-in page, because
+    // the marketing home leads to pricing.
+    const destination = embeddedSignInPath ?? signedOutRedirectUrl(SITE_HOME_PATH, isDesktopHost());
     try {
       await logout({ sessionId: session.sessionId });
       if (authService.isSessionSuperseded(session.sessionId)) return;
@@ -594,7 +608,7 @@ export function useDeleteAccount(): UseMutationResult<
         router.replace(destination ?? SITE_HOME_PATH);
       }
     }
-  }, [logout, identitySignOut, router]);
+  }, [embeddedSignInPath, logout, identitySignOut, router]);
 
   return { ...mutation, signOutAfterDeletion, stepUpDialog: dialog };
 }
@@ -700,7 +714,7 @@ const OrganizationOverviewSchema = z.object({
 });
 
 interface ApiErrorEnvelope {
-  error?: string | { message?: string };
+  error?: string | { message?: string; details?: { recovery?: { action?: unknown } } };
 }
 
 const REQUEST_FAILED = 'The request failed. Please try again.';
@@ -709,14 +723,14 @@ function statusMessage(status: number): string {
   return toUserMessage(Object.assign(new Error(`HTTP ${status}`), { status }), REQUEST_FAILED);
 }
 
-async function readApiError(response: Response): Promise<string> {
-  const fallback = statusMessage(response.status);
-  const body = (await response.json().catch(() => null)) as ApiErrorEnvelope | null;
+async function readApiErrorBody(response: Response): Promise<ApiErrorEnvelope | null> {
+  return (await response.json().catch(() => null)) as ApiErrorEnvelope | null;
+}
+
+function apiErrorMessage(body: ApiErrorEnvelope | null, status: number): string {
+  const fallback = statusMessage(status);
   if (typeof body?.error === 'string' && body.error.trim()) {
-    return toUserMessage(
-      Object.assign(new Error(body.error), { status: response.status }),
-      fallback,
-    );
+    return toUserMessage(Object.assign(new Error(body.error), { status }), fallback);
   }
   if (
     body?.error &&
@@ -724,12 +738,20 @@ async function readApiError(response: Response): Promise<string> {
     typeof body.error.message === 'string' &&
     body.error.message.trim()
   ) {
-    return toUserMessage(
-      Object.assign(new Error(body.error.message), { status: response.status }),
-      fallback,
-    );
+    return toUserMessage(Object.assign(new Error(body.error.message), { status }), fallback);
   }
   return fallback;
+}
+
+function apiErrorRecovery(body: ApiErrorEnvelope | null): APIKeyRefusalRecovery | null {
+  const error = body?.error;
+  return error && typeof error === 'object' && error.details?.recovery?.action === 'upgrade'
+    ? 'upgrade'
+    : null;
+}
+
+async function readApiError(response: Response): Promise<string> {
+  return apiErrorMessage(await readApiErrorBody(response), response.status);
 }
 
 async function fetchOrganizationOverview(): Promise<OrganizationOverview> {

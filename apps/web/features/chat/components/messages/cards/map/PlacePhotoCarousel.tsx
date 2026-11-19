@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import type { PlacesCardPhoto } from '@agiworkforce/types';
-import { placePhotoUrl, PLACE_PHOTO_DETAIL_WIDTH_PX } from '@/lib/maps/place-photo-url';
+import { placePhotoUrl, PLACE_PHOTO_DETAIL_WIDTH_PX } from '@agiworkforce/cloud-contracts';
 import { cn } from '@shared/lib/utils';
 
 interface PlacePhotoCarouselProps {

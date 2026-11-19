@@ -56,10 +56,6 @@ vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
   }),
 }));
 vi.mock('@/lib/server/claimed-user-scope-db', () => ({ createClaimedUserScopedDb: () => ({}) }));
-vi.mock('@/lib/server/side-call-training-policy', async (importOriginal) => ({
-  ...(await importOriginal<ImportedModule6>()),
-  sideCallTrainingOptOut: async () => false,
-}));
 vi.mock('@/lib/services/entitlement-resolution', async (importOriginal) => ({
   ...(await importOriginal<ImportedModule5>()),
   resolveEntitledPlanTier: async () => 'pro',
@@ -336,7 +332,6 @@ type ImportedModule10 = typeof import('@shared/utils/env');
 type ImportedModule9 = typeof import('@/lib/logger');
 type ImportedModule8 = typeof import('@/lib/rate-limit');
 type ImportedModule7 = typeof import('@/lib/server/neon-db');
-type ImportedModule6 = typeof import('@/lib/server/side-call-training-policy');
 type ImportedModule5 = typeof import('@/lib/services/entitlement-resolution');
 type ImportedModule4 = typeof import('@/lib/services/organization-policy-code-gate');
 type ImportedModule3 = typeof import('@/lib/services/organization-policy-gate');

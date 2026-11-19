@@ -10,6 +10,7 @@ import {
   PRIVACY_MODE_DISPLAY,
 } from '@agiworkforce/types';
 import { describe, expect, it } from 'vitest';
+import { CANONICAL_SITE_URL } from '@/lib/seo/site';
 import {
   canUseManagedCloudChatSurface,
   getCloudChatSurfaceCapability,
@@ -916,10 +917,7 @@ function repoText(...segments: string[]): string {
 }
 
 function canonicalSupportUrl(path: string): string {
-  const site = fileText('lib/seo/site.ts');
-  const origin = /NEXT_PUBLIC_APP_URL'\]\s*\?\?\s*'([^']+)'/u.exec(site)?.[1];
-  if (!origin) throw new Error('Missing canonical public origin');
-  return new URL(path, origin).href;
+  return new URL(path, CANONICAL_SITE_URL).href;
 }
 
 describe('/byok, VS Code is named with the release state it actually has', () => {
@@ -1107,8 +1105,8 @@ describe('/byok, custody names the store each runtime really writes to', () => {
 
 describe('/web, the browser surface has one route and it is managed cloud', () => {
   it('reads the single trust mode the web chat route stamps on every turn', () => {
-    const processor = fileText('app/api/llm/v1/chat/completions/lib/request-processor.ts');
-    expect(processor).toMatch(/const MANAGED_WEB_CLOUD_TRUST_MODE = 'managed_cloud';/u);
+    const routing = fileText('lib/server/managed-cloud-routing/routing-request.ts');
+    expect(routing).toMatch(/export const MANAGED_CLOUD_TRUST_MODE = 'managed_cloud';/u);
     expect(fileText('lib/marketing-constants.ts')).toMatch(
       /exclusion: 'Web, Mobile, Desktop and Chrome do not accept provider keys\.'/u,
     );

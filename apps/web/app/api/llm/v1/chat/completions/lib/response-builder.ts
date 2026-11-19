@@ -7,7 +7,7 @@ import { classifyError } from '@agiworkforce/provider-runtime';
 import { secureToken } from '@/lib/secure-random';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { calculateCacheSavings, logCacheAnalytics } from '@/lib/prompt-cache-helper';
-import { recordModelUsage, toOtelAttributes } from '@/lib/cost-tracker';
+import { toOtelAttributes } from '@/lib/cost-tracker';
 import { buildCpstUsageFields } from '@/lib/cpst-telemetry';
 import { getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { settleJsonObjectCompletion, wantsJsonObject } from './json-object-mode';
@@ -20,7 +20,7 @@ import {
 import { compactionUsageFields } from './context-window';
 import { addRouteLaneHeader } from '@/lib/services/free-lane/plan';
 import { FREE_LANE_RECOVERY } from '@/lib/services/free-lane/stage';
-import { describeSecretRedactionNotice } from '@/lib/chat-secret-redaction-notice';
+import { describeSecretRedactionNotice } from '@agiworkforce/cloud-contracts';
 import {
   observeFreeLaneSettlement,
   recordRouteOutcome,
@@ -217,7 +217,6 @@ export async function buildNonStreamResponse(
       cacheCreationInputTokens: llmResponse.cacheCreationInputTokens,
       cacheCreation1hInputTokens: llmResponse.cacheCreation1hInputTokens,
     };
-    recordModelUsage(userId, llmResponse.model, usage, pricedAt);
     logger.info(
       {
         event: 'gen_ai_usage_recorded',
@@ -354,6 +353,7 @@ export async function buildNonStreamResponse(
         provider,
         inputTokens: llmResponse.promptTokens,
         outputTokens: llmResponse.completionTokens,
+        finishReason: llmResponse.finishReason || 'stop',
         truncated: isTurnTruncated({
           reportedFailure: false,
           finishReason: llmResponse.finishReason ?? null,

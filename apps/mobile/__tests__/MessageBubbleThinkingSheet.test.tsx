@@ -106,7 +106,7 @@ jest.mock('@/src/features/chat/components/ToolCallTimeline', () => {
   };
 });
 jest.mock('@/src/features/chat/components/AgentActivityTimeline', () => ({
-  AgentActivityTimeline: () => null,
+  AgentActivityTimeline: ({ reasoning }: { reasoning?: React.ReactNode }) => reasoning ?? null,
 }));
 jest.mock('@/src/features/chat/components/InlineArtifactCard', () => {
   const RN = require('react-native');
@@ -169,7 +169,7 @@ jest.mock('@/src/features/chat/components/PerformanceChip', () => ({
   PerformanceChip: () => null,
 }));
 jest.mock('@/src/features/chat/components/ReportFlagButton', () => ({
-  ReportFlagButton: () => null,
+  ReportSheet: () => null,
 }));
 
 import { MessageBubble } from '@/src/features/chat/components/MessageBubble';

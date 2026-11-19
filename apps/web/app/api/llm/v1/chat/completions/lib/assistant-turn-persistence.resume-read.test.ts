@@ -57,6 +57,31 @@ describe('readPersistedAssistantTurn', () => {
     expect(params).toEqual([MESSAGE_ID, CONVERSATION_ID, USER_ID, ORGANIZATION_ID]);
   });
 
+  it('returns a turn stored with citation markup without it, so the replay offset counts what the client shows', async () => {
+    mocks.query.mockResolvedValue([
+      {
+        content: 'Starship flew. \uE200cite\uE202turn0search0\uE201Next.',
+        model: 'model-under-test',
+        metadata: {},
+      },
+    ]);
+
+    const turn = await read();
+
+    expect(turn?.content).toBe('Starship flew. Next.');
+    expect(turn?.content.slice('Starship flew. '.length)).toBe('Next.');
+  });
+
+  it('leaves a turn the provider filter already cleaned exactly as stored', async () => {
+    mocks.query.mockResolvedValue([
+      { content: 'Starship flew. Next.\n\n- one\n- two', model: 'model-under-test', metadata: {} },
+    ]);
+
+    await expect(read()).resolves.toMatchObject({
+      content: 'Starship flew. Next.\n\n- one\n- two',
+    });
+  });
+
   it('reports a turn the stream never finished as truncated, with its reason', async () => {
     mocks.query.mockResolvedValue([
       {

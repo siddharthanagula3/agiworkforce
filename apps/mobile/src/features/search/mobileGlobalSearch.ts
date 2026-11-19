@@ -55,6 +55,7 @@ export function buildMobileGlobalSearchGroups(input: {
   query: string;
   conversations: ReadonlyArray<ConversationSummary>;
   conversationContentMatchIds: ReadonlySet<string>;
+  conversationContentSnippets?: ReadonlyMap<string, string>;
   projects: ReadonlyArray<SearchableMobileProject>;
   files: ReadonlyArray<SearchableMobileFile>;
   libraryImages: ReadonlyArray<LibraryImage>;
@@ -84,7 +85,8 @@ export function buildMobileGlobalSearchGroups(input: {
           id: conversation.id,
           title: conversation.title || 'Untitled chat',
           subtitle: input.conversationContentMatchIds.has(conversation.id)
-            ? 'Matched message content'
+            ? input.conversationContentSnippets?.get(conversation.id)?.trim() ||
+              'Matched message content'
             : (conversation.lastMessage ?? 'Chat'),
         })),
       remoteChats,

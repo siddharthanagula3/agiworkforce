@@ -1,0 +1,243 @@
+{
+  "protocol": 2,
+  "requests": {
+    "submit": {
+      "jobId": "6f1c2a9e-0d3b-4c1e-9a7f-2b8e5d4c3a10:1",
+      "sourceUrl": "https://storage.example.com/private-bucket/chat-attachments/staging/6f1c2a9e-0d3b-4c1e-9a7f-2b8e5d4c3a10?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=1800&X-Amz-Signature=example",
+      "byteCount": 524288000,
+      "etag": "\"9b2cf535f27731c974343645a3985328-63\"",
+      "mimeType": "application/pdf"
+    },
+    "submitHeaders": {
+      "Authorization": "Bearer <UPLOAD_SCAN_WEBHOOK_TOKEN>",
+      "Content-Type": "application/json"
+    },
+    "poll": { "method": "GET", "path": "/v2/scans/6f1c2a9e-0d3b-4c1e-9a7f-2b8e5d4c3a10:1" },
+    "capability": { "method": "GET", "path": "/v2/capability" }
+  },
+  "answers": {
+    "submitAccepted": {
+      "httpStatus": 202,
+      "retryAfter": null,
+      "body": { "scanId": "6f1c2a9e-0d3b-4c1e-9a7f-2b8e5d4c3a10:1", "deadlineMs": 130000 }
+    },
+    "submitQueueFull": {
+      "httpStatus": 429,
+      "retryAfter": "60",
+      "body": { "reason": "queue_full" }
+    },
+    "submitSourceBudget": {
+      "httpStatus": 429,
+      "retryAfter": "877",
+      "body": { "reason": "source_budget" }
+    },
+    "submitInvalid": {
+      "httpStatus": 400,
+      "retryAfter": null,
+      "body": { "reason": "invalid_request" }
+    },
+    "submitSourceNotAllowed": {
+      "httpStatus": 400,
+      "retryAfter": null,
+      "body": { "reason": "source_not_allowed" }
+    },
+    "submitTooLarge": {
+      "httpStatus": 413,
+      "retryAfter": null,
+      "body": { "reason": "too_large" }
+    },
+    "unauthorized": {
+      "httpStatus": 401,
+      "retryAfter": null,
+      "body": { "reason": "unauthorized" }
+    },
+    "capability": {
+      "httpStatus": 200,
+      "retryAfter": null,
+      "body": { "protocol": 2, "maxSourceScanBytes": 545259520, "queueDepth": 1, "running": 1 }
+    },
+    "pollQueued": {
+      "httpStatus": 200,
+      "retryAfter": null,
+      "body": { "status": "queued", "deadlineMs": 130000 }
+    },
+    "pollScanning": {
+      "httpStatus": 200,
+      "retryAfter": null,
+      "body": { "status": "scanning", "deadlineMs": 130000 }
+    },
+    "pollUnknown": {
+      "httpStatus": 200,
+      "retryAfter": null,
+      "body": { "status": "unknown" }
+    },
+    "pollDoneClean": {
+      "httpStatus": 200,
+      "retryAfter": null,
+      "body": {
+        "status": "done",
+        "deadlineMs": 130000,
+        "verdict": {
+          "jobId": "6f1c2a9e-0d3b-4c1e-9a7f-2b8e5d4c3a10:1",
+          "outcome": "clean",
+          "sha256": "3f8a8b0f2a6c9d4e5b7a1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f",
+          "bytes": 524288000,
+          "etag": "\"9b2cf535f27731c974343645a3985328-63\"",
+          "ms": 61250
+        }
+      }
+    },
+    "pollDoneInfected": {
+      "httpStatus": 200,
+      "retryAfter": null,
+      "body": {
+        "status": "done",
+        "deadlineMs": 130000,
+        "verdict": {
+          "jobId": "6f1c2a9e-0d3b-4c1e-9a7f-2b8e5d4c3a10:1",
+          "outcome": "infected",
+          "sha256": "3f8a8b0f2a6c9d4e5b7a1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f",
+          "bytes": 524288000,
+          "etag": "\"9b2cf535f27731c974343645a3985328-63\"",
+          "ms": 58800
+        }
+      }
+    },
+    "pollDoneEncrypted": {
+      "httpStatus": 200,
+      "retryAfter": null,
+      "body": {
+        "status": "done",
+        "deadlineMs": 130000,
+        "verdict": {
+          "jobId": "6f1c2a9e-0d3b-4c1e-9a7f-2b8e5d4c3a10:1",
+          "outcome": "infected",
+          "reason": "encrypted",
+          "sha256": "3f8a8b0f2a6c9d4e5b7a1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f",
+          "bytes": 524288000,
+          "etag": "\"9b2cf535f27731c974343645a3985328-63\"",
+          "ms": 40210
+        }
+      }
+    },
+    "pollDoneLimitsExceeded": {
+      "httpStatus": 200,
+      "retryAfter": null,
+      "body": {
+        "status": "done",
+        "deadlineMs": 130000,
+        "verdict": {
+          "jobId": "6f1c2a9e-0d3b-4c1e-9a7f-2b8e5d4c3a10:1",
+          "outcome": "infected",
+          "reason": "limits_exceeded",
+          "sha256": "3f8a8b0f2a6c9d4e5b7a1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f",
+          "bytes": 524288000,
+          "etag": "\"9b2cf535f27731c974343645a3985328-63\"",
+          "ms": 97400
+        }
+      }
+    },
+    "pollDoneActivePdf": {
+      "httpStatus": 200,
+      "retryAfter": null,
+      "body": {
+        "status": "done",
+        "deadlineMs": 130000,
+        "verdict": {
+          "jobId": "6f1c2a9e-0d3b-4c1e-9a7f-2b8e5d4c3a10:1",
+          "outcome": "infected",
+          "reason": "active_pdf",
+          "sha256": "3f8a8b0f2a6c9d4e5b7a1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f",
+          "bytes": 524288000,
+          "etag": "\"9b2cf535f27731c974343645a3985328-63\"",
+          "ms": 62030
+        }
+      }
+    },
+    "pollDoneSizeMismatch": {
+      "httpStatus": 200,
+      "retryAfter": null,
+      "body": {
+        "status": "done",
+        "deadlineMs": 130000,
+        "verdict": {
+          "jobId": "6f1c2a9e-0d3b-4c1e-9a7f-2b8e5d4c3a10:1",
+          "outcome": "infected",
+          "reason": "size_mismatch",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 524288001,
+          "etag": "\"9b2cf535f27731c974343645a3985328-63\"",
+          "ms": 30110
+        }
+      }
+    },
+    "pollDoneDeadline": {
+      "httpStatus": 200,
+      "retryAfter": null,
+      "body": {
+        "status": "done",
+        "deadlineMs": 130000,
+        "verdict": {
+          "jobId": "6f1c2a9e-0d3b-4c1e-9a7f-2b8e5d4c3a10:1",
+          "outcome": "incomplete",
+          "reason": "deadline",
+          "sha256": "3f8a8b0f2a6c9d4e5b7a1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f",
+          "bytes": 524288000,
+          "etag": "\"9b2cf535f27731c974343645a3985328-63\"",
+          "ms": 130000
+        }
+      }
+    },
+    "pollDoneSourceUnavailable": {
+      "httpStatus": 200,
+      "retryAfter": null,
+      "body": {
+        "status": "done",
+        "deadlineMs": 130000,
+        "verdict": {
+          "jobId": "6f1c2a9e-0d3b-4c1e-9a7f-2b8e5d4c3a10:1",
+          "outcome": "incomplete",
+          "reason": "source_unavailable",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0,
+          "etag": "",
+          "ms": 212
+        }
+      }
+    },
+    "pollDoneSourceChanged": {
+      "httpStatus": 200,
+      "retryAfter": null,
+      "body": {
+        "status": "done",
+        "deadlineMs": 130000,
+        "verdict": {
+          "jobId": "6f1c2a9e-0d3b-4c1e-9a7f-2b8e5d4c3a10:1",
+          "outcome": "incomplete",
+          "reason": "source_changed",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0,
+          "etag": "",
+          "ms": 198
+        }
+      }
+    },
+    "pollDoneScanFailed": {
+      "httpStatus": 200,
+      "retryAfter": null,
+      "body": {
+        "status": "done",
+        "deadlineMs": 130000,
+        "verdict": {
+          "jobId": "6f1c2a9e-0d3b-4c1e-9a7f-2b8e5d4c3a10:1",
+          "outcome": "incomplete",
+          "reason": "scan_failed",
+          "sha256": "3f8a8b0f2a6c9d4e5b7a1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f",
+          "bytes": 524288000,
+          "etag": "\"9b2cf535f27731c974343645a3985328-63\"",
+          "ms": 2040
+        }
+      }
+    }
+  }
+}

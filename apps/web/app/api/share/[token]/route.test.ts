@@ -235,6 +235,57 @@ describe('GET /api/share/[token] after revocation', () => {
   });
 });
 
+describe('GET /api/share/[token] stored citation markup', () => {
+  const markup = '\uE200cite\uE202turn0search0\uE201';
+  const stored = [
+    { id: 'm1', role: 'user', content: `Quote ${markup} as typed` },
+    { id: 'm2', role: 'assistant', content: `Revenue grew.${markup} See notes.` },
+  ];
+  const served = [stored[0], { id: 'm2', role: 'assistant', content: 'Revenue grew. See notes.' }];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.rateLimit.mockResolvedValue(null);
+    mocks.query.mockResolvedValue([]);
+    mocks.cookieReader.mockResolvedValue(null);
+    mocks.lockdown.mockResolvedValue(undefined);
+  });
+
+  it('serves a public share written before cleaning without markup and leaves the user text as stored', async () => {
+    mocks.query.mockResolvedValue([
+      { token: TOKEN, title: 'Planning', messages: stored, total_messages: 2, expires_at: FUTURE },
+    ]);
+
+    const response = await get();
+
+    expect(response.status).toBe(200);
+    expect((await response.json()).messages).toEqual(served);
+  });
+
+  it('serves a workspace share the same way', async () => {
+    mocks.cookieReader.mockResolvedValue({ db: { query: mocks.scopedQuery }, userId: 'member' });
+    mocks.scopedQuery
+      .mockResolvedValueOnce([
+        {
+          id: 'share-1',
+          owner_id: 'owner-1',
+          token: TOKEN,
+          title: 'Shared',
+          visibility: 'organization',
+          messages: stored,
+          total_messages: 2,
+          expires_at: FUTURE,
+        },
+      ])
+      .mockResolvedValueOnce([{ organization_id: ORG }]);
+
+    const response = await get();
+
+    expect(response.status).toBe(200);
+    expect((await response.json()).messages).toEqual(served);
+  });
+});
+
 describe('GET /api/share/[token] authenticated fallback', () => {
   beforeEach(() => {
     vi.clearAllMocks();

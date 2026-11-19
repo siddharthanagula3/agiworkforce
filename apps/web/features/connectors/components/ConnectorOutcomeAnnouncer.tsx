@@ -2,9 +2,9 @@
 
 import { useEffect, useRef } from 'react';
 import { toast } from 'sonner';
+import { connectorOutcomeNotice } from '@agiworkforce/cloud-contracts';
 
 import { useConnectors, connectorDisplayName } from '../hooks/use-connectors';
-import { connectorOutcomeNotice } from '../lib/connector-outcome';
 
 /**
  * Mounting useConnectors is what announces a finished authorization: the hook

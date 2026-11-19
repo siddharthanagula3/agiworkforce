@@ -1,6 +1,13 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import {
+  CLIENT_CAPABILITIES_REQUEST_HEADER,
+  LARGE_CHAT_FILES_CAPABILITY,
+  MAX_CHAT_ATTACHMENT_BYTES,
+  hasClientCapability,
+} from '@agiworkforce/cloud-contracts';
 import { recordEgressBytes } from '@/lib/services/infrastructure-cost';
 import {
   assertDownloadAllowance,
@@ -11,7 +18,16 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { getActiveWorkspaceMediaAssetById } from '@/lib/server/media-assets';
 import { getUserScopedDb } from '@/lib/server/rls-db';
-import { isMediaStorageConfigured, streamStoredMedia } from '@/lib/server/media-storage';
+import {
+  isMediaStorageConfigured,
+  isSealedPrivateChatAttachmentPathname,
+  streamStoredMedia,
+} from '@/lib/server/media-storage';
+import {
+  getPresignedPrivateDownloadUrl,
+  headPrivateObject,
+  isPrivateObjectStorageConfigured,
+} from '@/lib/server/object-storage';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { servedByteHeaders } from '@/lib/security/served-bytes';
 import {
@@ -29,6 +45,10 @@ type RouteContext = { params: Promise<{ id: string }> };
 const MAX_SERVE_BYTES = 30 * 1024 * 1024;
 const MAX_VIDEO_SERVE_BYTES = 256 * 1024 * 1024;
 const AUTHENTICATED_MEDIA_CACHE_CONTROL = 'private, no-store';
+const LARGE_FILE_REDIRECT_TTL_SECONDS = 300;
+const LARGE_FILE_DOWNLOAD_CONTENT_TYPE = 'application/octet-stream';
+const CHAT_ATTACHMENT_SOURCE = 'chat-attachment';
+const PDF_PREVIEW_TOO_LARGE_MESSAGE = 'This PDF is too large to preview. Download it to open it.';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -95,6 +115,82 @@ function payloadTooLarge(): NextResponse {
   );
 }
 
+function previewTooLarge(): NextResponse {
+  return NextResponse.json(
+    { error: { code: 'preview_too_large', message: PDF_PREVIEW_TOO_LARGE_MESSAGE } },
+    { status: 413 },
+  );
+}
+
+interface StoredChatFile {
+  userId: string;
+  byteSize: number | null;
+  storagePathname: string | null;
+  metadata: Record<string, unknown>;
+}
+
+interface SealedLargeChatFile extends StoredChatFile {
+  byteSize: number;
+  storagePathname: string;
+}
+
+function isSealedLargeChatFile(
+  asset: StoredChatFile,
+  userId: string,
+): asset is SealedLargeChatFile {
+  return (
+    asset.userId === userId &&
+    asset.metadata['source'] === CHAT_ATTACHMENT_SOURCE &&
+    asset.byteSize != null &&
+    asset.byteSize > MAX_CHAT_ATTACHMENT_BYTES &&
+    asset.storagePathname != null &&
+    isSealedPrivateChatAttachmentPathname(asset.storagePathname)
+  );
+}
+
+function acceptsLargeFileRedirect(request: NextRequest): boolean {
+  return (
+    (request.headers.get('sec-fetch-mode') === 'navigate' && !request.headers.has('sec-purpose')) ||
+    hasClientCapability(
+      request.headers.get(CLIENT_CAPABILITIES_REQUEST_HEADER),
+      LARGE_CHAT_FILES_CAPABILITY,
+    )
+  );
+}
+
+async function redirectToLargeChatFile(
+  request: NextRequest,
+  scope: { db: DatabaseAdapter; userId: string },
+  asset: SealedLargeChatFile,
+  spendsAllowance: boolean,
+): Promise<NextResponse> {
+  const head = await headPrivateObject(asset.storagePathname);
+  if (!head) throw createError.notFound('File bytes are not available');
+  if (head.contentLength !== asset.byteSize) {
+    throw createError.internal('Stored file bytes did not match the authenticated asset.');
+  }
+  if (spendsAllowance) {
+    await assertDownloadAllowance({ db: scope.db, userId: scope.userId, bytes: asset.byteSize });
+  }
+  const url = await getPresignedPrivateDownloadUrl({
+    key: asset.storagePathname,
+    fileName: safeFilename(asset.metadata['filename']),
+    expiresInSeconds: LARGE_FILE_REDIRECT_TTL_SECONDS,
+    contentType: LARGE_FILE_DOWNLOAD_CONTENT_TYPE,
+  });
+  recordEgressBytes({
+    userId: scope.userId,
+    bytes: asset.byteSize,
+    surface: resolveProductAnalyticsSurface(request),
+    provider: 'object_storage',
+    downloadAllowanceExempt: !spendsAllowance,
+  });
+  return NextResponse.redirect(url, {
+    status: 302,
+    headers: { 'Cache-Control': AUTHENTICATED_MEDIA_CACHE_CONTROL },
+  });
+}
+
 async function handleGetFile(request: NextRequest, context: RouteContext): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'files-serve');
   if (rateLimitResponse) return rateLimitResponse;
@@ -128,6 +224,17 @@ async function handleGetFile(request: NextRequest, context: RouteContext): Promi
   const isVideo = asset.mimeType.toLowerCase().startsWith('video/');
   const serveCap = isVideo ? MAX_VIDEO_SERVE_BYTES : MAX_SERVE_BYTES;
   if (asset.byteSize != null && asset.byteSize > serveCap) {
+    if (!isVideo && isSealedLargeChatFile(asset, userId)) {
+      if (isPdfPreview) return previewTooLarge();
+      if (acceptsLargeFileRedirect(request) && isPrivateObjectStorageConfigured()) {
+        return redirectToLargeChatFile(
+          request,
+          { db, userId },
+          asset,
+          downloadSpendsAllowance(asset, userId),
+        );
+      }
+    }
     return payloadTooLarge();
   }
 

@@ -36,7 +36,6 @@ vi.mock('@/lib/prompt-cache-helper', async (importOriginal) => ({
 }));
 vi.mock('@/lib/cost-tracker', async (importOriginal) => ({
   ...(await importOriginal<ScanModule4>()),
-  recordModelUsage: vi.fn(),
   toOtelAttributes: () => ({}),
 }));
 vi.mock('@/lib/services/free-lane/runtime-state-service', async (importOriginal) => ({
@@ -132,5 +131,13 @@ describe('buildNonStreamResponse, a turn with nothing in it', () => {
 
   it('records a real answer as complete', async () => {
     expect(await persistedTurn('Here it is.', 'stop')).toMatchObject({ truncated: false });
+  });
+});
+
+describe('buildNonStreamResponse, the finish reason stored with the turn', () => {
+  it('stores the finish reason the response carries', async () => {
+    expect(await persistedTurn('Here it is, cut', 'length')).toMatchObject({
+      finishReason: 'length',
+    });
   });
 });

@@ -5,6 +5,8 @@ import {
   CONNECTOR_TOOL_PERMISSION_LEVELS,
   type OrganizationRole,
 } from '@agiworkforce/types';
+import { managedCloudConversationPath } from './conversations';
+import { TOOL_APPROVAL_RISK_TIERS } from './tool-approval-resume';
 
 export {
   CONNECTOR_HEALTH_STATES,
@@ -573,6 +575,51 @@ export const DeleteConnectorToolPermissionsResponseSchema = z.object({
 export type DeleteConnectorToolPermissionsResponse = z.infer<
   typeof DeleteConnectorToolPermissionsResponseSchema
 >;
+
+export function conversationToolGrantsPath(conversationId: string): string {
+  return `${managedCloudConversationPath(conversationId)}/tool-grants`;
+}
+
+export function conversationToolGrantPath(conversationId: string, grantId: string): string {
+  return `${conversationToolGrantsPath(conversationId)}/${encodeURIComponent(grantId)}`;
+}
+
+export const ConversationToolGrantSchema = z.object({
+  id: z.string().uuid(),
+  connectorId: PermissionNameSchema,
+  toolName: PermissionNameSchema,
+  riskTier: z.enum(TOOL_APPROVAL_RISK_TIERS),
+  destructive: z.boolean(),
+  grantedAt: z.string().datetime({ offset: true }),
+});
+export type ConversationToolGrant = z.infer<typeof ConversationToolGrantSchema>;
+
+export const ListConversationToolGrantsResponseSchema = z.object({
+  grants: z.array(ConversationToolGrantSchema),
+});
+export type ListConversationToolGrantsResponse = z.infer<
+  typeof ListConversationToolGrantsResponseSchema
+>;
+
+export const RevokeConversationToolGrantResponseSchema = z.object({
+  success: z.literal(true),
+  removed: z.literal(1),
+});
+export type RevokeConversationToolGrantResponse = z.infer<
+  typeof RevokeConversationToolGrantResponseSchema
+>;
+
+export function conversationToolGrantRevokeConfirmation(toolLabel: string): {
+  title: string;
+  message: string;
+  confirmLabel: string;
+} {
+  return {
+    title: `Stop allowing ${toolLabel}?`,
+    message: `${toolLabel} will ask for your approval again the next time this chat uses it.`,
+    confirmLabel: 'Stop allowing',
+  };
+}
 
 export const CONNECTOR_POLICY_PATH = '/api/settings/organization/connector-policy';
 export const CONNECTOR_POLICY_LIST_LIMIT = 512;

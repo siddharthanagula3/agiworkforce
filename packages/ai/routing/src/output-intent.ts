@@ -39,6 +39,8 @@ const DATA_RENDERING_REQUEST =
   /^(?:render|show|display|visuali[sz]e|present|demonstrate|build|create|make|generate|design)\b[^.!?\n]*\b(?:data|charts?|graphs?|plots?|diagrams?|ui|interfaces?|components?|artifacts?|forms?|cards?|carousels?|galler(?:y|ies)|tables?|checklists?|calculators?|equations?|formulas?|theorems?|matri(?:x|ces)|integrals?|summations?|math)\b/iu;
 const CHAT_RENDERING_REQUEST =
   /\b(?:what|which|show|demonstrate|display)\b[^.!?\n]*\b(?:this\s+chat\s+(?:can\s+)?(?:render|supports?)|render\s+(?:in\s+)?this\s+chat|inline\s+in\s+(?:this|the)\s+chat)/iu;
+const CHAT_RENDERING_LEAD_CLAUSE = /\b(?:what|which|show|demonstrate|display)\b[^.!?\n]*/giu;
+const CHAT_RENDERING_FROM_LEAD = new RegExp(CHAT_RENDERING_REQUEST, 'iuy');
 const SNIPPET_OUTPUT = /^(?:[\p{L}+#.-]+\s+){0,2}(?:snippets?|code\s+blocks?)\b/iu;
 const CODE_OUTPUT =
   /^(?:and\s+(?:run|execute)\s+)?(?:[\p{L}+#.-]+\s+){0,3}(?:code(?:\s+(?:examples?|snippets?|blocks?))?|programs?|scripts?)\b/iu;
@@ -82,6 +84,16 @@ function requestText(message: string): string {
     .replace(REQUEST_PREFIX, '');
 }
 
+// Tried once per clause, from its first lead word: a later lead word reaches no chat phrase
+// the first one misses, and retrying from each one rescans the clause in quadratic time.
+function requestsChatRendering(request: string): boolean {
+  for (const clause of request.matchAll(CHAT_RENDERING_LEAD_CLAUSE)) {
+    CHAT_RENDERING_FROM_LEAD.lastIndex = clause.index;
+    if (CHAT_RENDERING_FROM_LEAD.test(request)) return true;
+  }
+  return false;
+}
+
 export function classifyResponseOutputIntent(message: string): ResponseOutputIntent {
   const request = requestText(message);
   if (IMAGE_COMMAND.test(request)) return 'image';
@@ -104,12 +116,11 @@ export function classifyResponseOutputIntent(message: string): ResponseOutputInt
       IMAGE_OUTPUT.test(output)
     )
       return 'image';
-    return CHAT_RENDERING_REQUEST.test(request) ? 'rendered' : 'unknown';
+    return requestsChatRendering(request) ? 'rendered' : 'unknown';
   }
   if (IMAGE_OUTPUT.test(output)) return 'image';
   if (DRAW_SUBJECT.test(request)) return 'image';
-  if (DATA_RENDERING_REQUEST.test(request) || CHAT_RENDERING_REQUEST.test(request))
-    return 'rendered';
+  if (DATA_RENDERING_REQUEST.test(request) || requestsChatRendering(request)) return 'rendered';
   return 'unknown';
 }
 

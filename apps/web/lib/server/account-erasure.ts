@@ -14,6 +14,7 @@ import {
   objectKeyFromStorageUri,
 } from '@/lib/server/object-storage';
 import { eraseBackupCopies } from '@/lib/server/object-backup-erasure';
+import { chatFileTableOutcome, eraseChatFiles } from '@/lib/server/chat-file-intake/erasure';
 import {
   deleteProjectKnowledgeObject,
   isProjectKnowledgeObjectStorageConfigured,
@@ -73,6 +74,7 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{
   { table: 'shared_sessions', column: 'owner_id' },
   { table: 'cloud_agent_runs', column: 'user_id' },
   { table: 'cloud_code_sessions', column: 'user_id' },
+  { table: 'cloud_code_environments', column: 'user_id' },
   { table: 'work_plans', column: 'user_id' },
   { table: 'user_memories', column: 'user_id' },
   { table: 'connector_account_states', column: 'user_id' },
@@ -80,6 +82,8 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{
   { table: 'personal_spend_limits', column: 'user_id' },
   { table: 'user_projects', column: 'user_id' },
   { table: 'external_resource_references', column: 'user_id' },
+  { table: 'chat_file_intakes', column: 'user_id' },
+  { table: 'chat_file_preparations', column: 'user_id' },
   { table: 'user_shortcuts', column: 'user_id' },
   { table: 'user_skill_files', column: 'user_id' },
   { table: 'user_skills', column: 'user_id' },
@@ -1004,6 +1008,9 @@ export async function eraseUserAccountData(
     };
   }
   try {
+    // Chat files before media: a seal that commits meanwhile leaves a media row
+    // this media erasure still finds; afterwards it finds no intake and cleans up.
+    const chatFiles = await eraseChatFiles(db, { userId });
     const media = await eraseUserMedia(userId);
     const knowledge = await eraseUserKnowledgeObjects(userId);
     const exportArchives = await eraseUserDataExportArchives(db, userId);
@@ -1056,6 +1063,11 @@ export async function eraseUserAccountData(
 
     for (const { table, column, alsoColumn, jsonKey } of USER_SCOPED_TABLES) {
       if (table === PROFILE_TABLE) continue;
+      const chatFileTable = chatFileTableOutcome(chatFiles, table);
+      if (chatFileTable !== undefined) {
+        recordTableOutcome(tables, table, chatFileTable);
+        continue;
+      }
       if (
         table === 'user_projects' &&
         (knowledge.failed > 0 || knowledge.backupObjectsFailed > 0)

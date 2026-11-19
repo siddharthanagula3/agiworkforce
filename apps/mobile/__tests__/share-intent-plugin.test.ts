@@ -157,6 +157,115 @@ describe('withAGIShareIntent patchMainActivity', () => {
     expect(patchMainActivity(legacy)).not.toContain('File.createTempFile(');
   });
 
+  describe('shared stream source guard', () => {
+    const methodBody = (out: string, start: string, end: string) =>
+      out.slice(out.indexOf(start), out.indexOf(end, out.indexOf(start)));
+
+    it('refuses a stream before its provider is queried or opened', () => {
+      const out = patchMainActivity(STOCK_MAIN_ACTIVITY);
+      const copyMethod = methodBody(
+        out,
+        'private fun copySharedStream(uri: Uri, ownAuthorities: Set<String>, inbox: File)',
+        'private fun sharedDisplayName(',
+      );
+      const guardIdx = copyMethod.indexOf('if (!isForeignContentUri(uri, ownAuthorities)) {');
+      expect(guardIdx).toBeGreaterThan(-1);
+      expect(copyMethod.indexOf('return null', guardIdx)).toBeLessThan(
+        copyMethod.indexOf('sharedDisplayName(uri)'),
+      );
+      for (const read of [
+        'sharedDisplayName(uri)',
+        'contentResolver.getType(uri)',
+        'contentResolver.openInputStream(uri)',
+        'File.createTempFile(',
+      ]) {
+        expect(copyMethod.indexOf(read)).toBeGreaterThan(guardIdx);
+      }
+      const guardedStart = out.indexOf('private fun copySharedStream(uri:');
+      const guardedEnd = out.indexOf('private fun pruneSharedInbox(');
+      const resolverUses = [...out.matchAll(/contentResolver/g)].map((match) => match.index);
+      expect(resolverUses.length).toBeGreaterThan(0);
+      for (const index of resolverUses) {
+        expect(index).toBeGreaterThan(guardedStart);
+        expect(index).toBeLessThan(guardedEnd);
+      }
+      expect(out.match(/sharedDisplayName\(uri\)/g)).toHaveLength(1);
+    });
+
+    it('accepts only the content scheme, so file and every other scheme are refused', () => {
+      const out = patchMainActivity(STOCK_MAIN_ACTIVITY);
+      const guard = methodBody(
+        out,
+        'private fun isForeignContentUri(uri: Uri, ownAuthorities: Set<String>): Boolean',
+        'private fun ownProviderAuthorities(',
+      );
+      expect(guard).toContain(
+        'if (uri.scheme != ContentResolver.SCHEME_CONTENT) {\n      return false',
+      );
+      expect(out).toContain('import android.content.ContentResolver');
+      expect(out).not.toContain('uri.scheme == "file"');
+      expect(out).not.toContain('SCHEME_FILE');
+    });
+
+    it("refuses this app's own provider authorities, with a user prefix stripped as the resolver does", () => {
+      const out = patchMainActivity(STOCK_MAIN_ACTIVITY);
+      const guard = methodBody(
+        out,
+        'private fun isForeignContentUri(uri: Uri, ownAuthorities: Set<String>): Boolean',
+        'private fun ownProviderAuthorities(',
+      );
+      expect(guard).toContain("val provider = uri.authority?.substringAfterLast('@')");
+      expect(guard).toContain('if (provider.isNullOrEmpty()) {\n      return false');
+      expect(guard).toContain(
+        'return ownAuthorities.none { it.equals(provider, ignoreCase = true) }',
+      );
+      expect(guard).not.toContain('encodedAuthority');
+    });
+
+    it("reads every authority of this package's providers on each API level", () => {
+      const out = patchMainActivity(STOCK_MAIN_ACTIVITY);
+      const lookup = methodBody(
+        out,
+        'private fun ownProviderAuthorities(): Set<String>?',
+        'private fun sharedStreamUris(',
+      );
+      expect(out).toContain('import android.content.pm.PackageManager');
+      expect(out).toContain('import android.os.Build');
+      expect(lookup).toContain(
+        'val flags = PackageManager.GET_PROVIDERS or PackageManager.MATCH_DISABLED_COMPONENTS',
+      );
+      expect(lookup).toContain('if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {');
+      expect(lookup).toContain(
+        'packageManager.getPackageInfo(packageName, PackageManager.PackageInfoFlags.of(flags.toLong()))',
+      );
+      expect(lookup).toContain('packageManager.getPackageInfo(packageName, flags)');
+      expect(lookup).toContain(".flatMap { provider -> provider.authority?.split(';').orEmpty() }");
+    });
+
+    it("copies nothing when this package's own authorities cannot be read", () => {
+      const out = patchMainActivity(STOCK_MAIN_ACTIVITY);
+      const guardIdx = out.indexOf(
+        'val ownAuthorities = ownProviderAuthorities() ?: return copied',
+      );
+      expect(guardIdx).toBeGreaterThan(-1);
+      expect(guardIdx).toBeLessThan(out.indexOf('val inbox = File(cacheDir, SHARED_INBOX_DIR)'));
+      expect(out).toContain('val entry = copySharedStream(uri, ownAuthorities, inbox)');
+      const lookup = methodBody(
+        out,
+        'private fun ownProviderAuthorities(): Set<String>?',
+        'private fun sharedStreamUris(',
+      );
+      expect(lookup).toContain('} catch (error: Exception) {\n      return null\n    }');
+    });
+
+    it('reads through the grant on this intent only', () => {
+      const out = patchMainActivity(STOCK_MAIN_ACTIVITY);
+      expect(out).not.toContain('takePersistableUriPermission');
+      expect(out).not.toContain('MediaStore');
+      expect(out).not.toContain('"_data"');
+    });
+  });
+
   it('prunes the cached inbox so a share does not accumulate copies', () => {
     const out = patchMainActivity(STOCK_MAIN_ACTIVITY);
     expect(out).toContain('private fun pruneSharedInbox(inbox: File)');

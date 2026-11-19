@@ -4,52 +4,29 @@ import { useMemo, useState, type FormEvent } from 'react';
 import { CheckCircle2, Lightbulb, RotateCcw, Sparkles, XCircle } from 'lucide-react';
 import { Button } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
-import { gradeShortAnswer, type Quiz, type QuizQuestion } from './study-set';
+import {
+  buildQuizFollowUp,
+  gradeShortAnswer,
+  shortAnswerRecheckPrompt,
+  type Quiz,
+  type QuizQuestion,
+  type StudyAnswerState,
+} from '@agiworkforce/unified-chat/study-set';
 
-interface AnswerState {
-  choice: number | null;
-  typed: string;
-  submitted: boolean;
-  correct: boolean;
-  hints: number;
-}
-
-const EMPTY: AnswerState = { choice: null, typed: '', submitted: false, correct: false, hints: 0 };
-
-export function buildQuizFollowUp(quiz: Quiz, answers: readonly AnswerState[]): string {
-  const missed = quiz.questions
-    .map((question, index) => ({ question, answer: answers[index] ?? EMPTY, index }))
-    .filter((entry) => entry.answer.submitted && !entry.answer.correct);
-  const score = answers.filter((answer) => answer.correct).length;
-  const lines = [
-    `I finished the quiz "${quiz.title || 'Quiz'}" and scored ${score} of ${quiz.questions.length}.`,
-  ];
-  if (missed.length === 0) {
-    lines.push(
-      'I got everything right. What should I study next to go further, based on the same material?',
-    );
-  } else {
-    lines.push(
-      'Explain the questions I got wrong using the source material we have been working from, and point to where in the sources each answer comes from:',
-      '',
-    );
-    for (const entry of missed) {
-      const given =
-        entry.question.kind === 'multiple_choice'
-          ? (entry.question.options[entry.answer.choice ?? -1] ?? 'no answer')
-          : entry.answer.typed || 'no answer';
-      lines.push(`${entry.index + 1}. ${entry.question.question} (I answered: ${given})`);
-    }
-  }
-  return lines.join('\n');
-}
+const EMPTY: StudyAnswerState = {
+  choice: null,
+  typed: '',
+  submitted: false,
+  correct: false,
+  hints: 0,
+};
 
 function correctAnswerText(question: QuizQuestion): string {
   return question.kind === 'multiple_choice' ? question.options[question.answer]! : question.answer;
 }
 
 export function QuizView({ quiz, onAsk }: { quiz: Quiz; onAsk?: (prompt: string) => boolean }) {
-  const [answers, setAnswers] = useState<AnswerState[]>(() => quiz.questions.map(() => EMPTY));
+  const [answers, setAnswers] = useState<StudyAnswerState[]>(() => quiz.questions.map(() => EMPTY));
   const [index, setIndex] = useState(0);
   const [finished, setFinished] = useState(false);
   const total = quiz.questions.length;
@@ -57,7 +34,7 @@ export function QuizView({ quiz, onAsk }: { quiz: Quiz; onAsk?: (prompt: string)
   const state = answers[index] ?? EMPTY;
   const score = useMemo(() => answers.filter((answer) => answer.correct).length, [answers]);
 
-  const patch = (next: Partial<AnswerState>) =>
+  const patch = (next: Partial<StudyAnswerState>) =>
     setAnswers((current) =>
       current.map((answer, i) => (i === index ? { ...answer, ...next } : answer)),
     );
@@ -266,11 +243,7 @@ export function QuizView({ quiz, onAsk }: { quiz: Quiz; onAsk?: (prompt: string)
             {!state.correct && question.kind === 'short_answer' && onAsk ? (
               <button
                 type="button"
-                onClick={() =>
-                  onAsk(
-                    `For the question "${question.question}" I answered "${state.typed}". The expected answer is "${question.answer}". Is my answer also correct, or where did it go wrong?`,
-                  )
-                }
+                onClick={() => onAsk(shortAnswerRecheckPrompt(question, state.typed))}
                 className="self-start text-sm text-foreground underline underline-offset-2"
               >
                 Ask whether my wording also counts

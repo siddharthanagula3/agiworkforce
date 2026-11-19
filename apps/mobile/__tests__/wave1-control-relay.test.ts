@@ -216,8 +216,8 @@ describe('Wave 1 control relay fixes', () => {
     ).toBeNull();
   });
 
-  it('ships the authenticated companion and Dispatch lifecycle enabled', () => {
-    expect(FEATURES.companion).toBe(true);
-    expect(FEATURES.dispatch).toBe(true);
+  it('ships version 1 with Remote hidden, so companion and Dispatch stay off', () => {
+    expect(FEATURES.companion).toBe(false);
+    expect(FEATURES.dispatch).toBe(false);
   });
 });

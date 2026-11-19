@@ -2,12 +2,14 @@ import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { Alert, View } from 'react-native';
 import { Image } from 'expo-image';
-import { Download, Film, Play } from 'lucide-react-native';
+import { AlertCircle, Download, Film, Play, RotateCcw } from 'lucide-react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
 import { useThemeColors, radii } from '@/src/ui/theme';
-import { typeScale } from '@/src/ui/theme/tokens';
+import { spacing, typeScale } from '@/src/ui/theme/tokens';
 import { prepareLocalVideoPlayer, shareFile, type LocalVideoPlayer } from '@/services/fileCreation';
+import { useGeneratedImageSource } from '@/src/features/image/hooks/useGeneratedImageSource';
+import { inlineImageFrame } from '@/src/features/image/inlineImageFrame';
 import type { ReportTarget } from './ReportFlagButton';
 import { VideoPlayerModal } from './VideoPlayerModal';
 
@@ -21,6 +23,8 @@ export interface GeneratedVideoProps {
 
 type LoadingAction = 'play' | 'save';
 
+const DEFAULT_VIDEO_RATIO = 16 / 9;
+
 export function GeneratedVideo(props: GeneratedVideoProps) {
   return <GeneratedVideoOwner key={props.videoUrl} {...props} />;
 }
@@ -33,10 +37,13 @@ function GeneratedVideoOwner({
   reportTarget,
 }: GeneratedVideoProps) {
   const colors = useThemeColors();
-  const height = Math.round(width * (9 / 16));
+  const [posterRatio, setPosterRatio] = useState<number | null>(null);
+  const frame = inlineImageFrame(width, posterRatio ?? DEFAULT_VIDEO_RATIO);
+  const { source: posterSource } = useGeneratedImageSource(thumbnailUrl ?? '', true);
   const [player, setPlayer] = useState<LocalVideoPlayer | null>(null);
   const [playerOpen, setPlayerOpen] = useState(false);
   const [loading, setLoading] = useState<LoadingAction | null>(null);
+  const [playFailed, setPlayFailed] = useState(false);
 
   const lifetimeRef = useRef<symbol | null>(null);
   const operationRef = useRef<symbol | null>(null);
@@ -61,6 +68,7 @@ function GeneratedVideoOwner({
       const isCurrent = () =>
         lifetimeRef.current === lifetime && operationRef.current === operation;
       setLoading(action);
+      if (action === 'play') setPlayFailed(false);
       try {
         const prepared = player ?? (await prepareLocalVideoPlayer(videoUrl, colors.black));
         if (!isCurrent()) return;
@@ -71,12 +79,9 @@ function GeneratedVideoOwner({
           await shareFile(prepared.videoUri, { isCurrent });
         }
       } catch {
-        if (isCurrent()) {
-          Alert.alert(
-            action === 'play' ? 'Could not play the video' : 'Could not save the video',
-            'Check your connection and try again.',
-          );
-        }
+        if (!isCurrent()) return;
+        if (action === 'play') setPlayFailed(true);
+        else Alert.alert('Could not save the video', 'Check your connection and try again.');
       } finally {
         if (isCurrent()) {
           operationRef.current = null;
@@ -91,6 +96,11 @@ function GeneratedVideoOwner({
   const save = useCallback(() => runAction('save'), [runAction]);
 
   const closePlayer = useCallback(() => setPlayerOpen(false), []);
+  const handlePlaybackError = useCallback(() => {
+    setPlayerOpen(false);
+    setPlayer(null);
+    setPlayFailed(true);
+  }, []);
 
   return (
     <View testID="generated-video" style={{ marginTop: 8, gap: 6 }}>
@@ -98,11 +108,17 @@ function GeneratedVideoOwner({
         onPress={() => void play()}
         disabled={loading !== null}
         accessibilityRole="button"
-        accessibilityLabel={prompt ? `Play generated video: ${prompt}` : 'Play generated video'}
+        accessibilityLabel={
+          playFailed
+            ? 'Video could not play. Retry'
+            : prompt
+              ? `Play generated video: ${prompt}`
+              : 'Play generated video'
+        }
         accessibilityState={{ busy: loading === 'play' }}
         style={{
-          width,
-          height,
+          width: frame.width,
+          height: frame.height,
           borderRadius: radii.lg,
           overflow: 'hidden',
           backgroundColor: colors.neutralSurface,
@@ -112,12 +128,18 @@ function GeneratedVideoOwner({
           justifyContent: 'center',
         }}
       >
-        {thumbnailUrl ? (
+        {posterSource ? (
           <Image
-            source={{ uri: thumbnailUrl }}
+            testID="generated-video-poster"
+            source={posterSource}
             style={{ width: '100%', height: '100%' }}
-            contentFit="cover"
+            contentFit="contain"
             transition={200}
+            cachePolicy="memory"
+            onLoad={(event) => {
+              const { width: posterWidth, height: posterHeight } = event.source;
+              if (posterWidth > 0 && posterHeight > 0) setPosterRatio(posterWidth / posterHeight);
+            }}
             accessibilityIgnoresInvertColors
           />
         ) : (
@@ -140,6 +162,8 @@ function GeneratedVideoOwner({
         >
           {loading === 'play' ? (
             <LoadingIndicator size="small" />
+          ) : playFailed ? (
+            <RotateCcw size={13} color={colors.cameraOverlayText} />
           ) : (
             <Play size={13} color={colors.cameraOverlayText} />
           )}
@@ -150,10 +174,23 @@ function GeneratedVideoOwner({
               color: colors.cameraOverlayText,
             }}
           >
-            {loading === 'play' ? 'Loading' : 'Play'}
+            {loading === 'play' ? 'Loading' : playFailed ? 'Retry' : 'Play'}
           </Text>
         </View>
       </Pressable>
+
+      {playFailed ? (
+        <View
+          testID="generated-video-failed"
+          accessibilityLiveRegion="polite"
+          style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}
+        >
+          <AlertCircle size={14} color={colors.agentError} />
+          <Text style={{ flex: 1, fontSize: typeScale.caption, color: colors.agentError }}>
+            The video could not play. Retry, or Save to open it in another app.
+          </Text>
+        </View>
+      ) : null}
 
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
         {prompt ? (
@@ -203,6 +240,9 @@ function GeneratedVideoOwner({
         label={prompt ? `Video: ${prompt}` : 'Generated video'}
         failureHint="Try Save to open it in another app."
         reportTarget={reportTarget}
+        onPlaybackError={handlePlaybackError}
+        onSave={() => void save()}
+        saving={loading === 'save'}
       />
     </View>
   );

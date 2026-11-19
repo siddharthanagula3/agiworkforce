@@ -19,6 +19,8 @@ const {
   toastSuccess: vi.fn(),
 }));
 
+type CsrfModule = typeof import('@/lib/client/csrf');
+
 vi.mock('sonner', () => ({ toast: { success: toastSuccess, error: vi.fn() } }));
 vi.mock('@features/projects/services/project-knowledge-upload', async (importOriginal) => ({
   ...(await importOriginal<ImportedModule0>()),
@@ -46,10 +48,22 @@ vi.mock('@features/chat/services/document-export-service', () => ({ exportDocume
 // The same boundary for uploads: the Library's New menu must reach the one
 // upload path that catalogs an asset, not a second uploader of its own.
 vi.mock('@features/chat/services/chat-attachment-upload', () => ({ uploadChatAttachments }));
+vi.mock('@/lib/client/csrf', async (importOriginal) => ({
+  ...(await importOriginal<CsrfModule>()),
+  getCsrfToken: vi.fn(async () => 'csrf-token'),
+}));
 
 import { LibraryView, iconKindFor, generatedFileFromLibraryItem } from '../LibraryView';
 import { takeStagedLibraryAttachments } from '../../lib/library-chat-handoff';
 import { PENDING_CONVERSATION_KEY, useChatStore } from '@shared/stores/web-chat-store';
+import { useBillingStore } from '@/shared/stores/web-auth-store';
+import {
+  CHAT_LARGE_FILE_POLICY,
+  MAX_CHAT_ATTACHMENT_BYTES,
+  MAX_CHAT_ATTACHMENT_MESSAGE_BYTES,
+  MAX_CHAT_IMAGE_ATTACHMENT_BYTES,
+  type ChatAttachmentLimits,
+} from '@agiworkforce/cloud-contracts';
 
 function makeItem(overrides: Record<string, unknown> = {}) {
   return {
@@ -244,8 +258,48 @@ describe('LibraryView', () => {
     Object.defineProperty(input, 'files', { value: [file] });
     fireEvent.change(input);
 
-    await waitFor(() => expect(uploadChatAttachments).toHaveBeenCalledWith([file]));
+    await waitFor(() =>
+      expect(uploadChatAttachments).toHaveBeenCalledWith([file], { declineLargeFiles: true }),
+    );
     await waitFor(() => expect(libraryCalls().length).toBeGreaterThan(before));
+  });
+
+  it('refuses a file over the inline limit before any request, as today, even when the account is offered large files', async () => {
+    const offer: ChatAttachmentLimits = {
+      maxFileBytes: CHAT_LARGE_FILE_POLICY.largeFiles.maxBytes,
+      maxImageBytes: MAX_CHAT_IMAGE_ATTACHMENT_BYTES,
+      maxMessageBytes: CHAT_LARGE_FILE_POLICY.largeFiles.maxMessageBytes,
+      maxFilesPerMessage: CHAT_LARGE_FILE_POLICY.largeFiles.maxCount,
+      largeFilesAvailable: true,
+      storageRemainingBytes: null,
+      inlineMessageBytes: MAX_CHAT_ATTACHMENT_MESSAGE_BYTES,
+    };
+    useBillingStore.setState({ attachmentLimits: offer });
+    const actual = await vi.importActual<
+      typeof import('@features/chat/services/chat-attachment-upload')
+    >('@features/chat/services/chat-attachment-upload');
+    uploadChatAttachments.mockImplementationOnce(((
+      ...args: Parameters<typeof actual.uploadChatAttachments>
+    ) => actual.uploadChatAttachments(...args)) as never);
+    try {
+      render(<LibraryView />);
+      await screen.findByText('report.pdf');
+      const before = fetchMock.mock.calls.length;
+
+      fireEvent.click(screen.getByRole('button', { name: /New/ }));
+      fireEvent.click(await screen.findByRole('menuitem', { name: 'Upload file' }));
+      const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+      const file = new File([new Uint8Array(MAX_CHAT_ATTACHMENT_BYTES + 1)], 'big.pdf', {
+        type: 'application/pdf',
+      });
+      Object.defineProperty(input, 'files', { value: [file] });
+      fireEvent.change(input);
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('25 MiB');
+      expect(fetchMock.mock.calls.slice(before).map((call) => String(call[0]))).toEqual([]);
+    } finally {
+      useBillingStore.setState({ attachmentLimits: null });
+    }
   });
 
   it('keeps Delete behind the row menu and a confirm', async () => {
@@ -594,6 +648,110 @@ describe('library and conversation attachment lifecycle', () => {
         .map((call) => String(call[0]))
         .filter((url) => url.includes('/api/chat')),
     ).toEqual([]);
+  });
+});
+
+describe('library downloads by size', () => {
+  const large = makeItem({
+    id: '77777777-7777-4777-8777-777777777777',
+    file_name: 'site-survey.zip',
+    mime_type: 'application/zip',
+    byte_count: MAX_CHAT_ATTACHMENT_BYTES + 1,
+    origin: 'uploaded',
+    uri: '/api/files/77777777-7777-4777-8777-777777777777',
+  });
+  const small = makeItem();
+  const originalCreateObjectURL = URL.createObjectURL;
+  const originalRevokeObjectURL = URL.revokeObjectURL;
+  let clicked: Array<{ href: string; download: string | null }> = [];
+  let anchorClick: { mockRestore: () => void } | null = null;
+
+  function stubFiles(items: unknown[], fileResponse: () => Response) {
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith('/api/projects')) return projectsResponse([]);
+      if (url.startsWith('/api/files/')) return fileResponse();
+      return pageResponse(items);
+    });
+  }
+
+  function fileRequests(): string[] {
+    return fetchMock.mock.calls
+      .map((call) => String(call[0]))
+      .filter((url) => url.startsWith('/api/files/'));
+  }
+
+  async function chooseFromRowMenu(fileName: string, action: string) {
+    fireEvent.click(await screen.findByRole('button', { name: `Actions for ${fileName}` }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: action }));
+  }
+
+  beforeEach(() => {
+    clicked = [];
+    URL.createObjectURL = vi.fn(() => 'blob:library-download');
+    URL.revokeObjectURL = vi.fn();
+    anchorClick = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
+      clicked.push({
+        href: this.getAttribute('href') ?? '',
+        download: this.getAttribute('download'),
+      });
+    });
+  });
+
+  afterEach(() => {
+    URL.createObjectURL = originalCreateObjectURL;
+    URL.revokeObjectURL = originalRevokeObjectURL;
+    anchorClick?.mockRestore();
+    anchorClick = null;
+    takeStagedLibraryAttachments();
+  });
+
+  it('saves a file above the inline limit through a browser download of its file URL', async () => {
+    stubFiles([large], () => ({ ok: true, status: 200 }) as Response);
+    render(<LibraryView />);
+
+    await chooseFromRowMenu('site-survey.zip', 'Download');
+
+    await waitFor(() => expect(clicked).toEqual([{ href: large.uri, download: '' }]));
+    expect(fileRequests()).toEqual([]);
+    expect(screen.queryByText(/could not be downloaded/i)).toBeNull();
+  });
+
+  it('keeps reading a small file with the session fetch and saving its bytes', async () => {
+    stubFiles(
+      [small],
+      () =>
+        ({
+          ok: true,
+          status: 200,
+          blob: async () => new Blob(['%PDF'], { type: 'application/pdf' }),
+        }) as Response,
+    );
+    render(<LibraryView />);
+
+    await chooseFromRowMenu('report.pdf', 'Download');
+
+    await waitFor(() =>
+      expect(clicked).toEqual([{ href: 'blob:library-download', download: 'report.pdf' }]),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(small.uri, { credentials: 'same-origin' });
+  });
+
+  it('says why a file the server will not hand to the page cannot be added to a chat', async () => {
+    stubFiles([large], () => ({ ok: false, status: 413, headers: new Headers() }) as Response);
+    render(<LibraryView />);
+
+    await chooseFromRowMenu('site-survey.zip', 'Add to chat');
+
+    expect(
+      await screen.findByText(
+        'This file is too large to add from the Library. Download it, then add it from your device.',
+      ),
+    ).toBeInTheDocument();
+    expect(push).not.toHaveBeenCalled();
+    expect(takeStagedLibraryAttachments()).toBeNull();
   });
 });
 

@@ -19,6 +19,7 @@ const mockProject = {
   updatedAt: '2026-07-30T10:00:00.000Z',
 };
 
+jest.mock('../src/features/chat/components/WorkModeSwitch', () => ({ HEADER_TEXT_SCALE_LIMIT: 2 }));
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useNavigation: () => ({ openDrawer: jest.fn(), navigate: jest.fn(), goBack: jest.fn() }),
@@ -146,21 +147,29 @@ describe('Projects tab row navigation', () => {
     expect(mockSetActiveProject).not.toHaveBeenCalled();
   });
 
-  it('offers Open, Set active, Pin, Rename and Delete on long press in Local', () => {
+  it('offers Open, New chat in project, Pin, Edit project and Delete on long press in Local', () => {
     const screen = render(<ProjectsTabScreen />);
 
     fireEvent(screen.getByLabelText('Project: Launch demo'), 'longPress');
 
-    expect(menuLabels(screen)).toEqual(['Open', 'Set active', 'Pin', 'Rename', 'Delete', 'Cancel']);
+    expect(menuLabels(screen)).toEqual([
+      'Open',
+      'New chat in project',
+      'Pin',
+      'Edit project',
+      'Delete',
+      'Cancel',
+    ]);
   });
 
-  it('keeps set-active reachable from the long-press sheet', () => {
+  it('starts a chat in the project from the long-press sheet', () => {
     const screen = render(<ProjectsTabScreen />);
 
     fireEvent(screen.getByLabelText('Project: Launch demo'), 'longPress');
-    choose(screen, 'active');
+    choose(screen, 'new-chat');
 
     expect(mockSetActiveProject).toHaveBeenCalledWith('project-1');
+    expect(mockPush).toHaveBeenCalledWith('/(app)/(tabs)/chat');
   });
 
   it('opens the project from the long-press sheet too', () => {

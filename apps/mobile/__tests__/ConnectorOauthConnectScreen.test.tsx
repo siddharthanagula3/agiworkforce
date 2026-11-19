@@ -3,6 +3,10 @@ import React from 'react';
 import { Alert } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { ApiHttpError } from '../services/apiErrors';
+import {
+  CONNECTOR_ACCESS_SENTENCES,
+  DISCOVERED_CONNECTOR_ACCESS_SENTENCE,
+} from '@agiworkforce/cloud-contracts';
 
 const mockPush = jest.fn();
 const mockAuthState = {
@@ -78,6 +82,11 @@ jest.mock('@/src/features/auth/services/cloudAccountSession', () => ({
     snapshot.ownerId === mockAccountOwner && snapshot.epoch === mockAccountEpoch,
 }));
 
+const mockAskConsent = jest.fn();
+jest.mock('@/src/features/settings/cloud-connectors/connectorConsent', () => ({
+  askConnectorConsent: (target: unknown) => mockAskConsent(target),
+}));
+
 const mockFetchDirectory = jest.fn();
 const mockFetchListing = jest.fn();
 const mockFetchCapabilities = jest.fn();
@@ -85,6 +94,7 @@ const mockFetchPermissions = jest.fn();
 const mockConnect = jest.fn();
 const mockFetchCredentialStatus = jest.fn();
 jest.mock('@/services/connectors', () => ({
+  fetchConnectorAccounts: jest.fn(async () => []),
   connectConnector: (...args: unknown[]) => mockConnect(...args),
   fetchConnectorCalls: jest.fn(async () => []),
   deleteCustomConnector: jest.fn(),
@@ -143,6 +153,7 @@ describe('Connector detail, connect flow for an unconnected listing', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    mockAskConsent.mockResolvedValue(true);
     Object.assign(mockAuthState, {
       isClerkLoaded: true,
       isClerkSignedIn: true,
@@ -174,10 +185,48 @@ describe('Connector detail, connect flow for an unconnected listing', () => {
     expect(screen.getByText('Sign-in')).toBeTruthy();
     expect(screen.getByText('Account sign-in')).toBeTruthy();
     expect(screen.getByText('What it can do')).toBeTruthy();
+    expect(screen.getByText(CONNECTOR_ACCESS_SENTENCES['read-write'])).toBeTruthy();
     expect(screen.getByText('List Issues')).toBeTruthy();
     expect(screen.getByText('Create Issue')).toBeTruthy();
     expect(screen.queryByText('Connected to AGI Cloud')).toBeNull();
     expect(mockFetchCapabilities).not.toHaveBeenCalled();
+    expect(mockConnect).not.toHaveBeenCalled();
+  });
+
+  it('says a server outside the catalog lists its own tools', async () => {
+    mockFetchListing.mockResolvedValue(
+      linearListing({ id: 'acme-notes', name: 'Acme Notes', toolNames: [] }),
+    );
+
+    const screen = render(<ConnectorDetailScreen connectorId="acme-notes" />);
+    await waitFor(() =>
+      expect(screen.getByText(DISCOVERED_CONNECTOR_ACCESS_SENTENCE)).toBeTruthy(),
+    );
+    expect(screen.queryByText('Acme Notes lists its tools once it is connected.')).toBeNull();
+  });
+
+  it('asks without the provider consent note when the connector takes an API key', async () => {
+    mockFetchListing.mockResolvedValue(
+      linearListing({ id: 'jira', name: 'Jira', authMode: 'api-key', toolNames: [] }),
+    );
+    mockAskConsent.mockResolvedValue(false);
+
+    const screen = render(<ConnectorDetailScreen connectorId="jira" />);
+    await waitFor(() => expect(screen.getByLabelText('Connect Jira')).toBeTruthy());
+    expect(
+      screen.getByText(
+        `${CONNECTOR_ACCESS_SENTENCES['read-write']} Jira lists its tools once it is connected.`,
+      ),
+    ).toBeTruthy();
+
+    fireEvent.press(screen.getByLabelText('Connect Jira'));
+    await waitFor(() =>
+      expect(mockAskConsent).toHaveBeenCalledWith({
+        id: 'jira',
+        name: 'Jira',
+        providerSignIn: false,
+      }),
+    );
     expect(mockConnect).not.toHaveBeenCalled();
   });
 
@@ -188,6 +237,22 @@ describe('Connector detail, connect flow for an unconnected listing', () => {
 
     await waitFor(() => expect(screen.getByText('Desktop and CLI')).toBeTruthy());
     expect(screen.queryByLabelText('Connect Linear')).toBeNull();
+  });
+
+  it('shows Coming soon and no Connect for a connector that is not released yet', async () => {
+    mockFetchListing.mockResolvedValue(
+      linearListing({ id: 'gmail', name: 'Gmail', publisher: 'Google' }),
+    );
+    mockFetchCapabilities.mockResolvedValue({ connectorId: 'gmail', tools: [] });
+
+    const screen = render(<ConnectorDetailScreen connectorId="gmail" />);
+
+    await waitFor(() => expect(screen.getByText('Coming soon')).toBeTruthy());
+    expect(
+      screen.getByText('Connecting Gmail, Google Drive, Calendar and other apps is coming soon.'),
+    ).toBeTruthy();
+    expect(screen.queryByLabelText('Connect Gmail')).toBeNull();
+    expect(mockConnect).not.toHaveBeenCalled();
   });
 
   it('opens the provider authorize URL, then refreshes to the new grant', async () => {
@@ -206,6 +271,29 @@ describe('Connector detail, connect flow for an unconnected listing', () => {
     expect(mockFetchDirectory).toHaveBeenCalledTimes(2);
     expect(mockFetchCapabilities).toHaveBeenCalledWith('linear');
     expect(alertSpy).not.toHaveBeenCalled();
+  });
+
+  it('asks Connect Linear? first and starts nothing when the person denies', async () => {
+    mockAskConsent.mockResolvedValue(false);
+    const screen = render(<ConnectorDetailScreen connectorId="linear" />);
+    await waitFor(() => expect(screen.getByLabelText('Connect Linear')).toBeTruthy());
+
+    fireEvent.press(screen.getByLabelText('Connect Linear'));
+
+    await waitFor(() =>
+      expect(mockAskConsent).toHaveBeenCalledWith({
+        id: 'linear',
+        name: 'Linear',
+        providerSignIn: true,
+      }),
+    );
+    await waitFor(() =>
+      expect(screen.getByLabelText('Connect Linear').props.accessibilityState).toEqual({
+        disabled: false,
+      }),
+    );
+    expect(mockConnect).not.toHaveBeenCalled();
+    expect(mockOpenUntrusted).not.toHaveBeenCalled();
   });
 
   it('never claims success when the refreshed directory has no grant', async () => {
@@ -312,7 +400,7 @@ describe('Connector detail, connect flow for an unconnected listing', () => {
     await waitFor(() => expect(screen.getByLabelText('Connect Linear')).toBeTruthy());
 
     fireEvent.press(screen.getByLabelText('Connect Linear'));
-    expect(mockConnect).toHaveBeenCalledWith('linear');
+    await waitFor(() => expect(mockConnect).toHaveBeenCalledWith('linear'));
 
     act(() => {
       mockAccountOwner = 'user-b';

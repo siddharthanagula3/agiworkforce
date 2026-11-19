@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Alert, View } from 'react-native';
 import { reloadAppAsync } from 'expo';
+import { Redirect } from 'expo-router';
 import { Check, Languages, Smartphone } from 'lucide-react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
@@ -15,8 +16,14 @@ import {
   useLanguagePreferenceStore,
 } from '@/src/i18n';
 import { languageFor } from '@agiworkforce/i18n';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 
 export default function AppLanguageScreen() {
+  if (!FEATURES.appLanguage) return <Redirect href="/(app)/settings/general" />;
+  return <AppLanguagePicker />;
+}
+
+function AppLanguagePicker() {
   const colors = useThemeColors();
   const preference = useLanguagePreferenceStore((s) => s.preference);
   const [saving, setSaving] = useState(false);

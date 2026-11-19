@@ -11,7 +11,7 @@ import {
   PLACE_PHOTO_MIN_WIDTH_PX,
   PLACE_PHOTO_REFERENCE_PARAM,
   PLACE_PHOTO_WIDTH_PARAM,
-} from '@/lib/maps/place-photo-url';
+} from '@agiworkforce/cloud-contracts';
 import { createGooglePlacesProvider } from '@/lib/places/google-places-provider';
 import { withRateLimit } from '@/lib/rate-limit';
 

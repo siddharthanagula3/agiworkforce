@@ -344,3 +344,13 @@ export function parseAgentEventDelta(payload: unknown): AgentEventEnvelope | nul
   const parsed = AgentEventEnvelopeSchema.safeParse(payload);
   return parsed.success ? parsed.data : null;
 }
+
+export const WEB_SEARCH_NOT_PERFORMED_CODE = 'web_search_not_performed';
+export const DECLINED_WEB_SEARCH_ANSWER =
+  'You declined the web search, so I did not search the web.';
+
+export function isDeclinedWebSearchError(error: { code?: unknown; message?: unknown }): boolean {
+  return (
+    error.code === WEB_SEARCH_NOT_PERFORMED_CODE && error.message === DECLINED_WEB_SEARCH_ANSWER
+  );
+}

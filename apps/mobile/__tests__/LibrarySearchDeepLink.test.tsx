@@ -121,6 +121,7 @@ jest.mock('@/services/api', () => ({ api: { get: jest.fn(), delete: jest.fn() } 
 
 jest.mock('@/services/fileCreation', () => ({
   downloadGeneratedFile: jest.fn(async () => 'file:///exports/launch-plan.pdf'),
+  viewerFileCopy: jest.fn(async () => 'file:///cache/file-views/launch-plan.pdf'),
   shareFile: jest.fn(async () => undefined),
 }));
 
@@ -152,6 +153,9 @@ import { downloadGeneratedFile, shareFile } from '@/services/fileCreation';
 import { LibraryScreen } from '../src/features/library';
 
 const mockApi = api as unknown as { get: jest.Mock };
+
+// The screen waits before it searches, then asks the server again.
+const AFTER_SEARCH_DELAY = { timeout: 4000 };
 
 const HOSTED_IMAGE = {
   id: '11111111-1111-4111-8111-111111111111',
@@ -232,7 +236,7 @@ describe('Library reads the account library, not the local transcript', () => {
     expect(screen.queryByText('Search could not be completed')).toBeNull();
   });
 
-  it('renders a hosted document, filters it by the search field, and shares it on press', async () => {
+  it('renders a hosted document, filters it by the search field, and opens it on press', async () => {
     const screen = render(<LibraryScreen />);
 
     await waitFor(() => {
@@ -243,17 +247,21 @@ describe('Library reads the account library, not the local transcript', () => {
     fireEvent.changeText(screen.getByLabelText('Search library'), 'missing');
     await waitFor(() => {
       expect(screen.queryByText('launch-plan.pdf')).toBeNull();
-    });
+    }, AFTER_SEARCH_DELAY);
     await waitFor(() => {
       expect(screen.getByText(/Nothing in documents matches/)).toBeTruthy();
-    });
+    }, AFTER_SEARCH_DELAY);
 
     fireEvent.changeText(screen.getByLabelText('Search library'), 'launch');
     await waitFor(() => {
       expect(screen.getAllByText('launch-plan.pdf').length).toBeGreaterThan(0);
-    });
+    }, AFTER_SEARCH_DELAY);
 
     fireEvent.press(screen.getByLabelText('Open launch-plan.pdf'));
+    expect(screen.getByTestId('file-viewer-screen')).toBeTruthy();
+    expect(shareFile).not.toHaveBeenCalled();
+
+    fireEvent.press(screen.getByLabelText('Share launch-plan.pdf'));
     await waitFor(() => {
       expect(downloadGeneratedFile).toHaveBeenCalled();
       expect(shareFile).toHaveBeenCalledWith(

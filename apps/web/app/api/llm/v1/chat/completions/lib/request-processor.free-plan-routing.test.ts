@@ -7,7 +7,8 @@ vi.mock('@/lib/logger', async (importOriginal) => ({
   logger: { info: vi.fn(), error: vi.fn(), debug: vi.fn(), warn: vi.fn() },
 }));
 
-import { applyFreePlanDefaultModel, resolveWebCloudModelRoute } from './request-processor';
+import { applyFreePlanDefaultModel } from './request-processor';
+import { resolveWebCloudModelRoute } from '@/lib/server/managed-cloud-routing/routing-request';
 
 // The tier gate skips `auto`, so the resolver's own admission is what protects
 // the free plan here; a second rewrite would be a second answer to one question.

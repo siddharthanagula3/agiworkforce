@@ -39,7 +39,6 @@ vi.mock('@/lib/services/llm-cost-calculator', async (importOriginal) => ({
 }));
 vi.mock('@/lib/cost-tracker', async (importOriginal) => ({
   ...(await importOriginal<ScanModule4>()),
-  recordModelUsage: vi.fn(),
   toOtelAttributes: vi.fn(() => ({})),
 }));
 vi.mock('@/lib/services/free-trial-service', async (importOriginal) => ({
@@ -64,6 +63,11 @@ import { buildAdapterStreamResponse } from '../lib/stream-transform';
 import { persistAssistantTurn } from '../lib/assistant-turn-persistence';
 import type { ProcessedRequest } from '../lib/request-processor';
 import type { StreamChunk } from '@agiworkforce/types';
+import { parseInteractiveCardDelta } from '@agiworkforce/cloud-contracts';
+import {
+  CLARIFY_TOOL_NAME,
+  createClarifyToolDefinition,
+} from '@/lib/services/clarify-tool-service';
 
 const mockPersistAssistantTurn = persistAssistantTurn as ReturnType<typeof vi.fn>;
 
@@ -110,12 +114,13 @@ async function drain(response: Response): Promise<string> {
 
 async function run(
   chunks: StreamChunk[],
+  processed: ProcessedRequest = makeProcessed(),
 ): Promise<{ body: string; successfulTurns: number; persisted: { truncated: boolean }[] }> {
   let successfulTurns = 0;
   const response = await buildAdapterStreamResponse(
     makeRequest() as never,
     chunksOf(chunks),
-    makeProcessed(),
+    processed,
     'user-1',
     Date.now(),
     'legacy-web',
@@ -186,5 +191,144 @@ describe('buildAdapterStreamResponse, a turn with nothing in it', () => {
 
     expect(persisted[0]).toMatchObject({ truncated: true });
     expect(successfulTurns).toBe(0);
+  });
+});
+
+function makeClarifyCardProcessed(): ProcessedRequest {
+  const processed = makeProcessed();
+  return {
+    ...processed,
+    chatRequest: {
+      ...processed.chatRequest,
+      messages: [{ role: 'user', content: 'plan my trip' }],
+      tools: [createClarifyToolDefinition()],
+      x_interactive_cards: { supported: ['clarify.v1'], canRespond: true },
+    },
+  } as unknown as ProcessedRequest;
+}
+
+function clarifyCallChunks(args: unknown): StreamChunk[] {
+  return [
+    { type: 'tool-use-start', toolUseId: 'toolu_clarify', name: CLARIFY_TOOL_NAME },
+    { type: 'tool-use-delta', toolUseId: 'toolu_clarify', deltaJson: JSON.stringify(args) },
+    { type: 'tool-use-end', toolUseId: 'toolu_clarify' },
+    { type: 'stop', reason: 'tool_use' },
+  ];
+}
+
+const DESTINATION_QUESTION = {
+  questions: [
+    {
+      header: 'Destination',
+      question: 'Where are you going?',
+      options: [{ label: 'Europe' }, { label: 'Asia' }],
+    },
+  ],
+};
+
+function frames(body: string): Array<{
+  choices?: Array<{ delta?: Record<string, unknown>; finish_reason?: string | null }>;
+}> {
+  return body
+    .split('\n\n')
+    .map((line) => line.replace(/^data: /, ''))
+    .filter((data) => data.startsWith('{'))
+    .map((data) => JSON.parse(data));
+}
+
+describe('buildAdapterStreamResponse, a clarify call on a turn answered inline', () => {
+  it('shows the person the clarify card instead of a tool call nobody runs', async () => {
+    const { body, persisted, successfulTurns } = await run(
+      clarifyCallChunks(DESTINATION_QUESTION),
+      makeClarifyCardProcessed(),
+    );
+    const sent = frames(body);
+    const cards = sent.flatMap((frame) => {
+      const card = parseInteractiveCardDelta(frame.choices?.[0]?.delta?.['x_interactive_card']);
+      return card ? [card] : [];
+    });
+
+    expect(cards).toHaveLength(1);
+    expect(cards[0]).toMatchObject({
+      kind: 'clarify.v1',
+      producedBy: { toolCallId: 'toolu_clarify', toolName: CLARIFY_TOOL_NAME },
+    });
+    expect(sent.some((frame) => frame.choices?.[0]?.delta?.['tool_calls'] !== undefined)).toBe(
+      false,
+    );
+    expect(sent.map((frame) => frame.choices?.[0]?.finish_reason).filter(Boolean)).toEqual([
+      'stop',
+    ]);
+    expect(persisted[0]).toMatchObject({ truncated: false, interactiveCards: cards });
+    expect(successfulTurns).toBe(1);
+  });
+
+  it('leaves the call raw for a caller that never asked for clarify cards', async () => {
+    const { body } = await run(clarifyCallChunks(DESTINATION_QUESTION));
+
+    expect(frames(body).some((frame) => frame.choices?.[0]?.delta?.['tool_calls'])).toBe(true);
+    expect(body).not.toContain('x_interactive_card');
+  });
+});
+
+describe('buildAdapterStreamResponse, the finish reason stored with the turn', () => {
+  async function persistedFinishReason(
+    chunks: StreamChunk[],
+    wireMode: 'legacy-web' | 'openai-passthrough',
+  ): Promise<unknown> {
+    const response = await buildAdapterStreamResponse(
+      makeRequest() as never,
+      chunksOf(chunks),
+      makeProcessed(),
+      'user-1',
+      Date.now(),
+      wireMode,
+    );
+    await drain(response);
+    return mockPersistAssistantTurn.mock.calls[0]?.[0].snapshot.finishReason;
+  }
+
+  it('stores the finish reason the client was sent', async () => {
+    const answer: StreamChunk = { type: 'text-delta', delta: 'Here is the answer.' };
+    await expect(
+      persistedFinishReason([answer, { type: 'stop', reason: 'end_turn' }], 'legacy-web'),
+    ).resolves.toBe('stop');
+    vi.clearAllMocks();
+    await expect(
+      persistedFinishReason([answer, { type: 'stop', reason: 'max_tokens' }], 'legacy-web'),
+    ).resolves.toBe('max_tokens');
+    vi.clearAllMocks();
+    await expect(
+      persistedFinishReason([answer, { type: 'stop', reason: 'max_tokens' }], 'openai-passthrough'),
+    ).resolves.toBe('length');
+  });
+
+  it('stores no reason for a stream that ended without one', async () => {
+    await expect(
+      persistedFinishReason([{ type: 'text-delta', delta: 'Half an ans' }], 'legacy-web'),
+    ).resolves.toBeNull();
+  });
+
+  it('leaves the reason of a turn the reader stopped to the client', async () => {
+    async function* stalled(): AsyncIterable<StreamChunk> {
+      yield { type: 'text-delta', delta: 'The first half' };
+      await new Promise(() => undefined);
+    }
+    const response = await buildAdapterStreamResponse(
+      makeRequest() as never,
+      stalled(),
+      makeProcessed(),
+      'user-1',
+      Date.now(),
+      'legacy-web',
+    );
+    const reader = response.body!.getReader();
+    await reader.read();
+    await reader.cancel();
+
+    expect(mockPersistAssistantTurn).toHaveBeenCalledTimes(1);
+    const stored = mockPersistAssistantTurn.mock.calls[0]?.[0].snapshot;
+    expect(stored).toMatchObject({ truncated: true });
+    expect(stored).not.toHaveProperty('finishReason');
   });
 });

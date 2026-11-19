@@ -16,7 +16,8 @@
 export const CHAT_TURN_TOOL_CALL_CAP = 16;
 export const AGI_WORK_TURN_TOOL_CALL_CAP = 120;
 
-export type ToolWithdrawalReason = 'unavailable' | 'budget' | 'repeated-query' | 'turn-cap';
+export type ToolWithdrawalReason =
+  'unavailable' | 'budget' | 'repeated-query' | 'repeated-failure' | 'turn-cap';
 
 export interface ToolTurnGovernor {
   /** Close a tool for the remainder of the turn; a call to it is refused. */
@@ -31,6 +32,14 @@ export interface ToolTurnGovernor {
    * tells the model to answer from what it has.
    */
   noteQuery(name: string, rawQuery: unknown): 'new' | 'repeat';
+  /**
+   * Record a call that failed. `repeat` means the same tool already failed with
+   * identical arguments this turn: the caller withdraws the tool so the model
+   * stops retrying a call that will fail the same way.
+   */
+  noteFailedCall(name: string, args: unknown): 'first' | 'repeat';
+  /** A call that changed state succeeded, so an earlier failure may not recur. */
+  forgetFailedCalls(): void;
   /** Count one tool call against the turn cap. */
   countCall(): { withinCap: boolean; used: number };
   capReached(): boolean;
@@ -81,6 +90,24 @@ export function withdrawnToolMessage(name: string): string {
   );
 }
 
+function canonicalArguments(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalArguments);
+  if (value === null || typeof value !== 'object') return value;
+  return Object.fromEntries(
+    Object.keys(value as Record<string, unknown>)
+      .sort()
+      .map((key) => [key, canonicalArguments((value as Record<string, unknown>)[key])]),
+  );
+}
+
+export function repeatedFailedCallMessage(name: string, failure: string): string {
+  return (
+    `${failure}\n\nRepeated failure: ${name} was already tried with these same ` +
+    'arguments this turn and failed, so it is now closed for this turn. Do not call ' +
+    'it again. Answer from what you already have, and say plainly what could not be done.'
+  );
+}
+
 export function repeatedQueryMessage(query: string): string {
   return (
     `Repeated search: "${query}" already ran this turn and returned the results ` +
@@ -97,7 +124,8 @@ export function repeatedQueryMessage(query: string): string {
  * is not evidence until someone deliberately puts it here. Every reason the
  * governor has today is a harness fact: `unavailable` is a sandbox or executor
  * down on our side, `budget` and `turn-cap` are our own caps, and
- * `repeated-query` is a search loop rather than a loss of tool support.
+ * `repeated-query` and `repeated-failure` are retry loops rather than a loss of
+ * tool support.
  */
 const MODEL_ATTRIBUTABLE_WITHDRAWALS: ReadonlySet<ToolWithdrawalReason> =
   new Set<ToolWithdrawalReason>();
@@ -133,6 +161,7 @@ export function resolveToolCapabilityObservation(
 export function createToolTurnGovernor(cap: number): ToolTurnGovernor {
   const withdrawn = new Map<string, ToolWithdrawalReason>();
   const queriesByTool = new Map<string, Set<string>>();
+  const failedCalls = new Set<string>();
   let used = 0;
   let capAnnounced = false;
 
@@ -159,6 +188,15 @@ export function createToolTurnGovernor(cap: number): ToolTurnGovernor {
       if (seen.has(normalised)) return 'repeat';
       seen.add(normalised);
       return 'new';
+    },
+    noteFailedCall(name, args) {
+      const key = `${name}\u0000${JSON.stringify(canonicalArguments(args ?? {}))}`;
+      if (failedCalls.has(key)) return 'repeat';
+      failedCalls.add(key);
+      return 'first';
+    },
+    forgetFailedCalls() {
+      failedCalls.clear();
     },
     countCall() {
       used += 1;

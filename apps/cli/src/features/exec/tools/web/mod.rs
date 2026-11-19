@@ -186,11 +186,39 @@ async fn read_body_capped(mut resp: reqwest::Response) -> std::result::Result<St
     Ok(String::from_utf8_lossy(&buf).into_owned())
 }
 
+/// Whether a redirect stays inside what the user approved for this call: the
+/// host the call named, or one their allow rules name. Any other host would be
+/// sent the address, and whatever the model put in it, without the user being
+/// asked, so the caller must not follow it. This is decided before the hop is
+/// resolved, because a DNS lookup of an unapproved name already leaks to it.
+fn redirect_host_is_approved(
+    approved_url: &str,
+    redirect_url: &str,
+    permissions: &crate::permissions::PermissionStore,
+) -> bool {
+    let host_of = |url: &str| -> Option<String> {
+        reqwest::Url::parse(url)
+            .ok()?
+            .host_str()
+            .map(str::to_string)
+    };
+    let Some(redirect_host) = host_of(redirect_url) else {
+        return false;
+    };
+    host_of(approved_url).as_deref() == Some(redirect_host.as_str())
+        || permissions.names_domain(&redirect_host)
+}
+
 /// Fetch `url`, following redirects manually so every hop is re-validated AND
 /// pinned to the addresses that validation saw.
+///
+/// `host_approval` is the store this call's per-host approval was decided
+/// against. `None` follows a redirect to any host, so pass it only for a
+/// session that runs without that approval.
 async fn fetch_with_pinned_hops(
     url: &str,
     site_rules: Option<&SiteRules>,
+    host_approval: Option<&crate::permissions::PermissionStore>,
 ) -> std::result::Result<String, String> {
     let mut current = url.to_string();
     for hop in 0..=WEB_FETCH_MAX_REDIRECTS {
@@ -224,7 +252,15 @@ async fn fetch_with_pinned_hops(
             .and_then(|v| v.to_str().ok())
             .ok_or_else(|| format!("Failed to fetch URL: redirect from {current} had no Location"))?
             .to_string();
-        current = next_hop_url(&current, &location)?;
+        let next = next_hop_url(&current, &location)?;
+        let unapproved = host_approval
+            .is_some_and(|permissions| !redirect_host_is_approved(url, &next, permissions));
+        if unapproved {
+            return Err(format!(
+                "Redirect not followed: {current} redirects to {next}, which is on a site this fetch was not approved for. Nothing was sent to it. Reading that address takes a separate web_fetch call, which the user is asked to approve first."
+            ));
+        }
+        current = next;
     }
     Err(format!(
         "Failed to fetch URL: too many redirects (limit: {WEB_FETCH_MAX_REDIRECTS})"
@@ -497,7 +533,10 @@ fn page_title(html: &str) -> Option<String> {
     (!title.is_empty()).then_some(title)
 }
 
-pub(super) async fn execute_web_fetch(args: &HashMap<String, String>) -> Result<ToolResult> {
+pub(super) async fn execute_web_fetch(
+    args: &HashMap<String, String>,
+    host_approval: Option<&crate::permissions::PermissionStore>,
+) -> Result<ToolResult> {
     let url = match args.get("url") {
         Some(u) => u,
         None => {
@@ -537,7 +576,7 @@ pub(super) async fn execute_web_fetch(args: &HashMap<String, String>) -> Result<
 
     print_tool_status("web_fetch", &format!("WebFetch({})", url));
 
-    match fetch_with_pinned_hops(url, site_rules.as_ref()).await {
+    match fetch_with_pinned_hops(url, site_rules.as_ref(), host_approval).await {
         Ok(body) => {
             crate::sources::record([crate::sources::source(
                 url,
@@ -727,6 +766,48 @@ mod tests {
             validate_fetch_url(&rebound).is_err(),
             "hop escaped validation"
         );
+    }
+
+    #[test]
+    fn a_redirect_is_followed_only_to_the_approved_host_or_an_allowed_one() {
+        let mut permissions = crate::permissions::PermissionStore::default();
+        permissions.allow_always("domain:allowed.example.invalid");
+        let approved = "https://docs.example.invalid/redirect?to=elsewhere";
+
+        for followed in [
+            "https://docs.example.invalid/moved",
+            "http://docs.example.invalid:8080/moved",
+            "https://allowed.example.invalid/page",
+        ] {
+            assert!(
+                redirect_host_is_approved(approved, followed, &permissions),
+                "{followed} was not followed"
+            );
+        }
+        for stopped in [
+            "https://attacker.example.invalid/c?d=secret",
+            "https://www.docs.example.invalid/moved",
+            "https://docs.example.invalid.attacker.example.invalid/",
+            "file:///etc/passwd",
+            "not a url",
+        ] {
+            assert!(
+                !redirect_host_is_approved(approved, stopped, &permissions),
+                "{stopped} was followed"
+            );
+        }
+
+        let once = crate::permissions::PermissionStore::default();
+        assert!(redirect_host_is_approved(
+            "https://allowed.example.invalid/redirect",
+            "https://allowed.example.invalid/next",
+            &once
+        ));
+        assert!(!redirect_host_is_approved(
+            "https://allowed.example.invalid/redirect?to=attacker",
+            "https://attacker.example.invalid/c?d=secret",
+            &once
+        ));
     }
 
     #[tokio::test]

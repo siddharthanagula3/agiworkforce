@@ -34,17 +34,24 @@ function runReleaseGuard(
       'store-listing/ios',
       'store-listing/android',
       'src/features/billing',
+      'lib',
     ]) {
       fs.mkdirSync(path.join(root, directory), { recursive: true });
     }
     for (const file of [
       'app.config.js',
+      'lib/v1FeatureFlags.ts',
       'src/features/billing/storePurchases.json',
       'scripts/release/verify-privacy-declarations.mjs',
       'store-listing/android/data-safety.json',
     ]) {
       fs.copyFileSync(path.join(mobileRoot, file), path.join(root, file));
     }
+    fs.symlinkSync(
+      path.join(mobileRoot, 'node_modules'),
+      path.join(root, 'node_modules'),
+      process.platform === 'win32' ? 'junction' : 'dir',
+    );
     const parser = 'scripts/release/parse-privacy-manifest.py';
     if (fs.existsSync(path.join(mobileRoot, parser))) {
       fs.copyFileSync(path.join(mobileRoot, parser), path.join(root, parser));

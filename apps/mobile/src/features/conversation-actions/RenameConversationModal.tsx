@@ -9,12 +9,13 @@ import {
   View,
 } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Check } from 'lucide-react-native';
 import { CONVERSATION_TITLE_MAX_LENGTH } from '@agiworkforce/cloud-contracts';
 import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { dialogPadding, typeScale } from '@/src/ui/theme/tokens';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 import type {
   ConversationMenuAction,
   ConversationMenuState,
@@ -34,7 +35,6 @@ export function ActionMenuSheet({
   dismissLabel?: string;
 }) {
   const colors = useThemeColors();
-  const { height } = useWindowDimensions();
   const pendingRef = useRef<(() => void) | null>(null);
 
   const runPending = useCallback(() => {
@@ -71,94 +71,123 @@ export function ActionMenuSheet({
         accessibilityRole="button"
         accessible={false}
       >
-        <SafeAreaView edges={['bottom']} style={{ width: '100%' }}>
-          <PressableBox
-            style={{
-              backgroundColor: colors.surfaceElevated,
-              borderTopLeftRadius: 20,
-              borderTopRightRadius: 20,
-              paddingTop: 8,
-              paddingBottom: 8,
-            }}
-            onPress={() => undefined}
-            accessible={false}
-          >
-            <Text
-              style={{
-                fontSize: typeScale.caption,
-                color: colors.textMuted,
-                paddingHorizontal: dialogPadding,
-                paddingBottom: 8,
-              }}
-              numberOfLines={1}
-            >
-              {menu.title}
-            </Text>
-            <ScrollView
-              keyboardShouldPersistTaps="handled"
-              style={{ maxHeight: height * 0.6 }}
-              bounces={false}
-            >
-              {menu.actions.map((action, index) => (
-                <PressableBox
-                  key={action.key}
-                  testID={`conversation-action-${action.key}`}
-                  onPress={() => select(action)}
-                  accessibilityRole="button"
-                  accessibilityLabel={action.label}
-                  accessibilityState={action.selected ? { selected: true } : undefined}
-                  style={{
-                    minHeight: 52,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: 12,
-                    paddingHorizontal: dialogPadding,
-                    borderBottomWidth: index < menu.actions.length - 1 ? 1 : 0,
-                    borderBottomColor: colors.border,
-                  }}
-                >
-                  <Text
-                    numberOfLines={1}
-                    style={{
-                      flexShrink: 1,
-                      fontSize: typeScale.callout,
-                      color: action.destructive ? colors.agentError : colors.textPrimary,
-                    }}
-                  >
-                    {action.label}
-                  </Text>
-                  {action.selected ? <Check size={18} color={colors.textPrimary} /> : null}
-                </PressableBox>
-              ))}
-            </ScrollView>
-            <PressableBox
-              testID="conversation-action-cancel"
-              onPress={menu.close}
-              accessibilityRole="button"
-              accessibilityLabel="Cancel"
-              style={{
-                minHeight: 52,
-                justifyContent: 'center',
-                paddingHorizontal: dialogPadding,
-                borderTopWidth: 1,
-                borderTopColor: colors.border,
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: typeScale.callout,
-                  fontWeight: '600',
-                  color: colors.textSecondary,
-                }}
-              >
-                Cancel
-              </Text>
-            </PressableBox>
-          </PressableBox>
-        </SafeAreaView>
+        <ActionMenuSheetBody menu={menu} select={select} />
       </PressableBox>
     </Modal>
+  );
+}
+
+function ActionMenuSheetBody({
+  menu,
+  select,
+}: {
+  menu: ConversationMenuState;
+  select: (action: ConversationMenuAction) => void;
+}) {
+  const colors = useThemeColors();
+  const { height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+
+  return (
+    <PressableBox
+      testID="chat-actions-sheet"
+      style={{
+        ...contentColumn('reading'),
+        backgroundColor: colors.surfaceElevated,
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        paddingTop: 8,
+        paddingBottom: 8 + insets.bottom,
+      }}
+      onPress={() => undefined}
+      accessible={false}
+    >
+      <Text
+        style={{
+          fontSize: typeScale.caption,
+          color: colors.textMuted,
+          paddingHorizontal: dialogPadding,
+          paddingBottom: 8,
+        }}
+        numberOfLines={1}
+      >
+        {menu.title}
+      </Text>
+      {menu.message ? (
+        <Text
+          testID="chat-actions-sheet-message"
+          style={{
+            fontSize: typeScale.caption,
+            color: colors.textMuted,
+            paddingHorizontal: dialogPadding,
+            paddingBottom: 8,
+          }}
+        >
+          {menu.message}
+        </Text>
+      ) : null}
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        style={{ maxHeight: height * 0.6 }}
+        bounces={false}
+      >
+        {menu.actions.map((action, index) => (
+          <PressableBox
+            key={action.key}
+            testID={`conversation-action-${action.key}`}
+            onPress={() => select(action)}
+            accessibilityRole="button"
+            accessibilityLabel={action.label}
+            accessibilityState={action.selected ? { selected: true } : undefined}
+            style={{
+              minHeight: 52,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 12,
+              paddingHorizontal: dialogPadding,
+              borderBottomWidth: index < menu.actions.length - 1 ? 1 : 0,
+              borderBottomColor: colors.border,
+            }}
+          >
+            <Text
+              numberOfLines={1}
+              style={{
+                flexShrink: 1,
+                fontSize: typeScale.callout,
+                color: action.destructive ? colors.agentError : colors.textPrimary,
+              }}
+            >
+              {action.label}
+            </Text>
+            {action.selected ? <Check size={18} color={colors.textPrimary} /> : null}
+          </PressableBox>
+        ))}
+      </ScrollView>
+      <PressableBox
+        testID="conversation-action-cancel"
+        onPress={menu.close}
+        accessibilityRole="button"
+        accessibilityLabel="Cancel"
+        style={{
+          minHeight: 52,
+          justifyContent: 'center',
+          paddingHorizontal: dialogPadding,
+          borderTopWidth: 1,
+          borderTopColor: colors.border,
+        }}
+      >
+        <Text
+          style={{
+            fontSize: typeScale.callout,
+            fontWeight: '600',
+            color: colors.textSecondary,
+          }}
+        >
+          Cancel
+        </Text>
+      </PressableBox>
+    </PressableBox>
   );
 }
 
@@ -196,8 +225,9 @@ export function RenameConversationModal({
             onPress={rename.cancel}
           >
             <PressableBox
+              testID="rename-chat-dialog"
               style={{
-                width: '100%',
+                ...contentColumn('form'),
                 backgroundColor: colors.surfaceElevated,
                 borderRadius: 14,
                 padding: dialogPadding,

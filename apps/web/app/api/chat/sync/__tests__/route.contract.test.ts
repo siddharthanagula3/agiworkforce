@@ -17,7 +17,7 @@ import {
   SYNC_PROTOCOL_VERSION,
 } from '@agiworkforce/cloud-contracts';
 import { ERROR_CODE_TO_HTTP_STATUS, ErrorCode } from '@agiworkforce/types';
-import { ASSISTANT_CONTENT_EDIT_METADATA_KEY } from '@/features/chat/lib/assistant-content-edit-contract';
+import { ASSISTANT_CONTENT_EDIT_METADATA_KEY } from '@agiworkforce/cloud-contracts';
 type ScanModule0 = typeof import('@/lib/services/tier-unit-quota-service');
 
 const CLIENT_UPDATE_REQUIRED_STATUS = ERROR_CODE_TO_HTTP_STATUS[ErrorCode.CLIENT_UPDATE_REQUIRED];
@@ -62,6 +62,15 @@ const { mockAssertFreeDailyAllowance } = vi.hoisted(() => ({
 vi.mock('@/lib/services/tier-unit-quota-service', async (importOriginal) => ({
   ...(await importOriginal<ScanModule0>()),
   assertFreeDailyAllowance: mockAssertFreeDailyAllowance,
+}));
+
+type StoppedRunTurnModule = typeof import('@/app/api/llm/v1/chat/completions/lib/stopped-run-turn');
+const { mockRecordStoppedRunAssistantTurn } = vi.hoisted(() => ({
+  mockRecordStoppedRunAssistantTurn: vi.fn(async (_input: unknown) => undefined),
+}));
+vi.mock('@/app/api/llm/v1/chat/completions/lib/stopped-run-turn', async (importOriginal) => ({
+  ...(await importOriginal<StoppedRunTurnModule>()),
+  recordStoppedRunAssistantTurn: mockRecordStoppedRunAssistantTurn,
 }));
 
 import { GET, POST } from '../route';
@@ -228,6 +237,61 @@ describe('GET /api/chat/sync, shared cloud contract', () => {
     expect(body.conversations[0].active_leaf_message_id).toBe(LEAF_ID);
     expect(body.messages[0].parent_id).toBe(PARENT_ID);
     expect(ChatSyncPullResponseSchema.safeParse(body).success).toBe(true);
+  });
+
+  it('delivers an answer stored with citation markup without it', async () => {
+    mockQuery
+      .mockResolvedValueOnce([conversationRow])
+      .mockResolvedValueOnce([
+        {
+          ...messageRow,
+          content: 'Starship flew again. \uE200cite\uE202turn620734view2\uE201\n\nNext.',
+        },
+      ])
+      .mockResolvedValueOnce([]);
+
+    const body = await (await GET(makeGet())).json();
+
+    expect(body.messages[0].content).toBe('Starship flew again. \n\nNext.');
+  });
+
+  it('delivers an artifact body stored with citation markup without it', async () => {
+    mockQuery
+      .mockResolvedValueOnce([conversationRow])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          ...artifactRow,
+          content: '# Plan\n\nStarship flew again. \uE200cite\uE202turn620734view2\uE201',
+        },
+        { ...artifactRow, id: PROJECT_ID, content: 'print(1)' },
+      ]);
+
+    const body = await (await GET(makeGet())).json();
+
+    expect(body.artifacts[0].content).toBe('# Plan\n\nStarship flew again. ');
+    expect(body.artifacts[1].content).toBe('print(1)');
+  });
+
+  it('leaves a code artifact exactly as stored, even when it holds the marker characters', async () => {
+    const promptConfig = 'PS1="\uE200 \\w $ "';
+    mockQuery
+      .mockResolvedValueOnce([conversationRow])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        { ...artifactRow, artifact_type: 'code', language: 'bash', content: promptConfig },
+        {
+          ...artifactRow,
+          id: PROJECT_ID,
+          artifact_type: 'document',
+          content: 'Note \uE200cite\uE202turn0search0\uE201 end',
+        },
+      ]);
+
+    const body = await (await GET(makeGet())).json();
+
+    expect(body.artifacts[0].content).toBe(promptConfig);
+    expect(body.artifacts[1].content).toBe('Note  end');
   });
 
   it('sends a null pointer rather than dropping it, so a linear chat is not read as legacy', async () => {
@@ -662,6 +726,78 @@ describe('POST /api/chat/sync, shared cloud contract', () => {
     });
   });
 
+  it('delivers the current row of a message conflict without citation markup', async () => {
+    mockQuery.mockImplementation(async (sql: string) =>
+      String(sql).includes('insert into web_messages')
+        ? [
+            {
+              kind: 'conflict',
+              id: MSG_ID,
+              server_version: null,
+              current: {
+                ...messageRow,
+                content: 'Starship flew again. \uE200cite\uE202turn620734view2\uE201\n\nNext.',
+              },
+            },
+          ]
+        : [],
+    );
+
+    const res = await POST(
+      makePost({
+        protocolVersion: 2,
+        messages: [
+          {
+            id: MSG_ID,
+            conversationId: CONV_ID,
+            role: 'assistant',
+            content: 'stale content',
+            baseVersion: '42',
+          },
+        ],
+      }),
+    );
+    const body = await res.json();
+    expect(body.conflicts.messages[0].current.content).toBe('Starship flew again. \n\nNext.');
+  });
+
+  it('delivers the current row of an artifact conflict without citation markup', async () => {
+    mockQuery.mockImplementation(async (sql: string) =>
+      String(sql).includes('insert into web_artifacts')
+        ? [
+            {
+              kind: 'conflict',
+              id: ART_ID,
+              server_version: null,
+              current: {
+                ...artifactRow,
+                content: '# Plan\n\nStarship flew again. \uE200cite\uE202turn620734view2\uE201',
+              },
+            },
+          ]
+        : [],
+    );
+
+    const res = await POST(
+      makePost({
+        protocolVersion: 2,
+        artifacts: [
+          {
+            id: ART_ID,
+            conversationId: CONV_ID,
+            artifactType: 'markdown',
+            content: 'stale content',
+            baseVersion: '43',
+          },
+        ],
+      }),
+    );
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.conflicts.artifacts[0].current.content).toBe('# Plan\n\nStarship flew again. ');
+  });
+
   it('builds the message thread argument from the server leaf, never from the pushed item', async () => {
     mockQuery.mockImplementation(async (sql: string) =>
       String(sql).includes('insert into web_messages')
@@ -806,5 +942,86 @@ describe('POST /api/chat/sync, shared cloud contract', () => {
   it('empty push ack parses', async () => {
     const res = await POST(makePost({}));
     expect(ChatSyncPushResponseSchema.safeParse(await res.json()).success).toBe(true);
+  });
+});
+
+describe('POST /api/chat/sync, a stop the server recorded before the device saved its turn', () => {
+  const RUN_ID = '018f6f2a-0000-7000-8000-0000000000a1';
+  const CONVERSATION_ORGANIZATION_ID = '22222222-2222-4222-8222-222222222222';
+
+  beforeEach(() => vi.clearAllMocks());
+
+  function pushAnswer(
+    stored: Record<string, unknown> | null,
+    outcome: 'applied' | 'conflict' = 'applied',
+  ) {
+    mockQuery.mockImplementation(async (sql: string) => {
+      if (String(sql).includes('insert into web_messages')) {
+        return outcome === 'applied'
+          ? [{ kind: 'applied', id: MSG_ID, server_version: '48', current: null }]
+          : [{ kind: 'conflict', id: MSG_ID, server_version: null, current: null }];
+      }
+      if (String(sql).includes('conversation.organization_id::text as organization_id')) {
+        return [
+          {
+            id: MSG_ID,
+            conversation_id: CONV_ID,
+            organization_id: CONVERSATION_ORGANIZATION_ID,
+            content: 'Partial answer',
+            metadata: stored,
+          },
+        ];
+      }
+      return [];
+    });
+    return POST(
+      makePost({
+        protocolVersion: 2,
+        messages: [
+          {
+            id: MSG_ID,
+            conversationId: CONV_ID,
+            role: 'assistant',
+            content: 'Partial answer',
+            metadata: { cloudAgentRun: { runId: RUN_ID } },
+            baseVersion: '0',
+          },
+        ],
+      }),
+    );
+  }
+
+  it('records the stop on a saved turn of a run that ended cancelled, in the chat workspace', async () => {
+    const res = await pushAnswer({ cloudAgentRun: { runId: RUN_ID } });
+
+    expect(res.status).toBe(200);
+    expect(mockRecordStoppedRunAssistantTurn).toHaveBeenCalledTimes(1);
+    expect(mockRecordStoppedRunAssistantTurn).toHaveBeenCalledWith({
+      userId: 'user_contract_1',
+      organizationId: CONVERSATION_ORGANIZATION_ID,
+      runId: RUN_ID,
+      messageId: MSG_ID,
+    });
+  });
+
+  it('leaves a stored turn that already says how it ended to that ending', async () => {
+    const res = await pushAnswer({ cloudAgentRun: { runId: RUN_ID }, finishReason: 'stop' });
+
+    expect(res.status).toBe(200);
+    expect(mockRecordStoppedRunAssistantTurn).not.toHaveBeenCalled();
+  });
+
+  it('does not look for a stop on a turn that names no run', async () => {
+    const res = await pushAnswer({ cloudApproval: null });
+
+    expect(res.status).toBe(200);
+    expect(mockRecordStoppedRunAssistantTurn).not.toHaveBeenCalled();
+  });
+
+  it('does not touch a turn the push did not write', async () => {
+    const res = await pushAnswer({ cloudAgentRun: { runId: RUN_ID } }, 'conflict');
+
+    expect(res.status).toBe(200);
+    expect(mockRecordStoppedRunAssistantTurn).not.toHaveBeenCalled();
   });
 });

@@ -19,6 +19,7 @@ import {
 } from '@/lib/server/ooxml-markup';
 import type { TurnAttachment } from '@/lib/e2b/attachment-staging';
 import type { E2BExecutor } from '@/lib/e2b/types';
+import { exactCellNumber, isNumericCellText } from './managed-workbook-builder';
 
 export class ManagedOfficeProcessingError extends Error {}
 
@@ -1342,6 +1343,10 @@ function withoutTypeAttribute(openingTag: string): string {
   return openingTag.slice(0, start) + openingTag.slice(type.end);
 }
 
+function comparableCellValue(value: string | number | undefined): string | number | undefined {
+  return typeof value === 'string' ? (exactCellNumber(value) ?? value) : value;
+}
+
 function withEvaluatedCache(cell: string, evaluated: string): string {
   const value = evaluated.match(/<v>([^<]+)<\/v>/)?.[0];
   const type = cellAttribute(evaluated, 't') || undefined;
@@ -1448,12 +1453,15 @@ export async function editManagedWorkbook(
               : type === 'str'
                 ? decodedXmlText(value)
                 : Number(value);
-      if (current !== edit.expected)
+      if (comparableCellValue(current) !== comparableCellValue(edit.expected))
         throw new ManagedOfficeProcessingError(
           'A workbook cell differs from the expected value; refresh the source before editing.',
         );
       const open = withoutTypeAttribute(plainOpeningTag(firstOpenTag(cell, 'c')!));
       if (typeof edit.value === 'number') return open + `<v>${edit.value}</v></c>`;
+      const textCell =
+        formula === undefined && (type === 's' || type === 'inlineStr' || type === 'str');
+      if (!textCell && isNumericCellText(edit.value)) return open + `<v>${edit.value}</v></c>`;
       if (edit.value.startsWith('=')) return open + `<f>${xmlText(edit.value.slice(1))}</f></c>`;
       return (
         open.replace(/>$/, ' t="inlineStr">') +

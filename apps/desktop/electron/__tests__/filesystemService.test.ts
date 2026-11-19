@@ -967,6 +967,30 @@ describe('globFiles', () => {
     expect(paths).toContain('src/nested/deep.ts');
     expect(paths.some((entry) => entry.startsWith('node_modules/'))).toBe(false);
   });
+
+  it('matches without regard to case only when asked to', async () => {
+    const exact = await globFiles(root, '**/*.TS');
+    expect(exact.map((entry) => entry.path)).not.toContain('src/index.ts');
+
+    const folded = await globFiles(root, '**/*.TS', '', { ignoreCase: true });
+    expect(folded.map((entry) => entry.path)).toContain('src/index.ts');
+  });
+
+  /**
+   * A pattern compiled to a backtracking regular expression does not come back
+   * from this name, and the search runs in the main process.
+   */
+  it('answers a pattern of many wildcards over a long near miss', async () => {
+    const nearMiss = 'a'.repeat(120);
+    await fs.writeFile(path.join(sandbox, 'src', nearMiss), '');
+    try {
+      expect(await globFiles(root, `**/${'*a'.repeat(24)}*b`)).toEqual([]);
+      const found = await globFiles(root, `**/${'*a'.repeat(24)}*`);
+      expect(found.map((entry) => entry.path)).toEqual([`src/${nearMiss}`]);
+    } finally {
+      await fs.rm(path.join(sandbox, 'src', nearMiss), { force: true });
+    }
+  });
 });
 
 describe('grepFiles', () => {

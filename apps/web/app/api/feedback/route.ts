@@ -21,12 +21,12 @@ import {
 } from '@/lib/server/object-storage';
 import { secureFilenameSegment } from '@/lib/secure-random';
 import {
+  FEEDBACK_SOURCES,
   RESPONSE_RATING_COMMENT_MAX_CHARS,
   RESPONSE_RATING_MESSAGE_MAX_CHARS,
   RESPONSE_RATING_REASONS,
-  CHROME_RESPONSE_RATING_MESSAGE,
-  WEB_RESPONSE_RATING_MESSAGE,
-} from './response-rating-contract';
+  answerlessResponseRatingMessage,
+} from '@agiworkforce/cloud-contracts';
 
 const MAX_LOGS_CHARS = 20_000;
 const MAX_SCREENSHOT_BYTES = 4 * 1024 * 1024;
@@ -119,7 +119,7 @@ const FeedbackSchema = z.object({
   user_id: z.string().trim().max(200).nullish(),
   metadata: z
     .object({
-      source: z.enum(['desktop', 'web', 'vscode', 'cli', 'chrome']).optional(),
+      source: z.enum(FEEDBACK_SOURCES).optional(),
       platform: z.string().trim().max(100),
       version: z.string().trim().max(100),
       user_agent: z.string().trim().max(500),
@@ -233,16 +233,9 @@ interface FeedbackAttachments {
 
 const NO_ATTACHMENTS: FeedbackAttachments = { logs: null, screenshotKey: null };
 
-const ANSWERLESS_RATING_MESSAGES: Partial<
-  Record<NonNullable<Feedback['metadata']['source']>, string>
-> = {
-  web: WEB_RESPONSE_RATING_MESSAGE,
-  chrome: CHROME_RESPONSE_RATING_MESSAGE,
-};
-
 function answerlessRatingMessage(metadata: Feedback['metadata']): string | undefined {
   if (metadata.feedback_context !== 'response_rating' || !metadata.source) return undefined;
-  return ANSWERLESS_RATING_MESSAGES[metadata.source];
+  return answerlessResponseRatingMessage(metadata.source);
 }
 
 function isAnswerlessResponseRating(metadata: Feedback['metadata']): boolean {

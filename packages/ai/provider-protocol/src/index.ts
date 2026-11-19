@@ -75,6 +75,13 @@ export {
   resolveOpenAIToolStrictness,
 } from './openai-tool-schema';
 
+export {
+  createCitationMarkupFilter,
+  stripCitationMarkup,
+  withoutCitationMarkup,
+} from './citation-markup';
+export type { CitationMarkupFilter } from './citation-markup';
+
 export { normalizeToolParameterSchema } from './tool-parameter-schema';
 export type { ToolParameterSchemaOptions } from './tool-parameter-schema';
 

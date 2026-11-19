@@ -19,15 +19,48 @@ import {
  * files its rows under the shared NOTIFICATION_CATEGORIES instead.
  */
 export type PushPreferenceGroup =
-  'chat_replies' | 'tasks' | 'scheduled_tasks' | 'product_updates' | 'product';
+  | 'chat_replies'
+  | 'tasks'
+  | 'scheduled_tasks'
+  | 'research'
+  | 'code'
+  | 'product_updates'
+  | 'product'
+  | 'usage_resets';
 
 export const DEFAULT_CATEGORY_ENABLED: Readonly<Record<PushPreferenceGroup, boolean>> = {
   chat_replies: true,
   tasks: true,
   scheduled_tasks: true,
+  research: true,
+  code: true,
   product_updates: false,
   product: false,
+  usage_resets: true,
 };
+
+/**
+ * Groups split out of `tasks` whose notices only a newer server sends. Until
+ * this device has received one, the group stays hidden and its notices follow
+ * the `tasks` switch, so a switch never shows before anything can reach it.
+ */
+export type AnnouncedPushGroup = Extract<PushPreferenceGroup, 'research' | 'code'>;
+
+const ANNOUNCED_GROUP_BY_TYPE: Readonly<
+  Partial<Record<NotificationEventType, AnnouncedPushGroup>>
+> = {
+  research_completed: 'research',
+  code_session_completed: 'code',
+  code_session_failed: 'code',
+  code_session_needs_input: 'code',
+};
+
+export function announcedGroupForType(type: unknown): AnnouncedPushGroup | null {
+  return typeof type === 'string' &&
+    Object.prototype.hasOwnProperty.call(ANNOUNCED_GROUP_BY_TYPE, type)
+    ? (ANNOUNCED_GROUP_BY_TYPE[type as NotificationEventType] ?? null)
+    : null;
+}
 
 const LEGACY_CATEGORY_DEFAULTS = {
   approvals: true,
@@ -55,17 +88,28 @@ export interface NotificationPrefsState {
   vibrationEnabled: Record<'critical' | 'high' | 'normal' | 'low', boolean>;
   quietHours: QuietHours;
   breakReminderMinutes: BreakReminderMinutes | null;
+  announcedPushGroups: AnnouncedPushGroup[];
 
   setCategoryEnabled: (category: PushPreferenceGroup, enabled: boolean) => void;
   setVibrationEnabled: (priority: 'critical' | 'high' | 'normal' | 'low', enabled: boolean) => void;
   setQuietHours: (quietHours: Partial<QuietHours>) => void;
   setBreakReminderMinutes: (minutes: BreakReminderMinutes | null) => void;
   applyTimeFocusPreferences: (preferences: TimeFocusPreferences) => void;
+  notePushTypeReceived: (type: unknown) => void;
 
   shouldNotify: (type: NotificationEventType) => boolean;
 }
 
-export function getCategoryForType(type: NotificationEventType): PushPreferenceGroup {
+function currentAnnouncedPushGroups(): readonly AnnouncedPushGroup[] {
+  return useNotificationPrefsStore.getState().announcedPushGroups ?? [];
+}
+
+export function getCategoryForType(
+  type: NotificationEventType,
+  announced: readonly AnnouncedPushGroup[] = currentAnnouncedPushGroups(),
+): PushPreferenceGroup {
+  const split = announcedGroupForType(type);
+  if (split) return announced.includes(split) ? split : 'tasks';
   switch (type) {
     case 'chat_message':
       return 'chat_replies';
@@ -85,6 +129,8 @@ export function getCategoryForType(type: NotificationEventType): PushPreferenceG
     case 'status_update':
     case 'heartbeat_info':
       return 'product';
+    case 'usage_limit_reset':
+      return 'usage_resets';
     default:
       return 'tasks';
   }
@@ -106,8 +152,11 @@ export function migrateLegacyCategoryEnabled(
     chat_replies: flag('task_updates'),
     tasks,
     scheduled_tasks: tasks,
+    research: tasks,
+    code: tasks,
     product_updates: DEFAULT_CATEGORY_ENABLED.product_updates,
     product: flag('status'),
+    usage_resets: DEFAULT_CATEGORY_ENABLED.usage_resets,
   };
 }
 
@@ -125,8 +174,24 @@ export function addSeparatedPushGroups(current: unknown): Record<PushPreferenceG
     tasks: flag('tasks'),
     scheduled_tasks:
       typeof source.scheduled_tasks === 'boolean' ? source.scheduled_tasks : flag('tasks'),
+    research: flag('tasks'),
+    code: flag('tasks'),
     product_updates: flag('product_updates'),
     product: flag('product'),
+    usage_resets: flag('usage_resets'),
+  };
+}
+
+export function addResearchAndCodeGroups(current: unknown): Record<PushPreferenceGroup, boolean> {
+  const groups = addSeparatedPushGroups(current);
+  const source =
+    current !== null && typeof current === 'object' && !Array.isArray(current)
+      ? (current as Partial<Record<PushPreferenceGroup, unknown>>)
+      : {};
+  return {
+    ...groups,
+    research: typeof source.research === 'boolean' ? source.research : groups.tasks,
+    code: typeof source.code === 'boolean' ? source.code : groups.tasks,
   };
 }
 
@@ -152,18 +217,26 @@ export function migrateNotificationPrefs(persisted: unknown, version: number): u
   if (version < 2) {
     state = { ...state, categoryEnabled: migrateLegacyCategoryEnabled(state['categoryEnabled']) };
   }
-  if (version < 3) {
+  if (version < 4) {
     state = { ...state, categoryEnabled: addSeparatedPushGroups(state['categoryEnabled']) };
+  }
+  if (version < 5) {
+    state = {
+      ...state,
+      categoryEnabled: addResearchAndCodeGroups(state['categoryEnabled']),
+      announcedPushGroups: [],
+    };
   }
   return state;
 }
 
 export function shouldNotifyWithPreferences(
   type: NotificationEventType,
-  preferences: Pick<NotificationPrefsState, 'categoryEnabled' | 'quietHours'>,
+  preferences: Pick<NotificationPrefsState, 'categoryEnabled' | 'quietHours'> &
+    Partial<Pick<NotificationPrefsState, 'announcedPushGroups'>>,
   now: Date,
 ): boolean {
-  const category = getCategoryForType(type);
+  const category = getCategoryForType(type, preferences.announcedPushGroups ?? []);
   if (!preferences.categoryEnabled[category]) return false;
 
   if (
@@ -194,6 +267,7 @@ export const useNotificationPrefsStore = create<NotificationPrefsState>()(
         timezone: deviceTimezone(),
       },
       breakReminderMinutes: null,
+      announcedPushGroups: [],
 
       setCategoryEnabled: (category, enabled) => {
         set((state) => ({
@@ -224,6 +298,32 @@ export const useNotificationPrefsStore = create<NotificationPrefsState>()(
         });
       },
 
+      notePushTypeReceived: (type) => {
+        const group = announcedGroupForType(type);
+        if (!group) return;
+        const announce = () =>
+          set((state) =>
+            state.announcedPushGroups.includes(group)
+              ? state
+              : {
+                  announcedPushGroups: [...state.announcedPushGroups, group],
+                  categoryEnabled: {
+                    ...state.categoryEnabled,
+                    [group]: state.categoryEnabled.tasks,
+                  },
+                },
+          );
+        const { persist: storage } = useNotificationPrefsStore;
+        if (storage.hasHydrated()) {
+          announce();
+          return;
+        }
+        const unsubscribe = storage.onFinishHydration(() => {
+          unsubscribe();
+          announce();
+        });
+      },
+
       shouldNotify: (type: NotificationEventType): boolean => {
         if (
           !useNotificationPrefsStore.persist.hasHydrated() &&
@@ -237,7 +337,7 @@ export const useNotificationPrefsStore = create<NotificationPrefsState>()(
     {
       name: 'notification-prefs-store',
       storage: createJSONStorage(() => mmkvStorage),
-      version: 3,
+      version: 5,
       migrate: (persisted, version) =>
         migrateNotificationPrefs(persisted, version) as NotificationPrefsState,
       skipHydration: true,

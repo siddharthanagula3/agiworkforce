@@ -20,7 +20,11 @@ import {
   DialogTitle,
   useMenuKeyboard,
 } from '@agiworkforce/ui';
-import { getAutoRoutingProfileTiers } from '@agiworkforce/types';
+import {
+  isRoutingProfileChoice,
+  ROUTING_PROFILE_CHOICE_OPTIONS,
+  type RoutingProfileChoice,
+} from '@agiworkforce/types';
 
 import { SUPPORTED_LANGUAGES } from '@/app/i18n/index';
 import { cn } from '@shared/lib/utils';
@@ -28,7 +32,6 @@ import {
   clampVoicePace,
   useVoiceSessionStore,
   VOICE_LANGUAGE_AUTO,
-  type VoiceIntelligence,
 } from '@features/chat/stores/voice-session-store';
 import { VOICE_SESSION_STATUS } from '@agiworkforce/unified-chat';
 import { VoiceOrbPreview } from './VoiceOrb';
@@ -36,7 +39,8 @@ import { LIVE_VOICE_REASONING, type LiveVoiceReasoning } from '@features/chat/li
 
 const LABEL = {
   title: 'Voice settings',
-  description:
+  description: 'Choose the voice, its reasoning, language and pace.',
+  descriptionWithIntelligence:
     'Choose the voice, its reasoning, language and pace, and the intelligence for typed replies.',
   voice: 'Voice',
   previous: 'Previous voice',
@@ -59,6 +63,10 @@ const REASONING_OPTIONS: readonly PickerOption[] = [
     hint: 'Thinks longer on harder questions. Paid plans, from your next voice session',
   },
 ];
+
+const INTELLIGENCE_OPTIONS: readonly PickerOption[] = ROUTING_PROFILE_CHOICE_OPTIONS.map(
+  (option) => ({ id: option.choice, label: option.label, hint: option.description }),
+);
 
 const PACE_OPTIONS: readonly PickerOption[] = [
   { id: '0.75', label: 'Slower', hint: '0.75x' },
@@ -291,16 +299,21 @@ export function VoiceLanguagePicker({
   );
 }
 
+export interface VoiceChatIntelligence {
+  choice: RoutingProfileChoice;
+  onChange: (choice: RoutingProfileChoice) => void;
+}
+
 export interface VoiceSettingsModalProps {
   open: boolean;
   reducedMotion: boolean;
   voices: readonly VoicePickerOption[];
   voiceUri: string | null;
-  intelligence: VoiceIntelligence;
+  /** Offered only where the chat's typed replies route through Auto. */
+  chatIntelligence?: VoiceChatIntelligence | undefined;
   language: string;
   onOpenChange: (open: boolean) => void;
   onVoiceChange: (uri: string) => void;
-  onIntelligenceChange: (intelligence: VoiceIntelligence) => void;
   onLanguageChange: (language: string) => void;
   /** The control that picks where the call's audio plays, when the host has one. */
   audioOutput?: ReactNode;
@@ -311,11 +324,10 @@ export function VoiceSettingsModal({
   reducedMotion,
   voices,
   voiceUri,
-  intelligence,
+  chatIntelligence,
   language,
   onOpenChange,
   onVoiceChange,
-  onIntelligenceChange,
   onLanguageChange,
   audioOutput,
 }: VoiceSettingsModalProps) {
@@ -324,16 +336,6 @@ export function VoiceSettingsModal({
   const setPace = useVoiceSessionStore((state) => state.setPace);
   const reasoning = useVoiceSessionStore((state) => state.reasoning);
   const setReasoning = useVoiceSessionStore((state) => state.setReasoning);
-
-  const intelligenceOptions = useMemo<PickerOption[]>(
-    () =>
-      getAutoRoutingProfileTiers().map((profile) => ({
-        id: profile.profile,
-        label: profile.label,
-        hint: profile.description,
-      })),
-    [],
-  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -346,7 +348,9 @@ export function VoiceSettingsModal({
         }}
       >
         <DialogTitle className="text-base font-semibold">{LABEL.title}</DialogTitle>
-        <DialogDescription className="sr-only">{LABEL.description}</DialogDescription>
+        <DialogDescription className="sr-only">
+          {chatIntelligence ? LABEL.descriptionWithIntelligence : LABEL.description}
+        </DialogDescription>
 
         <div className="flex justify-center">
           <VoiceOrbPreview
@@ -360,16 +364,20 @@ export function VoiceSettingsModal({
         <VoiceCarousel voices={voices} voiceUri={voiceUri} onVoiceChange={onVoiceChange} />
 
         <div className="flex flex-col gap-3">
-          <Picker
-            id="intelligence"
-            label={LABEL.intelligence}
-            icon={Sparkles}
-            options={intelligenceOptions}
-            selectedId={intelligence}
-            open={openPicker === LABEL.intelligence}
-            onOpenChange={(next) => setOpenPicker(next ? LABEL.intelligence : null)}
-            onSelect={(id) => onIntelligenceChange(id as VoiceIntelligence)}
-          />
+          {chatIntelligence ? (
+            <Picker
+              id="intelligence"
+              label={LABEL.intelligence}
+              icon={Sparkles}
+              options={INTELLIGENCE_OPTIONS}
+              selectedId={chatIntelligence.choice}
+              open={openPicker === LABEL.intelligence}
+              onOpenChange={(next) => setOpenPicker(next ? LABEL.intelligence : null)}
+              onSelect={(id) => {
+                if (isRoutingProfileChoice(id)) chatIntelligence.onChange(id);
+              }}
+            />
+          ) : null}
           <Picker
             id="reasoning"
             label={LABEL.reasoning}

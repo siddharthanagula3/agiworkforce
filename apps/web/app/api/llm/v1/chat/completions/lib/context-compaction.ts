@@ -3,7 +3,6 @@ import 'server-only';
 import { createHash } from 'node:crypto';
 
 import { estimateTokens } from '@agiworkforce/routing';
-import type { AutoRouteDecision } from '@agiworkforce/routing';
 import { openAIWireRequestToChatRequest } from '@agiworkforce/provider-protocol';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { logger } from '@/lib/logger';
@@ -12,7 +11,7 @@ import {
   toGenericUpstreamError,
 } from '@/lib/services/provider-adapter-service';
 import { resolveWireMode } from './adapter-providers';
-import { dispatchProviderForSelectedRoute } from '@/lib/services/aggregator-routing';
+import type { ManagedCloudAdmission } from '@/lib/server/managed-cloud-routing/admission';
 import {
   fingerprintManagedUsageRequest,
   ManagedUsageRequestError,
@@ -30,6 +29,7 @@ import {
   applyDroppedSpanReplacement,
   DROPPED_HISTORY_MARKER,
   planContextTrim,
+  planLeavesLatestUserMessageOverflow,
   type ContextSizing,
   type ContextTrimResult,
   type TrimmableMessage,
@@ -159,12 +159,13 @@ async function generateCompactionSummary(params: {
   coverageDigest: string;
   priorSummary: string | null;
   spanMessages: readonly TrimmableMessage[];
-  resolveEconomyRoute: () => AutoRouteDecision;
+  resolveEconomyRoute: () => Promise<ManagedCloudAdmission>;
 }): Promise<string> {
-  const route = params.resolveEconomyRoute();
-  if (route.status !== 'selected') {
-    throw new Error(`no managed route available for context compaction (${route.code})`);
+  const admission = await params.resolveEconomyRoute();
+  if (admission.status !== 'admitted') {
+    throw new Error(`no managed route available for context compaction (${admission.reason})`);
   }
+  const { route, dispatchProvider } = admission;
 
   // Compaction is a second provider call carrying the conversation itself, and
   // it runs inside processRequest, before the turn reaches the secret-handling
@@ -196,7 +197,6 @@ async function generateCompactionSummary(params: {
     temperature: 0,
     stream: false,
   });
-  const dispatchProvider = dispatchProviderForSelectedRoute(route);
   const wireMode = resolveWireMode(dispatchProvider);
 
   const idempotencyKey = `context-compaction:${params.conversationId}:${params.coverageDigest.slice(0, 40)}`;
@@ -281,7 +281,7 @@ async function resolveCompactionSummary(params: {
   planTier: string;
   conversationId: string;
   droppedMessages: readonly TrimmableMessage[];
-  resolveEconomyRoute: () => AutoRouteDecision;
+  resolveEconomyRoute: () => Promise<ManagedCloudAdmission>;
 }): Promise<string> {
   const droppedText = params.droppedMessages
     .filter((message) => message.role === 'user' || message.role === 'assistant')
@@ -389,7 +389,7 @@ export interface ContextCompactionInput {
   conversationId: string | null;
   isTemporary: boolean;
   planTier: string;
-  resolveEconomyRoute: () => AutoRouteDecision;
+  resolveEconomyRoute: () => Promise<ManagedCloudAdmission>;
   sizing?: ContextSizing;
 }
 
@@ -403,9 +403,10 @@ export interface ContextCompactionInput {
  * cached on the conversation row and reused or extended while later turns
  * keep dropping from the same point. Falls back to the mechanical trim (no
  * summary, no extra managed call) for a temporary conversation, a
- * conversation with no persisted row, the kill switch, or any failure along
- * the way: compaction is always an enhancement over the trim, never a
- * dependency of it.
+ * conversation with no persisted row, the kill switch, a latest user message
+ * no trim can fit (that turn is refused, so a summary would be billed for
+ * nothing), or any failure along the way: compaction is always an enhancement
+ * over the trim, never a dependency of it.
  */
 export async function compactContextWindow(
   input: ContextCompactionInput,
@@ -433,7 +434,8 @@ export async function compactContextWindow(
     plan.droppedIndices.length === 0 ||
     input.isTemporary ||
     !input.conversationId ||
-    !resolveContextCompactionEnabled()
+    !resolveContextCompactionEnabled() ||
+    planLeavesLatestUserMessageOverflow(input.messages, plan, input.model, input.sizing)
   ) {
     return applyMechanicalTrim();
   }

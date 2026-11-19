@@ -1,4 +1,3 @@
-
 declare module 'expo-sqlite' {
   export interface RunResult {
     lastInsertRowId: number;
@@ -17,6 +16,8 @@ declare module 'expo-sqlite' {
   export interface OpenDatabaseOptions {
     useNewConnection?: boolean;
   }
+
+  export const defaultDatabaseDirectory: string | null;
 
   export function openDatabaseAsync(
     name: string,

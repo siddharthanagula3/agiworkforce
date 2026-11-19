@@ -2,14 +2,14 @@
 
 Status: Current
 Owner: Repository maintainers
-Last updated: 2026-10-23
+Last updated: 2026-11-17
 
 Symptoms whose cause is not where the error points. Each entry names what to
 check first, so the usual half hour of chasing the wrong layer is skipped.
 
 This file does not restate the validation rules. Those are `AGENTS.md` section
 12, including the four things it warns bite: guards read the working tree rather
-than `HEAD`, the guard chain is `&&` and hides every failure after the first,
+than `HEAD`, the guard chain lists its failures only once every guard has run,
 `apps/web`'s `tsc --noEmit` needs a raised heap, and a loaded machine fails tests
 that pass alone.
 

@@ -323,6 +323,27 @@ describe('scheduled agent tool access', () => {
     expect(drainToLlmResponse).not.toHaveBeenCalled();
   });
 
+  it('stores only the answer when the model reasons before it', async () => {
+    mockBuildToolLoopStream.mockResolvedValueOnce(
+      sseStreamFrom([
+        chunk({ content: '<thinking>' }),
+        chunk({ content: '**Creating a haiku** I need to write a haiku.' }),
+        chunk({ content: '</thinking>' }),
+        chunk({ content: 'Petals on the wind' }),
+        chunk({}, 'stop'),
+      ]),
+    );
+
+    const result = await executeScheduledAgent(
+      task,
+      new AbortController().signal,
+      'run-reasoning',
+      executionScope,
+    );
+
+    expect(result.text).toBe('Petals on the wind');
+  });
+
   it('offers a connector tool with no saved verdict, since calling it pauses the run for approval', async () => {
     mockLoadUserConnectorToolCatalog.mockResolvedValue({
       tools: [CONNECTOR_TOOL],

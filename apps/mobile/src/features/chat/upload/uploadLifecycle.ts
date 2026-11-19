@@ -1,10 +1,10 @@
 import { create } from 'zustand';
 
-export type UploadPhase = 'uploading' | 'canceled' | 'failed' | 'done';
+export type UploadPhase = 'uploading' | 'verifying' | 'canceled' | 'failed' | 'done';
 
 export interface UploadLifecycleEntry {
   phase: UploadPhase;
-  /** 0 to 1. Stays at its last reading while a retry waits to start. */
+  /** 0 to 1. Stays at its last reading while a retry waits to start, and holds at 1 while the server confirms the file. */
   progress: number;
   attempt: number;
   error?: string;
@@ -16,7 +16,11 @@ export interface UploadLifecycleState {
   uploads: Record<string, UploadLifecycleEntry>;
   begin: (id: string) => AbortSignal;
   reportProgress: (id: string, sentBytes: number, totalBytes: number) => void;
-  settle: (id: string, phase: Exclude<UploadPhase, 'uploading'>, error?: string) => void;
+  settle: (
+    id: string,
+    phase: Exclude<UploadPhase, 'uploading' | 'verifying'>,
+    error?: string,
+  ) => void;
   cancel: (id: string) => void;
   markBackgrounded: () => void;
   clear: (id: string) => void;
@@ -27,6 +31,10 @@ const controllers = new Map<string, AbortController>();
 
 export const RESUMABLE_UPLOAD_PHASES: ReadonlySet<UploadPhase> = new Set(['failed', 'canceled']);
 
+export function isUploadInFlight(entry: UploadLifecycleEntry | undefined): boolean {
+  return entry?.phase === 'uploading' || entry?.phase === 'verifying';
+}
+
 export function isResumable(entry: UploadLifecycleEntry | undefined): boolean {
   return entry !== undefined && RESUMABLE_UPLOAD_PHASES.has(entry.phase);
 }
@@ -36,6 +44,8 @@ export function uploadStatusLabel(entry: UploadLifecycleEntry | undefined): stri
   switch (entry.phase) {
     case 'uploading':
       return `Uploading ${Math.round(entry.progress * 100)}%`;
+    case 'verifying':
+      return 'Verifying';
     case 'canceled':
       return 'Upload canceled';
     case 'failed':
@@ -68,7 +78,12 @@ export const useUploadLifecycleStore = create<UploadLifecycleState>()((set, get)
     const ratio = totalBytes > 0 ? sentBytes / totalBytes : 0;
     const progress = Math.min(1, Math.max(0, ratio));
     if (progress <= entry.progress) return;
-    set((state) => ({ uploads: { ...state.uploads, [id]: { ...entry, progress } } }));
+    set((state) => ({
+      uploads: {
+        ...state.uploads,
+        [id]: { ...entry, progress, ...(progress >= 1 ? { phase: 'verifying' as const } : {}) },
+      },
+    }));
   },
 
   settle: (id, phase, error) => {
@@ -92,15 +107,15 @@ export const useUploadLifecycleStore = create<UploadLifecycleState>()((set, get)
     controllers.get(id)?.abort();
     controllers.delete(id);
     const entry = get().uploads[id];
-    if (!entry || entry.phase !== 'uploading') return;
+    if (!isUploadInFlight(entry)) return;
     set((state) => ({
-      uploads: { ...state.uploads, [id]: { ...entry, phase: 'canceled' } },
+      uploads: { ...state.uploads, [id]: { ...entry!, phase: 'canceled' } },
     }));
   },
 
   markBackgrounded: () => {
     const { uploads } = get();
-    const interrupted = Object.entries(uploads).filter(([, entry]) => entry.phase === 'uploading');
+    const interrupted = Object.entries(uploads).filter(([, entry]) => isUploadInFlight(entry));
     if (interrupted.length === 0) return;
     set((state) => ({
       uploads: {

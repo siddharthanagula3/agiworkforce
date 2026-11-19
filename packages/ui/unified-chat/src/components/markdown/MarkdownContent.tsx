@@ -6,9 +6,15 @@ import rehypeSanitize from 'rehype-sanitize';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { Button, useUiTranslation } from '@agiworkforce/ui';
 import { cn } from '../../lib/utils';
-import { markdownImageSource, trustedImageKeys } from './markdownImageSources';
+import {
+  imageTitle,
+  markdownImageSource,
+  readableImageAlt,
+  trustedImageKeys,
+} from './markdownImageSources';
 import { MARKDOWN_SANITIZE_SCHEMA, SANITIZED_ID_PREFIX } from './markdownSanitizeSchema';
 import { preprocessMath } from './preprocessMath';
+import { completeInlineTokens, dropOpenLinkDestination } from './completeInlineTokens';
 import { reactNodeText } from './reactNodeText';
 import { MarkdownTable } from './MarkdownTable';
 import { restoreHyphenatedLabels } from './checklistLabels';
@@ -28,7 +34,7 @@ import {
 import { EMAIL_BLOCK_LANGUAGE, isRichBlockLanguage, parseEmailBlock } from './richBlocks';
 import { AnswerSurface } from './AnswerSurface';
 import { isAnswerSurfaceLanguage, liftAnswerBadges } from './answerSurfaces';
-import { classifyAssistantFence } from './assistantFence';
+import { settleStreamingFence } from './assistantFence';
 import { FollowUpActionProvider } from './FollowUpAction';
 import {
   TaskItemIndexContext,
@@ -140,27 +146,6 @@ const BlockedImage = ({
     </span>
   );
 };
-
-const FILENAME_ALT = /^[\w.-]+\.(?:png|jpe?g|gif|webp|svg|avif)$/i;
-
-function readableImageAlt(alt: string | undefined): string {
-  const trimmed = alt?.trim() ?? '';
-  if (!trimmed || !FILENAME_ALT.test(trimmed)) return trimmed;
-  const stem = trimmed
-    .replace(/\.[a-z0-9]+$/i, '')
-    .replace(/[-_]+/g, ' ')
-    .trim();
-  if (!stem) return '';
-  return stem.charAt(0).toUpperCase() + stem.slice(1);
-}
-
-function imageTitle(title: string | undefined, alt: string | undefined): string | undefined {
-  const explicit = title?.trim();
-  if (explicit && !FILENAME_ALT.test(explicit)) return explicit;
-  const readable = readableImageAlt(alt);
-  if (!readable || FILENAME_ALT.test(alt?.trim() ?? '')) return undefined;
-  return readable;
-}
 
 const MarkdownImage = ({ src, alt, title }: { src?: string; alt?: string; title?: string }) => {
   const { t } = useUiTranslation('chat');
@@ -687,14 +672,15 @@ const RichFence = ({ language, source }: { language: string; source: string }) =
     );
   }
   if (isAnswerSurfaceLanguage(language)) {
-    const classified = classifyAssistantFence(language, source);
-    if (classified.kind === 'fallback') {
-      return <p data-answer-fallback={classified.reason}>{classified.text}</p>;
+    const settled = settleStreamingFence(language, source, !streaming);
+    if (!settled) return <div data-answer-pending="" aria-busy="true" className="min-h-6" />;
+    if (settled.fence.kind === 'fallback') {
+      return <p data-answer-fallback={settled.fence.reason}>{settled.fence.text}</p>;
     }
     return (
       <AnswerSurface
         language={language}
-        source={source}
+        source={settled.source}
         streaming={streaming}
         renderBody={renderWritingBody}
       />
@@ -708,6 +694,7 @@ const MarkdownPre = ({
   children,
   ...rest
 }: React.ComponentPropsWithoutRef<'pre'> & { node?: HastNode }) => {
+  const streaming = useIsStreamTail();
   if (node?.children?.some((child) => child.properties?.dataMarkdownSource === 'readonly')) {
     return (
       <CodeBlockEditorContext.Provider value={null}>
@@ -728,9 +715,17 @@ const MarkdownPre = ({
       </RichBlockEditScope>
     );
   }
-  const classified = classifyAssistantFence(language, source);
-  if (classified.kind === 'fallback') {
-    return <p data-answer-fallback={classified.reason}>{classified.text}</p>;
+  const settled = settleStreamingFence(language, source, !streaming);
+  if (!settled) return <div data-answer-pending="" aria-busy="true" className="min-h-6" />;
+  if (settled.fence.kind === 'fallback') {
+    return <p data-answer-fallback={settled.fence.reason}>{settled.fence.text}</p>;
+  }
+  if (settled.source !== source) {
+    return (
+      <pre {...rest}>
+        <CodeBlock className={`${LANGUAGE_CLASS_PREFIX}${language}`}>{settled.source}</CodeBlock>
+      </pre>
+    );
   }
   if (language === 'mermaid') return <>{children}</>;
   if (language === '' && hasFenceBody(node)) {
@@ -840,6 +835,13 @@ export interface MarkdownContentProps {
   footnoteScope?: string;
   onFenceEdit?: AssistantFenceEditHandler;
   fenceIndexOffset?: number;
+  finishedAnswer?: FinishedAnswer;
+}
+
+export type FinishedAnswer = 'complete' | 'stopped';
+
+export function settleFinishedAnswer(content: string, finished: FinishedAnswer): string {
+  return finished === 'stopped' ? completeInlineTokens(content) : dropOpenLinkDestination(content);
 }
 
 /**
@@ -882,6 +884,7 @@ function MarkdownContentImpl({
   footnoteScope,
   onFenceEdit,
   fenceIndexOffset = 0,
+  finishedAnswer,
 }: MarkdownContentProps) {
   // The sanitizer prefixes every id itself, so footnote ids are generated
   // without that prefix; MarkdownLink adds it to in-page hrefs.
@@ -893,9 +896,14 @@ function MarkdownContentImpl({
     () => (trustedImageUrls?.length ? trustedImageKeys(trustedImageUrls) : NO_TRUSTED_IMAGES),
     [trustedImageUrls],
   );
+  const settledContent = useMemo(
+    () =>
+      finishedAnswer && !isStreaming ? settleFinishedAnswer(content, finishedAnswer) : content,
+    [content, finishedAnswer, isStreaming],
+  );
   const mathContent = useMemo(
-    () => (skipPreprocess ? content : preprocessMath(content)),
-    [content, skipPreprocess],
+    () => (skipPreprocess ? settledContent : preprocessMath(settledContent)),
+    [settledContent, skipPreprocess],
   );
   const labeledContent = useMemo(
     () => liftAnswerBadges(isStreaming ? mathContent : restoreHyphenatedLabels(mathContent)),

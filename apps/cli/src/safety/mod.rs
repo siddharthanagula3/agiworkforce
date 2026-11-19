@@ -51,10 +51,46 @@ pub fn classify_command(command: &str) -> CommandSafety {
     let classification = classify_command_at_depth(command, 0);
     // A line that does not tokenise is not the arguments it appears to have, so
     // a safe-looking program name proves nothing about what would run.
-    if classification == CommandSafety::Safe && shlex::split(command.trim()).is_none() {
+    if classification == CommandSafety::Safe
+        && (shlex::split(command.trim()).is_none() || contains_unquoted_expansion(command))
+    {
         return CommandSafety::Unknown;
     }
     classification
+}
+
+/// Expansion the shell performs before the program runs: `$` outside single
+/// quotes, and an unquoted parenthesis, which zsh reads as a glob qualifier
+/// (`*(e:'cmd':)`) or a process substitution (`=(cmd)`) that runs a command.
+fn contains_unquoted_expansion(command: &str) -> bool {
+    let mut in_single_quote = false;
+    let mut in_double_quote = false;
+    let mut escaped = false;
+    for ch in command.chars() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+        if ch == '\\' && !in_single_quote {
+            escaped = true;
+            continue;
+        }
+        if ch == '\'' && !in_double_quote {
+            in_single_quote = !in_single_quote;
+            continue;
+        }
+        if ch == '"' && !in_single_quote {
+            in_double_quote = !in_double_quote;
+            continue;
+        }
+        if in_single_quote {
+            continue;
+        }
+        if ch == '$' || (!in_double_quote && matches!(ch, '(' | ')')) {
+            return true;
+        }
+    }
+    false
 }
 
 /// How deep a wrapper chain (`sh -c 'sh -c ...'`) is followed before the command
@@ -365,6 +401,14 @@ fn classify_named_program(segment: &str, prev_was_safe: bool, depth: usize) -> C
         return demote_safe_on_redirection(classify_sort(trimmed), trimmed);
     }
 
+    // `uniq IN OUT` writes OUT; `tree -o` and `tree -R` write files.
+    if base_cmd == "uniq" {
+        return demote_safe_on_redirection(classify_uniq(trimmed), trimmed);
+    }
+    if base_cmd == "tree" {
+        return demote_safe_on_redirection(classify_tree(trimmed), trimmed);
+    }
+
     // Network inspection commands can also mutate network interfaces/routes.
     if base_cmd == "ifconfig" {
         return demote_safe_on_redirection(classify_ifconfig(trimmed), trimmed);
@@ -429,16 +473,58 @@ fn classify_named_program(segment: &str, prev_was_safe: bool, depth: usize) -> C
 }
 
 fn classify_sort(command: &str) -> CommandSafety {
-    let args: Vec<&str> = command.split_whitespace().collect();
-    for arg in &args[1..] {
-        if *arg == "-o" || *arg == "--output" || arg.starts_with("--output=") {
-            return CommandSafety::Unknown;
-        }
-        if arg.starts_with("-o") && arg.len() > 2 {
-            return CommandSafety::Unknown;
+    let writes_or_runs =
+        command
+            .split_whitespace()
+            .skip(1)
+            .any(|arg| match arg.strip_prefix("--") {
+                Some(long) => {
+                    let name = long.split('=').next().unwrap_or(long);
+                    !name.is_empty()
+                        && ["output", "compress-program"]
+                            .iter()
+                            .any(|option| option.starts_with(name))
+                }
+                None => arg
+                    .strip_prefix('-')
+                    .is_some_and(|cluster| cluster.contains('o')),
+            });
+    if writes_or_runs {
+        CommandSafety::Unknown
+    } else {
+        CommandSafety::Safe
+    }
+}
+
+fn classify_uniq(command: &str) -> CommandSafety {
+    let mut operands = 0;
+    let mut args = command.split_whitespace().skip(1);
+    while let Some(arg) = args.next() {
+        if matches!(arg, "-f" | "-s" | "-w") {
+            args.next();
+        } else if !arg.starts_with('-') || arg == "-" {
+            operands += 1;
         }
     }
-    CommandSafety::Safe
+    if operands > 1 {
+        CommandSafety::Unknown
+    } else {
+        CommandSafety::Safe
+    }
+}
+
+fn classify_tree(command: &str) -> CommandSafety {
+    let writes = command.split_whitespace().skip(1).any(|arg| {
+        !arg.starts_with("--")
+            && arg
+                .strip_prefix('-')
+                .is_some_and(|cluster| cluster.contains(['o', 'R']))
+    });
+    if writes {
+        CommandSafety::Unknown
+    } else {
+        CommandSafety::Safe
+    }
 }
 
 fn classify_ifconfig(command: &str) -> CommandSafety {
@@ -649,6 +735,48 @@ mod tests {
             classify_command("sort --output=names.txt input.txt"),
             CommandSafety::Unknown
         );
+    }
+
+    #[test]
+    fn allowlisted_programs_that_write_or_run_code_require_prompt() {
+        for command in [
+            "sort -S 1K --compress-program=sh commands.txt",
+            "sort --compress-program sh commands.txt",
+            "sort --compress=sh commands.txt",
+            "sort --outp=names.txt input.txt",
+            "sort -ro names.txt input.txt",
+            "uniq input.txt src/main.rs",
+            "uniq -c -f 1 input.txt out.txt",
+            "tree -o src/main.rs",
+            "tree -ao src/main.rs",
+            "tree -R -H . src",
+            "base64 --outp=/tmp/blob secrets.env",
+            "git remote -v add mirror https://example.invalid/r.git",
+            "git remote -v set-url origin https://example.invalid/r.git",
+            "git remote --verbose remove origin",
+            "ls *(e:'touch marker':)",
+            "cat =(touch marker)",
+            "wc -l <(touch marker)",
+            "echo ${(e)${:-\\$\\(touch marker\\)}}",
+            "echo $OPENAI_API_KEY",
+            "sed -n 1,$p file.txt",
+        ] {
+            assert_ne!(classify_command(command), CommandSafety::Safe, "{command}");
+        }
+        for command in [
+            "sort -r -k2 names.txt",
+            "sort -t: -k3 -n /etc/passwd",
+            "uniq -c data.txt",
+            "uniq -f 1 data.txt",
+            "tree -a -L 2 src",
+            "git remote -v",
+            "git remote --verbose",
+            "rg 'fn main\\(' src",
+            "grep -E '(a|b)' notes.txt",
+            "echo 'cost: $5'",
+        ] {
+            assert_eq!(classify_command(command), CommandSafety::Safe, "{command}");
+        }
     }
 
     #[test]
@@ -1161,7 +1289,7 @@ mod tests {
             CommandSafety::Safe
         );
         assert_eq!(
-            classify_command("sed -n 1,$p file.txt"),
+            classify_command("sed -n '1,$p' file.txt"),
             CommandSafety::Safe
         );
     }

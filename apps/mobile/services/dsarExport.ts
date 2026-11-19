@@ -1,11 +1,11 @@
 import {
   cacheDirectory,
-  documentDirectory,
   deleteAsync,
   writeAsStringAsync,
   EncodingType,
 } from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
+import { MODEL_STORAGE_DIRS } from './modelStoragePaths';
 import { withDsarTemporaryFile } from './dsarTemporaryFile';
 import Constants from 'expo-constants';
 import { listConversations } from '@/storage/conversations';
@@ -423,10 +423,13 @@ export async function exportAllUserData(
 }
 
 export async function wipeAllLocalData(options: WipeAllLocalDataOptions = {}): Promise<void> {
+  const { withdrawSharingWithProviders } =
+    await import('@/src/features/settings/cloud-privacy/CloudProviderSharingGroup');
+  await withdrawSharingWithProviders('this-device');
   const { useAuthStore } = await import('@/src/features/auth/store');
   await useAuthStore.getState().signOutAllAccounts();
 
-  const { closeDb, getDb } = await import('@/storage/db');
+  const { closeDb, deleteSetAsideDatabases, getDb } = await import('@/storage/db');
 
   const db = await getDb();
 
@@ -446,16 +449,24 @@ export async function wipeAllLocalData(options: WipeAllLocalDataOptions = {}): P
   });
 
   await closeDb();
+  await deleteSetAsideDatabases();
 
-  const { storage } = await import('@/lib/mmkv');
+  const { deleteSetAsideStores, storage } = await import('@/lib/mmkv');
   storage.clearAll();
+  await deleteSetAsideStores();
 
   await options.afterPersistentWipe?.();
 
-  await deleteAsync(`${documentDirectory}models/`, { idempotent: true });
+  for (const directory of MODEL_STORAGE_DIRS) {
+    await deleteAsync(directory, { idempotent: true });
+  }
 
   await deleteAsync(EXPORT_DIR, { idempotent: true });
 
-  const { EXPORTS_DIR } = await import('@/services/fileCreation');
+  const { removeAllLocalChatAttachments } = await import('@/services/localChatAttachments');
+  await removeAllLocalChatAttachments();
+
+  const { EXPORTS_DIR, removeViewerFileCopies } = await import('@/services/fileCreation');
   await deleteAsync(EXPORTS_DIR, { idempotent: true });
+  await removeViewerFileCopies();
 }

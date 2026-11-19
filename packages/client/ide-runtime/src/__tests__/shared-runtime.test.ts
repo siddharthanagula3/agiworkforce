@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  compileGlob,
   countPorcelainStatus,
   GIT_OPERATION_PROBES,
-  compileGlob,
   grepLines,
   isDetachedHead,
   isSkippedDirectory,
@@ -21,12 +21,49 @@ describe('workspace file semantics', () => {
     expect(matchesGlob('src/**', 'src\\nested\\a.ts')).toBe(true);
   });
 
-  it('escapes regex metacharacters rather than honouring them', () => {
+  it('reads regex metacharacters as plain characters rather than honouring them', () => {
     expect(compileGlob('a+b.txt')('a+b.txt')).toBe(true);
     expect(compileGlob('a+b.txt')('aab.txt')).toBe(false);
     expect(compileGlob('file.(1)')('file.(1)')).toBe(true);
     expect(compileGlob('a?.ts')('ab.ts')).toBe(true);
     expect(compileGlob('a?.ts')('abc.ts')).toBe(false);
+  });
+
+  it('matches a path only as a whole', () => {
+    expect(compileGlob('src/*.ts')('src/a.ts')).toBe(true);
+    expect(compileGlob('src/*.ts')('lib/src/a.ts')).toBe(false);
+    expect(compileGlob('src/*.ts')('src/a.tsx')).toBe(false);
+    expect(compileGlob('')('')).toBe(true);
+    expect(compileGlob('')('a')).toBe(false);
+  });
+
+  it('lets a wildcard give back what it took when the rest of the pattern needs it', () => {
+    expect(compileGlob('*a*b')('aab')).toBe(true);
+    expect(compileGlob('**a*b')('a/ab')).toBe(true);
+    expect(compileGlob('**a*b')('a/a/b')).toBe(false);
+    expect(compileGlob('*/**/*.test.*')('src/a/b/c.test.ts')).toBe(true);
+    expect(compileGlob('***')('a/b')).toBe(true);
+    expect(compileGlob('a?c')('a/c')).toBe(false);
+  });
+
+  it('folds case only when asked to', () => {
+    expect(compileGlob('SRC/*.TS')('src/index.ts')).toBe(false);
+    expect(compileGlob('SRC/*.TS', { ignoreCase: true })('src/index.ts')).toBe(true);
+    expect(compileGlob('src/*.ts', { ignoreCase: true })('SRC/Index.TS')).toBe(true);
+    expect(compileGlob('src/*.ts', { ignoreCase: true })('SRC/nested/Index.TS')).toBe(false);
+  });
+
+  /**
+   * A backtracking matcher tries every way of sharing the path between the
+   * wildcards before it gives up, and on these it does not come back.
+   */
+  it('settles a pattern of many wildcards against a long near miss', () => {
+    const nearMiss = 'a'.repeat(240);
+    expect(compileGlob(`${'*a'.repeat(40)}*b`)(nearMiss)).toBe(false);
+    expect(compileGlob(`${'*a'.repeat(40)}*`)(nearMiss)).toBe(true);
+    expect(compileGlob(`${'**a'.repeat(40)}**b`)(`${nearMiss}/${nearMiss}`)).toBe(false);
+    expect(compileGlob(`${'*'.repeat(1000)}b`)(nearMiss)).toBe(false);
+    expect(() => compileGlob(`${'*'.repeat(5000)}b`)).toThrow(RangeError);
   });
 
   it('calls a file binary on a NUL byte in its opening bytes', () => {
