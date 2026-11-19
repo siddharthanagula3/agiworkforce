@@ -102,6 +102,11 @@ function clearLocalCloudAccountStateNow({ keepUnsentWork }: ClearCloudAccountOpt
     useChatCloudMessageStore.getState().clearCloudData();
   });
 
+  runTeardownStep('desktop pairing', () => {
+    const { useConnectionStore } = require('@/stores/connectionStore');
+    useConnectionStore.getState().disconnect();
+  });
+
   runTeardownStep('artifact cache', () => {
     const { clearAccountScopedArtifactState } = require('@/src/features/artifacts/store');
     clearAccountScopedArtifactState();

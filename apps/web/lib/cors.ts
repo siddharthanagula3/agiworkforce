@@ -82,6 +82,7 @@ export function getCorsHeaders(request: NextRequest): Record<string, string> {
     'Access-Control-Expose-Headers':
       'X-AGI-Agent-Run-Id, X-AGI-Agent-Run-URL, X-AGI-Tool-Loop, X-AGI-Research-Loop, X-Quota-Warning, X-AGI-Resolved-Model, X-AGI-Fallback-Reason, X-AGI-Moved-From-Model, X-AGI-Moved-Reason, X-AGI-Route-Lane, X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset, Retry-After, X-AGI-Terms-Notice, X-AGI-Terms-Required-From, X-AGI-Billing-Notice',
     'Access-Control-Max-Age': '86400', // 24 hours
+    Vary: 'Origin',
   };
 
   if (isOriginAllowed(origin)) {
@@ -164,7 +165,8 @@ export function withCorsAndSecurityHeaders<TResponse extends Response>(
   appendVary(response, 'Accept-Encoding');
 
   for (const [key, value] of Object.entries(corsHeaders)) {
-    response.headers.set(key, value);
+    if (key === 'Vary') appendVary(response, value);
+    else response.headers.set(key, value);
   }
   for (const [key, value] of Object.entries(securityHeaders)) {
     if (!response.headers.has(key)) {

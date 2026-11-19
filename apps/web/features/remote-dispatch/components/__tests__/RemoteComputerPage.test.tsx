@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runStatusLabel } from '@agiworkforce/types';
 import { RemoteComputerPage, RemoteComputerScreen } from '../RemoteComputerPage';
@@ -89,6 +89,13 @@ async function sendTask(prompt: string) {
   await screen.findByText(prompt);
 }
 
+async function disconnectAfterConfirming() {
+  fireEvent.click(screen.getByRole('button', { name: 'Disconnect' }));
+  const dialog = await screen.findByRole('alertdialog');
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Disconnect' }));
+  await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+}
+
 function rowFor(prompt: string): HTMLElement {
   return screen.getByText(prompt).closest('li') as HTMLElement;
 }
@@ -105,6 +112,25 @@ describe('RemoteComputerPage task ownership', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it('asks before disconnecting, because the pairing link stops working', async () => {
+    render(<RemoteComputerPage />);
+    const first = await connectTo('link-a', 'Computer A');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Disconnect' }));
+    const dialog = await screen.findByRole('alertdialog');
+    expect(dialog).toHaveTextContent('copy a new link from Desktop');
+    expect(first.close).not.toHaveBeenCalled();
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    expect(first.close).not.toHaveBeenCalled();
+    expect(screen.getByText('Connected to Computer A')).toBeInTheDocument();
+
+    await disconnectAfterConfirming();
+    expect(first.close).toHaveBeenCalledOnce();
+    expect(screen.getByLabelText('Pairing link')).toBeInTheDocument();
   });
 
   it('keeps controls for a task on the connection that sent it', async () => {
@@ -130,7 +156,7 @@ describe('RemoteComputerPage task ownership', () => {
       first.handlers.onTaskStatus({ requestId: 'request-0', status: 'running', taskId: 'task-a' }),
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Disconnect' }));
+    await disconnectAfterConfirming();
     const second = await connectTo('link-b', 'Computer B');
 
     const row = rowFor('build the report');
@@ -165,7 +191,7 @@ describe('RemoteComputerPage task ownership', () => {
     );
     expect(screen.getByRole('button', { name: 'Send again' })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Disconnect' }));
+    await disconnectAfterConfirming();
     await connectTo('link-b', 'Computer B');
 
     expect(screen.queryByRole('button', { name: 'Send again' })).not.toBeInTheDocument();

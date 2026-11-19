@@ -1148,7 +1148,10 @@ async fn execute_tool_with_scoped_permissions(
             )
             .await
         }
-        "notebook_edit" => execute_notebook_edit(&call.args, require_confirm).await,
+        "notebook_edit" => {
+            execute_notebook_edit(&call.args, require_confirm, opts.approval_callback.as_ref())
+                .await
+        }
         "todo_read" => execute_todo_read(opts.workspace_root.as_deref()).await,
         "todo_write" => execute_todo_write(&call.args, opts.workspace_root.as_deref()).await,
         "ask_user" => {
@@ -2590,6 +2593,7 @@ async fn execute_powershell(
 async fn execute_notebook_edit(
     args: &HashMap<String, String>,
     require_confirm: bool,
+    approval_callback: Option<&ApprovalCallback>,
 ) -> Result<ToolResult> {
     let path = match args.get("path") {
         Some(path) => path,
@@ -2685,7 +2689,18 @@ async fn execute_notebook_edit(
     );
 
     if require_confirm {
-        let confirmed = crate::output::confirm("Allow this notebook edit?", true);
+        let title = "Allow this notebook edit?";
+        let request = ApprovalRequest::new(
+            ApprovalRequestKind::FileEdit {
+                path: validated_path.clone(),
+            },
+            title,
+            vec![validated_path.display().to_string()],
+        );
+        let confirmed = match request_approval(approval_callback, request).await {
+            Some(decision) => approval_allows(decision),
+            None => crate::interactive::can_prompt() && crate::output::confirm(title, true),
+        };
         if !confirmed {
             return Ok(ToolResult {
                 tool_name: "notebook_edit".into(),
@@ -4815,10 +4830,52 @@ decision = "deny"
         args.insert("mode".to_string(), "delete".to_string());
         args.insert("index".to_string(), "0".to_string());
 
-        let result = execute_notebook_edit(&args, false).await.unwrap();
+        let result = execute_notebook_edit(&args, false, None).await.unwrap();
 
         assert!(!result.success);
         assert!(result.output.contains("File has not been read yet"));
+    }
+
+    #[tokio::test]
+    async fn notebook_edit_asks_through_the_session_approval_surface() {
+        let workspace = tempfile::Builder::new()
+            .prefix("notebook-approval")
+            .tempdir_in(std::env::current_dir().unwrap())
+            .unwrap();
+        let path = workspace.path().join("notebook.ipynb");
+        let notebook = r#"{"cells":[{"cell_type":"markdown","source":["alpha"],"metadata":{}}],"metadata":{},"nbformat":4,"nbformat_minor":5}"#;
+        std::fs::write(&path, notebook).unwrap();
+        crate::file_state::record_file_read(&path.canonicalize().unwrap(), notebook);
+        let (callback, seen) = recording_callback(ApprovalDecision::AllowOnce);
+        let opts = ToolExecOptions {
+            additional_workspace_roots: Vec::new(),
+            require_confirmation: true,
+            auto_approve_safe: false,
+            auto_approve_edits: false,
+            quiet: true,
+            approval_callback: Some(callback),
+            user_input_callback: None,
+            privacy_mode: crate::agent::PrivacyMode::Byok,
+            workspace_root: Some(workspace.path().to_path_buf()),
+            tool_search_catalog: None,
+        };
+        let call = ToolCall {
+            name: "notebook_edit".into(),
+            args: HashMap::from([
+                ("path".into(), "notebook.ipynb".into()),
+                ("mode".into(), "delete".into()),
+                ("index".into(), "0".into()),
+            ]),
+        };
+
+        let result = execute_tool_with_opts(&call, &opts).await.unwrap();
+
+        assert!(result.success, "{}", result.output);
+        let requests = seen.lock().unwrap();
+        assert!(
+            matches!(requests.as_slice(), [ApprovalRequestKind::FileEdit { .. }]),
+            "{requests:?}"
+        );
     }
 
     #[test]

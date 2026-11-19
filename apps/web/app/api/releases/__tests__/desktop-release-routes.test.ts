@@ -404,6 +404,138 @@ describe('desktop release routes', () => {
     expect(response.headers.get('cache-control')).toBe('no-store');
   });
 
+  describe('installer response deadline', () => {
+    let installerSignal: AbortSignal | undefined;
+
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      vi.spyOn(AbortSignal, 'timeout').mockImplementation((ms: number) => {
+        const controller = new AbortController();
+        setTimeout(
+          () => controller.abort(new DOMException('The operation timed out.', 'TimeoutError')),
+          ms,
+        );
+        return controller.signal;
+      });
+      installerSignal = undefined;
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    function installerFrom(
+      body: (signal: AbortSignal | undefined) => ReadableStream<Uint8Array>,
+    ): void {
+      fetchMock.mockImplementation(async (input: string | URL | Request, init?: RequestInit) => {
+        if (String(input) !== CLOUD_ARM64_DMG_URL) return Response.json([cloudDesktopRelease()]);
+        installerSignal = init?.signal ?? undefined;
+        return new Response(body(installerSignal), { status: 200 });
+      });
+    }
+
+    function chunkEvery(intervalMs: number, chunks: string[]) {
+      return (signal: AbortSignal | undefined) => {
+        const encoder = new TextEncoder();
+        return new ReadableStream<Uint8Array>({
+          start(controller) {
+            signal?.addEventListener('abort', () => controller.error(signal.reason));
+            const send = (index: number) => {
+              if (signal?.aborted) return;
+              if (index === chunks.length) {
+                controller.close();
+                return;
+              }
+              controller.enqueue(encoder.encode(chunks[index]));
+              setTimeout(() => send(index + 1), intervalMs);
+            };
+            send(0);
+          },
+        });
+      };
+    }
+
+    function endless(signal: AbortSignal | undefined): ReadableStream<Uint8Array> {
+      return new ReadableStream<Uint8Array>({
+        start(controller) {
+          signal?.addEventListener('abort', () => controller.error(signal.reason));
+        },
+        pull(controller) {
+          controller.enqueue(new TextEncoder().encode('chunk-'));
+        },
+      });
+    }
+
+    async function startDownload(): Promise<Response> {
+      const response = await downloadDesktop(
+        makeRequest('https://agi.example/api/download?platform=mac&arch=arm64'),
+      );
+      expect(response.status).toBe(200);
+      return response;
+    }
+
+    it('keeps streaming an installer whose transfer outlasts the response deadline while bytes keep moving', async () => {
+      const chunks = Array.from({ length: 30 }, (_, index) => `part-${index}-`);
+      installerFrom(chunkEvery(20_000, chunks));
+
+      const response = await startDownload();
+      const text = response.text();
+      await vi.advanceTimersByTimeAsync(10 * 60_000);
+
+      expect(await text).toBe(chunks.join(''));
+      expect(installerSignal?.aborted).toBe(false);
+    });
+
+    it('stops the installer transfer when the client stops reading', async () => {
+      installerFrom(endless);
+
+      const reader = (await startDownload()).body!.getReader();
+      await reader.read();
+      await vi.advanceTimersByTimeAsync(30_000);
+
+      expect(installerSignal?.aborted).toBe(true);
+      await expect(reader.read()).rejects.toThrow();
+    });
+
+    it('stops the installer transfer when the client goes away', async () => {
+      installerFrom(endless);
+
+      const reader = (await startDownload()).body!.getReader();
+      await reader.read();
+      await reader.cancel();
+
+      expect(installerSignal?.aborted).toBe(true);
+    });
+
+    it('ends a download whose installer host stops sending', async () => {
+      installerFrom(chunkEvery(10 * 60_000, ['first-', 'never-']));
+
+      const response = await startDownload();
+      const ended = expect(response.text()).rejects.toThrow('stopped making progress');
+      await vi.advanceTimersByTimeAsync(30_000);
+
+      await ended;
+      expect(installerSignal?.aborted).toBe(true);
+    });
+
+    it('still gives up on an installer host that never answers', async () => {
+      fetchMock.mockImplementation(async (input: string | URL | Request, init?: RequestInit) => {
+        if (String(input) !== CLOUD_ARM64_DMG_URL) return Response.json([cloudDesktopRelease()]);
+        return new Promise<Response>((_, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(init.signal?.reason));
+        });
+      });
+
+      const pending = downloadDesktop(
+        makeRequest('https://agi.example/api/download?platform=mac&arch=arm64'),
+      );
+      await vi.advanceTimersByTimeAsync(30_000);
+      const response = await pending;
+
+      expect(response.status).toBeGreaterThanOrEqual(500);
+    });
+  });
+
   it('rejects an oversized version before fetching a release', async () => {
     const response = await downloadDesktop(
       makeRequest(`https://agi.example/api/download?platform=mac&version=${'9'.repeat(65)}`),
