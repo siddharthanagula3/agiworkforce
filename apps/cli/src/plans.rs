@@ -451,4 +451,56 @@ mod tests {
             "Cloud in the CLI and VS Code"
         );
     }
+
+    #[test]
+    fn the_cli_plan_order_and_capability_sets_answer_as_recorded_for_every_spelling() {
+        use crate::tier_cache::plan_conformance::{conform, OwnedCopy, Probe, Scope};
+        use serde_json::{json, Value};
+
+        const COPIES: [OwnedCopy; 3] = [
+            OwnedCopy {
+                id: "cli.planOrderIndex",
+                scope: Scope::Spelling,
+                question: "planOrder",
+                source: "apps/cli/src/plans.rs PLAN_ORDER",
+                per_sample: false,
+            },
+            OwnedCopy {
+                id: "cli.capabilities",
+                scope: Scope::Spelling,
+                question: "capabilities",
+                source: "apps/cli/src/plans.rs plan_capabilities on the spelling",
+                per_sample: false,
+            },
+            OwnedCopy {
+                id: "cli.capabilitiesParsed",
+                scope: Scope::Spelling,
+                question: "capabilitiesNormalised",
+                source: "apps/cli/src/plans.rs plan_capabilities after tier_cache::parse_tier",
+                per_sample: false,
+            },
+        ];
+
+        fn sorted_capabilities(plan: &str) -> Value {
+            let mut capabilities = plan_capabilities(plan);
+            capabilities.sort_unstable();
+            json!(capabilities)
+        }
+
+        conform(&COPIES, &|probe: &Probe| {
+            let spelling = probe.spelling.expect("plan answers are per spelling");
+            match probe.copy {
+                "cli.planOrderIndex" => PLAN_ORDER
+                    .iter()
+                    .position(|plan| *plan == spelling)
+                    .map_or(Value::Null, |index| json!(index)),
+                "cli.capabilities" => sorted_capabilities(spelling),
+                "cli.capabilitiesParsed" => tier_cache::parse_tier(spelling)
+                    .map_or(Value::Null, |tier| {
+                        sorted_capabilities(&tier_cache::tier_slug(&tier))
+                    }),
+                other => panic!("plans does not own the {other} answer"),
+            }
+        });
+    }
 }

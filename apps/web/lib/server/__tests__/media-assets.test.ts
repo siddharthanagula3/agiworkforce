@@ -11,6 +11,7 @@ vi.mock('@/lib/services/infrastructure-cost', async (importOriginal) => ({
 import { createQueryDb } from '@/lib/server/chat-file-intake/__tests__/fake-query-db';
 import { recordGeneratedArtifactBytes } from '@/lib/services/infrastructure-cost';
 import {
+  getMediaAssetByContentHash,
   insertMediaAsset,
   insertScannedChatFileMediaAsset,
   listScannedChatFileAssets,
@@ -80,6 +81,32 @@ describe('insertScannedChatFileMediaAsset', () => {
     expect(sql).not.toBe(INSERT_MEDIA_ASSET_SQL);
   });
 
+  it('lets the conversation, read under a share lock, decide whether a file in it is temporary', async () => {
+    const { db, query } = createQueryDb(async () => [{ id: 'asset-4' }]);
+
+    await insertScannedChatFileMediaAsset(
+      {
+        userId: 'user-1',
+        organizationId: null,
+        kind: 'file',
+        mimeType: 'application/pdf',
+        byteSize: 400 * 1024 * 1024,
+        storagePathname: 'chat-attachments/user-1/1_a.pdf.scanned',
+        conversationId: '6c1f0a52-3b7e-4d2a-9f10-1a2b3c4d5e02',
+        temporaryChat: true,
+        scannedSha256: SHA,
+        metadata: { source: 'chat-attachment' },
+      },
+      db,
+    );
+
+    const [sql] = query.mock.calls[0]!;
+    const flat = String(sql).replace(/\s+/g, ' ');
+    expect(flat).toContain('case when $8::uuid is null then $10::boolean else exists (');
+    expect(flat).toContain('coalesce(c.is_temporary, false) for share of c ) end');
+    expect(flat).not.toContain('$10::boolean or exists');
+  });
+
   it('records no stored bytes itself, since the seal’s transaction may still roll it back', async () => {
     vi.mocked(recordGeneratedArtifactBytes).mockClear();
     const { db } = createQueryDb(async () => [{ id: 'asset-3' }]);
@@ -122,6 +149,20 @@ describe('insertScannedChatFileMediaAsset', () => {
         db,
       ),
     ).rejects.toThrow(/no identity/);
+  });
+});
+
+describe('getMediaAssetByContentHash', () => {
+  it('matches on the flag it was given when no conversation is named', async () => {
+    const { db, query } = createQueryDb(async () => []);
+
+    await getMediaAssetByContentHash('user-1', SHA, null, db, true);
+
+    const [sql, params] = query.mock.calls[0]!;
+    expect(String(sql).replace(/\s+/g, ' ')).toContain(
+      'and temporary_chat = case when $5::uuid is null then $4::boolean else exists ( select 1 from public.web_conversations c where c.id = $5::uuid and coalesce(c.is_temporary, false) ) end',
+    );
+    expect(params).toEqual(['user-1', SHA, null, true, null]);
   });
 });
 

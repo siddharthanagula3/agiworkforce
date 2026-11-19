@@ -72,7 +72,7 @@ nothing is left.
 | --- | --- | --- | --- |
 | web | partial | owner: set GOOGLE_PICKER_API_KEY and GOOGLE_PICKER_APP_ID (same GCP project as the Drive client; apps/web/app/api/connectors/google-drive/picker/route.ts:17); then live-check the Picker, including inside Electron | config |
 | desktop | partial | owner: set GOOGLE_PICKER_API_KEY and GOOGLE_PICKER_APP_ID (same GCP project as the Drive client; apps/web/app/api/connectors/google-drive/picker/route.ts:17); then live-check the Picker, including inside Electron | config |
-| mobile | partial | owner: files and text work on the phone; a Google Drive source waits on the owner's Google connector keys (Drive entry and GOOGLE_PICKER_API_KEY/APP_ID). Plan storage caps are 100 MB for Free and the team allowance for Team seats (billing-catalog.ts:358, :413). | handler, ui |
+| mobile | partial | owner: files and text work on the phone; a Google Drive source waits on the owner's Google connector keys (Drive entry and GOOGLE_PICKER_API_KEY/APP_ID). Plan storage caps come from knowledgeStorageBytes in the billing catalog, which Team seats share as the team allowance (billing-catalog.ts:619, :693). | handler, ui |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 

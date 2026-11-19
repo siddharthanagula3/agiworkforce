@@ -248,6 +248,10 @@ export interface InsertScannedChatFileMediaAssetParams {
  * both come from the one verdict hash. It runs inside the seal's transaction,
  * which may roll back, so the stored bytes are recorded by the seal after it
  * commits.
+ *
+ * A file in a conversation is temporary only while the conversation still is,
+ * read under a share lock: a Keep that committed first is seen, and one that
+ * commits later waits for this row and then saves it with the rest.
  */
 export async function insertScannedChatFileMediaAsset(
   p: InsertScannedChatFileMediaAssetParams,
@@ -258,10 +262,14 @@ export async function insertScannedChatFileMediaAsset(
        (user_id, organization_id, kind, mime_type, byte_size, storage_url, storage_pathname,
         metadata, conversation_id, content_sha256, scanned_sha256, temporary_chat)
      values ($1, $2, $3, $4, $5, $6, $6, $7::jsonb, $8, $9, $9,
-       $10::boolean or exists (
-         select 1 from public.web_conversations c
-          where c.id = $8::uuid and coalesce(c.is_temporary, false)
-       ))
+       case
+         when $8::uuid is null then $10::boolean
+         else exists (
+           select 1 from public.web_conversations c
+            where c.id = $8::uuid and coalesce(c.is_temporary, false)
+            for share of c
+         )
+       end)
      returning id`,
     [
       p.userId,
@@ -552,6 +560,10 @@ export async function latestConversationImageAssetId(
  * Scoped to the uploader and their active workspace: recognising a repeat
  * across accounts would tell one user that another holds the same file, which
  * is a disclosure the storage saving does not justify.
+ *
+ * Given a conversation, its current temporary flag decides which copies match,
+ * as it does for the seal's insert: an upload that began in a temporary chat
+ * kept since then matches saved files, not temporary ones.
  */
 export async function getMediaAssetByContentHash(
   userId: string,
@@ -559,6 +571,7 @@ export async function getMediaAssetByContentHash(
   organizationId: string | null,
   db: MediaAssetQueryClient,
   temporaryChat = false,
+  conversationId: string | null = null,
 ): Promise<MediaAssetForServing | null> {
   const rows = await db.query<Record<string, unknown>>(
     `select id, user_id, organization_id, kind, mime_type, byte_size, storage_url, storage_pathname,
@@ -567,11 +580,17 @@ export async function getMediaAssetByContentHash(
       where user_id = $1
         and organization_id is not distinct from $3::uuid
         and content_sha256 = $2
-        and temporary_chat = $4
+        and temporary_chat = case
+          when $5::uuid is null then $4::boolean
+          else exists (
+            select 1 from public.web_conversations c
+             where c.id = $5::uuid and coalesce(c.is_temporary, false)
+          )
+        end
         and deleted_at is null
       order by created_at asc
       limit 1`,
-    [userId, contentSha256, organizationId, temporaryChat],
+    [userId, contentSha256, organizationId, temporaryChat, conversationId],
   );
   const row = rows[0];
   if (!row) return null;

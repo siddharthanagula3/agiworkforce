@@ -13,6 +13,7 @@ import {
   MAX_PLAN_ATTACHMENT_BYTES,
   MAX_PLAN_CHAT_FILE_BYTES,
   getBillingPlanPricing,
+  getBillingPlanProductLimits,
   getPlanDailyChatFileUploadBytes,
   getPlanMaxChatFileBytes,
   getPlanDailyAttachmentUploads,
@@ -291,6 +292,10 @@ describe('admitAttachmentUpload', () => {
 });
 
 const GIB = 1024 * MIB;
+
+function storageBytes(planTier: 'basic' | 'pro'): number {
+  return getBillingPlanProductLimits(planTier)!.knowledgeStorageBytes as number;
+}
 const SCANNER_MAX_BYTES = PROTOCOL_2.answers['capability']!.body['maxSourceScanBytes'] as number;
 
 interface StorageState {
@@ -424,7 +429,7 @@ describe('large chat files', () => {
           ),
         ),
         largeFilesAvailable: true,
-        storageRemainingBytes: 8 * GIB,
+        storageRemainingBytes: storageBytes('pro') - 2 * GIB,
         inlineMessageBytes: today.maxMessageBytes,
       });
     });
@@ -432,11 +437,15 @@ describe('large chat files', () => {
     it('lowers the large file limit to the storage left, never below today’s', async () => {
       const today = chatAttachmentLimitsForPlan('basic');
       const nearlyFull = scope('basic', {
-        storedBytes: GIB - 100 * MIB,
+        storedBytes: storageBytes('basic') - 100 * MIB,
         inFlightBytes: 0,
         inFlightCount: 0,
       });
-      const full = scope('basic', { storedBytes: GIB, inFlightBytes: 0, inFlightCount: 0 });
+      const full = scope('basic', {
+        storedBytes: storageBytes('basic'),
+        inFlightBytes: 0,
+        inFlightCount: 0,
+      });
 
       expect((await resolveChatAttachmentLimits(nearlyFull.input)).maxFileBytes).toBe(100 * MIB);
       const fullLimits = await resolveChatAttachmentLimits(full.input);
@@ -464,7 +473,6 @@ describe('large chat files', () => {
       state: StorageState,
       over: {
         byteCount?: number;
-        temporaryChat?: boolean;
         deps?: ReturnType<typeof readinessDeps>;
       } = {},
     ) {
@@ -478,7 +486,6 @@ describe('large chat files', () => {
         fileName: 'survey.csv',
         mimeType: 'text/csv',
         byteCount: over.byteCount ?? 100 * MIB,
-        temporaryChat: over.temporaryChat ?? false,
         nowMs: Date.parse('2026-11-15T12:00:00Z'),
         readinessDeps: over.deps ?? readinessDeps(),
       });
@@ -573,16 +580,17 @@ describe('large chat files', () => {
     it('counts two 500 MiB files still in flight against storage and refuses the next', async () => {
       const store = memoryStore();
       mocks.store.mockReturnValue(store);
-      const twoInFlight = { storedBytes: 0, inFlightBytes: 1000 * MIB, inFlightCount: 2 };
+      const twoInFlight = {
+        storedBytes: storageBytes('basic') - 1000 * MIB,
+        inFlightBytes: 1000 * MIB,
+        inFlightCount: 2,
+      };
 
       await expect(admit('basic', twoInFlight)).rejects.toMatchObject({
         statusCode: 413,
         details: { code: CHAT_LARGE_FILE_STORAGE_FULL_CODE },
       });
       expect(store.increment).not.toHaveBeenCalled();
-      await expect(admit('basic', twoInFlight, { temporaryChat: true })).resolves.toMatchObject({
-        dailyBytesCharged: 100 * MIB,
-      });
     });
 
     it('refuses the day’s bytes beyond the plan with 429 and keeps the count unchanged', async () => {
@@ -605,13 +613,12 @@ describe('large chat files', () => {
     describe('confirmChatLargeFileAdmission, once the row is written', () => {
       const LIMIT = 1000 * MIB;
 
-      function confirm(state: StorageState, temporaryChat = false, planTier = 'basic') {
+      function confirm(state: StorageState, planTier = 'basic') {
         const { db } = largeFileDb(state);
         return confirmChatLargeFileAdmission({
           db: db as never,
           userId: 'user-1',
           organizationId: null,
-          temporaryChat,
           admitted: {
             planTier,
             dailyBytesCharged: 100 * MIB,
@@ -640,7 +647,7 @@ describe('large chat files', () => {
         });
       });
 
-      it('refuses a create whose own row passes storage, outside temporary chats', async () => {
+      it('refuses a create whose own row passes storage', async () => {
         const over = {
           ...NONE,
           storedBytes: LIMIT - 300 * MIB,
@@ -651,13 +658,12 @@ describe('large chat files', () => {
           statusCode: 413,
           details: { code: CHAT_LARGE_FILE_STORAGE_FULL_CODE },
         });
-        await expect(confirm(over, true)).resolves.toBeUndefined();
       });
 
       it.each(['free', 'not-a-plan'])(
         'refuses %s, whose plan value of zero is a refusal and never unlimited',
         async (planTier) => {
-          await expect(confirm(NONE, false, planTier)).rejects.toMatchObject({
+          await expect(confirm(NONE, planTier)).rejects.toMatchObject({
             statusCode: 429,
             details: { code: LARGE_FILE_INTAKES_IN_FLIGHT_CODE },
           });

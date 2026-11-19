@@ -7,7 +7,9 @@ import {
   MINIMUM_SUPPORTED_RUNTIME_VERSION,
   PRODUCT_NAMES,
 } from '@agiworkforce/types';
+import { DEVELOPER_SESSION_TABLE } from '@agiworkforce/types/protocol';
 import manifest from '../../package.json';
+import type { ExtensionAgentMode } from '../features/permissions/agentModeConsent';
 import { CLI_INSTALL_COMMAND } from '../integrations/cliInstaller';
 import { cliAcquisitionHint } from '../integrations/localRuntimeClient';
 
@@ -23,16 +25,6 @@ function commandPaletteLabel(command: string): string {
 
 function readRepoFile(relativePath: string): string {
   return readFileSync(resolve(REPO_ROOT, relativePath), 'utf8');
-}
-
-function rustU32Constant(relativePath: string, name: string): number {
-  const source = readRepoFile(relativePath);
-  const match = new RegExp(`pub const ${name}: u32 = (\\d+);`, 'u').exec(source);
-  expect(
-    match,
-    `${name} is no longer declared as a \`pub const … : u32\` in ${relativePath}. This guard exists to catch that rename, re-point it before editing the extension's own constants.`,
-  ).not.toBeNull();
-  return Number(match?.[1]);
 }
 
 // Scoped to the [package] table rather than to EOF: `[dependencies.foo]`
@@ -54,20 +46,6 @@ function cliCrateVersion(relativePath: string): string {
     `no version in the [package] table of ${relativePath}. This guard reads the CLI's shipped version from there, re-point it before changing the extension's minimum.`,
   ).toBeDefined();
   return version ?? '';
-}
-
-function rustU32SliceConstant(relativePath: string, name: string): number[] {
-  const source = readRepoFile(relativePath);
-  const match = new RegExp(`pub const ${name}: &\\[u32\\] = &\\[([^\\]]*)\\];`, 'u').exec(source);
-  expect(
-    match,
-    `${name} is no longer declared as a \`pub const … : &[u32]\` in ${relativePath}. This guard exists to catch that rename, re-point it before editing the extension's own constants.`,
-  ).not.toBeNull();
-  return (match?.[1] ?? '')
-    .split(',')
-    .map((entry) => entry.trim())
-    .filter((entry) => entry !== '')
-    .map(Number);
 }
 
 const EXTENSION_VERSION_CONSTANTS: Record<string, number> = {
@@ -104,10 +82,7 @@ function compareSemver(left: string, right: string): number {
 describe('developer-session contract with the shipped AGI CLI', () => {
   it('accepts exactly the protocol version the CLI advertises', () => {
     expect(extensionConstant('SUPPORTED_PROTOCOL_VERSION')).toBe(
-      rustU32Constant(
-        'crates/agiworkforce-protocol/src/developer_session.rs',
-        'DEVELOPER_SESSION_PROTOCOL_VERSION',
-      ),
+      DEVELOPER_SESSION_TABLE.protocolVersion,
     );
   });
 
@@ -117,10 +92,7 @@ describe('developer-session contract with the shipped AGI CLI', () => {
   // the list is not a downgrade, it is every install failing at the handshake.
   it('asks for a version the CLI still answers', () => {
     const requested = extensionConstant('SUPPORTED_PROTOCOL_VERSION');
-    const answered = rustU32SliceConstant(
-      'crates/agiworkforce-protocol/src/developer_session.rs',
-      'SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS',
-    );
+    const answered: readonly number[] = DEVELOPER_SESSION_TABLE.supportedProtocolVersions;
 
     expect(
       answered,
@@ -130,11 +102,18 @@ describe('developer-session contract with the shipped AGI CLI', () => {
 
   it('accepts exactly the agent-event schema version the CLI emits', () => {
     expect(extensionConstant('AGENT_EVENT_SCHEMA_VERSION')).toBe(
-      rustU32Constant(
-        'crates/agiworkforce-protocol/src/agent_events.rs',
-        'AGENT_EVENT_SCHEMA_VERSION',
-      ),
+      DEVELOPER_SESSION_TABLE.agentEventSchemaVersion,
     );
+  });
+
+  it('offers exactly the postures the wire names', () => {
+    const offered: Record<ExtensionAgentMode, true> = {
+      plan: true,
+      ask: true,
+      auto: true,
+      bypass: true,
+    };
+    expect(Object.keys(offered).sort()).toEqual([...DEVELOPER_SESSION_TABLE.agentModes].sort());
   });
 
   it('does not demand a CLI version newer than the one the CLI crate builds', () => {

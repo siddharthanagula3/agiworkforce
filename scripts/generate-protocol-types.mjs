@@ -77,6 +77,7 @@ try {
     'AppServerRequest',
     'AppServerResponse',
     'AppServerNotification',
+    'DeveloperSessionTable',
   ];
   const missingRequiredModules = requiredModules.filter((module) => !modules.includes(module));
   if (missingRequiredModules.length > 0) {
