@@ -616,7 +616,7 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
   },
   free: {
     projects: 5,
-    knowledgeStorageBytes: 104857600,
+    knowledgeStorageBytes: 500 * BYTES_PER_MIB,
     monthlyDownloadBytes: FREE_DAILY_CAPS.egressBytes * DAYS_IN_LONGEST_MONTH,
     customMcpServers: 0,
     maxConcurrentTurns: 1,
@@ -633,7 +633,7 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
   },
   basic: {
     projects: 'unlimited',
-    knowledgeStorageBytes: 1073741824,
+    knowledgeStorageBytes: 4 * BYTES_PER_GIB,
     monthlyDownloadBytes: BYTES_PER_GIB,
     customMcpServers: 5,
     maxConcurrentTurns: 1,
@@ -652,7 +652,7 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
   },
   pro: {
     projects: 'unlimited',
-    knowledgeStorageBytes: 10737418240,
+    knowledgeStorageBytes: 20 * BYTES_PER_GIB,
     monthlyDownloadBytes: 3 * BYTES_PER_GIB,
     customMcpServers: 25,
     maxConcurrentTurns: 3,

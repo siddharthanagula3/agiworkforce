@@ -1253,7 +1253,7 @@ cancel after the `202`) with the refund; the `uploads-intake-status` bucket;
 parts route answering `409` `large_file_needs_direct_upload` instead of a
 relay URL for a `chat-large-file` session whenever the relay would be used;
 create refusing a `chat-large-file` whose `byteCount` plus
-`sumInFlightIntakeBytes` passes the storage quota (outside temporary chats),
+`sumInFlightIntakeBytes` passes the storage quota (temporary chats included),
 and the effective limit's remaining storage net of the same sum; no large
 offer to an origin that needs the relay; both variables validated and in the
 example. The presign route is not
@@ -1447,7 +1447,7 @@ throughput unmeasured until step 4; HTML and script normalisation limits;
 credential and DLP checks that read no content of a binary type and only the
 first 256,000 bytes of an inline file; native admission capped at 25 MiB;
 small history files over the inline budget not excerpted; chat files over
-25 MiB without a backup replica (Owner decisions, L); the temporary-chat storage exposure;
+25 MiB without a backup replica (Owner decisions, L); storage held by a temporary chat's uploads that the user cannot see or free;
 attach-from-Library (`ComposerFilesMenu.tsx` `libraryItemToFile`) answering
 `413` for a chat file above 30 MiB, with a message only on the Library page's
 handoffs (`readLibraryItemFile`) and the generic could-not-be-added copy from

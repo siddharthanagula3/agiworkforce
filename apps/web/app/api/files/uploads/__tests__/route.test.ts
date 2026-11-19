@@ -664,12 +664,7 @@ describe('large chat files', () => {
     large.sumInFlightIntakeBytes.mockImplementation(async (db, input) => {
       await intakeStatement(db);
       return rowsOf(input.userId)
-        .filter(
-          (row) =>
-            NON_TERMINAL.has(row.state) &&
-            !row.temporaryChat &&
-            row.organizationId === input.organizationId,
-        )
+        .filter((row) => NON_TERMINAL.has(row.state) && row.organizationId === input.organizationId)
         .reduce((sum, row) => sum + row.byteCount, 0);
     });
     large.cancelIntakeByStagingKey.mockImplementation(async (db, input) => {
@@ -885,14 +880,34 @@ describe('large chat files', () => {
     expect(response.status).toBe(200);
   });
 
-  it('refuses a create whose bytes and two 500 MiB files in flight pass the storage quota', async () => {
-    seedInFlight(2, 500 * MIB);
+  it('refuses a create whose bytes and two files in flight pass the storage quota', async () => {
+    const { getFileStorageLimitBytes } = await import('@/lib/services/free-plan-entitlements');
+    seedInFlight(2, getFileStorageLimitBytes(large.planTier)! / 2 - 25 * MIB);
 
     const response = await createLarge({ byteCount: 100 * MIB });
 
     expect(response.status).toBe(413);
     const { UPLOAD_STORAGE_FULL_MESSAGE } = await import('@/lib/security/upload-scan');
     expect((await errorOf(response))?.message).toBe(UPLOAD_STORAGE_FULL_MESSAGE);
+    expect(await dailyBytes()).toBe(0);
+  });
+
+  it('counts a temporary chat’s large files against storage, those in flight and the new one', async () => {
+    const { getFileStorageLimitBytes } = await import('@/lib/services/free-plan-entitlements');
+    const completion = await import('@/lib/server/chat-attachment-completion');
+    vi.mocked(completion.resolveTemporaryChatUpload).mockResolvedValue({
+      temporary: true,
+      conversationId: null,
+    });
+    seedInFlight(1, getFileStorageLimitBytes(large.planTier)! - 50 * MIB);
+    for (const row of rowsOf(USER_ID)) intakes.set(row.id, { ...row, temporaryChat: true });
+
+    const response = await createLarge({ byteCount: 100 * MIB });
+
+    expect(response.status).toBe(413);
+    const { UPLOAD_STORAGE_FULL_MESSAGE } = await import('@/lib/security/upload-scan');
+    expect((await errorOf(response))?.message).toBe(UPLOAD_STORAGE_FULL_MESSAGE);
+    expect(rowsOf(USER_ID)).toHaveLength(1);
     expect(await dailyBytes()).toBe(0);
   });
 
