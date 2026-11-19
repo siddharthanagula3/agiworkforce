@@ -131,7 +131,7 @@ describe('organization creation and plan response', () => {
     expect(mockExecute).not.toHaveBeenCalled();
   });
 
-  it('returns the status-gated subscription plan without inventing a member limit', async () => {
+  function installOwnerWorkspace(membershipStatus: string) {
     mockQuery.mockImplementation(async (sql: unknown) => {
       const text = String(sql);
       if (text.includes('from public.user_settings')) {
@@ -149,11 +149,13 @@ describe('organization creation and plan response', () => {
         ];
       }
       if (text.includes('from public.organization_members')) {
+        if (text.includes("status = 'active'") && membershipStatus !== 'active') return [];
         return [
           {
             organization_id: organizationId,
             user_id: 'team-owner',
             role: 'owner',
+            status: membershipStatus,
             provisioning_source: 'manual',
             provisioned_at: null,
             joined_at: '2026-07-25T00:00:00.000Z',
@@ -168,6 +170,10 @@ describe('organization creation and plan response', () => {
       }
       throw new Error(`Unexpected query: ${text}`);
     });
+  }
+
+  it('returns the status-gated subscription plan without inventing a member limit', async () => {
+    installOwnerWorkspace('active');
 
     const response = await GET(
       new Request('http://localhost:3000/api/settings/organization') as never,
@@ -186,5 +192,21 @@ describe('organization creation and plan response', () => {
       maxMembers: null,
     });
     expect(body.collectionState).toMatchObject({ stage: 'current', readOnly: false });
+  });
+
+  it('shows no organization to a member whose membership is suspended', async () => {
+    installOwnerWorkspace('suspended');
+
+    const response = await GET(
+      new Request('http://localhost:3000/api/settings/organization') as never,
+    );
+    const body = (await response.json()) as {
+      organization: unknown;
+      activeOrganizationId: string | null;
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.organization).toBeNull();
+    expect(body.activeOrganizationId).toBeNull();
   });
 });

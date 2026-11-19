@@ -8,6 +8,7 @@ import { getShortDisplayName } from '@/src/features/model-picker/service';
 import { useTierStore } from '@/src/features/billing/store';
 import { useThemeColors, radii } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { HEADER_TEXT_SCALE_LIMIT } from './WorkModeSwitch';
 
 interface ModelSelectorButtonProps {
   onPress: () => void;
@@ -56,6 +57,7 @@ export function ModelSelectorButton({ onPress }: ModelSelectorButtonProps) {
     >
       <Text
         numberOfLines={1}
+        maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
         style={{
           color: colors.textSecondary,
           fontSize: typeScale.body,
@@ -70,6 +72,7 @@ export function ModelSelectorButton({ onPress }: ModelSelectorButtonProps) {
       {fastOn ? (
         <Text
           numberOfLines={1}
+          maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
           style={{
             color: colors.textMuted,
             fontSize: typeScale.body,

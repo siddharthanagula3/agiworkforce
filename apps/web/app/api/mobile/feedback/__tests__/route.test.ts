@@ -105,4 +105,42 @@ describe('POST /api/mobile/feedback', () => {
     expect(res.status).toBe(400);
     expect(mockNeonQuery).not.toHaveBeenCalled();
   });
+
+  describe('the build and device the feedback came from', () => {
+    const CLIENT = {
+      appVersion: '0.0.1',
+      appBuild: '42',
+      platform: 'ios',
+      osVersion: '26.1',
+      deviceClass: 'phone',
+      appMode: 'cloud',
+    };
+
+    function storedMetadata(): Record<string, unknown> {
+      const params = mockNeonQuery.mock.calls[0]?.[1] as unknown[];
+      return JSON.parse(String(params[3])) as Record<string, unknown>;
+    }
+
+    it('keeps app version and build, platform and OS version, device class and app mode', async () => {
+      mockOptionalUser.mockResolvedValue({ userId: 'user-1' });
+
+      const res = await POST(makeRequest({ type: 'bug', message: 'It froze', client: CLIENT }));
+
+      expect(res.status).toBe(200);
+      expect(storedMetadata()).toEqual({ type: 'bug', source: 'mobile', client: CLIENT });
+    });
+
+    it('drops a client description carrying anything beyond those fields and keeps the feedback', async () => {
+      const res = await POST(
+        makeRequest({
+          type: 'bug',
+          message: 'It froze',
+          client: { ...CLIENT, deviceName: "Sam's iPhone" },
+        }),
+      );
+
+      expect(res.status).toBe(200);
+      expect(storedMetadata()).toEqual({ type: 'bug', source: 'mobile' });
+    });
+  });
 });

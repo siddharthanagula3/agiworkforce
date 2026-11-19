@@ -1,9 +1,10 @@
 import { CircleHelp } from 'lucide-react';
+import { PageAnchor } from '@shared/components/layout/EmbeddedPage';
 import { helpArticlePath } from '@/lib/support/help-paths';
 
 export function HelpArticleLink({ docId, label }: { docId: string; label: string }) {
   return (
-    <a
+    <PageAnchor
       href={helpArticlePath(docId)}
       target="_blank"
       rel="noopener noreferrer"
@@ -11,6 +12,6 @@ export function HelpArticleLink({ docId, label }: { docId: string; label: string
     >
       <CircleHelp className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
       {label}
-    </a>
+    </PageAnchor>
   );
 }

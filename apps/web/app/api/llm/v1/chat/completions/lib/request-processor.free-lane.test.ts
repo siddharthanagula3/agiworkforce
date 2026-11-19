@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { getRoutingSlotModel, type RoutingSlot } from '@agiworkforce/types';
+import { getDefaultModelFor, getRoutingSlotModel, type RoutingSlot } from '@agiworkforce/types';
 import type { RoutingTaskType } from '@agiworkforce/routing';
 
-import { resolveWebCloudModelRoute } from './request-processor';
+import { resolveWebCloudModelRoute } from '@/lib/server/managed-cloud-routing/routing-request';
 import {
   FREE_LANE_SELECTION,
   activateFreeLane,
@@ -106,7 +106,12 @@ describe('only an exact free plan with the lane on gets the preference', () => {
   const activate = (
     configuredMode: (typeof FREE_LANE_MODES)[keyof typeof FREE_LANE_MODES],
     tier: string | undefined,
-  ) => activateFreeLane({ configuredMode, isFreePlan: isFreePlanTier(tier) });
+  ) =>
+    activateFreeLane({
+      configuredMode,
+      isFreePlan: isFreePlanTier(tier),
+      requestedModel: getDefaultModelFor('free', 'chat'),
+    });
 
   it.each([...TIERS_DEFAULTED_TO_FREE, ...PAID_TIERS])('withholds it from tier %s', (tier) => {
     for (const mode of [FREE_LANE_MODES.strict, FREE_LANE_MODES.prefer, FREE_LANE_MODES.shadow]) {
@@ -132,6 +137,18 @@ describe('only an exact free plan with the lane on gets the preference', () => {
     // not-free. Off is the safe direction for a tier we could not parse.
     expect(activate(FREE_LANE_MODES.strict, ' free ').preferSlots).toEqual([]);
   });
+
+  it('stays off for a Free pick of the fast Anthropic model, so that model answers the turn', () => {
+    for (const mode of [FREE_LANE_MODES.strict, FREE_LANE_MODES.prefer, FREE_LANE_MODES.shadow]) {
+      expect(
+        activateFreeLane({
+          configuredMode: mode,
+          isFreePlan: true,
+          requestedModel: getRoutingSlotModel('fast_anthropic'),
+        }),
+      ).toEqual({ mode: FREE_LANE_MODES.off, preferSlots: [] });
+    }
+  });
 });
 
 /**
@@ -154,7 +171,7 @@ describe('without the preference a defaulted tier resolves as free', () => {
  * The preference is a REORDER WITHIN the admitted set, never a widening of it.
  *
  * Every slot a pool record claims is a reasoning slot, and the free tier is
- * granted only its own two slots, so `preferSlots` has
+ * granted only its own slots, so `preferSlots` has
  * nothing admitted to promote on the free plan and the plan does not move. That
  * is the preference behaving correctly rather than the lane being bypassed: a
  * stage that may only reorder cannot reach a slot admission withheld.
@@ -190,7 +207,11 @@ describe('the preference reorders within admission and never widens it', () => {
     expect(bypassed.head).not.toBe(plan('basic', 'simple_chat').head);
     expect(pooledSlotModels.has(bypassed.head), bypassed.head).toBe(true);
     expect(
-      activateFreeLane({ configuredMode: FREE_LANE_MODES.strict, isFreePlan: false }).preferSlots,
+      activateFreeLane({
+        configuredMode: FREE_LANE_MODES.strict,
+        isFreePlan: false,
+        requestedModel: getDefaultModelFor('free', 'chat'),
+      }).preferSlots,
     ).toEqual([]);
   });
 });

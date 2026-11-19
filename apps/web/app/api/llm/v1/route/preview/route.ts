@@ -25,15 +25,11 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withAdmittedRateLimitHeaders } from '@/lib/rate-limit-headers';
 import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
-import { readModelPolicy } from '@/lib/services/model-policy-service';
 import { modelPolicyRefusalInit } from '@/lib/services/model-policy-gate';
-import { resolveZeroDataRetentionPolicy } from '@/lib/services/organization-policy-gate';
-import { resolveZeroDataRetentionProviderOverrides } from '@/lib/services/zero-data-retention-provider-overrides';
-import { listAvailableManagedProviderIds } from '@/lib/services/provider-adapter-service';
 import { getServedRouteAffinity } from '@/lib/services/free-lane/runtime-state-service';
 import { getUnhonouredCapabilities } from '@/lib/services/free-lane/capability-health-service';
 import { runAuthGate } from '../../chat/completions/lib/auth-gate';
-import { buildWebCloudAutoRoutingRequest } from '../../chat/completions/lib/request-processor';
+import { managedCloudRoutingRequest } from '@/lib/server/managed-cloud-routing/admission';
 
 const DEFAULT_SELECTION = modelRegistry.policies.auto.defaultAlias;
 
@@ -58,26 +54,6 @@ function jsonError(message: string, status: number, code: string): NextResponse 
     { error: { message, type: 'invalid_request_error', code } },
     { status, headers: { ...getSecurityHeaders() } },
   );
-}
-
-type WorkspacePolicyRead =
-  { readable: true; policy: Awaited<ReturnType<typeof readModelPolicy>> } | { readable: false };
-
-async function readWorkspacePolicyForPreview(
-  db: Parameters<typeof readModelPolicy>[0],
-  organizationId: string | null,
-  userId: string,
-): Promise<WorkspacePolicyRead> {
-  if (!organizationId) return { readable: true, policy: null };
-  try {
-    return { readable: true, policy: await readModelPolicy(db, organizationId) };
-  } catch (error) {
-    logger.error(
-      { error, userId, organizationId },
-      '[route-preview] workspace policy read failed; preview refused',
-    );
-    return { readable: false };
-  }
 }
 
 /**
@@ -156,12 +132,26 @@ async function handleRoutePreview(request: NextRequest): Promise<Response> {
       ).length > 0
     : false;
 
-  const [workspacePolicyRead, zeroDataRetentionPolicy, routeAffinity] = await Promise.all([
-    readWorkspacePolicyForPreview(db, organizationId, userId),
-    resolveZeroDataRetentionPolicy(db, userId),
-    ownsConversation ? getServedRouteAffinity(conversationId!) : Promise.resolve(null),
-  ]);
-  if (!workspacePolicyRead.readable) {
+  const routeAffinity = ownsConversation ? await getServedRouteAffinity(conversationId!) : null;
+  const routing = await managedCloudRoutingRequest({
+    kind: 'preview',
+    account: {
+      db,
+      userId,
+      organizationId,
+      conversationId: ownsConversation ? conversationId : null,
+    },
+    planTier: subscription.plan_tier,
+    need: {
+      selection: selection ?? DEFAULT_SELECTION,
+      taskType,
+      continuity: {
+        currentModelKey: routeAffinity?.modelKey ?? null,
+        previousTaskType: routeAffinity?.taskType ?? null,
+      },
+    },
+  });
+  if (routing.status === 'refused' && routing.reason === 'policy_unreadable') {
     return NextResponse.json(
       {
         error: {
@@ -176,22 +166,19 @@ async function handleRoutePreview(request: NextRequest): Promise<Response> {
       }),
     );
   }
-
-  const routingRequest = buildWebCloudAutoRoutingRequest(
-    selection ?? DEFAULT_SELECTION,
-    subscription.plan_tier,
-    taskType,
-    undefined,
-    undefined,
-    {
-      ...(routeAffinity?.modelKey ? { currentModelKey: routeAffinity.modelKey } : {}),
-      ...(routeAffinity?.taskType ? { previousTaskType: routeAffinity.taskType } : {}),
-    },
-    listAvailableManagedProviderIds(),
-    zeroDataRetentionPolicy.required,
-    resolveZeroDataRetentionProviderOverrides(),
-    workspacePolicyRead.policy,
-  );
+  if (routing.status === 'refused') {
+    return NextResponse.json(
+      {
+        error: {
+          message: 'No model on your plan keeps your chats out of training right now.',
+          type: 'invalid_request_error',
+          code: 'no_training_model_available',
+        },
+      },
+      { status: 403, headers: { ...getCorsHeaders(request), ...getSecurityHeaders() } },
+    );
+  }
+  const routingRequest = routing.request;
 
   const preview = await previewWithObservedCapabilities(
     routingRequest,

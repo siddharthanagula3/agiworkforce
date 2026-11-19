@@ -13,8 +13,26 @@ import {
   type GitHubInstallCompleteStatus,
   type GitHubInstallPendingResponse,
 } from '@agiworkforce/cloud-contracts';
-import { api } from '@/services/api';
+import { z } from 'zod';
+import { api, apiFetch } from '@/services/api';
+import { httpErrorFrom } from '@/services/apiErrors';
 import { API_URL } from '@/lib/constants';
+
+const GITHUB_INSTALLATIONS_PATH = '/api/github/installations';
+
+const GitHubInstallationsResponseSchema = z.object({
+  installations: z.array(
+    z.object({
+      installation_id: z.number(),
+      account_login: z.string(),
+      account_type: z.enum(['User', 'Organization']),
+    }),
+  ),
+});
+
+export type GitHubInstallation = z.infer<
+  typeof GitHubInstallationsResponseSchema
+>['installations'][number];
 
 export type GitHubInstallReturn = GitHubInstallCompleteRequest;
 
@@ -115,4 +133,21 @@ export function describeGitHubInstallOutcome(outcome: GitHubInstallCompleteStatu
     case 'failed':
       return 'GitHub could not be connected. Try again.';
   }
+}
+
+export async function fetchGitHubInstallations(
+  signal?: AbortSignal,
+): Promise<GitHubInstallation[]> {
+  return GitHubInstallationsResponseSchema.parse(
+    await api.get<unknown>(GITHUB_INSTALLATIONS_PATH, signal ? { signal } : undefined),
+  ).installations;
+}
+
+export async function disconnectGitHubInstallation(installationId: number): Promise<void> {
+  const response = await apiFetch(GITHUB_INSTALLATIONS_PATH, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ installationId }),
+  });
+  if (!response.ok) throw httpErrorFrom(response.status, await response.text());
 }

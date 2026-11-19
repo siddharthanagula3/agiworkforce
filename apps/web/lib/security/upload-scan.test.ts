@@ -3,11 +3,22 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 
 import {
+  UPLOAD_CHANGED_DURING_CHECK_MESSAGE,
+  UPLOAD_ENCRYPTED_MESSAGE,
+  UPLOAD_INSPECTION_BYTES,
+  UPLOAD_LIMITS_EXCEEDED_MESSAGE,
   UPLOAD_REJECTED_MESSAGE,
+  UPLOAD_SCAN_UNAVAILABLE_MESSAGE,
+  UPLOAD_STORAGE_FULL_MESSAGE,
+  type UploadScanFinding,
   inspectUploadBytes,
+  inspectUploadHead,
   refuseUnsafeUpload,
   scanUploadBytes,
   scanUploadForCredentials,
+  scanUploadRangeForCredentials,
+  uploadFindingRejects,
+  uploadRefusalMessage,
   uploadScannerStatus,
 } from './upload-scan';
 
@@ -194,6 +205,30 @@ describe('inspectUploadBytes, PDF active content', () => {
     const result = inspectUploadBytes(utf8(content), 'application/pdf');
     expect(result.ok).toBe(false);
     expect(result.findings.some((f) => f.code === 'active_content_pdf')).toBe(true);
+  });
+});
+
+describe('a PDF a reader opens by its name under another declared type', () => {
+  const SCRIPTED = utf8('\n%PDF-1.7\n/OpenAction << /S /JavaScript /JS (app.alert(1)) >>');
+
+  it('passes the active-content check when only the declared type is read', () => {
+    expect(inspectUploadBytes(SCRIPTED, 'text/plain').ok).toBe(true);
+    expect(inspectUploadHead(SCRIPTED, 'text/plain', 'report.pdf').ok).toBe(true);
+  });
+
+  it('is checked for active content when the caller says a reader opens it as a PDF', () => {
+    const result = inspectUploadBytes(SCRIPTED, 'text/plain', true);
+    expect(result.ok).toBe(false);
+    expect(result.findings.map((finding) => finding.code)).toEqual(['active_content_pdf']);
+
+    const head = inspectUploadHead(SCRIPTED, 'text/plain', 'report.pdf', 'text/plain', true);
+    expect(head.ok).toBe(false);
+    expect(head.findings.some((finding) => finding.code === 'active_content_pdf')).toBe(true);
+  });
+
+  it('leaves a clean file read as a PDF alone', () => {
+    const clean = utf8('\n%PDF-1.7\nharmless document body');
+    expect(inspectUploadBytes(clean, 'text/plain', true).ok).toBe(true);
   });
 });
 
@@ -589,5 +624,230 @@ describe('where the bytes sit in the object', () => {
     expect(asParts.every((part) => part.ok)).toBe(true);
     expect(assembled.ok).toBe(false);
     expect(assembled.findings.map((finding) => finding.code)).toContain('credential_material');
+  });
+});
+
+describe('inspectUploadHead', () => {
+  const MZ = bytes(0x4d, 0x5a, 0x90, 0x00, 0x03, 0x00, 0x00, 0x00);
+  const SVG_WITH_SCRIPT = utf8(
+    '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>',
+  );
+  const PDF_WITH_SCRIPT = utf8('%PDF-1.7\n1 0 obj << /JavaScript (app.alert(1)) >> endobj');
+
+  it.each([
+    ['an honest PNG', PNG, 'image/png'],
+    ['an honest JPEG', JPEG, 'image/jpeg'],
+    ['an honest PDF', PDF, 'application/pdf'],
+    ['an honest WebP', WEBP, 'image/webp'],
+    ['a JPEG declared as PNG', JPEG, 'image/png'],
+    ['an executable declared as an image', MZ, 'image/png'],
+    ['an archive declared as text', ZIP, 'text/plain'],
+    ['an SVG that runs script', SVG_WITH_SCRIPT, 'image/svg+xml'],
+    ['a PDF that embeds JavaScript', PDF_WITH_SCRIPT, 'application/pdf'],
+    ['plain text', utf8('notes for the meeting'), 'text/plain'],
+  ])('gives the findings inspectUploadBytes gives for %s', (_label, input, mime) => {
+    const head = inspectUploadHead(input, mime, 'file.bin');
+    const whole = inspectUploadBytes(input, mime);
+
+    expect(head.findings).toEqual(whole.findings);
+    expect(head.ok).toBe(whole.ok);
+  });
+
+  it('gives the findings scanUploadBytes gives without the external scan, credentials and file name included', async () => {
+    const leaked = utf8('STRIPE_SECRET_KEY=sk_live_' + 'EXAMPLE'.repeat(4) + '\n');
+    const cases: Array<[Uint8Array, string, string]> = [
+      [leaked, 'text/plain', 'notes.txt'],
+      [utf8('nothing to see'), 'text/plain', '.env.production'],
+      [utf8('notes'), 'text/plain', '../../etc/passwd'],
+      [MZ, 'image/png', 'avatar.png'],
+      [PNG, 'image/png', 'logo.png'],
+    ];
+
+    for (const [input, mime, filename] of cases) {
+      const head = inspectUploadHead(input, mime, filename);
+      const scanned = await scanUploadBytes(input, mime, {
+        leadsObject: true,
+        filename,
+        externalScan: false,
+      });
+      expect(head).toEqual(scanned);
+    }
+  });
+
+  it('refuses a credential file name and a path posing as a name', () => {
+    expect(inspectUploadHead(utf8('x'), 'text/plain', '.env.production').ok).toBe(false);
+    expect(
+      inspectUploadHead(utf8('x'), 'text/plain', '../../etc/passwd').findings.map(
+        (finding) => finding.code,
+      ),
+    ).toContain('unsafe_filename');
+  });
+
+  it('inspects the first UPLOAD_INSPECTION_BYTES and nothing after them', () => {
+    expect(UPLOAD_INSPECTION_BYTES).toBe(256_000);
+    const secret = utf8('STRIPE_SECRET_KEY=sk_live_' + 'EXAMPLE'.repeat(4) + '\n');
+    const padding = (length: number) => new Uint8Array(length).fill(0x20);
+
+    const inside = Uint8Array.from([...padding(UPLOAD_INSPECTION_BYTES - 200), ...secret]);
+    const beyond = Uint8Array.from([...padding(UPLOAD_INSPECTION_BYTES + 10), ...secret]);
+
+    expect(inspectUploadHead(inside, 'text/plain', 'a.txt').ok).toBe(false);
+    expect(inspectUploadHead(beyond, 'text/plain', 'a.txt').ok).toBe(true);
+    expect(inspectUploadHead(beyond, 'text/plain', 'a.txt')).toEqual(
+      inspectUploadHead(beyond.subarray(0, UPLOAD_INSPECTION_BYTES), 'text/plain', 'a.txt'),
+    );
+  });
+
+  it('never calls the external scanner, even when one is required or configured', () => {
+    vi.stubEnv('UPLOAD_SCAN_WEBHOOK_URL', 'https://scanner.example.test/scan');
+    vi.stubEnv('UPLOAD_SCAN_REQUIRED', 'true');
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      const result = inspectUploadHead(utf8('just some notes'), 'text/plain', 'notes.txt');
+      expect(result).toEqual({ ok: true, findings: [] });
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllEnvs();
+      vi.unstubAllGlobals();
+    }
+
+    vi.stubEnv('UPLOAD_SCAN_WEBHOOK_URL', '');
+    vi.stubEnv('UPLOAD_SCAN_REQUIRED', 'true');
+    try {
+      expect(
+        inspectUploadHead(utf8('just some notes'), 'text/plain', 'notes.txt').findings,
+      ).toEqual([]);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+});
+
+describe('uploadRefusalMessage, the copy for the large file refusals', () => {
+  const finding = (code: UploadScanFinding['code']): UploadScanFinding => ({ code, detail: code });
+
+  it.each([
+    [
+      'scan_unavailable',
+      UPLOAD_SCAN_UNAVAILABLE_MESSAGE,
+      "We couldn't check this file for safety. Try again later.",
+    ],
+    [
+      'limits_exceeded',
+      UPLOAD_LIMITS_EXCEEDED_MESSAGE,
+      "This file is too complex for us to check for safety, so it wasn't added. Try a smaller or simpler file.",
+    ],
+    [
+      'storage_full',
+      UPLOAD_STORAGE_FULL_MESSAGE,
+      "There isn't enough storage left for this file. Delete files in your Library to make room.",
+    ],
+    [
+      'changed_during_check',
+      UPLOAD_CHANGED_DURING_CHECK_MESSAGE,
+      'This file changed while we were checking it. Upload it again.',
+    ],
+  ] as const)('answers %s with its own copy', (code, constant, copy) => {
+    expect(constant).toBe(copy);
+    expect(uploadRefusalMessage([finding(code)], 'fallback')).toBe(copy);
+  });
+
+  it('keeps the encrypted copy and the fallback for every other finding', () => {
+    expect(uploadRefusalMessage([finding('encrypted_content')], 'fallback')).toBe(
+      UPLOAD_ENCRYPTED_MESSAGE,
+    );
+    expect(uploadRefusalMessage([finding('executable')], 'fallback')).toBe('fallback');
+    expect(uploadRefusalMessage([], 'fallback')).toBe('fallback');
+  });
+
+  it.each(['constructor', 'toString', '__proto__', 'hasOwnProperty'])(
+    'answers the fallback for the code %s that is not one of ours',
+    (code) => {
+      const stray = { code, detail: code } as unknown as UploadScanFinding;
+      expect(uploadRefusalMessage([stray], 'fallback')).toBe('fallback');
+      expect(uploadRefusalMessage([stray, finding('storage_full')], 'fallback')).toBe(
+        UPLOAD_STORAGE_FULL_MESSAGE,
+      );
+    },
+  );
+
+  it('treats each of the new codes as a refusal, never as a report', () => {
+    for (const code of [
+      'scan_unavailable',
+      'limits_exceeded',
+      'storage_full',
+      'changed_during_check',
+    ] as const) {
+      expect(uploadFindingRejects(finding(code))).toBe(true);
+    }
+  });
+
+  it('carries no em dash in any copy', () => {
+    for (const copy of [
+      UPLOAD_SCAN_UNAVAILABLE_MESSAGE,
+      UPLOAD_LIMITS_EXCEEDED_MESSAGE,
+      UPLOAD_STORAGE_FULL_MESSAGE,
+      UPLOAD_CHANGED_DURING_CHECK_MESSAGE,
+    ]) {
+      expect(copy).not.toContain(String.fromCharCode(0x2014));
+    }
+  });
+});
+
+describe('text whose credential only exists once its null characters are gone', () => {
+  const KEY = `sk_live_${'EXAMPLE'.repeat(4)}`;
+  const utf16 = (text: string) => new Uint8Array(Buffer.from(text, 'utf16le'));
+  const credentials = (findings: readonly UploadScanFinding[]) =>
+    findings.filter((finding) => finding.code === 'credential_material');
+
+  it('finds a key written as UTF-16 with no byte-order mark, which reads as UTF-8 with a null after each character', () => {
+    const findings = credentials(
+      scanUploadForCredentials(utf16(`notes\nkey ${KEY}\n`), 'text/plain', 'notes.txt'),
+    );
+
+    expect(findings).toHaveLength(1);
+    expect(uploadFindingRejects(findings[0]!)).toBe(true);
+  });
+
+  it('finds a key with one null inside it, and reports a key readable either way once', () => {
+    const broken = `${KEY.slice(0, 12)}\u0000${KEY.slice(12)}`;
+
+    expect(credentials(scanUploadForCredentials(utf8(broken), 'text/plain'))).toHaveLength(1);
+    expect(
+      credentials(scanUploadForCredentials(utf8(`${KEY}\n\u0000trailing`), 'text/plain')),
+    ).toHaveLength(1);
+  });
+
+  it('reports such a key from the window that owns its start and from no other', () => {
+    const filler = utf16('the quick brown fox jumps over the lazy dog\n'.repeat(40));
+    const key = utf16(`${KEY}\n`);
+    const bytes = new Uint8Array(filler.byteLength * 2 + key.byteLength);
+    bytes.set(filler, 0);
+    bytes.set(key, filler.byteLength);
+    bytes.set(filler, filler.byteLength + key.byteLength);
+    const scan = (ownedStart: number, ownedEnd: number) =>
+      credentials(
+        scanUploadRangeForCredentials(bytes, 'text/plain', { bytesStart: 0, ownedStart, ownedEnd }),
+      );
+
+    expect(scan(0, filler.byteLength)).toEqual([]);
+    expect(scan(filler.byteLength, filler.byteLength + key.byteLength)).toHaveLength(1);
+    expect(scan(filler.byteLength + key.byteLength, bytes.byteLength)).toEqual([]);
+  });
+
+  it('reads text with no null character exactly as before', () => {
+    const plain = utf8(`key ${KEY}\n`);
+
+    expect(credentials(scanUploadForCredentials(plain, 'text/plain'))).toHaveLength(1);
+    expect(
+      credentials(
+        scanUploadRangeForCredentials(plain, 'text/plain', {
+          bytesStart: 0,
+          ownedStart: 0,
+          ownedEnd: plain.byteLength,
+        }),
+      ),
+    ).toHaveLength(1);
   });
 });

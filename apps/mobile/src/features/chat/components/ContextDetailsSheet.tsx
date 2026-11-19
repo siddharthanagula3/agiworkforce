@@ -6,6 +6,7 @@ import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
 import { dialogPadding, useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { PageSheetSafeArea } from '@/src/features/chat/components/ModalSafeArea';
 import {
   computeContextBudget,
   summarizeContext,
@@ -49,115 +50,122 @@ export function ContextDetailsSheet({
       accessibilityViewIsModal
       onRequestClose={onClose}
     >
-      <View
-        style={{ flex: 1, backgroundColor: colors.surfaceBase, padding: dialogPadding }}
-        testID="context-details-sheet"
-      >
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-          <Text
-            accessibilityRole="header"
-            style={{
-              flex: 1,
-              color: colors.textPrimary,
-              fontSize: typeScale.headline,
-              fontWeight: '600',
-            }}
-          >
-            What is in context
-          </Text>
-          <Pressable
-            onPress={onClose}
-            accessibilityRole="button"
-            accessibilityLabel="Close context details"
-            style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
-          >
-            <X size={18} color={colors.textMuted} />
-          </Pressable>
-        </View>
-        <ScrollView contentContainerStyle={{ gap: 16, paddingBottom: 32 }}>
-          <View style={{ gap: 6 }}>
-            <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}>
-              {getManagedDisplayName(modelId)}
-            </Text>
+      <PageSheetSafeArea style={{ flex: 1, backgroundColor: colors.surfaceBase }}>
+        <View
+          style={{ flex: 1, backgroundColor: colors.surfaceBase, padding: dialogPadding }}
+          testID="context-details-sheet"
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
             <Text
-              style={{ color: colors.textPrimary, fontSize: typeScale.body }}
-              testID="context-details-usage"
-            >
-              {`About ${numberFormat.format(budget.usedTokens)} of ${numberFormat.format(budget.contextWindowTokens)} tokens (${percent}%)`}
-            </Text>
-            <View
-              accessibilityRole="progressbar"
-              accessibilityLabel="Context used"
-              accessibilityValue={{ min: 0, max: 100, now: percent }}
+              accessibilityRole="header"
               style={{
-                height: 6,
-                borderRadius: 3,
-                backgroundColor: colors.neutralSurface,
-                overflow: 'hidden',
+                flex: 1,
+                color: colors.textPrimary,
+                fontSize: typeScale.headline,
+                fontWeight: '600',
               }}
             >
-              <View style={{ width: `${percent}%`, height: 6, backgroundColor: barColor }} />
-            </View>
-            {budget.status !== 'ok' ? (
-              <Text
-                style={{
-                  color: colors.textSecondary,
-                  fontSize: typeScale.footnote,
-                  lineHeight: 19,
-                }}
-              >
-                {budget.runsOnDevice
-                  ? budget.status === 'compact'
-                    ? 'This chat is at the on-device limit. Start a new chat for complete answers.'
-                    : 'Close to the on-device limit. A new chat keeps answers complete.'
-                  : budget.status === 'compact'
-                    ? 'Oldest messages are summarized to fit. A new chat keeps answers complete.'
-                    : 'This chat is close to the point where the oldest messages get summarized.'}
-              </Text>
-            ) : null}
-          </View>
-
-          <View>
-            {rows.map((row) => (
-              <View
-                key={row.key}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  minHeight: 44,
-                  borderBottomWidth: 1,
-                  borderBottomColor: colors.border,
-                }}
-                testID={`context-details-row-${row.key}`}
-              >
-                <Text style={{ flex: 1, color: colors.textPrimary, fontSize: typeScale.body }}>
-                  {row.label}
-                </Text>
-                <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}>
-                  {row.key === 'attachments'
-                    ? numberFormat.format(row.count)
-                    : `${numberFormat.format(row.count)}, about ${numberFormat.format(row.tokens)} tokens`}
-                </Text>
-              </View>
-            ))}
-          </View>
-
-          <Text style={{ color: colors.textMuted, fontSize: typeScale.footnote, lineHeight: 19 }}>
-            Estimated on this device, without instructions, memory or sources.
-          </Text>
-
-          {onStartFreshChat ? (
-            <Button
-              title="Start a new chat"
-              variant="outline"
-              onPress={() => {
-                onClose();
-                onStartFreshChat();
+              What is in context
+            </Text>
+            <Pressable
+              onPress={onClose}
+              accessibilityRole="button"
+              accessibilityLabel="Close context details"
+              style={{
+                minWidth: 44,
+                minHeight: 44,
+                alignItems: 'center',
+                justifyContent: 'center',
               }}
-            />
-          ) : null}
-        </ScrollView>
-      </View>
+            >
+              <X size={18} color={colors.textMuted} />
+            </Pressable>
+          </View>
+          <ScrollView contentContainerStyle={{ gap: 16, paddingBottom: 32 }}>
+            <View style={{ gap: 6 }}>
+              <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}>
+                {getManagedDisplayName(modelId)}
+              </Text>
+              <Text
+                style={{ color: colors.textPrimary, fontSize: typeScale.body }}
+                testID="context-details-usage"
+              >
+                {`About ${numberFormat.format(budget.usedTokens)} of ${numberFormat.format(budget.contextWindowTokens)} tokens (${percent}%)`}
+              </Text>
+              <View
+                accessibilityRole="progressbar"
+                accessibilityLabel="Context used"
+                accessibilityValue={{ min: 0, max: 100, now: percent }}
+                style={{
+                  height: 6,
+                  borderRadius: 3,
+                  backgroundColor: colors.neutralSurface,
+                  overflow: 'hidden',
+                }}
+              >
+                <View style={{ width: `${percent}%`, height: 6, backgroundColor: barColor }} />
+              </View>
+              {budget.status !== 'ok' ? (
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontSize: typeScale.footnote,
+                    lineHeight: 19,
+                  }}
+                >
+                  {budget.runsOnDevice
+                    ? budget.status === 'compact'
+                      ? 'This chat is at the on-device limit. Start a new chat for complete answers.'
+                      : 'Close to the on-device limit. A new chat keeps answers complete.'
+                    : budget.status === 'compact'
+                      ? 'Oldest messages are summarized to fit. A new chat keeps answers complete.'
+                      : 'This chat is close to the point where the oldest messages get summarized.'}
+                </Text>
+              ) : null}
+            </View>
+
+            <View>
+              {rows.map((row) => (
+                <View
+                  key={row.key}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    minHeight: 44,
+                    borderBottomWidth: 1,
+                    borderBottomColor: colors.border,
+                  }}
+                  testID={`context-details-row-${row.key}`}
+                >
+                  <Text style={{ flex: 1, color: colors.textPrimary, fontSize: typeScale.body }}>
+                    {row.label}
+                  </Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}>
+                    {row.key === 'attachments'
+                      ? numberFormat.format(row.count)
+                      : `${numberFormat.format(row.count)}, about ${numberFormat.format(row.tokens)} tokens`}
+                  </Text>
+                </View>
+              ))}
+            </View>
+
+            <Text style={{ color: colors.textMuted, fontSize: typeScale.footnote, lineHeight: 19 }}>
+              Estimated on this device, without instructions, memory or sources.
+            </Text>
+
+            {onStartFreshChat ? (
+              <Button
+                title="Start a new chat"
+                variant="outline"
+                onPress={() => {
+                  onClose();
+                  onStartFreshChat();
+                }}
+              />
+            ) : null}
+          </ScrollView>
+        </View>
+      </PageSheetSafeArea>
     </Modal>
   );
 }

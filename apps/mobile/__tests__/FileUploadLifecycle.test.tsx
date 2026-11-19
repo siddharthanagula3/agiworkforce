@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 
 import React from 'react';
-import { render } from '@testing-library/react-native';
+import { fireEvent, render } from '@testing-library/react-native';
 
 jest.mock('lucide-react-native', () => {
   const React = require('react');
@@ -473,5 +473,36 @@ describe('resume and retry', () => {
     const both = unsentAttachmentMessage(['notes.txt', 'rows.csv']);
     expect(both).toContain('“notes.txt”, “rows.csv”');
     expect(both).toContain('Tap Retry on each file');
+  });
+});
+
+describe('a picked file that is still being prepared', () => {
+  it('shows a tile with a progress indicator before the file itself is ready', () => {
+    const { getByTestId, getByLabelText } = render(
+      <AttachmentPreview
+        attachments={[]}
+        preparing={[{ id: 'prep-1', failed: false }]}
+        onRemove={jest.fn()}
+      />,
+    );
+
+    expect(getByTestId('attachment-preparing-prep-1')).toBeTruthy();
+    expect(getByLabelText('Adding attachment').props.accessibilityRole).toBe('progressbar');
+  });
+
+  it('shows the failure on the tile and lets the person remove it', () => {
+    const onDismissPreparing = jest.fn();
+    const { getByText, getByLabelText } = render(
+      <AttachmentPreview
+        attachments={[NOTES_TXT]}
+        preparing={[{ id: 'prep-1', failed: true }]}
+        onRemove={jest.fn()}
+        onDismissPreparing={onDismissPreparing}
+      />,
+    );
+
+    expect(getByText('Not added')).toBeTruthy();
+    fireEvent.press(getByLabelText('Remove the attachment that could not be added'));
+    expect(onDismissPreparing).toHaveBeenCalledWith('prep-1');
   });
 });

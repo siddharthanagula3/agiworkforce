@@ -9,6 +9,8 @@ fi
 
 if [ "${AGI_PREPUSH_ON_TREE:-}" = "1" ]; then
   pnpm check:llm-operability
+  NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=8192}" \
+    pnpm exec turbo run lint typecheck --affected --concurrency=2
   git diff --check
   git diff --cached --check
 else

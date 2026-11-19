@@ -16,34 +16,19 @@ import { toast } from 'sonner';
 import { cn } from '@shared/lib/utils';
 import {
   RESPONSE_RATING_COMMENT_MAX_CHARS,
+  RESPONSE_RATING_RATE_LIMITED,
   RESPONSE_RATING_REASONS,
+  RESPONSE_RATING_REASON_LABELS,
+  RESPONSE_RATING_SEND_FAILED,
+  RESPONSE_RATING_SHARING_NOTE,
   type ResponseRatingReason,
-} from '@/app/api/feedback/response-rating-contract';
+} from '@agiworkforce/cloud-contracts';
 import {
   EMPTY_RESPONSE_RATING_DRAFT,
   hasResponseRatingDetails,
   useResponseRatingDraftStore,
 } from '../../stores/response-rating-draft-store';
 import { ACTION_BUTTON_SIZE, ACTION_BUTTON_TONE, ACTION_ICON_SIZE } from './messageActionRow';
-
-export const RESPONSE_RATING_REASON_LABELS: Record<ResponseRatingReason, string> = {
-  inaccurate: 'Not factually correct',
-  ignored_instructions: 'Did not follow instructions',
-  incomplete: 'Incomplete response',
-  unwarranted_refusal: 'Refused when it should not have',
-  style: 'Wrong style or tone',
-  other: 'Other',
-};
-
-export const RESPONSE_RATING_SHARING_NOTE =
-  'Your rating, reason and comment are saved with your account, this chat and response IDs, and your browser and device details. The response text is not attached.';
-
-export const RESPONSE_RATING_SEND_FAILED = 'Could not send that. Please try again.';
-
-export const RESPONSE_RATING_REMOVE_FAILED = 'Could not remove your rating. Please try again.';
-
-export const RESPONSE_RATING_RATE_LIMITED =
-  "You've sent a lot of feedback in the last hour. Try again later.";
 
 export class ResponseRatingRequestError extends Error {
   readonly status: number;

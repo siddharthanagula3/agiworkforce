@@ -64,6 +64,7 @@ function expoRouterMock(overrides = {}) {
     router,
     useRouter: () => router,
     useNavigation: () => navigation,
+    useIsFocused: () => true,
     useFocusEffect: (callback) => {
       React.useEffect(() => callback(), [callback]);
     },

@@ -19,6 +19,8 @@ import { SettingsGroup, SettingsRow, SettingsScreenShell } from '@/src/features/
 import { offlineStatusLine } from '@/src/features/companion/components/StatusBanners';
 import { useConnectionStore, type ConnectionStatus } from '@/stores/connectionStore';
 import { manualReconnect } from '@/services/companion';
+import { FEATURES } from '@/lib/v1FeatureFlags';
+import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
 import { useTierStore } from '@/src/features/billing/store';
 import { NATIVE_PURCHASES_AVAILABLE } from '@/src/features/billing/nativePurchaseAvailability';
 import {
@@ -126,6 +128,11 @@ function SectionHeader({ children }: { children: string }) {
 }
 
 export default function RemoteControlSettingsScreen() {
+  if (!FEATURES.companion) return <FeatureUnavailable feature="Remote" />;
+  return <RemoteControlSettings />;
+}
+
+function RemoteControlSettings() {
   const colors = useThemeColors();
   const router = useRouter();
   const status = useConnectionStore((s) => s.status);

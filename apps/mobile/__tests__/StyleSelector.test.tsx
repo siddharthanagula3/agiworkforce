@@ -1,7 +1,15 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 
+import { StyleSheet } from 'react-native';
 import { render, fireEvent } from '@testing-library/react-native';
+import { READING_COLUMN_MAX_WIDTH } from '../src/shared/layout/contentColumn';
 import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';
+
+let mockWindowWidth = 402;
+jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
+  __esModule: true,
+  default: () => ({ width: mockWindowWidth, height: 874, scale: 3, fontScale: 1 }),
+}));
 
 jest.mock('@gorhom/bottom-sheet', () => {
   const { View } = require('react-native');
@@ -150,5 +158,43 @@ describe('StyleSelector', () => {
   it('renders the "Choose Style" header', () => {
     const { getByText } = renderOpenStyleSelector();
     expect(getByText('Choose Style')).toBeTruthy();
+  });
+
+  it('stops the sheet at the reading column on a wide window', () => {
+    const { getByTestId } = renderOpenStyleSelector();
+
+    expect(StyleSheet.flatten(getByTestId('style-selector-sheet').props.style)).toMatchObject({
+      width: '100%',
+      maxWidth: READING_COLUMN_MAX_WIDTH,
+      alignSelf: 'center',
+    });
+  });
+
+  it('closes when the dimmed area beside the sheet is tapped on a wide window', () => {
+    mockWindowWidth = 1376;
+    const { getByTestId, queryByText } = renderOpenStyleSelector();
+
+    const sideScrim = getByTestId('style-selector-side-scrim');
+    expect(StyleSheet.flatten(sideScrim.props.style)).toMatchObject({
+      position: 'absolute',
+      top: 0,
+      bottom: 0,
+      left: 0,
+      right: 0,
+    });
+    expect(sideScrim.props.accessible).toBe(false);
+    fireEvent.press(sideScrim);
+
+    expect(queryByText('Choose Style')).toBeNull();
+    mockWindowWidth = 402;
+  });
+
+  it('keeps the phone tree: one close area above the sheet and no side scrim', () => {
+    mockWindowWidth = 402;
+    const { getAllByLabelText, queryByTestId } = renderOpenStyleSelector();
+
+    expect(queryByTestId('style-selector-side-scrim')).toBeNull();
+    const dismiss = getAllByLabelText('Close style selector')[0]!;
+    expect(StyleSheet.flatten(dismiss.props.style)).toEqual({ flex: 1 });
   });
 });

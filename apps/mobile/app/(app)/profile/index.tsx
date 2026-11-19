@@ -32,6 +32,7 @@ import {
 } from '@/src/features/chat/utils/conversationMode';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { SettingsScreenShell } from '@/src/features/settings/Common';
+import { SECURITY_LOGIN_SCREEN_TITLE } from '@/src/features/settings/screenTitles';
 import { UserAvatar } from '@/src/shared/components/UserAvatar';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
@@ -223,7 +224,7 @@ export default function ProfileScreen() {
               />
               <ProfileRow
                 icon={Shield}
-                label="Account Security"
+                label={SECURITY_LOGIN_SCREEN_TITLE}
                 onPress={push('/(app)/settings/account-security')}
                 value="Manage"
               />

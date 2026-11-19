@@ -535,6 +535,84 @@ describe('organization invitation lifecycle routes', () => {
     });
   });
 
+  describe('an administrator whose membership is not active', () => {
+    function answerMembershipByStatus(status: string) {
+      mockQuery.mockImplementation(async (sql: string) => {
+        const text = String(sql);
+        if (text.includes('from public.organization_members')) {
+          return text.includes("status = 'active'") && status !== 'active'
+            ? []
+            : [{ ...adminMembership, status }];
+        }
+        if (text.includes('from public.organization_invitations')) return [invitation()];
+        if (text.includes('update public.organization_invitations')) return [invitation()];
+        return [];
+      });
+    }
+
+    const invitationUrl = `http://localhost:3000/api/settings/team/invitations/${INVITE_ID}`;
+    const params = { params: Promise.resolve({ invitationId: INVITE_ID }) };
+    const attempts: Array<[string, () => Promise<Response>]> = [
+      [
+        'invite',
+        async () =>
+          POST(
+            jsonRequest('http://localhost:3000/api/settings/team/invitations', 'POST', {
+              organizationId: ORG_A,
+              email: 'invitee@example.com',
+              role: 'member',
+            }),
+          ),
+      ],
+      [
+        'list',
+        async () =>
+          GET(
+            new Request(
+              `http://localhost:3000/api/settings/team/invitations?organizationId=${ORG_A}`,
+            ) as never,
+          ),
+      ],
+      [
+        'resend',
+        async () =>
+          RESEND(
+            jsonRequest(invitationUrl, 'POST', { organizationId: ORG_A, action: 'resend' }),
+            params,
+          ),
+      ],
+      [
+        'revoke',
+        async () =>
+          REVOKE(
+            new Request(`${invitationUrl}?organizationId=${ORG_A}`, { method: 'DELETE' }) as never,
+            params,
+          ),
+      ],
+    ];
+
+    it.each(attempts)('is refused when they try to %s', async (_name, attempt) => {
+      answerMembershipByStatus('suspended');
+
+      const response = await attempt();
+
+      expect(response.status).toBe(403);
+      expect(
+        mockQuery.mock.calls.some(([sql]) =>
+          /insert into|update public\.organization_invitations/.test(String(sql)),
+        ),
+      ).toBe(false);
+    });
+
+    it.each(attempts)('is let through when active and they try to %s', async (_name, attempt) => {
+      answerMembershipByStatus('active');
+
+      const response = await attempt();
+
+      expect(response.status).not.toBe(403);
+    });
+  });
+
   describe('POST /api/settings/team/invitations/accept', () => {
     const token = 'raw-invite-token-value-long-enough';
 

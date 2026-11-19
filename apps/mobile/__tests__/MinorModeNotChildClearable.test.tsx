@@ -19,6 +19,8 @@ jest.mock('@/lib/mmkv', () => ({
   },
 }));
 
+jest.mock('@/src/features/chat/components/WorkModeSwitch', () => ({ HEADER_TEXT_SCALE_LIMIT: 2 }));
+
 const mockPush = jest.fn();
 const mockReplace = jest.fn();
 

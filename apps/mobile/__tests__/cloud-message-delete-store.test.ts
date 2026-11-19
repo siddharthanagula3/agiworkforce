@@ -44,3 +44,57 @@ describe('deleteCloudMessage', () => {
     expect(useChatCloudMessageStore.getState().messages['conv-1']).toHaveLength(1);
   });
 });
+
+describe('deleteCloudMessage in a threaded conversation', () => {
+  function row(id: string, role: 'user' | 'assistant', parentId: string | null, at: string) {
+    return { id, conversationId: 'conv-1', role, content: id, createdAt: at, parentId };
+  }
+
+  function seed(activeLeafMessageId: string) {
+    useChatCloudMessageStore.getState().setCloudConversations([
+      {
+        id: 'conv-1',
+        title: 'Thread',
+        createdAt: T,
+        updatedAt: T,
+        messageCount: 4,
+        pinned: false,
+        executionMode: 'cloud',
+        activeLeafMessageId,
+      },
+    ] as never);
+    useChatCloudMessageStore
+      .getState()
+      .setCloudMessages('conv-1', [
+        row('u1', 'user', null, '2026-06-20T00:00:00.000Z'),
+        row('a1', 'assistant', 'u1', '2026-06-20T00:00:01.000Z'),
+        row('u2', 'user', 'a1', '2026-06-20T00:00:02.000Z'),
+        row('a2', 'assistant', 'u2', '2026-06-20T00:00:03.000Z'),
+      ]);
+  }
+
+  it('hands the deleted row children to its parent so later turns stay in the thread', () => {
+    seed('a2');
+
+    useChatCloudMessageStore.getState().deleteCloudMessage('conv-1', 'a1');
+
+    const rows = useChatCloudMessageStore.getState().messages['conv-1'];
+    expect(rows.map((m) => m.id)).toEqual(['u1', 'u2', 'a2']);
+    expect(rows.find((m) => m.id === 'u2')?.parentId).toBe('u1');
+    expect(
+      useChatCloudMessageStore.getState().conversations.find((c) => c.id === 'conv-1')
+        ?.activeLeafMessageId,
+    ).toBe('a2');
+  });
+
+  it('moves the leaf to a surviving message when the leaf itself is deleted', () => {
+    seed('a2');
+
+    useChatCloudMessageStore.getState().deleteCloudMessage('conv-1', 'a2');
+
+    expect(
+      useChatCloudMessageStore.getState().conversations.find((c) => c.id === 'conv-1')
+        ?.activeLeafMessageId,
+    ).toBe('u2');
+  });
+});

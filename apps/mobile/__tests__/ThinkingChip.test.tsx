@@ -39,6 +39,7 @@ jest.mock('@/lib/safeOpenURL', () => ({
 import type { AgentActivityState } from '@agiworkforce/client-runtime';
 import { fireGestureHandler, getByGestureTestId } from 'react-native-gesture-handler/jest-utils';
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
+import { sitsInColumn } from '../test-utils/sheetColumn';
 import { buildThinkingSteps, ThinkingChip } from '@/src/features/chat/components/ThinkingChip';
 
 function searchActivity(): AgentActivityState {
@@ -120,6 +121,33 @@ describe('ThinkingChip', () => {
     );
 
     expect(queryByText('Considering the options.')).toBeNull();
+  });
+
+  it('rests as one grey line with a moving shine while the reasoning is written', () => {
+    const { getByTestId, getByLabelText, rerender, queryByTestId } = render(
+      <ThinkingChip thinkingText="Considering the options." isStreaming />,
+    );
+
+    expect(getByTestId('thinking-chip.running-label')).toBeTruthy();
+    expect(getByLabelText('Show reasoning')).toBeTruthy();
+
+    rerender(
+      <ThinkingChip thinkingText="Considering the options." isStreaming={false} duration={4} />,
+    );
+
+    expect(queryByTestId('thinking-chip.running-label')).toBeNull();
+  });
+
+  it('shows the latest thought under the line only where the host asks for it', () => {
+    const text = '**Weighing sources**\nThe schedule page is newer.';
+    const plain = render(<ThinkingChip thinkingText={text} isStreaming={false} duration={4} />);
+    expect(plain.queryByText('The schedule page is newer.')).toBeNull();
+    plain.unmount();
+
+    const { getByText } = render(
+      <ThinkingChip thinkingText={text} isStreaming={false} duration={4} showPreview />,
+    );
+    expect(getByText('The schedule page is newer.')).toBeTruthy();
   });
 
   it('opens the detail sheet on tap and closes it again', () => {
@@ -277,5 +305,46 @@ describe('ThinkingChip', () => {
     expect(getByText('luma.com')).toBeTruthy();
     fireEvent.press(getByText('ataconference.org'));
     expect(openUntrustedUrlInAppBrowser).toHaveBeenCalledWith('https://ataconference.org/');
+  });
+
+  it('settles to "Thought for" once the answer text starts, while the turn still streams', () => {
+    jest.useFakeTimers();
+    try {
+      const startedAtMs = Date.now();
+      const view = render(
+        <ThinkingChip thinkingText="Weighing it." isStreaming startedAtMs={startedAtMs} />,
+      );
+      act(() => {
+        jest.advanceTimersByTime(3_000);
+      });
+      expect(view.getByTestId('thinking-chip.running-label')).toBeTruthy();
+
+      view.rerender(
+        <ThinkingChip
+          thinkingText="Weighing it."
+          isStreaming
+          startedAtMs={startedAtMs}
+          answerStarted
+        />,
+      );
+      act(() => {
+        jest.advanceTimersByTime(5_000);
+      });
+
+      expect(view.queryByTestId('thinking-chip.running-label')).toBeNull();
+      expect(view.getByText('Thought for 3s')).toBeTruthy();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('stops the reasoning sheet at the reading column on a wide window', () => {
+    const { getByLabelText, getByText } = render(
+      <ThinkingChip thinkingText="Considering the options." isStreaming={false} duration={4} />,
+    );
+
+    fireEvent.press(getByLabelText('Show reasoning'));
+
+    expect(sitsInColumn(getByText('Considering the options.'), 'reading')).toBe(true);
   });
 });

@@ -5,6 +5,7 @@ import { getDefaultAutoRoutingProfile } from '@agiworkforce/types';
 type ScanModule0 = typeof import('@/lib/services/cloud-agent-run-service');
 type ScanModule1 = typeof import('@/lib/services/managed-usage-request-service');
 type ScanModule2 = typeof import('../lib/request-processor');
+type FreeTrialModule = typeof import('@/lib/services/free-trial-service');
 
 const PRIORITY_REQUESTS = {
   priority: {
@@ -108,6 +109,12 @@ vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) =
   finalizeManagedUsageRequest: managedUsageMocks.finalizeRequest,
 }));
 
+const freeTrialMocks = vi.hoisted(() => ({ settle: vi.fn(async () => 0) }));
+vi.mock('@/lib/services/free-trial-service', async (importOriginal) => ({
+  ...(await importOriginal<FreeTrialModule>()),
+  settleFreeTrialRequest: freeTrialMocks.settle,
+}));
+
 import {
   CloudAgentInputResponseError,
   CloudAgentApprovalCheckpointNotFoundError,
@@ -196,6 +203,17 @@ function resumeBody(toolCallId = 'call_1') {
     run_id: RUN_ID,
     tool_inputs: [{ tool_call_id: toolCallId, input_responses: PRIORITY_ANSWER }],
   };
+}
+
+const freeTrialReservation = {
+  userId: 'user-1',
+  requestId: 'resume-request-1',
+  reservedMicrousd: 5_000_000,
+};
+
+function freeProcessedRequest() {
+  const { managedUsage: _managedUsage, ...processed } = processedRequest();
+  return { ...processed, subscriptionTier: 'free', freeTrial: freeTrialReservation };
 }
 
 function processedRequest() {
@@ -533,6 +551,47 @@ describe('POST /api/llm/v1/chat/completions/resume-input, durable MRTR boundary'
       checkpointId: CHECKPOINT_ID,
       leaseToken: LEASE_TOKEN,
     });
+  });
+
+  it('settles the Free reservation and releases the lease when neither transport can start the turn', async () => {
+    mockProcessRequest.mockResolvedValue(freeProcessedRequest());
+    workflowMocks.start.mockRejectedValueOnce(new Error('workflow service unavailable'));
+
+    const response = await POST(makeRequest(resumeBody()));
+
+    expect(response.status).toBe(503);
+    expect(freeTrialMocks.settle).toHaveBeenCalledExactlyOnceWith({
+      reservation: freeTrialReservation,
+      outcome: 'failed',
+      attempt: { outcome: 'failed', errorClass: 'workflow_start_failed' },
+    });
+    expect(managedUsageMocks.finalizeRequest).not.toHaveBeenCalled();
+    expect(checkpointMocks.release).toHaveBeenCalledOnce();
+  });
+
+  it('settles the Free reservation when tool discovery fails before execution', async () => {
+    mockProcessRequest.mockResolvedValue(freeProcessedRequest());
+    toolMocks.loadOperatorTools.mockRejectedValueOnce(new Error('tool registry unavailable'));
+
+    const response = await POST(makeRequest(resumeBody()));
+
+    expect(response.status).toBe(500);
+    expect(freeTrialMocks.settle).toHaveBeenCalledExactlyOnceWith({
+      reservation: freeTrialReservation,
+      outcome: 'failed',
+      attempt: { outcome: 'failed', errorClass: 'tool_discovery_failed' },
+    });
+    expect(checkpointMocks.release).toHaveBeenCalledOnce();
+  });
+
+  it('leaves the Free reservation to the resumed turn once the workflow has started', async () => {
+    mockProcessRequest.mockResolvedValue(freeProcessedRequest());
+
+    const response = await POST(makeRequest(resumeBody()));
+
+    expect(response.status).toBe(200);
+    await response.text();
+    expect(freeTrialMocks.settle).not.toHaveBeenCalled();
   });
 
   /**

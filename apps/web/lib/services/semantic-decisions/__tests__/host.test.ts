@@ -241,6 +241,7 @@ describe('a decision that runs', () => {
         billedCents: 0,
         unitBasis: 'token',
         units: 100,
+        providerEstimatedCostMicrousd: 4,
         sourceRef: 'turn_signals:request-1',
         model: MODEL,
       }),

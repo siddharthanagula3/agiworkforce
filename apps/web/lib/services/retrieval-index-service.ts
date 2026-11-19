@@ -13,8 +13,22 @@ import {
 } from '@agiworkforce/data-layer/search';
 import { MAX_EMBEDDING_INPUTS } from '@agiworkforce/cloud-contracts';
 
+import {
+  CHAT_LARGE_FILE_POLICY,
+  MAX_CHAT_ATTACHMENT_BYTES,
+  type ChatLargeFilePolicy,
+} from '@/lib/chat-attachment-policy';
 import { retrievalDocumentHoldsGoogleUserData } from '@/lib/connectors/google-user-data-runs';
 import { logger } from '@/lib/logger';
+import { chatFileSchemaReady } from '@/lib/server/chat-file-intake/schema';
+import type { PreparationStorage } from '@/lib/server/chat-file-preparation/derived-keys';
+import { recordPreparedIndexedChars } from '@/lib/server/chat-file-preparation/progress-store';
+import {
+  readPreparedCard,
+  readPreparedText,
+  sumIndexedCharsForUser,
+} from '@/lib/server/chat-file-preparation/readers';
+import { storableText } from '@/lib/server/chat-file-preparation/text-stream';
 import { anchorLocationAt, parseKnowledgeAnchors } from '@/lib/server/project-knowledge-anchors';
 import {
   embedTextsMetered,
@@ -32,6 +46,7 @@ const CHUNK_INSERT_BATCH = 50;
 const INDEX_LEASE_MINUTES = 10;
 const DISPATCH_HOLD_MINUTES = 15;
 const RETRY_BASE_MINUTES = 5;
+const MAX_RETRY_MINUTES = 24 * 60;
 const UNAVAILABLE_RETRY_HOURS = 6;
 const SEGMENT_SEPARATOR = '\n\n';
 
@@ -50,15 +65,39 @@ export interface RetrievalDocumentRow {
   attempts: number;
 }
 
+const CHAT_FILE_ASSET_KIND = 'file';
+
 interface SourceSegment {
   text: string;
   metadata: SearchChunkMetadata;
+  anchorsFor?: (offset: number) => SearchChunkMetadata;
+}
+
+export interface PreparedSourceIndex {
+  assetId: string;
+  indexedChars: number;
+  recordedChars: number;
+  keywordOnly: boolean;
 }
 
 export interface RetrievalSourceText {
   title: string;
   segments: SourceSegment[];
   anchorsFor?: (offset: number) => SearchChunkMetadata;
+  maxChunks?: number;
+  prepared?: PreparedSourceIndex;
+}
+
+export interface RetrievalIndexDeps {
+  preparation?: { storage?: PreparationStorage; policy?: ChatLargeFilePolicy };
+}
+
+/** Enough windows for every character of the largest prepared text, plus the title. */
+export function preparedChatFileChunkCap(
+  policy: ChatLargeFilePolicy = CHAT_LARGE_FILE_POLICY,
+): number {
+  const stride = DEFAULT_TEXT_WINDOW.windowChars - DEFAULT_TEXT_WINDOW.overlapChars;
+  return Math.ceil(policy.preparation.maxIndexedChars / stride) + 2;
 }
 
 export interface PreparedChunk {
@@ -83,13 +122,118 @@ export const RETRIEVAL_FAILURE_MESSAGES: Readonly<Record<RetrievalEmbeddingFailu
 
 const INDEX_WRITE_FAILED_MESSAGE = 'This source could not be indexed. Retry indexing to try again.';
 
+const PREPARED_SOURCE_UNREADABLE_MESSAGE =
+  "This file's prepared text could not be read for indexing; indexing retries automatically.";
+
+export class PreparedSourceUnreadableError extends Error {
+  constructor(
+    readonly assetId: string,
+    options: { cause: unknown },
+  ) {
+    super('The prepared text of a chat file could not be read for indexing.', options);
+    this.name = 'PreparedSourceUnreadableError';
+  }
+}
+
 function clip(text: string | null | undefined, max = MAX_SOURCE_CHARS): string {
   return (text ?? '').slice(0, max);
+}
+
+interface LibraryFileRow {
+  kind: string;
+  mime_type: string;
+  prompt: string | null;
+  file_name: string | null;
+  byte_size: string | number | null;
+}
+
+function isLargeChatFile(asset: Pick<LibraryFileRow, 'kind' | 'byte_size'>): boolean {
+  if (asset.kind !== CHAT_FILE_ASSET_KIND || asset.byte_size === null) return false;
+  return Number(asset.byte_size) > MAX_CHAT_ATTACHMENT_BYTES;
+}
+
+function pageAnchorsAt(
+  anchors: readonly { page: number; char: number }[],
+): (offset: number) => SearchChunkMetadata {
+  return (offset) => {
+    let page: number | null = null;
+    for (const anchor of anchors) {
+      if (anchor.char > offset) break;
+      page = anchor.page;
+    }
+    return page === null ? {} : { page };
+  };
+}
+
+/**
+ * Null when the file has no preparation, or the schema that holds one is not
+ * there: the caller then indexes today's title-only text.
+ */
+async function preparedLibraryFileSource(
+  db: DatabaseAdapter,
+  document: Pick<RetrievalDocumentRow, 'source_id' | 'user_id'>,
+  title: string,
+  titleSegment: SourceSegment,
+  deps: RetrievalIndexDeps,
+): Promise<RetrievalSourceText | null> {
+  if (!(await chatFileSchemaReady(db, { cached: true }))) return null;
+  const policy = deps.preparation?.policy ?? CHAT_LARGE_FILE_POLICY;
+  const readerDeps = {
+    db,
+    userId: document.user_id,
+    policy,
+    ...(deps.preparation?.storage ? { storage: deps.preparation.storage } : {}),
+  };
+  const assetId = document.source_id;
+  try {
+    const card = await readPreparedCard(assetId, readerDeps);
+    if (!card) return null;
+    const keywordOnly = !policy.preparation.embedChatFiles;
+    const titleOnly: RetrievalSourceText = {
+      title,
+      segments: [titleSegment],
+      prepared: { assetId, indexedChars: 0, recordedChars: card.indexedChars, keywordOnly },
+    };
+    const indexedElsewhere =
+      (await sumIndexedCharsForUser(document.user_id, { db })) - card.indexedChars;
+    const allowance = Math.min(
+      policy.preparation.maxIndexedChars,
+      Math.max(policy.preparation.maxIndexedCharsPerUser - indexedElsewhere, 0),
+    );
+    if (allowance === 0) return titleOnly;
+    const slice = await readPreparedText(
+      assetId,
+      { startChar: 0, maxChars: allowance },
+      readerDeps,
+    );
+    if (!slice || slice.text.length === 0) return titleOnly;
+    return {
+      title,
+      segments: [
+        titleSegment,
+        {
+          text: slice.text,
+          metadata: titleSegment.metadata,
+          anchorsFor: pageAnchorsAt(slice.pageAnchors),
+        },
+      ],
+      maxChunks: preparedChatFileChunkCap(policy),
+      prepared: {
+        assetId,
+        indexedChars: slice.endChar - slice.startChar,
+        recordedChars: card.indexedChars,
+        keywordOnly,
+      },
+    };
+  } catch (error) {
+    throw new PreparedSourceUnreadableError(assetId, { cause: error });
+  }
 }
 
 export async function loadRetrievalSourceText(
   db: DatabaseAdapter,
   document: Pick<RetrievalDocumentRow, 'source_kind' | 'source_id' | 'user_id' | 'organization_id'>,
+  deps: RetrievalIndexDeps = {},
 ): Promise<RetrievalSourceText | null> {
   switch (document.source_kind) {
     case 'project_knowledge': {
@@ -118,13 +262,8 @@ export async function loadRetrievalSourceText(
       };
     }
     case 'library_file': {
-      const [asset] = await db.query<{
-        kind: string;
-        mime_type: string;
-        prompt: string | null;
-        file_name: string | null;
-      }>(
-        `select kind, mime_type, prompt, metadata->>'filename' as file_name
+      const [asset] = await db.query<LibraryFileRow>(
+        `select kind, mime_type, prompt, metadata->>'filename' as file_name, byte_size
            from media_assets
           where id = $1 and user_id = $2 and deleted_at is null and not temporary_chat`,
         [document.source_id, document.user_id],
@@ -134,7 +273,15 @@ export async function loadRetrievalSourceText(
       const text = [title, asset.prompt ?? '']
         .filter((part) => part.trim())
         .join(SEGMENT_SEPARATOR);
-      return { title, segments: [{ text: clip(text), metadata: { mimeType: asset.mime_type } }] };
+      const titleSegment: SourceSegment = {
+        text: clip(text),
+        metadata: { mimeType: asset.mime_type },
+      };
+      if (isLargeChatFile(asset)) {
+        const prepared = await preparedLibraryFileSource(db, document, title, titleSegment, deps);
+        if (prepared) return prepared;
+      }
+      return { title, segments: [titleSegment] };
     }
     case 'conversation': {
       const [conversation] = await db.query<{ title: string | null }>(
@@ -269,15 +416,20 @@ export async function loadRetrievalSourceText(
  */
 export function prepareChunks(source: RetrievalSourceText): PreparedChunk[] {
   const chunks: PreparedChunk[] = [];
+  const maxChunks = source.maxChunks ?? MAX_CHUNKS_PER_DOCUMENT;
   for (const segment of source.segments) {
+    const anchorsFor = segment.anchorsFor ?? source.anchorsFor;
     for (const window of windowText(segment.text, DEFAULT_TEXT_WINDOW)) {
-      if (chunks.length >= MAX_CHUNKS_PER_DOCUMENT) return chunks;
+      if (chunks.length >= maxChunks) return chunks;
+      // Prepared text keeps U+0000, which Postgres text refuses; offsets stay those of the prepared text.
+      const text = source.prepared ? storableText(window.text) : window.text;
+      if (source.prepared && !text.trim()) continue;
       chunks.push({
         index: chunks.length,
         start: window.start,
         end: window.end,
-        text: window.text,
-        metadata: { ...segment.metadata, ...(source.anchorsFor?.(window.start) ?? {}) },
+        text,
+        metadata: { ...segment.metadata, ...(anchorsFor?.(window.start) ?? {}) },
       });
     }
   }
@@ -298,7 +450,7 @@ export function toVectorLiteral(vector: readonly number[]): string {
 }
 
 function nextRetryMinutes(attempts: number): number {
-  return RETRY_BASE_MINUTES * 2 ** Math.max(0, attempts - 1);
+  return Math.min(RETRY_BASE_MINUTES * 2 ** Math.max(0, attempts - 1), MAX_RETRY_MINUTES);
 }
 
 async function claimRetrievalDocument(
@@ -364,51 +516,50 @@ async function embedChunks(
   return { vectors, model, failure: null };
 }
 
+/** Runs on the transaction that settles the document: the adapters refuse a transaction opened inside one. */
 async function writeChunks(
-  db: DatabaseAdapter,
+  tx: DatabaseAdapter,
   document: RetrievalDocumentRow,
   source: RetrievalSourceText,
   chunks: readonly PreparedChunk[],
   vectors: ReadonlyArray<number[] | null>,
   chunkVersion: number,
 ): Promise<void> {
-  await db.transaction(async (tx) => {
-    await tx.execute(`delete from retrieval_chunks where document_id = $1 and user_id = $2`, [
-      document.id,
-      document.user_id,
-    ]);
-    for (let offset = 0; offset < chunks.length; offset += CHUNK_INSERT_BATCH) {
-      const batch = chunks.slice(offset, offset + CHUNK_INSERT_BATCH);
-      await tx.execute(
-        `insert into retrieval_chunks
-           (document_id, user_id, organization_id, source_kind, source_id, chunk_version,
-            chunk_index, start_offset, end_offset, title, content, metadata, embedding)
-         select $1, $2, $3::uuid, $4, $5::uuid, $6,
-                c.chunk_index, c.start_offset, c.end_offset, $7, c.content, c.metadata::jsonb,
-                c.embedding::vector
-           from unnest($8::int[], $9::int[], $10::int[], $11::text[], $12::text[], $13::text[])
-             as c(chunk_index, start_offset, end_offset, content, metadata, embedding)`,
-        [
-          document.id,
-          document.user_id,
-          document.organization_id,
-          document.source_kind,
-          document.source_id,
-          chunkVersion,
-          source.title.slice(0, 500),
-          batch.map((chunk) => chunk.index),
-          batch.map((chunk) => chunk.start),
-          batch.map((chunk) => chunk.end),
-          batch.map((chunk) => chunk.text),
-          batch.map((chunk) => JSON.stringify(chunk.metadata)),
-          batch.map((chunk) => {
-            const vector = vectors[chunk.index];
-            return vector ? toVectorLiteral(vector) : null;
-          }),
-        ],
-      );
-    }
-  });
+  await tx.execute(`delete from retrieval_chunks where document_id = $1 and user_id = $2`, [
+    document.id,
+    document.user_id,
+  ]);
+  for (let offset = 0; offset < chunks.length; offset += CHUNK_INSERT_BATCH) {
+    const batch = chunks.slice(offset, offset + CHUNK_INSERT_BATCH);
+    await tx.execute(
+      `insert into retrieval_chunks
+         (document_id, user_id, organization_id, source_kind, source_id, chunk_version,
+          chunk_index, start_offset, end_offset, title, content, metadata, embedding)
+       select $1, $2, $3::uuid, $4, $5::uuid, $6,
+              c.chunk_index, c.start_offset, c.end_offset, $7, c.content, c.metadata::jsonb,
+              c.embedding::vector
+         from unnest($8::int[], $9::int[], $10::int[], $11::text[], $12::text[], $13::text[])
+           as c(chunk_index, start_offset, end_offset, content, metadata, embedding)`,
+      [
+        document.id,
+        document.user_id,
+        document.organization_id,
+        document.source_kind,
+        document.source_id,
+        chunkVersion,
+        source.title.slice(0, 500),
+        batch.map((chunk) => chunk.index),
+        batch.map((chunk) => chunk.start),
+        batch.map((chunk) => chunk.end),
+        batch.map((chunk) => chunk.text),
+        batch.map((chunk) => JSON.stringify(chunk.metadata)),
+        batch.map((chunk) => {
+          const vector = vectors[chunk.index];
+          return vector ? toVectorLiteral(vector) : null;
+        }),
+      ],
+    );
+  }
 }
 
 export type RetrievalIndexOutcome =
@@ -476,6 +627,30 @@ async function settleDocument(
 }
 
 /**
+ * Runs after the chunk write and outside it. A record that fails is repaired
+ * only when the document is next queued: a document that settled as indexed is
+ * not run again until then.
+ */
+async function recordIndexedChars(
+  db: DatabaseAdapter,
+  document: Pick<RetrievalDocumentRow, 'id' | 'user_id'>,
+  prepared: PreparedSourceIndex | undefined,
+): Promise<void> {
+  if (!prepared || prepared.indexedChars === prepared.recordedChars) return;
+  await recordPreparedIndexedChars(
+    db,
+    prepared.assetId,
+    document.user_id,
+    prepared.indexedChars,
+  ).catch((error: unknown) => {
+    logger.warn(
+      { err: error, documentId: document.id },
+      '[retrieval] indexed characters of a chat file were not recorded',
+    );
+  });
+}
+
+/**
  * Brings one document's chunks in line with its source. Unchanged text with
  * embeddings already present costs nothing; a failed embedding still leaves the
  * new chunks searchable by full text and schedules a retry with backoff.
@@ -484,11 +659,30 @@ export async function indexRetrievalDocument(
   db: DatabaseAdapter,
   documentId: string,
   workflowRunId: string,
+  deps: RetrievalIndexDeps = {},
 ): Promise<RetrievalIndexOutcome> {
   const document = await claimRetrievalDocument(db, documentId, workflowRunId);
   if (!document) return { kind: 'skipped' };
 
-  const source = await loadRetrievalSourceText(db, document);
+  let source: RetrievalSourceText | null;
+  try {
+    source = await loadRetrievalSourceText(db, document, deps);
+  } catch (error) {
+    if (!(error instanceof PreparedSourceUnreadableError)) throw error;
+    logger.warn({ err: error, documentId: document.id }, '[retrieval] prepared text unreadable');
+    const attempts = document.attempts + 1;
+    const settled = await settleDocument(db, document, workflowRunId, {
+      succeeded: false,
+      lastError: PREPARED_SOURCE_UNREADABLE_MESSAGE,
+      retryAfterMinutes: nextRetryMinutes(attempts),
+      resetAttempts: false,
+    });
+    if (!settled) return { kind: 'skipped' };
+    return {
+      kind: 'failed',
+      retryAfterMinutes: attempts < RETRIEVAL_MAX_ATTEMPTS ? nextRetryMinutes(attempts) : null,
+    };
+  }
   if (!source) {
     await db.execute(`delete from retrieval_documents where id = $1 and user_id = $2`, [
       document.id,
@@ -499,9 +693,10 @@ export async function indexRetrievalDocument(
 
   const chunks = prepareChunks(source);
   const digest = contentDigest(source.title, chunks);
+  const keywordOnly = source.prepared?.keywordOnly === true;
   if (
     digest === document.content_sha256 &&
-    (document.embedding_model !== null || chunks.length === 0)
+    (document.embedding_model !== null || chunks.length === 0 || keywordOnly)
   ) {
     const settled = await settleDocument(db, document, workflowRunId, {
       succeeded: true,
@@ -509,12 +704,14 @@ export async function indexRetrievalDocument(
       retryAfterMinutes: 0,
       resetAttempts: true,
     });
-    return settled ? { kind: 'unchanged' } : { kind: 'skipped' };
+    if (!settled) return { kind: 'skipped' };
+    await recordIndexedChars(db, document, source.prepared);
+    return { kind: 'unchanged' };
   }
 
   const embedded =
-    chunks.length === 0
-      ? { vectors: [], model: null, failure: null }
+    chunks.length === 0 || keywordOnly
+      ? { vectors: chunks.map(() => null), model: null, failure: null }
       : await embedChunks(db, document, chunks);
   const chunkVersion = document.chunk_version + 1;
 
@@ -568,6 +765,8 @@ export async function indexRetrievalDocument(
       retryAfterMinutes: attempts < RETRIEVAL_MAX_ATTEMPTS ? nextRetryMinutes(attempts) : null,
     };
   }
+
+  await recordIndexedChars(db, document, source.prepared);
 
   if (embedded.failure) {
     return {
@@ -689,6 +888,46 @@ export async function requestProjectKnowledgeReindex(
      on conflict (source_kind, source_id) do update set next_attempt_at = now()
      returning id`,
     [input.ownerUserId, input.organizationId, input.fileName.slice(0, 500), input.fileId],
+  );
+  return inserted?.id ?? null;
+}
+
+/**
+ * A chat file's prepared text is ready, so its title-only document is rebuilt
+ * from it: reset to pending with a fresh attempt budget, or created if the
+ * asset has none. A temporary chat's file or a deleted one is never indexed.
+ */
+export async function requestMediaAssetReindex(
+  db: Pick<DatabaseAdapter, 'query'>,
+  input: { assetId: string; ownerUserId: string },
+): Promise<string | null> {
+  const [updated] = await db.query<{ id: string }>(
+    `update retrieval_documents d
+        set status = case when d.status = 'indexing' then 'stale' else 'pending' end,
+            attempts = 0,
+            last_error = null,
+            next_attempt_at = now(),
+            updated_at = now()
+      where d.media_asset_id = $1::uuid and d.user_id = $2
+        and exists (
+          select 1 from media_assets a
+           where a.id = d.media_asset_id and a.user_id = d.user_id
+             and a.deleted_at is null and not a.temporary_chat
+        )
+      returning d.id`,
+    [input.assetId, input.ownerUserId],
+  );
+  if (updated) return updated.id;
+  const [inserted] = await db.query<{ id: string }>(
+    `insert into retrieval_documents (user_id, organization_id, source_kind, title, media_asset_id)
+     select a.user_id, a.organization_id, 'library_file',
+            left(coalesce(a.metadata->>'filename', a.kind), 500), a.id
+       from media_assets a
+      where a.id = $1::uuid and a.user_id = $2
+        and a.deleted_at is null and not a.temporary_chat
+     on conflict (source_kind, source_id) do update set next_attempt_at = now()
+     returning id`,
+    [input.assetId, input.ownerUserId],
   );
   return inserted?.id ?? null;
 }

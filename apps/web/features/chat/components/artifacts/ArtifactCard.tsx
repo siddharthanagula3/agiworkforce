@@ -3,6 +3,7 @@
 import { useCallback, useId } from 'react';
 import { Download, Globe2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { artifactKindLabel } from '@agiworkforce/artifacts';
 import { summarizeGeneratedFileBundle } from '@agiworkforce/types';
 import { cn } from '@shared/lib/utils';
 import { formatBytes } from '@shared/utils/format';
@@ -17,7 +18,6 @@ import {
   ARTIFACT_KIND_LABEL,
   TypeIcon,
   artifactExtensionLabel,
-  artifactKindLabel,
   artifactTitle,
 } from './ArtifactLabels';
 

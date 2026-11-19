@@ -1,17 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
-  insertSlide,
-  joinEditedSlide,
-  moveSlide,
   parseDeck,
-  removeSlide,
   replaceShapesBlock,
-  replaceVisualBlock,
   serializeDeck,
   slideSegments,
-  slideTitle,
-  splitSlideForEditing,
-} from './deck-model';
+} from '@agiworkforce/unified-chat/deck-model';
 import { SHAPE_KINDS, newShape, parseShapes, serializeShapes } from './deck-shapes';
 import {
   DECK_THEMES,
@@ -32,38 +25,6 @@ describe('deck model', () => {
     const again = parseDeck(themed);
     expect(again.meta['theme']).toBe('midnight');
     expect(again.slides).toEqual(deck.slides);
-  });
-
-  it('quotes meta values that hold spaces', () => {
-    const content = serializeDeck({
-      meta: { theme: 'custom', name: 'Acme Corp' },
-      slides: ['# A'],
-    });
-    expect(parseDeck(content).meta['name']).toBe('Acme Corp');
-  });
-
-  it('adds, moves and removes slides without losing the last one', () => {
-    let deck = parseDeck(DECK);
-    deck = insertSlide(deck, 0, '## Inserted');
-    expect(deck.slides[1]).toBe('## Inserted');
-    deck = moveSlide(deck, 1, 0);
-    expect(deck.slides[0]).toBe('## Inserted');
-    expect(removeSlide({ meta: {}, slides: ['only'] }, 0).slides).toEqual(['only']);
-  });
-
-  it('splits visual blocks out of the text and puts them back', () => {
-    const slide = '## Sales\n\nUp this year\n\n```chart\n{"data":[{"x":"a","y":1}]}\n```';
-    const segments = slideSegments(slide);
-    expect(segments.map((segment) => segment.kind)).toEqual(['markdown', 'chart']);
-    const { text, visuals } = splitSlideForEditing(slide);
-    expect(text).toBe('## Sales\n\nUp this year');
-    expect(joinEditedSlide('## Revenue', visuals)).toBe(
-      '## Revenue\n\n```chart\n{"data":[{"x":"a","y":1}]}\n```',
-    );
-    const chart = segments[1]!;
-    expect(chart.kind).toBe('chart');
-    if (chart.kind !== 'markdown')
-      expect(replaceVisualBlock(slide, chart.start, null)).toBe('## Sales\n\nUp this year');
   });
 
   it('keeps one shapes block per slide', () => {
@@ -87,11 +48,6 @@ describe('deck model', () => {
     expect(parseShapes(serializeShapes(shapes)).map((shape) => shape.kind)).toEqual([
       ...SHAPE_KINDS,
     ]);
-  });
-
-  it('names a slide by its heading', () => {
-    expect(slideTitle('## **Roadmap**\n\ntext', 0)).toBe('Roadmap');
-    expect(slideTitle('', 4)).toBe('Slide 5');
   });
 
   it('drops malformed shapes and clamps positions', () => {

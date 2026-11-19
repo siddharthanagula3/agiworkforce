@@ -1,8 +1,7 @@
 import 'server-only';
 
-import { providerKeepsInputsOutOfTraining } from '@agiworkforce/model-registry';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { estimateTokens, resolveAutoRoute, type AutoRoutingRequest } from '@agiworkforce/routing';
+import { estimateTokens } from '@agiworkforce/routing';
 import { openAIWireRequestToChatRequest } from '@agiworkforce/provider-protocol';
 import { resolveWireMode } from '@/app/api/llm/v1/chat/completions/lib/adapter-providers';
 import { drainToLlmResponse } from '@/app/api/llm/v1/chat/completions/lib/adapter-response';
@@ -10,18 +9,19 @@ import { buildPrReviewPrompt } from '@/app/api/github/webhook/pr-diff-prompt';
 import { normalizeModelId } from '@agiworkforce/types';
 import {
   buildServerProviderAdapter,
-  resolveProviderFromModel,
   toGenericUpstreamError,
 } from '@/lib/services/provider-adapter-service';
 import { logger } from '@/lib/logger';
-import { dispatchProviderForSelectedRoute } from '@/lib/services/aggregator-routing';
 import {
   reserveBackgroundUsage,
   type BackgroundUsageLease,
 } from '@/lib/services/background-usage-lease';
 import { fingerprintManagedUsageRequest } from '@/lib/services/managed-usage-request-service';
-import { modelKeepsInputsOutOfTraining } from '@/lib/server/provider-training-opt-out';
-import { sideCallRoutingRequest } from '@/lib/server/side-call-training-policy';
+import {
+  admitManagedCloudRoute,
+  type ManagedCloudAdmitted,
+  type ManagedCloudCall,
+} from '@/lib/server/managed-cloud-routing/admission';
 import { chunkDiff, parseUnifiedDiff, type ReviewDiffFile } from './diff';
 import {
   anchorFindings,
@@ -108,9 +108,8 @@ export interface CodeReviewInput {
   postedCommentBodies: readonly string[];
   /** The installation's configured review model, when it has one. */
   preferredModel?: string | null;
-  /** Who installed the review, and whether their content stays off providers that may train. */
+  /** Who installed the review; their account's routing rules govern every call. */
   ownerUserId: string;
-  noTrainingOnly: boolean;
   /** The owner's scoped connection that each model call is reserved and settled on. */
   billingDb: DatabaseAdapter;
   /** Names this review, so its calls' reservations are keyed to it. */
@@ -128,71 +127,29 @@ interface ReviewRoute {
   providerModelId: string;
 }
 
-function configuredReviewRoute(preferredModel: string | null | undefined): ReviewRoute | null {
-  const normalized = preferredModel ? normalizeModelId(preferredModel) : null;
-  if (!normalized) return null;
-  try {
-    const provider = resolveProviderFromModel(normalized);
-    return {
-      dispatchProvider: provider,
-      provider,
-      routeId: null,
-      modelKey: normalized,
-      providerModelId: normalized,
-    };
-  } catch (error) {
-    logger.warn({ error, preferredModel }, '[code-review] configured review model is unroutable');
-    return null;
-  }
+interface ReviewRouting {
+  route: ReviewRoute;
+  configuredModelSetAside: boolean;
 }
 
-function routeKeepsInputsOutOfTraining(route: ReviewRoute): boolean {
-  return (
-    modelKeepsInputsOutOfTraining(route.modelKey) &&
-    providerKeepsInputsOutOfTraining(route.dispatchProvider)
-  );
-}
+type ReviewRoutingInput = Pick<
+  CodeReviewInput,
+  'planTier' | 'preferredModel' | 'ownerUserId' | 'billingDb'
+>;
 
-function configuredModelSetAside(
-  input: Pick<CodeReviewInput, 'preferredModel' | 'noTrainingOnly'>,
-): boolean {
-  if (!input.noTrainingOnly) return false;
-  const configured = configuredReviewRoute(input.preferredModel);
-  return configured !== null && !routeKeepsInputsOutOfTraining(configured);
-}
-
-/**
- * The installation's chosen model when it names one the catalogue knows and
- * the account's training choice allows it, and the Auto coding route
- * otherwise. Either way the provider is resolved from the catalogue, so no
- * provider is named in this file.
- */
-async function resolveReviewRoute(
-  input: Pick<CodeReviewInput, 'planTier' | 'preferredModel' | 'ownerUserId' | 'noTrainingOnly'>,
-): Promise<ReviewRoute | null> {
-  const { planTier, noTrainingOnly } = input;
-  const configured = configuredReviewRoute(input.preferredModel);
-  if (configured && (!noTrainingOnly || routeKeepsInputsOutOfTraining(configured))) {
-    return configured;
-  }
-  const baseRouting: AutoRoutingRequest = {
-    selection: 'auto',
-    taskType: 'coding',
-    subscriptionTier: planTier,
-    trustMode: 'managed_cloud',
-    runtimeProfileId: 'web/cloud-chat',
+function reviewCall(input: ReviewRoutingInput, configuredModel: string | null): ManagedCloudCall {
+  return {
+    kind: 'background',
+    account: { db: input.billingDb, userId: input.ownerUserId, organizationId: null },
+    planTier: input.planTier,
+    need: {
+      taskType: 'coding',
+      ...(configuredModel ? { selection: configuredModel, exactSelection: true } : {}),
+    },
   };
-  const routing = noTrainingOnly
-    ? await sideCallRoutingRequest(null, input.ownerUserId, baseRouting, { forceNoTraining: true })
-    : baseRouting;
-  if (!routing) return null;
-  const route = resolveAutoRoute(routing);
-  if (route.status === 'unavailable') {
-    logger.warn({ code: route.code }, '[code-review] no managed route available');
-    return null;
-  }
-  const dispatchProvider = dispatchProviderForSelectedRoute(route);
-  if (noTrainingOnly && !providerKeepsInputsOutOfTraining(dispatchProvider)) return null;
+}
+
+function reviewRoute({ route, dispatchProvider }: ManagedCloudAdmitted): ReviewRoute {
   return {
     dispatchProvider,
     provider: route.provider,
@@ -202,13 +159,36 @@ async function resolveReviewRoute(
   };
 }
 
+/**
+ * The installation's chosen model when the owner's account admits it, and the
+ * Auto coding route otherwise. A chosen model set aside only because it may
+ * train on the code is named in the review.
+ */
+async function resolveReviewRoute(input: ReviewRoutingInput): Promise<ReviewRouting | null> {
+  const configuredModel = input.preferredModel ? normalizeModelId(input.preferredModel) : null;
+  let configuredModelSetAside = false;
+  if (configuredModel) {
+    const configured = await admitManagedCloudRoute(reviewCall(input, configuredModel));
+    if (configured.status === 'admitted') {
+      return { route: reviewRoute(configured), configuredModelSetAside };
+    }
+    if (configured.reason === 'policy_unreadable') return null;
+    configuredModelSetAside = configured.reason === 'no_training_route';
+    logger.warn(
+      { preferredModel: input.preferredModel, reason: configured.reason },
+      '[code-review] configured review model not admitted for this account; reviewing with Auto',
+    );
+  }
+  const auto = await admitManagedCloudRoute(reviewCall(input, null));
+  if (auto.status === 'refused') return null;
+  return { route: reviewRoute(auto), configuredModelSetAside };
+}
+
 async function callReviewModel(
   input: CodeReviewInput,
+  route: ReviewRoute,
   call: CodeReviewModelCall,
-): Promise<{ text: string; outputTokens: number } | null> {
-  const route = await resolveReviewRoute(input);
-  if (!route) return null;
-
+): Promise<{ text: string; outputTokens: number }> {
   let lease: BackgroundUsageLease;
   try {
     lease = await reserveBackgroundUsage({
@@ -307,20 +287,16 @@ export async function reviewPullRequestDiff(input: CodeReviewInput): Promise<Cod
   });
   if (chunks.length === 0) return empty;
 
-  const setAside = configuredModelSetAside(input);
-  if (setAside) {
-    logger.warn(
-      { preferredModel: input.preferredModel },
-      '[code-review] configured review model may train on inputs and the account opted out; reviewing with Auto',
-    );
-  }
-
+  let routing: Promise<ReviewRouting | null> | null = null;
+  let setAside = false;
   const callModel =
     input.callModel ??
     (async (call: CodeReviewModelCall) => {
-      const result = await callReviewModel(input, call);
-      if (!result) throw new NoRouteError();
-      return result;
+      routing ??= resolveReviewRoute(input);
+      const resolved = await routing;
+      if (!resolved) throw new NoRouteError();
+      setAside = resolved.configuredModelSetAside;
+      return callReviewModel(input, resolved.route, call);
     });
 
   const anchored: AnchoredFinding[] = [];

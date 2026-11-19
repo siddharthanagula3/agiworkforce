@@ -13,6 +13,8 @@ export interface FakeClamdBehaviour {
   version?: string;
   answer?: (payload: Buffer) => string | null;
   refuseStream?: string;
+  replyAfterMs?: number;
+  versionReply?: 'hang';
 }
 
 export interface FakeClamd {
@@ -29,6 +31,7 @@ function answerLikeClamd(payload: Buffer): string {
 export async function startFakeClamd(behaviour: FakeClamdBehaviour = {}): Promise<FakeClamd> {
   const scanned: Buffer[] = [];
   const sockets = new Set<Socket>();
+  const timers = new Set<ReturnType<typeof setTimeout>>();
   let connections = 0;
 
   const server = createServer((socket) => {
@@ -49,6 +52,7 @@ export async function startFakeClamd(behaviour: FakeClamdBehaviour = {}): Promis
         const command = pending.subarray(0, end).toString('latin1');
         pending = pending.subarray(end + 1);
         if (command === 'zVERSION') {
+          if (behaviour.versionReply === 'hang') return;
           socket.end(`${behaviour.version ?? CURRENT_VERSION}\0`);
           return;
         }
@@ -68,7 +72,15 @@ export async function startFakeClamd(behaviour: FakeClamdBehaviour = {}): Promis
           const payload = Buffer.concat(chunks);
           scanned.push(payload);
           const reply = (behaviour.answer ?? answerLikeClamd)(payload);
-          if (reply !== null) socket.end(`${reply}\0`);
+          const delayMs = behaviour.replyAfterMs;
+          if (reply !== null && delayMs === undefined) socket.end(`${reply}\0`);
+          if (reply !== null && delayMs !== undefined) {
+            const timer = setTimeout(() => {
+              timers.delete(timer);
+              if (!socket.destroyed) socket.end(`${reply}\0`);
+            }, delayMs);
+            timers.add(timer);
+          }
           pending = Buffer.alloc(0);
           return;
         }
@@ -87,6 +99,7 @@ export async function startFakeClamd(behaviour: FakeClamdBehaviour = {}): Promis
     scanned,
     connections: () => connections,
     close: async () => {
+      for (const timer of timers) clearTimeout(timer);
       for (const socket of sockets) socket.destroy();
       await new Promise<void>((resolve) => server.close(() => resolve()));
     },

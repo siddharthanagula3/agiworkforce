@@ -17,8 +17,10 @@ import {
   CircleArrowUp,
   Code2,
   FolderOpen,
+  ImageIcon,
   MoreHorizontal,
   Pin,
+  Plus,
   Search,
   Settings,
   SlidersHorizontal,
@@ -35,14 +37,17 @@ import { useProjectStore } from '@/src/features/projects/store';
 import { isCloudProjectPinned, pinnedFirst } from '@/src/features/projects/projectList';
 import { CLOUD_CODE_SCREEN_TITLE } from '@/src/features/cloud-code/presentation';
 import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
+import { clearNewChatProjectScope } from '@/stores/projects/newChatProjectScope';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { FEATURES } from '@/lib/v1FeatureFlags';
+import { useImageCreationAvailability } from '@/src/features/image/imageCreationAvailability';
 import {
   executionModeForConversation,
   isHistoryVisibleConversation,
 } from '@/src/features/chat/utils/conversationMode';
 import { ModeToggle } from '@/src/features/chat/components/ModeToggle';
+import { HEADER_TEXT_SCALE_LIMIT } from '@/src/features/chat/components/WorkModeSwitch';
 import { useAppModeSwitch } from '@/src/features/chat/hooks/useAppModeSwitch';
 import { useTierStore } from '@/src/features/billing/store';
 import { useAuthStore } from '@/src/features/auth/store';
@@ -66,6 +71,7 @@ type RoutePath =
   | '/(app)/(tabs)/projects'
   | '/(app)/(tabs)/chat'
   | '/(app)/library'
+  | '/(app)/images'
   | '/(app)/agents'
   | '/(app)/sites'
   | '/(app)/reports'
@@ -78,7 +84,16 @@ type RoutePath =
   | '/(app)/chat/[id]';
 
 interface PrimaryItem {
-  key: 'projects' | 'library' | 'reports' | 'agents' | 'sites' | 'schedules' | 'code' | 'tasks';
+  key:
+    | 'projects'
+    | 'library'
+    | 'images'
+    | 'reports'
+    | 'agents'
+    | 'sites'
+    | 'schedules'
+    | 'code'
+    | 'tasks';
   label?: string;
   labelKey?: string;
   icon: LucideIcon;
@@ -98,6 +113,13 @@ const PRIMARY_ITEMS: PrimaryItem[] = [
     labelKey: 'navLibrary',
     icon: BookImage,
     route: '/(app)/library',
+  },
+  {
+    key: 'images',
+    labelKey: 'drawer.images',
+    label: 'Images',
+    icon: ImageIcon,
+    route: '/(app)/images',
   },
   {
     key: 'code',
@@ -122,7 +144,7 @@ const PRIMARY_ITEMS: PrimaryItem[] = [
   },
   {
     key: 'sites',
-    labelKey: 'drawer.publishedSites',
+    labelKey: 'navSites',
     icon: Globe,
     route: '/(app)/sites',
     folded: true,
@@ -144,7 +166,9 @@ const PRIMARY_ITEMS: PrimaryItem[] = [
 ];
 
 const BRAND_SYMBOL_SIZE = 28;
-const DRAWER_RECENT_LIMIT = 8;
+const DRAWER_RECENT_LIMIT = 30;
+const DRAWER_NAV_ROW_HEIGHT = 48;
+const DRAWER_DIVIDER_MARGIN = 14;
 const DRAWER_PROJECT_CHAT_LIMIT = 5;
 const DRAWER_MIN_FOLDED = 2;
 const CIRCLE_BUTTON_SIZE = 44;
@@ -248,7 +272,7 @@ function NavRow({
           : { selected: Boolean(active), expanded }
       }
       style={{
-        minHeight: 48,
+        minHeight: DRAWER_NAV_ROW_HEIGHT,
         borderRadius: 12,
         paddingHorizontal: 12,
         flexDirection: 'row',
@@ -259,7 +283,8 @@ function NavRow({
     >
       <Icon size={21} color={colors.textPrimary} strokeWidth={1.8} />
       <Text
-        numberOfLines={1}
+        numberOfLines={2}
+        maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
         style={{
           flex: 1,
           color: colors.textPrimary,
@@ -279,6 +304,7 @@ function SectionHeading({ children }: { children: string }) {
   return (
     <Text
       accessibilityRole="header"
+      maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
       style={{
         color: colors.textMuted,
         fontSize: typeScale.caption,
@@ -317,6 +343,9 @@ export function DrawerContent(props: DrawerContentComponentProps) {
     appMode === 'cloud' &&
     canUseBillingPlanCapability(subscriptionTier, 'agi_work') &&
     grantedCapabilities.includes('canUseAgiWork');
+  const showImages =
+    useImageCreationAvailability(appMode === 'cloud' && isClerkSignedIn && Boolean(clerkUserId)) ===
+    'available';
 
   const { usesPersistentDrawer } = useTabletLayout();
   const drawerOpen = isDrawerOpen(props.state);
@@ -328,6 +357,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
   const projectsFolded = useSettingsStore((s) => s.sidePanelProjectsFolded);
   const setProjectsFolded = useSettingsStore((s) => s.setSidePanelProjectsFolded);
   const [organizeOpen, setOrganizeOpen] = useState(false);
+  const handleToggleMore = () => setMoreOpen(!moreOpen);
   const organizeMenu = useMemo<ConversationMenuState>(
     () => ({
       visible: organizeOpen,
@@ -391,8 +421,13 @@ export function DrawerContent(props: DrawerContentComponentProps) {
 
   const handleNewChat = useCallback(() => {
     closeDrawer();
+    clearNewChatProjectScope();
     router.push({ pathname: '/(app)/(tabs)/chat' as const });
   }, [closeDrawer, router]);
+
+  const handleNewProject = useCallback(() => {
+    navigate('/(app)/(tabs)/projects', { create: '1' });
+  }, [navigate]);
 
   const handleSelectMode = useCallback(
     (mode: 'local' | 'cloud') => {
@@ -499,6 +534,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
         ) : (
           <Text
             numberOfLines={1}
+            maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
             style={{
               flex: 1,
               color: colors.textPrimary,
@@ -527,19 +563,21 @@ export function DrawerContent(props: DrawerContentComponentProps) {
     const visible = PRIMARY_ITEMS.filter((item) => {
       if (item.key === 'schedules' && !FEATURES.schedules) return false;
       if (item.key === 'reports' && !FEATURES.research) return false;
+      if (item.key === 'images' && !showImages) return false;
       if (item.key === 'tasks' && !(FEATURES.cloudTasks && showAgiWork)) return false;
       return isShownInMode(item.route, appMode);
     });
     const folded = visible.filter((item) => item.folded);
     if (folded.length < DRAWER_MIN_FOLDED) return { shortList: visible, moreList: [] };
     return { shortList: visible.filter((item) => !item.folded), moreList: folded };
-  }, [appMode, showAgiWork]);
+  }, [appMode, showAgiWork, showImages]);
 
   const activeKey = useCallback(
     (key: PrimaryItem['key']) => {
       const p = pathname.startsWith('/') ? pathname : `/${pathname}`;
       if (key === 'projects') return p.includes('/projects');
       if (key === 'library') return p.includes('/library');
+      if (key === 'images') return p.includes('/images');
       if (key === 'agents') return p.includes('/agents');
       if (key === 'sites') return p.includes('/sites');
       if (key === 'reports') return p.includes('/reports');
@@ -554,7 +592,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
   const renderDestination = (item: PrimaryItem) => (
     <NavRow
       key={item.key}
-      label={item.labelKey ? t(item.labelKey) : (item.label ?? '')}
+      label={item.labelKey ? t(item.labelKey, { defaultValue: item.label }) : (item.label ?? '')}
       icon={item.icon}
       active={activeKey(item.key)}
       onPress={() => navigate(item.route)}
@@ -564,6 +602,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
   const moreHoldsActive = moreList.some((item) => activeKey(item.key));
   const MoreChevron = moreOpen ? ChevronUp : ChevronDown;
   const ProjectsChevron = projectsFolded ? ChevronRight : ChevronDown;
+  const showProjectsSection = FEATURES.projects && isShownInMode('/(app)/(tabs)/projects', appMode);
   const hasChatRows = pinnedConversations.length > 0 || recentConversations.length > 0;
 
   return (
@@ -576,7 +615,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
         borderRightWidth: 1,
       }}
     >
-      <View style={{ flex: 1, paddingHorizontal: 14 }}>
+      <View testID="drawer.body" style={{ flex: 1, paddingHorizontal: 14, overflow: 'hidden' }}>
         <View
           style={{
             minHeight: 56,
@@ -602,15 +641,17 @@ export function DrawerContent(props: DrawerContentComponentProps) {
         </View>
 
         <ScrollView
+          testID="drawer.scroll"
           ref={scrollMemory.ref}
           onScroll={scrollMemory.onScroll}
           scrollEventThrottle={scrollMemory.scrollEventThrottle}
           style={{ flex: 1 }}
           contentContainerStyle={{ paddingBottom: 24 }}
+          alwaysBounceVertical={false}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          <View style={{ gap: 2 }}>
+          <View testID="drawer.navigation" style={{ gap: 2 }}>
             <NavRow label={t('drawer.newChat')} icon={SquarePen} onPress={handleNewChat} />
             {shortList.map(renderDestination)}
             {moreList.length > 0 ? (
@@ -620,7 +661,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
                 active={!moreOpen && moreHoldsActive}
                 expanded={moreOpen}
                 trailing={<MoreChevron size={18} color={colors.textMuted} />}
-                onPress={() => setMoreOpen(!moreOpen)}
+                onPress={handleToggleMore}
               />
             ) : null}
             {moreOpen ? moreList.map(renderDestination) : null}
@@ -629,13 +670,13 @@ export function DrawerContent(props: DrawerContentComponentProps) {
           <View
             style={{
               height: StyleSheet.hairlineWidth,
-              marginVertical: 14,
+              marginVertical: DRAWER_DIVIDER_MARGIN,
               marginHorizontal: 12,
               backgroundColor: colors.border,
             }}
           />
 
-          {displayedProjects.length > 0 ? (
+          {showProjectsSection ? (
             <View style={{ marginBottom: 18 }}>
               <PressableBox
                 onPress={() => setProjectsFolded(!projectsFolded)}
@@ -657,6 +698,32 @@ export function DrawerContent(props: DrawerContentComponentProps) {
               </PressableBox>
               {projectsFolded ? null : (
                 <View style={{ gap: 1 }}>
+                  <PressableBox
+                    onPress={handleNewProject}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('chat:sidebar.newProject')}
+                    style={{
+                      minHeight: 44,
+                      borderRadius: 12,
+                      paddingHorizontal: 12,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 6,
+                    }}
+                  >
+                    <Plus size={16} color={colors.textPrimary} strokeWidth={1.8} />
+                    <Text
+                      numberOfLines={2}
+                      maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
+                      style={{
+                        flex: 1,
+                        color: colors.textPrimary,
+                        fontSize: typeScale.body,
+                      }}
+                    >
+                      {t('chat:sidebar.newProject')}
+                    </Text>
+                  </PressableBox>
                   {displayedProjects.map((project) => {
                     const chats = projectConversations(project.id);
                     const expanded = expandedProjectIds.has(project.id);
@@ -682,6 +749,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
                             ) : null}
                             <Text
                               numberOfLines={1}
+                              maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
                               style={{
                                 flex: 1,
                                 color: colors.textPrimary,
@@ -736,7 +804,10 @@ export function DrawerContent(props: DrawerContentComponentProps) {
                                   justifyContent: 'center',
                                 }}
                               >
-                                <Text style={{ color: colors.textMuted, fontSize: typeScale.body }}>
+                                <Text
+                                  maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
+                                  style={{ color: colors.textMuted, fontSize: typeScale.body }}
+                                >
                                   {t('drawer.seeAll')}
                                 </Text>
                               </PressableBox>
@@ -791,6 +862,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
             ) : null}
             {hasChatRows ? null : (
               <Text
+                maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
                 style={{
                   color: colors.textMuted,
                   fontSize: typeScale.body,
@@ -806,7 +878,10 @@ export function DrawerContent(props: DrawerContentComponentProps) {
               accessibilityLabel={t('drawer.seeAllChats')}
               style={{ minHeight: 44, paddingHorizontal: 12, justifyContent: 'center' }}
             >
-              <Text style={{ color: colors.textMuted, fontSize: typeScale.body }}>
+              <Text
+                maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
+                style={{ color: colors.textMuted, fontSize: typeScale.body }}
+              >
                 {t('drawer.seeAllChats')}
               </Text>
             </PressableBox>

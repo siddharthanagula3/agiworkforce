@@ -447,6 +447,53 @@ describe('syncNow, pull', () => {
     );
   });
 
+  it("restores a question's attachments from synced metadata after a cold device pull", async () => {
+    mockGet.mockResolvedValueOnce({
+      conversations: [convDelta('c1', '5')],
+      messages: [
+        msgDelta('m-photo', 'c1', '6', {
+          content: 'What flowers are these?',
+          metadata: {
+            attachments: [
+              {
+                id: 'asset-1',
+                assetId: 'asset-1',
+                type: 'image',
+                name: 'flowers.jpg',
+                size: 2048,
+                mimeType: 'image/jpeg',
+                url: '/api/files/asset-1',
+              },
+            ],
+          },
+        }),
+        msgDelta('m-answer', 'c1', '7', {
+          role: 'assistant',
+          metadata: { attachments: [{ id: 'x', assetId: 'x', type: 'file', name: 'x.pdf' }] },
+        }),
+      ],
+      artifacts: [],
+      cursor: '7',
+      hasMore: false,
+    } as never);
+
+    await syncNow();
+
+    const pulled = useChatCloudMessageStore.getState().messages.c1 ?? [];
+    const question = pulled.find((message) => message.id === 'm-photo');
+    const answer = pulled.find((message) => message.id === 'm-answer');
+    expect(question?.attachments).toEqual([
+      {
+        url: '/api/files/asset-1',
+        mimeType: 'image/jpeg',
+        fileName: 'flowers.jpg',
+        fileSize: 2048,
+        assetId: 'asset-1',
+      },
+    ]);
+    expect(answer?.attachments).toBeUndefined();
+  });
+
   it('removes a conversation when a deleted_at tombstone is pulled', async () => {
     seedConversation('c1');
     mockGet.mockResolvedValueOnce({
@@ -589,6 +636,58 @@ describe('syncNow, push', () => {
       imageGenPrompt: 'A clean enterprise dashboard',
       imageGenModel: SYNTHETIC_IMAGE_MODEL_ID,
       revisedPrompt: 'A polished enterprise dashboard',
+    });
+  });
+
+  it("pushes a question's uploaded attachments as stored-file references, never a local path", async () => {
+    seedConversation('c1', { messageCount: 1 });
+    seedMessage('c1', {
+      id: 'm-photo',
+      role: 'user',
+      content: 'What flowers are these?',
+      metadata: { requestedModel: 'auto' },
+      attachments: [
+        {
+          url: '/api/files/asset-1',
+          mimeType: 'image/jpeg',
+          fileName: 'flowers.jpg',
+          fileSize: 2048,
+          assetId: 'asset-1',
+        },
+        {
+          url: 'file:///var/mobile/IMG_1.pdf',
+          mimeType: 'application/pdf',
+          fileName: 'IMG_1.pdf',
+          assetId: 'asset-2',
+        },
+        { url: 'file:///var/mobile/local.png', mimeType: 'image/png', fileName: 'local.png' },
+      ],
+    });
+    markMessageForSync('c1', 'm-photo');
+
+    await syncNow();
+
+    const [, body] = mockPost.mock.calls[0] as [string, { messages: MessagePushItem[] }];
+    expect(body.messages[0]?.metadata).toEqual({
+      requestedModel: 'auto',
+      attachments: [
+        {
+          id: 'asset-1',
+          assetId: 'asset-1',
+          type: 'image',
+          name: 'flowers.jpg',
+          size: 2048,
+          mimeType: 'image/jpeg',
+          url: '/api/files/asset-1',
+        },
+        {
+          id: 'asset-2',
+          assetId: 'asset-2',
+          type: 'file',
+          name: 'IMG_1.pdf',
+          mimeType: 'application/pdf',
+        },
+      ],
     });
   });
 
@@ -1274,7 +1373,7 @@ describe('syncNow, artifact pull wiring (migration 0039)', () => {
     ]);
   });
 
-  it('does NOT push any artifacts in managed cloud mode (mobile is pull-only)', async () => {
+  it('does not push back an artifact it only pulled', async () => {
     useArtifactStore
       .getState()
       .applyCloudArtifactDeltas([artifactDelta('art1', '3')], 'sync-test-user');

@@ -342,7 +342,7 @@ export function messageArtifactView(
         id: computeDerivedArtifactId(conversationId, msg.id, tail.ordinal),
         messageId: msg.id,
         type: detectArtifactType(tail.language, tail.content),
-        title: extractArtifactTitle(tail.content) ?? t('spArtifactsUntitled'),
+        title: extractArtifactTitle(tail.content, tail.language) ?? t('spArtifactsUntitled'),
         content: tail.content,
         language: tail.language,
         streaming: true,

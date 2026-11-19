@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { PageLink } from '@shared/components/layout/EmbeddedPage';
 import { ChevronRight } from 'lucide-react';
 import type { DocsNavLink } from '../lib/docs-nav';
 
@@ -16,10 +16,10 @@ export function ArticleSupportCards({ related }: { related: readonly DocsNavLink
         </h2>
         <div className="dx-cards" data-cols="2">
           {SUPPORT_CARDS.map((card) => (
-            <Link key={card.href} href={card.href} className="dx-card">
+            <PageLink key={card.href} href={card.href} className="dx-card" omitWhenEmbedded>
               <span className="dx-card-title">{card.title}</span>
               <span className="dx-card-body">{card.body}</span>
-            </Link>
+            </PageLink>
           ))}
         </div>
       </section>
@@ -31,10 +31,10 @@ export function ArticleSupportCards({ related }: { related: readonly DocsNavLink
           <ul className="dx-related">
             {related.map((link) => (
               <li key={link.href}>
-                <Link href={link.href} className="dx-related-link">
+                <PageLink href={link.href} className="dx-related-link" omitWhenEmbedded>
                   <span className="dx-card-title">{link.title}</span>
                   <ChevronRight aria-hidden="true" />
-                </Link>
+                </PageLink>
               </li>
             ))}
           </ul>

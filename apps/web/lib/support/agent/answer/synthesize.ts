@@ -58,6 +58,7 @@ const inputSchema = z.object({
   viewer: z.object({
     isSignedIn: z.boolean(),
     userId: z.string().nullable(),
+    organizationId: z.string().nullable().optional(),
     planTier: z.string().nullable(),
   }),
   accountFacts: z
@@ -174,6 +175,7 @@ async function run(rawInput: SupportAnswerInput): Promise<SupportAnswer> {
   const modelResult = await callSupportModel({
     userMessage,
     userId: input.viewer.userId,
+    organizationId: input.viewer.organizationId ?? null,
     surface: input.surface,
     admitModelCall: rawInput.admitModelCall,
     signal: rawInput.signal,

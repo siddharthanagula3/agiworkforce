@@ -1,7 +1,7 @@
 import { useCallback, useState, type ReactNode } from 'react';
 import { Alert, TextInput, View, type LayoutChangeEvent, type TextInputProps } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowLeft, Cloud, RefreshCw, type LucideIcon } from 'lucide-react-native';
+import { ArrowLeft, ChevronDown, Cloud, RefreshCw, type LucideIcon } from 'lucide-react-native';
 
 import { Button } from '@/components/ui/Button';
 import { PressableBox } from '@/components/ui/PressableBox';
@@ -9,17 +9,20 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { Switch } from '@/components/ui/Switch';
 import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
-import { typeScale } from '@/src/ui/theme/tokens';
+import { HEADER_TEXT_SCALE_LIMIT, typeScale } from '@/src/ui/theme/tokens';
 
 const HEADER_SLOT_MIN_WIDTH = 44;
+const HEADER_TITLE_SHRINK_MAX_LENGTH = 32;
 
 export function ScreenHeader({
   title,
   onBack,
+  onTitlePress,
   trailing,
 }: {
   title: string;
   onBack: () => void;
+  onTitlePress?: () => void;
   trailing?: ReactNode;
 }) {
   const colors = useThemeColors();
@@ -28,6 +31,23 @@ export function ScreenHeader({
     const measured = Math.ceil(event.nativeEvent.layout.width);
     setSlotWidth((current) => Math.max(current, measured));
   }, []);
+  const titleText = (
+    <Text
+      accessibilityRole={onTitlePress ? undefined : 'header'}
+      numberOfLines={1}
+      adjustsFontSizeToFit={title.length <= HEADER_TITLE_SHRINK_MAX_LENGTH}
+      maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
+      style={{
+        ...(onTitlePress ? { flexShrink: 1 } : { flex: 1 }),
+        color: colors.textPrimary,
+        fontSize: typeScale.headline,
+        fontWeight: '600',
+        textAlign: 'center',
+      }}
+    >
+      {title}
+    </Text>
+  );
   return (
     <View
       style={{
@@ -53,19 +73,26 @@ export function ScreenHeader({
           <ArrowLeft size={21} color={colors.textPrimary} />
         </PressableBox>
       </View>
-      <Text
-        accessibilityRole="header"
-        numberOfLines={1}
-        style={{
-          flex: 1,
-          color: colors.textPrimary,
-          fontSize: typeScale.headline,
-          fontWeight: '600',
-          textAlign: 'center',
-        }}
-      >
-        {title}
-      </Text>
+      {onTitlePress ? (
+        <PressableBox
+          onPress={onTitlePress}
+          accessibilityRole="button"
+          accessibilityLabel={`${title}, switch section`}
+          style={{
+            flex: 1,
+            minHeight: HEADER_SLOT_MIN_WIDTH,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 4,
+          }}
+        >
+          {titleText}
+          <ChevronDown size={16} color={colors.textMuted} />
+        </PressableBox>
+      ) : (
+        titleText
+      )}
       <View style={{ minWidth: slotWidth, alignItems: 'flex-end' }} onLayout={growSlots}>
         {trailing}
       </View>

@@ -14,8 +14,8 @@ struct ScanIntent: AppIntent {
 
     func perform() async throws -> some IntentResult {
         var params: [String: String] = [:]
-        if let file = image, let url = file.fileURL {
-            params["imageUri"] = url.absoluteString
+        if let image {
+            params["imageUri"] = try AGIIntentFileStaging.stageImage(image).absoluteString
         }
         AGIIntentDispatch.open(verb: "scan", params: params)
         return .result()

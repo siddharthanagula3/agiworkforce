@@ -6,7 +6,7 @@ const CONVERSATION_ID = '11111111-1111-4111-8111-111111111111';
 const USER_ID = 'user-1';
 const ORGANIZATION_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 
-const mocks = vi.hoisted(() => ({ query: vi.fn(), execute: vi.fn() }));
+const mocks = vi.hoisted(() => ({ query: vi.fn(), execute: vi.fn(), warn: vi.fn() }));
 
 const db = {
   query: mocks.query,
@@ -22,7 +22,7 @@ vi.mock('@/lib/server/rls-db', () => ({
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/logger', () => ({
-  logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
+  logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: mocks.warn },
 }));
 vi.mock('@/lib/cors', () => ({
   withCorsRoute: <T>(handler: T) => handler,
@@ -90,6 +90,21 @@ describe('GET /api/chat/conversations/[id]/messages', () => {
     expect(params[1]).toBe(3);
   });
 
+  it('returns an answer stored with citation markup without it', async () => {
+    mocks.query.mockResolvedValueOnce([{ id: CONVERSATION_ID }]).mockResolvedValueOnce([
+      {
+        ...messageRow(1),
+        role: 'assistant',
+        content: 'Starship flew again. \uE200cite\uE202turn620734view2\uE201\n\nNext.',
+      },
+    ]);
+
+    const response = await GET(request(), context);
+    const body = (await response.json()) as { messages: Array<{ content: string }> };
+
+    expect(body.messages[0]?.content).toBe('Starship flew again. \n\nNext.');
+  });
+
   it('applies the cursor predicate in the same order as the sort', async () => {
     mocks.query
       .mockResolvedValueOnce([{ id: CONVERSATION_ID }])
@@ -106,6 +121,45 @@ describe('GET /api/chat/conversations/[id]/messages', () => {
     expect(sql).toContain('(page_sort_key, id) > ($3, $4)');
     expect(params[2]).toBe('2026-09-02T00:00:00.000Z');
     expect(params[3]).toBe(messageRow(2).id);
+  });
+
+  it('opens a conversation holding metadata that is not an object, sending that row repaired', async () => {
+    const suggestions = ['Try a smaller image', 'Use another style'];
+    mocks.query.mockResolvedValueOnce([{ id: CONVERSATION_ID }]).mockResolvedValueOnce([
+      { ...messageRow(1), metadata: { sources: [] } },
+      {
+        ...messageRow(2),
+        role: 'assistant',
+        content: 'secret answer text',
+        metadata: [null, { followUpSuggestions: suggestions }],
+      },
+      { ...messageRow(3), metadata: 'stop' },
+      { ...messageRow(4), metadata: null },
+    ]);
+
+    const response = await GET(request(), context);
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      messages: Array<{ id: string; metadata: unknown }>;
+    };
+    expect(body.messages.map((message) => message.metadata)).toEqual([
+      { sources: [] },
+      { followUpSuggestions: suggestions },
+      {},
+      null,
+    ]);
+    expect(mocks.warn).toHaveBeenCalledTimes(2);
+    expect(mocks.warn.mock.calls.map(([fields]) => fields)).toEqual([
+      expect.objectContaining({
+        event: 'chat_message_metadata_not_object',
+        messageId: messageRow(2).id,
+        conversationId: CONVERSATION_ID,
+        userId: USER_ID,
+      }),
+      expect.objectContaining({ messageId: messageRow(3).id }),
+    ]);
+    expect(JSON.stringify(mocks.warn.mock.calls)).not.toContain('secret answer text');
+    expect(JSON.stringify(mocks.warn.mock.calls)).not.toContain('Try a smaller image');
   });
 
   it('answers 404 for a direct link to a deleted conversation', async () => {

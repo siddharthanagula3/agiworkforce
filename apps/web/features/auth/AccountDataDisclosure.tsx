@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { PageLink } from '@shared/components/layout/EmbeddedPage';
 
 import {
   FREE_PLAN_TRAINING_SIGNUP_STATEMENT,
@@ -35,23 +35,23 @@ export function AccountDataDisclosure() {
 export function AccountPolicyLinks() {
   return (
     <nav aria-label="Policies" className={AUTH_POLICY_LINKS_CLASS}>
-      <Link
+      <PageLink
         href={CANONICAL_POLICY_ROUTES.acceptableUse}
         target="_blank"
         rel="noopener noreferrer"
         className={`${AUTH_FOOTER_NAV_LINK_CLASS} underline`}
       >
         Acceptable Use Policy
-      </Link>
+      </PageLink>
       <span aria-hidden="true">·</span>
-      <Link
+      <PageLink
         href={CANONICAL_POLICY_ROUTES.dataUse}
         target="_blank"
         rel="noopener noreferrer"
         className={`${AUTH_FOOTER_NAV_LINK_CLASS} underline`}
       >
         Data Use Guidelines
-      </Link>
+      </PageLink>
     </nav>
   );
 }

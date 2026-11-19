@@ -78,7 +78,10 @@ describe('cron routes and vercel.json schedules agree', () => {
   //     "when it happens" rather than tomorrow. live-artifacts-refresh claims
   //     each live artifact whose readiness check is due and retries a failed
   //     check after a fifteen minute backoff, which a daily sweep would stretch
-  //     to a day.
+  //     to a day. sweep-chat-file-intakes re-dispatches a large file's check
+  //     whose run died once its lease has passed and frees an abandoned
+  //     upload's slot, so the person's file is checked and their slot returned
+  //     within minutes rather than the next day.
   //
   //   monitoring, a check that exists to catch a problem before a customer
   //     does. health-probe and page-security-anomalies exist to page someone,
@@ -111,6 +114,7 @@ describe('cron routes and vercel.json schedules agree', () => {
     '/api/cron/expire-code-trials',
     '/api/cron/notify-upgrade-waitlist',
     '/api/cron/live-artifacts-refresh',
+    '/api/cron/sweep-chat-file-intakes',
   ]);
   const MONITORING_CRONS = new Set([
     '/api/cron/health-probe',

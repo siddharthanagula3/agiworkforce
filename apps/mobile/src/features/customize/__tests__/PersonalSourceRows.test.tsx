@@ -125,7 +125,7 @@ describe('personal source rows', () => {
     serve({ email: [], calendar: [listing('google-calendar', 'Google Calendar', ['calendar'])] });
     const screen = render(<PersonalSourceRows />);
     fireEvent.press(await screen.findByLabelText('Calendar. Connected'));
-    fireEvent.press(screen.getByLabelText('Calendar: Calendar on this phone. Connected'));
+    fireEvent.press(screen.getByLabelText('Calendar: Calendar on this device. Connected'));
     expect(mockPush).toHaveBeenCalledWith('/(app)/settings/integrations');
   });
 

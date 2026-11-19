@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   scopedDb: { query: vi.fn(), execute: vi.fn(), transaction: vi.fn() },
   listActions: vi.fn(),
   requireHumanCaller: vi.fn(),
+  activeWorkspace: { organizationId: 'org-1' as string | null },
 }));
 
 vi.hoisted(() => {
@@ -33,6 +34,9 @@ vi.mock('@/lib/rate-limit', () => ({
 }));
 vi.mock('@/lib/server/rls-db', () => ({
   getCurrentUserRlsDb: async () => ({ db: mocks.scopedDb, userId: 'user-1' }),
+}));
+vi.mock('@/lib/services/active-workspace-service', () => ({
+  resolveActiveOrganizationId: async () => mocks.activeWorkspace.organizationId,
 }));
 vi.mock('@/lib/support/handoff/request-identity', () => ({
   resolveHandoffIdentity: mocks.resolveIdentity,
@@ -155,7 +159,12 @@ describe('POST /api/support/ask', () => {
       undefined,
     );
     const [input] = mocks.answer.mock.calls[0]!;
-    expect(input.viewer).toEqual({ isSignedIn: false, userId: null, planTier: null });
+    expect(input.viewer).toEqual({
+      isSignedIn: false,
+      userId: null,
+      organizationId: null,
+      planTier: null,
+    });
     expect(input.accountFacts).toEqual([]);
     expect(input.availableActions).toEqual([]);
   });
@@ -166,6 +175,7 @@ describe('POST /api/support/ask', () => {
     expect(mocks.resolveContext).toHaveBeenCalledWith(mocks.scopedDb, 'user-1');
     const [input] = mocks.answer.mock.calls[0]!;
     expect(input.viewer.userId).toBe('user-1');
+    expect(input.viewer.organizationId).toBe('org-1');
     expect(input.accountFacts).toEqual(
       expect.arrayContaining([{ label: 'Plan', value: 'pro', sourceUrl: '/settings/billing' }]),
     );

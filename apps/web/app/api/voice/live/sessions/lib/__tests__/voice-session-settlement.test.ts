@@ -198,6 +198,14 @@ describe('settleVoiceSession on the Free monthly voice allowance', () => {
         reportedSeconds: 88,
       }),
     });
+    const cost = mocks.providerCost.mock.calls[0]![0] as {
+      actualCostCents: number;
+      providerEstimatedCostMicrousd: number;
+      usage: { providerCostMicrousd: number };
+    };
+    expect(cost.providerEstimatedCostMicrousd).toBe(cost.usage.providerCostMicrousd);
+    expect(cost.providerEstimatedCostMicrousd).toBeGreaterThan(0);
+    expect(cost.actualCostCents).toBe(Math.round(cost.providerEstimatedCostMicrousd / 10_000));
     expect(mocks.backendCost).toHaveBeenCalledWith(
       expect.objectContaining({ backendModel: BACKEND, reported: backend }),
     );

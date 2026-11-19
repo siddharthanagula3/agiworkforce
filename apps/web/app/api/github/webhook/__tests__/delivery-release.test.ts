@@ -40,10 +40,6 @@ vi.mock('@/lib/server/neon-db', () => ({
   }),
 }));
 vi.mock('@/lib/server/claimed-user-scope-db', () => ({ createClaimedUserScopedDb: () => ({}) }));
-vi.mock('@/lib/server/side-call-training-policy', async (importOriginal) => ({
-  ...(await importOriginal<ImportedModule1>()),
-  sideCallTrainingOptOut: async () => false,
-}));
 vi.mock('@/lib/services/entitlement-resolution', () => ({
   resolveEntitledPlanTier: async () => 'pro',
 }));
@@ -133,5 +129,4 @@ describe('a webhook receipt is kept only for a delivery that was fully handled',
   });
 });
 
-type ImportedModule1 = typeof import('@/lib/server/side-call-training-policy');
 type ImportedModule0 = typeof import('@/lib/services/organization-policy-gate');

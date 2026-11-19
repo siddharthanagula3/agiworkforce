@@ -6,7 +6,7 @@ import { SettingsGroup, SettingsRow } from '@/src/features/settings/Common';
 import { useToolApprovalPolicySync } from '../tool-approvals/useToolApprovalPolicySync';
 import { toolApprovalPolicySummary } from '../tool-approvals/toolApprovalPolicyOwner';
 import { useThemeColors } from '@/src/ui/theme';
-import { typeScale } from '@/src/ui/theme/tokens';
+import { ROW_LABEL_TEXT_SCALE_LIMIT, typeScale } from '@/src/ui/theme/tokens';
 
 export const ACTION_APPROVALS_ROUTE = '/(app)/settings/auto-approve';
 
@@ -24,7 +24,12 @@ export function ApprovalPolicySummary({ label, helper }: { label: string; helper
         isLast
       />
       <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
-        <Text style={{ color: colors.textSecondary, fontSize: typeScale.subhead }}>{helper}</Text>
+        <Text
+          maxFontSizeMultiplier={ROW_LABEL_TEXT_SCALE_LIMIT}
+          style={{ color: colors.textSecondary, fontSize: typeScale.subhead }}
+        >
+          {helper}
+        </Text>
       </View>
     </SettingsGroup>
   );

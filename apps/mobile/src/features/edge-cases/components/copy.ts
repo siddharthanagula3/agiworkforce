@@ -37,7 +37,7 @@ export const EDGE_COPY = {
 
   thermalThrottle: {
     title: 'Running hot',
-    body: 'Your phone is running hot. Pausing inference for a bit to cool down.',
+    body: 'Your device is running hot. Pausing inference for a bit to cool down.',
     cta: 'Got it',
   },
 

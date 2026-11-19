@@ -19,6 +19,11 @@ describe('mobile app domain association', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toContain('application/json');
     expect(response.headers.get('x-content-type-options')).toBe('nosniff');
+    const declared = body.applinks.details.flatMap(
+      (detail: { components: Array<{ '/': string }> }) =>
+        detail.components.map((component) => component['/']),
+    );
+    expect(declared.filter((declaredPath: string) => declaredPath.startsWith('/pair'))).toEqual([]);
     expect(body).toEqual({
       applinks: {
         apps: [],
@@ -26,8 +31,6 @@ describe('mobile app domain association', () => {
           {
             appIDs: ['D2PR62RLT4.com.agiworkforce.app'],
             components: [
-              expect.objectContaining({ '/': '/pair' }),
-              expect.objectContaining({ '/': '/pair/*' }),
               expect.objectContaining({ '/': '/auth/reset-password' }),
               expect.objectContaining({ '/': '/open/*' }),
               expect.objectContaining({ '/': '/github/installed' }),

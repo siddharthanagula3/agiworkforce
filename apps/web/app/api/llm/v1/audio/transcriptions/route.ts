@@ -787,6 +787,7 @@ async function handleTranscriptions(request: NextRequest, admit?: TranscriptionA
       provider: String(selectedModel.provider),
       model: selectedModel.id,
       actualCostCents: ledgerCentsFromMicrousd(actualCostMicrousd),
+      providerEstimatedCostMicrousd: actualCostMicrousd,
       customerCanonicalMicrousd: 0,
       sourceRef: `free_voice_allowance:${userId}:${freeAllowanceSessionId}`,
       taskOutcome: 'delivered',

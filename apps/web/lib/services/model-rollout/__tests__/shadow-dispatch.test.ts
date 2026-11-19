@@ -24,6 +24,9 @@ const mocks = vi.hoisted(() => ({
   calculateCost: vi.fn(
     (_provider: string, _model: string, _usage: unknown, _now?: Date, _routeId?: string) => 7,
   ),
+  calculateCostMicrousd: vi.fn(
+    (_provider: string, _model: string, _usage: unknown, _now?: Date, _routeId?: string) => 4_321,
+  ),
 }));
 
 vi.mock('@/lib/server/key-value', () => ({ getKeyValueStore: () => mocks.store }));
@@ -62,6 +65,13 @@ vi.mock('@/lib/services/llm-cost-calculator', () => ({
       now?: Date,
       routeId?: string,
     ) => mocks.calculateCost(provider, model, usage, now, routeId),
+    calculateCostMicrousd: (
+      provider: string,
+      model: string,
+      usage: unknown,
+      now?: Date,
+      routeId?: string,
+    ) => mocks.calculateCostMicrousd(provider, model, usage, now, routeId),
   },
 }));
 
@@ -166,6 +176,7 @@ describe('shadow dispatch', () => {
         model: 'candidate-model',
         billedCents: 0,
         providerCostCents: 7,
+        providerEstimatedCostMicrousd: 4_321,
         sourceRef: 'routing_shadow:request-1',
         routeId: 'openai/candidate-model',
       }),

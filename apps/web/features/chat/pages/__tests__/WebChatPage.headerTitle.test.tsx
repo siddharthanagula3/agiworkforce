@@ -4,6 +4,7 @@ import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { sessionRowActionFailureMessage } from '@shared/components/layout/sidebar-session-actions';
+import { toast } from 'sonner';
 type ScanModule0 = typeof import('sonner');
 type ScanModule1 = typeof import('next/navigation');
 type ScanModule2 = typeof import('react-i18next');
@@ -396,6 +397,37 @@ describe('WebChatPage conversation title slot', () => {
     // sentence the sidebar uses for a failed rename is shown here too.
     expect(toastError).toHaveBeenCalledWith(sessionRowActionFailureMessage('rename'));
   });
+
+  it.each([
+    [true, { archived: false, pinned: true }],
+    [false, { archived: false }],
+  ] as const)(
+    'Undo after archiving a chat with pinned %s restores it as it was',
+    async (isPinned, restored) => {
+      const user = userEvent.setup();
+      openConversation();
+      useChatStore.getState().updateConversation(CONVERSATION_ID, { isPinned });
+      vi.mocked(toast).mockClear();
+
+      render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
+      await screen.findByTestId('message-list');
+
+      await user.click(await screen.findByRole('button', { name: /conversation options/i }));
+      await user.click(await screen.findByText('Archive'));
+      await waitFor(() => expect(toast).toHaveBeenCalledWith('Chat archived', expect.anything()));
+      const options = vi.mocked(toast).mock.lastCall?.[1] as {
+        action: { label: string; onClick: () => void };
+      };
+      expect(options.action.label).toBe('Undo');
+      act(() => options.action.onClick());
+
+      await waitFor(() => expect(mocks.updateConversation).toHaveBeenCalledTimes(2));
+      expect(mocks.updateConversation).toHaveBeenNthCalledWith(1, CONVERSATION_ID, {
+        archived: true,
+      });
+      expect(mocks.updateConversation).toHaveBeenNthCalledWith(2, CONVERSATION_ID, restored);
+    },
+  );
 
   it('removes full-shell chrome from the compact Quick Ask surface', async () => {
     openConversation();

@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { Alert } from 'react-native';
 
 const mockListSupportTickets = jest.fn();
 let mockAuth: { isClerkLoaded: boolean; isClerkSignedIn: boolean; clerkUserId: string | null } = {
@@ -12,10 +13,34 @@ let mockAuth: { isClerkLoaded: boolean; isClerkSignedIn: boolean; clerkUserId: s
 const mockPush = jest.fn();
 const mockSetAppMode = jest.fn();
 let mockAppMode = 'cloud';
+const mockFocusEffects: Array<{ blur: () => void; focus: () => void }> = [];
+const mockOpenSupportTicket = jest.fn();
 
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useRouter: () => ({ push: mockPush }),
+  useFocusEffect: (callback: () => void | (() => void)) => {
+    const { useEffect } = jest.requireActual<typeof import('react')>('react');
+    useEffect(() => {
+      let cleanup: (() => void) | undefined;
+      const blur = () => {
+        cleanup?.();
+        cleanup = undefined;
+      };
+      const focus = () => {
+        blur();
+        const next = callback();
+        cleanup = typeof next === 'function' ? next : undefined;
+      };
+      const entry = { blur, focus };
+      mockFocusEffects.push(entry);
+      focus();
+      return () => {
+        blur();
+        mockFocusEffects.splice(mockFocusEffects.indexOf(entry), 1);
+      };
+    }, [callback]);
+  },
 }));
 
 jest.mock('lucide-react-native', () => {
@@ -93,7 +118,7 @@ jest.mock('@/src/features/settings/Common', () => {
 
 jest.mock('../src/features/support/service', () => ({
   listSupportTickets: (...args: unknown[]) => mockListSupportTickets(...args),
-  openSupportTicket: jest.fn(),
+  openSupportTicket: (...args: unknown[]) => mockOpenSupportTicket(...args),
 }));
 
 import { SupportTicketsScreen } from '../src/features/support/SupportTicketsScreen';
@@ -219,5 +244,54 @@ describe('SupportTicketsScreen ticket history', () => {
 
     expect(screen.queryByText('First account ticket')).toBeNull();
     expect(screen.getByLabelText('Loading your tickets')).toBeTruthy();
+  });
+
+  describe('a draft ticket', () => {
+    afterEach(() => jest.restoreAllMocks());
+
+    function leaveAndReturn() {
+      act(() => {
+        for (const effect of mockFocusEffects) effect.blur();
+      });
+      act(() => {
+        for (const effect of mockFocusEffects) effect.focus();
+      });
+    }
+
+    it('is kept while the person stays on the screen after a failed send', async () => {
+      mockListSupportTickets.mockResolvedValue({ tickets: [], nextOffset: null });
+      mockOpenSupportTicket.mockRejectedValue(new Error('offline'));
+      jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+      const screen = render(<SupportTicketsScreen />);
+
+      fireEvent.press(await screen.findByLabelText('New ticket'));
+      fireEvent.changeText(screen.getByLabelText('Subject'), 'Cannot sign in');
+      fireEvent.changeText(screen.getByLabelText('What happened'), 'The code never arrives');
+      fireEvent.press(screen.getByText('Raise ticket'));
+
+      await waitFor(() =>
+        expect(Alert.alert).toHaveBeenCalledWith('That ticket was not raised', expect.any(String)),
+      );
+      expect(screen.getByDisplayValue('Cannot sign in')).toBeTruthy();
+      expect(screen.getByDisplayValue('The code never arrives')).toBeTruthy();
+    });
+
+    it('is gone when the person comes back to Support later by another path', async () => {
+      mockListSupportTickets.mockResolvedValue({ tickets: [], nextOffset: null });
+      const screen = render(<SupportTicketsScreen />);
+
+      fireEvent.press(await screen.findByLabelText('New ticket'));
+      fireEvent.changeText(screen.getByLabelText('Subject'), 'Abandoned subject');
+      fireEvent.changeText(screen.getByLabelText('What happened'), 'Abandoned description');
+
+      leaveAndReturn();
+
+      expect(screen.queryByDisplayValue('Abandoned subject')).toBeNull();
+      expect(screen.queryByLabelText('Subject')).toBeNull();
+      fireEvent.press(screen.getByLabelText('New ticket'));
+      expect(screen.getByLabelText('Subject').props.value).toBe('');
+      expect(screen.getByLabelText('What happened').props.value).toBe('');
+      expect(screen.getByLabelText('Attach diagnostics').props.value).toBe(true);
+    });
   });
 });

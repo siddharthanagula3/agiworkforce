@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import { classifyTaskFamily, TASK_FAMILY_STAGE_ENV } from '@agiworkforce/routing';
 
-import { buildTaskFamilySignals, resolveWebCloudModelRoute } from './request-processor';
+import { buildTaskFamilySignals } from './request-processor';
+import { resolveWebCloudModelRoute } from '@/lib/server/managed-cloud-routing/routing-request';
 
 const emptyContext = {
   estimatedInputTokens: 120,

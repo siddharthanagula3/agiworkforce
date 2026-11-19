@@ -33,7 +33,12 @@ import {
 } from '@agiworkforce/types';
 import { handleError } from '@/lib/error-handler';
 import { isStepUpRequiredError, requireStepUp } from '@/lib/server/step-up-auth';
-import { resolveSubscriptionBillingSource } from '@/lib/server/subscription-billing-owner';
+import {
+  resolveBillingOwner,
+  resolveSubscriptionBillingSource,
+} from '@/lib/server/subscription-billing-owner';
+import { readBillingOwnerRow, resolveBillingCustomerId } from '@/lib/server/billing-owner-row';
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { isStripeSubscriptionId } from '@/lib/server/stripe-resource-ids';
 import {
   reversePlanRenewalStop,
@@ -75,7 +80,8 @@ const SECURITY_HEADERS = {
 type DeletionPlan =
   | { kind: 'ending'; subscription: SubscriptionInfo }
   | { kind: 'renewal_stopped'; subscription: SubscriptionInfo; subscriptionId: string }
-  | { kind: 'store_billed'; subscription: SubscriptionInfo; store: StoreBillingSource };
+  | { kind: 'store_billed'; subscription: SubscriptionInfo; store: StoreBillingSource }
+  | { kind: 'granted'; subscription: SubscriptionInfo };
 
 function scheduledDeletionResponse(
   request: NextRequest,
@@ -87,7 +93,7 @@ function scheduledDeletionResponse(
   const planNotice = plan ? ` ${deletionPlanNotice(plan)}` : '';
   return NextResponse.json(
     {
-      message: `Account deletion ${alreadyScheduled ? 'is already scheduled' : 'scheduled'}. Cancellation deadline: ${scheduledFor}. Sign back in and cancel from Settings > Account before this deadline to keep your account. Erasure is processed after the deadline and may take longer.${planNotice}`,
+      message: `Account deletion ${alreadyScheduled ? 'is already scheduled' : 'scheduled'}. Cancellation deadline: ${scheduledFor}. Sign back in and cancel from Settings > Account before this deadline to keep your account. Erasure is processed after the deadline and may take longer. If you signed in with Apple, also remove this app from Sign in with Apple: on iPhone, open Settings, tap your name, tap Sign in with Apple, choose the app and tap Delete.${planNotice}`,
       scheduledFor,
       status: outcome.status,
       statusReason: deletionReceiptReason(outcome),
@@ -138,6 +144,8 @@ function deletionPlanNotice(plan: DeletionPlan): string {
       return `Your ${label} plan no longer renews and ends when erasure runs instead of on ${periodEndLabel(plan.subscription)}. Deleting does not refund the unused time, and you will not be charged again. Cancelling the deletion turns renewal back on.`;
     case 'store_billed':
       return `Your ${label} plan is billed by ${STORE_BILLING_NAME[plan.store]}, and deleting your account does not cancel it. ${STORE_BILLING_NAME[plan.store]} keeps charging you until you cancel it there: ${STORE_SUBSCRIPTION_MANAGEMENT_URL[plan.store]}`;
+    case 'granted':
+      return `Your ${label} plan was given without a purchase, so it ends when erasure runs and nothing is charged or refunded.`;
   }
 }
 
@@ -204,7 +212,29 @@ type PlanAdmission =
   | { kind: 'stop_web_renewal'; subscription: SubscriptionInfo; subscriptionId: string }
   | { kind: 'refused'; subscription: SubscriptionInfo; message: string };
 
-function admitPlan(subscription: SubscriptionInfo | null): PlanAdmission {
+function isPersonalCatalogPlan(subscription: SubscriptionInfo): boolean {
+  const tier = subscription.plan_tier.trim().toLowerCase();
+  return (
+    isBillingPlanTier(tier) &&
+    resolveBillingOwner({ holdsOrganizationSeat: false, planTier: tier }) === 'personal'
+  );
+}
+
+/**
+ * A personal plan with no purchase recorded anywhere was granted by us, so
+ * nothing outside this account can keep charging for it. A Stripe customer on
+ * either row means a web purchase may exist that the row does not name.
+ */
+async function hasNoStripeCustomer(db: DatabaseAdapter, userId: string): Promise<boolean> {
+  const row = await readBillingOwnerRow(db, userId);
+  return (await resolveBillingCustomerId(db, userId, row)) === null;
+}
+
+async function admitPlan(
+  db: DatabaseAdapter,
+  userId: string,
+  subscription: SubscriptionInfo | null,
+): Promise<PlanAdmission> {
   if (!isPaidSubscription(subscription)) return { kind: 'none' };
   const plan = planLabel(subscription);
   if (subscriptionAccessRank(subscription.status) !== 2) {
@@ -226,6 +256,13 @@ function admitPlan(subscription: SubscriptionInfo | null): PlanAdmission {
       subscription,
       subscriptionId: subscription.stripe_subscription_id,
     };
+  }
+  if (
+    source === 'manual' &&
+    isPersonalCatalogPlan(subscription) &&
+    (await hasNoStripeCustomer(db, userId))
+  ) {
+    return { kind: 'plan', plan: { kind: 'granted', subscription } };
   }
   return {
     kind: 'refused',
@@ -367,9 +404,10 @@ async function handleDelete(request: NextRequest) {
 
   const db = createClaimedUserScopedDb(getNeonDb(), { userId, organizationId: null });
 
-  let subscription: SubscriptionInfo | null;
+  let admission: PlanAdmission;
   try {
-    subscription = await SubscriptionService.getSubscription(db, userId);
+    const subscription = await SubscriptionService.getSubscription(db, userId);
+    admission = await admitPlan(db, userId, subscription);
   } catch (err) {
     logger.error({ userId, err }, 'Account deletion halted: subscription lookup failed');
     return NextResponse.json(
@@ -379,8 +417,6 @@ async function handleDelete(request: NextRequest) {
       { status: 503, headers: SECURITY_HEADERS },
     );
   }
-
-  const admission = admitPlan(subscription);
 
   if (admission.kind === 'refused') {
     logger.warn(

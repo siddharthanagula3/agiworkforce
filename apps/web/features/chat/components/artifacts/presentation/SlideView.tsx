@@ -5,8 +5,12 @@ import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { ChartArtifact, MermaidDiagram } from '@agiworkforce/unified-chat';
 import { cn } from '@shared/lib/utils';
-import { slideSegments } from './deck-model';
-import { INSIGHTS_TITLE, parseInsights, parseKpiTiles } from './deck-insights';
+import { slideSegments } from '@agiworkforce/unified-chat/deck-model';
+import {
+  INSIGHTS_TITLE,
+  parseInsights,
+  parseKpiTiles,
+} from '@agiworkforce/unified-chat/deck-insights';
 import { parseShapes, type DeckShape } from './deck-shapes';
 import { DECK_FONT_STACKS, isDarkBackground, type DeckTheme } from './deck-themes';
 import { SlideShapes } from './SlideShapes';

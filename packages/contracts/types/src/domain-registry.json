@@ -275,6 +275,8 @@
       "capabilities": ["canUploadFiles"],
       "concepts": ["file", "external-reference"],
       "tables": [
+        "chat_file_intakes",
+        "chat_file_preparations",
         "external_resource_references",
         "file_lineage",
         "media_assets",
@@ -392,6 +394,7 @@
       "tables": [
         "cloud_code_agent_steps",
         "cloud_code_agent_turns",
+        "cloud_code_environments",
         "cloud_code_sessions",
         "cloud_code_terminal_entries",
         "github_installations",

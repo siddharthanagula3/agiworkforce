@@ -1,18 +1,16 @@
 'use client';
 
 import { MessagesSquare } from 'lucide-react';
-import type { PastChatCitation } from '@/lib/past-chat-citation';
+import {
+  PAST_CHAT_HIGHLIGHT_PARAM,
+  pastChatCitationDate,
+  type PastChatCitation,
+} from '@agiworkforce/types';
 
 /** Where the reader goes to check the claim: the chat it came from, at that message. */
 export function pastChatCitationHref(citation: PastChatCitation): string {
-  const params = new URLSearchParams({ highlightMessage: citation.messageId });
+  const params = new URLSearchParams({ [PAST_CHAT_HIGHLIGHT_PARAM]: citation.messageId });
   return `/chat/${encodeURIComponent(citation.conversationId)}?${params.toString()}`;
-}
-
-function citationDate(createdAt: string): string | null {
-  const parsed = Date.parse(createdAt);
-  if (Number.isNaN(parsed)) return null;
-  return new Date(parsed).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
 /**
@@ -29,7 +27,7 @@ export function CitationPastChats({ citations }: { citations: readonly PastChatC
       aria-label="Previous chats this answer used"
     >
       {citations.map((citation) => {
-        const date = citationDate(citation.createdAt);
+        const date = pastChatCitationDate(citation.createdAt);
         return (
           <a
             key={citation.id}

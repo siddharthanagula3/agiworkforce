@@ -20,6 +20,7 @@ jest.mock('../services/api', () => ({
 jest.mock('@agiworkforce/utils', () => ({
   uuidv7: jest.fn(() => `00000000-0000-7000-8000-${Date.now().toString(16).padStart(12, '0')}`),
   isUuidV7: jest.fn(() => true),
+  uuidV7TimestampMs: jest.requireActual('@agiworkforce/utils/uuidv7').uuidV7TimestampMs,
   setUuidV7RandomSource: jest.fn(),
 }));
 
@@ -39,7 +40,8 @@ import { useMemorySyncStateStore } from '../stores/memory/memorySyncStateStore';
 import { useProjectSyncStateStore } from '../stores/projects/projectSyncStateStore';
 import { useSettingsSyncStateStore } from '../stores/settings/settingsSyncStateStore';
 import { useCloudSettingsStore } from '../stores/settings/cloudSettingsStore';
-import { syncNow } from '../services/cloudSyncEngine';
+import { markProjectForSync, syncNow } from '../services/cloudSyncEngine';
+import { useCloudProjectStore } from '../stores/projects/cloudProjectStore';
 import { toCloudSettings } from '../services/cloudSettingsMapping';
 import {
   __resetCloudAccountSessionForTests,
@@ -864,5 +866,57 @@ describe('settings mapping, leak guard (toCloudSettings)', () => {
     for (const key of topLevelKeys) {
       expect(allowedNamespaces.has(key)).toBe(true);
     }
+  });
+});
+
+describe('one failing kind of sync', () => {
+  it('still pushes settings and syncs memory when the project push fails', async () => {
+    const projectId = '01986b80-0000-7000-8000-0000000000f1';
+    useCloudProjectStore.getState().upsertCloudProject({
+      id: projectId,
+      name: 'Broken on the server',
+      description: null,
+      instructions: null,
+      color: null,
+      isArchived: false,
+      metadata: null,
+      source: 'mobile',
+      createdAt: '2026-11-14T10:00:00.000Z',
+      updatedAt: '2026-11-14T10:00:00.000Z',
+      deletedAt: null,
+      serverVersion: '3',
+    });
+    markProjectForSync(projectId);
+    useCloudSettingsStore.getState().setThemeMode('dark');
+    const basePost = mockPost.getMockImplementation()!;
+    mockPost.mockImplementation(async (path: string, body?: unknown) => {
+      if ((path as string) === '/api/projects/sync') throw new Error('Internal server error');
+      return basePost(path, body as never);
+    });
+
+    await syncNow();
+
+    const settingsPushes = mockPost.mock.calls.filter(
+      (c) => (c[0] as string) === SETTINGS_SYNC_PATH,
+    );
+    expect(settingsPushes).toHaveLength(1);
+    expect(mockGet.mock.calls.some((c) => (c[0] as string).startsWith(SETTINGS_SYNC_PATH))).toBe(
+      true,
+    );
+    expect(mockGet.mock.calls.some((c) => (c[0] as string).startsWith('/api/memory/sync'))).toBe(
+      true,
+    );
+    const state = useCloudSyncStateStore.getState();
+    expect(state.status).toBe('error');
+    expect(state.lastError).toBe('Internal server error');
+    expect(state.failedSyncSteps).toEqual(['projects']);
+    expect(useProjectSyncStateStore.getState().dirtyProjectIds).toContain(projectId);
+  });
+
+  it('reports a clean run once every kind of sync succeeds', async () => {
+    await syncNow();
+
+    expect(useCloudSyncStateStore.getState().status).toBe('idle');
+    expect(useCloudSyncStateStore.getState().failedSyncSteps).toEqual([]);
   });
 });

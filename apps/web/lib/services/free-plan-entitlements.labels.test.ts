@@ -24,7 +24,7 @@ import {
 describe('plan labels in entitlement messages follow the catalog', () => {
   it('uses the renamed label while the plan id stays the lookup key', () => {
     expect(getProjectLimitErrorMessage('pro')).toBe(
-      'Your Renamed Pro plan includes 25 project folders. Upgrade your plan to add more, or delete an existing folder to make room.',
+      'Renamed Pro accounts have no Project limit from your plan. This request hit an account-level limit; contact support if it persists.',
     );
   });
 

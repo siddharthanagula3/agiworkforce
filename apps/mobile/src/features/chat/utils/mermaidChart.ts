@@ -1,22 +1,34 @@
 export interface ChartSeries {
   type: 'bar' | 'line';
   name?: string;
-  values: number[];
+  color?: string;
+  values: Array<number | null>;
 }
 
-export interface XyChart {
+interface ChartExtent {
+  showLegend?: boolean;
+  totalRows?: number;
+}
+
+export interface XyChart extends ChartExtent {
   kind: 'xy';
   title?: string;
   categories: string[];
+  categoryHeader?: string;
+  xLabel?: string;
   yLabel?: string;
   yRange?: { min: number; max: number };
   series: ChartSeries[];
 }
 
-export interface PieChart {
+export interface PieChart extends ChartExtent {
   kind: 'pie';
   title?: string;
   slices: Array<{ label: string; value: number }>;
+  categoryHeader?: string;
+  valueHeader?: string;
+  donut?: boolean;
+  showValues?: boolean;
 }
 
 export type MermaidChart = XyChart | PieChart;
@@ -26,7 +38,7 @@ const MAX_CHART_SERIES = 6;
 const MAX_PIE_SLICES = 12;
 const NUMBER = /^-?\d+(?:\.\d+)?$/;
 const RANGE = /^(-?\d+(?:\.\d+)?)\s*-->\s*(-?\d+(?:\.\d+)?)$/;
-const PIE_HEADER = /^pie(?:\s+showData)?(?:\s+title\s+(.+))?$/i;
+const PIE_HEADER = /^pie(\s+showData)?(?:\s+title\s+(.+))?$/i;
 const PIE_SLICE = /^"([^"]+)"\s*:\s*(\d+(?:\.\d+)?)$/;
 const IGNORED_STATEMENT = /^(?:accTitle|accDescr)\b/;
 
@@ -78,8 +90,10 @@ function parseXyChart(lines: readonly string[]): XyChart | null {
         chart.title = unquote(rest);
         break;
       case 'x-axis': {
-        const categories = readBracketList(readLeadingTitle(rest).rest);
+        const { title, rest: axis } = readLeadingTitle(rest);
+        const categories = readBracketList(axis);
         if (!categories || categories.length === 0) return null;
+        if (title) chart.xLabel = title;
         chart.categories = categories;
         break;
       }
@@ -115,8 +129,12 @@ function parseXyChart(lines: readonly string[]): XyChart | null {
   return chart;
 }
 
-function parsePieChart(headerTitle: string | undefined, lines: readonly string[]): PieChart | null {
-  const chart: PieChart = { kind: 'pie', slices: [] };
+function parsePieChart(
+  headerTitle: string | undefined,
+  showValues: boolean,
+  lines: readonly string[],
+): PieChart | null {
+  const chart: PieChart = { kind: 'pie', slices: [], ...(showValues ? { showValues } : {}) };
   if (headerTitle) chart.title = unquote(headerTitle);
   for (const line of lines) {
     if (/^title\b/i.test(line)) {
@@ -144,27 +162,53 @@ export function parseMermaidChart(source: string): MermaidChart | null {
   if (!header) return null;
   if (/^xychart(?:-beta)?$/i.test(header)) return parseXyChart(lines.slice(1));
   const pie = PIE_HEADER.exec(header);
-  if (pie) return parsePieChart(pie[1], lines.slice(1));
+  if (pie) return parsePieChart(pie[2], Boolean(pie[1]), lines.slice(1));
   return null;
 }
 
 export function formatChartValue(value: number): string {
+  return value.toLocaleString();
+}
+
+export function formatChartTick(value: number): string {
   return Number(value.toPrecision(4)).toLocaleString();
+}
+
+export function pieTotal(chart: PieChart): number {
+  return chart.slices.reduce((sum, slice) => sum + Math.max(0, slice.value), 0);
+}
+
+export function slicePercent(chart: PieChart, value: number): string {
+  return formatChartTick((Math.max(0, value) / pieTotal(chart)) * 100);
+}
+
+export function xySeriesLabel(chart: XyChart, index: number): string {
+  const series = chart.series[index]!;
+  return series.name ?? `${series.type === 'bar' ? 'Bars' : 'Line'} ${index + 1}`;
+}
+
+function spokenValue(value: number | null | undefined): string {
+  return typeof value === 'number' ? formatChartValue(value) : 'no value';
 }
 
 export function describeChart(chart: MermaidChart): string {
   if (chart.kind === 'pie') {
-    const total = chart.slices.reduce((sum, slice) => sum + slice.value, 0);
-    const parts = chart.slices.map(
-      (slice) => `${slice.label} ${formatChartValue((slice.value / total) * 100)} percent`,
+    const name = `${chart.donut ? 'Donut' : 'Pie'} chart${chart.title ? `, ${chart.title}` : ''}`;
+    if (pieTotal(chart) <= 0) return `${name}: nothing to plot`;
+    const parts = chart.slices.map((slice) =>
+      chart.showValues
+        ? `${slice.label} ${formatChartValue(slice.value)}, ${slicePercent(chart, slice.value)} percent`
+        : `${slice.label} ${slicePercent(chart, slice.value)} percent`,
     );
-    return `Pie chart${chart.title ? `, ${chart.title}` : ''}: ${parts.join(', ')}`;
+    return `${name}: ${parts.join(', ')}`;
   }
   const parts = chart.series.map((series, index) => {
     const points = chart.categories.map(
-      (category, pointIndex) => `${category} ${formatChartValue(series.values[pointIndex] ?? 0)}`,
+      (category, pointIndex) => `${category} ${spokenValue(series.values[pointIndex])}`,
     );
-    return `${series.name ?? `${series.type === 'bar' ? 'Bars' : 'Line'} ${index + 1}`}: ${points.join(', ')}`;
+    return `${xySeriesLabel(chart, index)}: ${points.join(', ')}`;
   });
-  return `Chart${chart.title ? `, ${chart.title}` : ''}${chart.yLabel ? ` in ${chart.yLabel}` : ''}. ${parts.join('. ')}`;
+  const unit = chart.yLabel ? ` in ${chart.yLabel}` : '';
+  const across = chart.xLabel ? ` by ${chart.xLabel}` : '';
+  return `Chart${chart.title ? `, ${chart.title}` : ''}${unit}${across}. ${parts.join('. ')}`;
 }

@@ -1,7 +1,7 @@
 import { View } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
-import { Check, Pin } from 'lucide-react-native';
+import { Pin } from 'lucide-react-native';
 import { Text } from '@/components/ui/Text';
 import { useThemeColors, motion } from '@/src/ui/theme';
 import { formatRelativeTime } from '@agiworkforce/utils/format';
@@ -20,12 +20,11 @@ interface ProjectCardProject {
 interface ProjectCardProps {
   project: ProjectCardProject;
   index: number;
-  isActive: boolean;
   onPress: (id: string) => void;
   onLongPress: (id: string) => void;
 }
 
-export function ProjectCard({ project, index, isActive, onPress, onLongPress }: ProjectCardProps) {
+export function ProjectCard({ project, index, onPress, onLongPress }: ProjectCardProps) {
   const reducedMotion = useReducedMotion();
   const colors = useThemeColors();
   const Icon = projectIcon(project.iconId);
@@ -47,9 +46,9 @@ export function ProjectCard({ project, index, isActive, onPress, onLongPress }: 
         style={{
           backgroundColor: colors.surfaceElevated,
           borderWidth: 1,
-          borderColor: isActive ? colors.accentBorder : colors.border,
+          borderColor: colors.border,
         }}
-        accessibilityLabel={`Project: ${project.name}${isActive ? ', active' : ''}${project.pinned ? ', pinned' : ''}${project.archived ? ', archived' : ''}`}
+        accessibilityLabel={`Project: ${project.name}${project.pinned ? ', pinned' : ''}${project.archived ? ', archived' : ''}`}
         accessibilityRole="button"
         accessibilityHint="Tap to open, long press for options"
       >
@@ -58,14 +57,10 @@ export function ProjectCard({ project, index, isActive, onPress, onLongPress }: 
             <View
               className="w-10 h-10 rounded-xl items-center justify-center"
               style={{
-                backgroundColor: accent
-                  ? `${accent}22`
-                  : isActive
-                    ? colors.accentSurface
-                    : colors.neutralSurface,
+                backgroundColor: accent ? `${accent}22` : colors.neutralSurface,
               }}
             >
-              <Icon size={20} color={accent ?? (isActive ? colors.teal : colors.textMuted)} />
+              <Icon size={20} color={accent ?? colors.textMuted} />
             </View>
             <View className="flex-1 flex-row items-center gap-1.5">
               {project.pinned ? (
@@ -79,14 +74,6 @@ export function ProjectCard({ project, index, isActive, onPress, onLongPress }: 
                 {project.name}
               </Text>
             </View>
-            {isActive && (
-              <View
-                className="w-6 h-6 rounded-full items-center justify-center"
-                style={{ backgroundColor: colors.accentSurface }}
-              >
-                <Check size={14} color={colors.teal} />
-              </View>
-            )}
           </View>
 
           {project.description ? (

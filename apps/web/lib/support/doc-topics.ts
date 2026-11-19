@@ -1,4 +1,4 @@
-import { getSupportCorpus } from './agent/corpus';
+import { getSupportCorpus, type SupportCorpusView } from './agent/corpus';
 import { helpArticlePath } from './help-paths';
 
 const TOPIC_MAX = 100;
@@ -22,8 +22,8 @@ export function readTopicParam(value: string | string[] | undefined): string | n
   return topic.length > 0 ? topic : null;
 }
 
-export function resolveDocTopic(topic: string): string | null {
-  const corpus = getSupportCorpus();
+export function resolveDocTopic(topic: string, view: SupportCorpusView = 'web'): string | null {
+  const corpus = getSupportCorpus(view);
   if (!corpus.available) return null;
   const chunks = corpus.chunks.filter((chunk) => chunk.origin === 'markdown');
   const docId = TOPIC_ALIASES[topic] ?? topic;

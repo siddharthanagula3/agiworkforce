@@ -94,3 +94,36 @@ export async function openUntrustedUrlInAppBrowser(input: unknown): Promise<bool
   }
   return presentInAppBrowser(input as string);
 }
+
+async function presentInSystemBrowser(url: string): Promise<boolean> {
+  try {
+    await Linking.openURL(url);
+    return true;
+  } catch {
+    try {
+      await WebBrowser.openBrowserAsync(url, IN_APP_BROWSER_OPTIONS);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
+
+let prefersSystemBrowser: () => boolean = () => false;
+
+export function setLinkBrowserPreferenceReader(reader: () => boolean): void {
+  prefersSystemBrowser = reader;
+}
+
+export async function openUntrustedLink(input: unknown): Promise<boolean> {
+  if (!isInAppBrowsableUrl(input)) {
+    if (__DEV__) {
+      console.warn('[safeOpenURL] Refusing to open non-http(s) URL:', input);
+    }
+    return false;
+  }
+  const systemBrowser = prefersSystemBrowser() && !isAllowedExternalUrl(input);
+  return systemBrowser
+    ? presentInSystemBrowser(input as string)
+    : presentInAppBrowser(input as string);
+}

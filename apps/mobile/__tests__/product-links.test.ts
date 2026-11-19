@@ -3,7 +3,9 @@ jest.mock('@/lib/v1FeatureFlags', () => ({
 }));
 
 import {
+  nativeRouteForCodeSession,
   nativeRouteForProductLink,
+  nativeRouteForSettingsSection,
   productLinkWebFallbackUrl,
   readProductLink,
   resolveNativeProductLinkRoute,
@@ -45,6 +47,21 @@ describe('product links on mobile', () => {
     expect(productLinkWebFallbackUrl(link)).toBe(
       new URL('/open/research/report-1', API_URL).toString(),
     );
+  });
+
+  it('opens a code session on its own AGI Code screen with the id encoded', () => {
+    expect(nativeRouteForCodeSession('session-1')).toBe('/(app)/cloud-code/session-1');
+    expect(nativeRouteForCodeSession('a/b')).toBe('/(app)/cloud-code/a%2Fb');
+  });
+
+  it('opens a settings section only when the app has a screen for it', () => {
+    expect(nativeRouteForSettingsSection('security')).toBe('/(app)/settings/account-security');
+    expect(nativeRouteForSettingsSection('account')).toBe('/(app)/settings/account-security');
+    expect(nativeRouteForSettingsSection('account-deletion')).toBe('/(app)/settings/cloud-account');
+    expect(nativeRouteForSettingsSection('capabilities')).toBe('/(app)/settings/capabilities');
+    expect(nativeRouteForSettingsSection('connectors')).toBeNull();
+    expect(nativeRouteForSettingsSection('billing')).toBeNull();
+    expect(nativeRouteForSettingsSection('constructor')).toBeNull();
   });
 
   it('opens an account chat on its own conversation screen', () => {

@@ -1,13 +1,16 @@
 import 'server-only';
 
-import type { AgentTaskState } from '@agiworkforce/types/protocol';
+import type { AgentEventStopReason, AgentTaskState } from '@agiworkforce/types/protocol';
 
 import { managedCloudAgentRunPath } from '@agiworkforce/cloud-contracts';
+
+import { logger } from '@/lib/logger';
 
 import {
   canPersistAssistantTurn,
   persistAssistantTurn,
 } from '@/app/api/llm/v1/chat/completions/lib/assistant-turn-persistence';
+import { recordStoppedRunAssistantTurn } from '@/app/api/llm/v1/chat/completions/lib/stopped-run-turn';
 import {
   buildPersistedTurnResearch,
   type PersistedTurnResearch,
@@ -74,6 +77,51 @@ function partialCompletionNote(failures: readonly CloudAgentOperationOutcome[]):
   return `\n\n${PARTIAL_COMPLETION_HEADING}\n${unique.map((reason) => `- ${reason}`).join('\n')}`;
 }
 
+const FINISH_REASON_BY_STOP_REASON: Readonly<Partial<Record<AgentEventStopReason, string>>> = {
+  'end-turn': 'stop',
+  'stop-sequence': 'stop',
+  'max-tokens': 'length',
+  refusal: 'content_filter',
+  error: 'error',
+};
+
+/**
+ * `undefined` when the turn has no final reason to record (cancelled, parked on
+ * an approval, or the journal holds no closing stop), which leaves the value a
+ * client already saved on the row alone. `null` for a turn that failed.
+ */
+async function workflowFinishReason(
+  db: ReturnType<typeof getNeonDb>,
+  input: CloudAgentWorkflowInput,
+  outcome: WorkflowTerminalOutcome,
+): Promise<string | null | undefined> {
+  if (outcome === 'failed') return null;
+  if (outcome !== 'completed') return undefined;
+  let reason: string | null | undefined;
+  try {
+    const scopedDb = createClaimedUserScopedDb(db, {
+      userId: input.userId,
+      organizationId: input.processed.organizationId ?? null,
+    });
+    const rows = await scopedDb.query<{ reason: string | null }>(
+      `select envelope->'event'->>'reason' as reason
+         from public.cloud_agent_events
+        where run_id = $1 and user_id = $2
+          and envelope->'event'->>'type' = 'stop'
+        order by sequence desc
+        limit 1`,
+      [input.runId, input.userId],
+    );
+    reason = rows[0]?.reason;
+  } catch (error) {
+    logger.warn({ error, runId: input.runId }, 'workflow finish reason read failed');
+    return undefined;
+  }
+  return typeof reason === 'string'
+    ? FINISH_REASON_BY_STOP_REASON[reason as AgentEventStopReason]
+    : undefined;
+}
+
 async function persistWorkflowAssistantTurn(
   db: ReturnType<typeof getNeonDb>,
   input: CloudAgentWorkflowInput,
@@ -90,6 +138,7 @@ async function persistWorkflowAssistantTurn(
     userId: input.userId,
     runId: input.runId,
   });
+  const finishReason = await workflowFinishReason(db, input, outcome);
   await persistAssistantTurn({
     processed,
     userId: input.userId,
@@ -99,7 +148,8 @@ async function persistWorkflowAssistantTurn(
       provider: serving.provider,
       inputTokens: usage.inputTokens,
       outputTokens: usage.outputTokens,
-      truncated: outcome === 'cancelled',
+      truncated: outcome === 'cancelled' || finishReason === 'error',
+      ...(finishReason === undefined ? {} : { finishReason }),
       interactiveCards: journal.interactiveCards,
       ...(research ? { research } : {}),
       runReference: {
@@ -305,6 +355,16 @@ export async function settleWorkflowInvocation(
       userId: input.userId,
       runId: input.runId,
       state: settlement.state,
+    });
+  }
+
+  if (outcome === 'cancelled') {
+    const processed = input.processed as ProcessedRequest;
+    await recordStoppedRunAssistantTurn({
+      userId: input.userId,
+      organizationId: processed.organizationId ?? null,
+      runId: input.runId,
+      legRequestId: processed.requestId,
     });
   }
 }

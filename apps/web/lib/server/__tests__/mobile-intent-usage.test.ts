@@ -12,6 +12,7 @@ type ScanModule9 = typeof import('@/lib/services/llm-cost-calculator');
 type ScanModule10 = typeof import('@/lib/services/managed-compute-access');
 type ScanModule11 = typeof import('@/lib/services/managed-usage-request-service');
 type ScanModule12 = typeof import('@/lib/services/scheduled-agent-executor');
+type ScanModule13 = typeof import('@/app/api/llm/v1/chat/completions/lib/secret-handling-gate');
 
 const {
   estimateTokens,
@@ -21,6 +22,7 @@ const {
   finalize,
   complete,
   selectRoute,
+  applySecrets,
   db,
 } = vi.hoisted(() => ({
   estimateTokens: vi.fn(),
@@ -30,12 +32,17 @@ const {
   finalize: vi.fn(),
   complete: vi.fn(),
   selectRoute: vi.fn(),
+  applySecrets: vi.fn(),
   db: { query: vi.fn(), execute: vi.fn(), transaction: vi.fn() },
 }));
 
 vi.mock('@agiworkforce/routing', async (importOriginal) => ({
   ...(await importOriginal<ScanModule0>()),
   estimateTokens,
+}));
+vi.mock('@/app/api/llm/v1/chat/completions/lib/secret-handling-gate', async (importOriginal) => ({
+  ...(await importOriginal<ScanModule13>()),
+  applySecretHandlingToTexts: applySecrets,
 }));
 vi.mock('@/lib/auth/account-lifecycle', async (importOriginal) => ({
   ...(await importOriginal<ScanModule1>()),
@@ -109,6 +116,10 @@ const input = {
 describe('Siri managed usage reservation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    applySecrets.mockImplementation(async (_userId: string, texts: string[]) => ({
+      action: 'clean',
+      texts,
+    }));
     estimateTokens.mockReturnValue(137);
     estimateCostMicrousd.mockReturnValue(80_000);
     selectRoute.mockResolvedValue({ provider: 'anthropic', modelKey: 'fixture-siri-route' });
@@ -190,6 +201,27 @@ describe('Siri managed usage reservation', () => {
     ).rejects.toMatchObject({ status: 400, code: 'content_policy_violation' });
     expect(reserve).not.toHaveBeenCalled();
     expect(complete).not.toHaveBeenCalled();
+  });
+
+  it('refuses a prompt that carries a secret in block mode before reserving or calling a model', async () => {
+    applySecrets.mockResolvedValueOnce({ action: 'blocked', texts: [input.prompt] });
+    await expect(answerMobileIntentAsk(input)).rejects.toMatchObject({
+      status: 400,
+      code: 'secret_handling_blocked',
+    });
+    expect(applySecrets).toHaveBeenCalledWith(input.owner.userId, [input.prompt]);
+    expect(reserve).not.toHaveBeenCalled();
+    expect(complete).not.toHaveBeenCalled();
+  });
+
+  it('sends the provider the redacted prompt and keeps the original for the saved chat', async () => {
+    applySecrets.mockResolvedValueOnce({ action: 'redacted', texts: ['What is [REDACTED]?'] });
+    await answerMobileIntentAsk(input);
+    expect(complete.mock.calls[0]![0].messages.at(-1)).toEqual({
+      role: 'user',
+      content: 'What is [REDACTED]?',
+    });
+    expect(db.query.mock.calls[0]![1]).toContain(input.prompt);
   });
 
   it('saves the question and the answer in one transaction', async () => {

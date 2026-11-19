@@ -146,6 +146,35 @@ describe('conversation row actions reach every action on both platforms', () => 
     expect(buttons.map((button) => button.text)).toEqual(['Cancel', 'Delete']);
   });
 
+  it('names the chat and what deleting it does in Cloud', () => {
+    seedCloudRow('c-1');
+    const { result } = renderHook(() => useConversationActions());
+
+    act(() => result.current.openActions('c-1', 'Quarterly plan'));
+    act(() => result.current.rename.menu.actions.find((action) => action.key === 'delete')?.run());
+
+    expect(Alert.alert).toHaveBeenCalledWith(
+      'Delete chat?',
+      '"Quarterly plan" is removed from every device; restore it from Recently deleted on the web.',
+      expect.any(Array),
+    );
+  });
+
+  it('names the chat and says a Local delete cannot be restored', () => {
+    useChatAppModeStore.getState().setAppMode('local');
+    seedLocalRow('l-1');
+    const { result } = renderHook(() => useConversationActions());
+
+    act(() => result.current.openActions('l-1', ''));
+    act(() => result.current.rename.menu.actions.find((action) => action.key === 'delete')?.run());
+
+    expect(Alert.alert).toHaveBeenCalledWith(
+      'Delete chat?',
+      '"Chat" is deleted from this device and cannot be restored.',
+      expect.any(Array),
+    );
+  });
+
   it('closes the menu when dismissed', () => {
     seedCloudRow('c-1');
     const { result } = renderHook(() => useConversationActions());
@@ -241,8 +270,8 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
-async function archiveAndReadUndo() {
-  seedCloudRow('c-1');
+async function archiveAndReadUndo(pinned = false) {
+  seedCloudRow('c-1', pinned);
   jest.mocked(api.put).mockResolvedValueOnce(archivedWire(true));
   const view = renderHook(() => useConversationActions());
   act(() => view.result.current.openActions('c-1', 'Chat c-1'));
@@ -289,6 +318,23 @@ describe('archive Undo retains the original account intent', () => {
       useChatCloudMessageStore.getState().conversations.find((row) => row.id === 'c-1'),
     ).toMatchObject({ id: 'c-1', pinned: false });
     expect(Alert.alert).not.toHaveBeenCalled();
+  });
+
+  it('puts a pinned chat back pinned, on the server and on the phone', async () => {
+    const undo = await archiveAndReadUndo(true);
+    jest.mocked(api.put).mockResolvedValueOnce(archivedWire(false));
+    await act(async () => {
+      undo();
+    });
+    const originalAccount = jest.mocked(api.put).mock.calls[0]?.[2]?.accountEpoch;
+    expect(api.put).toHaveBeenLastCalledWith(
+      '/api/chat/conversations/c-1',
+      { archived: false, pinned: true },
+      { accountEpoch: originalAccount },
+    );
+    expect(
+      useChatCloudMessageStore.getState().conversations.find((row) => row.id === 'c-1'),
+    ).toMatchObject({ id: 'c-1', pinned: true });
   });
 
   it('reports an uncertain Undo without claiming the chat remains archived', async () => {

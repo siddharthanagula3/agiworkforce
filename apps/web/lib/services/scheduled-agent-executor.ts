@@ -5,14 +5,13 @@ import { createPostgresContextManifestStore, resolveContext } from '@agiworkforc
 import {
   classifyTaskLocally,
   detectIndicScript,
-  modelsPastDeprecationDate,
-  resolveAutoRoute,
-  type AutoRoutingRequest,
+  MODEL_POLICY_UNAVAILABLE,
 } from '@agiworkforce/routing';
+import { sideCallTrainingOptOut } from '@/lib/server/side-call-training-policy';
 import {
-  sideCallRoutingRequest,
-  sideCallTrainingOptOut,
-} from '@/lib/server/side-call-training-policy';
+  admitManagedCloudRoute,
+  type ManagedCloudAccount,
+} from '@/lib/server/managed-cloud-routing/admission';
 import { modelKeepsInputsOutOfTraining } from '@/lib/server/provider-training-opt-out';
 import {
   connectedGoogleUserDataConnectorIds,
@@ -34,7 +33,9 @@ import {
   ADAPTER_PROVIDERS,
   resolveWireMode,
 } from '@/app/api/llm/v1/chat/completions/lib/adapter-providers';
+import { applySecretHandlingToTexts } from '@/app/api/llm/v1/chat/completions/lib/secret-handling-gate';
 import { drainToLlmResponse } from '@/app/api/llm/v1/chat/completions/lib/adapter-response';
+import { createPublicTextDeltaProjector } from '@/app/api/llm/v1/chat/completions/lib/agent-event-stream';
 import { extractAssistantTextDelta } from '@/app/api/llm/v1/chat/completions/lib/assistant-turn-persistence';
 import {
   buildCapabilityPreamble,
@@ -165,6 +166,10 @@ const SCHEDULED_TASK_DIRECTIVE =
   'No one is watching this run, so never ask a question or wait for input: use the tools ' +
   'you have, and if a step is impossible say so in the result. ' +
   'Do not claim to have performed external actions unless a tool result proves it.';
+
+const SECRET_REFUSAL_CODE = 'secret_handling_blocked';
+const SECRET_REFUSAL =
+  'The prompt appears to contain a secret, such as an API key or access token, and the workspace blocks secrets. Remove it and run the task again.';
 
 export class ScheduledAgentUnavailableError extends Error {
   override readonly name = 'ScheduledAgentUnavailableError';
@@ -601,6 +606,7 @@ export async function runScheduledToolLoop(input: {
 }): Promise<ScheduledCompletion> {
   const usage = input.usage;
   const toolsUsed: string[] = [];
+  const publicText = createPublicTextDeltaProjector();
   let text = '';
   let reportedError: string | undefined;
   let approval: ToolLoopApprovalCheckpoint | undefined;
@@ -641,7 +647,7 @@ export async function runScheduledToolLoop(input: {
   });
 
   for await (const chunk of loop) {
-    text += extractAssistantTextDelta(chunk);
+    text += publicText.push(extractAssistantTextDelta(chunk));
     for (const envelope of extractManagedAgentEventEnvelopes(chunk)) {
       if (envelope.event.type === 'tool-execution-start') toolsUsed.push(envelope.event.name);
       if (envelope.event.type === 'error' && !reportedError) reportedError = envelope.event.message;
@@ -649,6 +655,7 @@ export async function runScheduledToolLoop(input: {
     }
   }
 
+  text += publicText.flush();
   input.signal.throwIfAborted();
   if (reportedError && !approval) throw new Error(reportedError);
 
@@ -721,6 +728,16 @@ export class NoTrainingRouteError extends Error {
   }
 }
 
+export class UnattendedPolicyUnreadableError extends Error {
+  readonly code = MODEL_POLICY_UNAVAILABLE.code;
+  constructor() {
+    super(MODEL_POLICY_UNAVAILABLE.reason);
+    this.name = 'UnattendedPolicyUnreadableError';
+  }
+}
+
+type UnattendedScope = ManagedCloudAccount & { db: NonNullable<ManagedCloudAccount['db']> };
+
 async function scheduledRunReachesGoogleUserData(
   db: Parameters<typeof connectedGoogleUserDataConnectorIds>[0],
   userId: string,
@@ -748,7 +765,7 @@ function scheduledModelSelection(task: ScheduleTask): string {
 }
 
 async function selectScheduledRoute(
-  scope: { db: NonNullable<Parameters<typeof sideCallRoutingRequest>[0]>; userId: string },
+  scope: UnattendedScope,
   task: ScheduleTask,
   taskType: ReturnType<typeof classifyTaskLocally>['type'],
   subscriptionTier: string,
@@ -764,38 +781,28 @@ async function selectScheduledRoute(
 }
 
 export async function selectUnattendedRoute(
-  scope: { db: NonNullable<Parameters<typeof sideCallRoutingRequest>[0]>; userId: string },
+  scope: UnattendedScope,
   selection: string,
   taskType: ReturnType<typeof classifyTaskLocally>['type'],
   subscriptionTier: string,
   googleUserData: boolean,
 ): Promise<ScheduledRunRoute> {
-  const baseRouting: AutoRoutingRequest = {
-    selection,
-    taskType,
-    subscriptionTier,
-    trustMode: 'managed_cloud',
-    runtimeProfileId: 'web/cloud-chat',
-    retiredModelKeys: modelsPastDeprecationDate(),
-  };
-  const noTraining = googleUserData || (await sideCallTrainingOptOut(scope.db, scope.userId));
-  const routing = await sideCallRoutingRequest(scope.db, scope.userId, baseRouting, {
-    forceNoTraining: noTraining,
+  const admission = await admitManagedCloudRoute({
+    kind: 'unattended',
+    account: { db: scope.db, userId: scope.userId, organizationId: scope.organizationId },
+    planTier: subscriptionTier,
+    need: { selection, taskType, keepOutOfTraining: googleUserData },
   });
-  const noTrainingMessage = googleUserData
-    ? GOOGLE_USER_DATA_ROUTE_MESSAGE
-    : NO_TRAINING_MODEL_MESSAGE;
-  if (!routing) throw new NoTrainingRouteError(noTrainingMessage);
-  const route = resolveAutoRoute(routing);
-  if (route.status === 'unavailable') {
-    if (routing === baseRouting) {
-      throw new Error('The selected model is not available for scheduled managed execution');
+  if (admission.status === 'refused') {
+    if (admission.reason === 'policy_unreadable') throw new UnattendedPolicyUnreadableError();
+    if (admission.reason === 'no_training_route') {
+      throw new NoTrainingRouteError(
+        googleUserData ? GOOGLE_USER_DATA_ROUTE_MESSAGE : NO_TRAINING_MODEL_MESSAGE,
+      );
     }
-    throw new NoTrainingRouteError(noTrainingMessage);
+    throw new Error('The selected model is not available for scheduled managed execution');
   }
-  if (noTraining && !modelKeepsInputsOutOfTraining(route.modelKey)) {
-    throw new NoTrainingRouteError(noTrainingMessage);
-  }
+  const { route } = admission;
   if (route.harnessId.endsWith('/media')) {
     throw new Error('Scheduled media generation is unavailable');
   }
@@ -859,11 +866,27 @@ async function runScheduledAgent(
   resume: Parameters<ScheduledTaskExecutor>[4],
   options: ScheduledAgentRunOptions,
 ): Promise<ScheduledExecutionResult> {
-  const prompt = validateAgentTask(task);
+  const storedPrompt = validateAgentTask(task);
   if (task.userId !== scope.userId) {
     throw new Error('Scheduled execution scope does not match the task owner');
   }
   signal.throwIfAborted();
+
+  const secrets = await applySecretHandlingToTexts(scope.userId, [storedPrompt]);
+  if (secrets.action === 'blocked') {
+    logger.info({ taskId: task.id, runId }, 'Scheduled execution refused by secret handling');
+    return {
+      text: `Scheduled execution skipped: ${SECRET_REFUSAL}`,
+      model: task.model ?? 'auto',
+      billingStatus: SECRET_REFUSAL_CODE,
+      cancellation: {
+        reason: 'secret_handling_blocked',
+        code: SECRET_REFUSAL_CODE,
+        message: SECRET_REFUSAL,
+      },
+    };
+  }
+  const prompt = secrets.texts[0] ?? storedPrompt;
 
   const entitlement = await resolveEntitlementBundle(scope.db, scope.userId);
   const subscriptionTier = entitlement.plan;

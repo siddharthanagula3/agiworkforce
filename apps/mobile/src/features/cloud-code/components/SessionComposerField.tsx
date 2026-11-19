@@ -20,6 +20,7 @@ export function SessionComposerField({
   primaryDisabled,
   primaryLabel,
   maxLength,
+  fontFamily,
   onChangeText,
   onPrimary,
 }: {
@@ -30,6 +31,7 @@ export function SessionComposerField({
   primaryDisabled: boolean;
   primaryLabel: string;
   maxLength?: number;
+  fontFamily?: string;
   onChangeText: (text: string) => void;
   onPrimary: () => void;
 }) {
@@ -94,6 +96,7 @@ export function SessionComposerField({
           fontSize: typeScale.callout,
           lineHeight: 22,
           textAlignVertical: 'top',
+          ...(fontFamily ? { fontFamily } : {}),
         }}
       />
       {voiceAllowed ? (

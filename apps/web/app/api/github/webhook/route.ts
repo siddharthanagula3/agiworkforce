@@ -4,7 +4,6 @@ import { randomUUID } from 'node:crypto';
 import { NextRequest, NextResponse, after } from 'next/server';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
-import { sideCallTrainingOptOut } from '@/lib/server/side-call-training-policy';
 import {
   verifyGitHubWebhookSignature,
   getInstallationAccessToken,
@@ -558,7 +557,6 @@ async function runAutomatedReview(target: ReviewTarget): Promise<void> {
       userId: installation.user_id,
       organizationId: null,
     });
-    const noTrainingOnly = await sideCallTrainingOptOut(ownerDb, installation.user_id);
 
     const outcome = await reviewPullRequestDiff({
       diff: rawDiff,
@@ -568,7 +566,6 @@ async function runAutomatedReview(target: ReviewTarget): Promise<void> {
       postedCommentBodies,
       preferredModel: installation.review_model,
       ownerUserId: installation.user_id,
-      noTrainingOnly,
       billingDb: ownerDb,
       reviewRef: attemptId ?? `${installationId}:${owner}/${repo}#${prNumber}:${randomUUID()}`,
     });

@@ -12,6 +12,7 @@ type ScanModule9 = typeof import('@/lib/server/claimed-user-scope-db');
 
 const state = vi.hoisted(() => ({
   optOut: 'off' as 'on' | 'off' | 'unreadable',
+  workspaceUnreadable: false,
   reserve: vi.fn(),
 }));
 
@@ -67,7 +68,11 @@ import { providerKeepsInputsOutOfTraining } from '@agiworkforce/model-registry';
 import { listAvailableManagedProviderIds } from '@/lib/services/provider-adapter-service';
 import { noTrainingChatModelFor } from '@/lib/server/provider-training-opt-out';
 import { answerMobileIntentAsk, MobileIntentRefusal } from '@/lib/server/mobile-intent';
-import { NoTrainingRouteError, selectUnattendedRoute } from '../scheduled-agent-executor';
+import {
+  NoTrainingRouteError,
+  selectUnattendedRoute,
+  UnattendedPolicyUnreadableError,
+} from '../scheduled-agent-executor';
 
 const PROVIDERS = ['anthropic', 'openai', 'google', 'xai', 'deepseek', 'mistral'];
 const NO_TRAINING = new Set(PROVIDERS.filter(providerKeepsInputsOutOfTraining));
@@ -79,7 +84,10 @@ const NO_TRAINING_MODEL = noTrainingChatModelFor('pro');
 function optOutDb() {
   return {
     query: vi.fn(async (sql: string) => {
-      if (!/user_settings/.test(sql)) return [];
+      if (!/user_settings/.test(sql)) {
+        if (state.workspaceUnreadable) throw new Error('workspace rules unavailable');
+        return [];
+      }
       if (state.optOut === 'unreadable') throw new Error('settings unavailable');
       return [{ opted_out: state.optOut === 'on' }];
     }),
@@ -104,13 +112,14 @@ function selected(modelKey: string) {
   } as never;
 }
 
-const scope = () => ({ db: optOutDb() as never, userId: 'user-1' });
+const scope = () => ({ db: optOutDb() as never, userId: 'user-1', organizationId: null });
 const lastRouting = () =>
   vi.mocked(resolveAutoRoute).mock.calls.at(-1)?.[0] as { availableProviderIds?: Set<string> };
 
 beforeEach(() => {
   vi.clearAllMocks();
   state.optOut = 'off';
+  state.workspaceUnreadable = false;
   vi.mocked(listAvailableManagedProviderIds).mockReturnValue(new Set(PROVIDERS));
   vi.mocked(resolveAutoRoute).mockReturnValue(selected(NO_TRAINING_MODEL ?? 'model-key'));
 });
@@ -124,7 +133,7 @@ describe('scheduled routines honour the provider-training opt-out', () => {
 
   it('leaves routing open when the setting is off', async () => {
     await selectUnattendedRoute(scope(), 'auto', 'general', 'pro', false);
-    expect(lastRouting().availableProviderIds).toBeUndefined();
+    expect(lastRouting().availableProviderIds).toEqual(new Set(PROVIDERS));
   });
 
   it.each(['on', 'unreadable'] as const)(
@@ -143,6 +152,45 @@ describe('scheduled routines honour the provider-training opt-out', () => {
       NoTrainingRouteError,
     );
     expect(resolveAutoRoute).not.toHaveBeenCalled();
+  });
+});
+
+describe('unattended runs fail closed on workspace rules they cannot read', () => {
+  it('stops a scheduled run with the policy error and never routes', async () => {
+    state.workspaceUnreadable = true;
+
+    await expect(
+      selectUnattendedRoute(
+        { ...scope(), organizationId: 'org-1' },
+        'auto',
+        'general',
+        'pro',
+        false,
+      ),
+    ).rejects.toThrow(UnattendedPolicyUnreadableError);
+    expect(resolveAutoRoute).not.toHaveBeenCalled();
+  });
+
+  it('answers an Ask from Siri in a workspace with the policy refusal', async () => {
+    state.workspaceUnreadable = true;
+    state.reserve.mockRejectedValue(new Error('stop after routing'));
+
+    const refusal = await answerMobileIntentAsk({
+      request: new Request('https://example.test/api/mobile/intent/ask'),
+      owner: {
+        tokenId: 'token-1',
+        userId: 'user-1',
+        organizationId: 'org-1',
+        installId: 'install-1',
+        defaultModelId: null,
+      },
+      prompt: 'What is the capital of France?',
+      signal: new AbortController().signal,
+    }).catch((error: unknown) => error);
+
+    expect(refusal).toBeInstanceOf(MobileIntentRefusal);
+    expect(refusal).toMatchObject({ status: 503, code: 'policy_unavailable' });
+    expect(state.reserve).not.toHaveBeenCalled();
   });
 });
 
@@ -167,7 +215,7 @@ describe('Ask from Siri honours the provider-training opt-out', () => {
 
   it('routes freely when the setting is off', async () => {
     await expect(ask()).rejects.toThrow('stop after routing');
-    expect(lastRouting().availableProviderIds).toBeUndefined();
+    expect(lastRouting().availableProviderIds).toEqual(new Set(PROVIDERS));
   });
 
   it.each(['on', 'unreadable'] as const)(

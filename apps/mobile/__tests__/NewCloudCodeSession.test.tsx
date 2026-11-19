@@ -199,4 +199,36 @@ describe('new cloud code session', () => {
     expect(getByText('Connect GitHub')).toBeTruthy();
     expect(mockRouterPush).not.toHaveBeenCalled();
   });
+
+  it('lists a harness with its summary and credential note without a stray full stop', async () => {
+    const { getByText } = render(
+      <NewCloudCodeSessionSheet
+        visible
+        onClose={jest.fn()}
+        onCreated={jest.fn()}
+        runtimes={[
+          {
+            id: 'droid',
+            name: 'Droid',
+            kind: 'harness',
+            summary: 'Factory’s software engineering agent.',
+            agentCommand: 'droid',
+            cpuCount: 0,
+            memoryMB: 0,
+            diskSizeMB: 0,
+            isPublic: true,
+            needsUserCredential: true,
+          },
+        ]}
+      />,
+    );
+
+    await act(async () => {
+      jest.advanceTimersByTime(400);
+    });
+
+    expect(
+      getByText('Droid, Factory’s software engineering agent, needs your own API key'),
+    ).toBeTruthy();
+  });
 });

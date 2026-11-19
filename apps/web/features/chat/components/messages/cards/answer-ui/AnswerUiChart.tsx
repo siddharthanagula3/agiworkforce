@@ -4,57 +4,19 @@ import { useId, useMemo } from 'react';
 import { ChartSpecView, summarizeChart } from '@agiworkforce/unified-chat';
 import {
   formatAnswerUiNumber,
-  resolveAnswerUiNumber,
   type AnswerUiChartBlock,
   type AnswerUiControlBlock,
   type AnswerUiValues,
-  type ChartRenderSpec,
   type ChartRow,
 } from '@agiworkforce/types';
+import {
+  ANSWER_UI_CHART_DATA_LABEL,
+  answerUiChartSpec,
+} from '@agiworkforce/unified-chat/answer-ui';
 
 export const ANSWER_UI_CHART_HEIGHT_PX = 240;
-export const ANSWER_UI_CHART_DATA_LABEL = 'Data table';
 const CHART_LOADING_LABEL = 'Drawing chart';
 const CHART_FAILED_LABEL = 'This chart could not be drawn. The data table below has its values.';
-const LABEL_KEY = 'label';
-
-function seriesKey(index: number): string {
-  return `series_${index}`;
-}
-
-export function answerUiChartSpec(
-  block: AnswerUiChartBlock,
-  controls: ReadonlyMap<string, AnswerUiControlBlock>,
-  values: AnswerUiValues,
-): ChartRenderSpec {
-  const rows: ChartRow[] = [];
-  const rowFor = new Map<string, ChartRow>();
-  block.series.forEach((series, index) => {
-    for (const point of series.points) {
-      const y = resolveAnswerUiNumber(point.y, controls, values);
-      const key = block.chart === 'scatter' ? `${index}:${rows.length}` : String(point.x);
-      let row = rowFor.get(key);
-      if (!row) {
-        row = { [LABEL_KEY]: point.x };
-        rowFor.set(key, row);
-        rows.push(row);
-      }
-      if (y !== null) row[seriesKey(index)] = y;
-    }
-  });
-  return {
-    kind: block.chart,
-    rows,
-    xKey: LABEL_KEY,
-    series: block.series.map((series, index) => ({ dataKey: seriesKey(index), name: series.name })),
-    showLegend: block.series.length > 1 || block.chart === 'pie',
-    totalRows: rows.length,
-    title: block.title,
-    ...(block.xLabel ? { xLabel: block.xLabel } : {}),
-    ...(block.yLabel ? { yLabel: block.yLabel } : {}),
-  };
-}
-
 function cellValue(value: ChartRow[string] | undefined): string {
   if (typeof value === 'number') return formatAnswerUiNumber(value);
   return value ?? '';
@@ -131,14 +93,14 @@ export function AnswerUiChart({
             <tbody>
               {spec.rows.map((row, index) => (
                 <tr
-                  key={`${index}:${String(row[LABEL_KEY])}`}
+                  key={`${index}:${String(row[spec.xKey])}`}
                   className="border-b border-[var(--chat-border-subtle)] last:border-b-0"
                 >
                   <th
                     scope="row"
                     className="px-3 py-2 text-start font-normal text-[color:var(--chat-text-primary)]"
                   >
-                    {cellValue(row[LABEL_KEY])}
+                    {cellValue(row[spec.xKey])}
                   </th>
                   {spec.series.map((series) => (
                     <td

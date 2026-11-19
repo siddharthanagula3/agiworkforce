@@ -13,6 +13,7 @@ type ScanModule0 = typeof import('@/lib/services/cloud-agent-run-service');
 type ScanModule1 = typeof import('@/lib/services/managed-usage-request-service');
 type ScanModule2 = typeof import('@/lib/services/managed-usage-accounting-service');
 type RequestProcessorModule = typeof import('../lib/request-processor');
+type FreeTrialModule = typeof import('@/lib/services/free-trial-service');
 
 const RUN_ID = '0190a000-0000-7000-8000-000000000001';
 const CHECKPOINT_ID = '0190a000-0000-7000-8000-000000000002';
@@ -117,6 +118,12 @@ vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) =
   finalizeManagedUsageRequest: managedUsageMocks.finalizeRequest,
 }));
 
+const freeTrialMocks = vi.hoisted(() => ({ settle: vi.fn(async () => 0) }));
+vi.mock('@/lib/services/free-trial-service', async (importOriginal) => ({
+  ...(await importOriginal<FreeTrialModule>()),
+  settleFreeTrialRequest: freeTrialMocks.settle,
+}));
+
 vi.mock('@/lib/services/managed-usage-accounting-service', async (importOriginal) => ({
   ...(await importOriginal<ScanModule2>()),
   finalizeObservedManagedUsage: managedUsageMocks.finalizeObserved,
@@ -201,6 +208,17 @@ function resumeBody(toolCallId = 'call_1') {
     run_id: RUN_ID,
     tool_approvals: [{ tool_call_id: toolCallId, decision: 'approved' }],
   };
+}
+
+const freeTrialReservation = {
+  userId: 'user-1',
+  requestId: 'resume-request-1',
+  reservedMicrousd: 5_000_000,
+};
+
+function freeProcessedRequest() {
+  const { managedUsage: _managedUsage, ...processed } = processedRequest();
+  return { ...processed, subscriptionTier: 'free', freeTrial: freeTrialReservation };
 }
 
 function processedRequest() {
@@ -603,6 +621,47 @@ describe('POST /api/llm/v1/chat/completions/approve, durable checkpoint boundary
       checkpointId: CHECKPOINT_ID,
       leaseToken: LEASE_TOKEN,
     });
+  });
+
+  it('settles the Free reservation and releases the lease when the durable workflow cannot start', async () => {
+    mockProcessRequest.mockResolvedValue(freeProcessedRequest());
+    workflowMocks.start.mockRejectedValueOnce(new Error('workflow service unavailable'));
+
+    const response = await POST(makeRequest(resumeBody()));
+
+    expect(response.status).toBe(503);
+    expect(freeTrialMocks.settle).toHaveBeenCalledExactlyOnceWith({
+      reservation: freeTrialReservation,
+      outcome: 'failed',
+      attempt: { outcome: 'failed', errorClass: 'workflow_start_failed' },
+    });
+    expect(managedUsageMocks.finalizeRequest).not.toHaveBeenCalled();
+    expect(checkpointMocks.release).toHaveBeenCalledOnce();
+  });
+
+  it('settles the Free reservation when tool discovery fails before execution', async () => {
+    mockProcessRequest.mockResolvedValue(freeProcessedRequest());
+    toolMocks.loadOperatorTools.mockRejectedValueOnce(new Error('tool registry unavailable'));
+
+    const response = await POST(makeRequest(resumeBody()));
+
+    expect(response.status).toBe(500);
+    expect(freeTrialMocks.settle).toHaveBeenCalledExactlyOnceWith({
+      reservation: freeTrialReservation,
+      outcome: 'failed',
+      attempt: { outcome: 'failed', errorClass: 'tool_discovery_failed' },
+    });
+    expect(checkpointMocks.release).toHaveBeenCalledOnce();
+  });
+
+  it('leaves the Free reservation to the resumed turn once the workflow has started', async () => {
+    mockProcessRequest.mockResolvedValue(freeProcessedRequest());
+
+    const response = await POST(makeRequest(resumeBody()));
+
+    expect(response.status).toBe(200);
+    await response.text();
+    expect(freeTrialMocks.settle).not.toHaveBeenCalled();
   });
 
   it('retains extended thinking and its signed checkpoint continuity internally', async () => {
@@ -1053,6 +1112,30 @@ describe('POST /api/llm/v1/chat/completions/approve, approval scopes', () => {
       approvals: Array<{ decision: string }>;
     };
     expect(claimArgs.approvals).toEqual([{ toolCallId: 'call_1', decision: 'approved' }]);
+  });
+
+  it('settles a Free account reservation when a scoped approval is refused', async () => {
+    mockProcessRequest.mockResolvedValue(freeProcessedRequest());
+    const claim = claimFor(READ_TOOL);
+    checkpointMocks.claim.mockResolvedValue({
+      ...claim,
+      checkpoint: {
+        ...claim.checkpoint,
+        pendingToolCalls: [{ id: 'call_1', qualifiedName: READ_TOOL, args: {} }],
+      },
+    });
+
+    const response = await POST(makeRequest(scopedBody('approved-for-session')));
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: { code: 'tool_approval_scope_refused' } });
+    expect(freeTrialMocks.settle).toHaveBeenCalledExactlyOnceWith({
+      reservation: freeTrialReservation,
+      outcome: 'failed',
+      attempt: { outcome: 'failed', errorClass: 'scoped_tool_permission_refused' },
+    });
+    expect(checkpointMocks.release).toHaveBeenCalledOnce();
+    expect(workflowMocks.start).not.toHaveBeenCalled();
   });
 
   it('allows a critical tool for the conversation after its confirmation', async () => {

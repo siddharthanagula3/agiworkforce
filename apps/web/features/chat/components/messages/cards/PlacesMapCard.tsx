@@ -7,7 +7,6 @@ import { MapPinned, Star } from '@agiworkforce/icons';
 import { Spinner } from '@agiworkforce/ui';
 import type { PlacesCardBody } from '@agiworkforce/types';
 import { cn } from '@shared/lib/utils';
-import { assistantNoteForPlace } from './map/assistantNote';
 import {
   LeafletMapCanvas,
   type MapCanvasSize,
@@ -17,7 +16,11 @@ import {
 import { mapTileStyle, useMapTileConfig } from './map/mapTileConfig';
 import { PlaceDetailPopup } from './map/PlaceDetailPopup';
 import { PlaceListCard } from './map/PlaceListCard';
-import { placeMarkerName, ratingLabel } from './map/placeFacts';
+import {
+  assistantNoteForPlace,
+  placeMarkerName,
+  ratingLabel,
+} from '@agiworkforce/unified-chat/place-facts';
 
 export const PLACES_MAP_EMPTY_MESSAGE = 'No places matched this search.';
 export const PLACES_MAP_UNAVAILABLE_MESSAGE =

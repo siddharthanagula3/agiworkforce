@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { logger } from '@/lib/logger';
+import { dispatchProviderForSelectedRoute } from '@/lib/services/aggregator-routing';
 import {
   getRegistryRoute,
   getModelEffortOptions,
@@ -7,7 +8,7 @@ import {
   listManagedRoutesForModel,
 } from '@agiworkforce/types';
 type ScanModule0 = typeof import('next/server');
-type ScanModule1 = typeof import('@agiworkforce/routing');
+type AdmissionModule = typeof import('@/lib/server/managed-cloud-routing/admission');
 type ScanModule2 = typeof import('@/lib/services/managed-usage-request-service');
 type ScanModule3 = typeof import('@/lib/services/entitlement-resolution');
 type ScanModule4 = typeof import('@/lib/services/free-trial-service');
@@ -36,11 +37,24 @@ const SELECTED_ROUTE = {
   reason: 'preferred_slot',
 };
 
-const resolveAutoRouteMock = vi.fn(() => SELECTED_ROUTE);
-vi.mock('@agiworkforce/routing', async (importOriginal) => {
-  const actual = await importOriginal<ScanModule1>();
-  return { ...actual, resolveAutoRoute: () => resolveAutoRouteMock() };
-});
+const admittedRouteMock = vi.fn(() => SELECTED_ROUTE);
+const admissionCalls: unknown[] = [];
+let refuseAdmission = false;
+async function admitManagedCloudRouteMock(call: unknown) {
+  admissionCalls.push(call);
+  if (refuseAdmission)
+    return { status: 'refused' as const, reason: 'policy_unreadable', code: null };
+  const route = admittedRouteMock();
+  return {
+    status: 'admitted' as const,
+    route,
+    dispatchProvider: dispatchProviderForSelectedRoute(route),
+  };
+}
+vi.mock('@/lib/server/managed-cloud-routing/admission', async (importOriginal) => ({
+  ...(await importOriginal<AdmissionModule>()),
+  admitManagedCloudRoute: (call: unknown) => admitManagedCloudRouteMock(call),
+}));
 
 const drainToLlmResponseMock = vi.fn();
 vi.mock('@/app/api/llm/v1/chat/completions/lib/adapter-response', () => ({
@@ -166,13 +180,45 @@ beforeEach(() => {
   streamedRequests.length = 0;
   redisClient = new FakeRedis();
   resolveEntitledPlanTierMock.mockResolvedValue('pro');
-  resolveAutoRouteMock.mockReturnValue(SELECTED_ROUTE);
+  admittedRouteMock.mockReturnValue(SELECTED_ROUTE);
+  admissionCalls.length = 0;
+  refuseAdmission = false;
   drainToLlmResponseMock.mockResolvedValue({
     model: 'test.model',
     content: 'Refactor auth module',
     promptTokens: 12,
     completionTokens: 4,
     totalTokens: 16,
+  });
+});
+
+describe('routing', () => {
+  it('asks for a utility route on behalf of the conversation the title belongs to', async () => {
+    scheduleConversationTitleGeneration(scheduleInput(fakeDb()));
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(admissionCalls).toEqual([
+      {
+        kind: 'utility',
+        account: expect.objectContaining({
+          userId: USER_ID,
+          organizationId: null,
+          conversationId: CONVERSATION_ID,
+        }),
+      },
+    ]);
+  });
+
+  it('keeps the truncated title and never calls the provider when admission refuses', async () => {
+    refuseAdmission = true;
+    const db = fakeDb();
+
+    scheduleConversationTitleGeneration(scheduleInput(db));
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(drainToLlmResponseMock).not.toHaveBeenCalled();
+    expect(reserveMock).not.toHaveBeenCalled();
+    expect(db.execute).not.toHaveBeenCalled();
   });
 });
 
@@ -188,7 +234,7 @@ describe('exact-response cache integration', () => {
       (candidate) => candidate.provider === 'openai',
     )!;
     const registry = getRegistryRoute(route.routeId)!;
-    resolveAutoRouteMock.mockReturnValueOnce({
+    admittedRouteMock.mockReturnValueOnce({
       ...SELECTED_ROUTE,
       modelKey: registry.modelKey,
       provider: registry.provider,
@@ -271,7 +317,7 @@ describe('exact-response cache integration', () => {
     const registryRoute = getRegistryRoute(managedOpenRouterRoute.routeId);
     if (!registryRoute) throw new Error('Managed OpenRouter registry route fixture is missing');
 
-    resolveAutoRouteMock.mockReturnValueOnce({
+    admittedRouteMock.mockReturnValueOnce({
       ...SELECTED_ROUTE,
       modelKey: registryRoute.modelKey,
       provider: registryRoute.provider,

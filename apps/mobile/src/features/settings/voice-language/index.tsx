@@ -2,7 +2,7 @@ import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
-import { Check, Play, Volume2 } from 'lucide-react-native';
+import { Check, Play, Square, Volume2 } from 'lucide-react-native';
 import { LIVE_DEFAULT_VOICE, LIVE_VOICES } from '@agiworkforce/types/live-voices';
 import { Text } from '@/components/ui/Text';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -19,8 +19,37 @@ import { typeScale } from '@/src/ui/theme/tokens';
 import * as TTS from '@/src/features/voice/services/tts';
 import { useVoiceOutputOwner } from '@/src/features/voice/hooks/useVoiceOutputOwner';
 import { VOICE_PRESETS } from '@/src/features/voice/voicePresets';
-import { applyVoicePreset } from '@/src/features/voice/services/voicePresetSelection';
+import {
+  applyVoicePreset,
+  presetPreviewOptions,
+  presetSpeakingStyleNote,
+} from '@/src/features/voice/services/voicePresetSelection';
+import { useVoicePreview } from '@/src/features/voice/hooks/useVoicePreview';
 import type { VoiceInfo } from '@/src/features/voice/services/tts';
+
+function PreviewButton({
+  name,
+  playing,
+  onPress,
+}: {
+  name: string;
+  playing: boolean;
+  onPress: () => void;
+}) {
+  const colors = useThemeColors();
+  const Icon = playing ? Square : Play;
+
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={playing ? `Stop preview of ${name}` : `Preview ${name}`}
+      style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
+    >
+      <Icon size={typeScale.caption} color={playing ? colors.teal : colors.textSecondary} />
+    </Pressable>
+  );
+}
 
 function PresetRow({
   id,
@@ -30,6 +59,8 @@ function PresetRow({
   isLast,
   accessibilityLabel,
   onSelect,
+  onPreview,
+  previewing = false,
 }: {
   id: string;
   name: string;
@@ -38,6 +69,8 @@ function PresetRow({
   isLast?: boolean;
   accessibilityLabel: string;
   onSelect: (id: string) => void;
+  onPreview?: () => void;
+  previewing?: boolean;
 }) {
   const colors = useThemeColors();
 
@@ -66,6 +99,7 @@ function PresetRow({
           {description}
         </Text>
       </View>
+      {onPreview ? <PreviewButton name={name} playing={previewing} onPress={onPreview} /> : null}
       {selected ? <Check size={18} color={colors.teal} /> : null}
     </Pressable>
   );
@@ -75,12 +109,14 @@ function SystemVoiceRow({
   voice,
   selected,
   isLast,
+  playing,
   onSelect,
   onPreview,
 }: {
   voice: VoiceInfo;
   selected: boolean;
   isLast?: boolean;
+  playing: boolean;
   onSelect: (voice: VoiceInfo) => void;
   onPreview: (voice: VoiceInfo) => void;
 }) {
@@ -111,22 +147,7 @@ function SystemVoiceRow({
           {voice.quality} · {voice.language}
         </Text>
       </View>
-      <Pressable
-        onPress={() => onPreview(voice)}
-        accessibilityRole="button"
-        accessibilityLabel={`Preview ${voice.name}`}
-        hitSlop={8}
-        style={({ pressed }) => ({
-          width: 34,
-          height: 34,
-          borderRadius: 17,
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: pressed ? colors.surfaceHover : colors.inputSurface,
-        })}
-      >
-        <Play size={15} color={colors.textSecondary} />
-      </Pressable>
+      <PreviewButton name={voice.name} playing={playing} onPress={() => onPreview(voice)} />
       {selected ? <Check size={18} color={colors.teal} /> : null}
     </Pressable>
   );
@@ -176,6 +197,7 @@ function SystemDefaultRow({
 export default function VoiceLanguageScreen() {
   const colors = useThemeColors();
   const speechOwner = useVoiceOutputOwner('local', 'voice-preview');
+  const { playingKey, toggle: togglePreview } = useVoicePreview(speechOwner);
   const [voices, setVoices] = useState<VoiceInfo[]>([]);
   const [inventory, setInventory] = useState<'loading' | 'ready' | 'failed'>('loading');
   const [inventoryAttempt, setInventoryAttempt] = useState(0);
@@ -259,14 +281,16 @@ export default function VoiceLanguageScreen() {
 
   const handlePreview = useCallback(
     (voice: VoiceInfo) => {
-      speechOwner?.start('This is how AGI will sound.', {
+      togglePreview(voice.identifier, {
         voice: voice.identifier,
         rate: speechRate,
         pitch: speechPitch,
       });
     },
-    [speechOwner, speechPitch, speechRate],
+    [togglePreview, speechPitch, speechRate],
   );
+
+  const speakingStyleNote = presetSpeakingStyleNote(selectedPresetId);
 
   return (
     <SettingsScreenShell title="Voice & Language" backHref="/(app)/settings/voice">
@@ -311,9 +335,17 @@ export default function VoiceLanguageScreen() {
             isLast={index === VOICE_PRESETS.length - 1}
             accessibilityLabel={`${preset.name} voice preset`}
             onSelect={handleSelectPreset}
+            previewing={playingKey === preset.id}
+            onPreview={() => togglePreview(preset.id, presetPreviewOptions(preset, voices))}
           />
         ))}
       </SettingsGroup>
+
+      {speakingStyleNote ? (
+        <Text style={{ color: colors.textMuted, fontSize: typeScale.caption, lineHeight: 17 }}>
+          {speakingStyleNote}
+        </Text>
+      ) : null}
 
       <Text
         style={{
@@ -390,6 +422,7 @@ export default function VoiceLanguageScreen() {
               voice={voice}
               selected={selectedVoiceId === voice.identifier && selectedPresetId === null}
               isLast={index === visibleSystemVoices.length - 1}
+              playing={playingKey === voice.identifier}
               onSelect={handleSelectSystemVoice}
               onPreview={handlePreview}
             />

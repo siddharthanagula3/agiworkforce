@@ -84,7 +84,7 @@ function seed(
   options: {
     planTier?: string;
     secondOrgPlanTier?: string;
-    roles?: Array<{ organization_id: string; role: string }>;
+    roles?: Array<{ organization_id: string; role: string; status?: string }>;
   } = {},
 ): FakeScimDbState {
   const {
@@ -122,6 +122,7 @@ function seed(
       organization_id: entry.organization_id,
       user_id: 'admin-user',
       role: entry.role,
+      status: entry.status ?? 'active',
       provisioning_source: 'manual',
       provisioned_at: null,
       joined_at: '2026-01-01T00:00:00.000Z',
@@ -278,6 +279,53 @@ describe('directory sync admin entitlement gate', () => {
   it('rejects a caller who is only a plain member of the organization', async () => {
     seed({ roles: [{ organization_id: ORG, role: 'member' }] });
     expect((await connectionsGet(jsonRequest(LIST_URL))).status).toBe(403);
+  });
+});
+
+describe('directory sync membership status', () => {
+  it('refuses a suspended owner on every verb', async () => {
+    const state = seed({ roles: [{ organization_id: ORG, role: 'owner', status: 'suspended' }] });
+
+    const list = await connectionsGet(jsonRequest(LIST_URL));
+    const create = await connectionsPost(
+      jsonRequest(LIST_URL, 'POST', { provider: 'okta', directory_id: 'dir-new' }),
+    );
+    const mint = await tokensPost(
+      jsonRequest(TOKENS_URL, 'POST', { connectionId: CONNECTION, name: 'Okta' }),
+    );
+
+    for (const response of [list, create, mint]) {
+      expect(response.status).toBe(403);
+    }
+    expect(state.directory_sync_connections).toHaveLength(2);
+    expect(state.scim_tokens).toHaveLength(0);
+  });
+
+  it('resolves to the organization where the caller is active, not the suspended one', async () => {
+    seed({
+      roles: [
+        { organization_id: ORG, role: 'owner', status: 'suspended' },
+        { organization_id: SECOND_ORG, role: 'admin', status: 'active' },
+      ],
+    });
+
+    const response = await connectionsGet(jsonRequest(LIST_URL));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ organization_id: SECOND_ORG });
+  });
+
+  it('refuses an explicitly named organization where the caller is suspended', async () => {
+    seed({
+      roles: [
+        { organization_id: ORG, role: 'owner', status: 'active' },
+        { organization_id: SECOND_ORG, role: 'admin', status: 'suspended' },
+      ],
+    });
+
+    const response = await connectionsGet(jsonRequest(`${LIST_URL}?organizationId=${SECOND_ORG}`));
+
+    expect(response.status).toBe(403);
   });
 });
 

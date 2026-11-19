@@ -1,0 +1,1251 @@
+// @vitest-environment node
+import JSZip from 'jszip';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+type LoggerModule = typeof import('@/lib/logger');
+type ArchiveBoundsModule = typeof import('@/lib/security/archive-bounds');
+
+const inflated = vi.hoisted(() => [] as string[]);
+const exhaustsBudget = vi.hoisted(() => new Set<string>());
+
+vi.mock('server-only', () => ({}));
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<LoggerModule>()),
+  logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
+}));
+vi.mock('@/lib/security/archive-bounds', async (importOriginal) => {
+  const actual = await importOriginal<ArchiveBoundsModule>();
+  return {
+    ...actual,
+    readArchiveMember: async (...args: Parameters<typeof actual.readArchiveMember>) => {
+      inflated.push(args[0].name);
+      const member = await actual.readArchiveMember(...args);
+      const [entry, budget] = args;
+      if (exhaustsBudget.has(entry.name)) budget.spend(budget.ceiling - budget.spent);
+      return member;
+    },
+  };
+});
+
+import { MAX_FILE_TEXT_CHARS } from '@agiworkforce/types';
+import { XLSX_NOT_CALCULATED } from '@agiworkforce/unified-chat/tabular';
+import { MAX_CELL_FORMATS } from '@agiworkforce/unified-chat/workbook-cell-formats';
+import { CHAT_LARGE_FILE_POLICY, MAX_CHAT_ATTACHMENT_BYTES } from '@/lib/chat-attachment-policy';
+import { extractOfficeDocumentText } from '@/lib/server/office-document-text';
+import { prepareChatFileStep, readPreparedCard, readPreparedText } from '..';
+import { MAX_SHEET_PROFILES_BYTES, type SheetProfile } from '../spreadsheet';
+import {
+  createCountingStorage,
+  FakePreparationDb,
+  prepareUntilDone,
+  seededRandom,
+  storeSource,
+  testUuid,
+  USER,
+  type CountingStorage,
+} from './preparation-harness';
+
+const MIB = 1024 * 1024;
+const XLSX_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+const OVER_BUDGET_BYTES = 300 * MIB;
+const LEDGER_ROWS = 600;
+const SAMPLE_ROWS = CHAT_LARGE_FILE_POLICY.kinds.spreadsheet.sampleRows;
+const RELATIONSHIP_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+
+/** Each workbook here carries a stored member above the inline limit, so a test builds tens of megabytes. */
+vi.setConfig({ testTimeout: 30_000 });
+
+beforeEach(() => {
+  inflated.length = 0;
+  exhaustsBudget.clear();
+});
+
+function ledgerSheet(): string {
+  const random = seededRandom(17);
+  const rows = [
+    '<row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c><c r="C1" t="s"><v>2</v></c><c r="D1" t="s"><v>3</v></c></row>',
+  ];
+  for (let index = 2; index <= LEDGER_ROWS + 1; index += 1) {
+    rows.push(
+      `<row r="${index}"><c r="A${index}"><v>${index - 1}</v></c><c r="B${index}"><v>${(random() * 1000).toFixed(2)}</v></c><c r="C${index}" t="b"><v>${random() > 0.5 ? 1 : 0}</v></c><c r="D${index}" t="inlineStr"><is><t>Region ${index % 7}</t></is></c></row>`,
+    );
+  }
+  return `<?xml version="1.0"?><worksheet><dimension ref="A1:D${LEDGER_ROWS + 1}"/><sheetData>${rows.join('')}</sheetData></worksheet>`;
+}
+
+/** Three sheets; the second declares more inflated bytes than the archive budget allows. */
+async function buildWorkbook(): Promise<Buffer> {
+  const zip = new JSZip();
+  zip.file(
+    '[Content_Types].xml',
+    '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>',
+  );
+  zip.file(
+    'xl/workbook.xml',
+    '<?xml version="1.0"?><workbook xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Ledger" sheetId="1" r:id="rId1"/><sheet name="Archive" sheetId="2" r:id="rId2"/><sheet name="Notes" sheetId="3" r:id="rId3"/></sheets></workbook>',
+  );
+  zip.file(
+    'xl/_rels/workbook.xml.rels',
+    '<?xml version="1.0"?><Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Target="worksheets/sheet2.xml"/><Relationship Id="rId3" Target="worksheets/sheet3.xml"/></Relationships>',
+  );
+  zip.file(
+    'xl/sharedStrings.xml',
+    '<?xml version="1.0"?><sst><si><t>Entry</t></si><si><t>Amount</t></si><si><t>Settled</t></si><si><t>Region</t></si></sst>',
+  );
+  zip.file('xl/worksheets/sheet1.xml', ledgerSheet());
+  zip.file(
+    'xl/worksheets/sheet2.xml',
+    '<?xml version="1.0"?><worksheet><sheetData><row r="1"><c r="A1"><v>1</v></c></row></sheetData></worksheet>',
+  );
+  zip.file(
+    'xl/worksheets/sheet3.xml',
+    '<?xml version="1.0"?><worksheet><sheetData><row r="1"><c r="A1"><v>2</v></c></row></sheetData></worksheet>',
+  );
+  zip.file('xl/media/chart-cache.bin', Buffer.alloc(MAX_CHAT_ATTACHMENT_BYTES + MIB, 0x5a), {
+    compression: 'STORE',
+  });
+  const archive = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+  return declareMemberSize(archive, 'xl/worksheets/sheet2.xml', OVER_BUDGET_BYTES);
+}
+
+function declareMemberSize(archive: Buffer, path: string, size: number): Buffer {
+  const result = Buffer.from(archive);
+  const end = result.length - 22;
+  expect(result.readUInt32LE(end)).toBe(0x06054b50);
+  let offset = result.readUInt32LE(end + 16);
+  while (result.readUInt32LE(offset) === 0x02014b50) {
+    const nameLength = result.readUInt16LE(offset + 28);
+    const extraLength = result.readUInt16LE(offset + 30);
+    const commentLength = result.readUInt16LE(offset + 32);
+    const name = result.subarray(offset + 46, offset + 46 + nameLength).toString('utf8');
+    if (name === path) {
+      const localOffset = result.readUInt32LE(offset + 42);
+      expect(result.readUInt32LE(localOffset)).toBe(0x04034b50);
+      result.writeUInt32LE(size, offset + 24);
+      result.writeUInt32LE(size, localOffset + 22);
+      return result;
+    }
+    offset += 46 + nameLength + extraLength + commentLength;
+  }
+  throw new Error(`Fixture member missing: ${path}`);
+}
+
+/** One sheet with the given XML, padded past the inline limit with a stored media member. */
+async function singleSheetWorkbook(options: {
+  sheetName: string;
+  sheetXml: string;
+  sharedStringsXml?: string;
+  stylesXml?: string;
+  stylesTarget?: string;
+  date1904?: boolean;
+}): Promise<Buffer> {
+  const zip = new JSZip();
+  const workbookPr =
+    options.date1904 === undefined
+      ? ''
+      : `<workbookPr date1904="${options.date1904 ? '1' : '0'}"/>`;
+  zip.file(
+    'xl/workbook.xml',
+    `<?xml version="1.0"?><workbook xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">${workbookPr}<sheets><sheet name="${options.sheetName}" sheetId="1" r:id="rId1"/></sheets></workbook>`,
+  );
+  const stylesRelationship = options.stylesTarget
+    ? `<Relationship Id="rId9" Type="${RELATIONSHIP_NS}/styles" Target="${options.stylesTarget}"/>`
+    : '';
+  zip.file(
+    'xl/_rels/workbook.xml.rels',
+    `<?xml version="1.0"?><Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/>${stylesRelationship}</Relationships>`,
+  );
+  if (options.sharedStringsXml) zip.file('xl/sharedStrings.xml', options.sharedStringsXml);
+  if (options.stylesXml !== undefined) {
+    zip.file(`xl/${options.stylesTarget ?? 'styles.xml'}`, options.stylesXml);
+  }
+  zip.file('xl/worksheets/sheet1.xml', options.sheetXml);
+  zip.file('xl/media/chart-cache.bin', Buffer.alloc(MAX_CHAT_ATTACHMENT_BYTES + MIB, 0x5a), {
+    compression: 'STORE',
+  });
+  return zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+}
+
+function sheetXml(rows: string): string {
+  return `<?xml version="1.0"?><worksheet><sheetData>${rows}</sheetData></worksheet>`;
+}
+
+async function sealed(
+  db: FakePreparationDb,
+  storage: CountingStorage,
+  data: Buffer,
+  byteSize: number = data.byteLength,
+): Promise<string> {
+  const id = testUuid();
+  const key = `chat-attachments/${USER}/${id}.sealed`;
+  await storeSource(storage, key, data, XLSX_TYPE);
+  db.addAsset({
+    id,
+    mime_type: XLSX_TYPE,
+    storage_pathname: key,
+    filename: 'ledger.xlsx',
+    byte_size: byteSize,
+  });
+  return id;
+}
+
+describe('workbook preparation', () => {
+  it('profiles the sheets that fit the budget and lists the rest by name', async () => {
+    const db = new FakePreparationDb();
+    const storage = createCountingStorage();
+    const data = await buildWorkbook();
+    const id = await sealed(db, storage, data);
+
+    await prepareUntilDone(() => prepareChatFileStep(id, { db, storage }));
+
+    const card = await readPreparedCard(id, { userId: USER, db, storage });
+    expect(card).toMatchObject({ kind: 'spreadsheet', state: 'ready_partial', sheetCount: 3 });
+    expect(card?.coverage['sheets']).toEqual([
+      {
+        name: 'Ledger',
+        profiled: true,
+        dimension: `A1:D${LEDGER_ROWS + 1}`,
+        rowCount: LEDGER_ROWS,
+        columnCount: 4,
+        columns: [
+          { name: 'Entry', type: 'integer' },
+          { name: 'Amount', type: 'number' },
+          { name: 'Settled', type: 'boolean' },
+          { name: 'Region', type: 'text' },
+        ],
+      },
+      { name: 'Archive', profiled: false },
+      { name: 'Notes', profiled: false },
+    ]);
+    const text = (await readPreparedText(
+      id,
+      { startChar: 0, maxChars: 1_000_000 },
+      { userId: USER, db, storage },
+    ))!.text;
+    expect(text).toContain(
+      `## Sheet: Ledger (A1:D${LEDGER_ROWS + 1})\n${LEDGER_ROWS} rows after the header, 4 columns.`,
+    );
+    expect(text).toContain(`First ${SAMPLE_ROWS} rows:\nEntry,Amount,Settled,Region\n1,`);
+    expect(text).toContain(`\n${SAMPLE_ROWS},`);
+    expect(text).not.toContain(`\n${SAMPLE_ROWS + 1},`);
+    expect(text).toContain(
+      'Sheets not profiled, because the workbook is larger than can be read here',
+    );
+    expect(text).toContain(': Archive, Notes');
+    expect(inflated).not.toContain('xl/worksheets/sheet2.xml');
+    expect(inflated).not.toContain('xl/media/chart-cache.bin');
+
+    await expect(extractOfficeDocumentText(data, 'ledger.xlsx', 'xlsx')).rejects.toMatchObject({
+      reason: 'archive_bomb',
+    });
+  });
+
+  it('reads a self-closing cell or row as empty and keeps the cells after it in their columns', async () => {
+    const db = new FakePreparationDb();
+    const storage = createCountingStorage();
+    const data = await singleSheetWorkbook({
+      sheetName: 'Parts',
+      sharedStringsXml:
+        '<?xml version="1.0"?><sst><si><t>Code</t></si><si><t>Amount</t></si><si><t>X9</t></si></sst>',
+      sheetXml: sheetXml(
+        [
+          '<row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c></row>',
+          '<row r="2"><c r="A2" s="3"/><c r="B2"><v>42</v></c></row>',
+          '<row r="3"><c r="A3" t="s"><v>2</v></c><c r="B3"><v>7</v></c><c r="C3" s="1" /></row>',
+          '<row r="4" ht="20" customHeight="1"/>',
+          '<row r="5"><c r="A5" t="inlineStr"><is><t>a/b</t></is></c><c r="B5"><v>5</v></c></row>',
+        ].join(''),
+      ),
+    });
+    const id = await sealed(db, storage, data);
+
+    await prepareUntilDone(() => prepareChatFileStep(id, { db, storage }));
+
+    const card = await readPreparedCard(id, { userId: USER, db, storage });
+    expect(card).toMatchObject({ state: 'ready', sheetCount: 1 });
+    expect(card?.coverage['sheets']).toEqual([
+      {
+        name: 'Parts',
+        profiled: true,
+        rowCount: 3,
+        columnCount: 2,
+        columns: [
+          { name: 'Code', type: 'text' },
+          { name: 'Amount', type: 'integer' },
+        ],
+      },
+    ]);
+    const text = (await readPreparedText(
+      id,
+      { startChar: 0, maxChars: 100_000 },
+      { userId: USER, db, storage },
+    ))!.text;
+    expect(text).toContain('First 3 rows:\nCode,Amount\n,42\nX9,7\na/b,5');
+  });
+
+  it('stores sheet and column names Postgres can hold, without NUL or an unpaired surrogate', async () => {
+    const db = new FakePreparationDb();
+    const storage = createCountingStorage();
+    const data = await singleSheetWorkbook({
+      sheetName: 'Led&#0;ger',
+      sheetXml: sheetXml(
+        [
+          '<row r="1"><c r="A1" t="inlineStr"><is><t>Amo&#0;unt</t></is></c><c r="B1" t="inlineStr"><is><t>Note&#xD800;</t></is></c></row>',
+          '<row r="2"><c r="A2"><v>3</v></c><c r="B2" t="inlineStr"><is><t>fine</t></is></c></row>',
+        ].join(''),
+      ),
+    });
+    const id = await sealed(db, storage, data);
+
+    await prepareUntilDone(() => prepareChatFileStep(id, { db, storage }));
+
+    const card = await readPreparedCard(id, { userId: USER, db, storage });
+    expect(card).toMatchObject({ state: 'ready', sheetCount: 1 });
+    expect(card?.coverage['sheets']).toEqual([
+      {
+        name: 'Ledger',
+        profiled: true,
+        rowCount: 1,
+        columnCount: 2,
+        columns: [
+          { name: 'Amount', type: 'integer' },
+          { name: 'Note�', type: 'text' },
+        ],
+      },
+    ]);
+  });
+
+  it('refuses a character reference outside Unicode as unreadable instead of retrying it', async () => {
+    const db = new FakePreparationDb();
+    const storage = createCountingStorage();
+    const data = await singleSheetWorkbook({
+      sheetName: 'Codes',
+      sheetXml: sheetXml('<row r="1"><c r="A1" t="inlineStr"><is><t>&#x110000;</t></is></c></row>'),
+    });
+    const id = await sealed(db, storage, data);
+
+    const result = await prepareChatFileStep(id, { db, storage });
+
+    expect(result).toEqual({ outcome: 'finished', state: 'prepare_failed', done: true });
+    expect(db.rowForAsset(id)).toMatchObject({ error: 'unreadable', derived_keys: [] });
+  });
+
+  it(
+    'reads past unclosed row, cell and shared-string openers in time linear in the XML',
+    { timeout: 10_000 },
+    async () => {
+      const db = new FakePreparationDb();
+      const storage = createCountingStorage();
+      const openers = 120_000;
+      const data = await singleSheetWorkbook({
+        sheetName: 'Ragged',
+        sharedStringsXml: `<?xml version="1.0"?><sst><si><t>Code</t></si>${'<si>'.repeat(openers)}</sst>`,
+        sheetXml: sheetXml(
+          [
+            '<row r="1"><c r="A1" t="s"><v>0</v></c></row>',
+            '<row r="2"><c r="A2"><v>11</v></c></row>',
+            `<row r="3"><c r="A3"><v>12</v></c><c r="C3">${'<v>'.repeat(openers * 2)}</c>${'<c r="B3">'.repeat(openers / 2)}</row>`,
+            '<row>'.repeat(openers),
+          ].join(''),
+        ),
+      });
+      const id = await sealed(db, storage, data);
+
+      await prepareUntilDone(() => prepareChatFileStep(id, { db, storage }));
+
+      const card = await readPreparedCard(id, { userId: USER, db, storage });
+      expect(card?.coverage['sheets']).toEqual([
+        {
+          name: 'Ragged',
+          profiled: true,
+          rowCount: 2,
+          columnCount: 1,
+          columns: [{ name: 'Code', type: 'integer' }],
+        },
+      ]);
+    },
+  );
+
+  it(
+    'types a 200,000-digit cell that ends in a letter in time linear in its length',
+    { timeout: 60_000 },
+    async () => {
+      const db = new FakePreparationDb();
+      const storage = createCountingStorage();
+      const data = await singleSheetWorkbook({
+        sheetName: 'Codes',
+        sheetXml: sheetXml(
+          [
+            '<row r="1"><c r="A1" t="inlineStr"><is><t>Code</t></is></c></row>',
+            `<row r="2"><c r="A2"><v>${'1'.repeat(200_000)}x</v></c></row>`,
+          ].join(''),
+        ),
+      });
+      const id = await sealed(db, storage, data);
+
+      const started = performance.now();
+      await prepareUntilDone(() => prepareChatFileStep(id, { db, storage }));
+      const elapsed = performance.now() - started;
+
+      expect(db.rowForAsset(id)!.coverage['sheets']).toEqual([
+        {
+          name: 'Codes',
+          profiled: true,
+          rowCount: 1,
+          columnCount: 1,
+          columns: [{ name: 'Code', type: 'text' }],
+        },
+      ]);
+      expect(elapsed).toBeLessThan(5_000);
+    },
+  );
+
+  it('keeps the stored sheet profile within its budget and says which sheets lost their columns', async () => {
+    const db = new FakePreparationDb();
+    const storage = createCountingStorage();
+    const sheets = 100;
+    const columns = 256;
+    const letters = (index: number) =>
+      index < 26
+        ? String.fromCharCode(65 + index)
+        : `${String.fromCharCode(64 + Math.floor(index / 26))}${String.fromCharCode(65 + (index % 26))}`;
+    const names = Array.from(
+      { length: columns },
+      (_, index) => `${String(index).padStart(3, '0')}${'n'.repeat(97)}`,
+    );
+    const header = names
+      .map((_, index) => `<c r="${letters(index)}1" t="s"><v>${index}</v></c>`)
+      .join('');
+    const zip = new JSZip();
+    zip.file(
+      'xl/workbook.xml',
+      `<?xml version="1.0"?><workbook xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${Array.from(
+        { length: sheets },
+        (_, index) => `<sheet name="S${index + 1}" sheetId="${index + 1}" r:id="rId${index + 1}"/>`,
+      ).join('')}</sheets></workbook>`,
+    );
+    zip.file(
+      'xl/_rels/workbook.xml.rels',
+      `<?xml version="1.0"?><Relationships>${Array.from(
+        { length: sheets },
+        (_, index) =>
+          `<Relationship Id="rId${index + 1}" Target="worksheets/sheet${index + 1}.xml"/>`,
+      ).join('')}</Relationships>`,
+    );
+    zip.file(
+      'xl/sharedStrings.xml',
+      `<?xml version="1.0"?><sst>${names.map((name) => `<si><t>${name}</t></si>`).join('')}</sst>`,
+    );
+    for (let index = 1; index <= sheets; index += 1) {
+      zip.file(
+        `xl/worksheets/sheet${index}.xml`,
+        sheetXml(`<row r="1">${header}</row><row r="2"><c r="A2"><v>${index}</v></c></row>`),
+      );
+    }
+    zip.file('xl/media/chart-cache.bin', Buffer.alloc(MAX_CHAT_ATTACHMENT_BYTES + MIB, 0x5a), {
+      compression: 'STORE',
+    });
+    const id = await sealed(
+      db,
+      storage,
+      await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' }),
+    );
+
+    await prepareUntilDone(() => prepareChatFileStep(id, { db, storage }));
+
+    const row = db.rowForAsset(id)!;
+    const profiles = row.coverage['sheets'] as {
+      name: string;
+      rowCount?: number;
+      columns?: unknown[];
+      columnsOmitted?: boolean;
+    }[];
+    expect(row).toMatchObject({ state: 'ready', sheet_count: sheets });
+    expect(Buffer.byteLength(JSON.stringify(profiles), 'utf8')).toBeLessThanOrEqual(
+      MAX_SHEET_PROFILES_BYTES,
+    );
+    expect(profiles).toHaveLength(sheets);
+    expect(profiles[0]!.columns).toHaveLength(columns);
+    expect(profiles.at(-1)).toEqual({
+      name: `S${sheets}`,
+      profiled: true,
+      rowCount: 1,
+      columnCount: columns,
+      columnsOmitted: true,
+    });
+    const text = (await readPreparedText(
+      id,
+      { startChar: 0, maxChars: 10_000_000 },
+      { userId: USER, db, storage },
+    ))!.text;
+    expect(text).toContain(
+      `## Sheet: S${sheets}\n1 rows after the header, ${columns} columns.\n- 000n`,
+    );
+  });
+
+  it('stops collecting sheet text once it fills the text cap and lists the remaining sheets as not profiled', async () => {
+    const db = new FakePreparationDb();
+    const storage = createCountingStorage();
+    const sheets = 6;
+    const zip = new JSZip();
+    zip.file(
+      'xl/workbook.xml',
+      `<?xml version="1.0"?><workbook xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${Array.from(
+        { length: sheets },
+        (_, index) => `<sheet name="S${index + 1}" sheetId="${index + 1}" r:id="rId${index + 1}"/>`,
+      ).join('')}</sheets></workbook>`,
+    );
+    zip.file(
+      'xl/_rels/workbook.xml.rels',
+      `<?xml version="1.0"?><Relationships>${Array.from(
+        { length: sheets },
+        (_, index) =>
+          `<Relationship Id="rId${index + 1}" Target="worksheets/sheet${index + 1}.xml"/>`,
+      ).join('')}</Relationships>`,
+    );
+    for (let index = 1; index <= sheets; index += 1) {
+      zip.file(
+        `xl/worksheets/sheet${index}.xml`,
+        sheetXml(
+          `<row r="1"><c r="A1" t="inlineStr"><is><t>Name</t></is></c></row><row r="2"><c r="A2" t="inlineStr"><is><t>${'x'.repeat(150)}</t></is></c></row>`,
+        ),
+      );
+    }
+    zip.file('xl/media/chart-cache.bin', Buffer.alloc(MAX_CHAT_ATTACHMENT_BYTES + MIB, 0x5a), {
+      compression: 'STORE',
+    });
+    const id = await sealed(
+      db,
+      storage,
+      await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' }),
+    );
+    const policy = {
+      ...CHAT_LARGE_FILE_POLICY,
+      preparation: { ...CHAT_LARGE_FILE_POLICY.preparation, maxTextChars: 400 },
+    };
+
+    await prepareUntilDone(() => prepareChatFileStep(id, { db, storage, policy }));
+
+    const profiles = db.rowForAsset(id)!.coverage['sheets'] as {
+      name: string;
+      profiled: boolean;
+    }[];
+    expect(db.rowForAsset(id)).toMatchObject({ state: 'ready_partial', sheet_count: sheets });
+    expect(profiles.map((sheet) => sheet.profiled)).toEqual([
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+    ]);
+    expect(inflated).not.toContain('xl/worksheets/sheet3.xml');
+    expect(inflated).not.toContain('xl/worksheets/sheet6.xml');
+  });
+
+  it('refuses a workbook over the spreadsheet limit without reading it', async () => {
+    const db = new FakePreparationDb();
+    const storage = createCountingStorage();
+    const id = await sealed(
+      db,
+      storage,
+      Buffer.alloc(16, 0x20),
+      CHAT_LARGE_FILE_POLICY.kinds.spreadsheet.maxBytes + 1,
+    );
+
+    const result = await prepareChatFileStep(id, { db, storage });
+
+    expect(result).toEqual({ outcome: 'finished', state: 'prepare_failed', done: true });
+    expect(db.rowForAsset(id)).toMatchObject({ error: 'over_kind_limit' });
+    expect(storage.stats).toMatchObject({ reads: 0, heads: 0 });
+  });
+
+  it('refuses a stored object whose length is not the sealed size', async () => {
+    const db = new FakePreparationDb();
+    const storage = createCountingStorage();
+    const data = await buildWorkbook();
+    const id = await sealed(db, storage, data, data.byteLength + 1);
+
+    await prepareChatFileStep(id, { db, storage });
+
+    expect(db.rowForAsset(id)).toMatchObject({
+      state: 'prepare_failed',
+      error: 'source_size_mismatch',
+    });
+    expect(storage.stats.reads).toBe(0);
+  });
+});
+
+function xmlAttribute(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function stylesXml(cellFormats: number[], custom: Record<number, string> = {}): string {
+  const numFmts = Object.entries(custom)
+    .map(([id, code]) => `<numFmt numFmtId="${id}" formatCode="${xmlAttribute(code)}"/>`)
+    .join('');
+  const cellXfs = cellFormats
+    .map((id) => `<xf numFmtId="${id}" applyNumberFormat="1"><alignment/></xf>`)
+    .join('');
+  return `<?xml version="1.0"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">${
+    numFmts ? `<numFmts count="${Object.keys(custom).length}">${numFmts}</numFmts>` : ''
+  }<cellStyleXfs count="2"><xf numFmtId="14"/><xf numFmtId="9"/></cellStyleXfs><cellXfs count="${
+    cellFormats.length
+  }">${cellXfs}</cellXfs><dxfs count="1"><dxf><numFmt numFmtId="14" formatCode="0.00%"/></dxf></dxfs></styleSheet>`;
+}
+
+/** Style 1 is the built-in date format; the rest pad the part to the given counts. */
+function boundedStylesXml(cellFormats: number, customFormats: number): string {
+  const numFmts = Array.from(
+    { length: customFormats },
+    (_, index) => `<numFmt numFmtId="${164 + index}" formatCode=""/>`,
+  ).join('');
+  return `<styleSheet><numFmts>${numFmts}</numFmts><cellXfs><xf numFmtId="0"/>${'<xf numFmtId="14"/>'.repeat(
+    cellFormats - 1,
+  )}</cellXfs></styleSheet>`;
+}
+
+interface StyledCell {
+  value: string;
+  style?: string;
+}
+
+function styledSheet(header: string[], rows: StyledCell[][]): string {
+  const column = (index: number) => String.fromCharCode(65 + index);
+  const headerRow = `<row r="1">${header
+    .map((name, index) => `<c r="${column(index)}1" t="inlineStr"><is><t>${name}</t></is></c>`)
+    .join('')}</row>`;
+  const dataRows = rows.map(
+    (cells, rowIndex) =>
+      `<row r="${rowIndex + 2}">${cells
+        .map(
+          (cell, index) =>
+            `<c r="${column(index)}${rowIndex + 2}"${
+              cell.style === undefined ? '' : ` s="${cell.style}"`
+            }><v>${cell.value}</v></c>`,
+        )
+        .join('')}</row>`,
+  );
+  return sheetXml(headerRow + dataRows.join(''));
+}
+
+async function preparedSheet(data: Buffer): Promise<{ profile: SheetProfile; text: string }> {
+  const db = new FakePreparationDb();
+  const storage = createCountingStorage();
+  const id = await sealed(db, storage, data);
+
+  await prepareUntilDone(() => prepareChatFileStep(id, { db, storage }));
+
+  expect(db.rowForAsset(id)).toMatchObject({ state: 'ready', sheet_count: 1 });
+  const profiles = db.rowForAsset(id)!.coverage['sheets'] as SheetProfile[];
+  const text = (await readPreparedText(
+    id,
+    { startChar: 0, maxChars: 100_000 },
+    { userId: USER, db, storage },
+  ))!.text;
+  return { profile: profiles[0]!, text };
+}
+
+function columnTypes(profile: SheetProfile): string[] {
+  return (profile.columns ?? []).map((column) => `${column.name}: ${column.type}`);
+}
+
+describe('workbook preparation number formats', () => {
+  it('gives the model dates, percentages and separated numbers as the workbook shows them and types a date column as dates', async () => {
+    const { profile, text } = await preparedSheet(
+      await singleSheetWorkbook({
+        sheetName: 'Ledger',
+        sheetXml: styledSheet(
+          ['Day', 'Share', 'Rate', 'Units', 'Balance', 'Price', 'Cost', 'Count'],
+          [
+            [
+              { value: '45292', style: '1' },
+              { value: '0.285', style: '2' },
+              { value: '0.12345', style: '3' },
+              { value: '1234567.4', style: '4' },
+              { value: '-1234.5', style: '5' },
+              { value: '1.005', style: '6' },
+              { value: '1234.5', style: '7' },
+              { value: '42' },
+            ],
+            [
+              { value: '45293', style: '1' },
+              { value: '0.5', style: '2' },
+              { value: '0', style: '3' },
+              { value: '1000', style: '4' },
+              { value: '2.5', style: '5' },
+              { value: '3', style: '6' },
+              { value: '7', style: '7' },
+              { value: '8' },
+            ],
+          ],
+        ),
+        stylesXml: stylesXml([0, 14, 9, 10, 3, 4, 2, 164], { 164: '"$"#,##0.00' }),
+      }),
+    );
+
+    expect(text).toContain(
+      [
+        'First 2 rows:',
+        'Day,Share,Rate,Units,Balance,Price,Cost,Count',
+        '2024-01-01,29%,12.35%,"1,234,567","-1,234.50",1.01,"$1,234.50",42',
+        '2024-01-02,50%,0.00%,"1,000",2.50,3.00,$7.00,8',
+      ].join('\n'),
+    );
+    expect(columnTypes(profile)).toEqual([
+      'Day: date',
+      'Share: number',
+      'Rate: number',
+      'Units: number',
+      'Balance: number',
+      'Price: number',
+      'Cost: number',
+      'Count: integer',
+    ]);
+    expect(text).toContain('- Day: date\n- Share: number');
+  });
+
+  it('reads serials in the 1904 date system when the workbook says so', async () => {
+    const sheet = styledSheet(
+      ['Day'],
+      [[{ value: '43830', style: '1' }], [{ value: '0', style: '1' }]],
+    );
+    const styles = stylesXml([0, 14]);
+
+    const in1904 = await preparedSheet(
+      await singleSheetWorkbook({
+        sheetName: 'Days',
+        sheetXml: sheet,
+        stylesXml: styles,
+        date1904: true,
+      }),
+    );
+    const in1900 = await preparedSheet(
+      await singleSheetWorkbook({ sheetName: 'Days', sheetXml: sheet, stylesXml: styles }),
+    );
+
+    expect(in1904.text).toContain('First 2 rows:\nDay\n2024-01-01\n1904-01-01');
+    expect(columnTypes(in1904.profile)).toEqual(['Day: date']);
+    expect(in1900.text).toContain('First 2 rows:\nDay\n2019-12-31\n0');
+  });
+
+  it('gives a date and time, and a time only, from the fraction of the serial', async () => {
+    const afternoon = String(45292 + (13 * 3600 + 47 * 60 + 30) / 86400);
+    const { profile, text } = await preparedSheet(
+      await singleSheetWorkbook({
+        sheetName: 'Shifts',
+        sheetXml: styledSheet(
+          ['At', 'Clock', 'Precise', 'Stamp'],
+          [
+            [
+              { value: afternoon, style: '1' },
+              { value: afternoon, style: '2' },
+              { value: afternoon, style: '3' },
+              { value: afternoon, style: '4' },
+            ],
+          ],
+        ),
+        stylesXml: stylesXml([0, 22, 20, 21, 164], { 164: 'yyyy-mm-dd hh:mm:ss' }),
+      }),
+    );
+
+    expect(text).toContain(
+      'At,Clock,Precise,Stamp\n2024-01-01 13:47,13:47,13:47:30,2024-01-01 13:47:30',
+    );
+    expect(columnTypes(profile)).toEqual([
+      'At: date',
+      'Clock: text',
+      'Precise: text',
+      'Stamp: date',
+    ]);
+  });
+
+  it('keeps the stored value for a format it cannot show faithfully or a style the file does not declare', async () => {
+    const { profile, text } = await preparedSheet(
+      await singleSheetWorkbook({
+        sheetName: 'Raw',
+        sheetXml: styledSheet(
+          ['Science', 'Red', 'Signed', 'Thousands', 'Missing', 'Broken'],
+          [
+            [
+              { value: '12345.678', style: '1' },
+              { value: '12345.678', style: '2' },
+              { value: '12345.678', style: '3' },
+              { value: '12345.678', style: '4' },
+              { value: '45292', style: '9' },
+              { value: '45292', style: 'x' },
+            ],
+          ],
+        ),
+        stylesXml: stylesXml([0, 11, 164, 165, 166], {
+          164: '[Red]0.00',
+          165: '0.00;(0.00)',
+          166: '#,##0,',
+        }),
+      }),
+    );
+
+    expect(text).toContain(
+      'Science,Red,Signed,Thousands,Missing,Broken\n12345.678,12345.678,12345.678,12345.678,45292,45292',
+    );
+    expect(columnTypes(profile)).toEqual([
+      'Science: number',
+      'Red: number',
+      'Signed: number',
+      'Thousands: number',
+      'Missing: integer',
+      'Broken: integer',
+    ]);
+  });
+
+  it('finds the styles part through the workbook relationships', async () => {
+    const { text } = await preparedSheet(
+      await singleSheetWorkbook({
+        sheetName: 'Shares',
+        sheetXml: styledSheet(['Share'], [[{ value: '0.25', style: '1' }]]),
+        stylesXml: stylesXml([0, 9]),
+        stylesTarget: 'theme/s.xml',
+      }),
+    );
+
+    expect(text).toContain('Share\n25%');
+  });
+
+  it('gives stored values without failing when the styles part is missing, oversized or broken', async () => {
+    const sheet = styledSheet(['Day'], [[{ value: '45292', style: '1' }]]);
+    const variants: Buffer[] = [
+      await singleSheetWorkbook({ sheetName: 'Days', sheetXml: sheet }),
+      declareMemberSize(
+        await singleSheetWorkbook({
+          sheetName: 'Days',
+          sheetXml: sheet,
+          stylesXml: stylesXml([0, 14]),
+        }),
+        'xl/styles.xml',
+        OVER_BUDGET_BYTES,
+      ),
+      await singleSheetWorkbook({
+        sheetName: 'Days',
+        sheetXml: sheet,
+        stylesXml: '<styleSheet><cellXfs><xf numFmtId="0"/><xf numFmtId="14"/>',
+      }),
+      await singleSheetWorkbook({
+        sheetName: 'Days',
+        sheetXml: sheet,
+        stylesXml: `<styleSheet><numFmts><numFmt numFmtId="164" formatCode="${'y'.repeat(
+          MAX_FILE_TEXT_CHARS + 1,
+        )}"/></numFmts><cellXfs><xf numFmtId="0"/><xf numFmtId="14"/></cellXfs></styleSheet>`,
+      }),
+      await singleSheetWorkbook({
+        sheetName: 'Days',
+        sheetXml: sheet,
+        stylesXml: boundedStylesXml(MAX_CELL_FORMATS + 1, 0),
+      }),
+      await singleSheetWorkbook({
+        sheetName: 'Days',
+        sheetXml: sheet,
+        stylesXml: boundedStylesXml(2, MAX_CELL_FORMATS + 1),
+      }),
+    ];
+
+    for (const data of variants) {
+      inflated.length = 0;
+      const { profile, text } = await preparedSheet(data);
+      expect(text).toContain('First 1 rows:\nDay\n45292');
+      expect(columnTypes(profile)).toEqual(['Day: integer']);
+    }
+    expect(inflated).toContain('xl/styles.xml');
+    inflated.length = 0;
+    await preparedSheet(variants[1]!);
+    expect(inflated).not.toContain('xl/styles.xml');
+  });
+
+  it('formats numbers when the styles part holds exactly as many cell and custom formats as the bound allows', async () => {
+    const { profile, text } = await preparedSheet(
+      await singleSheetWorkbook({
+        sheetName: 'Days',
+        sheetXml: styledSheet(['Day'], [[{ value: '45292', style: '1' }]]),
+        stylesXml: boundedStylesXml(MAX_CELL_FORMATS, MAX_CELL_FORMATS),
+      }),
+    );
+
+    expect(text).toContain('First 1 rows:\nDay\n2024-01-01');
+    expect(columnTypes(profile)).toEqual(['Day: date']);
+  });
+
+  it('reads the styles part after the first sheet, so a styles part that fills the budget cannot crowd the sheet out', async () => {
+    exhaustsBudget.add('xl/styles.xml');
+    const { profile, text } = await preparedSheet(
+      await singleSheetWorkbook({
+        sheetName: 'Days',
+        sheetXml: styledSheet(['Day'], [[{ value: '45292', style: '1' }]]),
+        stylesXml: stylesXml([0, 14]),
+      }),
+    );
+
+    expect(inflated.indexOf('xl/worksheets/sheet1.xml')).toBeGreaterThanOrEqual(0);
+    expect(inflated.indexOf('xl/styles.xml')).toBeGreaterThan(
+      inflated.indexOf('xl/worksheets/sheet1.xml'),
+    );
+    expect(profile).toMatchObject({ name: 'Days', profiled: true, rowCount: 1 });
+    expect(text).toContain('First 1 rows:\nDay\n2024-01-01');
+  });
+
+  it('does not read the styles part when no sheet could be read', async () => {
+    const data = declareMemberSize(
+      await singleSheetWorkbook({
+        sheetName: 'Days',
+        sheetXml: styledSheet(['Day'], [[{ value: '45292', style: '1' }]]),
+        stylesXml: stylesXml([0, 14]),
+      }),
+      'xl/worksheets/sheet1.xml',
+      OVER_BUDGET_BYTES,
+    );
+    const db = new FakePreparationDb();
+    const storage = createCountingStorage();
+    const id = await sealed(db, storage, data);
+
+    await prepareUntilDone(() => prepareChatFileStep(id, { db, storage }));
+
+    expect(db.rowForAsset(id)).toMatchObject({ state: 'ready_partial' });
+    expect(db.rowForAsset(id)!.coverage['sheets']).toEqual([{ name: 'Days', profiled: false }]);
+    expect(inflated).not.toContain('xl/styles.xml');
+  });
+
+  it('keeps the stored value for a format code with a character reference outside Unicode and formats the rest', async () => {
+    const { text } = await preparedSheet(
+      await singleSheetWorkbook({
+        sheetName: 'Days',
+        sheetXml: styledSheet(
+          ['Coded', 'Day'],
+          [
+            [
+              { value: '45292', style: '1' },
+              { value: '45292', style: '2' },
+            ],
+          ],
+        ),
+        stylesXml:
+          '<styleSheet><numFmts><numFmt numFmtId="164" formatCode="&#x110000;0"/></numFmts><cellXfs><xf numFmtId="0"/><xf numFmtId="164"/><xf numFmtId="14"/></cellXfs></styleSheet>',
+      }),
+    );
+
+    expect(text).toContain('Coded,Day\n45292,2024-01-01');
+  });
+});
+
+describe('workbook preparation cell positions', () => {
+  const SHARED_STRINGS =
+    '<?xml version="1.0"?><sst><si><t>Code</t></si><si><t>Amount</t></si><si><t>Region</t></si><si><t>Note</t></si><si><t>X9</t></si></sst>';
+
+  async function profiled(rows: string[]): Promise<{ profile: SheetProfile; text: string }> {
+    return preparedSheet(
+      await singleSheetWorkbook({
+        sheetName: 'Positions',
+        sharedStringsXml: SHARED_STRINGS,
+        sheetXml: sheetXml(rows.join('')),
+      }),
+    );
+  }
+
+  it('reads a sheet whose cells and rows carry no references by position', async () => {
+    const { profile, text } = await profiled([
+      '<row><c t="s"><v>0</v></c><c t="s"><v>1</v></c></row>',
+      '<row><c><v>1</v></c><c><v>20</v></c></row>',
+      '<row><c><v>2</v></c><c><v>30</v></c></row>',
+    ]);
+
+    expect(profile).toMatchObject({ rowCount: 2 });
+    expect(columnTypes(profile)).toEqual(['Code: integer', 'Amount: integer']);
+    expect(text).toContain('2 rows after the header, 2 columns.');
+    expect(text).toContain('First 2 rows:\nCode,Amount\n1,20\n2,30');
+  });
+
+  it('continues from a declared reference with the cells after it that have none', async () => {
+    const { profile, text } = await profiled([
+      '<row><c r="A1" t="s"><v>0</v></c><c t="s"><v>1</v></c><c r="E1" t="s"><v>2</v></c><c t="s"><v>3</v></c></row>',
+      '<row><c r="A2"><v>1</v></c><c><v>2</v></c><c r="E2" t="inlineStr"><is><t>North</t></is></c><c><v>9</v></c></row>',
+    ]);
+
+    expect(columnTypes(profile)).toEqual([
+      'Code: integer',
+      'Amount: integer',
+      'Region: text',
+      'Note: integer',
+    ]);
+    expect(text).toContain('First 1 rows:\nCode,Amount,Region,Note\n1,2,North,9');
+  });
+
+  it('counts a cell without a value as a position so the cells after it keep their columns', async () => {
+    const { profile, text } = await profiled([
+      '<row><c t="s"><v>0</v></c><c t="s"><v>1</v></c><c t="s"><v>2</v></c></row>',
+      '<row><c/><c><v>42</v></c><c s="1" /></row>',
+      '<row><c t="s"><v>4</v></c><c></c><c><v>7</v></c></row>',
+      '<row ht="20"/>',
+      '<row><c/><c/><c><v>5</v></c></row>',
+    ]);
+
+    expect(profile).toMatchObject({ rowCount: 3 });
+    expect(profile.columns?.map((column) => column.name)).toEqual(['Code', 'Amount', 'Region']);
+    expect(text).toContain('First 3 rows:\nCode,Amount,Region\n,42,\nX9,,7\n,,5');
+  });
+
+  it('reads a shared string cell without a value as empty rather than the first shared string', async () => {
+    const { profile, text } = await profiled([
+      '<row><c t="s"><v>0</v></c><c t="s"><v>1</v></c><c t="s"><v>2</v></c></row>',
+      '<row><c t="s"/><c><v>42</v></c><c t="s"></c></row>',
+      '<row><c r="A3" t="s"/><c r="B3"><v>7</v></c><c r="C3" t="s"></c></row>',
+    ]);
+
+    expect(profile).toMatchObject({ rowCount: 2 });
+    expect(text).toContain('First 2 rows:\nCode,Amount,Region\n,42,\n,7,');
+  });
+
+  it('treats a malformed reference as missing and ignores an attribute whose name ends in r', async () => {
+    const { profile, text } = await profiled([
+      '<row><c bar="Z9" t="s"><v>0</v></c><c r="B" t="s"><v>1</v></c></row>',
+      '<row><c r="1A"><v>3</v></c><c r="zz9"><v>4</v></c></row>',
+      '<row><c r="AAAAAAAAAA1"><v>5</v></c><c ver="Q7"><v>6</v></c></row>',
+    ]);
+
+    expect(profile).toMatchObject({ rowCount: 2 });
+    expect(columnTypes(profile)).toEqual(['Code: integer', 'Amount: integer']);
+    expect(text).toContain('First 2 rows:\nCode,Amount\n3,4\n5,6');
+  });
+
+  it('places the 27th and later cells of a row in the columns after Z', async () => {
+    const header = Array.from(
+      { length: 28 },
+      (_, index) => `<c t="inlineStr"><is><t>H${index + 1}</t></is></c>`,
+    ).join('');
+    const values = Array.from({ length: 28 }, (_, index) => `<c><v>${index + 1}</v></c>`).join('');
+    const { profile } = await profiled([`<row>${header}</row>`, `<row>${values}</row>`]);
+
+    expect(profile.columns).toHaveLength(28);
+    expect(profile.columns?.slice(25).map((column) => column.name)).toEqual(['H26', 'H27', 'H28']);
+  });
+});
+
+describe('workbook preparation formulas without a stored result', () => {
+  const NOTE = `Formulas are not evaluated here: a formula cell with no stored result shows as "${XLSX_NOT_CALCULATED}".`;
+  const inline = (text: string) => `<c t="inlineStr"><is><t>${text}</t></is></c>`;
+
+  async function profiled(rows: string[]): Promise<{ profile: SheetProfile; text: string }> {
+    return preparedSheet(
+      await singleSheetWorkbook({ sheetName: 'Formulas', sheetXml: sheetXml(rows.join('')) }),
+    );
+  }
+
+  it('keeps a row that holds only a formula the file stores no result for and says it was not calculated', async () => {
+    const { profile, text } = await profiled([
+      `<row>${inline('Total')}</row>`,
+      '<row><c r="A2"><f>SUM(B2:C2)</f><v></v></c></row>',
+    ]);
+
+    expect(profile).toMatchObject({ rowCount: 1 });
+    expect(columnTypes(profile)).toEqual(['Total: empty']);
+    expect(text).toContain('1 rows after the header, 1 columns.');
+    expect(text).toContain(`First 1 rows:\nTotal\n${XLSX_NOT_CALCULATED}`);
+    expect(text).toContain(NOTE);
+  });
+
+  it('marks a formula with an empty, self-closing or missing value element, and a shared formula that has none', async () => {
+    const { profile, text } = await profiled([
+      `<row>${inline('A')}${inline('B')}${inline('C')}${inline('D')}${inline('E')}</row>`,
+      '<row><c><f>A1</f><v></v></c><c><f>A1</f><v/></c><c><f>A1</f></c><c><f t="shared" si="0"/></c><c><v>7</v></c></row>',
+    ]);
+    const marker = XLSX_NOT_CALCULATED;
+
+    expect(profile).toMatchObject({ rowCount: 1 });
+    expect(columnTypes(profile)).toEqual([
+      'A: empty',
+      'B: empty',
+      'C: empty',
+      'D: empty',
+      'E: integer',
+    ]);
+    expect(text).toContain(`A,B,C,D,E\n${marker},${marker},${marker},${marker},7`);
+  });
+
+  it('reads the stored result of a calculated formula and adds no note', async () => {
+    const { profile, text } = await profiled([
+      `<row>${inline('Total')}${inline('Label')}</row>`,
+      '<row><c><f>SUM(B2:C2)</f><v>12</v></c><c t="str"><f>CONCAT("a","b")</f><v>ab</v></c></row>',
+    ]);
+
+    expect(columnTypes(profile)).toEqual(['Total: integer', 'Label: text']);
+    expect(text).toContain('First 1 rows:\nTotal,Label\n12,ab');
+    expect(text).not.toContain(XLSX_NOT_CALCULATED);
+  });
+
+  it('leaves a cell with no formula empty, including one whose text spells a formula element', async () => {
+    const { profile, text } = await profiled([
+      `<row>${inline('Code')}${inline('Note')}</row>`,
+      `<row><c><v></v></c>${inline('&lt;f&gt;SUM(A1)&lt;/f&gt;')}</row>`,
+      '<row><c><v></v></c><c/></row>',
+    ]);
+
+    expect(profile).toMatchObject({ rowCount: 1 });
+    expect(text).toContain('First 1 rows:\nCode,Note\n,<f>SUM(A1)</f>');
+    expect(text).not.toContain(XLSX_NOT_CALCULATED);
+  });
+
+  it('leaves a calculated formula whose result is an empty string empty, drops a row holding only such cells and adds no note', async () => {
+    const blank = '<c t="str"><f>IF(A2="","",A2)</f><v></v></c>';
+    const { profile, text } = await profiled([
+      `<row>${inline('Code')}${inline('Label')}</row>`,
+      `<row><c><v>4</v></c>${blank}</row>`,
+      `<row><c/>${blank}</row>`,
+      `<row><c/><c t="str"><f>IF(A4="","",A4)</f></c></row>`,
+    ]);
+
+    expect(profile).toMatchObject({ rowCount: 1 });
+    expect(text).toContain('1 rows after the header, 2 columns.');
+    expect(text).toContain('First 1 rows:\nCode,Label\n4,');
+    expect(text).not.toContain(XLSX_NOT_CALCULATED);
+  });
+
+  it('reads a stored result whose value element carries an attribute', async () => {
+    const { profile, text } = await profiled([
+      `<row>${inline('Label')}${inline('Amount')}</row>`,
+      '<row><c t="str"><f>A1&amp;" "</f><v xml:space="preserve">hello </v></c><c><f>1+1</f><v xml:space="preserve">2</v></c></row>',
+    ]);
+
+    expect(columnTypes(profile)).toEqual(['Label: text', 'Amount: integer']);
+    expect(text).toContain('First 1 rows:\nLabel,Amount\nhello ,2');
+    expect(text).not.toContain(XLSX_NOT_CALCULATED);
+  });
+
+  it('keeps the text of an inline string cell that also holds a formula, and of a rich string whose font names a family', async () => {
+    const { text } = await profiled([
+      `<row>${inline('Result')}${inline('Rich')}${inline('Bare')}</row>`,
+      '<row><c t="inlineStr"><f>A1</f><is><t>kept</t></is></c><c t="inlineStr"><is><r><rPr><family val="2"/></rPr><t>styled</t></r></is></c><c t="inlineStr"><f>A1</f><is><t></t></is></c></row>',
+    ]);
+
+    expect(text).toContain(`First 1 rows:\nResult,Rich,Bare\nkept,styled,${XLSX_NOT_CALCULATED}`);
+    expect(text).toContain(NOTE);
+  });
+
+  it('adds the note only to the sheet that holds such a cell', async () => {
+    const zip = new JSZip();
+    zip.file(
+      'xl/workbook.xml',
+      `<?xml version="1.0"?><workbook xmlns:r="${RELATIONSHIP_NS}"><sheets><sheet name="Plain" sheetId="1" r:id="rId1"/><sheet name="Pending" sheetId="2" r:id="rId2"/></sheets></workbook>`,
+    );
+    zip.file(
+      'xl/_rels/workbook.xml.rels',
+      '<?xml version="1.0"?><Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Target="worksheets/sheet2.xml"/></Relationships>',
+    );
+    zip.file(
+      'xl/worksheets/sheet1.xml',
+      sheetXml(`<row>${inline('A')}</row><row><c><v>1</v></c></row>`),
+    );
+    zip.file(
+      'xl/worksheets/sheet2.xml',
+      sheetXml(`<row>${inline('B')}</row><row><c><f>A1</f></c></row>`),
+    );
+    zip.file('xl/media/chart-cache.bin', Buffer.alloc(MAX_CHAT_ATTACHMENT_BYTES + MIB, 0x5a), {
+      compression: 'STORE',
+    });
+    const db = new FakePreparationDb();
+    const storage = createCountingStorage();
+    const id = await sealed(
+      db,
+      storage,
+      await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' }),
+    );
+
+    await prepareUntilDone(() => prepareChatFileStep(id, { db, storage }));
+    const text = (await readPreparedText(
+      id,
+      { startChar: 0, maxChars: 100_000 },
+      { userId: USER, db, storage },
+    ))!.text;
+    const [plain, pending] = text.split('## Sheet: Pending');
+
+    expect(plain).toContain('## Sheet: Plain');
+    expect(plain).not.toContain(NOTE);
+    expect(pending).toContain(NOTE);
+  });
+});
+
+describe('workbook preparation columns beyond the profiled ones', () => {
+  const inline = (text: string) => `<c t="inlineStr"><is><t>${text}</t></is></c>`;
+
+  async function profiled(rows: string[]): Promise<{ profile: SheetProfile; text: string }> {
+    return preparedSheet(
+      await singleSheetWorkbook({ sheetName: 'Wide', sheetXml: sheetXml(rows.join('')) }),
+    );
+  }
+
+  it('gives the true column count and says how many columns were not profiled', async () => {
+    const header = Array.from({ length: 300 }, (_, index) => inline(`H${index + 1}`)).join('');
+    const values = Array.from({ length: 300 }, (_, index) => `<c><v>${index + 1}</v></c>`).join('');
+    const { profile, text } = await profiled([`<row>${header}</row>`, `<row>${values}</row>`]);
+
+    expect(profile.columnCount).toBe(300);
+    expect(profile.columns).toHaveLength(256);
+    expect(text).toContain('1 rows after the header, 300 columns.');
+    expect(text).toContain('- H256: integer\n- and 44 more columns not profiled');
+    expect(text).not.toContain('H257');
+  });
+
+  it('counts a column that first holds a value after the sampled rows', async () => {
+    const rows = [`<row>${inline('Code')}${inline('Amount')}</row>`];
+    for (let index = 0; index < SAMPLE_ROWS + 3; index += 1) {
+      rows.push(`<row><c><v>${index}</v></c><c><v>${index * 2}</v></c></row>`);
+    }
+    rows.push('<row><c><v>1</v></c><c><v>2</v></c><c><v>3</v></c></row>');
+    const { profile, text } = await profiled(rows);
+
+    expect(profile.columnCount).toBe(3);
+    expect(columnTypes(profile)).toEqual(['Code: integer', 'Amount: integer']);
+    expect(text).toContain(', 3 columns.');
+    expect(text).toContain('- and 1 more columns not profiled');
+  });
+
+  it('adds no omission line when every populated column is profiled', async () => {
+    const { profile, text } = await profiled([
+      `<row>${inline('Code')}${inline('Amount')}</row>`,
+      '<row><c><v>1</v></c><c><v>2</v></c></row>',
+    ]);
+
+    expect(profile.columnCount).toBe(2);
+    expect(text).toContain('1 rows after the header, 2 columns.');
+    expect(text).not.toContain('not profiled');
+  });
+
+  it('counts the columns that hold a value, not the span between the first and the last', async () => {
+    const { profile, text } = await profiled([
+      `<row><c r="A1" t="inlineStr"><is><t>First</t></is></c><c r="ZZ1" t="inlineStr"><is><t>Last</t></is></c></row>`,
+      '<row><c r="A2"><v>1</v></c><c r="ZZ2"><v>2</v></c></row>',
+    ]);
+
+    expect(profile.columnCount).toBe(2);
+    expect(columnTypes(profile)).toEqual(['First: integer', 'Last: integer']);
+    expect(text).toContain('1 rows after the header, 2 columns.');
+  });
+});
+
+describe('workbook preparation long cells', () => {
+  it('marks a cell cut to its limit, so a shortened value is not read as the whole one', async () => {
+    const long = 'word '.repeat(60);
+    const { text } = await preparedSheet(
+      await singleSheetWorkbook({
+        sheetName: 'Notes',
+        sheetXml: sheetXml(
+          `<row><c t="inlineStr"><is><t>Note</t></is></c><c t="inlineStr"><is><t>Amount</t></is></c></row>` +
+            `<row><c t="inlineStr"><is><t>${long}</t></is></c><c><v>7</v></c></row>` +
+            `<row><c t="inlineStr"><is><t>short</t></is></c><c><v>8</v></c></row>`,
+        ),
+      }),
+    );
+
+    expect(text).toContain(`${long.slice(0, 200)}…,7`);
+    expect(text).toContain('short,8');
+  });
+});

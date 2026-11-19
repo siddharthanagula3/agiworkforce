@@ -1,10 +1,18 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
 import { act, fireEvent, render } from '@testing-library/react-native';
+import { insetAbove } from '../test-utils/sheetColumn';
+
+let mockWindowWidth = 750;
+jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
+  __esModule: true,
+  default: () => ({ width: mockWindowWidth, height: 1334, scale: 2, fontScale: 1 }),
+}));
 import type { TranslateOptions, TranslateResult } from '../services/translateService';
 
 const mockTranslate = jest.fn();
 const mockSetStringAsync = jest.fn();
+jest.mock('../src/features/chat/components/WorkModeSwitch', () => ({ HEADER_TEXT_SCALE_LIMIT: 2 }));
 jest.mock('expo-clipboard', () => ({
   setStringAsync: (...args: unknown[]) => mockSetStringAsync(...args),
 }));
@@ -234,4 +242,17 @@ test('back synchronously rejects a captured same-turn submit before navigation c
   });
   expect(mockRouter.back).toHaveBeenCalledTimes(1);
   expect(mockTranslate).not.toHaveBeenCalled();
+});
+
+test.each([
+  [402, 0],
+  [1032, 156],
+  [1376, 328],
+])('the language picker sheet sits in the reading column of a %d point window', (width, inset) => {
+  mockWindowWidth = width;
+  const view = render(<TranslateScreen />);
+  fireEvent.press(view.getAllByLabelText(/^Select language:/)[0]!);
+
+  expect(insetAbove(view.getByLabelText('Close language picker'))).toBe(inset);
+  mockWindowWidth = 750;
 });

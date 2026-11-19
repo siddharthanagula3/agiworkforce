@@ -1,7 +1,11 @@
 'use client';
 
 import { cn } from '@shared/lib/utils';
-import { getConnectorCapability, type ConnectorRiskClass } from '@/lib/connectors/catalog';
+import {
+  CONNECTOR_ACCESS_PENDING_NOTE,
+  connectorAccessSentence,
+} from '@agiworkforce/cloud-contracts';
+import { getConnectorCapability } from '@/lib/connectors/catalog';
 import {
   describeGrantedConnectorScopes,
   getConnectorScopeDescriptions,
@@ -15,18 +19,6 @@ const ACCESS_BADGE_CLASS: Record<'read' | 'write', string> = {
   write: 'border-warning-fill/40 text-warning-text',
 };
 
-const ACCESS_SENTENCE: Record<ConnectorRiskClass, string> = {
-  'read-only':
-    'This connector is set up to read data in the account you connect, not to change anything there.',
-  'read-write':
-    'This connector can read data in the account you connect and can also change it, for example by creating, editing or sending items.',
-  'high-impact':
-    'This connector can read and change sensitive data in the account you connect, such as payment, health or production records.',
-};
-
-const DISCOVERED_ACCESS_SENTENCE =
-  'This server lists its own tools when you connect. Each tool it marks as read-only, and each that can change data, is shown in Tool permissions, where you can block the ones that change data.';
-
 function AccessExplanation({ connectorId, pending }: { connectorId: string; pending: boolean }) {
   const riskClass = getConnectorCapability(connectorId)?.riskClass;
   return (
@@ -34,10 +26,8 @@ function AccessExplanation({ connectorId, pending }: { connectorId: string; pend
       className="space-y-1 rounded-lg border border-border/80 p-3 text-xs text-muted-foreground"
       aria-label="What this connector can do"
     >
-      <p>{riskClass ? ACCESS_SENTENCE[riskClass] : DISCOVERED_ACCESS_SENTENCE}</p>
-      {pending ? (
-        <p>Its exact permissions are named on the provider&rsquo;s own consent screen.</p>
-      ) : null}
+      <p>{connectorAccessSentence(riskClass)}</p>
+      {pending ? <p>{CONNECTOR_ACCESS_PENDING_NOTE}</p> : null}
     </div>
   );
 }

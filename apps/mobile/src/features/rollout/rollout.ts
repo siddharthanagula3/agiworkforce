@@ -55,7 +55,9 @@ export const useRolloutStore = create<RolloutState>((set) => ({
     const channel = releaseChannel();
     if (channel === null) return;
     try {
-      const parsed = parseMeResponse(await api.get<unknown>('/api/me?surface=mobile'));
+      const parsed = parseMeResponse(
+        await api.get<unknown>(`/api/me?surface=${MOBILE_SURFACE}&channel=${channel}`),
+      );
       const openRings: Record<string, boolean> = {};
       const prefix = `${ROLLOUT_FLAG_PREFIX}${MOBILE_SURFACE}.${channel}.`;
       for (const [key, enabled] of Object.entries(parsed.feature_flags)) {

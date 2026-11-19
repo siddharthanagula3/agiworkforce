@@ -26,6 +26,7 @@ import {
   activateCloudAccount,
 } from '@/src/features/auth/services/cloudAccountSession';
 import { ModelSelectorButton } from '@/src/features/chat/components/ModelSelectorButton';
+import { HEADER_TEXT_SCALE_LIMIT } from '@/src/features/chat/components/WorkModeSwitch';
 import {
   getModelListForCloudAccess,
   getShortDisplayName,
@@ -82,6 +83,16 @@ describe('composer model label', () => {
     expect(getByTestId('chat.composer.model')).toHaveStyle({ minHeight: 44, minWidth: 44 });
   });
 
+  it('caps the label at the header text scale so the action row stays on screen', () => {
+    useModelStore.setState({ selectedModel: effortModel!.id });
+
+    const { getByText } = renderLabel();
+
+    expect(getByText(getShortDisplayName(effortModel!.id, tier)).props.maxFontSizeMultiplier).toBe(
+      HEADER_TEXT_SCALE_LIMIT,
+    );
+  });
+
   it('names the model only and leaves reasoning effort to the effort button', () => {
     const options = getModelEffortOptions(effortModel!.id);
     const chosen = options[options.length - 1] as PickerEffort;
@@ -115,6 +126,7 @@ describe('composer model label', () => {
 
       await waitFor(() => expect(getByText('Fast')).toBeTruthy());
       expect(getByTestId('chat.composer.model').props.accessibilityLabel).toContain('fast mode on');
+      expect(getByText('Fast').props.maxFontSizeMultiplier).toBe(HEADER_TEXT_SCALE_LIMIT);
     });
 
     it('shows no Fast token while fast mode is off', async () => {

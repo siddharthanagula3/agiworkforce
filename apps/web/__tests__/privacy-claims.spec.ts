@@ -98,7 +98,7 @@ describe('Personal data about people who hold no account (DPDP-49)', () => {
 
   it('routes a non-account-holder to the sign-in-free rights request form', () => {
     expect(privacySource).toMatch(
-      /grievance request at\{' '\} <Link href="\/privacy\/requests"[\s\S]{0,200}without signing in/i,
+      /grievance request at\{' '\} <PageLink href="\/privacy\/requests"[\s\S]{0,200}without signing in/i,
     );
   });
 

@@ -1,7 +1,7 @@
 import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { TextInput, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { BookOpen, ChevronRight } from 'lucide-react-native';
 import {
   MAX_STUDY_TOPIC_LENGTH,
@@ -23,6 +23,7 @@ import { Text } from '@/components/ui/Text';
 import { SettingsGroup, SettingsInfo, SettingsScreenShell } from '@/src/features/settings/Common';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useAppModeSwitch } from '@/src/features/chat/hooks/useAppModeSwitch';
+import { useModelStore } from '@/src/features/model-picker/store';
 import { listStudySessions, startStudySession } from '@/src/features/study/service';
 import { useChatStore } from '@/stores/chatStore';
 import { useThemeColors } from '@/src/ui/theme';
@@ -108,14 +109,23 @@ export function StudyScreen() {
   const [level, setLevel] = useState<StudyLevel>('beginner');
   const [sessions, setSessions] = useState<StudySession[]>([]);
   const [historyStatus, setHistoryStatus] = useState<'loading' | 'ready' | 'failed'>('loading');
-  const [historyAttempt, setHistoryAttempt] = useState(0);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const historyRequest = useRef<AbortController | null>(null);
   const isCloud = appMode === 'cloud';
 
-  useEffect(() => {
-    if (!isCloud) return;
+  const resetForm = useCallback(() => {
+    setTopic('');
+    setMode('learn');
+    setLevel('beginner');
+    setStarting(false);
+    setError(null);
+  }, []);
+
+  const loadHistory = useCallback(() => {
+    historyRequest.current?.abort();
     const controller = new AbortController();
+    historyRequest.current = controller;
     setHistoryStatus('loading');
     void listStudySessions(controller.signal)
       .then((loaded) => {
@@ -126,10 +136,16 @@ export function StudyScreen() {
       .catch(() => {
         if (!controller.signal.aborted) setHistoryStatus('failed');
       });
-    return () => controller.abort();
-  }, [isCloud, historyAttempt]);
+  }, []);
 
-  const retryHistory = useCallback(() => setHistoryAttempt((attempt) => attempt + 1), []);
+  useFocusEffect(
+    useCallback(() => {
+      if (!isCloud) return undefined;
+      resetForm();
+      loadHistory();
+      return () => historyRequest.current?.abort();
+    }, [isCloud, loadHistory, resetForm]),
+  );
 
   const normalizedTopic = normalizeStudyTopic(topic);
 
@@ -138,6 +154,7 @@ export function StudyScreen() {
     setStarting(true);
     setError(null);
     try {
+      useModelStore.getState().endConversationModel();
       const conversationId = await createConversation(
         studyConversationTitle(normalizedTopic, mode),
       );
@@ -148,11 +165,12 @@ export function StudyScreen() {
         level,
       });
       router.replace({ pathname: '/(app)/chat/[id]', params: { id: session.conversationId } });
+      resetForm();
     } catch (cause) {
       setError(toUserMessage(cause, 'The study session could not be started.'));
       setStarting(false);
     }
-  }, [createConversation, level, mode, normalizedTopic, router, starting]);
+  }, [createConversation, level, mode, normalizedTopic, resetForm, router, starting]);
 
   if (!isCloud) {
     return (
@@ -294,7 +312,7 @@ export function StudyScreen() {
           </Text>
           <Pressable
             testID="study-history-retry"
-            onPress={retryHistory}
+            onPress={loadHistory}
             accessibilityRole="button"
             accessibilityLabel="Retry loading recent study sessions"
             style={{

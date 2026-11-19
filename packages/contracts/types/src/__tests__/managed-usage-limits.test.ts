@@ -46,6 +46,19 @@ describe('plan economics', () => {
     }
   });
 
+  it('gives Free a hundred times its earlier 2, 15 and 20 credits per 5 hours, week and month', () => {
+    expect(MANAGED_USAGE_LIMITS.free).toEqual({
+      monthlyCredits: 2_000,
+      weeklyCredits: 1_500,
+      fiveHourCredits: 200,
+      dailyCredits: 0,
+      unlimited: false,
+    });
+    for (const version of [1, 2, 3, BILLING_PLAN_CATALOG_VERSION]) {
+      expect(managedUsageLimitsForCatalogVersion(version).free).toBe(MANAGED_USAGE_LIMITS.free);
+    }
+  });
+
   it('keeps the allowances a subscription was sold under in catalog 1', () => {
     expect(BILLING_PLAN_CATALOG_VERSION).toBeGreaterThan(1);
     expect(managedUsageLimitsForCatalogVersion(1)).toEqual(MANAGED_USAGE_LIMITS);
@@ -62,8 +75,13 @@ describe('plan economics', () => {
         expect(limit.fiveHourCredits).toBe(Math.ceil(limit.weeklyCredits * 0.1));
       }
     }
+  });
+
+  it('sets the Free five-hour window directly, above a tenth of its week', () => {
     const free = MANAGED_USAGE_LIMITS.free;
-    expect(free.fiveHourCredits).toBe(Math.ceil(free.weeklyCredits * 0.1));
+    expect(free.fiveHourCredits).toBe(200);
+    expect(free.fiveHourCredits).toBeGreaterThan(Math.ceil(free.weeklyCredits * 0.1));
+    expect(free.fiveHourCredits).toBeLessThanOrEqual(free.weeklyCredits);
   });
 
   it('keeps each plan window no larger than the one that contains it', () => {
@@ -91,12 +109,18 @@ describe('plan comparison copy', () => {
 
   it('compares each plan with the plan below it and Team seats with Pro', () => {
     expect(managedUsageComparisonLines('free')).toEqual([]);
-    expect(managedUsageComparisonLines('basic')).toEqual(['5x more usage per session than Free']);
+    expect(managedUsageComparisonLines('basic')).toEqual([]);
     expect(managedUsageComparisonLines('pro')).toEqual(['5x more usage than Basic']);
     expect(managedUsageComparisonLines('max')).toEqual(['5x more usage than Premium']);
     expect(managedUsageComparisonLines('max_15x')).toEqual(['10x more weekly usage than Premium']);
     expect(managedUsageComparisonLines('team')).toEqual(['Same usage as Premium for every seat']);
     expect(managedUsageComparisonLines('enterprise')).toEqual([]);
+  });
+
+  it('compares no plan with Free, which now has more usage than Basic in every window', () => {
+    expect(MANAGED_USAGE_BASELINES.basic).toBeUndefined();
+    expect(Object.values(MANAGED_USAGE_BASELINES)).not.toContain('free');
+    expect(compareManagedUsage('basic', 'free')).toBeNull();
   });
 
   it('claims only multiples the usage table yields window by window', () => {

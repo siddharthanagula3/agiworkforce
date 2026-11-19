@@ -4,7 +4,7 @@ title: Search: the web, your chats and the help centre
 path: /chat
 category: search
 tags: search, web search, find a conversation, search messages, search history, search past chats, deep research, sources, citations, help search
-updated: 2026-10-12
+updated: 2026-11-16
 description: How web search, Deep Research and searching your own chats and the help centre work.
 scope: public
 ---
@@ -31,7 +31,13 @@ fetched.
 rather than a single answer. It is not available on every model: choosing one
 that cannot do it says "Deep Research isn't available for this model. Choose
 Auto or a model that supports Deep Research." Availability also depends on your
-plan, and an ineligible plan shows "Upgrade to use Deep Research".
+plan.
+
+{{#purchase}}
+
+An ineligible plan shows "Upgrade to use Deep Research".
+
+{{/purchase}}
 
 ## Finding your own conversations
 

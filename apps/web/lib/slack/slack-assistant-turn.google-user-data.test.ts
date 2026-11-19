@@ -5,7 +5,6 @@ const mocks = vi.hoisted(() => ({
   classify: vi.fn(),
   keepsOutOfTraining: vi.fn(),
   trainingOptOut: vi.fn(),
-  sideCallRouting: vi.fn(),
   resolveAutoRoute: vi.fn(),
   moderate: vi.fn(),
 }));
@@ -58,7 +57,6 @@ vi.mock('@/lib/server/provider-training-opt-out', async (importOriginal) => ({
 }));
 vi.mock('@/lib/server/side-call-training-policy', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  sideCallRoutingRequest: mocks.sideCallRouting,
   sideCallTrainingOptOut: mocks.trainingOptOut,
 }));
 vi.mock('@/lib/moderation', async (importOriginal) => ({
@@ -116,7 +114,6 @@ function turn(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.sideCallRouting.mockImplementation(async (_db, _user, request) => request);
   mocks.resolveAutoRoute.mockReturnValue({ status: 'ok', harnessId: 'openai/chat', ...ROUTE });
   mocks.keepsOutOfTraining.mockReturnValue(false);
   mocks.trainingOptOut.mockResolvedValue(false);

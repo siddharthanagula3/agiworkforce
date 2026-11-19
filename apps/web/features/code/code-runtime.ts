@@ -9,7 +9,6 @@ import { CODE_COPY } from './code-surface';
 
 const HARNESS_HINT_TASK_PLACEHOLDER = 'your task';
 const MS_PER_MINUTE = 60_000;
-const BYTES_PER_GIGABYTE = 1024;
 
 export const HARNESS_BUDGET_MINUTES = Math.round(HARNESS_RUN_DEADLINE_MS / MS_PER_MINUTE);
 
@@ -23,17 +22,6 @@ export function headlessHarnessCommand(runtimeId: string): string | null {
     timeoutMs: HARNESS_RUN_DEADLINE_MS,
     resumeSessionId: null,
   });
-}
-
-export function describeRuntime(runtime: CloudCodeRuntime): string {
-  const cores = runtime.cpuCount > 0 ? `${runtime.cpuCount} vCPU` : null;
-  const memory =
-    runtime.memoryMB > 0 ? `${Math.round(runtime.memoryMB / BYTES_PER_GIGABYTE)} GB RAM` : null;
-  const detail = [runtime.summary, [cores, memory].filter(Boolean).join(', ')]
-    .filter(Boolean)
-    .join(' · ');
-  const label = detail ? `${runtime.name}, ${detail}` : runtime.name;
-  return runtime.needsUserCredential ? `${label}, needs your own API key` : label;
 }
 
 export function runtimeHelpText(

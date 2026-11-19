@@ -35,7 +35,7 @@ import {
   type SourceDelivery,
 } from '@agiworkforce/types';
 
-import { displaySourceSnippet } from '@/lib/sources/display-snippet';
+import { displaySourceSnippet } from '@agiworkforce/unified-chat/message-sources';
 
 export interface PersistedTurnSource {
   /** Stable across turns and providers, so the same page is one citation. */

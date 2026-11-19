@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { NewArtifactMenu } from './NewArtifactMenu';
 import { BUILT_IN_TEMPLATES, fillTemplate } from './artifact-templates';
-import { parseDeck } from '../presentation/deck-model';
+import { parseDeck } from '@agiworkforce/unified-chat/deck-model';
 import { useArtifactsStore } from '../../../stores/artifacts-store';
 
 const CONVERSATION = '3c2b1a09-8f7e-4d6c-9b5a-4e3d2c1b0a99';

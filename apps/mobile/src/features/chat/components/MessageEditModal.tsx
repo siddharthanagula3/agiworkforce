@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { View, Modal, TextInput, StyleSheet, KeyboardAvoidingView } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { confirmDiscardChanges } from '@/src/shared/hooks/useUnsavedChangesGuard';
-import { Paperclip } from 'lucide-react-native';
+import { Paperclip, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/Text';
 import { useThemeColors, dialogPadding } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 import { useFullScreenChrome } from '@/src/features/chat/chrome/fullScreenChrome';
 import { useKeyboardSafeComposer } from '@/src/features/chat/chrome/keyboardSafeComposer';
 import type { MessageAttachment } from '@/types/chat';
@@ -14,6 +15,7 @@ interface MessageEditModalProps {
   visible: boolean;
   text: string;
   attachments?: MessageAttachment[];
+  onRemoveAttachment?: (url: string) => void;
   onChangeText: (text: string) => void;
   onClose: () => void;
   onSubmit: () => void;
@@ -23,6 +25,7 @@ export function MessageEditModal({
   visible,
   text,
   attachments,
+  onRemoveAttachment,
   onChangeText,
   onClose,
   onSubmit,
@@ -30,13 +33,20 @@ export function MessageEditModal({
   const colors = useThemeColors();
   const keyboard = useKeyboardSafeComposer('modal');
   const [originalText, setOriginalText] = useState(text);
+  const [originalAttachmentCount, setOriginalAttachmentCount] = useState(attachments?.length ?? 0);
   const [wasVisible, setWasVisible] = useState(visible);
   if (visible !== wasVisible) {
     setWasVisible(visible);
-    if (visible) setOriginalText(text);
+    if (visible) {
+      setOriginalText(text);
+      setOriginalAttachmentCount(attachments?.length ?? 0);
+    }
   }
   const closeEdit = () => {
-    if (text.trim() !== originalText.trim()) {
+    if (
+      text.trim() !== originalText.trim() ||
+      (attachments?.length ?? 0) !== originalAttachmentCount
+    ) {
       confirmDiscardChanges(onClose);
     } else {
       onClose();
@@ -124,10 +134,23 @@ export function MessageEditModal({
                     >
                       {attachment.fileName}
                     </Text>
+                    {onRemoveAttachment ? (
+                      <PressableBox
+                        onPress={() => onRemoveAttachment(attachment.url)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Remove ${attachment.fileName}`}
+                        accessibilityHint="The edited message is sent without this file"
+                        style={styles.removeTarget}
+                      >
+                        <X size={16} color={colors.textSecondary} />
+                      </PressableBox>
+                    ) : null}
                   </View>
                 ))}
                 <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>
-                  These stay attached when you send the edit.
+                  {onRemoveAttachment
+                    ? 'Files you keep stay attached when you send the edit.'
+                    : 'These stay attached when you send the edit.'}
                 </Text>
               </View>
             ) : null}
@@ -165,7 +188,7 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   dialog: {
-    width: '100%',
+    ...contentColumn('reading'),
     borderRadius: 14,
     padding: dialogPadding,
     borderWidth: 1,
@@ -193,6 +216,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+  },
+  removeTarget: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   buttonRow: {
     flexDirection: 'row',

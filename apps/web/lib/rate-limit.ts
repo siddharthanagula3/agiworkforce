@@ -341,6 +341,11 @@ export const rateLimitConfigs = {
     window: '1 m', // one 256 MiB upload is 32 parts; several concurrent uploads must still fit
     failClosed: false,
   },
+  'uploads-intake-status': {
+    limit: 120,
+    window: '1 m', // a large file's status polls and cancels; several files are checked at once
+    failClosed: false,
+  },
   'files-serve': {
     limit: 120,
     window: '1 m', // generated-file byte serving; a transcript can render many inline files

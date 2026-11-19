@@ -1,5 +1,6 @@
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { PageAnchor } from '@shared/components/layout/EmbeddedPage';
 import { headingAnchor } from '@/lib/support/doc-topics';
 import { DocsCodeBlock } from './DocsCodeBlock';
 
@@ -10,6 +11,14 @@ export interface DocsArticleSection {
 }
 
 const MARKDOWN_COMPONENTS: Components = {
+  a: ({ href, title, children }) =>
+    href === undefined ? (
+      <a title={title}>{children}</a>
+    ) : (
+      <PageAnchor href={href} title={title}>
+        {children}
+      </PageAnchor>
+    ),
   pre: ({ children, node }) => {
     const code = node?.children.find(
       (child) => child.type === 'element' && child.tagName === 'code',

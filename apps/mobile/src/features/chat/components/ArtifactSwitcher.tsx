@@ -34,6 +34,7 @@ export function ArtifactSwitcher({ artifacts, activeId, onSelect }: ArtifactSwit
             accessibilityRole="tab"
             accessibilityState={{ selected }}
             accessibilityLabel={item.title}
+            hitSlop={{ top: 6, bottom: 6 }}
             style={{
               flexDirection: 'row',
               alignItems: 'center',

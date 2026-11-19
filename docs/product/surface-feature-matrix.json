@@ -620,8 +620,8 @@
         "web": {
           "state": "present",
           "via": "import",
-          "entry": "apps/web/features/chat/stores/research-panel-store.ts",
-          "mount": "apps/web/features/chat/utils/research-sources.ts"
+          "entry": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+          "mount": "apps/web/features/chat/pages/WebChatPage.tsx"
         },
         "desktop": {
           "state": "present",

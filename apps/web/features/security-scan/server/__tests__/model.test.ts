@@ -1,14 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-type RoutingModule = typeof import('@agiworkforce/routing');
+type AdmissionModule = typeof import('@/lib/server/managed-cloud-routing/admission');
 type ManagedUsageModule = typeof import('@/lib/services/managed-usage-request-service');
-type AggregatorRoutingModule = typeof import('@/lib/services/aggregator-routing');
 type ProviderAdapterModule = typeof import('@/lib/services/provider-adapter-service');
 
 const mocks = vi.hoisted(() => ({
-  routingRequest: vi.fn(),
-  providerAllowed: vi.fn(),
-  resolveAutoRoute: vi.fn(),
+  admit: vi.fn(),
   reserve: vi.fn(),
   drain: vi.fn(),
   stream: vi.fn((_request: unknown, _signal: unknown) => ({})),
@@ -24,18 +21,9 @@ vi.mock('@/lib/logger', async (importOriginal) => ({
   ...(await importOriginal<LoggerModule>()),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@agiworkforce/routing', async (importOriginal) => ({
-  ...(await importOriginal<RoutingModule>()),
-  resolveAutoRoute: mocks.resolveAutoRoute,
-}));
-vi.mock('@/lib/server/side-call-training-policy', async (importOriginal) => ({
-  ...(await importOriginal<SideCallTrainingPolicyModule>()),
-  sideCallRoutingRequest: mocks.routingRequest,
-  sideCallProviderAllowed: mocks.providerAllowed,
-}));
-vi.mock('@/lib/services/aggregator-routing', async (importOriginal) => ({
-  ...(await importOriginal<AggregatorRoutingModule>()),
-  dispatchProviderForSelectedRoute: (route: { provider: string }) => route.provider,
+vi.mock('@/lib/server/managed-cloud-routing/admission', async (importOriginal) => ({
+  ...(await importOriginal<AdmissionModule>()),
+  admitManagedCloudRoute: mocks.admit,
 }));
 vi.mock('@/lib/services/background-usage-lease', () => ({
   reserveBackgroundUsage: mocks.reserve,
@@ -67,7 +55,6 @@ type AdapterProvidersModule =
   typeof import('@/app/api/llm/v1/chat/completions/lib/adapter-providers');
 
 type LoggerModule = typeof import('@/lib/logger');
-type SideCallTrainingPolicyModule = typeof import('@/lib/server/side-call-training-policy');
 
 const INPUT = {
   db: {} as never,
@@ -85,11 +72,13 @@ const ROUTE = {
   providerModelId: 'model-a',
 };
 
+function admitted(route: typeof ROUTE) {
+  return { status: 'admitted', route, dispatchProvider: route.provider };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.routingRequest.mockImplementation(async (_db, _user, request) => request);
-  mocks.providerAllowed.mockResolvedValue(true);
-  mocks.resolveAutoRoute.mockReturnValue(ROUTE);
+  mocks.admit.mockResolvedValue(admitted(ROUTE));
   mocks.reserve.mockResolvedValue(mocks.lease);
   mocks.lease.providerStarted.mockResolvedValue(undefined);
   mocks.lease.completed.mockResolvedValue(undefined);
@@ -119,19 +108,15 @@ describe('resolveSecurityScanModel choice', () => {
     );
     expect(option).toBeDefined();
     const effort = getModelEffortOptions(option!.id)[0]!;
-    mocks.resolveAutoRoute.mockReturnValue({
-      ...ROUTE,
-      modelKey: option!.id,
-      providerModelId: option!.id,
-    });
+    mocks.admit.mockResolvedValue(
+      admitted({ ...ROUTE, modelKey: option!.id, providerModelId: option!.id }),
+    );
 
     const model = await resolveSecurityScanModel({ ...INPUT, selection: option!.id, effort });
     await model.call(CALL);
 
-    expect(mocks.routingRequest).toHaveBeenCalledWith(
-      INPUT.db,
-      'user-1',
-      expect.objectContaining({ selection: option!.id }),
+    expect(mocks.admit).toHaveBeenCalledWith(
+      expect.objectContaining({ need: { selection: option!.id, taskType: 'coding' } }),
     );
     expect(mocks.stream).toHaveBeenCalledWith(
       expect.objectContaining({ effort: expect.any(String) }),
@@ -143,25 +128,24 @@ describe('resolveSecurityScanModel choice', () => {
     const model = await resolveSecurityScanModel({ ...INPUT, effort: 'high' });
     await model.call(CALL);
 
-    expect(mocks.routingRequest).toHaveBeenCalledWith(
-      INPUT.db,
-      'user-1',
-      expect.objectContaining({ selection: 'auto' }),
+    expect(mocks.admit).toHaveBeenCalledWith(
+      expect.objectContaining({ need: { taskType: 'coding' } }),
     );
     expect(mocks.stream.mock.calls[0]?.[0]).not.toHaveProperty('effort');
   });
 });
 
 describe('resolveSecurityScanModel', () => {
-  it('routes on the managed coding route and settles each call as security scan usage', async () => {
-    const model = await resolveSecurityScanModel(INPUT);
+  it('asks for a background coding route for the account and workspace on its plan, and settles each call as security scan usage', async () => {
+    const model = await resolveSecurityScanModel({ ...INPUT, organizationId: 'org-1' });
     await expect(model.call(CALL)).resolves.toEqual({ text: '{"findings":[]}' });
 
-    expect(mocks.routingRequest).toHaveBeenCalledWith(
-      INPUT.db,
-      'user-1',
-      expect.objectContaining({ taskType: 'coding', trustMode: 'managed_cloud' }),
-    );
+    expect(mocks.admit).toHaveBeenCalledWith({
+      kind: 'background',
+      account: { db: INPUT.db, userId: 'user-1', organizationId: 'org-1' },
+      planTier: 'pro',
+      need: { taskType: 'coding' },
+    });
     expect(mocks.reserve).toHaveBeenCalledWith(
       expect.objectContaining({
         idempotencyKey: `security-scan:${INPUT.scanId}:scan:0`,
@@ -175,16 +159,17 @@ describe('resolveSecurityScanModel', () => {
     expect(request).toContain('"REPOSITORY-SOURCE"');
   });
 
-  it('has no route when the account allows no provider that keeps code out of training', async () => {
-    mocks.routingRequest.mockResolvedValueOnce(null);
-    await expect(resolveSecurityScanModel(INPUT)).rejects.toBeInstanceOf(SecurityScanNoRouteError);
+  it.each([['no_training_route'], ['no_route'], ['policy_unreadable']])(
+    'has no route and never reserves when admission refuses with %s',
+    async (reason) => {
+      mocks.admit.mockResolvedValueOnce({ status: 'refused', reason, code: null });
 
-    mocks.providerAllowed.mockResolvedValueOnce(false);
-    await expect(resolveSecurityScanModel(INPUT)).rejects.toBeInstanceOf(SecurityScanNoRouteError);
-
-    mocks.resolveAutoRoute.mockReturnValueOnce({ status: 'unavailable', code: 'none' });
-    await expect(resolveSecurityScanModel(INPUT)).rejects.toBeInstanceOf(SecurityScanNoRouteError);
-  });
+      await expect(resolveSecurityScanModel(INPUT)).rejects.toBeInstanceOf(
+        SecurityScanNoRouteError,
+      );
+      expect(mocks.reserve).not.toHaveBeenCalled();
+    },
+  );
 
   it('reports a refused reservation as a budget error and releases a failed call', async () => {
     const model = await resolveSecurityScanModel(INPUT);

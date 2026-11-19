@@ -1,5 +1,6 @@
 import { vi, type Mock } from 'vitest';
 import { getModelFamilySlot, getModelMetadataById } from '@agiworkforce/types';
+import { inMemoryPolicySource } from '@/lib/server/managed-cloud-routing/__tests__/in-memory-policy-source';
 
 const FAMILY = getModelFamilySlot('openai/gpt-fast');
 
@@ -24,6 +25,10 @@ interface ModelMocks {
   drainToLlmResponse: Mock;
   streamedRequests: unknown[];
 }
+
+export const supportPolicySource = inMemoryPolicySource({
+  availableProviderIds: new Set([SELECTED_ROUTE.provider]),
+});
 
 export const admitEveryModelCall = async (): Promise<boolean> => true;
 

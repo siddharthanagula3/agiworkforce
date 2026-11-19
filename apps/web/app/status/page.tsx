@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { PageLink } from '@shared/components/layout/EmbeddedPage';
 
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
@@ -279,9 +279,9 @@ export default async function StatusPage() {
                   </Prose>
                   <Prose size="sm">
                     Seeing a fault this page does not show?{' '}
-                    <Link href={contactMailto()} className="agi-ds-link">
+                    <PageLink href={contactMailto()} className="agi-ds-link">
                       Report a problem
-                    </Link>
+                    </PageLink>
                     .
                   </Prose>
                 </div>
@@ -366,9 +366,9 @@ export default async function StatusPage() {
             />
             {mirrorUrl ? (
               <Prose size="sm">
-                <Link href={mirrorUrl} className="agi-ds-link">
+                <PageLink href={mirrorUrl} className="agi-ds-link">
                   Open the status mirror
-                </Link>
+                </PageLink>
               </Prose>
             ) : null}
           </Stack>
@@ -411,9 +411,9 @@ export default async function StatusPage() {
               <Prose>
                 Each row is computed from production rows over a rolling window, not from a
                 hand-kept spreadsheet, and the objectives it is measured against are on{' '}
-                <Link href="/sla" className="agi-ds-link">
+                <PageLink href="/sla" className="agi-ds-link">
                   /sla
-                </Link>
+                </PageLink>
                 . When a domain burns its error budget fast enough to empty the month inside two
                 days, the same numbers page whoever is on call. A window with no events says so
                 rather than reporting a perfect score over nothing.

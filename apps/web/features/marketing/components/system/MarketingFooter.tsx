@@ -6,6 +6,7 @@ import './public-footer.css';
 import { CANONICAL_POLICY_ROUTES } from '@/lib/legal-constants';
 import { AgiMark } from '@shared/components/agi/AgiMark';
 import { CookiePreferencesTrigger } from '@shared/components/CookiePreferencesTrigger';
+import { PageLink, UnlessEmbedded } from '@shared/components/layout/EmbeddedPage';
 import { COOKIE_PREFERENCES_LABEL } from '@shared/lib/cookie-consent';
 import { Container } from './Container';
 import { FOOTER_COLUMNS, FOOTER_LEGAL } from './nav';
@@ -23,37 +24,39 @@ export function MarketingFooter({ condensed = false }: { condensed?: boolean } =
     >
       <Container>
         {!condensed && (
-          <div className="agi-ds-footer-top">
-            <div className="agi-ds-footer-brand">
-              <span className="agi-ds-footer-wordmark">
-                <AgiMark className="agi-ds-brand-symbol" ariaLabel={PRODUCT_BRAND} />
-              </span>
-              <p className="agi-ds-footer-statement">
-                One workspace for <span className="agi-ds-footer-phrase">AI-assisted</span> work.
-              </p>
+          <UnlessEmbedded>
+            <div className="agi-ds-footer-top">
+              <div className="agi-ds-footer-brand">
+                <span className="agi-ds-footer-wordmark">
+                  <AgiMark className="agi-ds-brand-symbol" ariaLabel={PRODUCT_BRAND} />
+                </span>
+                <p className="agi-ds-footer-statement">
+                  One workspace for <span className="agi-ds-footer-phrase">AI-assisted</span> work.
+                </p>
+              </div>
+              <nav aria-label="Footer" className="agi-ds-footer-cols">
+                {FOOTER_COLUMNS.map((column) => {
+                  const headingId = columnHeadingId(column.title);
+                  return (
+                    <div className="agi-ds-footer-col" key={column.title}>
+                      <h2 className="agi-ds-footer-title" id={headingId}>
+                        {column.title}
+                      </h2>
+                      <ul aria-labelledby={headingId} className="agi-ds-footer-list">
+                        {column.links.map((link) => (
+                          <li key={link.href}>
+                            <Link href={link.href} className="agi-ds-footer-link">
+                              {link.label}
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  );
+                })}
+              </nav>
             </div>
-            <nav aria-label="Footer" className="agi-ds-footer-cols">
-              {FOOTER_COLUMNS.map((column) => {
-                const headingId = columnHeadingId(column.title);
-                return (
-                  <div className="agi-ds-footer-col" key={column.title}>
-                    <h2 className="agi-ds-footer-title" id={headingId}>
-                      {column.title}
-                    </h2>
-                    <ul aria-labelledby={headingId} className="agi-ds-footer-list">
-                      {column.links.map((link) => (
-                        <li key={link.href}>
-                          <Link href={link.href} className="agi-ds-footer-link">
-                            {link.label}
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                );
-              })}
-            </nav>
-          </div>
+          </UnlessEmbedded>
         )}
         <div className="agi-ds-footer-legal">
           <span className="agi-ds-footer-copyright">
@@ -62,7 +65,9 @@ export function MarketingFooter({ condensed = false }: { condensed?: boolean } =
           <nav aria-label="Legal" className="agi-ds-footer-legal-nav">
             {FOOTER_LEGAL.map((link) => (
               <Fragment key={link.href}>
-                <Link href={link.href}>{link.label}</Link>
+                <PageLink href={link.href} omitWhenEmbedded>
+                  {link.label}
+                </PageLink>
                 {link.href === CANONICAL_POLICY_ROUTES.cookies ? (
                   <CookiePreferencesTrigger className="agi-ds-footer-legal-button">
                     {COOKIE_PREFERENCES_LABEL}

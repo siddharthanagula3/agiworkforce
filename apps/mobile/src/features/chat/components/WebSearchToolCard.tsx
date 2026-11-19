@@ -1,13 +1,18 @@
-import { Alert, View } from 'react-native';
+import { View } from 'react-native';
 import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { Globe, SearchX, CircleSlash, TriangleAlert } from 'lucide-react-native';
 import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
-import { hostnameOf, isValidExternalHttpUrl } from '@/src/features/chat/utils/externalUrls';
-import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
+import {
+  canOpenSource,
+  openSource,
+  sourcePublisher,
+} from '@/src/features/chat/utils/sourceDisplay';
 import type { ToolCall, ToolSearchResult } from '@/types/chat';
+
+const SOURCE_CHIP_HIT_SLOP = { top: 10, bottom: 10, left: 4, right: 4 };
 
 const SEARCH_TOOL_NAMES = new Set(['web_search', 'perplexity_search', 'websearch', 'brave_search']);
 
@@ -38,22 +43,18 @@ export function webSearchQueryOf(tool: ToolCall): string | null {
 
 function SourceChip({ result }: { result: ToolSearchResult }) {
   const colors = useThemeColors();
-  const hostname = hostnameOf(result.url);
-
-  const open = async () => {
-    if (!isValidExternalHttpUrl(result.url)) return;
-    const opened = await openUntrustedUrlInAppBrowser(result.url);
-    if (!opened) {
-      Alert.alert('Could not open source', 'Check your connection and try again.');
-    }
-  };
+  const hostname = sourcePublisher(result);
+  const canOpen = canOpenSource(result.url);
 
   return (
     <PressableBox
-      onPress={open}
-      accessibilityRole="link"
-      accessibilityLabel={`Open source ${hostname}, ${result.title}`}
-      hitSlop={6}
+      onPress={canOpen ? () => void openSource(result.url) : undefined}
+      disabled={!canOpen}
+      accessibilityRole={canOpen ? 'link' : 'text'}
+      accessibilityLabel={
+        canOpen ? `Open source ${hostname}, ${result.title}` : `${hostname}, ${result.title}`
+      }
+      hitSlop={SOURCE_CHIP_HIT_SLOP}
       style={{
         flexDirection: 'row',
         alignItems: 'center',

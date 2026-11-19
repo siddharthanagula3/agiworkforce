@@ -9,6 +9,7 @@ import { Text } from '@/components/ui/Text';
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 import { fetchServiceNotices, noticeUrl } from './service';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { NATIVE_PURCHASES_AVAILABLE } from '@/src/features/billing/nativePurchaseAvailability';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 
@@ -53,7 +54,10 @@ export function ServiceNoticesBanner() {
     setDismissed((current) => (current.includes(id) ? current : [...current, id]));
   }, []);
 
-  const notice = notices.find((entry) => !dismissed.includes(entry.id));
+  const notice = notices.find(
+    (entry) =>
+      !dismissed.includes(entry.id) && (NATIVE_PURCHASES_AVAILABLE || entry.scope !== 'billing'),
+  );
   if (!notice) return null;
   const Icon = notice.kind === 'maintenance' ? CalendarClock : CircleAlert;
   const iconColor =

@@ -25,7 +25,7 @@ import {
 } from '@/src/features/auth/services/cloudAccountSession';
 
 export const FAST_MODE_USAGE_CREDITS_MESSAGE =
-  'Fast mode is billed to usage credits. Turn them on in billing on the web.';
+  'Fast mode is billed to usage credits. Turn on usage credits in Usage.';
 
 interface FastModeAccountState {
   account: CloudAccountEpoch;

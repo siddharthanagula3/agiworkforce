@@ -14,6 +14,8 @@ const mockResolveImageRequest = jest.fn();
 let mockChatInputOnSend: ((text: string) => void | boolean | Promise<void | boolean>) | undefined;
 const mockCloudAccountStorage = new Map<string, string>();
 
+jest.mock('@clerk/expo', () => ({ useUser: () => ({ user: null }) }));
+
 jest.mock('@/services/usage', () => ({
   fetchUsageSnapshot: jest.fn(() => new Promise(() => undefined)),
 }));
@@ -55,6 +57,8 @@ jest.mock('@/stores/chatStore', () => ({
       deleteMessage: jest.fn(),
       setPaywallError: jest.fn(),
       clearError: jest.fn(),
+      clearUnscopedError: jest.fn(),
+      discardUnsentConversation: jest.fn(async () => undefined),
       features: { imageGen: true },
     }),
 }));
@@ -145,6 +149,11 @@ jest.mock('@/src/features/model-picker/installStore', () => ({
   pickReadyLocalModelId: () => null,
 }));
 
+jest.mock('@/services/llmGate', () => ({
+  ...jest.requireActual('@/services/llmGate'),
+  ensureCloudSendConsent: async () => undefined,
+}));
+
 jest.mock('@/lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb) => cb()),
   rehydrateWhenMmkvReady: jest.fn((store, _name) => {
@@ -172,6 +181,7 @@ import { useWaitlistStore } from '../src/features/waitlist/store';
 import { useModelStore } from '../src/features/model-picker/store';
 import { useTierStore } from '../src/features/billing/store';
 import { useAuthStore } from '../src/features/auth/store';
+import { useChatViewStore } from '../stores/chat/chatViewStore';
 import { DEFAULT_LOCAL_MODEL_ID } from '../src/features/model-picker/service';
 import {
   __resetCloudAccountSessionForTests,
@@ -267,5 +277,28 @@ describe('Chat tab new chat image request with guide images', () => {
     expect(input['referenceImages']).toBeUndefined();
     expect(input['transparentBackground']).toBeUndefined();
     expect(input['operation']).toBeUndefined();
+  });
+
+  it('asks for a transparent background when the composer has it switched on', async () => {
+    useChatViewStore.setState({ imageTransparentBackground: true });
+    mockResolveImageRequest.mockReturnValue({
+      status: 'ready',
+      prompt: 'a logo on nothing',
+      model: 'fixture-image-model',
+      transparentBackground: true,
+      ownerId: 'mobile-image-test-user',
+    });
+
+    try {
+      render(<ChatTabScreen />);
+      await mockChatInputOnSend?.('a logo on nothing');
+
+      await waitFor(() => expect(mockRunImageGenerationTurn).toHaveBeenCalledTimes(1));
+      expect(mockResolveImageRequest).toHaveBeenCalledWith(
+        expect.objectContaining({ transparentBackground: true }),
+      );
+    } finally {
+      useChatViewStore.setState({ imageTransparentBackground: false });
+    }
   });
 });

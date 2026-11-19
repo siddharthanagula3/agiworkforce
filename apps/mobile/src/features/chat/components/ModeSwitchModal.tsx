@@ -4,6 +4,7 @@ import { PressableBox } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
 import { useThemeColors, dialogPadding } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 
 export type AppMode = 'chat' | 'agent' | 'voice' | 'cloud' | 'local';
 
@@ -73,7 +74,9 @@ export function ModeSwitchModal({
         }}
       >
         <View
+          testID="mode-switch-dialog"
           style={{
+            ...contentColumn('form'),
             maxHeight: '86%',
             borderRadius: 24,
             borderWidth: 1,

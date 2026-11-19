@@ -1,3 +1,12 @@
+export {
+  MAX_WORKBOOK_SHEETS,
+  WorkbookFormatError,
+  WorkbookPreviewLimitError,
+  XLSX_NOT_CALCULATED,
+  readWorkbookSheets,
+  type WorkbookSheet,
+} from './workbook-sheets';
+
 export interface TabularData {
   columns: string[];
   rows: string[][];
@@ -65,6 +74,36 @@ function sniffDelimiter(text: string): ',' | '\t' | ';' {
 }
 
 const LEADING_BLANK_LINES_RE = /^(?:[ \t]*(?:\r\n|\r|\n))+/;
+
+export const SPREADSHEET_ROW_CAP = 500;
+
+export type TabularSort = { column: number; direction: 'asc' | 'desc' } | null;
+
+export function nextTabularSort(prev: TabularSort, column: number): TabularSort {
+  if (!prev || prev.column !== column) return { column, direction: 'asc' };
+  if (prev.direction === 'asc') return { column, direction: 'desc' };
+  return null;
+}
+
+export function sortTabularRows(data: TabularData, sort: TabularSort): string[][] {
+  if (!sort) return data.rows;
+  const { column, direction } = sort;
+  const numeric = data.numericColumns[column] ?? false;
+  const sign = direction === 'asc' ? 1 : -1;
+  return [...data.rows].sort((a, b) => {
+    const av = (a[column] ?? '').trim();
+    const bv = (b[column] ?? '').trim();
+    if (!av && !bv) return 0;
+    if (!av) return 1;
+    if (!bv) return -1;
+    if (numeric) {
+      const an = numericValue(av);
+      const bn = numericValue(bv);
+      if (!Number.isNaN(an) && !Number.isNaN(bn)) return sign * (an - bn);
+    }
+    return sign * av.localeCompare(bv, undefined, { numeric: true, sensitivity: 'base' });
+  });
+}
 
 export function parseDelimited(text: string, delimiter: ',' | '\t' | ';'): string[][] {
   const rows: string[][] = [];
@@ -138,7 +177,8 @@ function fromGrid(
   delimiter?: TabularData['delimiter'],
 ): TabularData | null {
   if (grid.length === 0) return null;
-  const width = Math.max(...grid.map((r) => r.length));
+  let width = 0;
+  for (const row of grid) if (row.length > width) width = row.length;
   if (width === 0) return null;
   const header = grid[0]!;
   const columns = Array.from({ length: width }, (_, i) => {
@@ -192,6 +232,10 @@ export function parseTabular(content: string): TabularData | null {
   const grid = parseDelimited(text, delimiter);
   if (grid.length < 2 && (grid[0]?.length ?? 0) < 2) return null;
   return fromGrid(grid, 'delimited', delimiter);
+}
+
+export function parseCsvTable(text: string): TabularData | null {
+  return fromGrid(parseDelimited(stripBom(text ?? ''), ','), 'delimited', ',');
 }
 
 function stringifyJsonCell(value: unknown): string {

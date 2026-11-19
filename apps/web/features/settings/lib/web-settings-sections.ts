@@ -51,6 +51,17 @@ export const WEB_SETTINGS_SECTION_ALIASES = {
 
 type WebSettingsSectionAlias = keyof typeof WEB_SETTINGS_SECTION_ALIASES;
 
+/**
+ * Addresses a notice opens that name one task inside a pane. The web opens the
+ * pane that holds the task; the phone app, whose settings are split
+ * differently, opens its own screen for the task.
+ */
+export const WEB_SETTINGS_TASK_SECTIONS = {
+  'account-deletion': 'account',
+} as const satisfies Record<string, WebSettingsPane>;
+
+type WebSettingsTaskSection = keyof typeof WEB_SETTINGS_TASK_SECTIONS;
+
 /** A section a link may address: a pane, or an alias that opens one. */
 export type WebSettingsContentSection = WebSettingsPane | WebSettingsSectionAlias;
 
@@ -88,8 +99,11 @@ const WEB_SETTINGS_SECTION_SET: ReadonlySet<string> = new Set<string>([
 ]);
 
 function aliasTarget(value: string): WebSettingsPane | undefined {
-  return Object.hasOwn(WEB_SETTINGS_SECTION_ALIASES, value)
-    ? WEB_SETTINGS_SECTION_ALIASES[value as WebSettingsSectionAlias]
+  if (Object.hasOwn(WEB_SETTINGS_SECTION_ALIASES, value)) {
+    return WEB_SETTINGS_SECTION_ALIASES[value as WebSettingsSectionAlias];
+  }
+  return Object.hasOwn(WEB_SETTINGS_TASK_SECTIONS, value)
+    ? WEB_SETTINGS_TASK_SECTIONS[value as WebSettingsTaskSection]
     : undefined;
 }
 

@@ -88,6 +88,7 @@ vi.mock('../trace-service', async () => {
 
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
 import { toolShortlistShadowInput } from '@/app/api/llm/v1/chat/completions/lib/tool-shortlist-shadow';
+import { DEFAULT_TOOL_SCHEMA_BUDGET } from '@/app/api/llm/v1/chat/completions/lib/tool-schema-loader';
 
 import { runToolShortlistShadow } from '../consumers/tool-shortlist';
 import { runMemoryRelevanceShadow } from '../consumers/memory-relevance';
@@ -147,7 +148,12 @@ describe('a disabled decision costs nothing measurable', () => {
     vi.stubGlobal('fetch', network);
 
     await runToolShortlistShadow(
-      toolShortlistShadowInput({ scope: scope(), tools: TOOLS, turnText }),
+      toolShortlistShadowInput({
+        scope: scope(),
+        tools: TOOLS,
+        turnText,
+        budget: DEFAULT_TOOL_SCHEMA_BUDGET,
+      }),
     );
 
     expect(turnText).not.toHaveBeenCalled();
@@ -196,7 +202,12 @@ describe('a disabled decision costs nothing measurable', () => {
 
     await Promise.all([
       runToolShortlistShadow(
-        toolShortlistShadowInput({ scope: shared, tools: TOOLS, turnText: () => '' }),
+        toolShortlistShadowInput({
+          scope: shared,
+          tools: TOOLS,
+          turnText: () => '',
+          budget: DEFAULT_TOOL_SCHEMA_BUDGET,
+        }),
       ),
       runMemoryRelevanceShadow({ scope: shared, derive }),
       runWorthExtractingShadow({ scope: shared, derive }),

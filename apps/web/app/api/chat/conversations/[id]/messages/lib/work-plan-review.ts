@@ -3,6 +3,7 @@ import { AGI_WORK_MODE } from '@agiworkforce/types';
 import type { CloudWorkPlanReview } from '@agiworkforce/types/protocol';
 import { AGIWORK_PLAN_MAX_STEPS, MAX_AGIWORK_PLAN_STEP_CHARS } from '@agiworkforce/cloud-contracts';
 import { AgiWorkGoalSchema } from '@/app/api/llm/v1/chat/completions/lib/agiwork-plan';
+import { mergeJsonbObjectSql } from '@/lib/server/jsonb-object-merge';
 
 const WorkPlanReviewSchema = z
   .object({
@@ -55,7 +56,7 @@ export function sameWorkPlanContent(
 }
 
 export const UPDATE_WORK_PLAN_REVIEW_SQL = `update web_messages
-   set metadata = coalesce(metadata, '{}'::jsonb) || $1::jsonb
+   set metadata = ${mergeJsonbObjectSql('metadata', '$1::jsonb')}
  where id = $2::uuid and conversation_id = $3::uuid
    and role = 'assistant' and deleted_at is null
    and coalesce(metadata -> 'agiWorkPlanReview', 'null'::jsonb) = $4::jsonb

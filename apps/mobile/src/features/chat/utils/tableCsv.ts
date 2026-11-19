@@ -1,24 +1,28 @@
-const FORMULA_PREFIX = /^[=+\-@\t\r]/;
+import { toCsv, toTsv, type TabularData } from '@agiworkforce/unified-chat/tabular';
+import { inlinePlainText } from '@/src/features/chat/utils/markdownInlineSyntax';
 
-function plainCell(value: string): string {
-  return value
-    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
-    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
-    .replace(/<br\s*\/?>/gi, ' ')
-    .replace(/(\*\*|__|~~|`)/g, '')
-    .replace(/\\\|/g, '|')
-    .trim();
+export function tableCellPlainText(value: string): string {
+  return inlinePlainText(value).trim();
 }
 
-function csvCell(value: string): string {
-  const plain = plainCell(value);
-  const guarded = FORMULA_PREFIX.test(plain) ? `'${plain}` : plain;
-  return /[",\r\n]/.test(guarded) ? `"${guarded.replace(/"/g, '""')}"` : guarded;
+export function markdownTableData(rows: readonly (readonly string[])[]): TabularData {
+  const width = Math.max(0, ...rows.map((row) => row.length));
+  const cells = rows.map((row) =>
+    Array.from({ length: width }, (_, index) => tableCellPlainText(row[index] ?? '')),
+  );
+  const [columns = [], ...body] = cells;
+  return {
+    columns,
+    rows: body,
+    numericColumns: columns.map(() => false),
+    source: 'delimited',
+  };
 }
 
 export function markdownTableToCsv(rows: readonly (readonly string[])[]): string {
-  const width = Math.max(0, ...rows.map((row) => row.length));
-  return rows
-    .map((row) => Array.from({ length: width }, (_, index) => csvCell(row[index] ?? '')).join(','))
-    .join('\r\n');
+  return toCsv(markdownTableData(rows));
+}
+
+export function markdownTableToTsv(rows: readonly (readonly string[])[]): string {
+  return toTsv(markdownTableData(rows));
 }

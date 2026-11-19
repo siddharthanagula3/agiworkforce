@@ -111,6 +111,7 @@ const MEMBERSHIPS: Record<string, Record<string, unknown>> = {
     organization_id: ORG_A,
     user_id: 'org-a-admin',
     role: 'admin',
+    status: 'active',
     provisioning_source: 'manual',
     provisioned_at: null,
     joined_at: '2026-07-23T00:00:00.000Z',
@@ -119,6 +120,7 @@ const MEMBERSHIPS: Record<string, Record<string, unknown>> = {
     organization_id: ORG_B,
     user_id: 'org-b-owner',
     role: 'owner',
+    status: 'active',
     provisioning_source: 'manual',
     provisioned_at: null,
     joined_at: '2026-07-23T00:00:00.000Z',
@@ -127,6 +129,7 @@ const MEMBERSHIPS: Record<string, Record<string, unknown>> = {
     organization_id: ORG_B,
     user_id: 'org-b-member',
     role: 'member',
+    status: 'active',
     provisioning_source: 'manual',
     provisioned_at: null,
     joined_at: '2026-07-23T00:00:00.000Z',
@@ -167,6 +170,7 @@ function installDatabase() {
           organization_id: ORG_A,
           user_id: 'target-user',
           role: 'member',
+          status: 'active',
           provisioning_source: 'manual',
           provisioned_at: null,
           joined_at: '2026-08-01T00:00:00.000Z',
@@ -236,7 +240,7 @@ describe('settings/team cross-organization isolation', () => {
           ),
         ).toBe(false);
       } finally {
-        delete caller['status'];
+        caller['status'] = 'active';
       }
     },
   );
@@ -338,6 +342,7 @@ describe('settings/team cross-organization isolation', () => {
       organization_id: ORG_A,
       user_id: 'target-user',
       role: 'member',
+      status: 'active',
       provisioning_source: 'manual',
       provisioned_at: null,
       joined_at: '2026-07-24T00:00:00.000Z',

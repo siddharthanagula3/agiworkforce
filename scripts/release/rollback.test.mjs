@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import test from 'node:test';
 
 import {
@@ -6,7 +9,9 @@ import {
   chooseRollbackTarget,
   listProductionDeployments,
   parseArguments,
+  parseRollbackFloor,
   readEnvironment,
+  readRollbackFloor,
   requestRollback,
   runRollback,
   teamQuery,
@@ -152,6 +157,7 @@ const ENV = {
 test('a dry run resolves the plan and issues no write of any kind', async () => {
   const calls = [];
   const result = await runRollback({
+    readFloor: () => null,
     argv: ['--dry-run', '--reason', 'checking the path'],
     env: ENV,
     fetchImpl: recordingFetch(calls),
@@ -168,6 +174,7 @@ test('a dry run resolves the plan and issues no write of any kind', async () => 
 test('a dry run writes no audit event, so it cannot be mistaken for a rollback', async () => {
   const calls = [];
   await runRollback({
+    readFloor: () => null,
     argv: ['--dry-run', '--reason', 'checking the path'],
     env: { ...ENV, AGI_DATABASE_URL: 'postgresql://127.0.0.1:1/nothing-listens-here' },
     fetchImpl: recordingFetch(calls),
@@ -178,6 +185,7 @@ test('a dry run writes no audit event, so it cannot be mistaken for a rollback',
 test('a real rollback posts to the rollback endpoint after reading the plan', async () => {
   const calls = [];
   const result = await runRollback({
+    readFloor: () => null,
     argv: ['--reason', 'bad deploy'],
     env: ENV,
     fetchImpl: recordingFetch(calls),
@@ -198,6 +206,7 @@ test('an audit-storage failure after an accepted rollback is a warning, not a fa
   console.warn = (message) => warnings.push(message);
   try {
     const result = await runRollback({
+      readFloor: () => null,
       argv: ['--reason', 'bad deploy'],
       env: { ...ENV, AGI_DATABASE_URL: 'postgresql://fixture.invalid/audit' },
       fetchImpl: recordingFetch(calls),
@@ -220,6 +229,7 @@ test('an audit-storage failure after an accepted rollback is a warning, not a fa
 test('a refused rollback never reaches the audit trail', async () => {
   await assert.rejects(
     runRollback({
+      readFloor: () => null,
       argv: ['--reason', 'bad deploy'],
       env: ENV,
       fetchImpl: async (url, init = {}) =>
@@ -278,6 +288,7 @@ test('a configured drill resolves its target and records the drill without reque
   const calls = [];
   const events = [];
   const result = await runRollback({
+    readFloor: () => null,
     argv: ['--drill', '--reason', 'fixture drill'],
     env: { ...ENV, AGI_DATABASE_URL: 'postgresql://fixture.invalid/audit' },
     fetchImpl: recordingFetch(calls),
@@ -299,6 +310,7 @@ test('a configured drill resolves its target and records the drill without reque
 test('a configured drill fails when Vercel refuses its credentials', async () => {
   await assert.rejects(
     runRollback({
+      readFloor: () => null,
       argv: ['--drill'],
       env: ENV,
       fetchImpl: async () => ({ ok: false, status: 403 }),
@@ -312,6 +324,7 @@ test('a configured drill fails when Vercel refuses its credentials', async () =>
 test('a configured drill fails when there is no earlier ready deployment', async () => {
   await assert.rejects(
     runRollback({
+      readFloor: () => null,
       argv: ['--drill'],
       env: ENV,
       fetchImpl: async (url) => ({
@@ -331,6 +344,7 @@ test('a configured drill fails when there is no earlier ready deployment', async
 test('a configured drill preserves an audit-storage failure', async () => {
   await assert.rejects(
     runRollback({
+      readFloor: () => null,
       argv: ['--drill'],
       env: { ...ENV, AGI_DATABASE_URL: 'postgresql://fixture.invalid/audit' },
       fetchImpl: recordingFetch([]),
@@ -341,4 +355,292 @@ test('a configured drill preserves an audit-storage failure', async () => {
     }),
     /fixture audit write failed/u,
   );
+});
+
+const FLOOR = {
+  deploymentId: 'dpl_good',
+  createdAt: 2000,
+  reason: 'first build with a stored-size check',
+};
+
+test("with no floor recorded the choice is today's", () => {
+  assert.equal(chooseRollbackTarget(SERVING, DEPLOYMENTS, null, null).uid, 'dpl_good');
+  assert.equal(chooseRollbackTarget(SERVING, DEPLOYMENTS, 'dpl_older', null).uid, 'dpl_older');
+  assert.equal(chooseRollbackTarget(SERVING, DEPLOYMENTS).uid, 'dpl_good');
+  assert.throws(
+    () =>
+      chooseRollbackTarget({ id: 'dpl_only', createdAt: 1 }, [
+        { uid: 'dpl_only', readyState: 'READY', createdAt: 1 },
+      ]),
+    /No earlier ready production deployment exists/u,
+  );
+});
+
+test('refuses a requested target older than the floor', () => {
+  assert.throws(
+    () => chooseRollbackTarget(SERVING, DEPLOYMENTS, 'dpl_older', FLOOR),
+    (error) =>
+      error instanceof RollbackError &&
+      error.message.includes('dpl_older') &&
+      error.message.includes('dpl_good') &&
+      error.message.includes(FLOOR.reason),
+  );
+});
+
+test('a requested target at or after the floor is allowed', () => {
+  assert.equal(chooseRollbackTarget(SERVING, DEPLOYMENTS, 'dpl_good', FLOOR).uid, 'dpl_good');
+  assert.equal(
+    chooseRollbackTarget({ id: 'dpl_rejected', createdAt: 4000 }, DEPLOYMENTS, 'dpl_new', FLOOR)
+      .uid,
+    'dpl_new',
+  );
+});
+
+test('a requested target with no creation time cannot be shown to be at or after the floor', () => {
+  assert.throws(
+    () =>
+      chooseRollbackTarget(
+        SERVING,
+        [{ uid: 'dpl_undated', readyState: 'READY' }],
+        'dpl_undated',
+        FLOOR,
+      ),
+    RollbackError,
+  );
+});
+
+test('automatic choice skips deployments older than the floor and refuses when none is left', () => {
+  const laterFloor = { ...FLOOR, deploymentId: 'dpl_new', createdAt: 3000 };
+  assert.throws(
+    () => chooseRollbackTarget(SERVING, DEPLOYMENTS, null, laterFloor),
+    (error) =>
+      error instanceof RollbackError &&
+      error.message.includes('dpl_new') &&
+      error.message.includes(laterFloor.reason),
+  );
+
+  const skipped = chooseRollbackTarget(
+    SERVING,
+    [
+      { uid: 'dpl_new', readyState: 'READY', createdAt: 3000 },
+      { uid: 'dpl_below', readyState: 'READY', createdAt: 2500 },
+      { uid: 'dpl_at', readyState: 'READY', createdAt: 2000 },
+      { uid: 'dpl_old', readyState: 'READY', createdAt: 1000 },
+    ],
+    null,
+    FLOOR,
+  );
+  assert.equal(skipped.uid, 'dpl_below');
+
+  const atFloor = chooseRollbackTarget(
+    { id: 'dpl_new', createdAt: 3000 },
+    [
+      { uid: 'dpl_new', readyState: 'READY', createdAt: 3000 },
+      { uid: 'dpl_at', readyState: 'READY', createdAt: 2000 },
+      { uid: 'dpl_old', readyState: 'READY', createdAt: 1000 },
+    ],
+    null,
+    FLOOR,
+  );
+  assert.equal(atFloor.uid, 'dpl_at');
+
+  assert.throws(
+    () =>
+      chooseRollbackTarget(
+        { id: 'dpl_at', createdAt: 2000 },
+        [
+          { uid: 'dpl_at', readyState: 'READY', createdAt: 2000 },
+          { uid: 'dpl_old', readyState: 'READY', createdAt: 1000 },
+        ],
+        null,
+        FLOOR,
+      ),
+    (error) => error instanceof RollbackError && error.message.includes(FLOOR.deploymentId),
+  );
+});
+
+test('the floor file is read as null or as a complete record', () => {
+  assert.equal(parseRollbackFloor({ web: null }), null);
+  assert.deepEqual(parseRollbackFloor({ web: FLOOR }), FLOOR);
+  for (const broken of [
+    { web: { ...FLOOR, createdAt: '1970-01-01T00:00:02.000Z' } },
+    { web: { ...FLOOR, createdAt: '2026-11-20T10:00:00' } },
+    { web: { ...FLOOR, createdAt: '2026' } },
+    { web: { ...FLOOR, createdAt: '12' } },
+    { web: { ...FLOOR, createdAt: 2000.5 } },
+    { web: { ...FLOOR, createdAt: -1 } },
+    { web: { ...FLOOR, createdAt: Number.NaN } },
+    { web: { ...FLOOR, createdAt: 8.64e15 + 1 } },
+    {},
+    { web: undefined },
+    { web: {} },
+    { web: { ...FLOOR, deploymentId: '' } },
+    { web: { ...FLOOR, createdAt: 'not a date' } },
+    { web: { ...FLOOR, createdAt: 0 } },
+    { web: { ...FLOOR, reason: ' ' } },
+    { web: 'dpl_good' },
+  ]) {
+    assert.throws(() => parseRollbackFloor(broken), RollbackError);
+  }
+});
+
+test('the committed floor file is readable and a missing or malformed one stops the rollback', () => {
+  assert.doesNotThrow(() => readRollbackFloor());
+  const directory = mkdtempSync(join(tmpdir(), 'rollback-floor-'));
+  try {
+    assert.throws(() => readRollbackFloor(join(directory, 'absent.json')), RollbackError);
+    const malformed = join(directory, 'malformed.json');
+    writeFileSync(malformed, '{ not json');
+    assert.throws(() => readRollbackFloor(malformed), RollbackError);
+    const recorded = join(directory, 'recorded.json');
+    writeFileSync(recorded, JSON.stringify({ web: FLOOR }));
+    assert.deepEqual(readRollbackFloor(recorded), FLOOR);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('a rollback with a floor recorded refuses an older named target before any write', async () => {
+  const calls = [];
+  await assert.rejects(
+    runRollback({
+      argv: ['--reason', 'bad deploy', '--to', 'dpl_older'],
+      env: ENV,
+      fetchImpl: recordingFetch(calls),
+      readFloor: () => FLOOR,
+      recordEventImpl: () => assert.fail('a refused target must not be audited as done'),
+    }),
+    /dpl_good/u,
+  );
+  assert.ok(!calls.some((call) => call.method === 'POST'));
+});
+
+test('a rollback whose floor file cannot be read stops before contacting Vercel', async () => {
+  await assert.rejects(
+    runRollback({
+      argv: ['--reason', 'bad deploy'],
+      env: ENV,
+      fetchImpl: () => assert.fail('an unreadable floor must stop before the API'),
+      readFloor: () => {
+        throw new RollbackError('unreadable floor');
+      },
+    }),
+    /unreadable floor/u,
+  );
+});
+
+test('a dry run and a drill report the floor and still never act', async () => {
+  for (const [argv, floor, expected] of [
+    [['--dry-run', '--reason', 'checking'], FLOOR, /rollback floor dpl_good/u],
+    [['--dry-run', '--reason', 'checking'], null, /no rollback floor recorded/u],
+    [['--drill'], FLOOR, /rollback floor dpl_good/u],
+  ]) {
+    const calls = [];
+    const events = [];
+    const lines = [];
+    const originalLog = console.log;
+    console.log = (line) => lines.push(line);
+    try {
+      await runRollback({
+        argv,
+        env: { ...ENV, AGI_DATABASE_URL: 'postgresql://fixture.invalid/audit' },
+        fetchImpl: recordingFetch(calls),
+        recordEventImpl: async (_config, event) => events.push(event),
+        readFloor: () => floor,
+      });
+    } finally {
+      console.log = originalLog;
+    }
+    assert.ok(lines.some((line) => expected.test(line)));
+    assert.ok(calls.every((call) => call.method === 'GET'));
+    if (argv.includes('--drill')) {
+      assert.equal(events.length, 1);
+      assert.deepEqual(events[0].detail.rollbackFloor, floor);
+    } else {
+      assert.equal(events.length, 0);
+    }
+  }
+});
+
+test('a floor time that disagrees with the listed floor deployment stops every choice', () => {
+  const lateFloor = { ...FLOOR, createdAt: 2500 };
+  const secondsFloor = { ...FLOOR, createdAt: 2 };
+  for (const floor of [lateFloor, secondsFloor]) {
+    for (const requested of [null, 'dpl_good', 'dpl_older']) {
+      assert.throws(
+        () => chooseRollbackTarget(SERVING, DEPLOYMENTS, requested, floor),
+        (error) =>
+          error instanceof RollbackError &&
+          error.message.includes('dpl_good') &&
+          error.message.includes(String(floor.createdAt)) &&
+          error.message.includes('2000'),
+      );
+    }
+  }
+});
+
+test('a floor recorded in epoch seconds cannot disable the floor while its deployment is listed', () => {
+  const nowSeconds = 1_795_000_000;
+  const listing = [
+    { uid: 'dpl_new', readyState: 'READY', createdAt: 1_795_000_300_000 },
+    { uid: 'dpl_floor', readyState: 'READY', createdAt: 1_795_000_000_000 },
+    { uid: 'dpl_before', readyState: 'READY', createdAt: 1_794_000_000_000 },
+  ];
+  const floor = { deploymentId: 'dpl_floor', createdAt: nowSeconds, reason: 'size check' };
+  assert.throws(
+    () =>
+      chooseRollbackTarget(
+        { id: 'dpl_new', createdAt: 1_795_000_300_000 },
+        listing,
+        'dpl_before',
+        floor,
+      ),
+    RollbackError,
+  );
+});
+
+test('the floor deployment itself is always an allowed target', () => {
+  const listing = [
+    { uid: 'dpl_new', readyState: 'READY', createdAt: 1_795_000_300_000 },
+    { uid: 'dpl_floor', readyState: 'READY', createdAt: 1_795_000_000_000 },
+    { uid: 'dpl_before', readyState: 'READY', createdAt: 1_794_000_000_000 },
+  ];
+  const floor = {
+    deploymentId: 'dpl_floor',
+    createdAt: 1_795_000_000_000,
+    reason: 'size check',
+  };
+  const current = { id: 'dpl_new', createdAt: 1_795_000_300_000 };
+  assert.equal(chooseRollbackTarget(current, listing, 'dpl_floor', floor).uid, 'dpl_floor');
+  assert.equal(chooseRollbackTarget(current, listing, null, floor).uid, 'dpl_floor');
+  assert.throws(() => chooseRollbackTarget(current, listing, 'dpl_before', floor), RollbackError);
+});
+
+test('a listed deployment whose creation time is not a number is below the floor', () => {
+  const listing = [
+    { uid: 'dpl_new', readyState: 'READY', createdAt: 3000 },
+    { uid: 'dpl_text', readyState: 'READY', createdAt: 'not a number' },
+    { uid: 'dpl_iso', readyState: 'READY', createdAt: '1970-01-01T00:00:02.500Z' },
+  ];
+  for (const requested of ['dpl_text', 'dpl_iso']) {
+    assert.throws(() => chooseRollbackTarget(SERVING, listing, requested, FLOOR), RollbackError);
+  }
+  assert.equal(chooseRollbackTarget(SERVING, listing, 'dpl_text', null).uid, 'dpl_text');
+});
+
+test('a dry run prints the floor time as an ISO instant', async () => {
+  const lines = [];
+  const originalLog = console.log;
+  console.log = (line) => lines.push(line);
+  try {
+    await runRollback({
+      argv: ['--dry-run', '--reason', 'checking'],
+      env: ENV,
+      fetchImpl: recordingFetch([]),
+      readFloor: () => FLOOR,
+    });
+  } finally {
+    console.log = originalLog;
+  }
+  assert.ok(lines.some((line) => line.includes('1970-01-01T00:00:02.000Z')));
 });

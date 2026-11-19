@@ -60,7 +60,9 @@ function createDb(membership: Row | null): DatabaseAdapter {
       return [{ id: CONNECTION, provider: 'okta', is_active: true }];
     }
     if (text.startsWith('select role from organization_members')) {
-      return membership ? [membership] : [];
+      const requiresActive = text.includes("status = 'active'");
+      const status = membership?.['status'] ?? 'active';
+      return membership && (!requiresActive || status === 'active') ? [membership] : [];
     }
     throw new Error(`unexpected query: ${sql}`);
   });
@@ -115,6 +117,27 @@ describe('authenticateScimRequest issuer role gate', () => {
       expect.objectContaining({ organizationId: ORG }),
       expect.objectContaining({ eventType: 'sync.denied' }),
     );
+  });
+
+  it.each(['owner', 'admin'] as const)('refuses an issuer who is a suspended %s', async (role) => {
+    dbHolder.current = createDb({ role, status: 'suspended' });
+
+    const error = await expectScimError(authenticateScimRequest(scimRequest()));
+
+    expect(error.status).toBe(403);
+    expect(recordSyncEventMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ organizationId: ORG }),
+      expect.objectContaining({ eventType: 'sync.denied' }),
+    );
+  });
+
+  it('accepts an issuer whose membership is explicitly active', async () => {
+    dbHolder.current = createDb({ role: 'admin', status: 'active' });
+
+    await expect(authenticateScimRequest(scimRequest())).resolves.toMatchObject({
+      organizationId: ORG,
+    });
   });
 
   it('refuses an issuer whose membership is gone', async () => {

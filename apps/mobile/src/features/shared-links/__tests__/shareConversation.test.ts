@@ -2,9 +2,13 @@ const mockAlert = jest.fn();
 const mockShare = jest.fn();
 const mockCreate = jest.fn();
 const mockRevoke = jest.fn();
+const mockPlatform = { OS: 'ios' };
 
 jest.mock('react-native', () => ({
   Alert: { alert: (...args: unknown[]) => mockAlert(...args) },
+  get Platform() {
+    return mockPlatform;
+  },
   Share: { share: (...args: unknown[]) => mockShare(...args) },
 }));
 jest.mock('../service', () => ({
@@ -48,14 +52,25 @@ const link = { shareUrl: 'https://agiworkforce.com/share/original' };
 describe('confirmed share completion ownership', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockPlatform.OS = 'ios';
     mockShare.mockResolvedValue({ action: 'sharedAction' });
   });
 
-  it('shares the original link when the caller remains current', async () => {
+  it('shares the original link once, as the url iOS shows as one link', async () => {
     mockCreate.mockResolvedValue(link);
     confirm(() => true);
     await flush();
-    expect(mockShare).toHaveBeenCalledWith({ message: link.shareUrl, url: link.shareUrl });
+    expect(mockShare).toHaveBeenCalledTimes(1);
+    expect(mockShare).toHaveBeenCalledWith({ url: link.shareUrl });
+  });
+
+  it('shares the link once as the message on Android, which has no url field', async () => {
+    mockPlatform.OS = 'android';
+    mockCreate.mockResolvedValue(link);
+    confirm(() => true);
+    await flush();
+    expect(mockShare).toHaveBeenCalledTimes(1);
+    expect(mockShare).toHaveBeenCalledWith({ message: link.shareUrl });
   });
 
   it('does not open native Share or revoke a created link after ownership retires', async () => {

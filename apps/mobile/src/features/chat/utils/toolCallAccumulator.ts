@@ -1,10 +1,22 @@
 import {
   isPhoneStepTool,
+  isTerminalToolStatus,
+  messageKindForAgentEvent,
   normalizeToolStatus,
   phoneStepNeedsConfirmation,
 } from '@agiworkforce/types';
+import { displaySourceSnippet } from '@agiworkforce/unified-chat/message-sources';
 import type { ToolCall } from '@/types/chat';
 import type { StreamDelta } from '@/services/streaming';
+import { recordToolApprovalReview } from './toolApprovalReview';
+
+const CODE_EXECUTION_RESULT_ERROR = 'code_execution_tool_result_error';
+
+export function codeExecutionFailedMessage(errorCode: unknown): string {
+  const code =
+    typeof errorCode === 'string' && errorCode.trim() ? errorCode.trim() : 'unknown_error';
+  return `Code execution failed: ${code.replace(/_/g, ' ')}`;
+}
 
 export interface ToolCallAccumulator {
   byKey: Map<string, ToolCall>;
@@ -113,10 +125,19 @@ export function accumulateToolCallDelta(acc: ToolCallAccumulator, delta: StreamD
     if (delta.x_code_result) {
       const inner = (
         delta.x_code_result as {
-          content?: { stdout?: string; stderr?: string; return_code?: number };
+          content?: {
+            type?: string;
+            error_code?: string;
+            stdout?: string;
+            stderr?: string;
+            return_code?: number;
+          };
         }
       ).content;
-      if (inner && (typeof inner.stdout === 'string' || typeof inner.stderr === 'string')) {
+      if (inner?.type === CODE_EXECUTION_RESULT_ERROR) {
+        t.status = 'failed';
+        t.output = codeExecutionFailedMessage(inner.error_code);
+      } else if (inner && (typeof inner.stdout === 'string' || typeof inner.stderr === 'string')) {
         if (inner.stdout) t.output = inner.stdout;
         else delete t.output;
         if (inner.stderr) t.stderr = inner.stderr;
@@ -133,12 +154,7 @@ export function accumulateToolCallDelta(acc: ToolCallAccumulator, delta: StreamD
         const results = (content as Record<string, unknown>[])
           .filter((r) => r['type'] === 'web_search_result' && typeof r['url'] === 'string')
           .map((r) => {
-            const snippet =
-              typeof r['encrypted_content'] === 'string' && r['encrypted_content']
-                ? r['encrypted_content']
-                : typeof r['snippet'] === 'string'
-                  ? r['snippet']
-                  : undefined;
+            const snippet = displaySourceSnippet(r['snippet']);
             return {
               url: r['url'] as string,
               title: (r['title'] as string) || (r['url'] as string),
@@ -172,16 +188,36 @@ export function accumulateToolCallDelta(acc: ToolCallAccumulator, delta: StreamD
     const key = acc.idToKey.get(appr.tool_call_id) ?? `id:${appr.tool_call_id}`;
     acc.idToKey.set(appr.tool_call_id, key);
     const t = ensure(acc, key, { name: appr.name });
+    const askedAgain =
+      t.approvalDecision !== undefined ||
+      t.output !== undefined ||
+      t.status === 'succeeded' ||
+      t.status === 'failed';
+    if (askedAgain) {
+      delete t.approvalDecision;
+      delete t.approvalScope;
+      delete t.approvalGuidance;
+      delete t.approvalReview;
+      delete t.output;
+      delete t.stderr;
+      delete t.exitCode;
+    }
     if (appr.name) t.name = appr.name;
-    if (appr.args !== undefined && !t.input) t.input = safeStringify(appr.args);
+    if (appr.args !== undefined && (askedAgain || !t.input)) t.input = safeStringify(appr.args);
     t.status = 'awaiting-approval';
     t.requiresApproval = true;
     t.toolCallId = appr.tool_call_id;
+    recordToolApprovalReview(t, appr);
     changed = true;
   }
 
   const agentEvent = delta.x_agent_event?.event;
-  if (agentEvent?.type === 'approval-requested' && agentEvent.riskLevel) {
+  const agentEventKind = agentEvent ? messageKindForAgentEvent(agentEvent.type) : null;
+  if (
+    agentEventKind === 'approval' &&
+    agentEvent?.type === 'approval-requested' &&
+    agentEvent.riskLevel
+  ) {
     const key = acc.idToKey.get(agentEvent.toolCallId) ?? `id:${agentEvent.toolCallId}`;
     acc.idToKey.set(agentEvent.toolCallId, key);
     const t = ensure(acc, key, { name: agentEvent.name });
@@ -189,7 +225,31 @@ export function accumulateToolCallDelta(acc: ToolCallAccumulator, delta: StreamD
     changed = true;
   }
 
-  if (agentEvent?.type === 'device-step-requested' && isPhoneStepTool(agentEvent.toolName)) {
+  if (agentEventKind === 'tool_result' && agentEvent?.type === 'tool-execution-end') {
+    const idKey = `id:${agentEvent.toolCallId}`;
+    const key =
+      acc.idToKey.get(agentEvent.toolCallId) ?? (acc.byKey.has(idKey) ? idKey : undefined);
+    const t = key ? acc.byKey.get(key) : undefined;
+    const awaitingDecision =
+      (t?.status === 'awaiting-approval' || t?.requiresApproval === true) && !t?.approvalDecision;
+    if (t && !awaitingDecision) {
+      if (!isTerminalToolStatus(t.status)) {
+        t.output = safeStringify(agentEvent.output);
+        t.status = agentEvent.isError ? 'failed' : 'succeeded';
+        t.requiresApproval = false;
+        changed = true;
+      } else if (t.output === undefined && t.stderr === undefined && t.exitCode === undefined) {
+        t.output = safeStringify(agentEvent.output);
+        changed = true;
+      }
+    }
+  }
+
+  if (
+    agentEventKind === 'computer_action' &&
+    agentEvent?.type === 'device-step-requested' &&
+    isPhoneStepTool(agentEvent.toolName)
+  ) {
     const key = acc.idToKey.get(agentEvent.toolCallId) ?? `id:${agentEvent.toolCallId}`;
     acc.idToKey.set(agentEvent.toolCallId, key);
     const t = ensure(acc, key, { name: agentEvent.toolName });

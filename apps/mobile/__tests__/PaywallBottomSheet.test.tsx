@@ -8,10 +8,20 @@ import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
 import { getBillingPlanPricing } from '@agiworkforce/types';
 
+const mockSheetProps: { current: { style?: unknown } | null } = { current: null };
+let mockWindowWidth = 750;
+jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
+  __esModule: true,
+  default: () => ({ width: mockWindowWidth, height: 1334, scale: 2, fontScale: 1 }),
+}));
+
 jest.mock('@gorhom/bottom-sheet', () => {
   const React = require('react');
   const mockBottomSheet = React.forwardRef(
-    ({ children }: { children: React.ReactNode }, _ref: unknown) => <>{children}</>,
+    ({ children, ...props }: { children: React.ReactNode }, _ref: unknown) => {
+      mockSheetProps.current = props;
+      return <>{children}</>;
+    },
   );
   mockBottomSheet.displayName = 'MockBottomSheet';
   const mockView = ({ children }: { children: React.ReactNode }) => <>{children}</>;
@@ -227,5 +237,17 @@ describe('PaywallBottomSheet interactions', () => {
     expect(onDismiss).not.toHaveBeenCalled();
     // The onDismiss is called via BottomSheet.onChange(-1) which is mocked away.
     // What we CAN verify is that pressing "Try later" doesn't throw.
+  });
+
+  it.each([
+    [402, 0],
+    [1032, 16],
+    [1376, 188],
+  ])('insets the sheet to the reading column of a %d point window', (width, inset) => {
+    mockWindowWidth = width;
+    render(<PaywallBottomSheet {...defaultProps} />);
+
+    expect(mockSheetProps.current?.style).toEqual({ marginHorizontal: inset });
+    mockWindowWidth = 750;
   });
 });

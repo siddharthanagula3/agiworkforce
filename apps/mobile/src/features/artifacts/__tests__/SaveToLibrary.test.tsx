@@ -1,6 +1,8 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
+import { Alert } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { actionMenuLabels, cancelActionMenu, chooseActionMenuItem } from '@/test-utils/actionMenu';
 
 const mockPost = jest.fn();
 
@@ -91,19 +93,76 @@ describe('save an artifact to the Library from mobile', () => {
     expect(canSaveArtifactToLibrary(CLOUD_DOC)).toBe(true);
   });
 
-  it('saves a Cloud document from the preview and confirms it', async () => {
+  let alert: jest.SpyInstance;
+
+  beforeEach(() => {
+    alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => alert.mockRestore());
+
+  function pressSave(screen: ReturnType<typeof render>) {
+    fireEvent.press(screen.getByLabelText('More artifact actions'));
+    expect(actionMenuLabels()).toContain('Save to Library');
+    chooseActionMenuItem('Save to Library');
+  }
+
+  function hasSave(screen: ReturnType<typeof render>): boolean {
+    fireEvent.press(screen.getByLabelText('More artifact actions'));
+    const offered = actionMenuLabels().includes('Save to Library');
+    cancelActionMenu();
+    return offered;
+  }
+
+  function reopen(screen: ReturnType<typeof render>, id: string) {
+    fireEvent.press(screen.getByTestId('chat.artifact.fullscreen.close'));
+    fireEvent.press(screen.getByTestId(`artifact-card-${id}`));
+  }
+
+  it('saves a Cloud document from the More menu and confirms it', async () => {
     mockPost.mockResolvedValue({ id: 'file-1' });
     useArtifactStore.setState({ artifacts: [CLOUD_DOC] });
     const screen = render(<ArtifactsGalleryScreen initialArtifactId="cloud-doc" />);
-    fireEvent.press(screen.getByLabelText('Save to Library'));
-    await waitFor(() => expect(screen.getByLabelText('Saved to Library')).toBeTruthy());
+
+    pressSave(screen);
+
+    await waitFor(() =>
+      expect(alert).toHaveBeenLastCalledWith(
+        'Saved to Library',
+        '“Launch plan” is in your Library.',
+      ),
+    );
     expect(mockPost).toHaveBeenCalledWith('/api/library', {
       fileName: 'Launch plan.md',
       content: '# Launch plan\n\nShip it.',
     });
+    expect(hasSave(screen)).toBe(false);
   });
 
-  it('does not show a saved receipt for an artifact that was never submitted', async () => {
+  it('says the save failed and offers it again', async () => {
+    mockPost.mockRejectedValue(new Error('offline'));
+    useArtifactStore.setState({ artifacts: [CLOUD_DOC] });
+    const screen = render(<ArtifactsGalleryScreen initialArtifactId="cloud-doc" />);
+
+    pressSave(screen);
+
+    await waitFor(() =>
+      expect(alert).toHaveBeenLastCalledWith(
+        'Could not save to Library',
+        '“Launch plan” was not saved. Try again.',
+      ),
+    );
+    expect(hasSave(screen)).toBe(true);
+  });
+
+  it('offers Save to Library only for Cloud artifacts', () => {
+    useArtifactStore.setState({ artifacts: [{ ...CLOUD_DOC, provenance: { scope: 'local' } }] });
+    const screen = render(<ArtifactsGalleryScreen initialArtifactId="cloud-doc" />);
+
+    expect(hasSave(screen)).toBe(false);
+  });
+
+  it('does not count a save of one artifact as a save of another', async () => {
     mockPost.mockResolvedValue({ id: 'file-1' });
     const second: MobileArtifact = {
       ...CLOUD_DOC,
@@ -113,18 +172,13 @@ describe('save an artifact to the Library from mobile', () => {
     };
     useArtifactStore.setState({ artifacts: [CLOUD_DOC, second] });
     const screen = render(<ArtifactsGalleryScreen initialArtifactId="cloud-doc" />);
-    fireEvent.press(screen.getByLabelText('Save to Library'));
-    await waitFor(() => expect(screen.getByLabelText('Saved to Library')).toBeTruthy());
+    pressSave(screen);
+    await waitFor(() => expect(mockPost).toHaveBeenCalledTimes(1));
 
-    fireEvent.press(screen.getByTestId('artifact-preview-close'));
-    fireEvent.press(screen.getByTestId('artifact-card-cloud-doc-2'));
+    reopen(screen, 'cloud-doc-2');
+    pressSave(screen);
 
-    const save = screen.getByTestId('artifact-save-library');
-    expect(save.props.accessibilityLabel).toBe('Save to Library');
-    expect(save.props.accessibilityState?.disabled).not.toBe(true);
-    fireEvent.press(save);
-    await waitFor(() => expect(screen.getByLabelText('Saved to Library')).toBeTruthy());
-    expect(mockPost).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(mockPost).toHaveBeenCalledTimes(2));
     expect(mockPost).toHaveBeenLastCalledWith('/api/library', {
       fileName: 'Roadmap.md',
       content: '# Roadmap',
@@ -147,17 +201,12 @@ describe('save an artifact to the Library from mobile', () => {
     };
     useArtifactStore.setState({ artifacts: [CLOUD_DOC, second] });
     const screen = render(<ArtifactsGalleryScreen initialArtifactId="cloud-doc" />);
-    fireEvent.press(screen.getByLabelText('Save to Library'));
-    fireEvent.press(screen.getByTestId('artifact-preview-close'));
-    fireEvent.press(screen.getByTestId('artifact-card-cloud-doc-2'));
+    pressSave(screen);
+    reopen(screen, 'cloud-doc-2');
 
-    expect(screen.getByTestId('artifact-save-library').props.accessibilityLabel).toBe(
-      'Save to Library',
-    );
-    settleFirst({ id: 'file-1' });
-    await waitFor(() => expect(mockPost).toHaveBeenCalledTimes(1));
-    expect(screen.getByTestId('artifact-save-library').props.accessibilityLabel).toBe(
-      'Save to Library',
-    );
+    expect(hasSave(screen)).toBe(true);
+    await React.act(async () => settleFirst({ id: 'file-1' }));
+    expect(mockPost).toHaveBeenCalledTimes(1);
+    expect(hasSave(screen)).toBe(true);
   });
 });

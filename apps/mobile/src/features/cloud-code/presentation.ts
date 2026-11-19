@@ -214,6 +214,62 @@ export function visibleCodeListEntries(
   return sortCloudCodeSessions([...cloud, ...computer], options.sort);
 }
 
+export const CLOUD_CODE_GROUP_BY_REPOSITORY_LABEL = 'Group by repository';
+export const CLOUD_CODE_NO_REPOSITORY_LABEL = 'No repository';
+
+export interface CodeListSection {
+  key: string;
+  title: string;
+  data: CodeListEntry[];
+}
+
+function codeListEntryRepository(entry: CodeListEntry): string | null {
+  const name =
+    entry.kind === 'cloud'
+      ? entry.session.repositoryUrl
+        ? cloudCodeRepositoryLabel(entry.session.repositoryUrl)
+        : ''
+      : entry.session.folder;
+  const trimmed = name.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+export function groupCodeListEntries(entries: readonly CodeListEntry[]): CodeListSection[] {
+  const byRepository = new Map<string, CodeListSection & { newest: number }>();
+  let unassigned: (CodeListSection & { newest: number }) | null = null;
+  for (const entry of entries) {
+    const repository = codeListEntryRepository(entry);
+    const time = sessionTime(entry);
+    let section: (CodeListSection & { newest: number }) | null | undefined;
+    if (repository === null) {
+      unassigned ??= {
+        key: 'repository:none',
+        title: CLOUD_CODE_NO_REPOSITORY_LABEL,
+        data: [],
+        newest: 0,
+      };
+      section = unassigned;
+    } else {
+      const key = repository.toLowerCase();
+      section = byRepository.get(key);
+      if (!section) {
+        section = { key: `repository:${key}`, title: repository, data: [], newest: 0 };
+        byRepository.set(key, section);
+      }
+    }
+    section.data.push(entry);
+    section.newest = Math.max(section.newest, time);
+  }
+  const named = [...byRepository.values()].sort(
+    (a, b) => b.newest - a.newest || a.title.localeCompare(b.title),
+  );
+  return [...named, ...(unassigned ? [unassigned] : [])].map(({ key, title, data }) => ({
+    key,
+    title,
+    data,
+  }));
+}
+
 export const CLOUD_CODE_CHANGE_STATE_LABELS: Readonly<Record<CloudCodeChangeState, string>> = {
   added: 'Added',
   modified: 'Modified',

@@ -1,15 +1,8 @@
 import { useCallback, useState } from 'react';
-import {
-  View,
-  Modal,
-  KeyboardAvoidingView,
-  Linking,
-  Platform,
-  TextInput,
-  useWindowDimensions,
-} from 'react-native';
+import { AppState, View, Linking, Platform } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { useFocusEffect, useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import {
   Bell,
   BellOff,
@@ -17,13 +10,16 @@ import {
   CalendarClock,
   CheckSquare,
   ChevronRight,
+  Code2,
+  Gauge,
   Info,
   MessageSquare,
   Moon,
   Clock,
   Sparkles,
+  Sunrise,
+  Telescope,
   Vibrate,
-  X,
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/Text';
 import { Card } from '@/components/ui/Card';
@@ -31,7 +27,7 @@ import { Switch } from '@/components/ui/Switch';
 import { Separator } from '@/components/ui/Separator';
 import {
   useNotificationPrefsStore,
-  type PushPreferenceGroup,
+  type AnnouncedPushGroup,
 } from '@/stores/notificationPrefsStore';
 import { SettingsScreenShell } from '@/src/features/settings/Common';
 import {
@@ -43,40 +39,39 @@ import {
   type PushRegistrationIssue,
 } from '@/services/notifications';
 import { androidChannelVibrates } from '@/services/notificationChannels';
+import { isPushPermissionRequestPending } from '@/services/pushPermissionStatus';
 import { useThemeColors } from '@/src/ui/theme';
-import { typeScale } from '@/src/ui/theme/tokens';
 import type { ColorScheme } from '@/src/ui/theme';
 import type { LucideIcon } from 'lucide-react-native';
-import { PUSH_PREFERENCE_GROUPS, PUSH_PREFERENCE_GROUP_COPY } from './categories';
+import {
+  ACCOUNT_PUSH_PREFERENCE_GROUP,
+  PUSH_PREFERENCE_GROUP_COPY,
+  devicePushPreferenceGroups,
+  type DevicePushPreferenceGroup,
+} from './categories';
+import { DAILY_BRIEF_DEFAULT_TIME, DAILY_BRIEF_DESCRIPTION, DAILY_BRIEF_NAME } from './dailyBrief';
+import {
+  CLOUD_REMINDERS_LOAD_FAILED,
+  useCloudReminders,
+  type CloudReminders,
+} from './useCloudReminders';
+import { NOTIFICATIONS_SCREEN_TITLE, TIME_AND_FOCUS_SCREEN_TITLE } from '../screenTitles';
 import { useAgentActivityPushSync } from './useAgentActivityPushSync';
-import { useTimeFocusSync } from './useTimeFocusSync';
-import { BREAK_REMINDER_MINUTES, type TimeFocusWeekday } from '@agiworkforce/types';
-
-const QUIET_HOURS_DAYS: ReadonlyArray<{ value: TimeFocusWeekday; label: string; short: string }> = [
-  { value: 0, label: 'Sunday', short: 'S' },
-  { value: 1, label: 'Monday', short: 'M' },
-  { value: 2, label: 'Tuesday', short: 'T' },
-  { value: 3, label: 'Wednesday', short: 'W' },
-  { value: 4, label: 'Thursday', short: 'T' },
-  { value: 5, label: 'Friday', short: 'F' },
-  { value: 6, label: 'Saturday', short: 'S' },
-];
-
-function breakReminderLabel(minutes: number | null): string {
-  if (minutes === null) return 'Off';
-  return minutes < 60 ? `After ${minutes} min today` : `After ${minutes / 60} hr today`;
-}
+import { TimePickerModal } from './TimePickerModal';
 
 interface CategoryMeta {
-  id: PushPreferenceGroup;
+  id: DevicePushPreferenceGroup;
   label: string;
   description: string;
   icon: LucideIcon;
   iconColor: string;
 }
 
-function getCategories(c: ColorScheme): CategoryMeta[] {
-  const presentation: Record<PushPreferenceGroup, Pick<CategoryMeta, 'icon' | 'iconColor'>> = {
+function getCategories(c: ColorScheme, announced: readonly AnnouncedPushGroup[]): CategoryMeta[] {
+  const presentation: Record<
+    DevicePushPreferenceGroup,
+    Pick<CategoryMeta, 'icon' | 'iconColor'>
+  > = {
     chat_replies: {
       icon: MessageSquare,
       iconColor: c.teal,
@@ -89,6 +84,14 @@ function getCategories(c: ColorScheme): CategoryMeta[] {
       icon: CalendarClock,
       iconColor: c.agentWarning,
     },
+    research: {
+      icon: Telescope,
+      iconColor: c.teal,
+    },
+    code: {
+      icon: Code2,
+      iconColor: c.teal,
+    },
     product_updates: {
       icon: Sparkles,
       iconColor: c.teal,
@@ -98,7 +101,7 @@ function getCategories(c: ColorScheme): CategoryMeta[] {
       iconColor: c.textMuted,
     },
   };
-  return PUSH_PREFERENCE_GROUPS.map((id) => ({
+  return devicePushPreferenceGroups(announced).map((id) => ({
     id,
     ...PUSH_PREFERENCE_GROUP_COPY[id],
     ...presentation[id],
@@ -132,192 +135,32 @@ function PriorityVibrationRow({ label, color, value, onValueChange }: PriorityRo
   );
 }
 
-interface TimePickerModalProps {
-  visible: boolean;
-  field: 'start' | 'end';
-  currentValue: string;
-  onClose: () => void;
-  onConfirm: (time: string) => void;
-}
+const DAILY_BRIEF_PICKER_COPY = {
+  title: 'Daily Brief Time',
+  inputLabel: 'Daily brief time',
+  quickTimes: ['07:00', '08:00', '09:00'],
+} as const;
 
-function TimePickerModal({
-  visible,
-  field,
-  currentValue,
-  onClose,
-  onConfirm,
-}: TimePickerModalProps) {
-  const colors = useThemeColors();
-  const { width } = useWindowDimensions();
-  const [value, setValue] = useState(currentValue);
-  const modalWidth = Math.min(width - 48, 320);
-
-  const handleConfirm = useCallback(() => {
-    const parts = value.split(':');
-    const hours = parseInt(parts[0] ?? '', 10);
-    const minutes = parseInt(parts[1] ?? '', 10);
-    if (
-      parts.length === 2 &&
-      !isNaN(hours) &&
-      !isNaN(minutes) &&
-      hours >= 0 &&
-      hours <= 23 &&
-      minutes >= 0 &&
-      minutes <= 59
-    ) {
-      const normalised = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
-      onConfirm(normalised);
-      onClose();
-    }
-  }, [value, onConfirm, onClose]);
-
-  const QUICK_TIMES =
-    field === 'start' ? ['21:00', '22:00', '23:00'] : ['06:00', '07:00', '08:00', '09:00'];
-
-  return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable
-        accessible={false}
-        className="flex-1 justify-center items-center"
-        style={{ backgroundColor: colors.scrim }}
-        onPress={onClose}
-      >
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-          <Pressable accessible={false} onPress={(e) => e.stopPropagation()}>
-            <View
-              accessibilityViewIsModal
-              className="rounded-2xl p-5"
-              style={{
-                backgroundColor: colors.surfaceOverlay,
-                paddingBottom: 20,
-                width: modalWidth,
-              }}
-            >
-              <View className="flex-row items-center justify-between mb-4">
-                <Text className="text-[15px] font-semibold" style={{ color: colors.textPrimary }}>
-                  {field === 'start' ? 'Quiet Hours Start' : 'Quiet Hours End'}
-                </Text>
-                <Pressable
-                  onPress={onClose}
-                  className="w-7 h-7 rounded-full items-center justify-center"
-                  style={({ pressed }) => ({
-                    backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
-                  })}
-                  accessibilityLabel="Close time picker"
-                  accessibilityRole="button"
-                >
-                  <X size={16} color={colors.textMuted} />
-                </Pressable>
-              </View>
-
-              <View
-                className="rounded-xl px-4 py-3 mb-4 flex-row items-center"
-                style={{ backgroundColor: colors.surfaceElevated }}
-              >
-                <Clock size={16} color={colors.textMuted} style={{ marginRight: 10 }} />
-                <TextInput
-                  accessibilityLabel={
-                    field === 'start' ? 'Quiet hours start time' : 'Quiet hours end time'
-                  }
-                  value={value}
-                  onChangeText={setValue}
-                  placeholder="HH:MM"
-                  placeholderTextColor={colors.textMuted}
-                  keyboardType="numbers-and-punctuation"
-                  maxLength={5}
-                  style={{
-                    flex: 1,
-                    color: colors.textPrimary,
-                    fontSize: typeScale.headline,
-                    fontVariant: ['tabular-nums'],
-                  }}
-                  selectTextOnFocus
-                />
-              </View>
-
-              <View className="flex-row flex-wrap gap-2 mb-4">
-                {QUICK_TIMES.map((t) => (
-                  <Pressable
-                    accessibilityLabel={`Set time to ${t}`}
-                    accessibilityRole="button"
-                    key={t}
-                    onPress={() => setValue(t)}
-                    className="px-3 py-1.5 rounded-lg active:opacity-70"
-                    style={{
-                      backgroundColor: value === t ? colors.accentSurface : colors.surfaceElevated,
-                      borderWidth: value === t ? 1 : 0,
-                      borderColor: colors.accentBorder,
-                    }}
-                  >
-                    <Text
-                      className="text-sm"
-                      style={{ color: value === t ? colors.teal : colors.textSecondary }}
-                    >
-                      {t}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-
-              <View style={{ marginTop: 8 }}>
-                <Pressable
-                  accessibilityLabel="Set Time"
-                  accessibilityRole="button"
-                  onPress={handleConfirm}
-                  style={{
-                    alignItems: 'center',
-                    backgroundColor: colors.textPrimary,
-                    borderColor: colors.textPrimary,
-                    borderRadius: 10,
-                    borderWidth: 1,
-                    justifyContent: 'center',
-                    minHeight: 44,
-                    width: '100%',
-                  }}
-                >
-                  <Text
-                    style={{
-                      color: colors.surfaceElevated,
-                      fontSize: typeScale.subhead,
-                      fontWeight: '600',
-                    }}
-                  >
-                    Set Time
-                  </Text>
-                </Pressable>
-                <Pressable
-                  accessibilityLabel="Cancel"
-                  accessibilityRole="button"
-                  onPress={onClose}
-                  style={{
-                    alignItems: 'center',
-                    backgroundColor: colors.surfaceElevated,
-                    borderColor: colors.border,
-                    borderRadius: 10,
-                    borderWidth: 1,
-                    justifyContent: 'center',
-                    marginTop: 8,
-                    minHeight: 44,
-                    width: '100%',
-                  }}
-                >
-                  <Text
-                    style={{
-                      color: colors.textPrimary,
-                      fontSize: typeScale.subhead,
-                      fontWeight: '600',
-                    }}
-                  >
-                    Cancel
-                  </Text>
-                </Pressable>
-              </View>
-            </View>
-          </Pressable>
-        </KeyboardAvoidingView>
-      </Pressable>
-    </Modal>
-  );
+function remindersFootnote(reminders: CloudReminders): string | null {
+  switch (reminders.status) {
+    case 'local':
+      return 'Switch to AGI Cloud to use these reminders.';
+    case 'signed_out':
+      return 'Sign in to AGI Cloud to use these reminders.';
+    case 'loading':
+      return 'Loading your account settings…';
+    case 'error':
+      return CLOUD_REMINDERS_LOAD_FAILED;
+    case 'ready':
+      return (
+        (reminders.dailyBrief.shown ? reminders.dailyBrief.error : null) ??
+        reminders.usageReset.error ??
+        (reminders.dailyBrief.shown && reminders.dailyBrief.state.elsewhere
+          ? `Your daily brief runs in ${reminders.dailyBrief.state.elsewhere}. Switch to that workspace to change it.`
+          : null) ??
+        (reminders.dailyBrief.state.enabled ? 'Each brief counts toward your usage limits.' : null)
+      );
+  }
 }
 
 const PERMISSION_COPY: Record<
@@ -408,22 +251,16 @@ function PushPermissionCard({
 export default function NotificationPreferencesScreen() {
   const colors = useThemeColors();
   const router = useRouter();
-  const {
-    categoryEnabled,
-    vibrationEnabled,
-    quietHours,
-    breakReminderMinutes,
-    setVibrationEnabled,
-    setQuietHours,
-    setBreakReminderMinutes,
-  } = useNotificationPrefsStore();
-  const CATEGORIES = getCategories(colors);
+  const { categoryEnabled, vibrationEnabled, setVibrationEnabled } = useNotificationPrefsStore();
+  const quietHoursEnabled = useNotificationPrefsStore((state) => state.quietHours.enabled);
+  const announcedPushGroups = useNotificationPrefsStore((state) => state.announcedPushGroups);
+  const CATEGORIES = getCategories(colors, announcedPushGroups);
   const { unreadCount } = useNotificationCenter();
-  const timeFocusSync = useTimeFocusSync();
   const agentActivityPush = useAgentActivityPushSync();
-  const pushTimeFocus = timeFocusSync.push;
+  const { t } = useTranslation();
+  const reminders = useCloudReminders(t('navPersonalWorkspace'));
 
-  const [timePickerField, setTimePickerField] = useState<'start' | 'end' | null>(null);
+  const [briefPickerOpen, setBriefPickerOpen] = useState(false);
   const [pushPermission, setPushPermission] = useState<PushDeliveryStatus>('undetermined');
   const [permissionBusy, setPermissionBusy] = useState(false);
   const [channelOverridden, setChannelOverridden] = useState(false);
@@ -431,20 +268,30 @@ export default function NotificationPreferencesScreen() {
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
-      void getPushDeliveryStatus().then((status) => {
-        if (!cancelled) setPushPermission(status);
-      });
-      if (Platform.OS === 'android') {
-        void Promise.all(
-          (['critical', 'high', 'normal', 'low'] as const).map((priority) =>
-            androidChannelVibrates(priority, true),
-          ),
-        ).then((states) => {
-          if (!cancelled) setChannelOverridden(states.some((vibrates) => vibrates === false));
+      let sequence = 0;
+      function readDeviceState() {
+        const current = ++sequence;
+        const isLatest = () => !cancelled && current === sequence;
+        void getPushDeliveryStatus().then((status) => {
+          if (isLatest()) setPushPermission(status);
         });
+        if (Platform.OS === 'android') {
+          void Promise.all(
+            (['critical', 'high', 'normal', 'low'] as const).map((priority) =>
+              androidChannelVibrates(priority, true),
+            ),
+          ).then((states) => {
+            if (isLatest()) setChannelOverridden(states.some((vibrates) => vibrates === false));
+          });
+        }
       }
+      readDeviceState();
+      const subscription = AppState.addEventListener('change', (state) => {
+        if (state === 'active' && !isPushPermissionRequestPending()) readDeviceState();
+      });
       return () => {
         cancelled = true;
+        subscription.remove();
       };
     }, []),
   );
@@ -465,49 +312,40 @@ export default function NotificationPreferencesScreen() {
     }
   }, [permissionBusy, pushPermission]);
 
-  const updateQuietHours = useCallback(
-    (updates: Parameters<typeof setQuietHours>[0]) => {
-      setQuietHours(updates);
-      pushTimeFocus();
-    },
-    [pushTimeFocus, setQuietHours],
-  );
-
-  const toggleQuietHoursDay = useCallback(
-    (day: TimeFocusWeekday) => {
-      const next = quietHours.days.includes(day)
-        ? quietHours.days.filter((value) => value !== day)
-        : [...quietHours.days, day].sort((a, b) => a - b);
-      updateQuietHours({ days: next });
-    },
-    [quietHours.days, updateQuietHours],
-  );
-
-  const cycleBreakReminder = useCallback(() => {
-    const options: Array<(typeof BREAK_REMINDER_MINUTES)[number] | null> = [
-      null,
-      ...BREAK_REMINDER_MINUTES,
-    ];
-    const index = options.indexOf(breakReminderMinutes);
-    const next = options[(index + 1) % options.length] ?? null;
-    setBreakReminderMinutes(next);
-    pushTimeFocus();
-  }, [breakReminderMinutes, pushTimeFocus, setBreakReminderMinutes]);
-
-  const handleOpenTimePicker = useCallback((field: 'start' | 'end') => {
-    setTimePickerField(field);
-  }, []);
+  const { turnOn: turnOnDailyBrief, changeTime: changeDailyBriefTime } = reminders.dailyBrief;
+  const dailyBriefEnabled = reminders.dailyBrief.state.enabled;
 
   const handleTimeConfirm = useCallback(
     (time: string) => {
-      if (timePickerField === 'start') {
-        updateQuietHours({ startTime: time });
-      } else if (timePickerField === 'end') {
-        updateQuietHours({ endTime: time });
-      }
+      if (dailyBriefEnabled) changeDailyBriefTime(time);
+      else turnOnDailyBrief(time);
     },
-    [timePickerField, updateQuietHours],
+    [changeDailyBriefTime, dailyBriefEnabled, turnOnDailyBrief],
   );
+
+  const handleDailyBriefChange = useCallback(
+    (value: boolean) => {
+      if (reminders.status === 'local' || reminders.status === 'signed_out') {
+        router.push('/(app)/schedules' as Parameters<typeof router.push>[0]);
+        return;
+      }
+      if (value) setBriefPickerOpen(true);
+      else reminders.dailyBrief.turnOff();
+    },
+    [reminders.dailyBrief, reminders.status, router],
+  );
+
+  const dailyBriefTime = dailyBriefEnabled
+    ? reminders.dailyBrief.state.timeOfDay
+    : DAILY_BRIEF_DEFAULT_TIME;
+  const remindersReady = reminders.status === 'ready';
+  const remindersNote = remindersFootnote(reminders);
+  const remindersInCloud = reminders.status !== 'local' && reminders.status !== 'signed_out';
+  const dailyBriefLoadFailed =
+    remindersReady &&
+    reminders.dailyBrief.shown &&
+    !reminders.dailyBrief.loaded &&
+    reminders.dailyBrief.error !== null;
 
   const priorityRows: Array<{
     key: 'critical' | 'high' | 'normal' | 'low';
@@ -521,7 +359,7 @@ export default function NotificationPreferencesScreen() {
   ];
 
   return (
-    <SettingsScreenShell title="Notification Preferences">
+    <SettingsScreenShell title={NOTIFICATIONS_SCREEN_TITLE}>
       <View className="mt-3">
         <Card>
           <Pressable
@@ -694,193 +532,139 @@ export default function NotificationPreferencesScreen() {
           className="text-sm uppercase mb-3"
           style={{ color: colors.textMuted, letterSpacing: 0 }}
         >
-          Quiet Hours
+          Reminders
         </Text>
       </View>
       <Card>
         <View className="flex-row items-center justify-between py-3 px-1">
-          <View className="flex-row items-center gap-3">
-            <Moon size={18} color={colors.textSecondary} />
-            <View>
+          <View className="flex-row items-center gap-3 flex-1 mr-3">
+            <Gauge size={18} color={colors.textSecondary} />
+            <View className="flex-1">
               <Text className="text-sm font-medium" style={{ color: colors.textPrimary }}>
-                Enable Quiet Hours
+                {PUSH_PREFERENCE_GROUP_COPY[ACCOUNT_PUSH_PREFERENCE_GROUP].label}
               </Text>
               <Text className="text-sm mt-0.5" style={{ color: colors.textMuted }}>
-                Suppress non-critical alerts
+                {PUSH_PREFERENCE_GROUP_COPY[ACCOUNT_PUSH_PREFERENCE_GROUP].description}
               </Text>
             </View>
           </View>
           <Switch
-            accessibilityLabel="Enable Quiet Hours"
-            value={quietHours.enabled}
-            onValueChange={(v) => updateQuietHours({ enabled: v })}
+            accessibilityLabel={PUSH_PREFERENCE_GROUP_COPY[ACCOUNT_PUSH_PREFERENCE_GROUP].label}
+            value={remindersReady && reminders.usageReset.enabled}
+            disabled={!remindersReady || reminders.usageReset.saving}
+            onValueChange={reminders.usageReset.setEnabled}
           />
         </View>
-
-        {quietHours.enabled && (
+        {reminders.dailyBrief.shown ? (
           <>
             <Separator />
-            {/* Days, quiet hours apply only on the days selected here, the
-                  same set web has always offered. */}
-            <View className="py-3 px-1">
-              <Text className="text-sm mb-2" style={{ color: colors.textPrimary }}>
-                Days
-              </Text>
-              <View className="flex-row" style={{ gap: 6 }}>
-                {QUIET_HOURS_DAYS.map((day) => {
-                  const selected = quietHours.days.includes(day.value);
-                  return (
-                    <Pressable
-                      key={day.value}
-                      onPress={() => toggleQuietHoursDay(day.value)}
-                      accessibilityRole="checkbox"
-                      accessibilityState={{ checked: selected }}
-                      accessibilityLabel={`${day.label} quiet hours`}
-                      style={({ pressed }) => ({
-                        flex: 1,
-                        height: 36,
-                        borderRadius: 10,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        borderWidth: 1,
-                        borderColor: selected ? colors.teal : colors.border,
-                        backgroundColor: selected
-                          ? colors.teal
-                          : pressed
-                            ? colors.surfaceHover
-                            : colors.transparent,
-                      })}
-                    >
-                      <Text
-                        className="text-sm font-semibold"
-                        style={{ color: selected ? colors.accentText : colors.textSecondary }}
-                      >
-                        {day.short}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
+            <View className="flex-row items-center justify-between py-3 px-1">
+              <View className="flex-row items-center gap-3 flex-1 mr-3">
+                <Sunrise size={18} color={colors.textSecondary} />
+                <View className="flex-1">
+                  <Text className="text-sm font-medium" style={{ color: colors.textPrimary }}>
+                    {DAILY_BRIEF_NAME}
+                  </Text>
+                  <Text className="text-sm mt-0.5" style={{ color: colors.textMuted }}>
+                    {DAILY_BRIEF_DESCRIPTION}
+                  </Text>
+                </View>
               </View>
-              {quietHours.days.length === 0 && (
-                <Text className="text-sm mt-2" style={{ color: colors.agentWarning }}>
-                  Pick at least one day, or quiet hours stay off.
-                </Text>
-              )}
+              <Switch
+                accessibilityLabel={DAILY_BRIEF_NAME}
+                value={remindersInCloud && dailyBriefEnabled}
+                disabled={
+                  remindersInCloud &&
+                  (!remindersReady ||
+                    !reminders.dailyBrief.loaded ||
+                    reminders.dailyBrief.saving ||
+                    Boolean(reminders.dailyBrief.state.elsewhere))
+                }
+                onValueChange={handleDailyBriefChange}
+              />
             </View>
-            <Separator />
-            <Pressable
-              onPress={() => handleOpenTimePicker('start')}
-              className="flex-row items-center justify-between py-3 px-1 rounded-lg"
-              style={({ pressed }) => ({
-                backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
-              })}
-              accessibilityLabel="Set quiet hours start time"
-              accessibilityRole="button"
-            >
-              <View className="flex-row items-center gap-3">
-                <BellOff size={18} color={colors.textSecondary} />
-                <Text className="text-sm" style={{ color: colors.textPrimary }}>
-                  Start Time
-                </Text>
-              </View>
-              <View
-                className="px-3 py-1.5 rounded-lg"
-                style={{ backgroundColor: colors.accentSurface }}
-              >
-                <Text className="text-sm font-medium" style={{ color: colors.teal }}>
-                  {quietHours.startTime}
-                </Text>
-              </View>
-            </Pressable>
-            <Separator />
-            <Pressable
-              onPress={() => handleOpenTimePicker('end')}
-              className="flex-row items-center justify-between py-3 px-1 rounded-lg"
-              style={({ pressed }) => ({
-                backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
-              })}
-              accessibilityLabel="Set quiet hours end time"
-              accessibilityRole="button"
-            >
-              <View className="flex-row items-center gap-3">
-                <Bell size={18} color={colors.textSecondary} />
-                <Text className="text-sm" style={{ color: colors.textPrimary }}>
-                  End Time
-                </Text>
-              </View>
-              <View
-                className="px-3 py-1.5 rounded-lg"
-                style={{ backgroundColor: colors.accentSurface }}
-              >
-                <Text className="text-sm font-medium" style={{ color: colors.teal }}>
-                  {quietHours.endTime}
-                </Text>
-              </View>
-            </Pressable>
-
-            <View
-              className="mt-3 mx-1 px-3 py-2 rounded-lg"
-              style={{
-                backgroundColor: colors.surfaceElevated,
-                borderColor: colors.border,
-                borderWidth: 1,
-              }}
-            >
-              <Text className="text-sm leading-5" style={{ color: colors.textMuted }}>
-                Agent failures, emergency stops and approval requests still come through.
-              </Text>
-            </View>
+            {remindersReady && dailyBriefEnabled ? (
+              <>
+                <Separator />
+                <Pressable
+                  onPress={() => setBriefPickerOpen(true)}
+                  disabled={reminders.dailyBrief.saving}
+                  className="flex-row items-center justify-between py-3 px-1 rounded-lg"
+                  style={({ pressed }) => ({
+                    backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
+                  })}
+                  accessibilityLabel={`Daily brief time, ${reminders.dailyBrief.state.timeOfDay}`}
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: reminders.dailyBrief.saving }}
+                >
+                  <View className="flex-row items-center gap-3">
+                    <Clock size={18} color={colors.textSecondary} />
+                    <Text className="text-sm" style={{ color: colors.textPrimary }}>
+                      Time
+                    </Text>
+                  </View>
+                  <View
+                    className="px-3 py-1.5 rounded-lg"
+                    style={{ backgroundColor: colors.accentSurface }}
+                  >
+                    <Text className="text-sm font-medium" style={{ color: colors.teal }}>
+                      {reminders.dailyBrief.state.timeOfDay}
+                    </Text>
+                  </View>
+                </Pressable>
+              </>
+            ) : null}
           </>
-        )}
+        ) : null}
+      </Card>
+      {remindersNote ? (
+        <Text className="text-sm mt-2 px-1" style={{ color: colors.textMuted }}>
+          {remindersNote}
+        </Text>
+      ) : null}
 
-        <Separator />
-        {/* Break reminders share the account's time-and-focus settings with
-              web, so the cadence chosen on either surface applies to both. */}
+      {reminders.status === 'error' || dailyBriefLoadFailed ? (
         <Pressable
-          onPress={cycleBreakReminder}
-          className="flex-row items-center justify-between py-3 px-1 rounded-lg"
-          style={({ pressed }) => ({
-            backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
-          })}
+          onPress={reminders.retry}
           accessibilityRole="button"
-          accessibilityLabel={`Break reminder, currently ${breakReminderLabel(breakReminderMinutes)}`}
+          accessibilityLabel="Retry reminders"
+          className="mt-2 px-3 py-2.5 rounded-xl items-center"
+          style={{ backgroundColor: colors.accentSurface }}
         >
-          <View className="flex-row items-center gap-3">
-            <Clock size={18} color={colors.textSecondary} />
-            <View>
+          <Text className="text-sm font-medium" style={{ color: colors.teal }}>
+            Retry
+          </Text>
+        </Pressable>
+      ) : null}
+
+      <View className="mt-6">
+        <Card>
+          <Pressable
+            testID="notifications.open-quiet-hours"
+            onPress={() =>
+              router.push('/(app)/settings/time-and-focus' as Parameters<typeof router.push>[0])
+            }
+            accessibilityRole="button"
+            accessibilityLabel={`Quiet hours. ${quietHoursEnabled ? 'On' : 'Off'}`}
+            accessibilityHint={`Opens ${TIME_AND_FOCUS_SCREEN_TITLE}`}
+            className="flex-row items-center justify-between py-3 px-1 rounded-lg"
+            style={({ pressed }) => ({
+              backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
+            })}
+          >
+            <View className="flex-row items-center gap-3 flex-1 mr-3">
+              <Moon size={18} color={colors.textSecondary} />
               <Text className="text-sm font-medium" style={{ color: colors.textPrimary }}>
-                Break Reminder
-              </Text>
-              <Text className="text-sm mt-0.5" style={{ color: colors.textMuted }}>
-                One nudge each day after this much time in AGI
+                Quiet hours
               </Text>
             </View>
-          </View>
-          <View
-            className="px-3 py-1.5 rounded-lg"
-            style={{ backgroundColor: colors.accentSurface }}
-          >
-            <Text className="text-sm font-medium" style={{ color: colors.teal }}>
-              {breakReminderLabel(breakReminderMinutes)}
+            <Text className="text-sm font-medium mr-1" style={{ color: colors.textSecondary }}>
+              {quietHoursEnabled ? 'On' : 'Off'}
             </Text>
-          </View>
-        </Pressable>
-      </Card>
-
-      {/* Where these settings live. Quiet hours and break reminders are an
-            account setting on web; in Local Mode there is no account to sync
-            with, so they stay on this device only. */}
-      <Text className="text-sm mt-2 px-1" style={{ color: colors.textMuted }}>
-        {timeFocusSync.status === 'local'
-          ? 'Saved on this device. Use AGI Cloud to share with web and desktop.'
-          : timeFocusSync.status === 'loading'
-            ? 'Loading your account settings…'
-            : timeFocusSync.status === 'saving'
-              ? 'Saving to your account…'
-              : timeFocusSync.status === 'error'
-                ? (timeFocusSync.error ?? 'Could not reach your account settings.')
-                : 'Synced with web and desktop.'}
-      </Text>
+            <ChevronRight size={17} color={colors.textMuted} />
+          </Pressable>
+        </Card>
+      </View>
 
       {/* Vibration is a per-channel Android setting. iOS gives an app no way to
           vibrate without sound, so there is nothing here to offer. */}
@@ -922,14 +706,14 @@ export default function NotificationPreferencesScreen() {
         </>
       )}
 
-      {/* Time picker modals. RN renders Modal in its own host view, so it adds
-          no layout to the shell's scroll content. */}
-      {timePickerField && (
+      {/* RN renders Modal in its own host view, so it adds no layout to the
+          shell's scroll content. */}
+      {briefPickerOpen && (
         <TimePickerModal
-          visible={timePickerField !== null}
-          field={timePickerField}
-          currentValue={timePickerField === 'start' ? quietHours.startTime : quietHours.endTime}
-          onClose={() => setTimePickerField(null)}
+          visible
+          {...DAILY_BRIEF_PICKER_COPY}
+          currentValue={dailyBriefTime}
+          onClose={() => setBriefPickerOpen(false)}
           onConfirm={handleTimeConfirm}
         />
       )}

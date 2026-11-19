@@ -1,3 +1,4 @@
+import { createCitationMarkupFilter } from '@agiworkforce/provider-protocol';
 import type { StreamChunk } from '@agiworkforce/types';
 
 import type {
@@ -187,6 +188,27 @@ function usageChunkFor(response: {
 export async function* translateOpenAIResponsesStream(
   events: AsyncIterable<ResponsesStreamEvent>,
   options: TranslateOpenAIResponsesStreamOptions = {},
+): AsyncIterable<StreamChunk> {
+  const citationMarkup = createCitationMarkupFilter();
+  const releaseHeldText = function* (): Generator<StreamChunk> {
+    const held = citationMarkup.flush();
+    if (held) yield { type: 'text-delta', delta: held };
+  };
+  for await (const chunk of translateResponsesEvents(events, options)) {
+    if (chunk.type !== 'text-delta') {
+      if (chunk.type === 'stop' || chunk.type === 'error') yield* releaseHeldText();
+      yield chunk;
+      continue;
+    }
+    const delta = citationMarkup.push(chunk.delta);
+    if (delta) yield { ...chunk, delta };
+  }
+  yield* releaseHeldText();
+}
+
+async function* translateResponsesEvents(
+  events: AsyncIterable<ResponsesStreamEvent>,
+  options: TranslateOpenAIResponsesStreamOptions,
 ): AsyncIterable<StreamChunk> {
   const items = new Map<number, OpenItem>();
   const webSearches = new Map<number, WebSearchState>();
