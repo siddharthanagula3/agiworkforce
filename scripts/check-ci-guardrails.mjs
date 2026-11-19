@@ -516,8 +516,9 @@ requireNotIncludes('apps/mobile/eas.json', '"appleId": "$APPLE_ID"');
 requireIncludes('.github/workflows/release-mobile.yml', "- 'v-mobile-*'");
 requireIncludes('.github/workflows/release-mobile.yml', 'name: mobile-store-release');
 requireIncludes('.github/workflows/release-mobile.yml', "EAS_CLI_VERSION: '21.4.0'");
-requireIncludes('.github/workflows/release-mobile.yml', 'release:ios:prod -- --auto-submit');
-requireIncludes('.github/workflows/release-mobile.yml', 'release:android:prod -- --auto-submit');
+requireIncludes('.github/workflows/release-mobile.yml', 'release:ios:prod --auto-submit');
+requireIncludes('.github/workflows/release-mobile.yml', 'release:android:prod --auto-submit');
+requireNotIncludes('.github/workflows/release-mobile.yml', ' -- --auto-submit');
 requireIncludes('.github/workflows/release-mobile.yml', 'release:verify-associations');
 requireIncludes(
   '.github/workflows/release-mobile.yml',

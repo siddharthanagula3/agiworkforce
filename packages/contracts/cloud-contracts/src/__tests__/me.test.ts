@@ -113,6 +113,47 @@ describe('MeResponseSchema', () => {
   });
 });
 
+describe('MeResponseSchema, attachment_limits and the large file offer', () => {
+  const MIB = 1024 * 1024;
+  const today = {
+    max_file_bytes: 25 * MIB,
+    max_image_bytes: 20 * MIB,
+    max_message_bytes: 25 * MIB,
+    max_files_per_message: 10,
+  };
+
+  it('parses a server that predates the offer, with no new field added', () => {
+    expect(
+      parseMeResponse({ ...golden, attachment_limits: today }).attachment_limits,
+    ).toStrictEqual(today);
+    expect(parseMeResponse(golden).attachment_limits).toBeUndefined();
+  });
+
+  it('keeps the offer, the storage left and the inline budget when the server sends them', () => {
+    const offered = {
+      ...today,
+      max_file_bytes: 500 * MIB,
+      max_message_bytes: 2048 * MIB,
+      max_files_per_message: 20,
+      large_files_available: true,
+      storage_remaining_bytes: 9 * 1024 * MIB,
+      inline_message_bytes: 25 * MIB,
+    };
+    expect(
+      parseMeResponse({ ...golden, attachment_limits: offered }).attachment_limits,
+    ).toStrictEqual(offered);
+  });
+
+  it('keeps the rest of the answer when the offer is malformed', () => {
+    const parsed = parseMeResponse({
+      ...golden,
+      attachment_limits: { ...today, large_files_available: true },
+    });
+    expect(parsed.attachment_limits).toBeUndefined();
+    expect(parsed.plan.tier).toBe('pro');
+  });
+});
+
 describe('MeResponseSchema, capability_handshake (six-app finding A)', () => {
   it('accepts the golden fixture pro-tier capability_handshake document', () => {
     const result = MeResponseSchema.safeParse(golden);

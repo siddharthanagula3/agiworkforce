@@ -90,10 +90,12 @@ describe('universal link paths resolve on web', () => {
     expect(unresolved).toEqual([]);
   });
 
-  it('resolves the wildcard pairing path through a dynamic segment, not a stray literal', async () => {
+  it('resolves the wildcard open path through dynamic segments, not a stray literal', async () => {
     const patterns = await claimedPaths();
-    expect(patterns).toContain('/pair/*');
-    expect(resolveRoute(['pair', 'ABCD1234WXYZ'])).toBe(path.join('pair', '[code]'));
+    expect(patterns).toContain('/open/*');
+    expect(resolveRoute(['open', 'work', 'ABCD1234WXYZ'])).toBe(
+      path.join('open', '[target]', '[id]'),
+    );
   });
 
   it('rejects the resolver itself on a path nothing claims', () => {

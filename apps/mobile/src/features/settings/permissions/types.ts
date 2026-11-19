@@ -1,5 +1,12 @@
 export type MobilePermissionKind =
-  'microphone' | 'camera' | 'photos' | 'notifications' | 'calendar' | 'reminders';
+  | 'microphone'
+  | 'speechRecognition'
+  | 'camera'
+  | 'photos'
+  | 'notifications'
+  | 'calendar'
+  | 'reminders'
+  | 'faceId';
 
 export type MobilePermissionLevel =
   'denied' | 'ask_each_time' | 'allow_while_using' | 'allow_always';

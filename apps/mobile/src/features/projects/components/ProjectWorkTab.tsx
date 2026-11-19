@@ -5,8 +5,10 @@ import { PressableBox } from '@/components/ui/PressableBox';
 import { useRouter } from 'expo-router';
 import { Bot } from 'lucide-react-native';
 import type { CloudAgentRun } from '@agiworkforce/cloud-contracts';
+import { canUseBillingPlanCapability, PRODUCT_NAMES } from '@agiworkforce/types';
 import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
+import { useTierStore } from '@/src/features/billing/store';
 import { createMobileCloudAgentRunClient } from '@/services/streaming';
 import { describeCloudRunError } from '@/src/features/tasks/service';
 import {
@@ -32,10 +34,14 @@ interface WorkState {
 export function ProjectWorkTab({ projectId, projectName }: ProjectWorkTabProps) {
   const colors = useThemeColors();
   const router = useRouter();
+  const workExcluded = useTierStore(
+    (s) => s.lastRefreshedAt !== null && !canUseBillingPlanCapability(s.tier, 'agi_work'),
+  );
   const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState<WorkState>({ runs: [], status: 'loading', error: null });
 
   useEffect(() => {
+    if (workExcluded) return;
     const controller = new AbortController();
     setState({ runs: [], status: 'loading', error: null });
     createMobileCloudAgentRunClient()
@@ -58,7 +64,7 @@ export function ProjectWorkTab({ projectId, projectName }: ProjectWorkTabProps) 
         });
       });
     return () => controller.abort();
-  }, [projectId, attempt]);
+  }, [projectId, attempt, workExcluded]);
 
   const handleOpen = useCallback(
     (conversationId: string) => {
@@ -66,6 +72,26 @@ export function ProjectWorkTab({ projectId, projectName }: ProjectWorkTabProps) 
     },
     [router],
   );
+
+  if (workExcluded) {
+    return (
+      <View className="items-center justify-center py-16 px-6">
+        <View
+          className="w-16 h-16 rounded-2xl items-center justify-center mb-4"
+          style={{ backgroundColor: `${colors.textMuted}14` }}
+        >
+          <Bot size={28} color={colors.textMuted} />
+        </View>
+        <Text
+          className="text-[15px] font-semibold text-center"
+          style={{ color: colors.textPrimary }}
+          testID="project-work-not-included"
+        >
+          {`${PRODUCT_NAMES.work} isn’t included in your plan.`}
+        </Text>
+      </View>
+    );
+  }
 
   if (state.status === 'loading') {
     return (
@@ -123,7 +149,7 @@ export function ProjectWorkTab({ projectId, projectName }: ProjectWorkTabProps) 
           className="text-sm text-center leading-[19px]"
           style={{ color: colors.textSecondary }}
         >
-          Switch a chat in {projectName} to AGI Work and its runs will be listed here.
+          {`Switch a chat in ${projectName} to ${PRODUCT_NAMES.work} and its runs will be listed here.`}
         </Text>
       </View>
     );

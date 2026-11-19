@@ -91,8 +91,10 @@ jest.mock('@/src/features/auth/services/cloudAccountSession', () => ({
     snapshot.ownerId === mockOwnerId && snapshot.epoch === mockEpoch,
 }));
 
+const mockFetchAccounts = jest.fn();
 jest.mock('@/services/connectors', () => ({
   connectConnector: jest.fn(),
+  fetchConnectorAccounts: (...args: unknown[]) => mockFetchAccounts(...args),
   fetchConnectorCalls: jest.fn(async () => []),
   deleteCustomConnector: (...args: unknown[]) => mockDeleteCustom(...args),
   disconnectConnector: (...args: unknown[]) => mockDisconnect(...args),
@@ -151,6 +153,21 @@ const GITHUB_CATALOG = {
   discoveryErrors: [],
 };
 
+function providerAccount(overrides: Record<string, unknown> = {}) {
+  return {
+    connectorId: 'github',
+    accountKey: 'acct-1',
+    accountLabel: 'octocat',
+    scope: 'personal',
+    isDefault: true,
+    grantedScopes: ['repo'],
+    connectedAt: '2026-07-29T18:30:00.000Z',
+    updatedAt: '2026-07-29T18:30:00.000Z',
+    needsReauthorization: false,
+    ...overrides,
+  };
+}
+
 describe('Connector detail', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -173,6 +190,7 @@ describe('Connector detail', () => {
     mockResetPermission.mockResolvedValue(undefined);
     mockDisconnect.mockResolvedValue({ vendorNotice: null });
     mockDeleteCustom.mockResolvedValue({ vendorNotice: null });
+    mockFetchAccounts.mockResolvedValue([providerAccount()]);
   });
 
   it("shows account and connection metadata plus only this connector's tools", async () => {
@@ -194,7 +212,9 @@ describe('Connector detail', () => {
 
     await waitFor(() => expect(screen.getByText('Connected to AGI Cloud')).toBeTruthy());
     expect(mockFetchListing).toHaveBeenCalledWith('github');
-    expect(screen.getByText('ada@example.com')).toBeTruthy();
+    await waitFor(() => expect(screen.getByText('octocat')).toBeTruthy());
+    expect(mockFetchAccounts).toHaveBeenCalledWith('github');
+    expect(screen.queryByText('ada@example.com')).toBeNull();
     expect(screen.getByText('GitHub App')).toBeTruthy();
     expect(screen.getByText('GitHub, Inc.')).toBeTruthy();
     await waitFor(() => expect(screen.getByText('Create Issue')).toBeTruthy());
@@ -400,5 +420,48 @@ describe('Connector detail', () => {
     expect(mockFetchListing).not.toHaveBeenCalled();
     expect(mockFetchCapabilities).not.toHaveBeenCalled();
     expect(mockFetchPermissions).not.toHaveBeenCalled();
+  });
+  it('marks only the provider account whose grant expired', async () => {
+    mockFetchAccounts.mockResolvedValue([
+      providerAccount(),
+      providerAccount({
+        accountKey: 'acct-2',
+        accountLabel: 'work-org',
+        needsReauthorization: true,
+      }),
+    ]);
+    const screen = render(<ConnectorDetailScreen connectorId="github" />);
+    await waitFor(() => expect(screen.getByText('octocat')).toBeTruthy());
+    expect(screen.getByText('work-org · Needs reconnecting')).toBeTruthy();
+    expect(screen.queryByText('octocat · Needs reconnecting')).toBeNull();
+  });
+
+  it('says the account could not be read and retries on tap', async () => {
+    mockFetchAccounts.mockRejectedValueOnce(new Error('offline'));
+    const screen = render(<ConnectorDetailScreen connectorId="github" />);
+    await waitFor(() => expect(screen.getByText('Could not be read. Tap to retry.')).toBeTruthy());
+    fireEvent.press(screen.getByText('Could not be read. Tap to retry.'));
+    await waitFor(() => expect(screen.getByText('octocat')).toBeTruthy());
+    expect(mockFetchAccounts).toHaveBeenCalledTimes(2);
+  });
+
+  it('lists each granted permission as its sentence with Read or Write, not the raw scope', async () => {
+    mockFetchDirectory.mockResolvedValue(
+      directoryWith(
+        githubConnection({
+          scopes: ['repo', 'read:user'],
+          grantedPermissions: [
+            { scope: 'repo', sentence: 'Read and change your repositories', access: 'write' },
+            { scope: 'read:user', sentence: 'Read your profile', access: 'read' },
+          ],
+        }),
+      ),
+    );
+    const screen = render(<ConnectorDetailScreen connectorId="github" />);
+    await waitFor(() => expect(screen.getByText('Read and change your repositories')).toBeTruthy());
+    expect(screen.getByText('Read your profile')).toBeTruthy();
+    expect(screen.getByText('Write')).toBeTruthy();
+    expect(screen.getByText('Read')).toBeTruthy();
+    expect(screen.queryByText('repo, read:user')).toBeNull();
   });
 });

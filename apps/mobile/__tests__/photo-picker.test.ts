@@ -100,6 +100,19 @@ describe('photoPicker', () => {
     ]);
   });
 
+  it('carries the picker asset id so the same photo is recognised across picks', () => {
+    jest.spyOn(Date, 'now').mockReturnValueOnce(1710000000000);
+
+    const [withId, withoutId] = imageAssetsToChatAttachments([
+      { uri: 'file:///cache/a.jpg', mimeType: 'image/jpeg', assetId: 'ph://asset-7' },
+      { uri: 'file:///cache/b.jpg', mimeType: 'image/jpeg', assetId: null },
+    ] as ImagePicker.ImagePickerAsset[]);
+
+    expect(withId?.pickerAssetId).toBe('ph://asset-7');
+    expect(withId?.assetId).toBeUndefined();
+    expect(withoutId && 'pickerAssetId' in withoutId).toBe(false);
+  });
+
   it('reads the real type off an asset the picker did not label instead of calling it a JPEG', () => {
     jest.spyOn(Date, 'now').mockReturnValueOnce(1710000000000);
 

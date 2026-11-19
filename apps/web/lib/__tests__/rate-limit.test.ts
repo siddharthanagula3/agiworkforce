@@ -698,6 +698,36 @@ describe('run-following has a bucket of its own', () => {
   });
 });
 
+describe('a large file status poll has a bucket of its own', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    delete process.env['UPSTASH_REDIS_REST_URL'];
+    delete process.env['UPSTASH_REDIS_REST_TOKEN'];
+    delete process.env['VERCEL_ENV'];
+  });
+
+  it('allows 120 status reads and cancels a minute and fails open', async () => {
+    const { rateLimitConfigs } = await import('../rate-limit');
+
+    expect(rateLimitConfigs['uploads-intake-status']).toEqual({
+      limit: 120,
+      window: '1 m',
+      failClosed: false,
+    });
+  });
+
+  it('counts separately from creating uploads for one identifier', async () => {
+    const { checkRateLimit, rateLimitConfigs } = await import('../rate-limit');
+
+    for (let call = 0; call < rateLimitConfigs['uploads-presign'].limit; call++) {
+      await checkRateLimit(req, 'uploads-presign', 'user:intake-1');
+    }
+    const status = await checkRateLimit(req, 'uploads-intake-status', 'user:intake-1');
+
+    expect(status.success).toBe(true);
+  });
+});
+
 describe('the feedback route has a ceiling wider than the report one', () => {
   beforeEach(() => {
     vi.resetModules();

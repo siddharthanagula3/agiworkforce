@@ -4,9 +4,9 @@ import { PLAN_CREDIT_ALLOWANCES, getPlanCreditAllowance } from '@agiworkforce/ty
 describe('PLAN_CREDIT_ALLOWANCES', () => {
   it('pins the public free-tier allowance', () => {
     expect(getPlanCreditAllowance('free')).toEqual({
-      monthly: 20,
-      weekly: 15,
-      fiveHour: 2,
+      monthly: 2_000,
+      weekly: 1_500,
+      fiveHour: 200,
       flagshipWeekly: null,
       unlimited: false,
     });

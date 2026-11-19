@@ -19,7 +19,8 @@ export const highContrastColors: ColorScheme = agiMobileHighContrastColors.dark;
 
 export const highContrastLightColors: ColorScheme = agiMobileHighContrastColors.light;
 
-export type AccentToken = 'neutral' | 'green' | 'blue' | 'violet' | 'rose';
+// prettier-ignore
+export type AccentToken = 'neutral' | 'blue' | 'cyan' | 'green' | 'lime' | 'yellow' | 'orange' | 'rose' | 'magenta' | 'violet';
 
 const accentSwatches: Record<AccentToken, { light: string; dark: string }> =
   agiMobileAccentSwatches;
@@ -86,6 +87,32 @@ export const typeScale = {
   largeTitle: 34,
   display: 48,
 } as const;
+
+export const HEADER_TEXT_SCALE_LIMIT = 2;
+
+export const STACKED_ROW_TEXT_SCALE = 1.5;
+
+// 'Personalization' at 15 pt, in Bold Text, still fits a settings row on a 320 pt phone.
+export const ROW_LABEL_TEXT_SCALE_LIMIT = 1.9;
+
+export const codeFontChoices = {
+  ios: [
+    { id: 'default', label: 'Menlo', family: 'Menlo' },
+    { id: 'courier', label: 'Courier New', family: 'Courier New' },
+    { id: 'system-mono', label: 'System mono', family: 'ui-monospace' },
+  ],
+  default: [
+    { id: 'default', label: 'Monospace', family: 'monospace' },
+    { id: 'serif-monospace', label: 'Serif monospace', family: 'serif-monospace' },
+  ],
+} as const;
+
+export const codeFontFaces = {
+  ios: codeFontChoices.ios[0].family,
+  default: codeFontChoices.default[0].family,
+} as const;
+
+export const transcriptSerifFaces = { ios: 'Georgia', default: 'serif' } as const;
 
 export const zIndex = {
   base: 0,

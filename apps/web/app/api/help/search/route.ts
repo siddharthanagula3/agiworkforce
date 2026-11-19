@@ -2,6 +2,7 @@ import 'server-only';
 
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
+import { hasEmbeddedPageMarker } from '@agiworkforce/types';
 
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
@@ -57,7 +58,8 @@ async function handleSearch(request: NextRequest) {
     throw createError.validation('Search needs a query of at least two characters', parsed.error);
   }
 
-  const corpus = getSupportCorpus();
+  const view = hasEmbeddedPageMarker(url.searchParams) ? 'phone' : 'web';
+  const corpus = getSupportCorpus(view);
   if (!corpus.available) {
     // Honest degradation: an empty result set would read as "nothing matched",
     // which is a different answer from "the index is not loaded".
@@ -71,6 +73,7 @@ async function handleSearch(request: NextRequest) {
   }
 
   const retrieval = retrieveSupportChunks(parsed.data.q, {
+    view,
     ...(parsed.data.limit ? { limit: parsed.data.limit } : {}),
   });
 

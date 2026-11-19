@@ -1,6 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const { mockToast } = vi.hoisted(() => {
+  const mockToast = Object.assign(vi.fn(), { error: vi.fn() });
+  return { mockToast };
+});
+vi.mock('sonner', () => ({ toast: mockToast }));
+
 import {
   conversationDeleteConfirm,
   conversationHref,
@@ -16,7 +23,51 @@ function source(relativePath: string): string {
   return readFileSync(join(ROOT, relativePath), 'utf8');
 }
 
+interface ArchivedToastOptions {
+  action: { label: string; onClick: () => void };
+}
+
+function undoArchive(): void {
+  const options = mockToast.mock.lastCall?.[1] as ArchivedToastOptions | undefined;
+  expect(options?.action.label).toBe('Undo');
+  options!.action.onClick();
+}
+
 describe('archive a chat from the public window', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('gives a pinned chat its pin back when the archive is undone', async () => {
+    const setArchived = vi.fn(async (_archived: boolean, _pinned?: boolean) => true);
+
+    await toggleConversationArchive(false, setArchived, vi.fn(), true);
+    undoArchive();
+
+    await vi.waitFor(() => expect(setArchived).toHaveBeenCalledTimes(2));
+    expect(setArchived).toHaveBeenNthCalledWith(1, true);
+    expect(setArchived).toHaveBeenNthCalledWith(2, false, true);
+  });
+
+  it('restores an unpinned chat without pinning it', async () => {
+    const setArchived = vi.fn(async (_archived: boolean, _pinned?: boolean) => true);
+
+    await toggleConversationArchive(false, setArchived, vi.fn(), false);
+    undoArchive();
+
+    await vi.waitFor(() => expect(setArchived).toHaveBeenCalledTimes(2));
+    expect(setArchived.mock.calls[1]).toEqual([false]);
+  });
+
+  it('says so when the undo does not go through', async () => {
+    const setArchived = vi.fn(async (archived: boolean, _pinned?: boolean) => archived);
+
+    await toggleConversationArchive(false, setArchived, vi.fn(), true);
+    undoArchive();
+
+    await vi.waitFor(() =>
+      expect(mockToast.error).toHaveBeenCalledWith('Could not restore this conversation'),
+    );
+  });
+
   it('archives a chat that is still in the list', async () => {
     const setArchived = vi.fn(async () => true);
     const openArchived = vi.fn();

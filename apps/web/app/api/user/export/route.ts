@@ -11,6 +11,7 @@ import {
   withCorsRoute,
 } from '@/lib/cors';
 import { getClerkAuthUser } from '@/lib/api-auth';
+import { readPrimaryEmailState } from '@/lib/auth/email-confirmation';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import {
@@ -23,6 +24,7 @@ import { authenticatedMediaUrl } from '@/lib/server/media-storage';
 import { readRestrictedUserExportSections } from '@/lib/server/restricted-user-export-reader';
 import { BETA_INVITE_EXPORT_SECTION } from '@/lib/server/beta-invite-export-section';
 import { requestDataExportArchive } from '@/lib/server/data-export-archive';
+import { chatFileSchemaReady } from '@/lib/server/chat-file-intake/schema';
 import { requireCsrfToken } from '@/lib/csrf';
 import type {
   DataExportArchiveResponse,
@@ -989,6 +991,21 @@ const cloudCodeSessionExportSchema = z.object({
   archived_at: nullableTimestampSchema,
 });
 
+const cloudCodeEnvironmentExportSchema = z.object({
+  id: z.string(),
+  organization_id: z.string().nullable(),
+  request_id: z.string(),
+  name: z.string(),
+  network_access: z.string(),
+  extra_hosts: z.array(z.string()),
+  allow_package_managers: z.boolean(),
+  setup_script: z.string(),
+  env_var_names: z.array(z.string()),
+  is_default: z.boolean(),
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
 const videoGenerationJobExportSchema = z.object({
   id: z.string(),
   organization_id: z.string().nullable(),
@@ -1617,6 +1634,25 @@ const connectorAccountStateExportSchema = z.object({
   updated_at: timestampSchema,
 });
 
+const chatFileIntakeExportSchema = z.object({
+  id: z.string(),
+  organization_id: z.string().nullable(),
+  conversation_id: z.string().nullable(),
+  temporary_chat: z.boolean(),
+  file_name: z.string(),
+  mime_type: z.string(),
+  byte_count: numericSchema,
+  declared_sha256: z.string(),
+  state: z.string(),
+  refusal_code: z.string().nullable(),
+  failure_code: z.string().nullable(),
+  cancel_reason: z.string().nullable(),
+  media_asset_id: z.string().nullable(),
+  created_at: timestampSchema,
+  state_changed_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
 const ADDITIONAL_EXPORT_SECTIONS: ReadonlyArray<{
   section: string;
   table: string;
@@ -1624,6 +1660,7 @@ const ADDITIONAL_EXPORT_SECTIONS: ReadonlyArray<{
   schema: z.ZodType<unknown>;
   rowLimit?: number;
   acrossWorkspaces?: boolean;
+  requiresChatFileSchema?: boolean;
 }> = [
   // Two roles, two sections. Each one carries what this person supplied or was
   // given, and never the other party's account id.
@@ -1827,6 +1864,22 @@ const ADDITIONAL_EXPORT_SECTIONS: ReadonlyArray<{
           where user_id = $1
           order by created_at asc`,
     schema: cloudCodeSessionExportSchema,
+    acrossWorkspaces: true,
+  },
+  // `env_vars_encrypted` is withheld: it holds the variable values sealed at
+  // rest, which are the secrets a session authenticates with, and a secret in
+  // this file stays valid wherever the file goes. The variable names are
+  // exported so the person can see what they stored.
+  {
+    section: 'cloud_code_environments',
+    table: 'cloud_code_environments',
+    sql: `select id, organization_id, request_id, name, network_access, extra_hosts,
+                 allow_package_managers, setup_script, env_var_names, is_default,
+                 created_at, updated_at
+          from cloud_code_environments
+          where user_id = $1
+          order by created_at asc`,
+    schema: cloudCodeEnvironmentExportSchema,
     acrossWorkspaces: true,
   },
   {
@@ -2365,9 +2418,26 @@ const ADDITIONAL_EXPORT_SECTIONS: ReadonlyArray<{
           order by connector_id asc`,
     schema: connectorAccountStateExportSchema,
   },
+  {
+    section: 'chat_file_intakes',
+    table: 'chat_file_intakes',
+    sql: `select id, organization_id, conversation_id, temporary_chat, file_name, mime_type,
+                 byte_count, declared_sha256, state, refusal_code, failure_code, cancel_reason,
+                 media_asset_id, created_at, state_changed_at, updated_at
+          from chat_file_intakes
+          where user_id = $1
+          order by created_at desc
+          limit 1000`,
+    schema: chatFileIntakeExportSchema,
+    rowLimit: EXPORT_ROW_LIMIT,
+    acrossWorkspaces: true,
+    requiresChatFileSchema: true,
+  },
 ];
 
 export const UNEXPORTED_USER_TABLES: Readonly<Record<string, string>> = {
+  chat_file_preparations:
+    'Derived text and progress for a chat file; the original file is exported and the text is regenerated from it.',
   signaling_sessions:
     'Remote Control pairing records: the pairing code, the paired device ids and the rotating relay credential. A live credential, not subject content, and the relay deletes each one an hour after it expires.',
   token_credits:
@@ -2438,6 +2508,19 @@ function exportOrigin(request: NextRequest): string {
   return configured || request.nextUrl.origin;
 }
 
+async function readExportAccountEmail(
+  user: { id: string; email?: string },
+  ledger: ExportCompletenessLedger,
+): Promise<string | undefined> {
+  if (user.email) return user.email;
+  try {
+    return (await readPrimaryEmailState(user.id)).email ?? undefined;
+  } catch {
+    ledger.sectionUnavailable('account');
+    return undefined;
+  }
+}
+
 async function collectUserData(
   user: { id: string; email?: string },
   scopedDbFor: (organizationId: string | null) => DatabaseAdapter,
@@ -2446,6 +2529,7 @@ async function collectUserData(
 ): Promise<Record<string, unknown>> {
   const db = scopedDbFor(null);
   const ledger = new ExportCompletenessLedger();
+  const accountEmail = await readExportAccountEmail(user, ledger);
   let workspaces: (string | null)[] = [null];
   const exportData: Record<string, unknown> = {
     export_metadata: {
@@ -2457,7 +2541,7 @@ async function collectUserData(
     },
     account: {
       id: user.id,
-      email: user.email,
+      email: accountEmail,
     },
   };
 
@@ -3192,7 +3276,25 @@ async function collectUserData(
     rowLimit: EXPORT_ROW_LIMIT,
   });
 
-  for (const { section, sql, schema, rowLimit, acrossWorkspaces } of ADDITIONAL_EXPORT_SECTIONS) {
+  let chatFileSchema: boolean | null = null;
+  for (const {
+    section,
+    sql,
+    schema,
+    rowLimit,
+    acrossWorkspaces,
+    requiresChatFileSchema,
+  } of ADDITIONAL_EXPORT_SECTIONS) {
+    if (requiresChatFileSchema) {
+      try {
+        chatFileSchema ??= await chatFileSchemaReady(db);
+      } catch (error) {
+        ledger.sectionUnavailable(section);
+        logger.warn({ error, userId: user.id, section }, 'User data export section unavailable');
+        continue;
+      }
+      if (!chatFileSchema) continue;
+    }
     const query = {
       sql,
       values: [user.id],

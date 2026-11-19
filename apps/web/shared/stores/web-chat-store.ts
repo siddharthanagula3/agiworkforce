@@ -39,7 +39,7 @@ import type {
   ResearchRunConfig,
   ResearchStep,
 } from '@agiworkforce/types';
-import type { PastChatCitation } from '@/lib/past-chat-citation';
+import type { PastChatCitation } from '@agiworkforce/types';
 import type { FreeModelHandoffReasonCode } from '@/lib/chat-fallback-reason';
 import type { ChatOutputFormat } from '@/lib/chat-output-format';
 import type { AgentEventSource, CloudWorkMode, ManagedMemoryCitations } from '@agiworkforce/types';

@@ -12,6 +12,7 @@ const HARNESS_REASONS: readonly ToolWithdrawalReason[] = [
   'unavailable',
   'budget',
   'repeated-query',
+  'repeated-failure',
   'turn-cap',
 ];
 

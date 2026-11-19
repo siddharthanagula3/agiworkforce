@@ -1,6 +1,6 @@
-import { Alert, Linking } from 'react-native';
-import { API_URL } from '@/lib/constants';
+import { Alert } from 'react-native';
 import { storage } from '@/lib/mmkv';
+import { openWebContentPage } from '@/src/platform/webContentPage';
 
 export const TERMS_NOTICE_HEADER = 'X-AGI-Terms-Notice';
 export const TERMS_REQUIRED_FROM_HEADER = 'X-AGI-Terms-Required-From';
@@ -30,7 +30,7 @@ export function surfaceTermsNotice(headers: { get(name: string): string | null }
     {
       text: 'Read terms',
       onPress: () => {
-        Linking.openURL(`${new URL(API_URL).origin}/terms`).catch(() => undefined);
+        void openWebContentPage('/terms');
       },
     },
   ]);

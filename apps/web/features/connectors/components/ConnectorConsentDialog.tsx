@@ -11,6 +11,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@agiworkforce/ui';
+import {
+  CONNECTOR_CONSENT_ALLOW,
+  CONNECTOR_CONSENT_DENY,
+  connectorConsentTitle,
+} from '@agiworkforce/cloud-contracts';
 
 import { ConnectorConsentSummary } from './ConnectorConsentSummary';
 import { ConnectorScopeList } from './ConnectorScopeList';
@@ -18,13 +23,6 @@ import { ConnectorScopeList } from './ConnectorScopeList';
 export interface ConnectorConsentTarget {
   id: string;
   name: string;
-}
-
-export const CONNECTOR_CONSENT_ALLOW = 'Allow';
-export const CONNECTOR_CONSENT_DENY = 'Deny';
-
-export function connectorConsentTitle(name: string): string {
-  return `Connect ${name}?`;
 }
 
 export function ConnectorConsentDialog({

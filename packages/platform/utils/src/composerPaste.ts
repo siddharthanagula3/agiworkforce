@@ -53,6 +53,37 @@ export function largePasteToFile(
   });
 }
 
+export const PASTED_BLOCK_SEPARATOR = '\n\n';
+
+/**
+ * The indexes of the pasted blocks a message must carry as files because the
+ * message would otherwise pass `maxLength`. The largest block goes first, so
+ * the fewest uploads are spent. A block that fits stays inline.
+ */
+export function pastedBlocksToAttach(
+  blocks: readonly string[],
+  typedText: string,
+  maxLength: number,
+): ReadonlySet<number> {
+  const inline = new Set(blocks.keys());
+  const joinedLength = () =>
+    [...[...inline].map((index) => blocks[index] as string), typedText]
+      .filter(Boolean)
+      .join(PASTED_BLOCK_SEPARATOR).length;
+  const attached = new Set<number>();
+  while (inline.size > 0 && joinedLength() > maxLength) {
+    let largest = -1;
+    for (const index of inline) {
+      if (largest === -1 || (blocks[index] as string).length > (blocks[largest] as string).length) {
+        largest = index;
+      }
+    }
+    inline.delete(largest);
+    attached.add(largest);
+  }
+  return attached;
+}
+
 /**
  * `items` is what a paste populates; `files` is what a drop populates most
  * reliably. Reading only one of them silently drops attachments on the other

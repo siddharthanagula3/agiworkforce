@@ -450,6 +450,8 @@
     "videoModeAttachments_other": "Die Videogenerierung nutzt nur Ihre Eingabeaufforderung. Angehängte Dateien werden nicht an das Videomodell gesendet. Verlassen Sie zuerst den Videomodus, wenn Sie diese Dateien an das Chat-Modell senden möchten.",
     "viewSources_one": "{{count}} Quelle ansehen",
     "viewSources_other": "{{count}} Quellen ansehen",
+    "viewSourcesSoFar_one": "Bisher {{count}} Quelle ansehen",
+    "viewSourcesSoFar_other": "Bisher {{count}} Quellen ansehen",
     "folderFilesLeftOut_one": "{{count}} Datei in {{folder}} wurde nicht angehängt. Hängen Sie sie aus einem lokalen Ordner an.",
     "folderFilesLeftOut_other": "{{count}} Dateien in {{folder}} wurden nicht angehängt. Hängen Sie sie aus einem lokalen Ordner an.",
     "savedMemoriesUsed_one": "{{count}} gespeicherte Erinnerung verwendet",

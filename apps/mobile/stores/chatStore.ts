@@ -25,7 +25,9 @@ import type { ProviderConsentErrorState } from '@/src/features/chat/utils/provid
 import type { FreeCapacityErrorState } from '@/src/features/chat/utils/freeCapacityRecovery';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 import type { CloudWorkMode, ResearchStep } from '@agiworkforce/types';
+import type { ToolApprovalDecisionValue } from '@agiworkforce/cloud-contracts';
 import type { ResearchPlanChoices } from '@/src/features/chat/utils/researchPlanChoices';
+import type { ResponseRatingDetailsInput } from '@/src/features/chat/services/cloudMessageMutations';
 
 export interface CombinedChatState {
   conversations: ConversationSummary[];
@@ -37,6 +39,7 @@ export interface CombinedChatState {
   conversationLoadError: string | null;
   isLoadingMessages: boolean;
   messageLoadErrorConversationId: string | null;
+  missingConversationId: string | null;
   clearMessageLoadError: () => void;
   isStreaming: boolean;
   streamingConversationIds: string[];
@@ -71,6 +74,7 @@ export interface CombinedChatState {
     options?: ForkConversationOptions,
   ) => Promise<string>;
   deleteConversation: (id: string) => Promise<void>;
+  discardUnsentConversation: (id: string) => Promise<void>;
   loadMessages: (conversationId: string) => Promise<void>;
   renameConversation: (id: string, title: string) => Promise<void>;
   setConversationModel: (id: string, model: string) => Promise<boolean>;
@@ -81,10 +85,20 @@ export interface CombinedChatState {
   markConversationRead: (id: string) => void;
   markConversationUnread: (id: string) => void;
   deleteMessage: (conversationId: string, messageId: string) => void;
+  rememberFollowUpSuggestions: (
+    conversationId: string,
+    messageId: string,
+    suggestions: readonly string[],
+  ) => void;
   setMessageReaction: (
     conversationId: string,
     messageId: string,
     reaction: 'thumbsUp' | 'thumbsDown' | null,
+  ) => Promise<void>;
+  submitResponseRatingDetails: (
+    conversationId: string,
+    messageId: string,
+    details: ResponseRatingDetailsInput,
   ) => Promise<void>;
   enqueueOfflineMessage: (
     conversationId: string,
@@ -108,6 +122,7 @@ export interface CombinedChatState {
     conversationId: string,
     assistantMessageId: string,
     errorMessage: string,
+    retryAt?: number,
   ) => void;
   beginVideoGeneration: (
     conversationId: string,
@@ -160,16 +175,23 @@ export interface CombinedChatState {
     decision: 'start' | 'cancel' | 'retry',
     steps?: ResearchStep[],
     choices?: ResearchPlanChoices,
+    answers?: string,
   ) => Promise<void>;
-  editMessage: (conversationId: string, messageId: string, newContent: string) => boolean;
+  editMessage: (
+    conversationId: string,
+    messageId: string,
+    newContent: string,
+    attachments?: MessageAttachment[],
+  ) => boolean;
   resolveToolApproval: (
     conversationId: string,
     assistantMessageId: string,
     toolCallId: string,
-    decision: 'approved' | 'rejected',
+    decision: ToolApprovalDecisionValue,
     guidance?: string,
   ) => Promise<void>;
   clearError: () => void;
+  clearUnscopedError: () => void;
   setSendError: (message: string) => void;
   clearPaywallError: () => void;
   setPaywallError: (paywallError: PaywallErrorState) => void;
@@ -199,6 +221,7 @@ function buildCombinedState(
     conversationLoadError: msg.conversationLoadError,
     isLoadingMessages: msg.isLoadingMessages,
     messageLoadErrorConversationId: msg.messageLoadErrorConversationId,
+    missingConversationId: msg.missingConversationId,
     clearMessageLoadError: msg.clearMessageLoadError,
     setCurrentConversationId: msg.setCurrentConversationId,
     loadConversations: msg.loadConversations,
@@ -206,6 +229,7 @@ function buildCombinedState(
     createConversation: msg.createConversation,
     forkConversation: msg.forkConversation,
     deleteConversation: msg.deleteConversation,
+    discardUnsentConversation: msg.discardUnsentConversation,
     loadMessages: msg.loadMessages,
     renameConversation: msg.renameConversation,
     setConversationModel: msg.setConversationModel,
@@ -216,7 +240,9 @@ function buildCombinedState(
     markConversationRead: msg.markConversationRead,
     markConversationUnread: msg.markConversationUnread,
     deleteMessage: msg.deleteMessage,
+    rememberFollowUpSuggestions: msg.rememberFollowUpSuggestions,
     setMessageReaction: msg.setMessageReaction,
+    submitResponseRatingDetails: msg.submitResponseRatingDetails,
     enqueueOfflineMessage: msg.enqueueOfflineMessage,
     beginImageGeneration: msg.beginImageGeneration,
     completeImageGeneration: msg.completeImageGeneration,
@@ -250,6 +276,7 @@ function buildCombinedState(
     editMessage: exec.editMessage,
     resolveToolApproval: exec.resolveToolApproval,
     clearError: exec.clearError,
+    clearUnscopedError: exec.clearUnscopedError,
     setSendError: exec.setSendError,
     clearPaywallError: exec.clearPaywallError,
     setPaywallError: exec.setPaywallError,

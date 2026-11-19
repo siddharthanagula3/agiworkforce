@@ -90,7 +90,7 @@ function presignRequest(body: PresignBody, origin = 'http://localhost:3000'): Ne
       : body;
   return new NextRequest(`${origin}/api/uploads/presign`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-csrf-token': 'csrf-fixture' },
+    headers: { 'Content-Type': 'application/json', 'x-csrf-token': 'csrf-fixture', origin },
     body: JSON.stringify(authorized),
   });
 }

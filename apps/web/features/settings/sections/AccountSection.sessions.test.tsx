@@ -198,6 +198,82 @@ describe('AccountSection active sessions', () => {
     expect(mockSignOut).not.toHaveBeenCalled();
   });
 
+  describe('the device a row names', () => {
+    const phoneRow = {
+      ...sessions[1]!,
+      id: 'sess_app',
+      device: 'Mobile device',
+      browser: 'OkHttp 5.4.0',
+      os: 'android',
+      surface: 'mobile',
+    };
+
+    function listSessions(rows: unknown[]) {
+      vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+        if (String(input) === '/api/settings/sessions' && (init?.method ?? 'GET') === 'GET') {
+          return jsonResponse({ sessions: rows, totalCount: rows.length });
+        }
+        throw new Error(`Unexpected request: ${String(input)} ${init?.method ?? 'GET'}`);
+      });
+    }
+
+    it('names the phone app and its platform instead of the HTTP library', async () => {
+      listSessions([sessions[0], phoneRow]);
+
+      renderAccountSection();
+
+      expect(await screen.findByText('AGI Mobile on Android')).toBeInTheDocument();
+      expect(screen.queryByText(/OkHttp/)).toBeNull();
+      expect(screen.queryByText('Mobile device')).toBeNull();
+      expect(
+        screen.getByRole('button', { name: 'Revoke AGI Mobile on Android session' }),
+      ).toBeInTheDocument();
+    });
+
+    it('names the app on iOS from the library when the surface is not recorded', async () => {
+      listSessions([
+        sessions[0],
+        { ...phoneRow, surface: undefined, os: 'ios', browser: 'CFNetwork/1568.100.1' },
+      ]);
+
+      renderAccountSection();
+
+      expect(await screen.findByText('AGI Mobile on iOS')).toBeInTheDocument();
+      expect(screen.queryByText(/CFNetwork/)).toBeNull();
+    });
+
+    it('names the app without a platform when the operating system is unknown', async () => {
+      listSessions([sessions[0], { ...phoneRow, os: null }]);
+
+      renderAccountSection();
+
+      expect(await screen.findByText('AGI Mobile')).toBeInTheDocument();
+      expect(screen.queryByText(/OkHttp/)).toBeNull();
+    });
+
+    it('leaves a desktop browser row as it is', async () => {
+      listSessions([{ ...sessions[0], os: 'macos', surface: 'web' }, phoneRow]);
+
+      renderAccountSection();
+
+      expect(await screen.findByText('Mac')).toBeInTheDocument();
+      expect(screen.getByText('Chrome 140')).toBeInTheDocument();
+    });
+
+    it('leaves a desktop app row alone even when its browser reads like a library', async () => {
+      listSessions([
+        sessions[0],
+        { ...phoneRow, id: 'sess_desktop', device: 'Mac', os: 'macos', surface: 'desktop' },
+      ]);
+
+      renderAccountSection();
+
+      expect(await screen.findByText('OkHttp 5.4.0')).toBeInTheDocument();
+      expect(screen.getAllByText('Mac')).toHaveLength(2);
+      expect(screen.queryByText(/AGI Mobile/)).toBeNull();
+    });
+  });
+
   it('shows the signed-in account identifier with a way to copy it for support', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
       if (String(input) === '/api/settings/sessions' && (init?.method ?? 'GET') === 'GET') {

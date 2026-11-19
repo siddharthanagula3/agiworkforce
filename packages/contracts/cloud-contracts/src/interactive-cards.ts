@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { AnswerUiCardBodySchema } from './answer-ui';
 import { ManagedMediaImageAspectRatioSchema } from './managed-media';
-import { isAllowedMapSearchProviderUrl } from './map-urls';
+import { isAllowedMapSearchProviderUrl, isAllowedPlaceDirectionsUrl } from './map-urls';
 import {
   CLARIFY_HEADER_MAX_LENGTH,
   CLARIFY_MAX_OPTIONS,
@@ -49,7 +49,7 @@ import {
   type InteractiveCard,
 } from '@agiworkforce/types';
 
-export { isAllowedMapSearchProviderUrl };
+export { isAllowedMapSearchProviderUrl, isAllowedPlaceDirectionsUrl };
 
 const HttpsUrlSchema = z
   .string()

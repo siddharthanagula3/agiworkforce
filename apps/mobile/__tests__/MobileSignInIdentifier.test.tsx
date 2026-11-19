@@ -30,6 +30,7 @@ function makeAttempt(factors: Factor[]): MockAttempt {
 }
 
 jest.mock('@clerk/expo', () => ({
+  useClerk: () => ({}),
   useSignIn: () => ({ signIn: mockAttempt, fetchStatus: 'idle' }),
 }));
 jest.mock('@clerk/expo/apple', () => ({

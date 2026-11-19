@@ -7,6 +7,7 @@ import { MessageBubble } from '@/src/features/chat/components/MessageBubble';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { ownerHandler } from '@/test-utils/ownerProps';
 import { useArtifactStore } from '@/src/features/artifacts/store';
+import { answerClipboardText } from '@/src/features/chat/utils/markdownPlainText';
 import type { ChatMessage } from '@/types/chat';
 import type {
   VoiceOutputHandle,
@@ -63,12 +64,29 @@ describe('whole native message accessibility structure', () => {
 
     expectUngroupedAncestors(screen.getByRole('header', { name: 'Readable heading' }));
     expectUngroupedAncestors(screen.getByLabelText('Message'));
-    expectUngroupedAncestors(screen.getByRole('button', { name: 'Copy email' }));
+    if (isStreaming) {
+      expect(screen.queryByRole('button', { name: 'Copy email' })).toBeNull();
+    } else {
+      expectUngroupedAncestors(screen.getByRole('button', { name: 'Copy email' }));
+    }
+  });
+
+  it('offers the message actions once the answer is complete, on a full-size control', () => {
+    render(<MessageBubble message={assistant({ isStreaming: false })} />);
+
     const more = screen.getByRole('button', { name: /^More message actions for / });
     expect(more).toHaveStyle({ width: 44, height: 44 });
     expect(more.props.accessibilityActions).toEqual(
       expect.arrayContaining([expect.objectContaining({ name: 'copy' })]),
     );
+  });
+
+  it('shows no action buttons under an answer that is still being written', () => {
+    render(<MessageBubble message={assistant({ isStreaming: true })} />);
+
+    expect(screen.queryByLabelText('Message actions')).toBeNull();
+    expect(screen.queryByRole('button', { name: /^More message actions for / })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Copy' })).toBeNull();
   });
 
   it('retains the full export/share sheet through More', async () => {
@@ -86,7 +104,7 @@ describe('whole native message accessibility structure', () => {
     await act(async () => {
       fireEvent.press(screen.getByRole('button', { name: 'Copy to Clipboard' }));
     });
-    expect(Clipboard.setStringAsync).toHaveBeenLastCalledWith(CONTENT);
+    expect(Clipboard.setStringAsync).toHaveBeenLastCalledWith(answerClipboardText(CONTENT));
   });
 
   it('keeps touch long-press and custom message actions on a reachable control', () => {

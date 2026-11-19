@@ -1,4 +1,4 @@
-import { artifactReplyFormat } from '../artifact-edit-request';
+import { artifactReplyFormat } from '@agiworkforce/unified-chat/artifact-edit-request';
 import type { BrandPayload } from './studio-library-client';
 
 export function buildApplyBrandRequest(

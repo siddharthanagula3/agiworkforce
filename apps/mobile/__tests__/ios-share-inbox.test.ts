@@ -1,4 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
+jest.mock('expo-file-system/legacy', () => ({ cacheDirectory: 'file:///caches/' }));
+
 import type { AppStateStatus } from 'react-native';
 
 type InboxApi = typeof import('@/src/features/share-preview/iosShareInbox');
@@ -111,12 +113,66 @@ describe('iOS share inbox payload', () => {
     ]);
   });
 
+  it('takes only copies inside the staging inbox and counts the rest as not added', () => {
+    const staged = `file:///caches/AGISharedInbox/${RECEIPT_A}/0-plan%20v2.pdf`;
+    const pending = inbox.normalizePendingShare({
+      receiptId: RECEIPT_A,
+      text: '',
+      files: [
+        { uri: staged, fileName: 'plan v2.pdf', mimeType: 'application/pdf' },
+        { uri: 'file:///Documents/agi.db', fileName: 'agi.db', mimeType: '' },
+        { uri: 'file:///caches/AGISharedInbox/../agi.db', fileName: 'agi.db', mimeType: '' },
+        { uri: 'file:///caches/AGISharedInbox/%2e%2e/agi.db', fileName: 'agi.db', mimeType: '' },
+        { uri: 'file:///caches/other/agi.db', fileName: 'agi.db', mimeType: '' },
+      ],
+      unavailableFileCount: 1,
+    });
+    expect(pending?.files).toEqual([
+      { uri: staged, fileName: 'plan v2.pdf', mimeType: 'application/pdf' },
+    ]);
+    expect(pending?.unavailableFileCount).toBe(5);
+  });
+
   it('still opens a review when every file failed to copy, so the loss is visible', () => {
     expect(inbox.normalizePendingShare({ text: ' ', files: [], unavailableFileCount: 2 })).toEqual(
       expect.objectContaining({ unavailableFileCount: 2, files: [] }),
     );
     expect(inbox.normalizePendingShare({ text: '   ', files: [] })).toBeNull();
     expect(inbox.normalizePendingShare(null)).toBeNull();
+  });
+});
+
+describe('a file named on an App Intent link', () => {
+  type Attachments = typeof import('@/src/features/share-preview/sharedAttachments');
+  const STAGED = 'file:///caches/AGIIntentFiles/0F8E2C1A-1B2C-4D5E-8F90-123456789ABC.jpg';
+
+  function attachmentsOn(os: 'ios' | 'android'): Attachments {
+    load(os, {});
+    return require('@/src/features/share-preview/sharedAttachments') as Attachments;
+  }
+
+  it('is passed on when an App Intent staged it', () => {
+    expect(attachmentsOn('ios').stagedIntentFileUri(STAGED)).toBe(STAGED);
+  });
+
+  it.each([
+    ['the app documents', 'file:///Documents/agi.db'],
+    ['the share inbox', `file:///caches/AGISharedInbox/${RECEIPT_A}/0-plan.pdf`],
+    ['the cache outside the folder', 'file:///caches/recording.m4a'],
+    ['a sibling that only starts like the folder', 'file:///caches/AGIIntentFilesOld/a.jpg'],
+    ['a .. segment', 'file:///caches/AGIIntentFiles/../agi.db'],
+    ['an encoded .. segment', 'file:///caches/AGIIntentFiles/%2e%2e/agi.db'],
+    ['a web address', 'https://example.com/a.jpg'],
+  ])('is dropped when it points at %s', (_label, uri) => {
+    expect(attachmentsOn('ios').stagedIntentFileUri(uri)).toBeUndefined();
+  });
+
+  it('is dropped when the link names none', () => {
+    expect(attachmentsOn('ios').stagedIntentFileUri(undefined)).toBeUndefined();
+  });
+
+  it('is always dropped on Android, where no App Intent stages a file', () => {
+    expect(attachmentsOn('android').stagedIntentFileUri(STAGED)).toBeUndefined();
   });
 });
 

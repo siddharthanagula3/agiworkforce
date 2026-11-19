@@ -35,6 +35,7 @@ import {
   resolveWireMode,
 } from '@/app/api/llm/v1/chat/completions/lib/adapter-providers';
 import { drainToLlmResponse } from '@/app/api/llm/v1/chat/completions/lib/adapter-response';
+import { createPublicTextDeltaProjector } from '@/app/api/llm/v1/chat/completions/lib/agent-event-stream';
 import { extractAssistantTextDelta } from '@/app/api/llm/v1/chat/completions/lib/assistant-turn-persistence';
 import {
   buildCapabilityPreamble,
@@ -601,6 +602,7 @@ export async function runScheduledToolLoop(input: {
 }): Promise<ScheduledCompletion> {
   const usage = input.usage;
   const toolsUsed: string[] = [];
+  const publicText = createPublicTextDeltaProjector();
   let text = '';
   let reportedError: string | undefined;
   let approval: ToolLoopApprovalCheckpoint | undefined;
@@ -641,7 +643,7 @@ export async function runScheduledToolLoop(input: {
   });
 
   for await (const chunk of loop) {
-    text += extractAssistantTextDelta(chunk);
+    text += publicText.push(extractAssistantTextDelta(chunk));
     for (const envelope of extractManagedAgentEventEnvelopes(chunk)) {
       if (envelope.event.type === 'tool-execution-start') toolsUsed.push(envelope.event.name);
       if (envelope.event.type === 'error' && !reportedError) reportedError = envelope.event.message;
@@ -649,6 +651,7 @@ export async function runScheduledToolLoop(input: {
     }
   }
 
+  text += publicText.flush();
   input.signal.throwIfAborted();
   if (reportedError && !approval) throw new Error(reportedError);
 

@@ -347,4 +347,132 @@ describe('ResearchRunCard over a recorded run', () => {
     expect(screen.getByText('Research plan cancelled')).toBeTruthy();
     expect(screen.queryByTestId('research-plan-approve')).toBeNull();
   });
+
+  it('asks the plan questions and sends the answers with Approve plan', () => {
+    const onPlanDecision = jest.fn();
+    const research = replay([
+      RUN[0] as StreamDelta,
+      {
+        x_research_plan: {
+          steps: [{ id: 'step-1', type: 'search', description: 'Grid storage', status: 'pending' }],
+          questions: ['Which region matters most?', 'Home or utility scale?'],
+        },
+      } as StreamDelta,
+      RUN[2] as StreamDelta,
+    ]);
+    render(
+      <ResearchRunCard research={research} isStreaming={false} onPlanDecision={onPlanDecision} />,
+    );
+
+    expect(screen.getByText('Before I search')).toBeTruthy();
+    expect(screen.getByText('Answer what you can; anything left blank is skipped.')).toBeTruthy();
+    fireEvent.changeText(screen.getByLabelText('Which region matters most?'), '  Texas  ');
+    fireEvent.press(screen.getByTestId('research-plan-approve'));
+
+    expect(onPlanDecision).toHaveBeenCalledWith({
+      choices: defaultResearchPlanChoices(),
+      answers: 'Q: Which region matters most?\nA: Texas',
+    });
+  });
+
+  it('sends no answers when every plan question is left blank', () => {
+    const onPlanDecision = jest.fn();
+    const research: ResearchRunState = { ...replay(RUN), questions: ['Which region?'] };
+    render(
+      <ResearchRunCard research={research} isStreaming={false} onPlanDecision={onPlanDecision} />,
+    );
+
+    fireEvent.changeText(screen.getByLabelText('Which region?'), '   ');
+    fireEvent.press(screen.getByTestId('research-plan-approve'));
+
+    expect(onPlanDecision).toHaveBeenCalledWith({ choices: defaultResearchPlanChoices() });
+  });
+
+  it('hides the plan questions once the plan is no longer waiting for approval', () => {
+    const research: ResearchRunState = {
+      ...replay([...RUN, ...PROGRESS]),
+      questions: ['Which region?'],
+    };
+    render(<ResearchRunCard research={research} isStreaming onPlanDecision={jest.fn()} />);
+
+    expect(screen.queryByText('Before I search')).toBeNull();
+    expect(screen.queryByTestId('research-plan-questions')).toBeNull();
+  });
+
+  it('opens the plan on the run configuration the plan returned', () => {
+    const onPlanDecision = jest.fn();
+    const research = replay([
+      RUN[0] as StreamDelta,
+      {
+        x_research_plan: {
+          steps: [{ id: 'step-1', type: 'search', description: 'Grid storage', status: 'pending' }],
+          run: {
+            files: true,
+            allow_domains: ['iea.org'],
+            deny_domains: [],
+            connectors: [],
+            deliverable: { depth: 'executive-summary', format: 'bullet-brief' },
+          },
+        },
+      } as StreamDelta,
+      RUN[2] as StreamDelta,
+    ]);
+    render(
+      <ResearchRunCard research={research} isStreaming={false} onPlanDecision={onPlanDecision} />,
+    );
+
+    fireEvent.press(screen.getByTestId('research-plan-approve'));
+
+    expect(onPlanDecision).toHaveBeenCalledWith({
+      choices: {
+        deliverable: expect.objectContaining({
+          depth: 'executive-summary',
+          format: 'bullet-brief',
+        }),
+        sources: { files: true, allowDomains: ['iea.org'], denyDomains: [], connectors: [] },
+      },
+    });
+  });
+
+  it.each([
+    [
+      'by message id',
+      { first: { messageId: 'assistant-1' }, second: { messageId: 'assistant-2' } },
+    ],
+    ['by run start when no message id is passed', { first: {}, second: {} }],
+  ])('starts a recycled row with the new run plan, keyed %s', (_label, ids) => {
+    const onPlanDecision = jest.fn();
+    const first = replay(RUN);
+    const second: ResearchRunState = {
+      ...first,
+      startedAt: '2026-09-14T00:00:00.000Z',
+      steps: [
+        { id: 'other-1', type: 'search', description: 'Tidal power output', status: 'pending' },
+      ],
+    };
+    const { rerender } = render(
+      <ResearchRunCard
+        {...ids.first}
+        research={first}
+        isStreaming={false}
+        onPlanDecision={onPlanDecision}
+      />,
+    );
+    fireEvent.changeText(screen.getByLabelText('Step 1'), 'Edited on the first run');
+    fireEvent.press(screen.getByTestId('research-deliverable-executive-summary'));
+
+    rerender(
+      <ResearchRunCard
+        {...ids.second}
+        research={second}
+        isStreaming={false}
+        onPlanDecision={onPlanDecision}
+      />,
+    );
+
+    expect(screen.getByLabelText('Step 1').props.value).toBe('Tidal power output');
+    expect(screen.queryByLabelText('Step 2')).toBeNull();
+    fireEvent.press(screen.getByTestId('research-plan-approve'));
+    expect(onPlanDecision).toHaveBeenCalledWith({ choices: defaultResearchPlanChoices() });
+  });
 });

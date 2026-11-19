@@ -1,4 +1,6 @@
 import { buildMetadata } from '@/lib/seo/metadata';
+import { purchaseHelpPaths } from '@/lib/support/help-articles';
+import { EmbeddedPageExclusions } from '@shared/components/layout/EmbeddedPage';
 
 export const metadata = buildMetadata({
   title: 'Help Center',
@@ -18,5 +20,5 @@ export const metadata = buildMetadata({
 });
 
 export default function HelpLayout({ children }: { children: React.ReactNode }) {
-  return children;
+  return <EmbeddedPageExclusions paths={purchaseHelpPaths()}>{children}</EmbeddedPageExclusions>;
 }

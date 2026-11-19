@@ -30,7 +30,7 @@ export const PERSONAL_SOURCE_TITLES: Record<ConnectorPersonalSource, string> = {
   calendar: 'Calendar',
 };
 
-export const DEVICE_CALENDAR_NAME = 'Calendar on this phone';
+export const DEVICE_CALENDAR_NAME = 'Calendar on this device';
 
 const CONNECTABLE_NOW: ReadonlySet<ConnectorListing['connectable']> = new Set([
   'connect',

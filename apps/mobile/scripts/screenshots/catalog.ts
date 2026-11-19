@@ -48,7 +48,7 @@ export const DEVICES: DeviceClass[] = [
     simulator: 'iPhone 17 Pro',
     width: 1206,
     height: 2622,
-    storeSlot: null,
+    storeSlot: 'App Store Connect, iPhone with Dynamic Island (medium display) (required)',
   },
   {
     platform: 'ios',
@@ -74,7 +74,7 @@ export const SCREENSHOTS: Screenshot[] = [
     name: 'onboarding-local',
     spec: '02-onboarding-local.spec.ts',
     heading: 'Start without an account',
-    subhead: 'Local setup, device fit, and model readiness.',
+    subhead: 'No account needed. Local chats stay on this device.',
   },
   {
     id: '01',
@@ -94,8 +94,8 @@ export const SCREENSHOTS: Screenshot[] = [
     id: '04',
     name: 'cloud-sign-in',
     spec: '04-mode-toggle-to-sign-in.spec.ts',
-    heading: 'Sign in for Cloud',
-    subhead: 'Cloud chat opens to any signed-in account.',
+    heading: 'AGI Cloud when you sign in',
+    subhead: 'Cloud chat answers with cited sources.',
   },
   {
     id: '06',

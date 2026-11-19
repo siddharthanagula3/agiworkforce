@@ -4,10 +4,12 @@ import {
   cloudCodeSessionMatchesQuery,
   cloudCodeViewStatusFilter,
   computerCodeSessionInView,
+  groupCodeListEntries,
   sortCloudCodeSessions,
   visibleCodeListEntries,
 } from '../src/features/cloud-code/presentation';
 import type { CloudCodeSession, RemoteCodeSessionSummary } from '@agiworkforce/types';
+import type { CodeListEntry } from '../src/features/cloud-code/presentation';
 
 describe('cloud code session views', () => {
   it('maps every state view onto the open server filter and the rest onto themselves', () => {
@@ -138,5 +140,122 @@ describe('merged code session list', () => {
       ['computer', 't1'],
       ['cloud', 'c2'],
     ]);
+  });
+});
+
+describe('grouping the code list by repository', () => {
+  const cloud = (id: string, updatedAt: string, repositoryUrl: string | null): CodeListEntry => ({
+    kind: 'cloud',
+    id: `cloud:${id}`,
+    updatedAt,
+    session: {
+      id,
+      title: id,
+      state: 'ready',
+      updatedAt,
+      archivedAt: null,
+      repositoryUrl,
+      repositoryBranch: null,
+      workingBranch: null,
+      baseBranch: null,
+    } as unknown as CloudCodeSession,
+  });
+  const computer = (threadId: string, updatedAt: string, folder: string): CodeListEntry => ({
+    kind: 'computer',
+    id: `computer:${threadId}`,
+    updatedAt,
+    session: {
+      rootId: 'r1',
+      threadId,
+      title: threadId,
+      folder,
+      branch: null,
+      status: 'idle',
+      model: null,
+      updatedAt,
+    },
+  });
+  const ids = (sections: ReturnType<typeof groupCodeListEntries>) =>
+    sections.map((section) => [section.title, section.data.map((entry) => entry.id)]);
+
+  it('makes one section per repository, named like the repository label', () => {
+    const sections = groupCodeListEntries([
+      cloud('a', '2026-11-12T00:00:00.000Z', 'https://github.com/acme/web.git'),
+      cloud('b', '2026-11-11T00:00:00.000Z', 'https://github.com/acme/api'),
+      cloud('c', '2026-11-10T00:00:00.000Z', 'https://github.com/acme/web'),
+    ]);
+
+    expect(ids(sections)).toEqual([
+      ['acme/web', ['cloud:a', 'cloud:c']],
+      ['acme/api', ['cloud:b']],
+    ]);
+  });
+
+  it('keeps the order the entries came in inside each section', () => {
+    const sections = groupCodeListEntries([
+      cloud('old', '2026-11-01T00:00:00.000Z', 'https://github.com/acme/web'),
+      cloud('new', '2026-11-05T00:00:00.000Z', 'https://github.com/acme/web'),
+    ]);
+
+    expect(sections[0]?.data.map((entry) => entry.id)).toEqual(['cloud:old', 'cloud:new']);
+  });
+
+  it('orders sections by their newest session, whatever the sort inside them', () => {
+    const sections = groupCodeListEntries([
+      cloud('b1', '2026-11-02T00:00:00.000Z', 'https://github.com/acme/web'),
+      cloud('a1', '2026-11-01T00:00:00.000Z', 'https://github.com/acme/api'),
+      cloud('a2', '2026-11-09T00:00:00.000Z', 'https://github.com/acme/api'),
+    ]);
+
+    expect(sections.map((section) => section.title)).toEqual(['acme/api', 'acme/web']);
+  });
+
+  it('keys each section by its repository so a reorder does not remount the rows', () => {
+    const sections = groupCodeListEntries([
+      cloud('a', '2026-11-02T00:00:00.000Z', 'https://github.com/Acme/Web'),
+      cloud('b', '2026-11-01T00:00:00.000Z', null),
+    ]);
+
+    expect(sections.map((section) => section.key)).toEqual([
+      'repository:acme/web',
+      'repository:none',
+    ]);
+  });
+
+  it('puts No repository last even when its session is the newest', () => {
+    const sections = groupCodeListEntries([
+      cloud('none', '2026-11-20T00:00:00.000Z', null),
+      cloud('a', '2026-11-01T00:00:00.000Z', 'https://github.com/acme/web'),
+    ]);
+
+    expect(ids(sections)).toEqual([
+      ['acme/web', ['cloud:a']],
+      ['No repository', ['cloud:none']],
+    ]);
+  });
+
+  it('files a computer session under its folder, and a session without one under No repository', () => {
+    const sections = groupCodeListEntries([
+      computer('t1', '2026-11-03T00:00:00.000Z', 'shop'),
+      computer('t2', '2026-11-02T00:00:00.000Z', '  '),
+      cloud('c1', '2026-11-01T00:00:00.000Z', 'https://github.com/acme/shop'),
+    ]);
+
+    expect(ids(sections)).toEqual([
+      ['shop', ['computer:t1']],
+      ['acme/shop', ['cloud:c1']],
+      ['No repository', ['computer:t2']],
+    ]);
+  });
+
+  it('returns no sections when nothing is left after filtering', () => {
+    expect(groupCodeListEntries([])).toEqual([]);
+  });
+
+  it('does not change the entries it is given', () => {
+    const entries = [cloud('a', '2026-11-01T00:00:00.000Z', null)];
+    groupCodeListEntries(entries);
+
+    expect(entries).toHaveLength(1);
   });
 });

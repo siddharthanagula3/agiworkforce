@@ -43,5 +43,5 @@ else
   eas_build ios "${PROFILE}"
   log_ok "iOS build queued. Watch progress: https://expo.dev/accounts → builds"
   log "build only, to upload after it finishes:"
-  log "  pnpm --filter @agiworkforce/mobile release:ios:beta:submit -- --build-id <id>"
+  log "  pnpm --filter @agiworkforce/mobile release:ios:beta:submit --build-id <id>"
 fi

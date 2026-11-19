@@ -7,6 +7,11 @@ const mockPush = jest.fn();
 const mockListCodeSessions = jest.fn();
 const mockListAccountComputers = jest.fn();
 
+jest.mock('@/lib/v1FeatureFlags', () => {
+  const actual = jest.requireActual('@/lib/v1FeatureFlags');
+  return { FEATURES: { ...actual.FEATURES, companion: true, dispatch: true } };
+});
+
 jest.mock('@/lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb) => cb()),
   rehydrateWhenMmkvReady: jest.fn(),
@@ -262,7 +267,7 @@ describe('AGI Code merged sessions list', () => {
     seedComputer();
     const screen = await renderScreen();
 
-    fireEvent.press(screen.getByLabelText('Sort sessions: Most recent'));
+    fireEvent.press(screen.getByLabelText('View and sort sessions: Most recent'));
     fireEvent.press(screen.getByLabelText('Oldest first'));
 
     expect(shownTitles(screen)).toEqual([

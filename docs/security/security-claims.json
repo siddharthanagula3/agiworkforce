@@ -710,7 +710,10 @@
       "section": "Read this first: no scope string is hardcoded in this repository",
       "kind": "prose",
       "sentence": "It exists so that the first operator who configures a provider cannot quietly request more than this file permits.",
-      "implementation": ["apps/web/lib/connectors/oauth-scope-allowlist.ts"],
+      "implementation": [
+        "packages/contracts/cloud-contracts/src/connector-scopes.ts",
+        "apps/web/lib/connectors/oauth-scope-allowlist.ts"
+      ],
       "proof": [
         {
           "kind": "guard",
@@ -797,8 +800,11 @@
       "id": "ceiling-test-pins-the-whole-rule",
       "section": "Enforcement",
       "kind": "prose",
-      "sentence": "`apps/web/lib/connectors/__tests__/oauth-registry.scope-allowlist.test.ts` pins all of this: it asserts an over-ceiling scope is dropped and an on-ceiling one survives, that the authorization URL carries only the survivors, that every `oauth2` connector in the catalog has an entry, and that no enforced ceiling admits a scope from `FORBIDDEN_CONNECTOR_OAUTH_SCOPES` in `oauth-scope-allowlist.ts` (`admin`, `full`, `default`, `https://mail.google.com/`, the bare Google `drive`, `calendar`, or `cloud-platform` scopes, `Files.ReadWrite.All`, `Sites.FullControl.All`, and `Mail.ReadWrite`).",
-      "implementation": ["apps/web/lib/connectors/oauth-scope-allowlist.ts"],
+      "sentence": "`apps/web/lib/connectors/__tests__/oauth-registry.scope-allowlist.test.ts` pins all of this: it asserts an over-ceiling scope is dropped and an on-ceiling one survives, that the authorization URL carries only the survivors, that every `oauth2` connector in the catalog has an entry, and that no enforced ceiling admits a scope from `FORBIDDEN_CONNECTOR_OAUTH_SCOPES` in `connector-scopes.ts` (`admin`, `full`, `default`, `https://mail.google.com/`, the bare Google `drive`, `calendar`, or `cloud-platform` scopes, `Files.ReadWrite.All`, `Sites.FullControl.All`, and `Mail.ReadWrite`).",
+      "implementation": [
+        "packages/contracts/cloud-contracts/src/connector-scopes.ts",
+        "apps/web/lib/connectors/oauth-scope-allowlist.ts"
+      ],
       "proof": [
         {
           "kind": "test",
@@ -811,8 +817,8 @@
       "id": "scope-guard-runs-outside-vitest",
       "section": "Enforcement",
       "kind": "prose",
-      "sentence": "`pnpm check:connector-scopes` (`scripts/check-connector-scopes.mjs`, wired into `pnpm check:llm-operability`) statically parses the manifest and `scope-descriptions.ts` on every run, independent of the vitest suite, and fails the build if a ceiling admits a forbidden scope, a ceiling scope has no description in `SCOPE_DESCRIPTIONS`, or a scope literal from an enforced ceiling is declared a second time anywhere else under `apps/web/lib/connectors`, `apps/web/app/api/connectors`, or `apps/web/lib/user-connector-tools.ts`.",
-      "implementation": ["apps/web/lib/connectors/oauth-scope-allowlist.ts"],
+      "sentence": "`pnpm check:connector-scopes` (`scripts/check-connector-scopes.mjs`, wired into `pnpm check:llm-operability`) statically parses the manifest, `connector-scopes.ts`, which also holds `SCOPE_DESCRIPTIONS`, on every run, independent of the vitest suite, and fails the build if a ceiling admits a forbidden scope, a ceiling scope has no description in `SCOPE_DESCRIPTIONS`, or a scope literal from an enforced ceiling is declared a second time anywhere else under `apps/web/lib/connectors`, `apps/web/app/api/connectors`, or `apps/web/lib/user-connector-tools.ts`.",
+      "implementation": ["packages/contracts/cloud-contracts/src/connector-scopes.ts"],
       "proof": [
         {
           "kind": "guard",
@@ -824,8 +830,8 @@
       "id": "scope-literals-live-in-one-file",
       "section": "Enforcement",
       "kind": "prose",
-      "sentence": "That last check is what keeps \"the manifest is the only place a scope may be added\" true going forward rather than as a one-time fact: nothing outside `oauth-scope-allowlist.ts` can introduce a scope string without the guard catching the duplicate.",
-      "implementation": ["apps/web/lib/connectors/oauth-scope-allowlist.ts"],
+      "sentence": "That last check is what keeps \"the manifest is the only place a scope may be added\" true going forward rather than as a one-time fact: nothing outside `connector-scopes.ts` can introduce a scope string without the guard catching the duplicate.",
+      "implementation": ["packages/contracts/cloud-contracts/src/connector-scopes.ts"],
       "proof": [
         {
           "kind": "guard",
@@ -838,7 +844,10 @@
       "section": "Ceiling table",
       "kind": "prose",
       "sentence": "Connector ids not in this table have no reviewed ceiling and are not filtered.",
-      "implementation": ["apps/web/lib/connectors/oauth-scope-allowlist.ts"],
+      "implementation": [
+        "packages/contracts/cloud-contracts/src/connector-scopes.ts",
+        "apps/web/lib/connectors/oauth-scope-allowlist.ts"
+      ],
       "proof": [
         {
           "kind": "guard",
@@ -1684,7 +1693,7 @@
       "section": "Ceiling table",
       "kind": "rows",
       "rows": 66,
-      "implementation": ["apps/web/lib/connectors/oauth-scope-allowlist.ts"],
+      "implementation": ["packages/contracts/cloud-contracts/src/connector-scopes.ts"],
       "proof": [
         {
           "kind": "guard",

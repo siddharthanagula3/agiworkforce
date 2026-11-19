@@ -271,7 +271,7 @@ this document.
 
 ### Deep Research
 
-- **web**: present. `apps/web/features/chat/stores/research-panel-store.ts`, reached by `apps/web/features/chat/utils/research-sources.ts` (import).
+- **web**: present. `apps/web/features/chat/components/research/ResearchPanel.tsx`, reached by `apps/web/features/chat/pages/WebChatPage.tsx` (import).
 - **desktop**: present. `apps/desktop/src/features/research/ResearchReport.tsx`, reached by `apps/desktop/src/features/research/DeepResearchPage.tsx` (import).
 - **mobile**: present. `apps/mobile/app/(app)/reports/index.tsx`, reached by `apps/mobile/app/(app)/_layout.tsx` (route).
 - **cli**: absent. Nothing under apps/cli/src runs or reads a research report; the CLI is a coding surface.

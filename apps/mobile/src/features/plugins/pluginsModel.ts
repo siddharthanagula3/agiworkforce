@@ -5,8 +5,14 @@ import type {
   PluginUpdateOfferWire,
 } from '@agiworkforce/cloud-contracts';
 
-export const PLUGIN_FEATURED_LIMIT = 6;
+export const PLUGIN_POPULAR_LIMIT = 6;
 export const PLUGIN_RECOMMENDED_LIMIT = 6;
+export const PLUGIN_INSTALLED_TILE_LIMIT = 5;
+export const PLUGIN_SHELF_COUNT = 3;
+export const PLUGIN_SHELF_MIN_ENTRIES = 3;
+export const PLUGIN_SHELF_ROW_LIMIT = 4;
+export const PLUGIN_DETAIL_CONCURRENCY = 6;
+export const ADDED_PLUGINS_ROUTE = '/(app)/plugins/installed';
 
 export const PLUGIN_WORKS_WITH_LABELS: Readonly<Record<string, string>> = {
   web: 'Web',
@@ -41,6 +47,66 @@ export function indexInstallations(
   return new Map(installations.map((installation) => [installation.pluginId, installation]));
 }
 
+export type InstalledPluginDetail =
+  { status: 'loaded'; entry: PluginDirectoryEntryWire } | { status: 'failed' };
+
+function installedAtMillis(installation: PluginInstallationWire): number {
+  const millis = Date.parse(installation.installedAt);
+  return Number.isNaN(millis) ? 0 : millis;
+}
+
+export function installedTilePlan(
+  installations: readonly PluginInstallationWire[],
+  limit: number = PLUGIN_INSTALLED_TILE_LIMIT,
+): { tiles: PluginInstallationWire[]; overflow: number } {
+  const recent = [...installations].sort(
+    (left, right) =>
+      installedAtMillis(right) - installedAtMillis(left) ||
+      left.pluginId.localeCompare(right.pluginId),
+  );
+  return { tiles: recent.slice(0, limit), overflow: Math.max(0, recent.length - limit) };
+}
+
+export function pluginTileLetter(name: string): string {
+  return Array.from(name.trim())[0]?.toUpperCase() ?? '?';
+}
+
+export interface AddedPluginRow {
+  id: string;
+  name: string;
+  meta: string | null;
+}
+
+export const PLUGIN_ADDED_FAILED_META = 'Could not load';
+
+export function addedPluginRows(
+  installations: readonly PluginInstallationWire[],
+  details: ReadonlyMap<string, InstalledPluginDetail>,
+  search = '',
+): AddedPluginRow[] {
+  const needle = search.trim().toLowerCase();
+  return installations
+    .map((installation): AddedPluginRow => {
+      const detail = details.get(installation.pluginId);
+      const loaded = detail?.status === 'loaded' ? detail.entry : null;
+      return {
+        id: installation.pluginId,
+        name: loaded?.name ?? installation.pluginId,
+        meta: loaded ? (installation.enabled ? null : 'Turned off') : PLUGIN_ADDED_FAILED_META,
+      };
+    })
+    .filter((row) => !needle || row.name.toLowerCase().includes(needle))
+    .sort(
+      (left, right) =>
+        left.name.localeCompare(right.name, undefined, { sensitivity: 'base' }) ||
+        left.id.localeCompare(right.id),
+    );
+}
+
+export function addedPluginsCountLabel(count: number): string | null {
+  return count > 0 ? `${count} added` : null;
+}
+
 export function isPluginInstallable(entry: PluginDirectoryEntryWire): boolean {
   return entry.status === 'published' && entry.webInstallable;
 }
@@ -59,7 +125,7 @@ export function pluginCompatibility(entry: PluginDirectoryEntryWire): PluginComp
       installable: false,
       warning:
         entry.runtime?.note ??
-        'Runs in the Desktop app and the CLI. Cloud chats on this phone cannot load it.',
+        'Runs in the Desktop app and the CLI. Cloud chats on this device cannot load it.',
     };
   }
   return { installable: true, warning: entry.runtime?.note ?? null };
@@ -69,20 +135,29 @@ function byInstallsThenName(left: PluginDirectoryEntryWire, right: PluginDirecto
   return (right.installs ?? 0) - (left.installs ?? 0) || left.name.localeCompare(right.name);
 }
 
-export function featuredPlugins(
+export function popularPlugins(
   entries: readonly PluginDirectoryEntryWire[],
-  installed: PluginInstallIndex,
 ): PluginDirectoryEntryWire[] {
   return entries
     .filter(
-      (entry) =>
-        entry.verified === true &&
-        (entry.installs ?? 0) > 0 &&
-        isPluginInstallable(entry) &&
-        !installed.has(entry.id),
+      (entry) => entry.verified === true && (entry.installs ?? 0) > 0 && isPluginInstallable(entry),
     )
     .sort(byInstallsThenName)
-    .slice(0, PLUGIN_FEATURED_LIMIT);
+    .slice(0, PLUGIN_POPULAR_LIMIT);
+}
+
+export type PluginRowControl = 'install' | 'more' | 'none';
+
+export function pluginRowControl(
+  entry: PluginDirectoryEntryWire,
+  installation: PluginInstallationWire | undefined,
+): PluginRowControl {
+  if (installation) return 'more';
+  return isPluginInstallable(entry) ? 'install' : 'none';
+}
+
+export function pluginInstallPermissionsMessage(permissions: readonly string[]): string {
+  return `${PLUGIN_PERMISSIONS_COPY}\n\n${permissions.map((permission) => `• ${permission}`).join('\n')}`;
 }
 
 export function recommendedPlugins(
@@ -103,13 +178,52 @@ export function recommendedPlugins(
     .slice(0, PLUGIN_RECOMMENDED_LIMIT);
 }
 
+export interface PluginCategoryOption {
+  key: string;
+  value: string;
+  label: string;
+}
+
+export function pluginCategoryKey(category: string): string {
+  return category.trim().toLowerCase();
+}
+
+export function pluginCategoryLabel(category: string): string {
+  const words = category.trim().replace(/[-_]+/g, ' ');
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
 export function pluginCategories(
   entries: readonly PluginDirectoryEntryWire[],
   byCategory?: Record<string, number>,
-): string[] {
-  const names = new Set<string>(Object.keys(byCategory ?? {}));
-  for (const entry of entries) names.add(entry.category);
-  return [...names].filter((name) => name.trim().length > 0).sort((a, b) => a.localeCompare(b));
+): PluginCategoryOption[] {
+  const options = new Map<string, PluginCategoryOption>();
+  const add = (category: string) => {
+    const key = pluginCategoryKey(category);
+    if (!key || options.has(key)) return;
+    options.set(key, { key, value: category.trim(), label: pluginCategoryLabel(key) });
+  };
+  for (const entry of entries) add(entry.category);
+  for (const name of Object.keys(byCategory ?? {})) add(name);
+  return [...options.values()].sort((a, b) => a.label.localeCompare(b.label));
+}
+
+export function pluginShelfCategories(
+  byCategory: Record<string, number> | undefined,
+): PluginCategoryOption[] {
+  return Object.entries(byCategory ?? {})
+    .filter(([name, count]) => pluginCategoryKey(name) && count >= PLUGIN_SHELF_MIN_ENTRIES)
+    .sort(
+      ([leftName, leftCount], [rightName, rightCount]) =>
+        rightCount - leftCount ||
+        pluginCategoryLabel(leftName).localeCompare(pluginCategoryLabel(rightName)),
+    )
+    .slice(0, PLUGIN_SHELF_COUNT)
+    .map(([name]) => ({
+      key: pluginCategoryKey(name),
+      value: name.trim(),
+      label: pluginCategoryLabel(name),
+    }));
 }
 
 export function pluginStateLabel(

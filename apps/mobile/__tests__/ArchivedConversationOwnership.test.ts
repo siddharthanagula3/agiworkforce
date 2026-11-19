@@ -113,6 +113,18 @@ it.each([
   },
 );
 
+it('restores a chat pinned again when the caller knows it was pinned', async () => {
+  jest
+    .mocked(api.put)
+    .mockResolvedValueOnce({ conversation: { ...response.conversation, archived: false } });
+  await restoreArchivedConversation('chat-original', account, undefined, true);
+  expect(api.put).toHaveBeenCalledWith(
+    '/api/chat/conversations/chat-original',
+    { archived: false, pinned: true },
+    { accountEpoch: account },
+  );
+});
+
 it.each([archiveConversation, restoreArchivedConversation])(
   'refuses an old account before dispatch',
   async (mutate) => {
@@ -154,6 +166,20 @@ it('binds archived reads to their original epoch and caller signal', async () =>
   });
   expect(page.nextOffset).toBe(51);
   expect(page.conversations[0]?.id).toBe('chat-original');
+});
+
+it('asks the server for archived chats whose title matches a search', async () => {
+  jest.mocked(api.get).mockResolvedValue({ conversations: [], hasMore: false, nextOffset: 0 });
+
+  await fetchArchivedConversations(0, account, undefined, '  trip & plan ');
+  await fetchArchivedConversations(0, account, undefined, '   ');
+
+  const [searched, blank] = jest
+    .mocked(api.get)
+    .mock.calls.map(([path]) => new URL(path, 'https://agiworkforce.com'));
+  expect(searched?.searchParams.get('archived')).toBe('only');
+  expect(searched?.searchParams.get('q')).toBe('trip & plan');
+  expect(blank?.searchParams.has('q')).toBe(false);
 });
 
 it('rejects a read with a retired epoch before dispatch', async () => {

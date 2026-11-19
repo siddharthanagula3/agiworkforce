@@ -30,6 +30,7 @@ import {
   applyDroppedSpanReplacement,
   DROPPED_HISTORY_MARKER,
   planContextTrim,
+  planLeavesLatestUserMessageOverflow,
   type ContextSizing,
   type ContextTrimResult,
   type TrimmableMessage,
@@ -401,9 +402,10 @@ export interface ContextCompactionInput {
  * cached on the conversation row and reused or extended while later turns
  * keep dropping from the same point. Falls back to the mechanical trim (no
  * summary, no extra managed call) for a temporary conversation, a
- * conversation with no persisted row, the kill switch, or any failure along
- * the way: compaction is always an enhancement over the trim, never a
- * dependency of it.
+ * conversation with no persisted row, the kill switch, a latest user message
+ * no trim can fit (that turn is refused, so a summary would be billed for
+ * nothing), or any failure along the way: compaction is always an enhancement
+ * over the trim, never a dependency of it.
  */
 export async function compactContextWindow(
   input: ContextCompactionInput,
@@ -431,7 +433,8 @@ export async function compactContextWindow(
     plan.droppedIndices.length === 0 ||
     input.isTemporary ||
     !input.conversationId ||
-    !resolveContextCompactionEnabled()
+    !resolveContextCompactionEnabled() ||
+    planLeavesLatestUserMessageOverflow(input.messages, plan, input.model, input.sizing)
   ) {
     return applyMechanicalTrim();
   }

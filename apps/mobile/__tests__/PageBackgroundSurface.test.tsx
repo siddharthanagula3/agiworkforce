@@ -4,6 +4,11 @@ import { StyleSheet } from 'react-native';
 import { render } from '@testing-library/react-native';
 import { agiMobileColors } from '@agiworkforce/design-tokens';
 
+jest.mock('@/lib/v1FeatureFlags', () => {
+  const actual = jest.requireActual('@/lib/v1FeatureFlags');
+  return { FEATURES: { ...actual.FEATURES, companion: true, dispatch: true } };
+});
+
 jest.mock('@/lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb) => cb()),
   rehydrateWhenMmkvReady: jest.fn(),

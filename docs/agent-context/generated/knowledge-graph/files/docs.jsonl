@@ -223,6 +223,9 @@
 {"path":"docs/specs/jev-auto-routing/plan.md","unit":"docs","role":"doc","unparsed":"notCode"}
 {"path":"docs/specs/jev-auto-routing/spec.md","unit":"docs","role":"doc","unparsed":"notCode"}
 {"path":"docs/specs/jev-auto-routing/tasks.md","unit":"docs","role":"doc","unparsed":"notCode"}
+{"path":"docs/specs/large-file-uploads/plan.md","unit":"docs","role":"doc","unparsed":"notCode"}
+{"path":"docs/specs/large-file-uploads/spec.md","unit":"docs","role":"doc","unparsed":"notCode"}
+{"path":"docs/specs/large-file-uploads/tasks.md","unit":"docs","role":"doc","unparsed":"notCode"}
 {"path":"docs/specs/README.md","unit":"docs","role":"doc","unparsed":"notCode"}
 {"path":"docs/specs/semantic-decisions/audit.md","unit":"docs","role":"doc","unparsed":"notCode"}
 {"path":"docs/specs/semantic-decisions/call-sites.json","unit":"docs","role":"config","unparsed":"notCode"}

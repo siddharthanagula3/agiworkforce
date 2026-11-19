@@ -16,7 +16,10 @@ jest.mock('@/components/ui/Text', () => {
 
 jest.mock('lucide-react-native', () => {
   const RN = require('react-native');
-  return { Flag: (props: Record<string, unknown>) => <RN.View {...props} /> };
+  return {
+    Flag: (props: Record<string, unknown>) => <RN.View {...props} />,
+    X: (props: Record<string, unknown>) => <RN.View {...props} />,
+  };
 });
 
 const mockReport = {
@@ -228,8 +231,81 @@ describe('ReportFlagButton', () => {
     fireEvent.press(getByLabelText('Harmful or dangerous'));
     fireEvent.press(getByLabelText('Save report'));
 
-    await waitFor(() => expect(getByText('Report saved on this device')).toBeTruthy());
+    await waitFor(() => expect(getByText('Report submitted for review')).toBeTruthy());
+    expect(getByText('Your report was sent to the AGI safety team for review.')).toBeTruthy();
+    expect(
+      getByText('The email could not be opened. No mail app is set up on this device.'),
+    ).toBeTruthy();
     expect(queryByLabelText('Send')).toBeNull();
+  });
+
+  it('keeps saying the report was sent when emailing it afterwards finds no mail app', async () => {
+    mockSaveContentReport.mockResolvedValue({
+      report: { ...mockReport, serverAcknowledged: true },
+      delivery: { kind: 'submitted-to-server' },
+    });
+    mockOpenSupportEmail.mockResolvedValue(false);
+
+    const { getByLabelText, getByTestId, getByText, queryByText } = renderButton();
+    fireEvent.press(getByLabelText('Report this response'));
+    fireEvent.press(getByLabelText('Harmful or dangerous'));
+    fireEvent.press(getByLabelText('Save report'));
+    await waitFor(() => expect(getByText('Report submitted for review')).toBeTruthy());
+
+    fireEvent.press(getByTestId('report-email-handoff-btn'));
+
+    await waitFor(() =>
+      expect(
+        getByText('The email could not be opened. No mail app is set up on this device.'),
+      ).toBeTruthy(),
+    );
+    expect(getByText('Report submitted for review')).toBeTruthy();
+    expect(getByText('Your report was sent to the AGI safety team for review.')).toBeTruthy();
+    expect(queryByText('Report saved on this device')).toBeNull();
+  });
+
+  it('says the checked email option found no mail app even though the report was sent', async () => {
+    mockSaveContentReport.mockResolvedValue({
+      report: { ...mockReport, serverAcknowledged: true },
+      delivery: { kind: 'submitted-to-server' },
+    });
+
+    const { getByLabelText, getByText } = renderButton();
+    fireEvent.press(getByLabelText('Report this response'));
+    fireEvent.press(getByLabelText('Harmful or dangerous'));
+    fireEvent.press(getByLabelText('Email this report to support'));
+    fireEvent.press(getByLabelText('Save report'));
+
+    await waitFor(() => expect(getByText('Report submitted for review')).toBeTruthy());
+    expect(mockSaveContentReport).toHaveBeenCalledWith(
+      expect.objectContaining({ sendEmail: true }),
+    );
+    expect(
+      getByText('The email could not be opened. No mail app is set up on this device.'),
+    ).toBeTruthy();
+  });
+
+  it('says a queued report is saved here and will be sent when emailing it finds no mail app', async () => {
+    mockSendStoredContentReport.mockResolvedValue({ kind: 'queued-for-upload' });
+    mockOpenSupportEmail.mockResolvedValue(false);
+
+    const { getByLabelText, getByTestId, getByText } = renderButton();
+    fireEvent.press(getByLabelText('Report this response'));
+    fireEvent.press(getByLabelText('Harmful or dangerous'));
+    fireEvent.press(getByLabelText('Save report'));
+    await waitFor(() => expect(getByText('Send this report to AGI?')).toBeTruthy());
+    fireEvent.press(getByLabelText('Send'));
+    await waitFor(() => expect(getByText('Report queued')).toBeTruthy());
+
+    fireEvent.press(getByTestId('report-email-handoff-btn'));
+
+    await waitFor(() =>
+      expect(
+        getByText('The email could not be opened. No mail app is set up on this device.'),
+      ).toBeTruthy(),
+    );
+    expect(getByText('Report queued')).toBeTruthy();
+    expect(getByText('Saved on this device. It sends as soon as it can.')).toBeTruthy();
   });
 
   it('asks before sending a report that stayed on the device, and sends it on Send', async () => {

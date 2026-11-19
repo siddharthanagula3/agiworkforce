@@ -6,6 +6,10 @@ import Link from 'next/link';
 import { BILLING_PLAN_PRICING, type SelfServePaidPlanTier } from '@agiworkforce/types';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { formatUsdAmount } from '@features/billing/lib/billing-format';
+import {
+  planPeriodEndKind,
+  type PlanPeriodEndKind,
+} from '@features/billing/lib/subscription-owner-presentation';
 
 const POLL_INTERVAL_MS = 2_000;
 const POLL_TIMEOUT_MS = 30_000;
@@ -22,6 +26,13 @@ const SURFACE_GROUPS = [
     note: 'Scoped to the workspace you run them in.',
   },
 ] as const;
+
+const PERIOD_END_WORDING: Record<PlanPeriodEndKind, string | null> = {
+  renews: 'renews',
+  trial: 'trial ends',
+  ends: 'ends',
+  period: null,
+};
 
 function formatPeriodEnd(unixSeconds: number): string | null {
   const date = new Date(unixSeconds * 1000);
@@ -56,11 +67,12 @@ export function UpgradeWelcome({
       ? plan.monthlyPriceUsd
       : null;
 
+  const periodEndKind = planActivated ? planPeriodEndKind(subscription) : null;
+  const periodEndWording = periodEndKind ? PERIOD_END_WORDING[periodEndKind] : null;
   const periodEnd =
-    planActivated && typeof subscription?.current_period_end === 'number'
+    periodEndWording && typeof subscription?.current_period_end === 'number'
       ? formatPeriodEnd(subscription.current_period_end)
       : null;
-  const endsWithoutRenewal = subscription?.cancel_at_period_end === true;
 
   useEffect(() => {
     if (planActivated) return;
@@ -103,7 +115,7 @@ export function UpgradeWelcome({
                       &middot;
                     </span>
                     <span className="text-muted-foreground">
-                      {endsWithoutRenewal ? 'ends' : 'renews'} {periodEnd}
+                      {periodEndWording} {periodEnd}
                     </span>
                   </>
                 ) : null}

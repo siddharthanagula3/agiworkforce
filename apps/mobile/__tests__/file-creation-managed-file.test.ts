@@ -6,6 +6,7 @@ const mockMoveAsync = jest.fn();
 const mockDeleteAsync = jest.fn();
 const mockMakeDirectoryAsync = jest.fn();
 jest.mock('expo-file-system/legacy', () => ({
+  cacheDirectory: 'file:///cache/',
   documentDirectory: 'file:///docs/',
   getInfoAsync: (...args: unknown[]) => mockGetInfoAsync(...args),
   deleteAsync: (...args: unknown[]) => mockDeleteAsync(...args),
@@ -33,9 +34,11 @@ jest.mock('@/services/authSession', () => ({
 import {
   downloadGeneratedFileAsManagedFile,
   exportToMarkdown,
+  exportHtmlToPDF,
   exportToPDF,
   exportToText,
 } from '@/services/fileCreation';
+import * as Print from 'expo-print';
 
 class FakeFileReader {
   onload: (() => void) | null = null;
@@ -61,7 +64,7 @@ describe('mobile exports speak the shared File model', () => {
     const result = await exportToText('hello there', 'Launch plan');
 
     expect(result.file.uri).toBe(result.uri);
-    expect(result.file.name).toBe('Launch_plan.txt');
+    expect(result.file.name).toBe('Launch plan.txt');
     expect(result.file.mediaType).toBe('text/plain');
     expect(result.file.storage).toBe('local_device');
     expect(result.file.origin).toBe('generated');
@@ -79,7 +82,24 @@ describe('mobile exports speak the shared File model', () => {
   it('gives a pdf export the pdf media type', async () => {
     const result = await exportToPDF('body', 'Notes');
     expect(result.file.mediaType).toBe('application/pdf');
-    expect(result.uri).toBe('file:///docs/exports/export-1/Notes.pdf');
+    expect(result.uri).toBe('file:///cache/exports/export-1/Notes.pdf');
+  });
+
+  it('prints prepared HTML on the page size it is given', async () => {
+    const html = '<!DOCTYPE html><html><body><section class="slide">One</section></body></html>';
+    const result = await exportHtmlToPDF(html, 'Launch deck', { width: 792, height: 446 });
+
+    expect(Print.printToFileAsync).toHaveBeenCalledWith({ html, width: 792, height: 446 });
+    expect(result.fileName).toBe('Launch deck.pdf');
+    expect(result.file.mediaType).toBe('application/pdf');
+    expect(mockMoveAsync).toHaveBeenCalledWith({ from: 'file:///tmp/print.pdf', to: result.uri });
+  });
+
+  it('refuses to print empty HTML', async () => {
+    await expect(exportHtmlToPDF('  ', 'Empty deck', { width: 792, height: 446 })).rejects.toThrow(
+      'Cannot export empty content',
+    );
+    expect(Print.printToFileAsync).not.toHaveBeenCalled();
   });
 
   it('links a downloaded cloud file back to the asset it was copied from', async () => {
@@ -97,7 +117,7 @@ describe('mobile exports speak the shared File model', () => {
 
     expect(file.lineage.derivedFromFileId).toBe('gf-1');
     expect(file.lineage.derivation).toBe('copy');
-    expect(file.uri).toBe('file:///docs/exports/export-1/report.pdf');
+    expect(file.uri).toBe('file:///cache/exports/export-1/report.pdf');
   });
 
   it('preserves same-title exports in separate directories with the same display name', async () => {
@@ -140,7 +160,7 @@ describe('mobile exports speak the shared File model', () => {
   it('propagates directory allocation failure without falling back to a shared filename', async () => {
     const failure = new Error('disk full');
     mockGetInfoAsync.mockImplementation(async (uri: string) => ({
-      exists: uri === 'file:///docs/exports/',
+      exists: uri === 'file:///cache/exports/',
     }));
     mockMakeDirectoryAsync.mockRejectedValueOnce(failure);
     await expect(exportToText('body', 'Notes')).rejects.toBe(failure);

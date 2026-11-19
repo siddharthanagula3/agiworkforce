@@ -31,6 +31,7 @@ export const DESTINATION_SCOPE = {
   '/(app)/sites': 'cloud',
   '/(app)/agents': 'cloud',
   '/(app)/reports': 'cloud',
+  '/(app)/images': 'cloud',
   '/(app)/connectors': 'cloud',
   '/(app)/skills': 'cloud',
   '/(app)/customize': 'cloud',

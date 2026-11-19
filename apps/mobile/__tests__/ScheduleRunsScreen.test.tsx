@@ -1,10 +1,19 @@
 import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { Dimensions, StyleSheet } from 'react-native';
 
 const mockPush = jest.fn();
 const mockBack = jest.fn();
 const mockReplace = jest.fn();
 const mockApiGet = jest.fn();
+const mockReportSheet = jest.fn();
+
+jest.mock('@/src/features/chat/components/ReportFlagButton', () => ({
+  ReportSheet: (props: Record<string, unknown>) => {
+    mockReportSheet(props);
+    return null;
+  },
+}));
 
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
@@ -50,6 +59,8 @@ import ScheduledRunsScreen from '../app/(app)/schedules/runs';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useWaitlistStore } from '../src/features/waitlist/store';
 import { useScheduleStore } from '../src/features/schedules/store';
+import { HEADER_TEXT_SCALE_LIMIT } from '../src/features/chat/components/WorkModeSwitch';
+import { LARGEST_IOS_TEXT_SCALE, setTextScale } from '../test-utils/textScale';
 
 function apiRun(id: string, taskName: string, overrides: Record<string, unknown> = {}) {
   return {
@@ -103,6 +114,40 @@ describe('Scheduled runs screen', () => {
       pathname: '/(app)/schedules/create',
       params: { id: 'task-run-1' },
     });
+  });
+
+  it('reports what a run wrote from its row, naming the run and its schedule', async () => {
+    mockApiGet.mockResolvedValueOnce({
+      runs: [
+        apiRun('run-2', 'Morning briefing'),
+        apiRun('run-1', 'Inbox triage', { status: 'failed', result: null }),
+      ],
+      nextCursor: null,
+    });
+
+    const { getAllByLabelText, getByTestId, getByText, queryByTestId } = render(
+      <ScheduledRunsScreen />,
+    );
+    await waitFor(() => expect(getByText('Morning briefing')).toBeTruthy());
+
+    expect(getAllByLabelText('Report this run')).toHaveLength(1);
+    expect(queryByTestId('recent-run-report-run-1')).toBeNull();
+
+    fireEvent.press(getByTestId('recent-run-report-run-2'));
+
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(mockReportSheet).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        visible: true,
+        title: 'Report this run',
+        target: {
+          messageId: 'schedule-run:run-2',
+          conversationId: 'schedule:task-run-2',
+          contentExcerpt: 'Result of Morning briefing',
+          subject: { kind: 'schedule-run', id: 'run-2' },
+        },
+      }),
+    );
   });
 
   it('shows the empty state when nothing has run yet', async () => {
@@ -215,6 +260,43 @@ describe('Scheduled runs screen', () => {
 
     await waitFor(() => expect(getByText('Second')).toBeTruthy());
     expect(mockApiGet).toHaveBeenLastCalledWith(expect.stringContaining('cursor=cursor-1'));
+  });
+
+  describe('header at large text sizes', () => {
+    const startingScale = Dimensions.get('window').fontScale;
+
+    afterEach(() => setTextScale(startingScale));
+
+    it.each([
+      ['the default text size', 1],
+      ['the largest text size', LARGEST_IOS_TEXT_SCALE],
+    ])('gives the header a minimum height and a capped title at %s', (_name, scale) => {
+      setTextScale(scale);
+      mockApiGet.mockResolvedValueOnce({ runs: [], nextCursor: null });
+
+      const { getByTestId, getByRole } = render(<ScheduledRunsScreen />);
+
+      const header = getByTestId('schedule-runs-header');
+      expect(String(header.props.className)).toMatch(/\bmin-h-12\b/);
+      expect(String(header.props.className)).not.toMatch(/(^|\s)h-12\b/);
+      const title = getByRole('header', { name: 'Scheduled runs' });
+      expect(title.props.maxFontSizeMultiplier).toBe(HEADER_TEXT_SCALE_LIMIT);
+    });
+
+    it('keeps the title in the header row so a taller title makes the row taller', () => {
+      mockApiGet.mockResolvedValueOnce({ runs: [], nextCursor: null });
+
+      const { getByRole } = render(<ScheduledRunsScreen />);
+
+      const title = getByRole('header', { name: 'Scheduled runs' });
+      let node = title.parent;
+      while (node) {
+        expect(StyleSheet.flatten(node.props?.style)?.position).not.toBe('absolute');
+        if (node.props?.testID === 'schedule-runs-header') break;
+        node = node.parent;
+      }
+      expect(node?.props?.testID).toBe('schedule-runs-header');
+    });
   });
 
   it('does not contact Cloud in Local Mode', () => {

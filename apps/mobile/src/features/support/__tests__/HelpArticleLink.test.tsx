@@ -1,12 +1,12 @@
 jest.mock('@/lib/safeOpenURL', () => ({
-  openUntrustedUrlInAppBrowser: jest.fn().mockResolvedValue(true),
+  openInAppBrowser: jest.fn().mockResolvedValue(true),
 }));
 
 import { existsSync } from 'fs';
 import { join } from 'path';
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react-native';
-import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
+import { openInAppBrowser } from '@/lib/safeOpenURL';
 import { SettingsScreenShell } from '@/src/features/settings/Common';
 import {
   HelpArticleLink,
@@ -30,7 +30,8 @@ describe('help article links', () => {
   it('opens the article in the in-app browser', () => {
     render(<HelpArticleLink docId="voice" label="How voice works" />);
     fireEvent.press(screen.getByRole('link', { name: 'How voice works' }));
-    expect(openUntrustedUrlInAppBrowser).toHaveBeenCalledWith(helpArticleUrl('voice'));
+    expect(openInAppBrowser).toHaveBeenCalledWith(helpArticleUrl('voice'));
+    expect(helpArticleUrl('voice')).toMatch(/\/help\/voice\?from=mobile$/);
   });
 
   it('puts the screen help link at the end of a settings screen', () => {

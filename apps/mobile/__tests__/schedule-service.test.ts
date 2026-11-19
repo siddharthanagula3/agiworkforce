@@ -5,6 +5,7 @@ import {
   createSchedule,
   deleteSchedule,
   fetchScheduleRuns,
+  fetchSchedulePage,
   fetchSchedules,
   toggleSchedule,
   triggerScheduleNow,
@@ -185,6 +186,26 @@ describe('mobile schedule service', () => {
     expect(apiMock.patch).toHaveBeenCalledWith('/api/schedules/schedule%2F1', {
       isActive: false,
     });
+  });
+
+  it('marks only the withdrawal pause as a withdrawal control', async () => {
+    apiMock.get.mockResolvedValueOnce({
+      schedules: [serverSchedule],
+      pagination: { limit: 100, offset: 0 },
+    });
+    apiMock.patch.mockResolvedValueOnce({ schedule: { ...serverSchedule, isEnabled: false } });
+
+    await fetchSchedulePage(0, { withdrawalControl: true });
+    await toggleSchedule('schedule-1', false, { withdrawalControl: true });
+
+    expect(apiMock.get).toHaveBeenCalledWith(expect.stringMatching(/^\/api\/schedules\?/), {
+      withdrawalControl: true,
+    });
+    expect(apiMock.patch).toHaveBeenCalledWith(
+      '/api/schedules/schedule-1',
+      { isActive: false },
+      { withdrawalControl: true },
+    );
   });
 
   it('requires a confirmed schedule deletion response', async () => {

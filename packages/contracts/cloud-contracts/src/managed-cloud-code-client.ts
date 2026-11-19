@@ -1,4 +1,12 @@
 import { z } from 'zod';
+import {
+  CLOUD_CODE_ENVIRONMENT_LIMITS,
+  CLOUD_CODE_NETWORK_ACCESS,
+  type CloudCodeEnvironment,
+  type CloudCodeEnvironmentListResponse,
+  type CreateCloudCodeEnvironmentInput,
+  type UpdateCloudCodeEnvironmentInput,
+} from '@agiworkforce/types';
 import type {
   CloudCodeAgentTurnRecord,
   CloudCodeSession,
@@ -46,6 +54,61 @@ import {
   type DecideCloudCodeApprovalRequest,
   type StartCloudCodeAgentTurnRequest,
 } from './cloud-code-sessions';
+
+export const CLOUD_CODE_ENVIRONMENTS_PATH = '/api/code/environments';
+
+export function cloudCodeEnvironmentPath(environmentId: string): string {
+  return `${CLOUD_CODE_ENVIRONMENTS_PATH}/${encodeURIComponent(environmentId)}`;
+}
+
+export const CloudCodeEnvironmentSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1),
+  networkAccess: z.enum(CLOUD_CODE_NETWORK_ACCESS),
+  extraHosts: z.array(z.string()),
+  allowPackageManagers: z.boolean(),
+  setupScript: z.string(),
+  variableNames: z.array(z.string()),
+  isDefault: z.boolean(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+
+export const CloudCodeEnvironmentListSchema = z.object({
+  environments: z.array(CloudCodeEnvironmentSchema),
+  limit: z.number().int().nonnegative(),
+});
+
+export const CloudCodeEnvironmentResponseSchema = z.object({
+  environment: CloudCodeEnvironmentSchema,
+});
+
+export const CloudCodeEnvironmentDeletedSchema = z.object({ deleted: z.literal(true) });
+
+const environmentChanges = {
+  name: z.string().trim().min(1).max(CLOUD_CODE_ENVIRONMENT_LIMITS.name),
+  networkAccess: z.enum(CLOUD_CODE_NETWORK_ACCESS),
+  fullNetworkAcknowledged: z.boolean().optional(),
+  extraHosts: z.array(z.string()).optional(),
+  allowPackageManagers: z.boolean().optional(),
+  setupScript: z.string().optional(),
+  isDefault: z.boolean().optional(),
+};
+
+export const CreateCloudCodeEnvironmentRequestSchema = z.strictObject({
+  ...environmentChanges,
+  requestId: z.string().regex(/^[A-Za-z0-9_-]{8,128}$/),
+});
+
+export const UpdateCloudCodeEnvironmentRequestSchema = z
+  .strictObject({
+    ...environmentChanges,
+    name: environmentChanges.name.optional(),
+    networkAccess: environmentChanges.networkAccess.optional(),
+  })
+  .refine((changes) => Object.keys(changes).length > 0, {
+    message: 'Send at least one setting to change',
+  });
 
 export class CloudCodeApiError extends Error {
   constructor(
@@ -147,6 +210,26 @@ export interface CloudCodeApi {
   ): Promise<CloudCodeAgentTurn>;
 }
 
+export interface CloudCodeEnvironmentsApi {
+  listEnvironments(signal?: AbortSignal): Promise<CloudCodeEnvironmentListResponse>;
+  createEnvironment(
+    input: CreateCloudCodeEnvironmentInput,
+    signal?: AbortSignal,
+  ): Promise<CloudCodeEnvironment>;
+  updateEnvironment(
+    environmentId: string,
+    changes: UpdateCloudCodeEnvironmentInput,
+    signal?: AbortSignal,
+  ): Promise<CloudCodeEnvironment>;
+  deleteEnvironment(environmentId: string, signal?: AbortSignal): Promise<void>;
+}
+
+export type ManagedCloudCodeApi = CloudCodeApi & CloudCodeEnvironmentsApi;
+
+export function isCloudCodeEnvironmentsUnavailable(error: unknown): boolean {
+  return error instanceof CloudCodeApiError && error.status === 404;
+}
+
 function isAbortError(error: unknown): boolean {
   return (
     typeof error === 'object' &&
@@ -195,7 +278,7 @@ function apiError(body: unknown, status: number): CloudCodeApiError {
   return new CloudCodeApiError(message, status, nested?.details?.reason ?? nested?.code);
 }
 
-export function createManagedCloudCodeApi(config: ManagedCloudCodeApiConfig): CloudCodeApi {
+export function createManagedCloudCodeApi(config: ManagedCloudCodeApiConfig): ManagedCloudCodeApi {
   async function request<T>(
     path: string,
     init: RequestInit,
@@ -443,6 +526,42 @@ export function createManagedCloudCodeApi(config: ManagedCloudCodeApiConfig): Cl
         },
         CloudCodeAgentTurnSchema,
         true,
+      );
+    },
+    listEnvironments(signal) {
+      return request(CLOUD_CODE_ENVIRONMENTS_PATH, { signal }, CloudCodeEnvironmentListSchema);
+    },
+    async createEnvironment(input, signal) {
+      const body = await request(
+        CLOUD_CODE_ENVIRONMENTS_PATH,
+        {
+          method: 'POST',
+          headers: await mutationHeaders(),
+          body: JSON.stringify(input),
+          signal,
+        },
+        CloudCodeEnvironmentResponseSchema,
+      );
+      return body.environment;
+    },
+    async updateEnvironment(environmentId, changes, signal) {
+      const body = await request(
+        cloudCodeEnvironmentPath(environmentId),
+        {
+          method: 'PATCH',
+          headers: await mutationHeaders(),
+          body: JSON.stringify(changes),
+          signal,
+        },
+        CloudCodeEnvironmentResponseSchema,
+      );
+      return body.environment;
+    },
+    async deleteEnvironment(environmentId, signal) {
+      await request(
+        cloudCodeEnvironmentPath(environmentId),
+        { method: 'DELETE', headers: await mutationHeaders(), signal },
+        CloudCodeEnvironmentDeletedSchema,
       );
     },
   };

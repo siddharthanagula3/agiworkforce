@@ -65,6 +65,7 @@ export interface PresignGetInput {
   key: string;
   expiresInSeconds: number;
   downloadFileName?: string;
+  contentType?: string;
 }
 
 export interface PresignUploadPartInput {
@@ -118,6 +119,12 @@ export interface PendingMultipartUpload {
   initiatedAtMs: number;
 }
 
+export interface ListedObject {
+  key: string;
+  /** Absent when the host did not say when the object was written. */
+  lastModifiedMs: number | undefined;
+}
+
 /**
  * Every object-storage operation the product performs. A host is swapped by
  * pointing the configuration at a different endpoint, so nothing here names a
@@ -167,6 +174,24 @@ export interface ObjectStore {
   listPendingMultipartUploads?(bucket: string, prefix?: string): Promise<PendingMultipartUpload[]>;
 
   presignUploadPart?(input: PresignUploadPartInput): Promise<string>;
+
+  /**
+   * The objects under `prefix` in key order, at most `limit` of them, starting
+   * after the key `startAfter` when one is given. Optional for the same reason
+   * as multipart; consumers go through `supportsObjectListing`.
+   */
+  listObjects?(
+    bucket: string,
+    prefix: string,
+    limit?: number,
+    startAfter?: string,
+  ): Promise<ListedObject[]>;
+}
+
+export type ListingObjectStore = ObjectStore & Required<Pick<ObjectStore, 'listObjects'>>;
+
+export function supportsObjectListing(store: ObjectStore): store is ListingObjectStore {
+  return typeof store.listObjects === 'function';
 }
 
 export type MultipartObjectStore = ObjectStore &

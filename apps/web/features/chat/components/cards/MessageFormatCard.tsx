@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { LayoutGrid } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
-import { MessageCardRenderer, type CardType } from './index';
+import type { CardType } from '@agiworkforce/unified-chat/message-format';
+import { MessageCardRenderer } from './index';
 
 interface MessageFormatCardProps {
   content: string;

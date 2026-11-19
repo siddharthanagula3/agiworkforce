@@ -40,6 +40,7 @@ jest.mock('@/lib/mmkv', () => ({
 
 jest.mock('@/src/features/chat/draftStore', () => ({
   getDraft: jest.fn(() => ''),
+  getDraftAttachments: jest.fn(() => []),
   setDraft: jest.fn(),
   clearDraft: jest.fn(),
 }));
@@ -67,6 +68,7 @@ jest.mock('@/src/features/model-picker/store', () => ({
 
 jest.mock('@/src/features/model-picker/service', () => ({
   getShortDisplayName: (id: string) => id,
+  isFreeQuotaTurnModelId: () => false,
 }));
 
 jest.mock('@/src/features/auth/store', () => ({

@@ -1,20 +1,19 @@
 import { useCallback, useEffect, useState } from 'react';
-import { View } from 'react-native';
+import { ScrollView } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import Animated, { FadeIn, FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { Monitor, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/Text';
 import { storage } from '@/lib/mmkv';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
-import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { useThemeColors, motion } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
-import { useUser } from '@clerk/expo';
 import { resolveGreetingHeadline } from '@agiworkforce/utils/greeting';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useTierStore } from '@/src/features/billing/store';
+import { useGreetingName } from '@/src/features/chat/hooks/useGreetingName';
 import { NewChatConnectorSuggestions } from './NewChatConnectorSuggestions';
 
 const MMKV_PAIRING_BANNER_KEY = 'dismissedDesktopPairingBanner';
@@ -26,21 +25,8 @@ interface ChatEmptyStateProps {
 
 export function ChatEmptyState({ showPairingBanner, onPairDesktop }: ChatEmptyStateProps) {
   const colors = useThemeColors();
-  const { user: clerkUser } = useUser();
   const isCloud = useChatAppModeStore((s) => s.appMode) === 'cloud';
-  const localNickname = useLocalSettingsStore((s) => s.personalization.nickname);
-  const localFullName = useLocalSettingsStore((s) => s.personalization.fullName);
-  const cloudNickname = useCloudSettingsStore((s) => s.personalization.nickname);
-  const cloudFullName = useCloudSettingsStore((s) => s.personalization.fullName);
-  const nickname = isCloud ? cloudNickname : localNickname;
-  const fullName = isCloud ? cloudFullName : localFullName;
-  const clerkFirstName = clerkUser?.firstName || clerkUser?.fullName?.split(' ')[0] || '';
-  const localNameOptedOut = useLocalSettingsStore((s) => s.personalization.nameOptedOut === true);
-  const cloudNameOptedOut = useCloudSettingsStore((s) => s.personalization.nameOptedOut === true);
-  const nameOptedOut = isCloud ? cloudNameOptedOut : localNameOptedOut;
-  const displayName = nameOptedOut
-    ? ''
-    : nickname || fullName?.split(' ')[0] || (isCloud ? clerkFirstName : '');
+  const displayName = useGreetingName();
 
   const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
   const canUseConnectors = useTierStore((s) => s.grantedCapabilities.includes('canUseConnectors'));
@@ -73,8 +59,18 @@ export function ChatEmptyState({ showPairingBanner, onPairDesktop }: ChatEmptySt
   const headline = resolveGreetingHeadline(greetingTime, displayName);
 
   return (
-    <View
-      style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 }}
+    <ScrollView
+      testID="chat-empty-state"
+      style={{ flex: 1 }}
+      contentContainerStyle={{
+        flexGrow: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 24,
+      }}
+      alwaysBounceVertical={false}
+      showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
     >
       {bannerVisible && (
         <Animated.View
@@ -160,6 +156,6 @@ export function ChatEmptyState({ showPairingBanner, onPairDesktop }: ChatEmptySt
         </Animated.View>
       )}
       {showConnectorSuggestions ? <NewChatConnectorSuggestions /> : null}
-    </View>
+    </ScrollView>
   );
 }

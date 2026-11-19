@@ -8,7 +8,10 @@ vi.mock('@/lib/logger', async (importOriginal) => ({
 }));
 
 import { modelRegistry } from '@agiworkforce/model-registry';
+import { estimateTokens } from '@agiworkforce/routing';
 import { getModelMetadataById } from '@agiworkforce/types';
+
+import { contextBudgetTokens } from '@features/chat/components/Composer/model-compatibility';
 
 import {
   planContextTrim,
@@ -26,6 +29,8 @@ interface RegistryView {
 
 const registry = modelRegistry as unknown as RegistryView;
 const MAX_OUTPUT_TOKENS = 1_024;
+const OVER_BUDGET_FACTOR = 1.25;
+const CATALOG_SWEEP_TIMEOUT_MS = 60_000;
 
 function servedTextModels(): string[] {
   const keys = new Set<string>();
@@ -38,8 +43,17 @@ function servedTextModels(): string[] {
   return [...keys].sort();
 }
 
-function overflowingConversation(contextWindow: number): TrimmableMessage[] {
-  const oldTurn = 'earlier context '.repeat(Math.ceil(contextWindow / 2));
+function charsOverBudget(key: string, contextWindow: number): number {
+  const probe = 10_000;
+  const tokensPerProbe = estimateTokens('x'.repeat(probe), key);
+  const budget = contextBudgetTokens(contextWindow, MAX_OUTPUT_TOKENS);
+  return Math.ceil((budget * OVER_BUDGET_FACTOR * probe) / tokensPerProbe);
+}
+
+function overflowingConversation(key: string, contextWindow: number): TrimmableMessage[] {
+  const oldTurn = 'earlier context '.repeat(
+    Math.ceil(charsOverBudget(key, contextWindow) / 'earlier context '.length),
+  );
   return [
     { role: 'system', content: 'stay on task' },
     { role: 'user', content: oldTurn },
@@ -60,38 +74,42 @@ describe('context validation covers every model a chat turn can be served by', (
     expect(unmeasured).toEqual([]);
   });
 
-  it('brings an over-long conversation under the budget for every distinct window', () => {
-    const representativeByWindow = new Map<number, string>();
-    for (const key of models) {
-      const window = getModelMetadataById(key)?.contextWindow;
-      if (window && !representativeByWindow.has(window)) representativeByWindow.set(window, key);
-    }
-    expect(representativeByWindow.size).toBeGreaterThan(0);
+  it(
+    'brings an over-long conversation under the budget for every distinct window',
+    { timeout: CATALOG_SWEEP_TIMEOUT_MS },
+    () => {
+      const representativeByWindow = new Map<number, string>();
+      for (const key of models) {
+        const window = getModelMetadataById(key)?.contextWindow;
+        if (window && !representativeByWindow.has(window)) representativeByWindow.set(window, key);
+      }
+      expect(representativeByWindow.size).toBeGreaterThan(0);
 
-    for (const [window, key] of representativeByWindow) {
-      const messages = overflowingConversation(window);
-      const plan = planContextTrim(messages, key, MAX_OUTPUT_TOKENS);
-      expect(plan, `${key} (${window} tokens) was not measured`).not.toBeNull();
+      for (const [window, key] of representativeByWindow) {
+        const messages = overflowingConversation(key, window);
+        const plan = planContextTrim(messages, key, MAX_OUTPUT_TOKENS);
+        expect(plan, `${key} (${window} tokens) was not measured`).not.toBeNull();
 
-      const result = trimMessagesToContextWindow(messages, key, MAX_OUTPUT_TOKENS);
-      expect(result, key).not.toBeNull();
-      expect(result!.estimatedTokensAfter, key).toBeLessThanOrEqual(result!.budgetTokens);
-      expect(messages[messages.length - 1]?.content, key).toBe(
-        'the question this turn has to answer',
-      );
+        const result = trimMessagesToContextWindow(messages, key, MAX_OUTPUT_TOKENS);
+        expect(result, key).not.toBeNull();
+        expect(result!.estimatedTokensAfter, key).toBeLessThanOrEqual(result!.budgetTokens);
+        expect(messages[messages.length - 1]?.content, key).toBe(
+          'the question this turn has to answer',
+        );
 
-      const pasted = 'paste '.repeat(window * 2);
-      const oversizedTurn: TrimmableMessage[] = [
-        { role: 'system', content: 'stay on task' },
-        { role: 'user', content: pasted },
-      ];
-      const fitted = trimMessagesToContextWindow(oversizedTurn, key, MAX_OUTPUT_TOKENS);
-      expect(fitted, key).not.toBeNull();
-      expect(oversizedTurn[1]?.content, key).toBe(pasted);
-      expect(fitted!.truncatedMessages, key).toBe(0);
-      expect(fitted!.protectedOverflow, key).toBe(true);
-      expect(fitted!.latestUserMessageOverflow, key).toBe(true);
-      expect(fitted!.estimatedTokensAfter, key).toBeGreaterThan(fitted!.budgetTokens);
-    }
-  });
+        const pasted = 'paste '.repeat(Math.ceil(charsOverBudget(key, window) / 'paste '.length));
+        const oversizedTurn: TrimmableMessage[] = [
+          { role: 'system', content: 'stay on task' },
+          { role: 'user', content: pasted },
+        ];
+        const fitted = trimMessagesToContextWindow(oversizedTurn, key, MAX_OUTPUT_TOKENS);
+        expect(fitted, key).not.toBeNull();
+        expect(oversizedTurn[1]?.content, key).toBe(pasted);
+        expect(fitted!.truncatedMessages, key).toBe(0);
+        expect(fitted!.protectedOverflow, key).toBe(true);
+        expect(fitted!.latestUserMessageOverflow, key).toBe(true);
+        expect(fitted!.estimatedTokensAfter, key).toBeGreaterThan(fitted!.budgetTokens);
+      }
+    },
+  );
 });

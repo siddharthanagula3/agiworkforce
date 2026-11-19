@@ -786,7 +786,8 @@ export default function PricingPage() {
     const lines = usageComparisonCopy(plan, t);
     if (lines.length > 0) return textCell(...lines);
     const withoutBaseline = USAGE_WITHOUT_BASELINE_KEY[plan];
-    return withoutBaseline ? textCell(t(withoutBaseline)) : EXCLUDED_CELL;
+    if (withoutBaseline) return textCell(t(withoutBaseline));
+    return canUseBillingPlanCapability(plan, 'managed_chat') ? INCLUDED_CELL : EXCLUDED_CELL;
   };
 
   const comparisonGroups: PlanComparisonGroup[] = [

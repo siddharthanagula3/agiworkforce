@@ -48,135 +48,14 @@ import type { DocumentFormat } from '../../types/message-metadata';
 import { documentExportService } from '../../services/document-export-service';
 import { formatSourceDate } from '../../utils/research-sources';
 import { toUserMessage } from '@/lib/user-error-message';
-
-/**
- * The report as one self-contained markdown document: title, summary, key
- * findings, body, and a numbered Sources list whose numbers match the report's
- * inline `[n]` citations.
- */
-export function researchReportToMarkdown(report: ResearchReport): string {
-  const parts: string[] = [];
-  if (report.title.trim()) parts.push(`# ${report.title.trim()}`);
-  if (report.summary.trim()) parts.push(report.summary.trim());
-  if (report.keyFindings && report.keyFindings.length > 0) {
-    parts.push(
-      ['## Key findings', ...report.keyFindings.map((finding) => `- ${finding}`)].join('\n'),
-    );
-  }
-  if (report.content.trim()) parts.push(report.content.trim());
-  if (report.citations.length > 0) {
-    parts.push(
-      [
-        '## Sources',
-        ...report.citations.map(
-          (citation, index) => `${index + 1}. [${citation.title}](${citation.url})`,
-        ),
-      ].join('\n'),
-    );
-  }
-  return parts.join('\n\n');
-}
-
-/** How much of the report rides along as grounding for a follow-up question. */
-const FOLLOW_UP_GROUNDING_CHARS = 8_000;
-
-/**
- * The question the follow-up composer really sends: the user's words plus the
- * report they are asking about, so the answer is grounded in the stored run
- * rather than in a fresh guess at the same topic. A report too long to carry
- * whole is cut with the cut declared, never silently.
- */
-export function researchReportFollowUpPrompt(report: ResearchReport, question: string): string {
-  const markdown = researchReportToMarkdown(report);
-  const grounding =
-    markdown.length > FOLLOW_UP_GROUNDING_CHARS
-      ? `${markdown.slice(0, FOLLOW_UP_GROUNDING_CHARS)}\n\n[report truncated after ${FOLLOW_UP_GROUNDING_CHARS} characters]`
-      : markdown;
-  return [
-    'Follow-up on a saved research report. Answer from the report below, citing its sources where they apply, and say plainly when the report does not cover the question.',
-    '<research_report>',
-    grounding,
-    '</research_report>',
-    question.trim(),
-  ].join('\n\n');
-}
-
-export interface ReportHeading {
-  id: string;
-  text: string;
-  level: number;
-}
-
-function slugifyHeading(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-}
-
-/**
- * Headings of the stored report body, in document order.
- *
- * Fenced code blocks are skipped: a `# comment` inside a fence is not a
- * heading, and counting it would shift every entry's index off the heading
- * elements the markdown renderer actually produces (the TOC scrolls by that
- * index, so a drift sends the reader to the wrong section).
- */
-export function extractMarkdownHeadings(markdown: string): ReportHeading[] {
-  const headings: ReportHeading[] = [];
-  const seen = new Map<string, number>();
-  let insideFence = false;
-
-  for (const line of markdown.split('\n')) {
-    if (/^\s{0,3}(?:```|~~~)/.test(line)) {
-      insideFence = !insideFence;
-      continue;
-    }
-    if (insideFence) continue;
-
-    const match = /^\s{0,3}(#{1,4})\s+(.+?)\s*#*\s*$/.exec(line);
-    if (!match) continue;
-
-    const text = match[2]!.replace(/[*_`]/g, '').trim();
-    if (!text) continue;
-
-    const base = slugifyHeading(text) || `section-${headings.length + 1}`;
-    const used = seen.get(base) ?? 0;
-    seen.set(base, used + 1);
-    headings.push({
-      id: used === 0 ? base : `${base}-${used}`,
-      text,
-      level: match[1]!.length,
-    });
-  }
-
-  return headings;
-}
-
-export interface ReportArtifactInput {
-  title: string;
-  language: string;
-  content: string;
-}
-
-/** The report as a markdown artifact the artifacts surface can own and edit. */
-export function researchReportToArtifact(report: ResearchReport): ReportArtifactInput {
-  return {
-    title: report.title || 'Research report',
-    language: 'md',
-    content: researchReportToMarkdown(report),
-  };
-}
-
-/** A filesystem-safe base name derived from the report's own title. */
-export function researchReportFilename(report: ResearchReport): string {
-  const base = (report.title || 'research-report')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 80);
-  return base || 'research-report';
-}
+import { extractMarkdownHeadings } from '@agiworkforce/unified-chat/markdown-headings';
+import {
+  researchReportFilename,
+  researchReportFollowUpPrompt,
+  researchReportToArtifact,
+  researchReportToMarkdown,
+  type ReportArtifactInput,
+} from '@agiworkforce/unified-chat/research-report';
 
 function citationDateLabel(citation: Citation): string | null {
   const published = formatSourceDate(citation.publishedDate);

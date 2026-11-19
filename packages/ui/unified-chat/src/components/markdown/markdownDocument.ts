@@ -1,5 +1,6 @@
 import { unified } from 'unified';
 import remarkParse from 'remark-parse';
+import { normalizeMathDelimiters, tagsAndDollarsAsText } from '@agiworkforce/utils/markdown-source';
 
 import { REMARK_PLUGINS } from './remarkPlugins';
 
@@ -76,6 +77,53 @@ function exportableHref(url: string | undefined): string | undefined {
   return trimmed && EXPORTABLE_HREF.test(trimmed) ? trimmed : undefined;
 }
 
+const OPEN_TAG = /^<([A-Za-z][A-Za-z0-9-]*)(\s[^<>]*)?>$/;
+const CLOSE_TAG = /^<\/([A-Za-z][A-Za-z0-9-]*)\s*>$/;
+const LINE_BREAK_ELEMENTS: ReadonlySet<string> = new Set(['br', 'wbr']);
+const VOID_ELEMENTS: ReadonlySet<string> = new Set([
+  'area',
+  'base',
+  'col',
+  'embed',
+  'hr',
+  'img',
+  'input',
+  'link',
+  'meta',
+  'source',
+  'track',
+]);
+
+// A tag named in a sentence ("use the <script> tag") is text the reader was
+// shown, not markup: a bare void tag, or a bare opening tag nothing closes.
+// A tag with attributes, a closing tag and a closed pair stay markup.
+function tagMentions(nodes: readonly MarkdownNode[]): ReadonlySet<number> {
+  const mentions = new Set<number>();
+  const unclosed = new Map<string, { index: number; bare: boolean }[]>();
+  nodes.forEach((node, index) => {
+    if (node.type !== 'html') return;
+    const value = (node.value ?? '').trim();
+    const opening = OPEN_TAG.exec(value);
+    if (opening) {
+      const name = opening[1]!.toLowerCase();
+      const bare = opening[2] === undefined;
+      if (LINE_BREAK_ELEMENTS.has(name)) return;
+      if (VOID_ELEMENTS.has(name)) {
+        if (bare) mentions.add(index);
+        return;
+      }
+      unclosed.set(name, [...(unclosed.get(name) ?? []), { index, bare }]);
+      return;
+    }
+    const closing = CLOSE_TAG.exec(value);
+    if (closing) unclosed.get(closing[1]!.toLowerCase())?.pop();
+  });
+  for (const opened of unclosed.values()) {
+    for (const { index, bare } of opened) if (bare) mentions.add(index);
+  }
+  return mentions;
+}
+
 function plainText(node: MarkdownNode): string {
   if (typeof node.value === 'string') return node.value;
   return (node.children ?? []).map(plainText).join('');
@@ -86,7 +134,8 @@ function inlinesOf(
   marks: DocumentMarks,
 ): DocumentInline[] {
   const out: DocumentInline[] = [];
-  for (const node of nodes ?? []) {
+  const mentions = tagMentions(nodes ?? []);
+  for (const [index, node] of (nodes ?? []).entries()) {
     switch (node.type) {
       case 'text':
         if (node.value) out.push({ kind: 'text', text: node.value, marks });
@@ -126,7 +175,9 @@ function inlinesOf(
         break;
       case 'html': {
         const value = node.value ?? '';
-        if (HTML_LINE_BREAK.test(value.trim())) {
+        if (mentions.has(index)) {
+          out.push({ kind: 'text', text: value, marks });
+        } else if (HTML_LINE_BREAK.test(value.trim())) {
           out.push({ kind: 'break' });
         } else {
           const text = value.replace(HTML_TAG, '');
@@ -263,6 +314,7 @@ function inlinesRenderedText(inlines: readonly DocumentInline[]): string {
   return inlines
     .map((inline) => {
       if (inline.kind === 'text') return inline.text;
+      if (inline.kind === 'break') return '\n';
       return inline.kind === 'math' ? inline.tex : '';
     })
     .join('');
@@ -295,65 +347,12 @@ export function markdownRenderedText(source: string): string {
     .join(BLOCK_TEXT_SEPARATOR);
 }
 
-export type DocumentDirection = 'ltr' | 'rtl';
-
-export const RIGHT_TO_LEFT_TEXT = /[֐-ࣿיִ-﷿ﹰ-ﻼ]/u;
-const STRONG_LETTER = /\p{L}/u;
-
-export function textDirection(text: string): DocumentDirection | null {
-  for (const char of text) {
-    if (RIGHT_TO_LEFT_TEXT.test(char)) return 'rtl';
-    if (STRONG_LETTER.test(char)) return 'ltr';
-  }
-  return null;
-}
-
-function inlinesDirection(inlines: readonly DocumentInline[]): DocumentDirection | null {
-  for (const inline of inlines) {
-    if (inline.kind !== 'text') continue;
-    const direction = textDirection(inline.text);
-    if (direction) return direction;
-  }
-  return null;
-}
-
-function blockDirection(block: DocumentBlock): DocumentDirection | null {
-  switch (block.kind) {
-    case 'heading':
-    case 'paragraph':
-      return inlinesDirection(block.inlines);
-    case 'list':
-      for (const item of block.items) {
-        const direction = blocksDirection(item.blocks);
-        if (direction) return direction;
-      }
-      return null;
-    case 'quote':
-      return blocksDirection(block.blocks);
-    case 'table':
-      for (const row of block.rows) {
-        for (const cell of row) {
-          const direction = inlinesDirection(cell);
-          if (direction) return direction;
-        }
-      }
-      return null;
-    default:
-      return null;
-  }
-}
-
-function blocksDirection(blocks: readonly DocumentBlock[]): DocumentDirection | null {
-  for (const block of blocks) {
-    const direction = blockDirection(block);
-    if (direction) return direction;
-  }
-  return null;
-}
-
-export function documentDirection(
-  blocks: readonly DocumentBlock[],
-  title?: string,
-): DocumentDirection {
-  return blocksDirection(blocks) ?? (title ? textDirection(title) : null) ?? 'ltr';
+/**
+ * One line of what a short piece of model-written Markdown reads as, for text
+ * that is shown and sent as typed words, such as a follow-up suggestion.
+ */
+export function markdownLineText(source: string): string {
+  return markdownRenderedText(normalizeMathDelimiters(tagsAndDollarsAsText(source)))
+    .replace(/\s+/g, ' ')
+    .trim();
 }

@@ -218,7 +218,7 @@ export const IDENTITY_SECURITY_EVENTS: Readonly<
     message: `Your account and its content are queued to be erased. ${UNDO}`,
     auditEventType: 'account_deletion_requested',
     resourceType: 'account',
-    settingsSection: 'account',
+    settingsSection: 'account-deletion',
   },
   advanced_security_enabled: {
     category: 'security',

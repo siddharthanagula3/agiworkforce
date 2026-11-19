@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  CLIENT_CAPABILITIES_REQUEST_HEADER,
   IDEMPOTENCY_KEY_HEADER,
   MAX_REQUEST_ID_LENGTH,
   REQUEST_ID_HEADER,
@@ -22,6 +23,13 @@ describe('request header names', () => {
     for (const name of [REQUEST_ID_HEADER, IDEMPOTENCY_KEY_HEADER, SYNC_PROTOCOL_VERSION_HEADER]) {
       expect(name).toBe(name.toLowerCase());
     }
+  });
+
+  it('names the header a client lists its optional capabilities in', () => {
+    expect(CLIENT_CAPABILITIES_REQUEST_HEADER).toBe('x-agi-client-capabilities');
+    expect(CLIENT_CAPABILITIES_REQUEST_HEADER).toBe(
+      CLIENT_CAPABILITIES_REQUEST_HEADER.toLowerCase(),
+    );
   });
 });
 

@@ -1,3 +1,6 @@
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -516,5 +519,70 @@ describe('the bytes the caller handed in', () => {
     const once = stripped(jpegFixture(6)).bytes;
     const twice = stripped(once).bytes;
     expect(Array.from(twice)).toEqual(Array.from(once));
+  });
+});
+
+function realJpeg(name: string): Uint8Array {
+  return new Uint8Array(readFileSync(new URL(`./fixtures/${name}`, import.meta.url)));
+}
+
+function withCameraMetadata(jpeg: Uint8Array): Uint8Array {
+  return new Uint8Array([
+    0xff,
+    0xd8,
+    ...jpegSegment(0xe1, [...ascii('Exif'), 0, 0, ...exifTiff(6)]),
+    ...jpegSegment(0xfe, ascii(NEEDLE.text)),
+    ...jpeg.subarray(2),
+  ]);
+}
+
+function pairCount(bytes: Uint8Array, matches: (next: number) => boolean): number {
+  let count = 0;
+  for (let i = 0; i + 1 < bytes.length; i += 1) {
+    if (bytes[i] === 0xff && matches(bytes[i + 1] ?? 0)) count += 1;
+  }
+  return count;
+}
+
+function sha256(bytes: Uint8Array): string {
+  return createHash('sha256').update(bytes).digest('hex');
+}
+
+describe('a JPEG an encoder wrote, with restart markers and stuffed bytes', () => {
+  const REAL_JPEGS = [
+    [
+      'baseline',
+      'jpeg-baseline-restart.jpg',
+      'ea83a3f726643e87a336eb054b37be508202b48f57cc5360f3e425f56841e597',
+    ],
+    [
+      'progressive',
+      'jpeg-progressive-restart.jpg',
+      '6cc3d406d7308eefd7fbaacb4bc7a5a3dee47fbafca9bcbd6b2eb791e24bd2ed',
+    ],
+  ] as const;
+
+  it.each(REAL_JPEGS)('carries every scan of the %s file through unchanged', (_kind, name) => {
+    const original = realJpeg(name);
+    expect(pairCount(original, (next) => next >= 0xd0 && next <= 0xd7)).toBeGreaterThan(0);
+    expect(Array.from(stripped(original).bytes)).toEqual(Array.from(original));
+  });
+
+  it.each(REAL_JPEGS)(
+    'strips the %s file with camera metadata to the bytes it produced before',
+    (_kind, name, expected) => {
+      const result = stripped(withCameraMetadata(realJpeg(name)));
+      expect(contains(result.bytes, NEEDLE.make)).toBe(false);
+      expect(contains(result.bytes, NEEDLE.text)).toBe(false);
+      expect(result.orientation).toBe(6);
+      expect(sha256(result.bytes)).toBe(expected);
+    },
+  );
+
+  it('keeps the stuffed bytes of the baseline scan', () => {
+    const original = realJpeg('jpeg-baseline-restart.jpg');
+    const stuffed = pairCount(original, (next) => next === 0x00);
+    expect(stuffed).toBeGreaterThan(0);
+    expect(pairCount(stripped(original).bytes, (next) => next === 0x00)).toBe(stuffed);
   });
 });

@@ -4,7 +4,7 @@ title: Passkeys, two-factor and active sessions
 path: /security
 category: account
 tags: passkey, two factor, 2fa, mfa, totp, authenticator, backup codes, recovery codes, advanced account security, security key, recovery key, change password, forgot password, sessions, log out all devices, revoke session, api keys
-updated: 2026-11-08
+updated: 2026-11-16
 description: How to manage passkeys, two-factor authentication, your password, active sessions and API keys.
 scope: public
 ---
@@ -20,9 +20,10 @@ check the spam folder before requesting another.
 
 Settings, Security manages passkeys and two-factor authentication. Passkeys sign
 you in. Setting up an authenticator app (TOTP) and replacing backup codes can be
-switched off for a time: while it is, Settings, Security shows **Temporarily
-unavailable** where you would set one up or replace your backup codes, and a
-workspace cannot start requiring multi-factor authentication until they return.
+switched off for a time: while it is, Settings, Security on the web shows
+**Temporarily unavailable** where you would set one up or replace your backup
+codes, the AGI Mobile app leaves out those options, and a workspace cannot start
+requiring multi-factor authentication until they return.
 SMS MFA is not part of the
 current account contract, so it is not offered rather than silently ignored.
 Hardware security keys work with Advanced Account Security. An account with an

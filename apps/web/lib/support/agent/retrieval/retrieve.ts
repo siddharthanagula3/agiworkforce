@@ -7,7 +7,7 @@
 
 import { SITE_URL } from '@/lib/seo/site';
 import type { RetrievalResult, RetrievedChunk, SupportCitation, CorpusChunk } from '../types';
-import { getSupportCorpus } from '../corpus';
+import { getSupportCorpus, type SupportCorpusView } from '../corpus';
 import { evaluateRelevanceFloor } from '../policy/relevance-floor';
 import { buildBm25Index, scoreBm25, type Bm25Index } from './bm25';
 import { tokenize } from './tokenize';
@@ -16,11 +16,17 @@ const DEFAULT_LIMIT = 6;
 const MAX_PER_DOCUMENT = 2;
 const SNIPPET_CHARS = 320;
 
-let cachedIndex: { index: Bm25Index; chunks: readonly CorpusChunk[] } | null = null;
+const cachedIndexes = new Map<
+  SupportCorpusView,
+  { index: Bm25Index; chunks: readonly CorpusChunk[] }
+>();
 
-function getIndex(): { index: Bm25Index; chunks: readonly CorpusChunk[] } | null {
-  const corpus = getSupportCorpus();
+function getIndex(
+  view: SupportCorpusView,
+): { index: Bm25Index; chunks: readonly CorpusChunk[] } | null {
+  const corpus = getSupportCorpus(view);
   if (!corpus.available) return null;
+  const cachedIndex = cachedIndexes.get(view);
   if (cachedIndex && cachedIndex.chunks === corpus.chunks) return cachedIndex;
 
   const index = buildBm25Index(
@@ -30,8 +36,9 @@ function getIndex(): { index: Bm25Index; chunks: readonly CorpusChunk[] } | null
       boosted: `${chunk.headingPath} ${chunk.tags.join(' ')} ${chunk.category}`,
     })),
   );
-  cachedIndex = { index, chunks: corpus.chunks };
-  return cachedIndex;
+  const built = { index, chunks: corpus.chunks };
+  cachedIndexes.set(view, built);
+  return built;
 }
 
 function repeatsOwnHeading(line: string, chunk: CorpusChunk): boolean {
@@ -58,8 +65,9 @@ export function buildCitation(chunk: CorpusChunk): SupportCitation {
 
 export function retrieveSupportChunks(
   query: string,
-  opts: { limit?: number } = {},
+  opts: { limit?: number; view?: SupportCorpusView } = {},
 ): RetrievalResult {
+  const view = opts.view ?? 'web';
   const queryTerms = [...new Set(tokenize(query))];
   const empty: RetrievalResult = {
     chunks: [],
@@ -71,11 +79,11 @@ export function retrieveSupportChunks(
     floorReason: 'empty_query',
   };
 
-  const loaded = getIndex();
+  const loaded = getIndex(view);
   if (!loaded) return { ...empty, floorReason: 'corpus_unavailable' };
   if (queryTerms.length === 0) return empty;
 
-  const corpus = getSupportCorpus();
+  const corpus = getSupportCorpus(view);
   if (!corpus.available) return { ...empty, floorReason: 'corpus_unavailable' };
 
   const hits = scoreBm25(loaded.index, query);

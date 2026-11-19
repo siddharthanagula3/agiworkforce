@@ -6,6 +6,8 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { withIsoTimestamps } from '@/lib/server/iso-timestamps';
+import { withoutStoredCitationMarkup } from '@/lib/server/stored-assistant-text';
+import { withObjectMessageMetadata } from '@/lib/server/message-metadata-repair';
 import type { ChatMessageRow } from '@/lib/server/neon-chat';
 import { CreateMessageSchema } from '@/lib/validations/chat';
 import { getUserScopedDb } from '@/lib/server/rls-db';
@@ -76,10 +78,12 @@ async function handleListMessages(request: NextRequest, context: RouteContext) {
     );
 
     const page = buildPage(rows, limit, (row) => ({ sortValue: row.page_sort_key, id: row.id }));
-    const messages = page.items.map(({ page_sort_key: _sortKey, ...row }) => row);
+    const messages = page.items.map(({ page_sort_key: _sortKey, ...row }) =>
+      withObjectMessageMetadata(row, { userId, conversationId }),
+    );
 
     return NextResponse.json({
-      messages: withIsoTimestamps(messages).map((message) =>
+      messages: withIsoTimestamps(withoutStoredCitationMarkup(messages)).map((message) =>
         ManagedCloudMessageWireSchema.parse(message),
       ),
       hasMore: page.hasMore,

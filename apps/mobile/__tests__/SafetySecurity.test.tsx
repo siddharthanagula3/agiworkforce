@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 
 const mockSetItemAsync = jest.fn();
@@ -41,9 +41,9 @@ jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: ({ children }: { children: React.ReactNode }) => children,
 }));
 
-const mockOpenUntrustedUrl = jest.fn().mockResolvedValue(true);
+const mockOpenInAppBrowser = jest.fn().mockResolvedValue(true);
 jest.mock('@/lib/safeOpenURL', () => ({
-  openUntrustedUrlInAppBrowser: (...args: unknown[]) => mockOpenUntrustedUrl(...args),
+  openInAppBrowser: (...args: unknown[]) => mockOpenInAppBrowser(...args),
 }));
 
 jest.mock('../src/features/auth/services/ageGate', () => ({
@@ -59,6 +59,7 @@ jest.mock('lucide-react-native', () => {
     EyeOff: icon,
     CircleHelp: icon,
     Fingerprint: icon,
+    KeyRound: icon,
     Shield: icon,
     Smartphone: icon,
   };
@@ -111,6 +112,8 @@ jest.mock('@/components/ui/Switch', () => {
 
 import SafetySecurityScreen from '../src/features/settings/safety-security';
 import { useBiometricFlag } from '../lib/biometricFlagStore';
+import { useAuthStore } from '../src/features/auth/store';
+import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { helpArticleUrl } from '../src/features/support/HelpArticleLink';
 
 describe('Safety & Security settings', () => {
@@ -120,6 +123,8 @@ describe('Safety & Security settings', () => {
     jest.clearAllMocks();
     mockMinorMode = false;
     mockReduceSensitiveContent = false;
+    useChatAppModeStore.setState({ appMode: 'local' });
+    useAuthStore.setState({ isClerkLoaded: true, isClerkSignedIn: true });
     useBiometricFlag.setState({ hydrated: true, enabled: false });
     mockGetEnrolledLevelAsync.mockResolvedValue(2);
     mockAuthenticateAsync.mockResolvedValue({ success: true });
@@ -135,7 +140,7 @@ describe('Safety & Security settings', () => {
 
     fireEvent.press(getByRole('link', { name: 'Learn more' }));
 
-    expect(mockOpenUntrustedUrl).toHaveBeenCalledWith(helpArticleUrl('crisis-resources'));
+    expect(mockOpenInAppBrowser).toHaveBeenCalledWith(helpArticleUrl('crisis-resources'));
   });
 
   it('shows the app-lock toggle with Face ID and passcode copy', () => {
@@ -144,6 +149,41 @@ describe('Safety & Security settings', () => {
     expect(getByText('App Lock')).toBeTruthy();
     expect(getByText('Require Face ID, Touch ID, or passcode to open AGI.')).toBeTruthy();
     expect(getByRole('switch', { name: 'App Lock. Off' })).toBeTruthy();
+  });
+
+  describe('on Android', () => {
+    let platform: jest.ReplaceProperty<'OS', typeof Platform.OS>;
+
+    beforeEach(() => {
+      platform = jest.replaceProperty(Platform, 'OS', 'android');
+    });
+
+    afterEach(() => {
+      platform.restore();
+    });
+
+    it('names the fingerprint, face unlock and screen lock instead of Face ID and Touch ID', () => {
+      const { getByText, queryByText } = render(<SafetySecurityScreen />);
+
+      expect(
+        getByText('Require your fingerprint, face unlock, or screen lock to open AGI.'),
+      ).toBeTruthy();
+      expect(queryByText(/Face ID|Touch ID|passcode/)).toBeNull();
+    });
+
+    it('asks for a screen lock without naming Face ID when none is set up', async () => {
+      mockGetEnrolledLevelAsync.mockResolvedValue(0);
+      const { getByRole } = render(<SafetySecurityScreen />);
+
+      fireEvent.press(getByRole('switch', { name: 'App Lock. Off' }));
+
+      await waitFor(() => {
+        expect(alertSpy).toHaveBeenCalledWith(
+          'Set up a device lock first',
+          'Set up a fingerprint, face unlock, or screen lock in system settings before enabling AGI app lock.',
+        );
+      });
+    });
   });
 
   it('does not name a trusted-contact feature the app does not offer', () => {
@@ -227,5 +267,43 @@ describe('Safety & Security settings', () => {
     });
     expect(mockSetItemAsync).not.toHaveBeenCalled();
     expect(useBiometricFlag.getState().enabled).toBe(false);
+  });
+
+  it('has no Security and login row in Local, where there is no account to secure', () => {
+    const { queryByText } = render(<SafetySecurityScreen />);
+
+    expect(queryByText('Security and login')).toBeNull();
+  });
+
+  it('ends Device boundary with Security and login in Cloud and opens the account security screen', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    const { getByRole, getAllByRole } = render(<SafetySecurityScreen />);
+
+    const labels = getAllByRole('button').map((button) => button.props.accessibilityLabel);
+    expect(labels.indexOf('Security and login')).toBe(labels.indexOf('Permissions') + 1);
+    fireEvent.press(getByRole('button', { name: 'Security and login' }));
+
+    expect(mockPush).toHaveBeenCalledWith('/(app)/settings/account-security');
+  });
+
+  it('starts sign-in from Security and login when signed out in Cloud', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    useAuthStore.setState({ isClerkLoaded: true, isClerkSignedIn: false });
+    const { getByRole } = render(<SafetySecurityScreen />);
+
+    fireEvent.press(getByRole('button', { name: 'Security and login. Sign in' }));
+
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/(auth)/login',
+      params: { postAuthIntent: 'cloud-account-security' },
+    });
+  });
+
+  it('says Checking while the sign-in state loads, as the Settings home row does', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    useAuthStore.setState({ isClerkLoaded: false, isClerkSignedIn: false });
+    const { getByRole } = render(<SafetySecurityScreen />);
+
+    expect(getByRole('button', { name: 'Security and login. Checking…' })).toBeTruthy();
   });
 });

@@ -11,6 +11,7 @@ import {
   isAccountScopedUiStateOwned,
 } from '@/src/features/auth/services/accountScopedUiState';
 import { downloadGeneratedFile, shareFile } from '@/services/fileCreation';
+import { toUserMessage } from '@/services/userMessage';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 
@@ -46,9 +47,12 @@ export function VoiceToolFiles({ files }: { files: readonly LiveVoiceToolFile[] 
       );
       if (!isCurrent()) return;
       await shareFile(localUri, { isCurrent });
-    } catch {
+    } catch (error) {
       if (isCurrent()) {
-        Alert.alert('Could not open this file', 'The file could not be downloaded.');
+        Alert.alert(
+          'Could not open this file',
+          toUserMessage(error, 'The file could not be downloaded.'),
+        );
       }
     } finally {
       if (mountedRef.current) setOpening(null);

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { TOOL_APPROVAL_RISK_TIERS, TOOL_APPROVAL_SCOPES } from './tool-approval-resume';
 
 export const ToolStatusPayloadSchema = z.object({
   type: z.string(),
@@ -18,6 +19,9 @@ export const ToolApprovalRequestPayloadSchema = z.object({
   tool_call_id: z.string().min(1),
   name: z.string().min(1),
   args: z.record(z.string(), z.unknown()),
+  risk_tier: z.enum(TOOL_APPROVAL_RISK_TIERS).optional().catch(undefined),
+  destructive: z.boolean().optional().catch(undefined),
+  approval_scopes: z.array(z.enum(TOOL_APPROVAL_SCOPES)).min(1).max(3).optional().catch(undefined),
 });
 export type ToolApprovalRequestPayload = z.infer<typeof ToolApprovalRequestPayloadSchema>;
 

@@ -34,11 +34,13 @@ import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { VOICE_PRESETS } from '@/src/features/voice/voicePresets';
 import { SPEECH_LANGUAGE_AUTO } from '@/src/features/voice/speechLanguage';
+import { onDeviceRecognizerGuaranteed } from '@/src/features/voice/services/voiceInput';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useModelInstallStore } from '@/src/features/model-picker/installStore';
 import { DEFAULT_LOCAL_MODEL_ID, getDisplayName } from '@/src/features/model-picker/service';
 import { useTierStore } from '@/src/features/billing/store';
 import { resolveNewConversationModel } from '@/src/features/chat/utils/newConversationModel';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 
 const CONVERSATION_MODES = [
   {
@@ -199,7 +201,11 @@ function SpeechLanguageModal({
         style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: colors.scrim }}
         onPress={onClose}
       >
-        <Pressable accessible={false} onPress={(e) => e.stopPropagation()}>
+        <Pressable
+          accessible={false}
+          style={contentColumn('reading')}
+          onPress={(e) => e.stopPropagation()}
+        >
           <View
             accessibilityViewIsModal
             style={{
@@ -503,19 +509,21 @@ export default function VoiceSettingsScreen() {
         })}
       </SettingsGroup>
 
-      <SettingsGroup>
-        <SettingsRow
-          label="Open Voice Companion"
-          icon={Play}
-          onPress={() =>
-            router.push({
-              pathname: '/(app)/voice',
-              params: { returnTo: '/(app)/settings/voice' },
-            } as Parameters<typeof router.push>[0])
-          }
-          isLast
-        />
-      </SettingsGroup>
+      {onDeviceRecognizerGuaranteed() ? (
+        <SettingsGroup>
+          <SettingsRow
+            label="Open Voice Companion"
+            icon={Play}
+            onPress={() =>
+              router.push({
+                pathname: '/(app)/voice',
+                params: { returnTo: '/(app)/settings/voice' },
+              } as Parameters<typeof router.push>[0])
+            }
+            isLast
+          />
+        </SettingsGroup>
+      ) : null}
 
       <SpeechLanguageModal
         visible={languagePickerOpen}

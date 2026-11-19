@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
-import { Alert } from 'react-native';
+import { Alert, Platform, StyleSheet } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockHasHardware = jest.fn();
@@ -97,6 +97,37 @@ describe('App Lock offer', () => {
     const unenrolled = render(<AppLockOffer />);
     await waitFor(() => expect(mockIsEnrolled).toHaveBeenCalled());
     expect(unenrolled.queryByLabelText('Turn on App Lock')).toBeNull();
+  });
+
+  it('keeps the card to a centred form column that never exceeds an iPhone window', async () => {
+    const screen = render(<AppLockOffer />);
+    const card = await screen.findByTestId('app-lock-offer-card');
+    const style = StyleSheet.flatten(card.props.style);
+    expect(style.maxWidth).toBe(440);
+    expect(style.width).toBe('100%');
+    expect(style.alignSelf).toBe('center');
+  });
+
+  describe.each([
+    ['ios', 'Use Face ID, Touch ID, or your device passcode when opening AGI.'],
+    ['android', 'Use your fingerprint, face unlock, or screen lock when opening AGI.'],
+  ] as const)('wording on %s', (os, wording) => {
+    let platform: jest.ReplaceProperty<'OS', typeof Platform.OS>;
+
+    beforeEach(() => {
+      platform = jest.replaceProperty(Platform, 'OS', os);
+    });
+
+    afterEach(() => {
+      platform.restore();
+    });
+
+    it('names the biometrics the platform has', async () => {
+      const screen = render(<AppLockOffer />);
+
+      expect(await screen.findByText(wording)).toBeTruthy();
+      if (os === 'android') expect(screen.queryByText(/Face ID|Touch ID|passcode/)).toBeNull();
+    });
   });
 
   it('waits until first Cloud continuity onboarding is finished', async () => {

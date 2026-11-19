@@ -14,7 +14,7 @@ import {
   withCorsRoute,
 } from '@/lib/cors';
 import { addFallbackReasonHeader, addModelEscalationHeaders } from '@/lib/chat-fallback-reason';
-import { addSecretRedactionNoticeHeader } from '@/lib/chat-secret-redaction-notice';
+import { addSecretRedactionNoticeHeader } from '@agiworkforce/cloud-contracts';
 import { addAttachmentTruncationHeader } from '@agiworkforce/cloud-contracts';
 import { addProjectSourcesHeader } from '@/lib/chat-project-sources';
 import { addRouteLaneHeader } from '@/lib/services/free-lane/plan';
@@ -154,9 +154,6 @@ import { CHAT_TURN_PHASE, CHAT_TURN_SPAN } from './lib/turn-phases';
 import type { CloudChatSurface } from '@/lib/free-chat-surface-policy';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { recordManagedAutoMemoryTurn } from '@/lib/services/managed-auto-memory-service';
-import { scheduleToolShortlistShadow } from '@/lib/services/semantic-decisions/consumers/tool-shortlist';
-import { lastUserTurnText } from './lib/tool-loop';
-import { toolShortlistShadowInput } from './lib/tool-shortlist-shadow';
 import { settleFreeTrialRequest } from '@/lib/services/free-trial-service';
 import { servedOnIsolatedPromotionCredential } from '@/lib/server/free-model-promotion';
 
@@ -867,18 +864,6 @@ async function dispatchChatCompletions(
     );
     const mcpTools = [...operatorTools, ...connectorTools];
 
-    // Shadow only: the lexical shortlist below still builds the turn, and a
-    // tool it defers stays one load_connector_tools call away either way.
-    if (processed.decisionScope && mcpTools.length > 0) {
-      scheduleToolShortlistShadow(
-        toolShortlistShadowInput({
-          scope: processed.decisionScope,
-          tools: mcpTools,
-          turnText: () => lastUserTurnText(processed.chatRequest?.messages),
-        }),
-      );
-    }
-
     // A provider-native search runs inside the provider's own turn, so it never
     // reaches the tool loop as a call and cannot be gated there. When the
     // account's policy will not auto-approve a search, swap it for our own
@@ -1125,6 +1110,8 @@ async function dispatchChatCompletions(
               processed.turnToolProhibition,
               checkpoint.toolSchemaState,
               processed.contextPolicySnapshot,
+              processed.largeFileTurn,
+              processed.untrustedContextPresent,
             ),
             messages: checkpoint.messages,
             pendingToolCalls: checkpoint.pendingToolCalls,
@@ -1149,6 +1136,8 @@ async function dispatchChatCompletions(
               processed.turnToolProhibition,
               checkpoint.toolSchemaState,
               processed.contextPolicySnapshot,
+              processed.largeFileTurn,
+              processed.untrustedContextPresent,
             ),
             messages: checkpoint.messages,
             pendingToolCalls: checkpoint.pendingToolCalls,
@@ -1177,6 +1166,8 @@ async function dispatchChatCompletions(
               processed.turnToolProhibition,
               checkpoint.toolSchemaState,
               processed.contextPolicySnapshot,
+              processed.largeFileTurn,
+              processed.untrustedContextPresent,
             ),
             messages: checkpoint.messages,
             pendingToolCalls: checkpoint.pendingToolCalls,
@@ -1202,6 +1193,8 @@ async function dispatchChatCompletions(
               processed.turnToolProhibition,
               checkpoint.toolSchemaState,
               processed.contextPolicySnapshot,
+              processed.largeFileTurn,
+              processed.untrustedContextPresent,
             ),
             messages: checkpoint.messages,
             pendingToolCalls: checkpoint.pendingToolCalls,

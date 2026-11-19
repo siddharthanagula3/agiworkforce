@@ -62,6 +62,37 @@ describe('memory object store', () => {
     });
   });
 
+  it('records the content type a presigned download is served with', async () => {
+    const store = createMemoryObjectStore({ uploadBaseUrl: UPLOAD_BASE_URL });
+
+    const url = new URL(
+      await store.presignGet({
+        bucket: 'bucket',
+        key: 'object.pdf',
+        expiresInSeconds: PRESIGN_TTL_SECONDS,
+        downloadFileName: 'object.pdf',
+        contentType: 'application/octet-stream',
+      }),
+    );
+
+    expect(url.searchParams.get('responseContentType')).toBe('application/octet-stream');
+    expect(url.searchParams.get('disposition')).toContain('object.pdf');
+  });
+
+  it('records no content type on a presigned download that asks for none', async () => {
+    const store = createMemoryObjectStore({ uploadBaseUrl: UPLOAD_BASE_URL });
+
+    const url = new URL(
+      await store.presignGet({
+        bucket: 'bucket',
+        key: 'object.pdf',
+        expiresInSeconds: PRESIGN_TTL_SECONDS,
+      }),
+    );
+
+    expect(url.searchParams.has('responseContentType')).toBe(false);
+  });
+
   it('keeps buckets separate', async () => {
     const store = createMemoryObjectStore();
     await store.put({

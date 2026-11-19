@@ -408,6 +408,37 @@ describe('LiveVoiceBar call controls', () => {
     expect(router.push).toHaveBeenCalledWith('/(app)/settings/voice');
   });
 
+  it('hides and shows the captions from the header while the call keeps going', () => {
+    const turns = [
+      { turnId: 'a', role: 'user' as const, text: 'what is on my calendar', final: true },
+      { turnId: 'b', role: 'assistant' as const, text: 'Two meetings', final: true },
+    ];
+    const { getByLabelText, queryByTestId, queryByText, getByTestId } = renderLiveBar({ turns });
+    expect(queryByTestId('live-voice-transcript')).not.toBeNull();
+
+    fireEvent.press(getByLabelText('Hide captions'));
+    expect(queryByTestId('live-voice-transcript')).toBeNull();
+    expect(queryByText('Two meetings')).toBeNull();
+    expect(getByTestId('live-voice-status').props.children).toBe('Listening');
+
+    fireEvent.press(getByLabelText('Show captions'));
+    expect(queryByText('Two meetings')).not.toBeNull();
+    expect(queryByText('what is on my calendar')).not.toBeNull();
+  });
+
+  it('lets a caption be selected and copied, and keeps the header controls bare', () => {
+    const { getByText, getByTestId } = renderLiveBar({
+      turns: [{ turnId: 'a', role: 'user', text: 'call my sister', final: true }],
+    });
+    expect(getByText('call my sister').props.selectable).toBe(true);
+    for (const id of ['live-voice-captions', 'live-voice-pause', 'live-voice-settings']) {
+      const style = StyleSheet.flatten(getByTestId(id).props.style);
+      expect(style.backgroundColor).toBeUndefined();
+      expect(style.width).toBe(44);
+      expect(style.height).toBe(44);
+    }
+  });
+
   it('shows an image a tool returned in the results, beside the file link', () => {
     const { getByTestId, getAllByTestId } = renderLiveBar({
       toolOutcomes: [

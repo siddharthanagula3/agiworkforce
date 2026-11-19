@@ -2,16 +2,66 @@
 
 Status: Current
 Owner: Mobile lead
-Last updated: 2026-11-11
+Last updated: 2026-11-17
 Applies to: `com.agiworkforce.app`, version 0.0.1
 
-Paste the body of this file into the **App Review Information → Notes** field in
-App Store Connect. `store-listing/LISTING-METADATA-IOS.json` points
-`app_review_information.notes_file` here.
+`store-listing/LISTING-METADATA-IOS.json` points
+`app_review_information.notes_file` here. App Store Connect's **App Review
+Information → Notes** field takes at most 4,000 bytes, so only the text in the
+next section goes there. Replace the two bracketed placeholders with the review
+account's email and password as you paste, and enter the same pair in the
+Sign-In Information fields; never commit them. The rest of this file is the
+reference behind that text: answer App Review from it if they ask.
 
 Every statement below is checked against shipped code in `apps/mobile`. When a
 behaviour changes, update this file in the same change, App Review reads it as
 a factual claim about the binary.
+
+## Paste this into App Review notes
+
+`__tests__/ios-store-submission-config.test.ts` holds this text at 3,900 bytes
+or less, so the filled-in credentials still fit under Apple's limit.
+
+```text
+AGI Mobile is an AI assistant with two modes.
+- Local Mode: chats run on a model on this device. No account is needed, and no chat content leaves the device unless the person chooses to send a report.
+- AGI Cloud: optional, needs sign-in. Chats run on AGI's servers and the AI provider that serves the chosen model.
+
+Demo account (also in the Sign-In Information fields; no one-time code is needed):
+Email: [REVIEW ACCOUNT EMAIL]
+Password: [REVIEW ACCOUNT PASSWORD]
+
+To review AGI Cloud:
+1. Launch the app and finish onboarding. On a device without a built-in model the app offers a local model download over Wi-Fi; tap "Sign in to use Cloud" on that screen to skip it.
+2. In the side menu or Settings, tap Cloud in the Local/Cloud switch.
+3. Age step: on iOS 26 and later iOS may ask to share an age range; otherwise enter an age of 18 or more under "Your age" and tap Continue.
+4. Enter the email, tap Continue, then the password. If "Review the Terms for AGI Cloud" appears, accept it. Sign in with Apple is offered wherever Google or GitHub sign-in is.
+5. Before AGI Cloud opens, the app asks "Share with AI providers?" and names them. Tap Allow to enter AGI Cloud; Not now keeps Local Mode, and tapping Cloud asks again. Then chat, search the web or attach a photo.
+To withdraw: Settings > Privacy > Share with AI providers, off. The app returns to Local Mode and pauses the account's scheduled and running tasks.
+
+Purchases: version 1 is free and sells nothing. It has no in-app purchases, shows no prices and has no purchase or upgrade control. Nothing is sold on any platform before 1 January 2027: no plan or credit can be bought in this app, on the web or anywhere else. The demo account's plan was granted to it for this review without a purchase. Settings > Subscription shows the plan and a plain-text Billing line, "Included with your account", with no link.
+
+Account deletion: Settings > Email (under Account) > Danger Zone > Delete Account, or Settings > Data Controls > Delete account. In Local Mode, use Data Controls and tap Check deletion status first; it stays in Local Mode and does not ask about AI providers. Deletion is scheduled with a 24-hour window; signing back in before it ends offers Cancel Account Deletion.
+
+Reporting AI content: tap the three-dot button under any answer (or long-press the answer) and choose Report. Generated images and videos, research reports and artifacts have their own Report control. Items shared by other people have Report and "Hide <name>".
+
+Not reachable in review, and why:
+- Remote Control and Send to Desktop are not in this version; the app shows no control for them.
+- The built-in Apple Intelligence model is used only on devices that support it; other devices use the downloaded model.
+- The age-range prompt appears only on iOS 26 and later where iOS offers age features.
+- Connectors and Connect GitHub sign in to the reviewer's own account with that service.
+- Calendar answers need calendar access and events on the test device.
+
+Permissions are asked only when a feature is first used: camera, microphone, speech recognition, photos, calendar, reminders and Face ID. Declining one leaves the rest working.
+
+Contact: review@agiworkforce.com
+```
+
+Depends on things outside the binary: the purchases paragraph holds only
+while checkout stays closed in production and the review account's plan is
+granted by hand, and the deletion paragraph holds for that account only once
+the delete-account change that schedules a granted plan is deployed
+(`docs/runbooks/mobile-store-first-release.md`, sections 4.2 and 10).
 
 ---
 
@@ -23,9 +73,20 @@ AGI is an AI assistant with two independent modes.
 Apple Intelligence on the device without a model download. Other devices use a
 quantized open-weight model downloaded on first run and executed through
 ExecuTorch or llama.rn. Inference happens entirely on-device; no prompt or
-response leaves the phone. Chats are stored in an encrypted on-device store
-(MMKV with a 256-bit key held in the iOS Keychain); on-device memory and model
-records use a local SQLite database encrypted with SQLCipher.
+response leaves the device unless the person chooses to send a report about it
+(see "Reporting AI-generated content"). Chats are stored in an encrypted
+on-device store (MMKV, AES-128 in CFB mode, keyed by 16 random printable
+characters, about 105 bits, held in the iOS Keychain); on-device memory and
+model records use a local SQLite database encrypted with SQLCipher (AES-256-CBC
+with HMAC-SHA512 through Apple CommonCrypto, under a random 256-bit key).
+Both keys are kept on this device only (`WHEN_UNLOCKED_THIS_DEVICE_ONLY`,
+`lib/mmkv.ts`, `storage/db.ts`), so Local chats restored from a backup onto a
+different iPhone or iPad cannot be opened there: the app sets that copy aside rather
+than deleting it, and tells the person once that their Local chats were not
+restored (`src/features/edge-cases/components/LocalDataResetNotice.tsx`).
+Downloaded model files are excluded from iCloud and computer backups, because
+they can be downloaded again (`services/modelDownload.ts`,
+`src/platform/backupExclusion.ts`).
 
 **AGI Cloud (optional, requires sign-in).** Signing in with an AGI account
 enables server-side chat and web search on the Free plan, which is open to
@@ -36,47 +97,99 @@ purchases; see "Purchases: please read" below.
 The two modes never mix silently. Local chats are not uploaded, and switching a
 conversation to Cloud is an explicit user action.
 
+Remote Control and Send to Desktop are not in this version: the app shows no
+control for them (`lib/v1FeatureFlags.ts`, `companion` and `dispatch` are
+`false`).
+
+The app declares no background modes: while `dispatch` is `false`,
+`app.config.js` leaves the background task plugin out and removes `fetch` and
+`processing`, so the built `Info.plist` has no `UIBackgroundModes` and no
+`BGTaskSchedulerPermittedIdentifiers`. The share extension and the widgets
+carry the app's name, AGI Mobile, in the share sheet and the widget gallery.
+
 ## How to review it
 
 Before submission, provide Apple an active AGI Cloud review account through
 App Store Connect's secure demo-account fields (email and password; sign-in
 needs no one-time code). Do not put its credentials in this repository. The account must remain accessible throughout review and
-must be able to exercise Cloud chat and web search. The Cloud entry path asks
-for age confirmation before sign-in.
-That screen first asks iOS for the age range through Declared Age Range (`expo-age-range`) and falls back to typed age if none is shared.
+must be able to exercise Cloud chat and web search.
 
 1. **Local Mode requires no account at all.** Launch the app, tap through
    onboarding, and chat. This exercises the core product. On supported devices, onboarding uses the built-in system model without a
    download. Otherwise it downloads a local model over Wi-Fi; please allow
-   that to finish, or use **Continue to Cloud** to skip it.
-2. **AGI Cloud sign-up is open self-service.** Sign-in uses Clerk's native
-   `AuthView` (an in-app native sheet, not a web browser). Cloud chat and web
-   search are available on the free tier after sign-in. Use the review account
-   supplied in App Store Connect to test these features without relying on
-   email verification during review.
+   that to finish, or tap **Sign in to use Cloud** on the screen before the
+   download to skip it.
+2. **AGI Cloud.** In the side menu or Settings, tap **Cloud** in the
+   Local/Cloud switch. Then comes the age step: on iOS 26 and later, where iOS
+   offers age features, the app asks iOS for a declared age range
+   (`expo-age-range`); otherwise **Your age** asks for an age and
+   **Continue** (`app/(public)/age-gate.tsx`). Sign-in is the app's own form,
+   not a browser (`app/(auth)/login.tsx`,
+   `src/features/auth/components/MobileSignIn.tsx`): **Email address**,
+   **Continue**, then a password or an emailed code. Sign in with Apple sits
+   beside Google and GitHub. Clerk's native sheet opens from **More sign-in
+   options** (on the password step, **Forgot password or try another way**),
+   or when a sign-in needs a step this form does not handle. An account that has not accepted the current Terms sees
+   **Review the Terms for AGI Cloud** first. Then the app asks about AI
+   providers (step 3); after **Allow** the chat opens. On a plan
+   with Work, a one-time Work introduction labelled **Beta** comes first
+   (**Start a task**, **Not now**); without Work, that screen (Settings →
+   Capabilities → **Cross-device continuity**) says "Work isn’t included in
+   your plan." and offers **Close**.
+3. **Consent before AGI Cloud opens.** After sign-in and the Terms, and
+   whenever a signed-in person taps **Cloud** in Local Mode, the app asks
+   **Share with AI providers?**, names each provider, and offers **Details**,
+   **Not now** and **Allow**. Without **Allow** the app cannot be in AGI
+   Cloud: **Not now** keeps it in Local Mode, signed in, and tapping **Cloud**
+   asks again (`src/features/chat/store/cloudModeDoor.ts`,
+   `services/providerConsent.ts`). The permission belongs to the account that
+   gave it; another account on the same device is asked itself. Without it the
+   network chokepoint refuses every request to AGI Cloud except the signed-in
+   account controls (Terms, account deletion and its status and cancellation,
+   the identity check for deletion, data export), the controls a withdrawal
+   needs, and a content report the person chooses to send
+   (`lib/egressGuard.ts`). Messages, attachments, picture and video requests,
+   the image editor and live voice check the permission again before they send
+   (`services/llmGate.ts`,
+   `src/features/chat/actions/mediaGenerationConsent.ts`,
+   `src/features/voice/services/liveVoiceSession.ts`).
+4. **Withdrawing it.** Settings → **Privacy** → **Share with AI providers**,
+   captioned "AGI Cloud needs this. Off keeps Local Mode." The switch shows in
+   AGI Cloud, and in Local Mode while the account's permission is on. Turning
+   it off withdraws the permission at once: the app returns to Local Mode and
+   stays there, Ask from Siri is turned off, live voice and answers being
+   written stop, and the account's active schedules and running tasks are
+   paused, never cancelled. When there was something to pause, one line says
+   what was paused or what could not be. Turning it on asks the same question
+   (`src/features/settings/cloud-privacy/CloudProviderSharingGroup.tsx`).
 
 ## Why the app asks for each permission
 
-Every permission except notifications is requested **on first use, from a user
-action**, never on launch and never on screen mount
+Every permission, notifications included, is requested **on first use, from a
+user action**, never on launch and never on screen mount
 (`src/features/settings/permissions/registry.ts`). Notification permission is
-requested once, after the user signs in to AGI Cloud, because push delivery is
-part of what signing in to Cloud enables (`app/_layout.tsx`,
-`services/notifications.ts`).
-Declining any one of them leaves the rest of the app fully usable. There is also
-a Settings → Permissions screen that shows current status for each.
+requested only when the user taps **Turn on notifications** in Settings →
+Notifications (`services/notifications.ts` → `enablePushNotifications`) or
+**Allow Notifications** in Settings → Permissions → Notifications. Signing in to
+AGI Cloud registers the device for push only when notifications are already
+allowed, and never shows the prompt (`app/_layout.tsx`,
+`services/notifications.ts` → `registerForPushNotifications`).
+Declining any one of them leaves the rest of the app fully usable. Settings →
+Permissions shows the current status of Microphone, Speech Recognition, Camera,
+Photos & Files, Notifications, Calendar, Reminders and, on a device with Face
+ID, Face ID (`src/features/settings/permissions/registry.ts`).
 
-| Permission                                                 | Where it is used                                                                                                                                                                                                                                                                             |
-| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Camera (`NSCameraUsageDescription`)                        | Taking a photo to attach to a chat and scanning documents/text for on-device OCR.                                                                                                                                                                                                            |
-| Microphone (`NSMicrophoneUsageDescription`)                | Voice input in the chat composer, and live voice mode in an AGI Cloud chat, which streams the microphone to AGI Cloud over WebRTC for the session (`src/features/voice/services/liveVoiceSession.ts`) and saves the transcript to that chat. Declared as Audio Data in the privacy manifest. |
-| Speech Recognition (`NSSpeechRecognitionUsageDescription`) | Transcribing that voice input. Uses the on-device iOS Speech framework via `expo-speech-recognition` (`src/features/voice/services/voiceInput.ts`).                                                                                                                                          |
-| Photo Library (`NSPhotoLibraryUsageDescription`)           | Choosing an existing image to attach to a chat.                                                                                                                                                                                                                                              |
-| Photo Library Add (`NSPhotoLibraryAddUsageDescription`)    | Saving an image the user chooses to save into the photo library (`services/fileCreation.ts`).                                                                                                                                                                                                |
-| Face ID (`NSFaceIDUsageDescription`)                       | Optional app lock, opt-in from Settings → Safety & Security (`src/features/auth/hooks/useBiometricGate.ts`). Off by default.                                                                                                                                                                 |
-| Calendar / Reminders                                       | Optional. Calendar is read when the user asks about their schedule, and an event is added only after the user confirms it in a chat. Reminders are only written, when the user creates or confirms one (`src/features/reminders/service.ts`); they are never read.                           |
-| Translation (no permission prompt)                         | On-device translation through Apple's Translation framework (`native/ios/AGITranslate.swift`). No text is sent to a server.                                                                                                                                                                  |
-| Notifications                                              | Optional; used for model-download, reminder and cloud job completion alerts, and for agent actions waiting on the user's approval.                                                                                                                                                           |
+| Permission                                                 | Where it is used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Camera (`NSCameraUsageDescription`)                        | Taking a photo to attach to a chat and scanning documents/text for on-device OCR.                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| Microphone (`NSMicrophoneUsageDescription`)                | Voice input in the chat composer, and live voice mode in an AGI Cloud chat: AGI Cloud sets up the WebRTC call with the voice provider, then the audio streams directly between the device and that provider (`src/features/voice/services/liveVoiceSession.ts`, `apps/web/app/api/voice/live/sessions/route.ts`, and the app's own Privacy, Data use & access screen, `src/features/settings/cloud-privacy/DataUseScreen.tsx`); the transcript is saved to that chat. Declared as Audio Data in the privacy manifest. |
+| Speech Recognition (`NSSpeechRecognitionUsageDescription`) | Transcribing that voice input. Uses the on-device iOS Speech framework via `expo-speech-recognition` (`src/features/voice/services/voiceInput.ts`).                                                                                                                                                                                                                                                                                                                                                                   |
+| Photo Library (`NSPhotoLibraryUsageDescription`)           | Choosing an existing image to attach to a chat.                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Photo Library Add (`NSPhotoLibraryAddUsageDescription`)    | Saving an image the user chooses to save into the photo library (`services/fileCreation.ts`).                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| Face ID (`NSFaceIDUsageDescription`)                       | Optional app lock, opt-in from Settings → Safety & Security (`src/features/auth/hooks/useBiometricGate.ts`). Off by default.                                                                                                                                                                                                                                                                                                                                                                                          |
+| Calendar / Reminders                                       | Optional. Calendar is read when the user asks about their schedule in a Cloud chat, and the events read (titles, times, places, notes) go to AGI Cloud and the model provider (`src/features/integrations/services/phoneDeviceSteps.ts`); an event is added only after the user confirms it in a chat. Reminders are only written, when the user creates or confirms one (`src/features/reminders/service.ts`); they are never read.                                                                                  |
+| Translation (no permission prompt)                         | On-device translation through Apple's Translation framework (`native/ios/AGITranslate.swift`). No text is sent to a server.                                                                                                                                                                                                                                                                                                                                                                                           |
+| Notifications                                              | Optional. A notice when a reply finishes while the app is in the background (`services/replyReadyNotice.ts`), and pushes from AGI Cloud about the account's replies, scheduled tasks and agent runs (`apps/web/lib/services/push-notification-service.ts`).                                                                                                                                                                                                                                                           |
 
 The app does **not** link `expo-location` and requests no location permission.
 The app contains no HealthKit code and requests no Health permission, the Apple
@@ -108,35 +221,45 @@ false:
   `apps/web/lib/server/mobile-iap-catalog.ts`) stay off unless the deployment
   sets `MOBILE_IAP_ENABLED`. This version never calls them either way.
 
-What you will see under **Settings → Subscription**: a screen titled **Plan**
+What you will see under **Settings → Subscription**: a screen titled **Subscription**
 (`src/features/settings/cloud-billing/index.tsx`, the
 `if (!NATIVE_PURCHASES_AVAILABLE)` branch) with:
 
 - **Current plan**, and the renewal or end date if the plan has one.
 - **Billing**, as plain text with no link, only for an account that already
-  holds a paid plan: **Managed on the web**, **By your organization**, or
-  **Managed where you subscribed**. A Free-plan account gets no Billing row.
+  holds a paid plan: **Managed on the web**, **By your organization** (a
+  workspace plan), **Included with your account** (a personal plan given without
+  a purchase), or **Managed where you subscribed**. A Free-plan account gets no
+  Billing row.
 - **What your plan includes**, which lists the current plan's features only.
-- **Usage**, the account's usage, read natively from the usage API.
+- **Usage**: on a paid plan, the account's usage read natively from the usage
+  API; on the Free plan, a short explanation of how its limits reset, with no
+  meters (`src/features/settings/cloud-usage/index.tsx`).
 - **Help with your plan**, which opens the in-app support screen.
 
-How a locked feature is presented: when something is outside the account's
-plan, the app says it "isn’t included in your plan" (or that the plan's
-allowance is used up for now) and offers **Close**, plus **Choose a standard
-model** when the locked item is a model, with no upgrade button, plan comparison
-or link
-(`src/features/chat/components/PaywallBottomSheet.tsx`). Elsewhere the same rule
-holds: a model the plan does not include is not listed in the model picker, and
-other plan-locked features are described as not included, never as something to
-buy.
+How a locked feature is presented: the chat sheet says the item "isn’t
+included in your plan" (or that the plan's allowance is used up for now) and
+offers **Close**, plus **Choose a standard model** when the locked item is a
+model, with no upgrade button, plan comparison or link
+(`src/features/chat/components/PaywallBottomSheet.tsx`). A screen whose feature
+the plan leaves out, such as Connectors on the Free plan, reads **Not on your
+plan** and "Your current plan does not include this." (`src/lib/Capabilities.tsx`).
+Server messages are shown without any sentence or alternative about upgrading,
+pricing, access codes, the waitlist or credits (`services/failureCopy.ts`), and
+server notices about billing are not shown. A model the plan does not include
+is not listed in the model picker.
 
-Paid plans exist for the AGI Cloud web product. An account that already holds a
-paid plan gets that plan's access after signing in here.
-The app neither sells nor advertises those plans, names no price, and has no
-link to where they are sold.
+Paid plans exist for the AGI Cloud web product, but nothing is sold on any
+platform before 1 January 2027: no plan or credit can be bought in this app, on
+the web or anywhere else. The plans that exist were granted without a purchase.
+An account that holds one gets that plan's access after signing in here. The app
+neither sells nor advertises plans, names no price, and has no link to a
+purchase.
 
-The review account needs no purchase setup: there are no sandbox purchases to
-make, no products to load and nothing to restore.
+The review account's plan was granted to it for this review without a purchase,
+so its Plan screen shows **Billing: Included with your account**. It needs no
+purchase setup: there are no sandbox purchases to make, no products to load and
+nothing to restore.
 
 Before submitting (operator step, not for the reviewer): do not attach in-app
 purchase products to this version in App Store Connect. Selling in the app needs
@@ -148,52 +271,66 @@ This section identifies website, legal and support destinations in the
 current mobile source. `openExternalUrl` (`lib/safeOpenURL.ts`) accepts only
 reviewed HTTPS hosts; other link handlers are described separately below.
 
+Pages on `agiworkforce.com` are opened through `src/platform/webContentPage.ts`.
+`openWebContentPage` adds `from=mobile` to the address and opens the page in
+the in-app Safari sheet. `openWebAccountPage` adds the same marker, opens only
+`/settings/account` and `/settings/security`, and opens nothing for any other
+address.
+
 **A. Account destinations.** These account links render in this version:
 
-| #   | Control                                                                                 | Opens                                                     | Call site                                                       | Who sees it                                                                                                      |
-| --- | --------------------------------------------------------------------------------------- | --------------------------------------------------------- | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| A1  | **Continue** on the "Change your email" alert                                           | `agiworkforce.com/settings/account`                       | `src/features/settings/cloud-account/index.tsx`                 | Any signed-in Cloud account. Email change is not implemented in-app; the alert says so before it opens anything. |
-| A2  | **Advanced Account Security**, **Add or remove a sign-in method**, **Open Web account** | `agiworkforce.com/settings/security`, `/settings/account` | `src/features/settings/account-security/index.tsx`              | Any signed-in Cloud account. Opens in an in-app Safari sheet.                                                    |
-| A3  | **Turn on** in the two-factor banner                                                    | `agiworkforce.com/settings/security`                      | `src/features/settings/account-security/WorkspaceMfaBanner.tsx` | A member of a workspace that requires two-factor authentication. In-app Safari sheet.                            |
-| A4  | A security recommendation on the workspace administration screen                        | an `agiworkforce.com/workspace/*` admin page              | `src/features/team/WorkspaceAdministration.tsx`                 | A workspace administrator. In-app Safari sheet.                                                                  |
+| #   | Control                                                                                 | Opens                                                     | Call site                                                       | Who sees it                                                                                                    |
+| --- | --------------------------------------------------------------------------------------- | --------------------------------------------------------- | --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| A1  | **Continue** on the "Change your email" alert                                           | `agiworkforce.com/settings/account`                       | `src/features/settings/cloud-account/index.tsx`                 | Any signed-in Cloud account. Email change is not implemented in-app; the alert says so before it opens Safari. |
+| A2  | **Advanced Account Security**, **Add or remove a sign-in method**, **Open Web account** | `agiworkforce.com/settings/security`, `/settings/account` | `src/features/settings/account-security/index.tsx`              | Any signed-in Cloud account. Opens in an in-app Safari sheet.                                                  |
+| A3  | **Turn on** in the two-factor banner                                                    | `agiworkforce.com/settings/security`                      | `src/features/settings/account-security/WorkspaceMfaBanner.tsx` | A member of a workspace that requires two-factor authentication. In-app Safari sheet.                          |
+| A4  | A security recommendation on the workspace administration screen                        | an `agiworkforce.com/workspace/*` admin page              | `src/features/team/WorkspaceAdministration.tsx`                 | A workspace administrator. In-app Safari sheet.                                                                |
 
 No link in the app opens a page about pricing, billing, invoices, sales or
-upgrades.
+upgrades. The `agiworkforce.com` pages it opens carry `from=mobile`, which makes
+the site leave out its pricing and contact-sales links; that website change
+(`apps/web/lib/embedded-page.ts`) must be deployed before review (operator
+check, not for the reviewer: on 2026-11-15 production pages opened that way
+still linked to `/pricing` and `/contact-sales`).
 
-**B. Non-billing destinations.** The sign-in and account-creation flows open
-Terms, Privacy, data-use and acceptable-use pages on `agiworkforce.com`; the
-account Terms confirmation also links to Terms and Privacy
-(`app/(auth)/login.tsx`, `src/features/auth/components/MobileSignUp.tsx`).
-Settings → Privacy links to Privacy, Data rights requests and Terms
+**B. Non-billing destinations.** In the in-app Safari sheet, through
+`openWebContentPage`: the sign-in and account-creation flows open Terms,
+Privacy, data-use and acceptable-use pages on `agiworkforce.com`; the account
+Terms confirmation also links to Terms and Privacy (`app/(auth)/login.tsx`,
+`src/features/auth/components/MobileSignUp.tsx`). Settings → Privacy links to
+Privacy, Data rights requests and Terms
 (`src/features/settings/cloud-privacy/index.tsx`). Settings → Personalization links its
 custom-instructions helper to the acceptable-use page
-(`src/features/settings/personalization/index.tsx`). Password recovery opens
-`agiworkforce.com/login`, whose password step offers Forgot password, and
-account recovery opens `agiworkforce.com/recover`
-(`app/(auth)/reset-password.tsx`). The desktop-pairing safety disclosure opens
-`agiworkforce.com/security`
-(`src/features/companion/components/PairingRiskDisclosure.tsx`). When the
-server refuses a locked or suspended account, the alert's **Open on the web**
-opens the reset-password or appeal page (`services/api.ts`), and the updated
-Terms notice opens `/terms` (`services/termsNotice.ts`).
+(`src/features/settings/personalization/index.tsx`). The updated Terms notice
+opens `/terms` (`services/termsNotice.ts`). The desktop-pairing safety
+disclosure opens `agiworkforce.com/security`
+(`src/features/companion/components/PairingRiskDisclosure.tsx`), but it is on
+the Remote Control screen, which this version does not show. In Safari:
+password recovery opens `agiworkforce.com/login`, whose password step offers
+Forgot password, and account recovery opens `agiworkforce.com/recover`
+(`app/(auth)/reset-password.tsx`); when the server refuses a locked or
+suspended account, the alert's **Open on the web** opens the reset-password or
+appeal page (`services/api.ts`).
 
-**C. Opened in an in-app Safari sheet, not the browser.** These go through
-`openInAppBrowser` (`lib/safeOpenURL.ts`), which presents
-`SFSafariViewController` as a page sheet rather than leaving the app: Settings →
-About opens `agiworkforce.com`, `/privacy`, `/terms`, `/acceptable-use`, `/help`
-and `/status` (`app/(app)/about.tsx`); Settings opens the Help Center
+**C. Opened in an in-app Safari sheet, not the browser.** The sheet is
+`SFSafariViewController` presented as a page sheet (`lib/safeOpenURL.ts`), so
+the person never leaves the app. Through `openWebContentPage`: Settings →
+About opens `/privacy`, `/terms`, `/acceptable-use`, `/help` and `/status`
+(`app/(app)/about.tsx`); Settings opens the Help Center
 (`src/features/settings/index.tsx`); Settings → Permissions opens a help article
 (`src/features/settings/permissions/index.tsx`); the first-run disclosure opens
-`/privacy` and the India notice at `/privacy/india`
+`/privacy`, `/terms` and the India notice at `/privacy/india`
 (`src/features/onboarding/components/FirstRunDisclosureModal.tsx`); the cloud
 provider consent opens `/privacy` and the provider list at `/subprocessors`
 (`src/features/settings/cloud-privacy/NamedProviderConsentModal.tsx`,
-`services/providerConsent.ts`); and a notification whose target has no screen in
+`services/providerConsent.ts`). A notification whose target has no screen in
 the app opens its web page (`services/notifications.ts`). A link in assistant
 output, and a map place or route card, also opens in the sheet and is never
 auto-followed; a non-`http(s)` scheme requires a confirmation alert first
 (`src/features/chat/components/MarkdownInline.tsx`,
-`src/features/chat/components/InteractiveCardBlock.tsx`).
+`src/features/chat/components/InteractiveCardBlock.tsx`). **Open** on an
+artifact the person has published opens its public page through
+`openExternalUrl` (`src/features/chat/components/ArtifactFullScreen.tsx`).
 
 **D. Not `agiworkforce.com`, or not a web page.** Settings → Connectors
 authorizes a connector in an in-app authentication session
@@ -213,7 +350,8 @@ shows an **Open link** button for it
 `Linking.openURL` targets are not web pages: `mailto:` to
 `support@agiworkforce.com` (`app/(app)/about.tsx`, `services/contentReport.ts`)
 and to the account's own address for the desktop link
-(`src/features/companion/components/DesktopSetupChecklistView.tsx`), an
+(`src/features/companion/components/DesktopSetupChecklistView.tsx`, also on
+the Remote Control screen), an
 `otpauth:` link to an authenticator app
 (`src/features/settings/account-security/TwoFactorSection.tsx`), and the
 iOS/Android device-settings intents.
@@ -247,8 +385,17 @@ one and we will remove or gate it.
 Required by Guideline 5.1.1(v). Deletion is requested in the app and needs no
 support ticket.
 
-**Settings → Account → Delete Account** → confirmation alert → identity check →
-`DELETE /api/user/delete-account`. Sources:
+In Cloud mode: Settings → **Email** (under Account) → **Danger Zone** →
+**Delete Account** → confirmation alert → identity check →
+`DELETE /api/user/delete-account`. From either mode, Settings → **Data
+Controls** → **Delete account** opens the same screen (after sign-in, if
+signed out; if the app then asks **Share with AI providers?**, either answer
+leads to the same screen). In Local Mode the **Danger Zone** shows **Check
+deletion status**; tapping it asks AGI Cloud for the account's deletion status
+without switching modes or asking about AI providers, and then shows **Delete
+Account**, or **Cancel Account Deletion** when a deletion is scheduled.
+Deletion, its cancellation and **Export Cloud Data** never need the permission
+to share with AI providers (`lib/egressGuard.ts`). Sources:
 `src/features/settings/cloud-account/index.tsx` (screen),
 `src/features/settings/cloud-account/deleteAccountConfirmation.ts` (the
 confirmation text) and `apps/web/app/api/user/delete-account/route.ts` (server).
@@ -283,6 +430,10 @@ deletion either:
   the person cancels there, with a link to the store's own subscription
   settings.
 - **A paid plan already cancelled**: deletion is scheduled straight away.
+- **A personal paid plan given without a purchase**, on an account with no web
+  billing account: deletion is scheduled straight away. The plan ends when
+  erasure runs, and nothing is charged or refunded. Its Plan screen shows
+  **Billing: Included with your account**.
 
 In every paid case the remaining paid time ends when erasure runs, and the
 confirmation and the receipt both say that the unused time is not refunded.
@@ -293,21 +444,41 @@ reason:
 - **A payment still being collected**: deletion is refused until it is settled.
 - **A plan change already scheduled** on a web plan: the message asks the person
   to keep their current plan in Billing first.
-- **A plan billed by invoice, or one whose purchase cannot be identified**: the
-  message asks the person to contact support.
+- **A plan billed by invoice, or a plan with a web billing account whose
+  purchase cannot be identified**: the message asks the person to contact
+  support.
 - **The only owner of a workspace**: the message names the workspace and asks
   for another owner or for the workspace to be deleted first.
 
 ## Privacy and data collection
 
-- Local Mode collects no personal data.
+- Local Mode uploads no chat content. The one thing Local Mode sends to AGI
+  without a sign-in is a content report, and only after the person taps
+  **Send** on it (see "Reporting AI-generated content"). Signed in, Local Mode
+  also reaches AGI for account controls that carry no chat content: Terms,
+  account deletion and its status and cancellation, the identity check for
+  deletion, data export, and, when the person turns off sharing with AI
+  providers, pausing their scheduled and running tasks and revoking Ask from
+  Siri (`lib/egressGuard.ts`).
+- In every mode, signed in or not, `expo-updates` asks Expo's update service
+  for an update on each launch, sending Expo's per-install client ID and, after
+  a failed launch, the launch error (`app.config.js` sets `updates.url` and no
+  `checkAutomatically`). App Privacy declares this as Device ID and Crash Data;
+  Expo does not link either to a person.
 - Signing in to AGI Cloud collects, linked to the account and never for
-  tracking, the types the privacy manifest declares: email address, name (if
-  the sign-in method provides one), user ID, device ID, and the content of
-  Cloud chats (text, live-voice audio, attached photos), all for app
-  functionality; and product interaction, for analytics, governed by the
-  **Product analytics** switch in Settings → Privacy
+  tracking: email address, name (if the sign-in method provides one), user ID,
+  device ID (an app-generated install ID with the device name and OS version,
+  sent on every active session to list the device in the account), the content
+  of Cloud chats (text, live-voice audio, attached photos and files, and the
+  calendar events a chat reads), chat search queries (Search History), the
+  support tickets and feedback the user writes (Customer Support) and the
+  diagnostics a support ticket attaches unless the person turns that off (Other
+  Diagnostic Data), all for app functionality; and product interaction, for
+  analytics, governed by the **Product analytics** switch in Settings → Privacy
   (`src/features/settings/cloud-privacy/ProductAnalyticsConsentGroup.tsx`).
+- Besides AGI's hosts, the device talks to Clerk for sign-in, Apple's push
+  service, Expo for update checks, and, in live voice, the voice provider
+  directly.
 - `NSPrivacyTracking` is `false`. The app contains no IDFA/AdSupport code, no
   ad SDK, and no cross-app tracking.
 - The privacy manifest is generated from `ios.privacyManifests` in
@@ -350,13 +521,48 @@ we have not met, verifiable parental consent under s.9, notice in Eighth
 Schedule languages under s.6(4), and India data residency, are listed at
 https://agiworkforce.com/trust.
 
+## Reporting AI-generated content
+
+Anything the AI produced can be reported from the app; in Local Mode no
+account is needed:
+
+- **A finished answer**: **Report…** in the menu that the three-dot button
+  under the answer opens (VoiceOver: **More message actions**), and in the same
+  menu on a long press (`src/features/chat/components/MessageBubble.tsx`).
+- **A generated image or video**: a Report control in its full-screen viewer
+  (`src/features/chat/components/ImageFullScreen.tsx`,
+  `src/features/chat/components/VideoPlayerModal.tsx`).
+- **A research report or an artifact preview**: a Report control in its header
+  (`src/features/research/ReportsScreen.tsx`, `src/features/artifacts/index.tsx`).
+- **An item shared with the person**: its own **Report**
+  (`src/features/shared-with-you/SharedItemSafetyActions.tsx`).
+
+Each opens one report sheet with six categories and an optional note
+(`src/features/chat/components/ReportFlagButton.tsx`). `services/contentReport.ts`
+saves the report on the device first, then sends it to
+`POST /api/mobile/content-report` (`apps/web/app/api/mobile/content-report/route.ts`).
+In Local Mode the egress guard blocks that send, and the sheet asks **Send this
+report to AGI?**: only a tap on **Send** lets that one report through
+(`consentedReport` in `lib/egressGuard.ts`). Otherwise the report stays on the
+device and the sheet says "Saved on this device. Nothing was sent." **Email
+support instead** hands it to the mail app.
+
 ## Export compliance
 
-`ITSAppUsesNonExemptEncryption` is `false` in `Info.plist`. All cryptography is
-Apple-provided: TLS via URLSession, the Keychain via `expo-secure-store`,
-`SecRandomCopyBytes` via `expo-crypto`, and SQLCipher compiled against Apple
-CommonCrypto (`-DSQLCIPHER_CRYPTO_CC`). The app ships no proprietary or
-non-standard cipher.
+Operator facts, not for the reviewer. `ITSAppUsesNonExemptEncryption` is
+`false` in `Info.plist`, and whether that answer stands is open for the owner
+and counsel. From the operating system: TLS via URLSession, the Keychain via
+`expo-secure-store`, `SecRandomCopyBytes` via `expo-crypto`, and SQLCipher
+compiled against Apple CommonCrypto (`-DSQLCIPHER_CRYPTO_CC`). Not from the
+operating system: `react-native-mmkv` compiles MMKV's own OpenSSL-derived AES
+(AES-128 in CFB mode) into the app to encrypt the local chat store
+(`lib/mmkv.ts`), and `react-native-webrtc` links the JitsiWebRTC framework,
+which contains BoringSSL and secures live voice media. All of these are
+industry-standard algorithms; none is proprietary. Apple's export compliance
+documentation says an industry-standard algorithm not provided within the
+Apple operating system needs a French encryption declaration uploaded in App
+Store Connect when the app is distributed in France, which is in the
+availability list.
 
 ## Contact
 

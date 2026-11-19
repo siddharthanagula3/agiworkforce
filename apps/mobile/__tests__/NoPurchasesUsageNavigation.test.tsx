@@ -86,6 +86,8 @@ jest.mock('@/services/usage', () => ({
   fetchUsageSnapshot: () => mockFetchUsageSnapshot(),
   fetchUsageAllowances: () => new Promise(() => undefined),
   fetchUsageHistory: () => new Promise(() => undefined),
+  fetchUsageOverage: () => new Promise(() => undefined),
+  saveUsageOverage: jest.fn(),
 }));
 
 jest.mock('@/src/features/settings/Common', () => {
@@ -275,6 +277,33 @@ describe('version 1 without in-app purchases', () => {
     expect(pushedBilling()).toBe(false);
   });
 
+  it('usage screen: a paid account sees what its plan includes, with no purchased or bonus balances', async () => {
+    const window = { allowance: 5000, used: 1000, remaining: 4000, reset_at: null };
+    mockFetchUsageSnapshot.mockResolvedValue(
+      usageSnapshot({
+        planTier: 'pro',
+        hasUsageRemaining: true,
+        credits: {
+          monthly: window,
+          weekly: window,
+          five_hour: window,
+          flagship_weekly: null,
+          purchased: { remaining: 250, overage_enabled: false },
+          bonus: { remaining: 40, next_expiry_at: '2099-01-01T00:00:00Z' },
+        },
+      }),
+    );
+    const screen = render(<CloudUsageScreen />);
+
+    await waitFor(() => expect(screen.getByText('Included in your plan')).toBeTruthy());
+    expect(screen.getByText('4,000 credits left')).toBeTruthy();
+    expect(screen.queryByText(/purchase/i)).toBeNull();
+    expect(screen.queryByText('Bonus credits')).toBeNull();
+    expect(screen.queryByText(/bonus credits go first/)).toBeNull();
+    expect(screen.queryByText(/expire/)).toBeNull();
+    expect(pushedBilling()).toBe(false);
+  });
+
   it.each(['upgrade', 'add_credits', 'enable_usage_credits', 'wait'] as const)(
     'usage card (%s): states the reset and offers no action',
     (recovery) => {
@@ -305,9 +334,9 @@ describe('version 1 without in-app purchases', () => {
     jest.restoreAllMocks();
   });
 
-  it('search: the billing destination is a Plan with no payment or credits keywords', () => {
+  it('search: the billing destination is named Subscription like its screen, with no payment or credits keywords', () => {
     const destination = MOBILE_DESTINATIONS.find((item) => item.route === BILLING);
-    expect(destination?.title).toBe('Plan');
+    expect(destination?.title).toBe('Subscription');
     expect(destination?.keywords).toEqual(['plan', 'subscription']);
     expect(MOBILE_DESTINATIONS.some((item) => item.title === 'Billing')).toBe(false);
   });

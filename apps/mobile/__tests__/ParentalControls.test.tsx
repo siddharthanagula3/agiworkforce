@@ -4,9 +4,11 @@ import { fireEvent, render } from '@testing-library/react-native';
 
 const mockPush = jest.fn();
 let mockMinorMode = false;
+let mockSearchParams: Record<string, string> = {};
 
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
+  useLocalSearchParams: () => mockSearchParams,
   useRouter: () => ({
     push: mockPush,
     canGoBack: jest.fn().mockReturnValue(true),
@@ -44,6 +46,7 @@ describe('Parental Controls settings', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockMinorMode = false;
+    mockSearchParams = {};
   });
 
   it('states that v1 age review is device-only and does not imply family governance', () => {
@@ -74,5 +77,43 @@ describe('Parental Controls settings', () => {
       ),
     ).toBeTruthy();
     expect(getByText('Device age settings only')).toBeTruthy();
+  });
+
+  it('is titled Parental Controls when opened from the Parental Controls row', () => {
+    const { getByText } = render(<ParentalControlsScreen />);
+
+    expect(getByText('Parental Controls')).toBeTruthy();
+  });
+
+  it('carries the Age entry through the device age review so the title survives the round trip', () => {
+    mockSearchParams = { entry: 'age' };
+    const { getByRole } = render(<ParentalControlsScreen />);
+
+    fireEvent.press(getByRole('button', { name: 'Review Device Age Settings' }));
+
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/(public)/age-gate',
+      params: { returnTo: '/(app)/settings/parental-controls', entry: 'age' },
+    });
+  });
+
+  it('does not carry an entry it does not know through the device age review', () => {
+    mockSearchParams = { entry: 'elsewhere' };
+    const { getByRole } = render(<ParentalControlsScreen />);
+
+    fireEvent.press(getByRole('button', { name: 'Review Device Age Settings' }));
+
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/(public)/age-gate',
+      params: { returnTo: '/(app)/settings/parental-controls' },
+    });
+  });
+
+  it('is titled Age when opened from the Age row, so the header says what the row said', () => {
+    mockSearchParams = { entry: 'age' };
+    const { getByText, queryByText } = render(<ParentalControlsScreen />);
+
+    expect(getByText('Age')).toBeTruthy();
+    expect(queryByText('Parental Controls')).toBeNull();
   });
 });

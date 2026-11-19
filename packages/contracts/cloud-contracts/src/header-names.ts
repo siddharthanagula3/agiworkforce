@@ -19,6 +19,9 @@ export const IDEMPOTENCY_KEY_HEADER = 'idempotency-key';
 /** Which sync exchange the caller speaks, read against the floor in `sync`. */
 export const SYNC_PROTOCOL_VERSION_HEADER = 'x-agi-sync-protocol';
 
+/** The optional behaviours this build can handle, read with `hasClientCapability`. */
+export const CLIENT_CAPABILITIES_REQUEST_HEADER = 'x-agi-client-capabilities';
+
 export const MAX_REQUEST_ID_LENGTH = 128;
 
 const REQUEST_ID_PATTERN = new RegExp(`^[A-Za-z0-9._~-]{1,${MAX_REQUEST_ID_LENGTH}}$`, 'u');

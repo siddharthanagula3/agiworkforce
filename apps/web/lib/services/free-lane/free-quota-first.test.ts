@@ -566,6 +566,7 @@ describe('a Free Auto turn the free quota lane takes first', () => {
       inputTokens: 12,
       outputTokens: 3,
       truncated: false,
+      finishReason: 'stop',
     });
   });
 

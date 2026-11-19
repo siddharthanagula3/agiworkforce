@@ -25,6 +25,11 @@
           "path": "packages/platform/object-storage/src/__tests__/fake-s3-endpoint.ts",
           "owner": false,
           "reason": "stands in for the real S3 endpoint in adapter tests and needs the SDK's request types to shape the fake responses."
+        },
+        {
+          "path": "packages/platform/object-storage/src/__tests__/s3-adapter.test.ts",
+          "owner": false,
+          "reason": "verifies the SDK client the adapter builds, so it sends the SDK's own copy command through that client to count its retries and cut-offs at the deadline."
         }
       ]
     },

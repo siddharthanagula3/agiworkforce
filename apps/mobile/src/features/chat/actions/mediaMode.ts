@@ -107,9 +107,17 @@ export function mediaModelIdForMode(mode: MediaMode): string | null {
   return mode === 'text' ? null : resolveMediaModelId(mode);
 }
 
-export function enterMediaMode(kind: MediaKind): boolean {
+export function canEnterMediaMode(kind: MediaKind): boolean {
   if (kind === 'video' && !FEATURES.videoGen) return false;
-  if (!resolveMediaModelId(kind)) return false;
+  return resolveMediaModelId(kind) !== null;
+}
+
+export function canCreateImages(): boolean {
+  return FEATURES.imageGen && canEnterMediaMode('image');
+}
+
+export function enterMediaMode(kind: MediaKind): boolean {
+  if (!canEnterMediaMode(kind)) return false;
   useChatViewStore.getState().setMediaMode(kind);
   return true;
 }

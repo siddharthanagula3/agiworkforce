@@ -49,6 +49,14 @@ describe('ArtifactCreatingRow', () => {
     expect(creatingArtifactLabel('jsx', '// @artifact\n')).toBe('Creating artifact.jsx');
   });
 
+  it('never names a table after its header row', () => {
+    const table = 'Fruit name,Price\napple,1\npear,2';
+    expect(creatingArtifactLabel('csv', table)).toMatch(/^Creating artifact\.\w+$/);
+    expect(creatingArtifactLabel('tsv', table.replace(/,/g, '\t'))).toMatch(
+      /^Creating artifact\.\w+$/,
+    );
+  });
+
   it('shows the live line count and time, and opens the code being written on click', () => {
     vi.useFakeTimers();
     const onShow = vi.fn();

@@ -1,5 +1,6 @@
 import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useRecyclingState } from '@shopify/flash-list';
 import { TextInput, View } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import {
@@ -19,7 +20,8 @@ import {
   Telescope,
   X,
 } from 'lucide-react-native';
-import type { ResearchStep } from '@agiworkforce/types';
+import type { ResearchRunConfig, ResearchStep } from '@agiworkforce/types';
+import { researchAnswersGuidance } from '@agiworkforce/unified-chat/research-plan';
 import { Text } from '@/components/ui/Text';
 import { radii, useThemeColors, type ColorScheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
@@ -31,16 +33,112 @@ import {
   type ResearchRunState,
 } from '@/src/features/chat/utils/researchRunState';
 import { ResearchPlanOptions } from './ResearchPlanOptions';
+import { useRevealFocusedField } from '../cards/ChatScrollIntoView';
 import {
   defaultResearchPlanChoices,
   type ResearchPlanChoices,
 } from '@/src/features/chat/utils/researchPlanChoices';
 
 export type ResearchPlanDecision =
-  'cancel' | { steps?: ResearchStep[]; choices: ResearchPlanChoices };
+  'cancel' | { steps?: ResearchStep[]; choices: ResearchPlanChoices; answers?: string };
 
 const MAX_PLAN_STEPS = 6;
 const MAX_STEP_CHARS = 300;
+const QUESTIONS_HEADING = 'Before I search';
+const QUESTIONS_HINT = 'Answer what you can; anything left blank is skipped.';
+
+function planChoicesFor(runConfig: ResearchRunConfig | undefined): ResearchPlanChoices {
+  if (!runConfig) return defaultResearchPlanChoices();
+  const { sources, deliverable } = runConfig;
+  return {
+    deliverable: { ...deliverable },
+    sources: {
+      files: sources.files,
+      allowDomains: [...sources.allowDomains],
+      denyDomains: [...sources.denyDomains],
+      connectors: [...sources.connectors],
+    },
+  };
+}
+
+function PlanQuestionField({
+  question,
+  value,
+  onChangeText,
+}: {
+  question: string;
+  value: string;
+  onChangeText: (text: string) => void;
+}) {
+  const colors = useThemeColors();
+  const container = useRef<View>(null);
+  const revealOnFocus = useRevealFocusedField(container, 'end');
+  return (
+    <View ref={container} collapsable={false} style={{ gap: 4 }}>
+      <Text style={{ fontSize: typeScale.caption, lineHeight: 17, color: colors.textPrimary }}>
+        {question}
+      </Text>
+      <TextInput
+        value={value}
+        onChangeText={onChangeText}
+        onFocus={revealOnFocus.onFocus}
+        onBlur={revealOnFocus.onBlur}
+        onContentSizeChange={revealOnFocus.onContentSizeChange}
+        maxLength={MAX_STEP_CHARS}
+        multiline
+        accessibilityLabel={question}
+        style={{
+          fontSize: typeScale.caption,
+          lineHeight: 17,
+          color: colors.textPrimary,
+          borderWidth: 1,
+          borderColor: colors.border,
+          borderRadius: radii.md,
+          paddingHorizontal: 8,
+          paddingVertical: 6,
+        }}
+      />
+    </View>
+  );
+}
+
+function PlanQuestions({
+  questions,
+  answers,
+  onChange,
+}: {
+  questions: readonly string[];
+  answers: readonly string[];
+  onChange: (answers: string[]) => void;
+}) {
+  const colors = useThemeColors();
+  const answer = (index: number, text: string) =>
+    onChange(
+      questions.map((_, position) => (position === index ? text : (answers[position] ?? ''))),
+    );
+  return (
+    <View
+      testID="research-plan-questions"
+      style={{ borderTopWidth: 1, borderTopColor: colors.borderLight, paddingTop: 6, gap: 6 }}
+    >
+      <Text
+        accessibilityRole="header"
+        style={{ fontSize: typeScale.caption, fontWeight: '600', color: colors.textPrimary }}
+      >
+        {QUESTIONS_HEADING}
+      </Text>
+      <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>{QUESTIONS_HINT}</Text>
+      {questions.map((question, index) => (
+        <PlanQuestionField
+          key={question}
+          question={question}
+          value={answers[index] ?? ''}
+          onChangeText={(text) => answer(index, text)}
+        />
+      ))}
+    </View>
+  );
+}
 
 const STEP_STATUS_LABELS: Record<ResearchStep['status'], string> = {
   pending: 'Queued',
@@ -163,6 +261,7 @@ function ActionButton({
       accessibilityLabel={label}
       accessibilityState={{ disabled: disabled === true }}
       testID={testID}
+      hitSlop={{ top: 6, bottom: 6 }}
       style={({ pressed }) => ({
         minHeight: 32,
         paddingHorizontal: 12,
@@ -188,6 +287,62 @@ function ActionButton({
         {label}
       </Text>
     </PressableBox>
+  );
+}
+
+function PlanStepField({
+  step,
+  index,
+  onEdit,
+  onRemove,
+}: {
+  step: ResearchStep;
+  index: number;
+  onEdit: (description: string) => void;
+  onRemove: () => void;
+}) {
+  const colors = useThemeColors();
+  const row = useRef<View>(null);
+  const revealOnFocus = useRevealFocusedField(row, 'end');
+  return (
+    <View
+      ref={row}
+      collapsable={false}
+      style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
+    >
+      <TextInput
+        value={step.description}
+        onChangeText={onEdit}
+        onFocus={revealOnFocus.onFocus}
+        onBlur={revealOnFocus.onBlur}
+        onContentSizeChange={revealOnFocus.onContentSizeChange}
+        maxLength={MAX_STEP_CHARS}
+        multiline
+        accessibilityLabel={`Step ${index + 1}`}
+        placeholder="Describe what to search"
+        placeholderTextColor={colors.textMuted}
+        style={{
+          flex: 1,
+          fontSize: typeScale.caption,
+          lineHeight: 17,
+          color: colors.textPrimary,
+          borderWidth: 1,
+          borderColor: colors.border,
+          borderRadius: radii.md,
+          paddingHorizontal: 8,
+          paddingVertical: 6,
+        }}
+      />
+      <PressableBox
+        onPress={onRemove}
+        accessibilityRole="button"
+        accessibilityLabel={`Remove step ${index + 1}`}
+        hitSlop={8}
+        style={{ minWidth: 32, minHeight: 32, alignItems: 'center', justifyContent: 'center' }}
+      >
+        <X size={14} color={colors.textMuted} />
+      </PressableBox>
+    </View>
   );
 }
 
@@ -222,37 +377,13 @@ function PlanEditor({
         Edit any step before it runs. Only these steps are searched.
       </Text>
       {steps.map((step, index) => (
-        <View key={step.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <TextInput
-            value={step.description}
-            onChangeText={(text) => edit(step.id, text)}
-            maxLength={MAX_STEP_CHARS}
-            multiline
-            accessibilityLabel={`Step ${index + 1}`}
-            placeholder="Describe what to search"
-            placeholderTextColor={colors.textMuted}
-            style={{
-              flex: 1,
-              fontSize: typeScale.caption,
-              lineHeight: 17,
-              color: colors.textPrimary,
-              borderWidth: 1,
-              borderColor: colors.border,
-              borderRadius: radii.md,
-              paddingHorizontal: 8,
-              paddingVertical: 6,
-            }}
-          />
-          <PressableBox
-            onPress={() => remove(step.id)}
-            accessibilityRole="button"
-            accessibilityLabel={`Remove step ${index + 1}`}
-            hitSlop={8}
-            style={{ minWidth: 32, minHeight: 32, alignItems: 'center', justifyContent: 'center' }}
-          >
-            <X size={14} color={colors.textMuted} />
-          </PressableBox>
-        </View>
+        <PlanStepField
+          key={step.id}
+          step={step}
+          index={index}
+          onEdit={(text) => edit(step.id, text)}
+          onRemove={() => remove(step.id)}
+        />
       ))}
       {steps.length < MAX_PLAN_STEPS ? (
         <ActionButton
@@ -268,6 +399,7 @@ function PlanEditor({
 
 interface ResearchRunCardProps {
   research: ResearchRunState;
+  messageId?: string;
   isStreaming: boolean;
   isResuming?: boolean;
   onPlanDecision?: (decision: ResearchPlanDecision) => void;
@@ -278,6 +410,7 @@ interface ResearchRunCardProps {
 
 export function ResearchRunCard({
   research,
+  messageId,
   isStreaming,
   isResuming = false,
   onPlanDecision,
@@ -287,9 +420,14 @@ export function ResearchRunCard({
 }: ResearchRunCardProps) {
   const colors = useThemeColors();
   const active = isStreaming && isResearchRunActive(research);
-  const [pauseRequested, setPauseRequested] = useState(false);
-  const [draftSteps, setDraftSteps] = useState<ResearchStep[] | null>(null);
-  const [choices, setChoices] = useState<ResearchPlanChoices>(defaultResearchPlanChoices);
+  const runKey = messageId ?? research.startedAt;
+  const [pauseRequested, setPauseRequested] = useRecyclingState(false, [runKey]);
+  const [draftSteps, setDraftSteps] = useRecyclingState<ResearchStep[] | null>(null, [runKey]);
+  const [choices, setChoices] = useRecyclingState<ResearchPlanChoices>(
+    () => planChoicesFor(research.runConfig),
+    [runKey],
+  );
+  const [answers, setAnswers] = useRecyclingState<string[]>([], [runKey]);
 
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
@@ -315,6 +453,7 @@ export function ResearchRunCard({
   const counts = researchCountsSummary(research);
   const steps = research.steps ?? [];
   const gaps = research.gaps ?? [];
+  const questions = research.questions ?? [];
   const canDecide = Boolean(onPlanDecision) && awaitingApproval && !isStreaming;
   const canRetry = Boolean(onRetry) && (failed || interrupted || paused) && !isStreaming;
   const canRunAgain = Boolean(onRetry) && complete && !isStreaming;
@@ -419,8 +558,13 @@ export function ResearchRunCard({
         </View>
       ) : null}
 
+      {canDecide && questions.length > 0 ? (
+        <PlanQuestions questions={questions} answers={answers} onChange={setAnswers} />
+      ) : null}
       {canDecide ? <PlanEditor steps={editedSteps} onChange={setDraftSteps} /> : null}
-      {canDecide ? <ResearchPlanOptions choices={choices} onChange={setChoices} /> : null}
+      {canDecide ? (
+        <ResearchPlanOptions key={runKey} choices={choices} onChange={setChoices} />
+      ) : null}
 
       {gaps.length > 0 ? (
         <View
@@ -477,9 +621,11 @@ export function ResearchRunCard({
                 icon={Play}
                 emphasis
                 disabled={isResuming || !planReady}
-                onPress={() =>
+                onPress={() => {
+                  const guidance = researchAnswersGuidance(questions, answers);
                   onPlanDecision?.({
                     choices,
+                    ...(guidance ? { answers: guidance } : {}),
                     ...(draftSteps === null
                       ? {}
                       : {
@@ -487,8 +633,8 @@ export function ResearchRunCard({
                             .map((step) => ({ ...step, description: step.description.trim() }))
                             .filter((step) => step.description !== ''),
                         }),
-                  })
-                }
+                  });
+                }}
                 testID="research-plan-approve"
               />
               <ActionButton

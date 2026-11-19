@@ -62,13 +62,15 @@ describe('Local chat persistence when the app is killed mid-reply', () => {
     expect(saved[1]?.metadata?.finishReason).toBe('stopped');
   });
 
-  it('drops a streaming reply that has no text yet', () => {
+  it('keeps a streaming reply that has no text yet as stopped, so Try again is offered', () => {
     const saved = persistedMessages([
       { id: 'u1', role: 'user', content: 'Hello' } as ChatMessage,
       { id: 'a1', role: 'assistant', content: '', isStreaming: true } as ChatMessage,
     ]);
 
-    expect(saved.map((message) => message.id)).toEqual(['u1']);
+    expect(saved.map((message) => message.id)).toEqual(['u1', 'a1']);
+    expect(saved[1]?.isStreaming).toBe(false);
+    expect(saved[1]?.metadata?.finishReason).toBe('stopped');
   });
 });
 

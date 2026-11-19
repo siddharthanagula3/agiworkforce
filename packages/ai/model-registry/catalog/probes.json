@@ -78,6 +78,14 @@
       "toolOutcome": "honoured",
       "toolDetail": null
     },
+    "gemini-4-argon": {
+      "routeId": "google/gemini-4-argon",
+      "probedOn": "2026-11-16",
+      "outcome": "no_credential",
+      "ttfbMs": null,
+      "echoedModelId": null,
+      "detail": "no value for GOOGLE_API_KEY"
+    },
     "glm-5.3": {
       "routeId": "zhipu/glm-5.3",
       "probedOn": "2026-09-12",

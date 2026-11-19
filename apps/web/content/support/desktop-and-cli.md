@@ -5,7 +5,7 @@ path: /cli
 category: surfaces
 tags: desktop, cli, terminal, install, download, macos, windows, linux, agi install, command line
 platforms: desktop, cli, macos, windows, linux
-updated: 2026-11-10
+updated: 2026-11-16
 description: How to check availability before installing, and how the desktop app and the CLI reach managed cloud.
 scope: public
 ---
@@ -34,6 +34,11 @@ and platform requirements.
 
 ## Managed cloud from developer surfaces
 
-For managed-cloud setup, use the guide for the client you are installing and
-review the current [plan details](https://agiworkforce.com/pricing). Keep account
-sign-in separate from provider-key setup.
+For managed-cloud setup, use the guide for the client you are installing. Keep
+account sign-in separate from provider-key setup.
+
+{{#purchase}}
+
+Review the current [plan details](https://agiworkforce.com/pricing).
+
+{{/purchase}}

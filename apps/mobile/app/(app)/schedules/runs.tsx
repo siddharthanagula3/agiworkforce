@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   CheckCircle2,
   Clock,
+  Flag,
   Loader,
   ShieldQuestion,
   XCircle,
@@ -24,8 +25,21 @@ import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
+import { HEADER_TEXT_SCALE_LIMIT } from '@/src/features/chat/components/WorkModeSwitch';
+import { FULL_SCREEN_TOUCH_TARGET } from '@/src/features/chat/chrome/fullScreenChrome';
+import { ReportSheet, type ReportTarget } from '@/src/features/chat/components/ReportFlagButton';
 
 const END_REACHED_THRESHOLD = 0.4;
+const REPORT_THIS_RUN = 'Report this run';
+
+function recentRunReportTarget(run: RecentScheduleRun, summary: string): ReportTarget {
+  return {
+    messageId: `schedule-run:${run.id}`,
+    conversationId: `schedule:${run.scheduleId}`,
+    contentExcerpt: summary,
+    subject: { kind: 'schedule-run', id: run.id },
+  };
+}
 
 function formatRunStart(iso: string): string {
   const date = new Date(iso);
@@ -132,7 +146,7 @@ export default function ScheduledRunsScreen() {
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
-      <View className="h-12 flex-row items-center px-3">
+      <View testID="schedule-runs-header" className="min-h-12 flex-row items-center px-3">
         <PressableBox
           onPress={handleBack}
           className="p-2 rounded-lg active:bg-white/5"
@@ -141,14 +155,15 @@ export default function ScheduledRunsScreen() {
         >
           <ArrowLeft size={20} color={colors.textSecondary} />
         </PressableBox>
-        <View
-          pointerEvents="none"
-          style={{ position: 'absolute', left: 0, right: 0, alignItems: 'center' }}
+        <Text
+          variant="subheading"
+          accessibilityRole="header"
+          maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
+          style={{ flex: 1, textAlign: 'center' }}
         >
-          <Text variant="subheading" accessibilityRole="header">
-            Scheduled runs
-          </Text>
-        </View>
+          Scheduled runs
+        </Text>
+        <View style={{ width: 36, height: 36 }} />
       </View>
 
       {initialLoad ? (
@@ -265,43 +280,73 @@ function RunRow({
           : colors.textMuted;
   const label = statusLabel(run.status);
   const started = formatRunStart(run.startedAt);
+  const summary = run.summary?.trim() ? run.summary : null;
+  const [reporting, setReporting] = useState(false);
 
   return (
-    <PressableBox
-      onPress={() => onPress(run.scheduleId)}
-      className="rounded-xl px-4 py-3 active:opacity-80"
+    <View
+      className="flex-row items-end rounded-xl"
       style={{ backgroundColor: colors.surfaceOverlay }}
-      accessibilityRole="button"
-      accessibilityLabel={`${run.scheduleName}, ${label}${started ? `, ${started}` : ''}`}
-      accessibilityHint="Opens this scheduled task"
     >
-      <View className="flex-row items-center gap-2">
-        <StatusIcon size={16} color={tone} />
-        <Text
-          className="flex-1 font-semibold"
-          numberOfLines={1}
-          style={{ color: colors.textPrimary }}
+      <PressableBox
+        onPress={() => onPress(run.scheduleId)}
+        className="flex-1 px-4 py-3 active:opacity-80"
+        accessibilityRole="button"
+        accessibilityLabel={`${run.scheduleName}, ${label}${started ? `, ${started}` : ''}`}
+        accessibilityHint="Opens this scheduled task"
+      >
+        <View className="flex-row items-center gap-2">
+          <StatusIcon size={16} color={tone} />
+          <Text
+            className="flex-1 font-semibold"
+            numberOfLines={1}
+            style={{ color: colors.textPrimary }}
+          >
+            {run.scheduleName}
+          </Text>
+          <Text className="text-sm" style={{ color: tone }}>
+            {label}
+          </Text>
+        </View>
+        {started ? (
+          <Text className="mt-1 text-sm" style={{ color: colors.textMuted }}>
+            {started}
+          </Text>
+        ) : null}
+        {run.summary ? (
+          <Text
+            className="mt-1 text-sm leading-5"
+            numberOfLines={2}
+            style={{ color: colors.textSecondary }}
+          >
+            {run.summary}
+          </Text>
+        ) : null}
+      </PressableBox>
+      {summary ? (
+        <PressableBox
+          testID={`recent-run-report-${run.id}`}
+          onPress={() => setReporting(true)}
+          accessibilityRole="button"
+          accessibilityLabel={REPORT_THIS_RUN}
+          style={{
+            width: FULL_SCREEN_TOUCH_TARGET,
+            height: FULL_SCREEN_TOUCH_TARGET,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
         >
-          {run.scheduleName}
-        </Text>
-        <Text className="text-sm" style={{ color: tone }}>
-          {label}
-        </Text>
-      </View>
-      {started ? (
-        <Text className="mt-1 text-sm" style={{ color: colors.textMuted }}>
-          {started}
-        </Text>
+          <Flag size={14} color={colors.textMuted} />
+        </PressableBox>
       ) : null}
-      {run.summary ? (
-        <Text
-          className="mt-1 text-sm leading-5"
-          numberOfLines={2}
-          style={{ color: colors.textSecondary }}
-        >
-          {run.summary}
-        </Text>
+      {summary && reporting ? (
+        <ReportSheet
+          visible
+          onClose={() => setReporting(false)}
+          title={REPORT_THIS_RUN}
+          target={recentRunReportTarget(run, summary)}
+        />
       ) : null}
-    </PressableBox>
+    </View>
   );
 }

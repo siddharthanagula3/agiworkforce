@@ -7,6 +7,11 @@ const mockCloudCodeApi = {
   create: jest.fn(),
 };
 
+jest.mock('@/lib/v1FeatureFlags', () => {
+  const actual = jest.requireActual('@/lib/v1FeatureFlags');
+  return { FEATURES: { ...actual.FEATURES, companion: true, dispatch: true } };
+});
+
 jest.mock('@/src/features/cloud-code/service', () => ({
   get cloudCodeApi() {
     return mockCloudCodeApi;

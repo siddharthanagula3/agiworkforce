@@ -86,6 +86,13 @@ describe('clarify card helpers', () => {
     ).toBe('The user declined the clarifying questions without answering.');
     expect(settledClarifyTurn([clarify({})])).toBeNull();
   });
+
+  it('leaves the card response path to the cloud contract', () => {
+    const clarifyCardModule = jest.requireActual<Record<string, unknown>>(
+      '@/src/features/chat/utils/clarifyCard',
+    );
+    expect(clarifyCardModule).not.toHaveProperty('INTERACTIVE_CARD_RESPONSE_PATH');
+  });
 });
 
 describe('AGI Work plan helpers', () => {
