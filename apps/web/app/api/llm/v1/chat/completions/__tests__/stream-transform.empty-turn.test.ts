@@ -39,7 +39,6 @@ vi.mock('@/lib/services/llm-cost-calculator', async (importOriginal) => ({
 }));
 vi.mock('@/lib/cost-tracker', async (importOriginal) => ({
   ...(await importOriginal<ScanModule4>()),
-  recordModelUsage: vi.fn(),
   toOtelAttributes: vi.fn(() => ({})),
 }));
 vi.mock('@/lib/services/free-trial-service', async (importOriginal) => ({

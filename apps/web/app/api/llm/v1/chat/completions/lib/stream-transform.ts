@@ -5,7 +5,7 @@ import { logger } from '@/lib/logger';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { buildServingRouteId } from './tool-loop-anthropic';
 import { getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
-import { recordModelUsage, toOtelAttributes } from '@/lib/cost-tracker';
+import { toOtelAttributes } from '@/lib/cost-tracker';
 import { buildCpstUsageFields } from '@/lib/cpst-telemetry';
 import { addFallbackReasonHeader, addModelEscalationHeaders } from '@/lib/chat-fallback-reason';
 import { addSecretRedactionNoticeHeader } from '@/lib/chat-secret-redaction-notice';
@@ -893,7 +893,6 @@ export async function buildAdapterStreamResponse(
           cacheCreationInputTokens: usage.cacheCreationInputTokens,
           cacheCreation1hInputTokens: usage.cacheCreation1hInputTokens,
         };
-        recordModelUsage(userId, modelUsed, usageForTracking, new Date());
         logger.info(
           {
             event: 'gen_ai_usage_recorded',

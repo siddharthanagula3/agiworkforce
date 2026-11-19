@@ -3,7 +3,7 @@ import { addAttachmentTruncationHeader } from '@agiworkforce/cloud-contracts';
 import { toolStatusPhrase } from '@agiworkforce/provider-protocol';
 import { logger } from '@/lib/logger';
 import { getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
-import { recordModelUsage, toOtelAttributes } from '@/lib/cost-tracker';
+import { toOtelAttributes } from '@/lib/cost-tracker';
 import { buildCpstUsageFields } from '@/lib/cpst-telemetry';
 import { addFallbackReasonHeader, addModelEscalationHeaders } from '@/lib/chat-fallback-reason';
 import { addSecretRedactionNoticeHeader } from '@/lib/chat-secret-redaction-notice';
@@ -514,7 +514,6 @@ export async function buildStreamResponse(
           cacheCreationInputTokens,
           cacheCreation1hInputTokens,
         };
-        recordModelUsage(userId, modelUsed, usage, new Date());
         logger.info(
           {
             event: 'gen_ai_usage_recorded',

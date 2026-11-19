@@ -36,7 +36,6 @@ vi.mock('@/lib/prompt-cache-helper', async (importOriginal) => ({
 }));
 vi.mock('@/lib/cost-tracker', async (importOriginal) => ({
   ...(await importOriginal<ScanModule4>()),
-  recordModelUsage: vi.fn(),
   toOtelAttributes: () => ({}),
 }));
 vi.mock('@/lib/services/free-lane/runtime-state-service', async (importOriginal) => ({
