@@ -7,6 +7,8 @@ import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 type McpExecutorModule = typeof import('@/lib/mcp-tool-executor');
 type SecurityAuditModule = typeof import('@/lib/security-audit');
 
+type ToolAccessPolicyModule = typeof import('@/lib/server/tool-access-policy');
+
 vi.mock('@/lib/security-audit', async (importOriginal) => ({
   ...(await importOriginal<SecurityAuditModule>()),
   recordAuditEvent: vi.fn().mockResolvedValue(undefined),
@@ -27,6 +29,14 @@ vi.mock('@/lib/mcp-tool-executor', async () => {
   const actual = await vi.importActual<McpExecutorModule>('@/lib/mcp-tool-executor');
   return { ...actual, executeWebMcpTool: vi.fn(), getWebMcpCatalog: vi.fn() };
 });
+
+const toolAccess = vi.hoisted(() => ({
+  resolve: vi.fn(async (): Promise<'auto' | 'on_demand' | 'always'> => 'auto'),
+}));
+vi.mock('@/lib/server/tool-access-policy', async (importOriginal) => ({
+  ...(await importOriginal<ToolAccessPolicyModule>()),
+  resolveToolAccessMode: (...args: unknown[]) => toolAccess.resolve(...(args as [])),
+}));
 
 import {
   runToolLoop,
@@ -209,6 +219,82 @@ function resumeCursor(checkpoint: ToolLoopApprovalCheckpoint) {
 
 beforeEach(() => {
   mockBuildToolLoopStream.mockReset();
+  toolAccess.resolve.mockReset().mockResolvedValue('auto');
+});
+
+describe("the account's tool access choice shapes the schemas a turn carries", () => {
+  const answer = () => sseStreamFrom([chunk({ content: 'Done.' }), chunk({}, 'stop')]);
+  const runWith = async (userId: string | undefined) => {
+    mockBuildToolLoopStream.mockResolvedValueOnce(answer());
+    await drain(
+      runToolLoop(makeProcessed('read the pull request diff for me'), {
+        approvalMode: 'auto',
+        mcpTools: connectorToolDefs(),
+        ...(userId ? { userId } : {}),
+      }),
+    );
+    return offeredNames(0);
+  };
+
+  it('keeps Auto as the relevance-ranked selection', async () => {
+    const offered = await runWith('tool-access-user');
+    expect(toolAccess.resolve).toHaveBeenCalledTimes(1);
+    expect(offered).toContain(PULL_REQUEST_TOOL);
+    expect(offered).not.toContain(SLACK_TOOL);
+    expect(offered).toContain(TOOL_DIRECTORY_TOOL_NAME);
+  });
+
+  it('sends no connector schema up front On demand and offers the directory', async () => {
+    toolAccess.resolve.mockResolvedValue('on_demand');
+    const offered = await runWith('tool-access-user');
+    for (const name of [PULL_REQUEST_TOOL, SLACK_TOOL, JIRA_TOOL]) {
+      expect(offered).not.toContain(name);
+    }
+    expect(offered).toContain(TOOL_DIRECTORY_TOOL_NAME);
+  });
+
+  it('sends every permitted connector schema Always, with no directory', async () => {
+    toolAccess.resolve.mockResolvedValue('always');
+    const offered = await runWith('tool-access-user');
+    expect(offered).toEqual(expect.arrayContaining([PULL_REQUEST_TOOL, SLACK_TOOL, JIRA_TOOL]));
+    expect(offered).not.toContain(TOOL_DIRECTORY_TOOL_NAME);
+  });
+
+  it('never sends a denied tool, even Always', async () => {
+    toolAccess.resolve.mockResolvedValue('always');
+    mockBuildToolLoopStream.mockResolvedValueOnce(answer());
+    await drain(
+      runToolLoop(makeProcessed('read the pull request diff for me'), {
+        approvalMode: 'auto',
+        mcpTools: connectorToolDefs(),
+        userId: 'tool-access-user',
+        connectorPermissions: connectorToolPermissionsFromEntries([
+          { connectorId: 'slack', toolName: 'post_channel_message', level: 'deny' },
+        ]),
+      }),
+    );
+    expect(offeredNames(0)).not.toContain(SLACK_TOOL);
+    expect(offeredNames(0)).toContain(JIRA_TOOL);
+  });
+
+  it('does not read the account when the turn has no connector tools', async () => {
+    mockBuildToolLoopStream.mockResolvedValueOnce(answer());
+    await drain(
+      runToolLoop(makeProcessed('hello'), {
+        approvalMode: 'auto',
+        mcpTools: [],
+        userId: 'tool-access-user',
+      }),
+    );
+    expect(toolAccess.resolve).not.toHaveBeenCalled();
+  });
+
+  it('uses Auto without an account to read', async () => {
+    const offered = await runWith(undefined);
+    expect(toolAccess.resolve).not.toHaveBeenCalled();
+    expect(offered).toContain(PULL_REQUEST_TOOL);
+    expect(offered).not.toContain(SLACK_TOOL);
+  });
 });
 
 describe('connector tool schemas are loaded against a budget, not sent whole', () => {

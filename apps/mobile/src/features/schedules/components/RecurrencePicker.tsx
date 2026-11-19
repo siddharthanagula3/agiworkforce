@@ -183,6 +183,7 @@ export function RecurrencePicker({
               const selected = daysOfWeek.includes(idx);
               return (
                 <PressableBox
+                  hitSlop={4}
                   key={idx}
                   onPress={() => handleDayToggle(idx)}
                   className={`w-9 h-9 rounded-full items-center justify-center ${
@@ -218,6 +219,7 @@ export function RecurrencePicker({
               const selected = dayOfMonth === day;
               return (
                 <PressableBox
+                  hitSlop={4}
                   key={day}
                   onPress={() => handleDayOfMonthChange(day)}
                   className={`w-9 h-9 rounded-lg items-center justify-center ${

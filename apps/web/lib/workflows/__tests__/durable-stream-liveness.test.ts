@@ -198,13 +198,14 @@ describe('durable first-event budget', () => {
   });
 
   it('spends the budget once, then bypasses the durable attempt for the cooldown', async () => {
+    const beforeSpend = Date.now();
     await claimDurableStreamWithinBudget(neverEmits(), TINY_BUDGET_MS);
-    const now = Date.now();
+    const afterSpend = Date.now();
     await expect(
-      isDurableFirstEventBudgetCoolingDown(now + DURABLE_STALL_COOLDOWN_MS - 1),
+      isDurableFirstEventBudgetCoolingDown(beforeSpend + DURABLE_STALL_COOLDOWN_MS - 1),
     ).resolves.toBe(true);
     await expect(
-      isDurableFirstEventBudgetCoolingDown(now + DURABLE_STALL_COOLDOWN_MS),
+      isDurableFirstEventBudgetCoolingDown(afterSpend + DURABLE_STALL_COOLDOWN_MS),
     ).resolves.toBe(false);
   });
 

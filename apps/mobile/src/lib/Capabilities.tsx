@@ -4,12 +4,15 @@ import { PressableBox } from '@/components/ui/PressableBox';
 import { create } from 'zustand';
 import {
   ALL_PLATFORM_CAPABILITIES,
+  describeCapabilityDenial,
   getPlatformCapabilities,
   isCapabilityEnabled as matrixIsCapabilityEnabled,
   resolveCapabilityDocumentDecision,
+  type CapabilityDenialReason,
   type PlatformCapability,
   type SyncedAppSurface,
 } from '@agiworkforce/types';
+import { NATIVE_PURCHASES_AVAILABLE } from '@/src/features/billing/nativePurchaseAvailability';
 import { useTierStore } from '@/src/features/billing/store';
 import { parseMeResponse } from '@agiworkforce/cloud-contracts';
 import { api } from '@/services/api';
@@ -130,24 +133,69 @@ export function useCapability(capability: PlatformCapability): boolean {
     : matrixIsCapabilityEnabled(platform, capability) && !switchedOff;
 }
 
+const SWITCHED_OFF_REASON: CapabilityDenialReason = 'temporarily_unavailable';
+
+/**
+ * Why a capability is closed, or null when it is open. A plan that leaves a
+ * capability out and an operator switch that pauses it both close it, and the
+ * reader is owed the true one: a plan limit shown as an outage reads as a
+ * broken feature.
+ */
+export function useCapabilityDenialReason(
+  capability: PlatformCapability,
+): CapabilityDenialReason | null {
+  const platform = useContext(CapabilityContext);
+  const document = useTierStore((state) => state.capabilityDocument);
+  const switchedOff = useRemoteCapabilityStore((state) => state.switchedOff[capability] === true);
+  const decision = resolveCapabilityDocumentDecision(document, capability);
+  if (decision) return decision.allowed ? null : (decision.reason ?? SWITCHED_OFF_REASON);
+  if (!matrixIsCapabilityEnabled(platform, capability)) return 'unsupported_by_surface';
+  return switchedOff ? SWITCHED_OFF_REASON : null;
+}
+
 export const CAPABILITY_SWITCHED_OFF_BODY =
   'It’s paused while we fix an issue and will come back without an update.';
 
+const PURCHASE_REMEDY_REASONS: ReadonlySet<CapabilityDenialReason> = new Set([
+  'requires_upgrade',
+  'entitlement_missing',
+  'quota_exceeded',
+  'payment_required',
+]);
+
+function unavailableCopy(
+  label: string,
+  reason: CapabilityDenialReason | null | undefined,
+): { title: string; body: string } {
+  if (!reason || reason === SWITCHED_OFF_REASON) {
+    return { title: `${label} is unavailable right now`, body: CAPABILITY_SWITCHED_OFF_BODY };
+  }
+  const copy = describeCapabilityDenial(reason);
+  const namesAPurchase = PURCHASE_REMEDY_REASONS.has(reason) && !NATIVE_PURCHASES_AVAILABLE;
+  return {
+    title: copy.title,
+    body: namesAPurchase ? copy.message : `${copy.message} ${copy.suggestion}`,
+  };
+}
+
 export function CapabilityUnavailable({
   label,
+  reason,
   onDismiss,
   dismissLabel = 'Go back',
 }: {
   label: string;
+  reason?: CapabilityDenialReason | null;
   onDismiss?: () => void;
   dismissLabel?: string;
 }) {
   const c = useThemeColors();
   const styles = useMemo(() => createUnavailableStyles(c), [c]);
+  const copy = unavailableCopy(label, reason);
   return (
     <View style={styles.container} testID="capability.unavailable">
-      <Text style={styles.title}>{label} is unavailable right now</Text>
-      <Text style={styles.body}>{CAPABILITY_SWITCHED_OFF_BODY}</Text>
+      <Text style={styles.title}>{copy.title}</Text>
+      <Text style={styles.body}>{copy.body}</Text>
       {onDismiss ? (
         <PressableBox
           onPress={onDismiss}

@@ -231,6 +231,71 @@ describe('getPublicSharedSessionByToken', () => {
     expect(issued).toHaveLength(1);
   });
 
+  it('serves assistant text without citation markup and every other message as stored', async () => {
+    const markup = '\uE200cite\uE202turn0search0\uE201';
+    const messages = [
+      { role: 'user', content: `Typed ${markup} text` },
+      { role: 'assistant', content: `Answer.${markup}` },
+      { role: 'assistant', content: [{ type: 'text', text: `Parts${markup}` }] },
+      null,
+      'not a message',
+    ];
+    const { db } = makeDb(() => [sessionRow({ visibility: 'public', messages })]);
+
+    const session = await getPublicSharedSessionByToken(db, TOKEN);
+
+    expect(session?.messages).toEqual([
+      messages[0],
+      { role: 'assistant', content: 'Answer.' },
+      messages[2],
+      null,
+      'not a message',
+    ]);
+  });
+
+  it('serves assistant artifact text without citation markup and leaves other artifact shapes as stored', async () => {
+    const markup = '\uE200cite\uE202turn0search0\uE201';
+    const userArtifacts = [{ id: 'u', content: `Mine ${markup}` }];
+    const messages = [
+      { role: 'user', content: 'Hi', artifacts: userArtifacts },
+      {
+        role: 'assistant',
+        content: 'Done.',
+        artifacts: [
+          { id: 'a', title: 'Doc', content: `Draft${markup} text` },
+          { id: 'b', content: 42 },
+          null,
+        ],
+      },
+      { role: 'assistant', content: 'No list.', artifacts: 'none' },
+    ];
+    const { db } = makeDb(() => [sessionRow({ visibility: 'public', messages })]);
+
+    const session = await getPublicSharedSessionByToken(db, TOKEN);
+
+    expect(session?.messages).toEqual([
+      messages[0],
+      {
+        role: 'assistant',
+        content: 'Done.',
+        artifacts: [
+          { id: 'a', title: 'Doc', content: 'Draft text' },
+          { id: 'b', content: 42 },
+          null,
+        ],
+      },
+      messages[2],
+    ]);
+  });
+
+  it('passes a messages column that is not an array through unchanged', async () => {
+    const { db } = makeDb(() => [sessionRow({ visibility: 'public', messages: null })]);
+
+    await expect(getPublicSharedSessionByToken(db, TOKEN)).resolves.toMatchObject({
+      messages: null,
+    });
+  });
+
   it('never issues a statement for a malformed token', async () => {
     const { db, issued } = makeDb(() => [sessionRow()]);
 

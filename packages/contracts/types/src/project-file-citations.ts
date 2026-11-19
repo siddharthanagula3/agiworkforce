@@ -113,3 +113,53 @@ export function dedupeProjectFileCitations(
   }
   return [...byKey.values()];
 }
+
+export const PROJECT_FILE_CITATION_FILE_PARAM = 'knowledgeFile';
+export const PROJECT_FILE_CITATION_PAGE_PARAM = 'page';
+
+export interface ProjectFileCitationTarget {
+  projectId: string;
+  fileId: string;
+  page?: number;
+}
+
+export function projectFileCitationTarget(
+  citation: ProjectFileCitation,
+): ProjectFileCitationTarget | undefined {
+  if (!citation.projectId || !citation.fileId) return undefined;
+  const page = citation.anchor?.page;
+  return {
+    projectId: citation.projectId,
+    fileId: citation.fileId,
+    ...(typeof page === 'number' ? { page } : {}),
+  };
+}
+
+export function projectFileCitationHref(citation: ProjectFileCitation): string | undefined {
+  const target = projectFileCitationTarget(citation);
+  if (!target) return undefined;
+  const params = new URLSearchParams({
+    [PROJECT_FILE_CITATION_FILE_PARAM]: target.fileId,
+    ...(target.page !== undefined
+      ? { [PROJECT_FILE_CITATION_PAGE_PARAM]: String(target.page) }
+      : {}),
+  });
+  return `/chat/projects/${encodeURIComponent(target.projectId)}?${params.toString()}`;
+}
+
+// The passage the answer named leads, so the chip a reader wants is first even
+// when one long file contributed a run of adjacent pages.
+export function orderProjectFileCitationsByAnswer(
+  citations: readonly ProjectFileCitation[],
+  answerText: string,
+): readonly ProjectFileCitation[] {
+  if (!answerText) return citations;
+  const named = (citation: ProjectFileCitation): boolean => {
+    const location = formatProjectFileAnchor(citation.anchor);
+    return Boolean(location && answerText.includes(location));
+  };
+  const cited = citations.filter(named);
+  return cited.length === 0 || cited.length === citations.length
+    ? citations
+    : [...cited, ...citations.filter((citation) => !named(citation))];
+}

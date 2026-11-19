@@ -4,6 +4,7 @@ import { MarketingFooter } from '@/features/marketing/components/MarketingFooter
 import '../docs.css';
 import { docsNavGroups, docsSearchLinks } from '../lib/docs-nav';
 import { DocsNavigation } from './DocsNavigation';
+import { DocsShellFrame } from './DocsShellFrame';
 import { DocsToc, type DocsTocItem } from './DocsToc';
 
 export function DocsShell({
@@ -18,13 +19,14 @@ export function DocsShell({
   return (
     <div data-design="agi" className="dx">
       <Header />
-      <div className="dx-shell">
-        <DocsNavigation groups={groups} searchLinks={docsSearchLinks()} />
+      <DocsShellFrame
+        navigation={<DocsNavigation groups={groups} searchLinks={docsSearchLinks()} />}
+      >
         <main id="main-content" tabIndex={-1} className="dx-main" data-wide={!hasToc}>
           {hasToc ? <DocsToc items={toc} /> : null}
           <div className="dx-body">{children}</div>
         </main>
-      </div>
+      </DocsShellFrame>
       <MarketingFooter />
     </div>
   );

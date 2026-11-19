@@ -26,6 +26,14 @@ const MOBILE_SETTINGS_FILE = path.join(
   'settings',
   'index.tsx',
 );
+const MOBILE_SCREEN_TITLES_FILE = path.join(
+  APPS_DIR,
+  'mobile',
+  'src',
+  'features',
+  'settings',
+  'screenTitles.ts',
+);
 const EXTENSION_OPTIONS_FILE = path.join(
   APPS_DIR,
   'extension',
@@ -85,6 +93,21 @@ function sourceItems(file: string, pattern: RegExp): MenuItem[] {
   }));
 }
 
+function mobileItems(file: string, titlesFile: string): MenuItem[] {
+  const titles = new Map(
+    [...readFileSync(titlesFile, 'utf8').matchAll(/export const (\w+) = '([^']+)'/gu)].map(
+      (match) => [match[1] ?? '', match[2] ?? ''] as const,
+    ),
+  );
+  return [
+    ...sourceItems(file, /\blabel:\s*'([^']+)'/gu),
+    ...sourceItems(file, /\blabel:\s*([A-Z][A-Z0-9_]*_SCREEN_TITLE)\b/gu).map((item) => ({
+      group: undefined,
+      label: titles.get(item.label) ?? item.label,
+    })),
+  ];
+}
+
 function extensionItems(file: string, messagesFile: string): MenuItem[] {
   const messages = JSON.parse(readFileSync(messagesFile, 'utf8')) as Record<
     string,
@@ -99,7 +122,7 @@ function extensionItems(file: string, messagesFile: string): MenuItem[] {
 const MENU_ITEMS: Readonly<Record<SettingsMenu, readonly MenuItem[]>> = {
   web: navItems(WEB_SETTINGS_NAV_GROUPS),
   desktop: navItems(HOSTED_SETTINGS_NAV_GROUPS),
-  mobile: sourceItems(MOBILE_SETTINGS_FILE, /\blabel:\s*'([^']+)'/gu),
+  mobile: mobileItems(MOBILE_SETTINGS_FILE, MOBILE_SCREEN_TITLES_FILE),
   chrome: extensionItems(EXTENSION_OPTIONS_FILE, EXTENSION_MESSAGES_FILE),
 };
 

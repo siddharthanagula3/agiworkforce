@@ -172,14 +172,24 @@ import {
   expandDeferredToolSchemas,
   selectToolSchemas,
   toolDirectoryToolDef,
+  toolSchemaBudgetFor,
   TOOL_DIRECTORY_TOOL_NAME,
 } from './tool-schema-loader';
+import { toolShortlistShadowInput } from './tool-shortlist-shadow';
+import { scheduleToolShortlistShadow } from '@/lib/services/semantic-decisions/consumers/tool-shortlist';
+import { resolveToolAccessMode } from '@/lib/server/tool-access-policy';
+import { DEFAULT_TOOL_ACCESS_MODE, type ToolAccessMode } from '@/lib/tool-access-mode';
 import {
   createToolSchemaState,
   ToolSchemaStateSchema,
   type ToolSchemaState,
 } from './tool-schema-state';
-import { stageTurnAttachments, type TurnAttachment } from '@/lib/e2b/attachment-staging';
+import {
+  stageStorageFiles,
+  stageTurnAttachments,
+  storageNotStagedNote,
+  type TurnAttachment,
+} from '@/lib/e2b/attachment-staging';
 import { researchDomainAllowed, type ResearchDomainPolicy } from './research-sources';
 import {
   STORED_RESULT_NOTICE_MARKER,
@@ -225,6 +235,7 @@ import {
   DEFAULT_CHAT_TOOL_MAX_STEPS,
   DEFAULT_WORK_TOOL_MAX_STEPS,
   DEFAULT_CALLER_TOOL_MAX_STEPS,
+  DECLINED_WEB_SEARCH_ANSWER,
   HostedCallerToolBatchSchema,
   DEVICE_SCREENSHOT_MESSAGE_PREFIX,
   MANAGED_OFFICE_FILE_TOOL_NAME,
@@ -273,6 +284,7 @@ import {
 import {
   createToolTurnGovernor,
   emptyToolCapabilityEvidence,
+  repeatedFailedCallMessage,
   repeatedQueryMessage,
   resolveToolCapabilityObservation,
   resolveTurnToolCallCap,
@@ -282,7 +294,7 @@ import {
 } from './tool-turn-governor';
 import { prohibitedToolResultMessage, turnProhibitsTool } from './turn-tool-prohibition';
 import { turnWithholdsTool, withheldToolResultMessage } from './turn-tool-offer';
-import { displaySourceSnippet } from '@/lib/sources/display-snippet';
+import { displaySourceSnippet } from '@agiworkforce/unified-chat/message-sources';
 import { resolveNativeSearchMaxUses } from './request-processor';
 import { e2bCutoverEnabled } from '@/lib/e2b/gate';
 import { managedCloudE2BSessionScope, type E2BSessionScope } from '@/lib/e2b/session-store';
@@ -434,7 +446,16 @@ import {
   isManagedOfficeFileTool,
 } from '@/lib/services/managed-office-file-service';
 import { searchToolsByKeyword } from '@/lib/connectors/tool-search';
-import { executeFileTool, isFileSearchTool } from '@/lib/server/tools/file-search-tool';
+import {
+  OPEN_FILE_TOOL_NAME,
+  SEARCH_FILES_TOOL_NAME,
+  executeFileTool,
+  isFileSearchTool,
+  type FileReadingBudget,
+  type LargeFileToolTurn,
+} from '@/lib/server/tools/file-search-tool';
+import { applyAttachmentTurnStep, createStepReadingBudget } from './attachment-turn-budget';
+import { resolveLargeFileStorageFiles } from './prepared-attachments';
 import { executeScheduleTool, isScheduleTool } from '@/lib/server/tools/schedule-tool';
 import { executePluginDraftTool, isPluginDraftTool } from '@/lib/server/tools/plugin-draft-tool';
 import {
@@ -444,7 +465,12 @@ import {
   SAVE_MEMORY_TOOL_NAME,
 } from '@/lib/server/tools/memory-tools';
 import { isSensitiveDataToolName } from '@/lib/connectors/sensitive-data-connectors';
-import { executeMapSearchTool, isMapSearchTool } from '@/lib/services/map-search-tool-service';
+import {
+  executeMapSearchTool,
+  isMapSearchNoPlacesResult,
+  isMapSearchTool,
+  MAP_SEARCH_TOOL_NAME,
+} from '@/lib/services/map-search-tool-service';
 import { buildPlacesCard } from '@/lib/places/places-card';
 import {
   executePlacesSearch,
@@ -1594,6 +1620,7 @@ function toolResultsToTrim(
   const truncatable = toolIdx.slice(0, Math.max(0, toolIdx.length - keepRecent));
   for (const i of truncatable) {
     if (total <= maxChars) break;
+    if (isTurnLongToolResult(messages[i]?.content)) continue;
     const before = len(i);
     const replacement = replacementFor(messages[i]!, i);
     if (before <= replacement.length) continue;
@@ -1891,6 +1918,7 @@ export interface CollectedProviderLine {
 export async function collectProviderStream(
   stream: ReadableStream,
   onLine?: (entry: CollectedProviderLine) => void,
+  turnToolCallIds: ReadonlySet<string> = new Set(),
 ): Promise<{
   lines: CollectedProviderLine[];
   providerError?: ProviderStreamError;
@@ -1917,6 +1945,35 @@ export async function collectProviderStream(
   const generatedFileRefs = new Map<string, GeneratedFileRef>();
 
   const toolCallAccum: Map<number, { id: string; name: string; argsJson: string }> = new Map();
+  const seenToolCallIds = new Set<string>(turnToolCallIds);
+  const outboundToolCallIds = new Map<number, { provided: string; outbound: string }>();
+  /**
+   * A provider can name a call with an id the turn already used, in this step
+   * or an earlier one. Clients and the next request match calls by id, so a
+   * reused one is renamed in the line that is forwarded and in the call.
+   */
+  const renameReusedToolCallIds = (toolCallDeltas: unknown[]): boolean => {
+    let renamed = false;
+    for (const tc of toolCallDeltas) {
+      if (typeof tc !== 'object' || tc === null) continue;
+      const tcObj = tc as Record<string, unknown>;
+      const provided = tcObj['id'];
+      if (typeof provided !== 'string' || !provided) continue;
+      const idx = typeof tcObj['index'] === 'number' ? tcObj['index'] : 0;
+      let assigned = outboundToolCallIds.get(idx);
+      if (assigned?.provided !== provided) {
+        const outbound = seenToolCallIds.has(provided) ? crypto.randomUUID() : provided;
+        seenToolCallIds.add(outbound);
+        assigned = { provided, outbound };
+        outboundToolCallIds.set(idx, assigned);
+      }
+      if (assigned.outbound !== provided) {
+        tcObj['id'] = assigned.outbound;
+        renamed = true;
+      }
+    }
+    return renamed;
+  };
   const pendingServerWebSearchTools: Array<{
     toolCallId: string;
     providerToolUseId?: string;
@@ -2028,6 +2085,7 @@ export async function collectProviderStream(
         // failure in its own words once the step has ended.
         const streamErrorDelta = event?.choices?.[0]?.delta?.x_stream_error;
         const toolCallDeltas: unknown[] | undefined = event?.choices?.[0]?.delta?.tool_calls;
+        const renamed = Array.isArray(toolCallDeltas) && renameReusedToolCallIds(toolCallDeltas);
         if (streamErrorDelta && typeof streamErrorDelta === 'object') {
           const errorObj = streamErrorDelta as Record<string, unknown>;
           providerError = {
@@ -2044,7 +2102,7 @@ export async function collectProviderStream(
           };
         } else {
           pushLine({
-            line: raw + '\n\n',
+            line: renamed ? `data: ${JSON.stringify(event)}\n\n` : raw + '\n\n',
             publicTextDelta,
             reasoningDelta,
             toolCallDelta: Array.isArray(toolCallDeltas) && toolCallDeltas.length > 0,
@@ -2105,7 +2163,7 @@ export async function collectProviderStream(
   }
 
   const pendingToolCalls: PendingToolCall[] = [];
-  const seenToolCallIds = new Set<string>();
+  const stepToolCallIds = new Set<string>(turnToolCallIds);
   for (const [, tc] of toolCallAccum) {
     if (!tc.name) continue;
     if (pendingToolCalls.length >= MAX_TOOL_CALLS_PER_STEP) break;
@@ -2118,8 +2176,8 @@ export async function collectProviderStream(
       argsMalformed = true;
     }
     let id = tc.id || crypto.randomUUID();
-    if (seenToolCallIds.has(id)) id = crypto.randomUUID();
-    seenToolCallIds.add(id);
+    if (stepToolCallIds.has(id)) id = crypto.randomUUID();
+    stepToolCallIds.add(id);
     pendingToolCalls.push({
       id,
       qualifiedName: tc.name,
@@ -2146,6 +2204,8 @@ const NATIVE_SEARCH_CAP_ROW_SUMMARY = 'Search limit reached';
 const AGIWORK_PLAN_REVIEW_NOTE =
   'Here is the plan. Review it, edit any step, then start the work, or cancel it.';
 const GOOGLE_GROUNDING_PROVIDER = 'google';
+
+const DECLINED_ACTION_ANSWER = 'You declined the action, so I did not run it.';
 
 const MAX_TOOL_ERROR_CHARS = 4_000;
 const DELIVERED_TEXT_TAIL_CHARS = 64;
@@ -2220,6 +2280,20 @@ function callerScopedDb(
     { userId, organizationId: executionContext?.organizationId ?? null },
     { signal },
   );
+}
+
+async function accountToolAccessMode(
+  userId: string | undefined,
+  organizationId: string | null,
+  signal?: AbortSignal,
+): Promise<ToolAccessMode> {
+  if (!userId) return DEFAULT_TOOL_ACCESS_MODE;
+  try {
+    return await resolveToolAccessMode(callerScopedDb({ organizationId }, userId, signal), userId);
+  } catch (error) {
+    logger.warn({ error }, '[tool-loop] tool access preference adapter unavailable');
+    return DEFAULT_TOOL_ACCESS_MODE;
+  }
 }
 
 function googleHostedServerIdsOf(tools: readonly WebMcpToolDef[]): ReadonlySet<string> {
@@ -2328,6 +2402,7 @@ async function runMcpTool(
     googleUserDataRouted?: boolean;
     healthSpaceProjectId?: string | null;
     latestUserMessage?: string;
+    largeFileTurn?: LargeFileToolTurn;
   },
 ): Promise<ToolLoopToolResult> {
   executionContext?.signal?.throwIfAborted();
@@ -2442,6 +2517,7 @@ async function runMcpTool(
       healthSpaceProjectId: executionContext.healthSpaceProjectId ?? null,
       conversationId: executionContext.conversationId ?? null,
       googleUserDataRouted: executionContext.googleUserDataRouted === true,
+      ...(executionContext.largeFileTurn ? { largeFileTurn: executionContext.largeFileTurn } : {}),
     });
   }
 
@@ -3084,7 +3160,64 @@ export function isToolOffered(
   return mcpTools.some((t) => t.qualifiedName === qualifiedName);
 }
 
-const TOOL_DENIED_MESSAGE = 'The user denied permission to run this tool.';
+const TOOL_DENIED_MESSAGE =
+  'The user denied permission to run this tool. It did not run and is closed for the rest ' +
+  'of this turn, so do not ask for it again: answer without it, and say plainly what you ' +
+  'could not do.';
+
+const TOOL_DENIED_WITH_GUIDANCE_MESSAGE =
+  'The user denied permission to run this tool, so it did not run. Follow what the user ' +
+  'says next instead.';
+
+function isTurnLongToolResult(content: unknown): boolean {
+  return (
+    content === TOOL_DENIED_MESSAGE ||
+    content === TOOL_DENIED_WITH_GUIDANCE_MESSAGE ||
+    isMapSearchNoPlacesResult(content)
+  );
+}
+
+function toolNamesWithResult(
+  messages: ReadonlyArray<{
+    role: string;
+    content?: unknown;
+    tool_calls?: unknown[];
+    tool_call_id?: string;
+  }>,
+  matches: (content: unknown) => boolean,
+): Set<string> {
+  const matchingCallIds = new Set<string>();
+  for (const message of messages) {
+    if (message.role === 'tool' && matches(message.content) && message.tool_call_id) {
+      matchingCallIds.add(message.tool_call_id);
+    }
+  }
+  const names = new Set<string>();
+  if (matchingCallIds.size === 0) return names;
+  for (const message of messages) {
+    for (const call of message.tool_calls ?? []) {
+      const { id, function: fn } = (call ?? {}) as { id?: unknown; function?: { name?: unknown } };
+      if (typeof id === 'string' && matchingCallIds.has(id) && typeof fn?.name === 'string') {
+        names.add(fn.name);
+      }
+    }
+  }
+  return names;
+}
+
+export function toolCallIdsIn(
+  messages: ReadonlyArray<{ tool_calls?: unknown[]; tool_call_id?: string }>,
+): Set<string> {
+  const ids = new Set<string>();
+  for (const message of messages) {
+    if (message.tool_call_id) ids.add(message.tool_call_id);
+    for (const call of message.tool_calls ?? []) {
+      const id = (call as { id?: unknown } | null)?.id;
+      if (typeof id === 'string' && id) ids.add(id);
+    }
+  }
+  return ids;
+}
 
 function createLiveLineQueue<T>(): {
   push: (item: T) => void;
@@ -3794,13 +3927,32 @@ export async function* runToolLoop(
   // Schemas are admitted against a byte budget rather than sent whole, so the
   // prompt payload stays bounded as the connected count grows. Nothing is
   // hidden: what is left out is listed on TOOL_DIRECTORY_TOOL_NAME.
+  const toolAccessMode =
+    schemaTools.length > 0
+      ? await accountToolAccessMode(
+          options.userId,
+          processed.organizationId ?? null,
+          options.signal,
+        )
+      : DEFAULT_TOOL_ACCESS_MODE;
   const toolSchemaSelection = selectToolSchemas({
     tools: schemaTools,
     turnText: lastUserTurnText(processed.chatRequest?.messages),
     pinnedQualifiedNames: restoredSchemaState.success
       ? restoredSchemaState.data.loadedQualifiedNames.filter((name) => currentSchemaNames.has(name))
       : [],
+    budget: toolSchemaBudgetFor(toolAccessMode),
   });
+  if (processed.decisionScope && schemaTools.length > 0) {
+    scheduleToolShortlistShadow(
+      toolShortlistShadowInput({
+        scope: processed.decisionScope,
+        tools: schemaTools,
+        turnText: () => lastUserTurnText(processed.chatRequest?.messages),
+        budget: toolSchemaBudgetFor(toolAccessMode),
+      }),
+    );
+  }
   const loadedToolNames = new Set(toolSchemaSelection.tools.map((tool) => tool.qualifiedName));
   processed.toolSchemaState = createToolSchemaState(loadedToolNames);
   let deferredToolSchemas = toolSchemaSelection.deferred;
@@ -3921,6 +4073,15 @@ export async function* runToolLoop(
   const observedUsage = options.usage ?? createObservedProviderUsage();
 
   const messages: ProcessedRequest['llmRequest']['messages'] = [...llmRequest.messages];
+  const declinedTools = toolNamesWithResult(messages, (content) => content === TOOL_DENIED_MESSAGE);
+  const toolsDeclinedThisTurn = new Set([
+    ...declinedTools,
+    ...toolNamesWithResult(messages, (content) => content === TOOL_DENIED_WITH_GUIDANCE_MESSAGE),
+  ]);
+  let declinedWithNothingRunSince = false;
+  let mapSearchFoundNoPlaces = toolNamesWithResult(messages, isMapSearchNoPlacesResult).has(
+    MAP_SEARCH_TOOL_NAME,
+  );
   const storedResultsNotice = earlierToolResultsNotice(earlierStoredResults);
   if (storedResultsNotice) {
     placeTurnSystemNotices(messages, [storedResultsNotice]);
@@ -4050,6 +4211,7 @@ export async function* runToolLoop(
     (getModelMetadataById(processed.requestedModel)?.transientSameRouteRetries ?? 0) > 0;
   let servedRouteId: string | undefined;
   const toolCapabilityEvidence = emptyToolCapabilityEvidence();
+  let toolCapabilityObservationWithheld = false;
 
   async function runProviderStepWithFailover(
     step: number,
@@ -4132,31 +4294,35 @@ export async function* runToolLoop(
                 stepSink,
                 signal,
               );
-              return collectProviderStream(providerStream, (entry) => {
-                if (firstProviderLineAtMs === undefined) {
-                  firstProviderLineAtMs = now();
-                  markFirstToken();
-                }
-                if (holdLeadingLines) {
-                  if (heldLeadingChars + entry.line.length > MAX_RETRY_HELD_PROVIDER_CHARS) {
-                    releaseHeldLines();
-                  } else {
-                    heldLeadingLines.push(entry);
-                    heldLeadingChars += entry.line.length;
-                    if (
-                      entry.publicTextDelta?.trim() ||
-                      entry.toolCallDelta ||
-                      entry.serverToolStart ||
-                      (entry.serverToolResults?.length ?? 0) > 0 ||
-                      entry.searchActivity
-                    ) {
-                      releaseHeldLines();
-                    }
-                    return;
+              return collectProviderStream(
+                providerStream,
+                (entry) => {
+                  if (firstProviderLineAtMs === undefined) {
+                    firstProviderLineAtMs = now();
+                    markFirstToken();
                   }
-                }
-                releaseLine(entry);
-              });
+                  if (holdLeadingLines) {
+                    if (heldLeadingChars + entry.line.length > MAX_RETRY_HELD_PROVIDER_CHARS) {
+                      releaseHeldLines();
+                    } else {
+                      heldLeadingLines.push(entry);
+                      heldLeadingChars += entry.line.length;
+                      if (
+                        entry.publicTextDelta?.trim() ||
+                        entry.toolCallDelta ||
+                        entry.serverToolStart ||
+                        (entry.serverToolResults?.length ?? 0) > 0 ||
+                        entry.searchActivity
+                      ) {
+                        releaseHeldLines();
+                      }
+                      return;
+                    }
+                  }
+                  releaseLine(entry);
+                },
+                toolCallIdsIn([...messages, ...attemptRequest.messages]),
+              );
             },
             streamDeadlineMs,
             options.signal,
@@ -4577,6 +4743,8 @@ export async function* runToolLoop(
     .slice(0, WEB_SEARCH_MAX_QUERY_LENGTH)
     .trim();
   let searchObserved = false;
+  let searchInvoked = false;
+  let searchDeclined = false;
   let searchRetryUsed = false;
   let serverSearchWithoutSources = false;
   let serverSearchUnavailable = false;
@@ -4647,6 +4815,88 @@ export async function* runToolLoop(
       );
     }
   }
+  const largeFileTurn = processed.largeFileTurn;
+  let largeFileStagingNotes: string[] = [];
+  let stepReadingBudget: FileReadingBudget | null = largeFileTurn
+    ? createStepReadingBudget(largeFileTurn, largeFileTurn.stepAllowanceLeft ?? 0)
+    : null;
+  const withdrawFileReading = (): void => {
+    toolGovernor.withdraw(OPEN_FILE_TOOL_NAME, 'budget');
+    toolGovernor.withdraw(SEARCH_FILES_TOOL_NAME, 'budget');
+  };
+  if (largeFileTurn?.readingClosed) withdrawFileReading();
+  /**
+   * The ledger rewrites the attachment-derived content before each step and
+   * charges what it sends. The step processing already built is sent as is.
+   */
+  function applyLargeFileStep(): void {
+    if (!largeFileTurn) return;
+    const pending = largeFileTurn.pendingStepAllowance;
+    if (pending !== undefined) {
+      delete largeFileTurn.pendingStepAllowance;
+      if (largeFileTurn.readingClosed) withdrawFileReading();
+      stepReadingBudget = createStepReadingBudget(largeFileTurn, pending);
+      return;
+    }
+    const outcome = applyAttachmentTurnStep(messages, largeFileTurn);
+    if (!outcome.readingOpen) withdrawFileReading();
+    stepReadingBudget = createStepReadingBudget(largeFileTurn, outcome.resultsAllowanceTokens);
+  }
+  /**
+   * Large files reach the sandbox only when code runs, streamed from storage
+   * after the owner check is repeated on their ids, inside this invocation's
+   * deadline with the teardown reserve left for removing a failed copy.
+   */
+  async function stageLargeFilesForSandbox(executor: E2BExecutor): Promise<void> {
+    if (!largeFileTurn || largeFileTurn.assetIds.length === 0 || !options.userId) return;
+    const unnamed = (assetId: string) => `the file with id ${assetId}`;
+    let names = largeFileTurn.assetIds.map(unnamed);
+    let missingNotes: string[] = [];
+    try {
+      const owner = { userId: options.userId, organizationId: processed.organizationId ?? null };
+      const files = await resolveLargeFileStorageFiles(
+        callerScopedDb(owner, options.userId, options.signal),
+        owner,
+        largeFileTurn.assetIds,
+      );
+      const found = new Set(files.map((file) => file.assetId));
+      missingNotes = [...new Set(largeFileTurn.assetIds)]
+        .filter((assetId) => !found.has(assetId))
+        .map((assetId) => storageNotStagedNote(unnamed(assetId), 'not_in_storage'));
+      if (files.length === 0) {
+        largeFileStagingNotes = missingNotes;
+        return;
+      }
+      names = files.map((file) => file.filename);
+      const keys = new Set(files.map((file) => file.key));
+      const deadline = AbortSignal.timeout(Math.max(0, startedAt + maxDurationMs - now()));
+      const outcome = await stageStorageFiles(executor, files, {
+        signal: options.signal ? AbortSignal.any([options.signal, deadline]) : deadline,
+        isAllowedKey: (key) => keys.has(key),
+        removeTimeoutMs: FUNCTION_TEARDOWN_RESERVE_MS,
+      });
+      largeFileStagingNotes = [
+        ...outcome.staged.map((entry) => `[code sandbox: ${entry.filename} is at ${entry.path}]`),
+        ...outcome.notStaged.map((entry) => storageNotStagedNote(entry.filename, entry.reason)),
+        ...missingNotes,
+      ];
+    } catch (err) {
+      logger.warn({ err, conversationId }, '[tool-loop] large chat files could not be staged');
+      largeFileStagingNotes = [
+        ...names.map((name) => storageNotStagedNote(name, 'stream_failed')),
+        ...missingNotes,
+      ];
+    }
+  }
+  function withLargeFileStagingNotes(
+    qualifiedName: string,
+    result: ToolLoopToolResult,
+  ): ToolLoopToolResult {
+    if (!isExecutionTool(qualifiedName) || largeFileStagingNotes.length === 0) return result;
+    const notes = largeFileStagingNotes.join('\n');
+    largeFileStagingNotes = [];
+    return { ...result, content: `${notes}\n\n${result.content}` };
+  }
   const pendingSandboxFiles: SandboxSeedFile[] = [];
   async function flushSandboxSeedFiles(executor: E2BExecutor): Promise<void> {
     const files = pendingSandboxFiles.splice(0);
@@ -4667,6 +4917,7 @@ export async function* runToolLoop(
         });
         if (e2bExecutor) {
           await stageTurnAttachmentsForSandbox(e2bExecutor);
+          await stageLargeFilesForSandbox(e2bExecutor);
           await flushSandboxSeedFiles(e2bExecutor);
           // After staging, never before: the baseline is what tells a generated
           // file from one that was already there, so a baseline taken first
@@ -5008,7 +5259,8 @@ export async function* runToolLoop(
           model: servingProcessed.llmRequest.model,
           requestId: processed.requestId,
           search_required: true,
-          search_invoked: searchObserved,
+          search_invoked: searchInvoked,
+          search_declined: searchDeclined,
           search_required_source: processed.searchRequirement?.source,
           search_enforcement: processed.searchEnforcement?.mode,
           search_tool: processed.searchEnforcement?.attachedTool,
@@ -5088,12 +5340,17 @@ export async function* runToolLoop(
   }
 
   async function* finishNoResultSearch(): AsyncGenerator<Uint8Array> {
-    const answer = 'I searched the web, but found no results for that query.';
+    yield* finishWithNotice('I searched the web, but found no results for that query.');
+  }
+
+  async function* finishWithNotice(answer: string): AsyncGenerator<Uint8Array> {
     publicTextEmitted = true;
+    const text = paragraphBreakBetween(deliveredTextTail, answer) + answer;
+    deliveredTextTail = (deliveredTextTail + text).slice(-DELIVERED_TEXT_TAIL_CHARS);
     yield encoder.encode(
-      sseData({ choices: [{ index: 0, delta: { content: answer } }], model: responseModel }),
+      sseData({ choices: [{ index: 0, delta: { content: text } }], model: responseModel }),
     );
-    yield encoder.encode(eventStream.emit({ type: 'text-delta', delta: answer }));
+    yield encoder.encode(eventStream.emit({ type: 'text-delta', delta: text }));
     yield encoder.encode(
       sseData({ choices: [{ index: 0, delta: {}, finish_reason: 'stop' }], model: responseModel }),
     );
@@ -5106,7 +5363,7 @@ export async function* runToolLoop(
    * tool says nothing either way.
    */
   function recordToolCapabilityObservation(reason: AgentEventStopReason): void {
-    if (reason !== 'end-turn') return;
+    if (reason !== 'end-turn' || toolCapabilityObservationWithheld) return;
     if (searchRequired && !searchObserved) toolCapabilityEvidence.requiredToolsMissed += 1;
     if (executionRequirement.required && !executionToolCalled) {
       toolCapabilityEvidence.requiredToolsMissed += 1;
@@ -5130,7 +5387,10 @@ export async function* runToolLoop(
       resumeInput?: Map<string, ResumeInputResponse>;
     },
   ): AsyncGenerator<Uint8Array> {
-    if (calls.length > 0) processed.toolExecutionObserved = true;
+    if (calls.length > 0) {
+      processed.toolExecutionObserved = true;
+      declinedWithNothingRunSince = false;
+    }
     const readOnly = calls.filter((tc) => isReadOnlyTool(tc.qualifiedName));
     const mutating = calls.filter((tc) => !isReadOnlyTool(tc.qualifiedName));
     const servingHarnessId = getRegistryRoute(
@@ -5182,6 +5442,7 @@ export async function* runToolLoop(
     }
 
     const results: Array<{ tc: PendingToolCall } & ToolLoopToolResult> = [];
+    const callsNotRun = new Set<PendingToolCall>();
 
     const executeTool = (tc: PendingToolCall): Promise<ToolLoopToolResult> => {
       if (turnProhibitsTool(turnToolProhibition, tc.qualifiedName)) {
@@ -5201,6 +5462,7 @@ export async function* runToolLoop(
       const budget = toolGovernor.countCall();
       if (!budget.withinCap) {
         toolGovernor.withdraw(tc.qualifiedName, 'turn-cap');
+        callsNotRun.add(tc);
         return Promise.resolve({
           content: turnToolCapMessage(toolGovernor.cap),
           isError: false,
@@ -5208,8 +5470,9 @@ export async function* runToolLoop(
       }
       if (
         toolGovernor.isWithdrawn(tc.qualifiedName) ||
-        (mapSearchBatchCompleted && isMapSearchTool(tc.qualifiedName))
+        ((mapSearchBatchCompleted || mapSearchFoundNoPlaces) && isMapSearchTool(tc.qualifiedName))
       ) {
+        callsNotRun.add(tc);
         return Promise.resolve({
           content: withdrawnToolMessage(tc.qualifiedName),
           isError: false,
@@ -5247,6 +5510,7 @@ export async function* runToolLoop(
       }
       if (isWebSearchTool(tc.qualifiedName)) {
         searchObserved = true;
+        searchInvoked = true;
         webSearchCallsUsed += 1;
         if (webSearchCallsUsed > webSearchCallBudget) {
           toolGovernor.withdraw(tc.qualifiedName, 'budget');
@@ -5315,7 +5579,7 @@ export async function* runToolLoop(
           await settleSearchCall(searchCallOrdinal, admitted, searchSpend, callSpend);
         };
         try {
-          const result = await runMcpTool(
+          const ran = await runMcpTool(
             tc,
             resolveE2BExecutor,
             availableTools,
@@ -5363,8 +5627,18 @@ export async function* runToolLoop(
               healthSpaceProjectId: processed.healthSpaceProjectId ?? null,
               latestUserMessage: lastUserTurnText(processed.chatRequest?.messages),
               webSearchRequired: processed.searchRequirement?.required === true,
+              ...(largeFileTurn && stepReadingBudget
+                ? {
+                    largeFileTurn: {
+                      attachmentAssetIds: largeFileTurn.attachmentAssetIds,
+                      budget: stepReadingBudget,
+                      scannedPages: null,
+                    },
+                  }
+                : {}),
             },
           );
+          const result = withLargeFileStagingNotes(tc.qualifiedName, ran);
           if (!result.isError && isSensitiveDataToolName(tc.qualifiedName)) {
             sensitiveDataRead = true;
           }
@@ -5482,6 +5756,21 @@ export async function* runToolLoop(
         const name = functionToolName(tool);
         if (name && isExecutionTool(name)) toolGovernor.withdraw(name, 'unavailable');
       }
+    }
+
+    if (
+      results.some(
+        (r) => !r.isError && !callsNotRun.has(r.tc) && !isReadOnlyTool(r.tc.qualifiedName),
+      )
+    ) {
+      toolGovernor.forgetFailedCalls();
+    }
+    for (const r of results) {
+      if (!r.isError || r.unavailable || r.inputRequired) continue;
+      if (turnWithholdsTool(turnWithheldTools, r.tc.qualifiedName)) continue;
+      if (toolGovernor.noteFailedCall(r.tc.qualifiedName, r.tc.args) !== 'repeat') continue;
+      toolGovernor.withdraw(r.tc.qualifiedName, 'repeated-failure');
+      r.content = repeatedFailedCallMessage(r.tc.qualifiedName, r.content);
     }
 
     for (const r of results) {
@@ -5660,7 +5949,15 @@ export async function* runToolLoop(
           : {}),
       });
       if (!isError && interactiveCard && isMapSearchTool(tc.qualifiedName)) {
-        mapSearchBatchCompleted = true;
+        if (
+          interactiveCard.recognized &&
+          interactiveCard.kind === 'map-search.v1' &&
+          !interactiveCard.body.view
+        ) {
+          mapSearchFoundNoPlaces = true;
+        } else {
+          mapSearchBatchCompleted = true;
+        }
       }
       if (!isError && interactiveCard && isClarifyTool(tc.qualifiedName)) {
         clarifyTurnCompleted = true;
@@ -6156,11 +6453,17 @@ export async function* runToolLoop(
       }
 
       const toRun: PendingToolCall[] = [];
-      let requiredSearchCouldNotRun = false;
+      const settledOnResume = pending.filter(
+        (p) =>
+          !alreadyResolved.has(p.id) &&
+          !(callerContinuation && callerOwnedTools.has(p.qualifiedName)),
+      );
+      let requiredSearchCouldNotRun: 'declined' | 'unavailable' | null = null;
       function* finishUnexecutedResumeTool(
         call: PendingToolCall,
         content: string,
         legacyIsError: boolean,
+        declined = false,
       ): Generator<Uint8Array> {
         yield encoder.encode(
           toolResultEvent(call.id, call.qualifiedName, content, legacyIsError, responseModel),
@@ -6171,7 +6474,7 @@ export async function* runToolLoop(
             toolCallId: call.id,
             name: call.qualifiedName,
             output: toAgentEventJson(content),
-            isError: true,
+            isError: !declined,
             elapsedMs: 0,
           }),
         );
@@ -6259,7 +6562,7 @@ export async function* runToolLoop(
         }
         if (decision === 'approved' && connectorPermissions.isDenied(p.qualifiedName)) {
           if (searchRequired && isWebSearchTool(p.qualifiedName)) {
-            requiredSearchCouldNotRun = true;
+            requiredSearchCouldNotRun = 'unavailable';
           }
           logger.warn(
             { tool: p.qualifiedName, requestId: processed.requestId },
@@ -6278,7 +6581,7 @@ export async function* runToolLoop(
           toRun.push(p);
         } else if (decision === 'approved') {
           if (searchRequired && isWebSearchTool(p.qualifiedName)) {
-            requiredSearchCouldNotRun = true;
+            requiredSearchCouldNotRun = 'unavailable';
           }
           const content = await applyToolResultSecretPolicy(
             options.userId,
@@ -6288,18 +6591,29 @@ export async function* runToolLoop(
           yield* finishUnexecutedResumeTool(p, content, true);
         } else {
           if (searchRequired && isWebSearchTool(p.qualifiedName)) {
-            requiredSearchCouldNotRun = true;
+            requiredSearchCouldNotRun ??= decision ? 'declined' : 'unavailable';
           }
+          const guided = decision !== undefined && Boolean(options.resume.guidance?.trim());
           const content = await applyToolResultSecretPolicy(
             options.userId,
             p.qualifiedName,
-            TOOL_DENIED_MESSAGE,
+            guided ? TOOL_DENIED_WITH_GUIDANCE_MESSAGE : TOOL_DENIED_MESSAGE,
           );
-          yield* finishUnexecutedResumeTool(p, content, false);
+          if (!guided) declinedTools.add(p.qualifiedName);
+          if (decision !== undefined && !guided) declinedWithNothingRunSince = true;
+          toolsDeclinedThisTurn.add(p.qualifiedName);
+          yield* finishUnexecutedResumeTool(p, content, false, decision !== undefined);
         }
       }
 
-      if (requiredSearchCouldNotRun) {
+      if (requiredSearchCouldNotRun === 'declined') {
+        searchObserved = true;
+        searchDeclined = true;
+        if (toRun.length === 0 && !options.resume.guidance?.trim()) {
+          yield* finishWithNotice(DECLINED_WEB_SEARCH_ANSWER);
+          return;
+        }
+      } else if (requiredSearchCouldNotRun) {
         yield* failRequiredTool(
           'web_search_not_performed',
           'Web search was not approved or available, so this answer could not be verified.',
@@ -6336,6 +6650,16 @@ export async function* runToolLoop(
             'Web search returned no usable sources, so this answer could not be verified.',
             true,
           );
+          return;
+        }
+        if (
+          !options.resume.guidance?.trim() &&
+          toRun.length === settledOnResume.length &&
+          ((mapSearchBatchCompleted &&
+            toRun.every((call) => isMapSearchTool(call.qualifiedName))) ||
+            (clarifyTurnCompleted && toRun.every((call) => isClarifyTool(call.qualifiedName))))
+        ) {
+          yield* flushTerminal('end-turn');
           return;
         }
       }
@@ -6456,6 +6780,7 @@ export async function* runToolLoop(
           '[tool-loop] trimmed old tool-result history to fit the context window',
         );
       }
+      applyLargeFileStep();
 
       const stepMcpTools = offeredMcpToolDefs()
         .filter((tool) => !callerOwnedTools.has(tool.qualifiedName))
@@ -6473,10 +6798,22 @@ export async function* runToolLoop(
       // The tool list is part of the cached prompt prefix, so it stays the same
       // from step to step and a closed tool is refused when it is called. A
       // provider-run tool is the exception: nothing here sees its call to refuse.
+      // A tool the user declined also leaves, and so does a map search that
+      // found no places, since a model that still sees one asks for it again
+      // and every request puts another approval card up.
       const stepTools = turnTools?.filter(
-        (tool) => !nativeSearchToolName(tool) || !toolGovernor.isWithdrawn(offeredToolName(tool)),
+        (tool) =>
+          !declinedTools.has(offeredToolName(tool)) &&
+          !(mapSearchFoundNoPlaces && isMapSearchTool(offeredToolName(tool))) &&
+          (!nativeSearchToolName(tool) || !toolGovernor.isWithdrawn(offeredToolName(tool))),
       );
       if ((stepTools?.length ?? 0) > 0) toolCapabilityEvidence.toolsOffered = true;
+      const stepToolNames = new Set((stepTools ?? []).map(offeredToolName));
+      const forcesSpentTool = [
+        ...(turnTools ?? []).map(offeredToolName).filter((name) => !stepToolNames.has(name)),
+        ...toolsDeclinedThisTurn,
+        ...(mapSearchBatchCompleted || mapSearchFoundNoPlaces ? [MAP_SEARCH_TOOL_NAME] : []),
+      ].some((name) => isForcedToolChoiceFor(llmRequest.tool_choice, name));
       const stepRequest = {
         ...llmRequest,
         messages,
@@ -6499,9 +6836,13 @@ export async function* runToolLoop(
         ...(step > 1 &&
         processed.chatRequest?.tool_choice === undefined &&
         isForcedToolChoice(llmRequest.tool_choice) &&
-        toolGovernor.anyClosed()
+        (toolGovernor.anyClosed() || declinedTools.size > 0 || mapSearchFoundNoPlaces)
           ? { tool_choice: 'auto' as const }
           : {}),
+        // Whoever set it, a choice forcing a tool this step no longer offers is
+        // refused by providers, and one forcing a tool the user declined or that
+        // already ran asks for it again.
+        ...(forcesSpentTool ? { tool_choice: 'auto' as const } : {}),
         // A tool choice with no tools on offer is a request providers refuse.
         ...(stepTools && stepTools.length > 0 ? {} : { tool_choice: undefined }),
       };
@@ -6617,6 +6958,7 @@ export async function* runToolLoop(
           }
           if (providerLineShowsSearch(entry)) {
             searchObserved = true;
+            searchInvoked = true;
             processed.toolExecutionObserved = true;
           }
           if (stepNativeSearchTool) {
@@ -7009,6 +7351,11 @@ export async function* runToolLoop(
             },
             '[tool-loop] provider step ended with no assistant text, tool call, or artifact',
           );
+          if (classified.code === 'empty_response' && declinedWithNothingRunSince) {
+            toolCapabilityObservationWithheld = true;
+            yield* finishWithNotice(DECLINED_ACTION_ANSWER);
+            return;
+          }
           const mappedUpstream = mapClassifiedUpstreamError(classified, servingProcessed.provider, {
             requestedModel: processed.requestedModel,
             isolatedCredential: servedOnIsolatedPromotionCredential(servingProcessed),
@@ -7129,7 +7476,8 @@ export async function* runToolLoop(
         (tc) =>
           (!callerContinuation || !callerOwnedTools.has(tc.qualifiedName)) &&
           (turnProhibitsTool(turnToolProhibition, tc.qualifiedName) ||
-            turnWithholdsTool(turnWithheldTools, tc.qualifiedName)),
+            turnWithholdsTool(turnWithheldTools, tc.qualifiedName) ||
+            declinedTools.has(tc.qualifiedName)),
       );
       // A call to a tool this turn never offered has nothing to approve: the
       // model named a tool it saw earlier or invented one. Asking would put a
@@ -7138,7 +7486,8 @@ export async function* runToolLoop(
         (tc) =>
           (!callerContinuation || !callerOwnedTools.has(tc.qualifiedName)) &&
           !prohibitedCalls.includes(tc) &&
-          !toolOfferedThisTurn(tc.qualifiedName),
+          (!toolOfferedThisTurn(tc.qualifiedName) ||
+            (mapSearchFoundNoPlaces && isMapSearchTool(tc.qualifiedName))),
       );
       const gatedCalls = pendingToolCalls
         .filter((tc) => !callerContinuation || !callerOwnedTools.has(tc.qualifiedName))

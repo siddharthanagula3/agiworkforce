@@ -1,4 +1,5 @@
-import { act, renderHook } from '@testing-library/react';
+import { act, render, renderHook } from '@testing-library/react';
+import { memo } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { collectPendingApprovals } from '@/features/chat/components/approvals/ApprovalInbox';
@@ -8,8 +9,18 @@ import {
 } from '@/features/chat/lib/pending-approval';
 import { useFreeTrialStore } from '@/features/chat/stores/freeTrialStore';
 import { useToolPermissionsStore } from '@/features/connectors/stores/tool-permissions-store';
-import { useChatStream, __resetPendingTurnsForTests, isApprovalTurnLive } from './useChatStream';
-import { AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/cloud-contracts';
+import {
+  useChatStream,
+  __resetPendingTurnsForTests,
+  isApprovalTurnLive,
+  isInputTurnLive,
+  useToolApprovalResolver,
+  useToolInputResolver,
+} from './useChatStream';
+import {
+  AGENT_EVENT_SCHEMA_VERSION,
+  parseInteractiveCardDelta,
+} from '@agiworkforce/cloud-contracts';
 import { hasOpenApprovalDecision, settledActivityStatus } from '@agiworkforce/unified-chat';
 
 const authMocks = vi.hoisted(() => ({ getToken: vi.fn() }));
@@ -84,6 +95,38 @@ const approvalEvent = {
 
 function assistantMessage() {
   return useChatStore.getState().messages.find((m) => m.role === 'assistant');
+}
+
+const ApprovalLiveProbe = memo(function ApprovalLiveProbe({ messageId }: { messageId: string }) {
+  useToolApprovalResolver();
+  return <span data-testid="approval-live">{String(isApprovalTurnLive(messageId))}</span>;
+});
+
+const InputLiveProbe = memo(function InputLiveProbe({ messageId }: { messageId: string }) {
+  useToolInputResolver();
+  return <span data-testid="input-live">{String(isInputTurnLive(messageId))}</span>;
+});
+
+function holdNextFetch(): { signal: () => AbortSignal | undefined } {
+  let captured: AbortSignal | undefined;
+  vi.mocked(fetch).mockImplementationOnce((_url, init) => {
+    captured = (init as RequestInit | undefined)?.signal ?? undefined;
+    return new Promise<Response>((_resolve, reject) => {
+      captured?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
+    });
+  });
+  return { signal: () => captured };
+}
+
+function markContinuable(messageId: string) {
+  const message = useChatStore.getState().messages.find((m) => m.id === messageId)!;
+  useChatStore
+    .getState()
+    .updateMessage(
+      messageId,
+      { metadata: { ...message.metadata, finishReason: 'length' } },
+      TEMP_CONVERSATION.id,
+    );
 }
 
 function expectApprovalStateAfterDone(pending: boolean) {
@@ -707,6 +750,223 @@ describe('useChatStream, tool approval → resume', () => {
     expect(capturedSignal!.aborted).toBe(true);
   });
 
+  it.each([false, true])(
+    'ends an older paused approval as expired without aborting the newer reply being written (restored after a reload: %s)',
+    async (reloaded) => {
+      mockSseStream([approvalEvent]);
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.sendMessage('summarize PR 7', {
+          conversationId: TEMP_CONVERSATION.id,
+        });
+      });
+      const olderId = assistantMessage()!.id;
+      if (reloaded) __resetPendingTurnsForTests();
+      expect(isApprovalTurnLive(olderId)).toBe(true);
+
+      let replySignal: AbortSignal | undefined;
+      vi.mocked(fetch).mockImplementationOnce((_url, init) => {
+        replySignal = (init as RequestInit | undefined)?.signal ?? undefined;
+        return new Promise<Response>((_resolve, reject) => {
+          replySignal?.addEventListener('abort', () =>
+            reject(new DOMException('Aborted', 'AbortError')),
+          );
+        });
+      });
+      let reply: Promise<unknown> | undefined;
+      await act(async () => {
+        reply = result.current.sendMessage('now summarize PR 8', {
+          conversationId: TEMP_CONVERSATION.id,
+        });
+        await vi.waitFor(() => expect(replySignal).toBeDefined());
+      });
+      const fetchesBeforeDecision = vi.mocked(fetch).mock.calls.length;
+
+      await act(async () => {
+        await result.current.resolveToolApproval(olderId, 'call_1', 'approved');
+      });
+
+      expect(replySignal!.aborted).toBe(false);
+      expect(vi.mocked(fetch).mock.calls).toHaveLength(fetchesBeforeDecision);
+      expect(isApprovalTurnLive(olderId)).toBe(false);
+      const older = useChatStore.getState().messages.find((m) => m.id === olderId);
+      expect(older?.metadata?.tools?.find((t) => t.toolCallId === 'call_1')?.approved).toBe(
+        undefined,
+      );
+
+      await act(async () => {
+        result.current.stopGeneration();
+        await reply;
+      });
+    },
+  );
+
+  it.each([false, true])(
+    'ends the newest paused approval as expired, and shows it, while another message is being continued (restored after a reload: %s)',
+    async (reloaded) => {
+      mockSseStream([{ choices: [{ delta: { content: 'PR 6 renames a file' } }] }]);
+      const first = renderHook(() => useChatStream());
+      await act(async () => {
+        await first.result.current.sendMessage('summarize PR 6', {
+          conversationId: TEMP_CONVERSATION.id,
+        });
+      });
+      const continuedId = assistantMessage()!.id;
+      markContinuable(continuedId);
+      mockSseStream([approvalEvent]);
+      await act(async () => {
+        await first.result.current.sendMessage('summarize PR 7', {
+          conversationId: TEMP_CONVERSATION.id,
+        });
+      });
+      const thread = useChatStore.getState().messages;
+      const pausedId = thread[thread.length - 1]!.id;
+      expect(pausedId).not.toBe(continuedId);
+      first.unmount();
+      if (reloaded) __resetPendingTurnsForTests();
+      const { result } = renderHook(() => useChatStream());
+      const probe = render(<ApprovalLiveProbe messageId={pausedId} />);
+      expect(probe.getByTestId('approval-live').textContent).toBe('true');
+
+      const continuation = holdNextFetch();
+      let continuing: Promise<void> | undefined;
+      await act(async () => {
+        continuing = result.current.continueGeneration(continuedId, {
+          conversationId: TEMP_CONVERSATION.id,
+        });
+        await vi.waitFor(() => expect(continuation.signal()).toBeDefined());
+      });
+      const fetchesBeforeDecision = vi.mocked(fetch).mock.calls.length;
+
+      await act(async () => {
+        await result.current.resolveToolApproval(pausedId, 'call_1', 'approved');
+      });
+
+      expect(continuation.signal()!.aborted).toBe(false);
+      expect(vi.mocked(fetch).mock.calls).toHaveLength(fetchesBeforeDecision);
+      expect(isApprovalTurnLive(pausedId)).toBe(false);
+      expect(probe.getByTestId('approval-live').textContent).toBe('false');
+
+      probe.unmount();
+      await act(async () => {
+        result.current.stopGeneration();
+        await continuing;
+      });
+    },
+  );
+
+  it('leaves the newer reply running when an answered card on an older message would resume', async () => {
+    const answeredCard = parseInteractiveCardDelta({
+      card: {
+        schemaVersion: 1,
+        cardId: 'toolu_01abc',
+        kind: 'clarify.v1',
+        createdAt: '2026-06-05T10:00:00.000Z',
+        fallback: { headline: 'A question', text: 'Which pull request?' },
+        producedBy: { toolCallId: 'toolu_01abc', toolName: 'ask_clarifying_questions' },
+        body: {
+          questions: [
+            {
+              id: 'q1',
+              header: 'Pull request',
+              question: 'Which pull request?',
+              options: [
+                { id: 'o1', label: 'PR 7', description: 'Open' },
+                { id: 'o2', label: 'PR 8', description: 'Draft' },
+              ],
+              multiSelect: false,
+              isOther: true,
+              isSecret: false,
+            },
+          ],
+          state: {
+            status: 'answered',
+            answeredAt: '2026-06-05T10:05:00.000Z',
+            answers: [{ questionId: 'q1', kind: 'options', optionIds: ['o1'], labels: ['PR 7'] }],
+          },
+        },
+      },
+    });
+    expect(answeredCard).not.toBeNull();
+    mockSseStream([{ choices: [{ delta: { content: 'A question' } }] }]);
+    const first = renderHook(() => useChatStream());
+    await act(async () => {
+      await first.result.current.sendMessage('summarize a PR', {
+        conversationId: TEMP_CONVERSATION.id,
+      });
+    });
+    const cardMessage = assistantMessage()!;
+    useChatStore
+      .getState()
+      .updateMessage(
+        cardMessage.id,
+        { metadata: { ...cardMessage.metadata, interactiveCards: [answeredCard!] } },
+        TEMP_CONVERSATION.id,
+      );
+    first.unmount();
+    const { result } = renderHook(() => useChatStream());
+
+    const reply = holdNextFetch();
+    let replying: Promise<unknown> | undefined;
+    await act(async () => {
+      replying = result.current.sendMessage('now summarize PR 8', {
+        conversationId: TEMP_CONVERSATION.id,
+      });
+      await vi.waitFor(() => expect(reply.signal()).toBeDefined());
+    });
+    const fetchesBeforeResume = vi.mocked(fetch).mock.calls.length;
+
+    await act(async () => {
+      await result.current.resumeInteractiveCardTurn(cardMessage.id);
+    });
+
+    expect(reply.signal()!.aborted).toBe(false);
+    expect(vi.mocked(fetch).mock.calls).toHaveLength(fetchesBeforeResume);
+
+    await act(async () => {
+      result.current.stopGeneration();
+      await replying;
+    });
+  });
+
+  it('resumes the newest paused approval while an older one is expired', async () => {
+    mockSseStream([approvalEvent]);
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('summarize PR 7', {
+        conversationId: TEMP_CONVERSATION.id,
+      });
+    });
+    const olderId = assistantMessage()!.id;
+    mockSseStream([approvalEvent]);
+    await act(async () => {
+      await result.current.sendMessage('summarize PR 8', {
+        conversationId: TEMP_CONVERSATION.id,
+      });
+    });
+    const assistants = useChatStore.getState().messages.filter((m) => m.role === 'assistant');
+    const newestId = assistants[assistants.length - 1]!.id;
+    expect(newestId).not.toBe(olderId);
+    expect(isApprovalTurnLive(olderId)).toBe(false);
+    expect(isApprovalTurnLive(newestId)).toBe(true);
+
+    await act(async () => {
+      await result.current.resolveToolApproval(olderId, 'call_1', 'approved');
+    });
+    const approveCalls = () =>
+      vi.mocked(fetch).mock.calls.filter((c) => String(c[0]).includes('/approve'));
+    expect(approveCalls()).toHaveLength(0);
+
+    mockSseStream([{ choices: [{ delta: { content: 'PR 8 adds tests.' } }] }]);
+    await act(async () => {
+      await result.current.resolveToolApproval(newestId, 'call_1', 'approved');
+    });
+    expect(approveCalls()).toHaveLength(1);
+    expect(useChatStore.getState().messages.find((m) => m.id === newestId)?.content).toContain(
+      'PR 8 adds tests.',
+    );
+  });
+
   it('does not resume until every pending tool is decided', async () => {
     mockSseStream([
       approvalEvent,
@@ -743,6 +1003,32 @@ describe('useChatStream, tool approval → resume', () => {
     const body = JSON.parse((approveCalls[0]![1] as RequestInit).body as string);
     expect(body.run_id).toBe(RUN_ID);
     expect(body.tool_approvals).toHaveLength(2);
+  });
+
+  it('keeps one pending call when the same request arrives twice in one stream', async () => {
+    mockSseStream([approvalEvent, approvalEvent]);
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('one tool, sent twice', {
+        conversationId: TEMP_CONVERSATION.id,
+      });
+    });
+    const awaiting = (assistantMessage()?.metadata?.tools ?? []).filter(
+      (t) => t.toolCallId === 'call_1',
+    );
+    expect(awaiting).toHaveLength(1);
+    expect(awaiting[0]?.status).toBe('awaiting_approval');
+
+    mockSseStream([{ choices: [{ delta: { content: 'done' } }] }]);
+    await act(async () => {
+      await result.current.resolveToolApproval(assistantMessage()!.id, 'call_1', 'approved');
+    });
+    const approveCalls = vi
+      .mocked(fetch)
+      .mock.calls.filter((c) => String(c[0]).includes('/approve'));
+    expect(approveCalls).toHaveLength(1);
+    const body = JSON.parse((approveCalls[0]![1] as RequestInit).body as string);
+    expect(body.tool_approvals).toHaveLength(1);
   });
 
   it('persists a partial multi-tool decision before reload', async () => {
@@ -1154,6 +1440,107 @@ describe('useChatStream, approval scopes and connector input', () => {
       tool_inputs: [{ tool_call_id: 'call_9', input_responses: answers }],
     });
     expect(assistantMessage()?.content).toContain('Task created.');
+  });
+
+  it.each([false, true])(
+    'ends an older connector question as expired without aborting the newer reply being written (restored after a reload: %s)',
+    async (reloaded) => {
+      mockSseStream([inputEvent]);
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.sendMessage('make a task', { conversationId: TEMP_CONVERSATION.id });
+      });
+      const olderId = assistantMessage()!.id;
+      if (reloaded) __resetPendingTurnsForTests();
+      expect(isInputTurnLive(olderId)).toBe(true);
+
+      let replySignal: AbortSignal | undefined;
+      vi.mocked(fetch).mockImplementationOnce((_url, init) => {
+        replySignal = (init as RequestInit | undefined)?.signal ?? undefined;
+        return new Promise<Response>((_resolve, reject) => {
+          replySignal?.addEventListener('abort', () =>
+            reject(new DOMException('Aborted', 'AbortError')),
+          );
+        });
+      });
+      let reply: Promise<unknown> | undefined;
+      await act(async () => {
+        reply = result.current.sendMessage('make another task', {
+          conversationId: TEMP_CONVERSATION.id,
+        });
+        await vi.waitFor(() => expect(replySignal).toBeDefined());
+      });
+      const fetchesBeforeAnswer = vi.mocked(fetch).mock.calls.length;
+
+      let sent: boolean | undefined;
+      await act(async () => {
+        sent = await result.current.resolveToolInput(olderId, 'call_9', {
+          priority: { action: 'accept', content: { priority: 'high' } },
+        });
+      });
+
+      expect(sent).toBe(false);
+      expect(replySignal!.aborted).toBe(false);
+      expect(vi.mocked(fetch).mock.calls).toHaveLength(fetchesBeforeAnswer);
+      expect(isInputTurnLive(olderId)).toBe(false);
+
+      await act(async () => {
+        result.current.stopGeneration();
+        await reply;
+      });
+    },
+  );
+
+  it('ends the newest connector question as expired, and shows it, while another message is being continued', async () => {
+    mockSseStream([{ choices: [{ delta: { content: 'Task list ready' } }] }]);
+    const first = renderHook(() => useChatStream());
+    await act(async () => {
+      await first.result.current.sendMessage('list my tasks', {
+        conversationId: TEMP_CONVERSATION.id,
+      });
+    });
+    const continuedId = assistantMessage()!.id;
+    markContinuable(continuedId);
+    mockSseStream([inputEvent]);
+    await act(async () => {
+      await first.result.current.sendMessage('make a task', {
+        conversationId: TEMP_CONVERSATION.id,
+      });
+    });
+    const thread = useChatStore.getState().messages;
+    const pausedId = thread[thread.length - 1]!.id;
+    first.unmount();
+    const { result } = renderHook(() => useChatStream());
+    const probe = render(<InputLiveProbe messageId={pausedId} />);
+    expect(probe.getByTestId('input-live').textContent).toBe('true');
+
+    const continuation = holdNextFetch();
+    let continuing: Promise<void> | undefined;
+    await act(async () => {
+      continuing = result.current.continueGeneration(continuedId, {
+        conversationId: TEMP_CONVERSATION.id,
+      });
+      await vi.waitFor(() => expect(continuation.signal()).toBeDefined());
+    });
+    const fetchesBeforeAnswer = vi.mocked(fetch).mock.calls.length;
+
+    let sent: boolean | undefined;
+    await act(async () => {
+      sent = await result.current.resolveToolInput(pausedId, 'call_9', {
+        priority: { action: 'accept', content: { priority: 'high' } },
+      });
+    });
+
+    expect(sent).toBe(false);
+    expect(continuation.signal()!.aborted).toBe(false);
+    expect(vi.mocked(fetch).mock.calls).toHaveLength(fetchesBeforeAnswer);
+    expect(probe.getByTestId('input-live').textContent).toBe('false');
+
+    probe.unmount();
+    await act(async () => {
+      result.current.stopGeneration();
+      await continuing;
+    });
   });
 
   it.each([400, 410])(

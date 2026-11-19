@@ -1,22 +1,37 @@
 import type * as ImagePicker from 'expo-image-picker';
-import { readAsStringAsync, writeAsStringAsync } from 'expo-file-system/legacy';
-import { launchImageLibraryAsync } from 'expo-image-picker';
+import { launchCameraAsync, launchImageLibraryAsync } from 'expo-image-picker';
 import { readExifOrientation } from '@agiworkforce/utils';
 
 import { PictureMetadataError, withoutPictureMetadata } from '../image-metadata';
-import { pickImageAssetsFromLibrary } from '../photo-picker';
+import { captureImageAssetsFromCamera, pickImageAssetsFromLibrary } from '../photo-picker';
 
-jest.mock('expo-file-system/legacy', () => ({
-  ...jest.requireActual('expo-file-system/legacy'),
-  EncodingType: { UTF8: 'utf8', Base64: 'base64' },
-  cacheDirectory: 'file:///cache/',
-  readAsStringAsync: jest.fn(),
-  writeAsStringAsync: jest.fn(async () => undefined),
-}));
+const mockFiles = new Map<string, Uint8Array>();
+
+jest.mock('expo-file-system', () => {
+  class File {
+    uri: string;
+    constructor(...parts: Array<string | { uri: string }>) {
+      this.uri = parts.map((part) => (typeof part === 'string' ? part : part.uri)).join('');
+    }
+    async bytes(): Promise<Uint8Array> {
+      const stored = mockFiles.get(this.uri);
+      if (!stored) throw new Error(`nothing at ${this.uri}`);
+      return stored;
+    }
+    create(): void {
+      mockFiles.set(this.uri, new Uint8Array());
+    }
+    write(content: Uint8Array): void {
+      mockFiles.set(this.uri, new Uint8Array(content));
+    }
+  }
+  return { File, Paths: { cache: { uri: 'file:///cache/' } } };
+});
 
 jest.mock('expo-image-picker', () => ({
   ...jest.requireActual('expo-image-picker'),
   launchImageLibraryAsync: jest.fn(),
+  launchCameraAsync: jest.fn(),
 }));
 
 const CAMERA = 'FIXTURECAMERA';
@@ -75,10 +90,6 @@ function pickerJpeg(orientation: number): Uint8Array {
   ]);
 }
 
-function base64(bytes: Uint8Array): string {
-  return Buffer.from(bytes).toString('base64');
-}
-
 function contains(bytes: Uint8Array, text: string): boolean {
   return Buffer.from(bytes).includes(Buffer.from(text, 'latin1'));
 }
@@ -96,20 +107,31 @@ function asset(
   } as ImagePicker.ImagePickerAsset;
 }
 
+function cleanedCopies(): Uint8Array[] {
+  return Array.from(mockFiles)
+    .filter(([uri]) => uri.startsWith('file:///cache/'))
+    .map(([, bytes]) => bytes);
+}
+
 function written(): Uint8Array {
-  const call = (writeAsStringAsync as jest.Mock).mock.calls[0] as [string, string] | undefined;
-  if (!call) throw new Error('nothing was written');
-  return new Uint8Array(Buffer.from(call[1], 'base64'));
+  const [copy] = cleanedCopies();
+  if (!copy) throw new Error('nothing was written');
+  return copy;
+}
+
+function pickerHandsBack(bytes: Uint8Array): void {
+  mockFiles.set(asset().uri, bytes);
 }
 
 beforeEach(() => {
-  (readAsStringAsync as jest.Mock).mockReset();
-  (writeAsStringAsync as jest.Mock).mockClear();
+  mockFiles.clear();
+  (launchImageLibraryAsync as jest.Mock).mockReset();
+  (launchCameraAsync as jest.Mock).mockReset();
 });
 
 describe('a photo on its way out of the phone', () => {
   it('is uploaded from a copy without the camera, keeping pixels and orientation', async () => {
-    (readAsStringAsync as jest.Mock).mockResolvedValue(base64(pickerJpeg(6)));
+    pickerHandsBack(pickerJpeg(6));
 
     const cleaned = await withoutPictureMetadata(asset(), 0);
 
@@ -125,12 +147,19 @@ describe('a photo on its way out of the phone', () => {
 
   it('is refused, in plain words, when it cannot be read well enough to clean', async () => {
     const whole = pickerJpeg(1);
-    (readAsStringAsync as jest.Mock).mockResolvedValue(base64(whole.subarray(0, 30)));
+    pickerHandsBack(whole.subarray(0, 30));
 
     await expect(withoutPictureMetadata(asset(), 0)).rejects.toThrow(
       new PictureMetadataError('IMG_0001.jpg'),
     );
-    expect(writeAsStringAsync).not.toHaveBeenCalled();
+    expect(cleanedCopies()).toEqual([]);
+  });
+
+  it('is refused, in plain words, when the picker copy cannot be read at all', async () => {
+    await expect(withoutPictureMetadata(asset(), 0)).rejects.toThrow(
+      new PictureMetadataError('IMG_0001.jpg'),
+    );
+    expect(cleanedCopies()).toEqual([]);
   });
 
   it('is what the library picker hands the chat', async () => {
@@ -138,11 +167,46 @@ describe('a photo on its way out of the phone', () => {
       canceled: false,
       assets: [asset()],
     });
-    (readAsStringAsync as jest.Mock).mockResolvedValue(base64(pickerJpeg(1)));
+    pickerHandsBack(pickerJpeg(1));
 
     const [picked] = await pickImageAssetsFromLibrary();
 
     expect(picked?.uri).toMatch(/^file:\/\/\/cache\/attachment-/);
     expect(contains(written(), CAMERA)).toBe(false);
+  });
+
+  it('reports how many photos were chosen as the library picker closes, before they are cleaned', async () => {
+    (launchImageLibraryAsync as jest.Mock).mockResolvedValue({
+      canceled: false,
+      assets: [asset(), asset()],
+    });
+    pickerHandsBack(pickerJpeg(1));
+    const copiesWhenReported: number[] = [];
+    const onPicked = jest.fn(() => {
+      copiesWhenReported.push(cleanedCopies().length);
+    });
+
+    const picked = await pickImageAssetsFromLibrary({ allowsMultipleSelection: true, onPicked });
+
+    expect(onPicked).toHaveBeenCalledTimes(1);
+    expect(onPicked).toHaveBeenCalledWith(2);
+    expect(copiesWhenReported).toEqual([0]);
+    expect(picked).toHaveLength(2);
+  });
+
+  it('reports the captured photo as the camera closes, and nothing when either is cancelled', async () => {
+    (launchCameraAsync as jest.Mock).mockResolvedValueOnce({ canceled: false, assets: [asset()] });
+    pickerHandsBack(pickerJpeg(1));
+    const onPicked = jest.fn();
+
+    await captureImageAssetsFromCamera({ onPicked });
+    expect(onPicked).toHaveBeenCalledWith(1);
+
+    onPicked.mockClear();
+    (launchCameraAsync as jest.Mock).mockResolvedValueOnce({ canceled: true, assets: null });
+    (launchImageLibraryAsync as jest.Mock).mockResolvedValueOnce({ canceled: true, assets: null });
+    expect(await captureImageAssetsFromCamera({ onPicked })).toEqual([]);
+    expect(await pickImageAssetsFromLibrary({ onPicked })).toEqual([]);
+    expect(onPicked).not.toHaveBeenCalled();
   });
 });

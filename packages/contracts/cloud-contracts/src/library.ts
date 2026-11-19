@@ -66,6 +66,7 @@ export const LibraryItemSchema = z.object({
   kind: z.string(),
   byte_count: z.number().nonnegative().nullable(),
   uri: z.string().min(1),
+  thumbnail_uri: z.string().min(1).optional(),
   surface: z.enum(GENERATED_FILE_SURFACES).default('file').catch('file'),
   previewable: z.boolean().default(false).catch(false),
   origin: z.enum(LIBRARY_ORIGINS).default('generated').catch('generated'),
@@ -122,6 +123,8 @@ export const LibraryListResponseSchema = z.object({
   storage_limit_bytes: z.number().nonnegative().optional(),
   download_used_bytes: z.number().nonnegative().optional(),
   download_limit_bytes: z.number().nonnegative().optional(),
+  storage_documents_bytes: z.number().nonnegative().optional(),
+  storage_images_bytes: z.number().nonnegative().optional(),
 });
 export type LibraryListResponse = z.infer<typeof LibraryListResponseSchema>;
 

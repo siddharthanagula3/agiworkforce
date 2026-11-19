@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { PageLink } from '@shared/components/layout/EmbeddedPage';
 
 import type { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 import { policyHistoryForKey, policyHistoryHref } from '@/lib/legal/policy-archive';
@@ -7,8 +7,8 @@ export function PolicyVersionsLink({ policy }: { policy: keyof typeof POLICY_LAS
   const history = policyHistoryForKey(policy);
   if (!history || history.versions.length < 2) return null;
   return (
-    <Link href={policyHistoryHref(history)} className="agi-ds-link">
+    <PageLink href={policyHistoryHref(history)} className="agi-ds-link" omitWhenEmbedded>
       Previous versions
-    </Link>
+    </PageLink>
   );
 }

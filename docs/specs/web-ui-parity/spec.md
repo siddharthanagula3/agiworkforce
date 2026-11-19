@@ -162,7 +162,13 @@ of @11, sends writing card and artifact app text only to a surface that renders
 them, and adds tone, hard limits, wellbeing, professional advice,
 evenhandedness, copyright and consent before an action with consequences.
 
-Published @1–15 text is unchanged; stable pin @6 remains. Deterministic assembly,
+`chat.system@17` is internal as well (ledger record 41). It is @16 plus the
+sections sent when a person has turned Artifacts or Inline visualizations off in
+Capabilities (`artifacts_off`, `inline_visualizations_off` and the inline-block
+variants without artifacts, without visualizations or without both), and the
+`artifacts_off` line goes only to a turn that would have carried artifact text.
+
+Published @1–16 text is unchanged; stable pin @6 remains. Deterministic assembly,
 immutability, release and replay checks verify code/fixtures, not model quality
 or permission to promote.
 

@@ -1,0 +1,1 @@
+export const HOLD_TO_TALK_THRESHOLD_MS = 300;

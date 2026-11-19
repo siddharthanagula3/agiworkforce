@@ -28,7 +28,12 @@ struct AskAGIIntent: AppIntent {
 }
 
 enum AGIAskClient {
-    static let signInMessage = "Open AGI Mobile to sign in."
+    // The app keeps the Ask token only while the switch is on, and signing out
+    // turns the switch off, so a missing token cannot tell the two apart.
+    static let switchedOffMessage =
+        "Ask from Siri is off. Open AGI Mobile in AGI Cloud, sign in if asked, and turn on Ask from Siri in Settings, Security and login."
+    static let tokenRejectedMessage =
+        "Ask from Siri needs to be set up again. Open AGI Mobile in AGI Cloud, sign in if asked, and turn Ask from Siri off and on in Settings, Security and login."
     static let unavailableMessage = "AGI Mobile could not answer right now. Try again in the app."
     private static let keychainService = "com.agiworkforce.app.ask-intent:no-auth"
     private static let keychainKey = "ask_intent_token"
@@ -40,7 +45,8 @@ enum AGIAskClient {
         guard !question.isEmpty, question.count <= maxPromptCharacters else {
             return "Ask a shorter question."
         }
-        guard let token = storedToken(), let url = endpoint() else { return signInMessage }
+        guard let url = endpoint() else { return unavailableMessage }
+        guard let token = storedToken() else { return switchedOffMessage }
 
         var request = URLRequest(url: url, timeoutInterval: 55)
         request.httpMethod = "POST"
@@ -53,7 +59,7 @@ enum AGIAskClient {
             let status = (response as? HTTPURLResponse)?.statusCode ?? 0
             let body = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
             if status == 200, let text = body?["text"] as? String, !text.isEmpty { return text }
-            if status == 401 { return signInMessage }
+            if status == 401 { return tokenRejectedMessage }
             if let error = body?["error"] as? [String: Any], let message = error["message"] as? String {
                 return message
             }

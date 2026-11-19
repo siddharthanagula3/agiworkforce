@@ -1,21 +1,30 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createHash } from 'crypto';
 type ScanModule0 = typeof import('@/lib/services/tier-unit-quota-service');
 type InfrastructureCostModule = typeof import('@/lib/services/infrastructure-cost');
+type ObjectStorageModule = typeof import('@/lib/server/object-storage');
 
 const {
   mockGetUserScopedDb,
   mockGetActiveWorkspaceMediaAssetById,
   mockStreamObject,
   mockIsConfigured,
+  mockIsPrivateConfigured,
+  mockHeadPrivateObject,
+  mockPresignDownload,
   scopedDb,
 } = vi.hoisted(() => ({
   mockGetUserScopedDb: vi.fn(),
   mockGetActiveWorkspaceMediaAssetById: vi.fn(),
   mockStreamObject: vi.fn(),
   mockIsConfigured: vi.fn(() => true),
+  mockIsPrivateConfigured: vi.fn(() => true),
+  mockHeadPrivateObject: vi.fn(),
+  mockPresignDownload: vi.fn(),
   scopedDb: { query: vi.fn() },
 }));
+
+type MediaStorageModule = typeof import('@/lib/server/media-storage');
 
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn().mockResolvedValue(null),
@@ -33,10 +42,19 @@ vi.mock('@/lib/server/media-assets', () => ({
   getActiveWorkspaceMediaAssetById: mockGetActiveWorkspaceMediaAssetById,
 }));
 
-vi.mock('@/lib/server/media-storage', () => ({
+vi.mock('@/lib/server/media-storage', async (importOriginal) => ({
   streamStoredMedia: mockStreamObject,
   isMediaStorageConfigured: mockIsConfigured,
+  isSealedPrivateChatAttachmentPathname: (await importOriginal<MediaStorageModule>())
+    .isSealedPrivateChatAttachmentPathname,
   deleteStoredMedia: vi.fn(),
+}));
+
+vi.mock('@/lib/server/object-storage', async (importOriginal) => ({
+  ...(await importOriginal<ObjectStorageModule>()),
+  isPrivateObjectStorageConfigured: mockIsPrivateConfigured,
+  headPrivateObject: mockHeadPrivateObject,
+  getPresignedPrivateDownloadUrl: mockPresignDownload,
 }));
 
 const { mockRecordEgressBytes } = vi.hoisted(() => ({ mockRecordEgressBytes: vi.fn() }));
@@ -57,6 +75,10 @@ import { GET } from '../route';
 import { createError } from '@/lib/errors';
 import { buildAiGeneratedProvenance } from '@/lib/compliance/ai-act';
 import { freeDailyLimitError } from '@/lib/services/tier-unit-quota-service';
+import {
+  LARGE_CHAT_FILES_CAPABILITY,
+  MAX_CHAT_ATTACHMENT_BYTES,
+} from '@agiworkforce/cloud-contracts';
 
 const ASSET_ID = '22222222-2222-4222-8222-222222222222';
 
@@ -105,6 +127,7 @@ describe('GET /api/files/[id]', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockIsConfigured.mockReturnValue(true);
+    mockIsPrivateConfigured.mockReturnValue(true);
     mockGetUserScopedDb.mockResolvedValue({
       db: scopedDb,
       userId: 'user-owner',
@@ -623,5 +646,317 @@ describe('GET /api/files/[id]', () => {
     mockGetActiveWorkspaceMediaAssetById.mockResolvedValue(makeAsset());
     const res = await GET(makeRequest(ASSET_ID), makeContext(ASSET_ID));
     expect(res.status).toBe(404);
+  });
+});
+
+const MIB = 1024 * 1024;
+const SEALED_KEY = 'chat-attachments/user-owner/1731000000000_abc123.pdf.scanned';
+const PRESIGNED_URL = 'https://storage.example.com/private/chat-attachments/x?X-Amz-Signature=sig';
+const LARGE_COPY = 'This PDF is too large to preview. Download it to open it.';
+
+function largeChatFile(overrides: Record<string, unknown> = {}) {
+  return makeAsset({
+    byteSize: 400 * MIB,
+    storagePathname: SEALED_KEY,
+    metadata: { filename: 'report.pdf', origin: 'upload', source: 'chat-attachment' },
+    ...overrides,
+  });
+}
+
+const NAVIGATION = { 'Sec-Fetch-Mode': 'navigate' };
+const CAPABILITY = { 'x-agi-client-capabilities': LARGE_CHAT_FILES_CAPABILITY };
+const FETCH_FROM_PAGE = { 'Sec-Fetch-Mode': 'cors' };
+const NATIVE_REQUEST = { Authorization: 'Bearer test-token' };
+
+function expectNothingSpent() {
+  expect(mockPresignDownload).not.toHaveBeenCalled();
+  expect(mockAssertDownloadAllowance).not.toHaveBeenCalled();
+  expect(mockRecordEgressBytes).not.toHaveBeenCalled();
+  expect(mockStreamObject).not.toHaveBeenCalled();
+}
+
+describe.each([
+  ['unset', undefined],
+  ['on', 'on'],
+])('sealed large chat files with CHAT_LARGE_FILES_ENABLED %s', (_label, flagValue) => {
+  const original = process.env['CHAT_LARGE_FILES_ENABLED'];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    if (flagValue === undefined) delete process.env['CHAT_LARGE_FILES_ENABLED'];
+    else process.env['CHAT_LARGE_FILES_ENABLED'] = flagValue;
+    mockIsConfigured.mockReturnValue(true);
+    mockIsPrivateConfigured.mockReturnValue(true);
+    mockGetUserScopedDb.mockResolvedValue({
+      db: scopedDb,
+      userId: 'user-owner',
+      organizationId: null,
+    });
+    mockGetActiveWorkspaceMediaAssetById.mockResolvedValue(largeChatFile());
+    mockHeadPrivateObject.mockResolvedValue({ contentLength: 400 * MIB });
+    mockPresignDownload.mockResolvedValue(PRESIGNED_URL);
+  });
+
+  afterEach(() => {
+    if (original === undefined) delete process.env['CHAT_LARGE_FILES_ENABLED'];
+    else process.env['CHAT_LARGE_FILES_ENABLED'] = original;
+  });
+
+  it('a navigation to a sealed chat-attachment asset above the inline limit is redirected', async () => {
+    const res = await GET(makeRequest(ASSET_ID, '', NAVIGATION), makeContext(ASSET_ID));
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get('location')).toBe(PRESIGNED_URL);
+    expect(res.headers.get('cache-control')).toBe('private, no-store');
+    expect(mockPresignDownload).toHaveBeenCalledTimes(1);
+    expect(mockPresignDownload).toHaveBeenCalledWith({
+      key: SEALED_KEY,
+      fileName: 'report.pdf',
+      expiresInSeconds: 300,
+      contentType: 'application/octet-stream',
+    });
+    expect(mockStreamObject).not.toHaveBeenCalled();
+  });
+
+  it('charges the monthly download allowance and records the egress once per redirect', async () => {
+    await GET(makeRequest(ASSET_ID, '', NAVIGATION), makeContext(ASSET_ID));
+
+    expect(mockAssertDownloadAllowance).toHaveBeenCalledTimes(1);
+    expect(mockAssertDownloadAllowance).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'user-owner', bytes: 400 * MIB }),
+    );
+    expect(mockRecordEgressBytes).toHaveBeenCalledTimes(1);
+    expect(mockRecordEgressBytes).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'user-owner',
+        bytes: 400 * MIB,
+        provider: 'object_storage',
+        downloadAllowanceExempt: false,
+      }),
+    );
+  });
+
+  it('redirects the browser download the web Library starts and charges it once', async () => {
+    const res = await GET(
+      makeRequest(ASSET_ID, '', {
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Dest': 'empty',
+        'Sec-Fetch-Site': 'same-origin',
+        'Sec-Fetch-User': '?1',
+      }),
+      makeContext(ASSET_ID),
+    );
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get('location')).toBe(PRESIGNED_URL);
+    expect(mockAssertDownloadAllowance).toHaveBeenCalledTimes(1);
+    expect(mockRecordEgressBytes).toHaveBeenCalledTimes(1);
+    expect(mockRecordEgressBytes).toHaveBeenCalledWith(
+      expect.objectContaining({ bytes: 400 * MIB, downloadAllowanceExempt: false }),
+    );
+    expect(mockStreamObject).not.toHaveBeenCalled();
+  });
+
+  it('a request carrying large-chat-files-v1 is redirected', async () => {
+    const res = await GET(
+      makeRequest(ASSET_ID, '', {
+        ...FETCH_FROM_PAGE,
+        'x-agi-client-capabilities': `other-token, ${LARGE_CHAT_FILES_CAPABILITY}`,
+      }),
+      makeContext(ASSET_ID),
+    );
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get('location')).toBe(PRESIGNED_URL);
+  });
+
+  it.each([
+    ['a fetch with Sec-Fetch-Mode cors', FETCH_FROM_PAGE],
+    ['a native request with no Sec-Fetch-Mode and an Authorization header', NATIVE_REQUEST],
+    ['a request with no headers', {}],
+    ['a no-cors request', { 'Sec-Fetch-Mode': 'no-cors' }],
+    ['a same-origin request', { 'Sec-Fetch-Mode': 'same-origin' }],
+    [
+      'a capability header that only starts with the token',
+      { 'x-agi-client-capabilities': `${LARGE_CHAT_FILES_CAPABILITY}0` },
+    ],
+    ['an empty capability header', { 'x-agi-client-capabilities': '' }],
+    ['a speculative prefetch navigation', { ...NAVIGATION, 'Sec-Purpose': 'prefetch' }],
+    ['a speculative prerender navigation', { ...NAVIGATION, 'Sec-Purpose': 'prefetch;prerender' }],
+  ])('a request with neither gets 413: %s', async (_name, headers) => {
+    const res = await GET(makeRequest(ASSET_ID, '', headers), makeContext(ASSET_ID));
+
+    expect(res.status).toBe(413);
+    expect(res.headers.get('location')).toBeNull();
+    expectNothingSpent();
+  });
+
+  it.each([
+    [
+      'a 40 MiB generated asset',
+      makeAsset({ byteSize: 40 * MIB, metadata: { filename: 'out.pdf', origin: 'e2b-execution' } }),
+    ],
+    [
+      'a public-bucket asset',
+      largeChatFile({ storagePathname: 'chat-attachments/user-owner/1731000000000_abc123.pdf' }),
+    ],
+    [
+      'a local-prefix asset',
+      largeChatFile({
+        storagePathname:
+          'local-dev-media/file/0123456789abcdef0123456789abcdef/33333333-3333-4333-8333-333333333333.pdf',
+      }),
+    ],
+    [
+      'a sealed key outside the private chat prefix',
+      largeChatFile({ storagePathname: 'private-media/file/abc/x.pdf.scanned' }),
+    ],
+    [
+      'a key under the chat prefix that only ends like a sealed key',
+      largeChatFile({ storagePathname: 'chat-attachments/x.scanned' }),
+    ],
+    [
+      'a chat-attachment asset recorded under another source',
+      largeChatFile({ metadata: { filename: 'report.pdf', source: 'library' } }),
+    ],
+    ['a sealed chat file recorded under another account', largeChatFile({ userId: 'user-other' })],
+    [
+      'a sealed chat file typed as video above the video serve cap',
+      largeChatFile({
+        mimeType: 'video/mp4',
+        byteSize: 300 * MIB,
+        storagePathname: SEALED_KEY.replace('.pdf', '.mp4'),
+        metadata: { filename: 'clip.mp4', origin: 'upload', source: 'chat-attachment' },
+      }),
+    ],
+  ])('keeps 413 for %s, even for a navigation or the token', async (_name, asset) => {
+    mockGetActiveWorkspaceMediaAssetById.mockResolvedValue(asset);
+
+    for (const headers of [NAVIGATION, CAPABILITY, { ...NAVIGATION, ...CAPABILITY }]) {
+      const res = await GET(makeRequest(ASSET_ID, '', headers), makeContext(ASSET_ID));
+      expect(res.status).toBe(413);
+      expect(res.headers.get('location')).toBeNull();
+    }
+    expectNothingSpent();
+  });
+
+  it('keeps 413 when private object storage is not configured', async () => {
+    mockIsPrivateConfigured.mockReturnValue(false);
+
+    const res = await GET(makeRequest(ASSET_ID, '', NAVIGATION), makeContext(ASSET_ID));
+
+    expect(res.status).toBe(413);
+    expectNothingSpent();
+  });
+
+  it('answers 413 preview_too_large with the copy before reading the request', async () => {
+    for (const headers of [NAVIGATION, CAPABILITY, FETCH_FROM_PAGE, {}]) {
+      const res = await GET(makeRequest(ASSET_ID, '?preview=pdf', headers), makeContext(ASSET_ID));
+      expect(res.status).toBe(413);
+      expect(res.headers.get('location')).toBeNull();
+      await expect(res.json()).resolves.toEqual({
+        error: { code: 'preview_too_large', message: LARGE_COPY },
+      });
+    }
+    expectNothingSpent();
+  });
+
+  it('keeps the plain 413 for a preview of an asset that is not a sealed chat file', async () => {
+    mockGetActiveWorkspaceMediaAssetById.mockResolvedValue(
+      makeAsset({ byteSize: 40 * MIB, metadata: { filename: 'out.pdf', origin: 'e2b-execution' } }),
+    );
+
+    const res = await GET(makeRequest(ASSET_ID, '?preview=pdf', NAVIGATION), makeContext(ASSET_ID));
+
+    expect(res.status).toBe(413);
+    await expect(res.json()).resolves.toMatchObject({ error: { code: 'PAYLOAD_TOO_LARGE' } });
+  });
+
+  it('answers 404 for a preview of a large chat file that is not a PDF', async () => {
+    mockGetActiveWorkspaceMediaAssetById.mockResolvedValue(
+      largeChatFile({
+        mimeType: 'text/csv',
+        storagePathname: `${SEALED_KEY}`.replace('.pdf', '.csv'),
+      }),
+    );
+
+    const res = await GET(makeRequest(ASSET_ID, '?preview=pdf', NAVIGATION), makeContext(ASSET_ID));
+
+    expect(res.status).toBe(404);
+  });
+
+  it.each([
+    ['the inline limit', MAX_CHAT_ATTACHMENT_BYTES],
+    ['27 MiB', 27 * MIB],
+    ['30 MiB', 30 * MIB],
+  ])(
+    'serves a sealed chat file of %s as today, whatever the request headers',
+    async (_name, size) => {
+      const stored = Buffer.from('%PDF-1.7\n%%EOF', 'utf8');
+      mockGetActiveWorkspaceMediaAssetById.mockResolvedValue(largeChatFile({ byteSize: size }));
+
+      for (const headers of [NAVIGATION, CAPABILITY, FETCH_FROM_PAGE, {}]) {
+        mockStreamObject.mockResolvedValueOnce(streamedFile(stored, 'application/pdf'));
+        const res = await GET(makeRequest(ASSET_ID, '', headers), makeContext(ASSET_ID));
+        expect(res.status).toBe(200);
+        expect(res.headers.get('location')).toBeNull();
+        expect(Buffer.from(await res.arrayBuffer()).equals(stored)).toBe(true);
+      }
+      expect(mockPresignDownload).not.toHaveBeenCalled();
+      expect(mockHeadPrivateObject).not.toHaveBeenCalled();
+    },
+  );
+
+  it('answers 429 and signs nothing once the monthly downloads are used up', async () => {
+    mockAssertDownloadAllowance.mockRejectedValueOnce(freeDailyLimitError('egress_bytes'));
+
+    const res = await GET(makeRequest(ASSET_ID, '', NAVIGATION), makeContext(ASSET_ID));
+
+    expect(res.status).toBe(429);
+    expect(mockPresignDownload).not.toHaveBeenCalled();
+    expect(mockRecordEgressBytes).not.toHaveBeenCalled();
+  });
+
+  it('answers 404 and charges nothing when the sealed object is gone', async () => {
+    mockHeadPrivateObject.mockResolvedValue(null);
+
+    const res = await GET(makeRequest(ASSET_ID, '', NAVIGATION), makeContext(ASSET_ID));
+
+    expect(res.status).toBe(404);
+    expectNothingSpent();
+  });
+
+  it('fails closed and charges nothing when the stored size is not the recorded size', async () => {
+    mockHeadPrivateObject.mockResolvedValue({ contentLength: 399 * MIB });
+
+    const res = await GET(makeRequest(ASSET_ID, '', NAVIGATION), makeContext(ASSET_ID));
+
+    expect(res.status).toBe(500);
+    expect(res.headers.get('location')).toBeNull();
+    expectNothingSpent();
+  });
+
+  it('does not record the egress when signing fails', async () => {
+    mockPresignDownload.mockRejectedValue(new Error('signing unavailable'));
+
+    const res = await GET(makeRequest(ASSET_ID, '', NAVIGATION), makeContext(ASSET_ID));
+
+    expect(res.status).toBeGreaterThanOrEqual(500);
+    expect(mockRecordEgressBytes).not.toHaveBeenCalled();
+  });
+
+  it('redirects the key that the sealing copy writes', async () => {
+    const { sealedChatAttachmentPathname } = await vi.importActual<
+      typeof import('@/lib/server/media-storage')
+    >('@/lib/server/media-storage');
+    const key = sealedChatAttachmentPathname(
+      'chat-attachments/user-owner/1731000000000_abc123.pdf',
+    );
+    mockGetActiveWorkspaceMediaAssetById.mockResolvedValue(largeChatFile({ storagePathname: key }));
+
+    const res = await GET(makeRequest(ASSET_ID, '', NAVIGATION), makeContext(ASSET_ID));
+
+    expect(res.status).toBe(302);
+    expect(mockPresignDownload).toHaveBeenCalledWith(expect.objectContaining({ key }));
   });
 });

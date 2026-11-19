@@ -19,12 +19,12 @@ describe('ToolCallTimeline, recycling state reset', () => {
       <ToolCallTimeline messageId="msg-a" toolCalls={manyTools} summary={summary} />,
     );
 
-    fireEvent.press(getByLabelText(toggleLabel(summary, false)));
-    expect(() => getByLabelText(toggleLabel(summary, true))).not.toThrow();
+    fireEvent.press(getByLabelText(toggleLabel(summary, true)));
+    expect(() => getByLabelText(toggleLabel(summary, false))).not.toThrow();
 
     rerender(<ToolCallTimeline messageId="msg-b" toolCalls={manyTools} summary={summary} />);
 
-    expect(() => getByLabelText(toggleLabel(summary, false))).not.toThrow();
+    expect(() => getByLabelText(toggleLabel(summary, true))).not.toThrow();
   });
 
   it('does NOT reset when re-rendered with the SAME messageId (only identity changes reset it)', () => {
@@ -33,13 +33,13 @@ describe('ToolCallTimeline, recycling state reset', () => {
       <ToolCallTimeline messageId="msg-a" toolCalls={manyTools} summary={summary} />,
     );
 
-    fireEvent.press(getByLabelText(toggleLabel(summary, false)));
-    expect(() => getByLabelText(toggleLabel(summary, true))).not.toThrow();
+    fireEvent.press(getByLabelText(toggleLabel(summary, true)));
+    expect(() => getByLabelText(toggleLabel(summary, false))).not.toThrow();
 
     rerender(
       <ToolCallTimeline messageId="msg-a" toolCalls={manyTools} summary="Read 5 files, updated" />,
     );
 
-    expect(() => getByLabelText(toggleLabel('Read 5 files, updated', true))).not.toThrow();
+    expect(() => getByLabelText(toggleLabel('Read 5 files, updated', false))).not.toThrow();
   });
 });

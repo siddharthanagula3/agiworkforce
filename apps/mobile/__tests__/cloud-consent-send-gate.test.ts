@@ -27,6 +27,12 @@ jest.mock('../services/llmGate', () => ({
   ensureCloudSendConsent: (...args: unknown[]) => mockEnsureCloudSendConsent(...args),
 }));
 
+const mockUploadWithRetry = jest.fn();
+jest.mock('../src/features/chat/upload/uploadAttachment', () => ({
+  ...jest.requireActual('../src/features/chat/upload/uploadAttachment'),
+  uploadWithRetry: (...args: unknown[]) => mockUploadWithRetry(...args),
+}));
+
 jest.mock('../services/remoteChatGate', () => {
   class MockRemoteChatDisabledError extends Error {
     readonly code = 'MOBILE_REMOTE_CHAT_DISABLED';
@@ -67,12 +73,15 @@ jest.mock('../lib/mmkv', () => ({
   },
 }));
 
-import { Alert } from 'react-native';
+import { Alert, type AlertButton } from 'react-native';
 import { getDefaultModel } from '@agiworkforce/local-llm';
+import { getModelMetadataById } from '@agiworkforce/types';
+import type { Attachment } from '../src/features/chat/components/AttachmentPreview';
+import { wasCloudUploadDeclined } from '../src/features/chat/utils/cloudUploadConsent';
 import { CloudProviderConsentDeclinedError } from '../services/llmGate';
 import { managedCloudChat } from '../services/managedCloudChat';
-import { streamChat } from '../services/streaming';
-import { useChatExecutionStore } from '../stores/chat/chatExecutionStore';
+import { streamChat, type StreamCallbacks } from '../services/streaming';
+import { clearCloudExecutionState, useChatExecutionStore } from '../stores/chat/chatExecutionStore';
 import { useChatCloudMessageStore } from '../stores/chat/chatCloudMessageStore';
 import { useCloudSyncStateStore } from '../stores/chat/cloudSyncStateStore';
 import { useChatMessageStore } from '../stores/chat/chatMessageStore';
@@ -179,5 +188,142 @@ describe('Cloud provider consent at send time', () => {
       expect.anything(),
       expect.anything(),
     );
+  });
+});
+
+describe('the question before files are uploaded to AGI Cloud', () => {
+  const visionModel = requireMobileCloudModel(
+    (model) => getModelMetadataById(model.id)?.capabilities.vision === true,
+    'Mobile Cloud model that reads images',
+  ).id;
+
+  function photo(): Attachment {
+    return {
+      id: 'photo-upload-question',
+      uri: 'file:///cache/attachment-1-0.jpg',
+      mimeType: 'image/jpeg',
+      fileName: 'IMG_0001.jpg',
+    };
+  }
+
+  function answerUploadQuestion(choice: 'Cancel' | 'Upload & Send') {
+    return jest.spyOn(Alert, 'alert').mockImplementation((title, _message, buttons) => {
+      if (title !== 'Send files to AGI Cloud?') return;
+      (buttons as AlertButton[] | undefined)?.find((button) => button.text === choice)?.onPress?.();
+    });
+  }
+
+  function holdFirstTurn() {
+    let release!: () => void;
+    let started!: () => void;
+    const running = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    mockStreamChat.mockImplementation(async (_body, callbacks: StreamCallbacks) => {
+      if (mockStreamChat.mock.calls.length === 1) {
+        started();
+        await new Promise<void>((resolve) => {
+          release = resolve;
+        });
+      }
+      callbacks.onDone();
+    });
+    return { running, release: () => release() };
+  }
+
+  async function waitForStreamCalls(count: number): Promise<void> {
+    for (let attempt = 0; attempt < 500; attempt += 1) {
+      if (mockStreamChat.mock.calls.length >= count) return;
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+  }
+
+  beforeEach(() => {
+    mockUploadWithRetry.mockReset().mockResolvedValue({
+      id: '0190a000-0000-7000-8000-0000000000e2',
+      url: 'https://agi.example/IMG_0001.jpg',
+      mimeType: 'image/jpeg',
+      name: 'IMG_0001.jpg',
+      byteCount: 100,
+      type: 'image',
+    });
+  });
+
+  afterEach(() => {
+    clearCloudExecutionState();
+  });
+
+  it('Cancel uploads and sends nothing, leaves no error and says the upload was declined', async () => {
+    seedCloudConversation(visionModel);
+    answerUploadQuestion('Cancel');
+    const onAccepted = jest.fn();
+    const attachments = [photo()];
+
+    const accepted = await useChatExecutionStore
+      .getState()
+      .sendMessage(CLOUD_CONV_ID, 'what is this', visionModel, attachments, { onAccepted });
+
+    expect(accepted).toBe(false);
+    expect(onAccepted).not.toHaveBeenCalled();
+    expect(mockUploadWithRetry).not.toHaveBeenCalled();
+    expect(mockStreamChat).not.toHaveBeenCalled();
+    expect(useChatExecutionStore.getState().error).toBeNull();
+    expect(wasCloudUploadDeclined(attachments)).toBe(true);
+    expect(useChatCloudMessageStore.getState().messages[CLOUD_CONV_ID] ?? []).toEqual([]);
+  });
+
+  it('asks before a follow-up waits for the running answer, and Cancel keeps it out of the queue', async () => {
+    seedCloudConversation(visionModel);
+    const turn = holdFirstTurn();
+    const first = useChatExecutionStore.getState().sendMessage(CLOUD_CONV_ID, 'first', visionModel);
+    await turn.running;
+    const alert = answerUploadQuestion('Cancel');
+    const onAccepted = jest.fn();
+    const attachments = [photo()];
+
+    const accepted = await useChatExecutionStore
+      .getState()
+      .sendMessage(CLOUD_CONV_ID, 'and this photo', visionModel, attachments, { onAccepted });
+
+    expect(accepted).toBe(false);
+    expect(onAccepted).not.toHaveBeenCalled();
+    expect(alert).toHaveBeenCalledTimes(1);
+    expect(wasCloudUploadDeclined(attachments)).toBe(true);
+    expect(useChatExecutionStore.getState().error).toBeNull();
+
+    turn.release();
+    await first;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(mockStreamChat).toHaveBeenCalledTimes(1);
+    expect(mockUploadWithRetry).not.toHaveBeenCalled();
+  });
+
+  it('asks once, before the composer is cleared, for a follow-up that waits for the running answer', async () => {
+    seedCloudConversation(visionModel);
+    const turn = holdFirstTurn();
+    const first = useChatExecutionStore.getState().sendMessage(CLOUD_CONV_ID, 'first', visionModel);
+    await turn.running;
+    const alert = answerUploadQuestion('Upload & Send');
+    const onAccepted = jest.fn();
+
+    const accepted = await useChatExecutionStore
+      .getState()
+      .sendMessage(CLOUD_CONV_ID, 'and this photo', visionModel, [photo()], { onAccepted });
+
+    expect(accepted).toBe(true);
+    expect(alert).toHaveBeenCalledTimes(1);
+    expect(onAccepted).toHaveBeenCalledTimes(1);
+    expect(alert.mock.invocationCallOrder[0]).toBeLessThan(
+      onAccepted.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
+    );
+    expect(mockStreamChat).toHaveBeenCalledTimes(1);
+
+    turn.release();
+    await first;
+    await waitForStreamCalls(2);
+
+    expect(mockStreamChat).toHaveBeenCalledTimes(2);
+    expect(mockUploadWithRetry).toHaveBeenCalledTimes(1);
+    expect(alert).toHaveBeenCalledTimes(1);
   });
 });

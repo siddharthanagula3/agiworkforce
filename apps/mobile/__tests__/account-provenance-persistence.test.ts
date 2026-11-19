@@ -52,13 +52,6 @@ import {
 import * as offlineQueueModule from '@/services/offlineQueue';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 
-const THEME = {
-  teal: '#21808d',
-  terraCotta: '#da7756',
-  agentThinking: '#a855f7',
-  agentActive: '#3b82f6',
-};
-
 const LOCAL_PROVENANCE = { scope: 'local' } as const;
 const CLOUD_A_PROVENANCE = { scope: 'cloud', ownerId: 'user-a' } as const;
 
@@ -94,12 +87,11 @@ beforeEach(() => {
 describe('artifact account provenance', () => {
   it('tags derived code and generated images with their explicit execution provenance', () => {
     const derived = deriveAndMapToMobileArtifacts(
-      ['```ts', 'const a = 1;', 'const b = 2;', 'const c = 3;', 'const d = 4;', '```'].join('\n'),
+      ['```html', '<!-- @artifact -->', '<!DOCTYPE html>', '<div>0</div>', '```'].join('\n'),
       'conversation-1',
       'message-1',
       '2026-07-26T00:00:00.000Z',
       'Local chat',
-      THEME,
       LOCAL_PROVENANCE,
     );
     const image = generatedImageToMobileArtifact({

@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import {
   pluginPermissionsToAcknowledge,
   type PluginDirectoryEntryWire,
@@ -38,6 +38,7 @@ import {
 } from '@/src/shared/components/cloud-screen';
 import { useCloudFeatureAccess } from '@/src/shared/hooks/useCloudFeatureAccess';
 import { useGoBack } from '@/src/shared/hooks/useGoBack';
+import { formatConnectorName } from '@/src/features/settings/cloud-connectors/connectorStatus';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { PLUGINS_ROUTE } from './PluginsScreen';
@@ -45,6 +46,8 @@ import {
   PLUGIN_COMMUNITY_NOTE,
   PLUGIN_REPAIR_MISSING_SKILLS_COPY,
   missingPluginSkills,
+  pluginCategoryKey,
+  pluginCategoryLabel,
   PLUGIN_CONNECTORS_NEVER_CONNECTED_NOTE,
   PLUGIN_PERMISSIONS_COPY,
   PLUGIN_SCAN_NONE_COPY,
@@ -57,7 +60,6 @@ import {
   versionSwitchSummary,
 } from './pluginsModel';
 import {
-  PluginDependentsError,
   fetchPlugin,
   fetchPluginDirectory,
   fetchPluginInstallations,
@@ -65,13 +67,11 @@ import {
   fetchPluginSettings,
   fetchPluginUpdates,
   fetchPluginVersions,
-  installPlugin,
   movePluginToVersion,
   pluginActionError,
-  setPluginEnabled,
-  uninstallPlugin,
   updatePluginSettings,
 } from './service';
+import { usePluginActions } from './usePluginActions';
 
 interface PluginDetailState {
   entry: PluginDirectoryEntryWire;
@@ -81,6 +81,7 @@ interface PluginDetailState {
   versions: PluginVersionsWire | null;
   settings: PluginSettingsWire | null;
   connected: ReadonlySet<string>;
+  connectorNames: ReadonlyMap<string, string>;
   moreFromPublisher: PluginDirectoryEntryWire[];
   loadedSkillNames: ReadonlySet<string> | null;
 }
@@ -88,7 +89,7 @@ interface PluginDetailState {
 async function loadPluginDetail(pluginId: string, signal: AbortSignal): Promise<PluginDetailState> {
   const [entry, installations, scan, updates, directory] = await Promise.all([
     fetchPlugin(pluginId, signal),
-    fetchPluginInstallations(signal).catch(() => []),
+    fetchPluginInstallations(signal),
     fetchPluginScan(pluginId).catch(() => null),
     fetchPluginUpdates(signal).catch(() => []),
     fetchConnectorDirectory().catch(() => null),
@@ -113,6 +114,15 @@ async function loadPluginDetail(pluginId: string, signal: AbortSignal): Promise<
           (id): id is string => typeof id === 'string',
         ),
       ),
+    ),
+    connectorNames: new Map(
+      (directory?.connectors ?? []).flatMap((connection) => {
+        const name = connection.name?.trim();
+        if (!name) return [];
+        return [connection.connectorId, connection.toolConnectorId]
+          .filter((id): id is string => typeof id === 'string')
+          .map((id): [string, string] => [id, name]);
+      }),
     ),
     moreFromPublisher: (publisherPage?.entries ?? []).filter((other) => other.id !== pluginId),
     loadedSkillNames: loadedSkills ? new Set(loadedSkills.map((skill) => skill.name)) : null,
@@ -152,6 +162,8 @@ export function PluginDetailScreen() {
   const [busy, setBusy] = useState<string | null>(null);
   const [chosenVersion, setChosenVersion] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const [syncing, setSyncing] = useState(false);
+  const focusedBefore = useRef(false);
 
   useEffect(() => {
     if (!access.ready || !pluginId) return;
@@ -159,22 +171,39 @@ export function PluginDetailScreen() {
     if (!account) return;
     const controller = new AbortController();
     setLoadError(null);
+    setSyncing(true);
     loadPluginDetail(pluginId, controller.signal)
       .then((next) => {
-        if (isCloudAccountEpochCurrent(account)) setState(next);
+        if (controller.signal.aborted || !isCloudAccountEpochCurrent(account)) return;
+        setState(next);
+        setSyncing(false);
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted || !isCloudAccountEpochCurrent(account)) return;
+        setState(null);
+        setSyncing(false);
         setLoadError(pluginActionError(error, 'Could not load this plugin.'));
       });
     return () => controller.abort();
   }, [access.ready, attempt, pluginId]);
 
   const refresh = useCallback(() => setAttempt((value) => value + 1), []);
+  useFocusEffect(
+    useCallback(() => {
+      if (!focusedBefore.current) {
+        focusedBefore.current = true;
+        return;
+      }
+      refresh();
+    }, [refresh]),
+  );
+  const showActionError = useCallback((message: string) => setActionError(message), []);
+  const actions = usePluginActions({ onChanged: refresh, onFailure: showActionError });
+  const working = busy !== null || actions.pending !== null || syncing;
 
   const act = useCallback(
     async (key: string, action: () => Promise<unknown>, failure: string) => {
-      if (busy) return false;
+      if (busy || actions.pending) return false;
       setBusy(key);
       setActionError(null);
       try {
@@ -188,7 +217,7 @@ export function PluginDetailScreen() {
         setBusy(null);
       }
     },
-    [busy, refresh],
+    [actions.pending, busy, refresh],
   );
 
   const entry = state?.entry;
@@ -205,57 +234,23 @@ export function PluginDetailScreen() {
 
   const install = useCallback(() => {
     if (!entry) return;
-    void act('install', () => installPlugin(entry.id), `Could not install ${entry.name}.`);
-  }, [act, entry]);
-
-  const uninstall = useCallback(async () => {
-    if (!entry) return;
-    const confirmed = await confirmIrreversible({
-      title: `Remove ${entry.name}?`,
-      consequence: `Its skills and agents stop loading in your Cloud chats and its settings are cleared. You can install it again later.`,
-      actionLabel: 'Remove',
-    });
-    if (!confirmed) return;
-    setBusy('uninstall');
     setActionError(null);
-    try {
-      await uninstallPlugin(entry.id);
-      refresh();
-    } catch (error) {
-      if (error instanceof PluginDependentsError) {
-        const together = await confirmIrreversible({
-          title: `Remove ${entry.name} and what needs it?`,
-          consequence: `${error.message} Removing them together also removes ${error.dependents
-            .map((dependent) => dependent.name)
-            .join(', ')}.`,
-          actionLabel: 'Remove all',
-        });
-        if (together) {
-          try {
-            await uninstallPlugin(entry.id, true);
-            refresh();
-          } catch (secondError) {
-            setActionError(pluginActionError(secondError, `Could not remove ${entry.name}.`));
-          }
-        }
-      } else {
-        setActionError(pluginActionError(error, `Could not remove ${entry.name}.`));
-      }
-    } finally {
-      setBusy(null);
-    }
-  }, [entry, refresh]);
+    void actions.install(entry);
+  }, [actions, entry]);
+
+  const uninstall = useCallback(() => {
+    if (!entry) return;
+    setActionError(null);
+    void actions.remove(entry);
+  }, [actions, entry]);
 
   const toggleEnabled = useCallback(
     (enabled: boolean) => {
       if (!entry) return;
-      void act(
-        'enabled',
-        () => setPluginEnabled(entry.id, enabled),
-        `Could not turn ${entry.name} ${enabled ? 'on' : 'off'}.`,
-      );
+      setActionError(null);
+      void actions.setEnabled(entry, enabled);
     },
-    [act, entry],
+    [actions, entry],
   );
 
   const switchVersion = useCallback(
@@ -307,7 +302,7 @@ export function PluginDetailScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceBase }}>
       <ScreenHeader title={entry?.name ?? 'Plugin'} onBack={goBack} />
-      {loadError && !state ? (
+      {loadError ? (
         <EmptyState
           title="Could not load this plugin"
           body={loadError}
@@ -328,7 +323,7 @@ export function PluginDetailScreen() {
               {[
                 entry.publisher.name,
                 entry.verified ? 'Verified' : null,
-                entry.category,
+                pluginCategoryLabel(pluginCategoryKey(entry.category)),
                 `Version ${installation?.installedVersion ?? entry.version}`,
               ]
                 .filter(Boolean)
@@ -358,24 +353,22 @@ export function PluginDetailScreen() {
                   label="Turned on"
                   description="Its skills and agents load in your Cloud chats while this is on."
                   value={installation.enabled}
-                  disabled={busy !== null}
+                  disabled={working}
                   onValueChange={toggleEnabled}
                 />
                 <Button
                   title="Remove plugin"
                   variant="outline"
-                  loading={busy === 'uninstall'}
-                  disabled={busy !== null}
-                  onPress={() => void uninstall()}
+                  loading={actions.pending?.kind === 'uninstall'}
+                  disabled={working}
+                  onPress={uninstall}
                 />
               </>
             ) : (
               <Button
                 title={compatibility.installable ? 'Install' : 'Not available on mobile'}
-                loading={busy === 'install'}
-                disabled={
-                  !compatibility.installable || busy !== null || state.scan?.verdict === 'block'
-                }
+                loading={actions.pending?.kind === 'install'}
+                disabled={!compatibility.installable || working || state.scan?.verdict === 'block'}
                 onPress={install}
               />
             )}
@@ -417,6 +410,8 @@ export function PluginDetailScreen() {
             <SectionCard title="Connectors" description={PLUGIN_CONNECTORS_NEVER_CONNECTED_NOTE}>
               {entry.requiredConnectors.map((connector) => {
                 const isConnected = state.connected.has(connector);
+                const connectorName =
+                  state.connectorNames.get(connector) ?? formatConnectorName(connector);
                 return (
                   <View
                     key={connector}
@@ -424,7 +419,7 @@ export function PluginDetailScreen() {
                   >
                     <View style={{ flex: 1 }}>
                       <Text style={{ color: colors.textPrimary, fontSize: typeScale.footnote }}>
-                        {connector}
+                        {connectorName}
                       </Text>
                       <MetaText>
                         {connectorsReleased()
@@ -439,7 +434,7 @@ export function PluginDetailScreen() {
                         title="Connect"
                         size="sm"
                         variant="outline"
-                        accessibilityLabel={`Connect ${connector}`}
+                        accessibilityLabel={`Connect ${connectorName}`}
                         onPress={() =>
                           router.push({
                             pathname: '/(app)/connectors/[id]' as const,
@@ -486,7 +481,7 @@ export function PluginDetailScreen() {
                   <Button
                     title={`Update to ${state.offer.latestVersion}`}
                     loading={busy === 'version'}
-                    disabled={busy !== null}
+                    disabled={working}
                     onPress={() =>
                       void switchVersion(state.offer!.latestVersion, (permissions) =>
                         versionSwitchSummary(state.offer!, permissions),
@@ -516,9 +511,7 @@ export function PluginDetailScreen() {
                     title="Switch version"
                     variant="outline"
                     disabled={
-                      busy !== null ||
-                      !chosenVersion ||
-                      chosenVersion === installation.installedVersion
+                      working || !chosenVersion || chosenVersion === installation.installedVersion
                     }
                     onPress={() =>
                       chosenVersion
@@ -543,8 +536,8 @@ export function PluginDetailScreen() {
               <Button
                 title="Reinstall"
                 variant="outline"
-                loading={busy === 'install'}
-                disabled={busy !== null}
+                loading={actions.pending?.kind === 'install'}
+                disabled={working}
                 accessibilityLabel={`Reinstall ${entry.name}`}
                 onPress={install}
               />
@@ -561,7 +554,7 @@ export function PluginDetailScreen() {
                   key={skill}
                   label={skill}
                   value={state.settings!.enabledSkills.includes(skill)}
-                  disabled={busy !== null}
+                  disabled={working}
                   onValueChange={(enabled) => toggleSkill(skill, enabled)}
                 />
               ))}

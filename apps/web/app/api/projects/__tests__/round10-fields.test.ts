@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { ManagedCloudProjectResponseSchema } from '@agiworkforce/cloud-contracts';
+import { getProjectLimit } from '@/lib/services/free-plan-entitlements';
+import { mergeJsonbObjectSql } from '@/lib/server/jsonb-object-merge';
 
 const {
   mockFrom,
@@ -274,9 +276,14 @@ describe('PUT /api/projects/[id] · round-10 fields', () => {
 
     expect(res.status).toBe(200);
     const sqlCalls = mockNeonQuery.mock.calls.map((c) => String(c[0]));
-    expect(
-      sqlCalls.some((sql) => /metadata = coalesce\(metadata/.test(sql) && /starred/.test(sql)),
-    ).toBe(true);
+    const starredMerge = `metadata = ${mergeJsonbObjectSql(
+      'metadata',
+      "jsonb_build_object('starred', $1::boolean)",
+    )}`;
+    expect(sqlCalls.some((sql) => sql.includes(starredMerge))).toBe(true);
+    expect(sqlCalls.some((sql) => /coalesce\(metadata, '\{\}'::jsonb\) \|\|/.test(sql))).toBe(
+      false,
+    );
     const json = (await res.json()) as { project: { metadata?: Record<string, unknown> } };
     expect(json.project.metadata?.['starred']).toBe(true);
   });
@@ -617,7 +624,7 @@ describe('POST /api/projects · round-10 fields', () => {
 
     const [sql, params] = mockNeonQuery.mock.calls[0] as [string, unknown[]];
     expect(sql).toContain("assert_user_resource_limit('projects'");
-    expect(params).toContain(1);
+    expect(params.at(-1)).toBe(getProjectLimit('free'));
   });
 
   it.each([
@@ -661,7 +668,7 @@ describe('POST /api/projects · round-10 fields', () => {
     );
   });
 
-  it('uses the Pro project limit from the shared billing catalog', async () => {
+  it('gives Pro no plan project limit', async () => {
     mockGetSubscription.mockResolvedValue({ plan_tier: 'pro', status: 'active' });
     setupInsertChain({ data: { ...BASE_DB_ROW, id: 'proj-paid' }, error: null });
 
@@ -670,7 +677,8 @@ describe('POST /api/projects · round-10 fields', () => {
     expect(res.status).toBe(201);
     const [sql, params] = mockNeonQuery.mock.calls[0] as [string, unknown[]];
     expect(sql).toContain("assert_user_resource_limit('projects'");
-    expect(params).toContain(25);
+    expect(params.at(-1)).toBeNull();
+    expect(params).not.toContain(25);
   });
 
   it('keeps Max project creation unlimited', async () => {
@@ -692,7 +700,7 @@ describe('POST /api/projects · round-10 fields', () => {
     expect(mockSeatCandidates).toHaveBeenCalled();
     const [sql, params] = mockNeonQuery.mock.calls[0] as [string, unknown[]];
     expect(sql).toContain("assert_user_resource_limit('projects'");
-    expect(params.at(-1)).toBe(1);
+    expect(params.at(-1)).toBe(getProjectLimit('free'));
   });
 
   it.each(['past_due', 'canceled', 'expired'])(
@@ -701,7 +709,7 @@ describe('POST /api/projects · round-10 fields', () => {
       mockGetSubscription.mockResolvedValue({ plan_tier: 'pro', status });
       setupInsertChain({ data: BASE_DB_ROW, error: null });
       expect((await POST(makePostRequest({ name: 'Baseline project' }))).status).toBe(201);
-      expect(mockNeonQuery.mock.calls[0]?.[1].at(-1)).toBe(1);
+      expect(mockNeonQuery.mock.calls[0]?.[1].at(-1)).toBe(getProjectLimit('free'));
     },
   );
 
@@ -732,7 +740,7 @@ describe('POST /api/projects · round-10 fields', () => {
     const insertion = mockNeonQuery.mock.calls.find(([sql]) =>
       String(sql).includes('insert into user_projects'),
     );
-    expect(insertion?.[1].at(-1)).toBe(25);
+    expect(insertion?.[1].at(-1)).toBeNull();
   });
 
   it('POST returns 400 for invalid importedFrom enum', async () => {

@@ -4,7 +4,7 @@ title: Connect a custom MCP server
 path: /connectors/mcp-directory
 category: connectors
 tags: mcp, model context protocol, custom mcp, mcp server, remote mcp, mcp url, auth token, tool discovery, mcp directory, mcp-server, scopes
-updated: 2026-10-12
+updated: 2026-11-16
 description: How to connect a custom MCP server, what discovery results mean and which permissions and limits apply.
 scope: public
 ---
@@ -55,9 +55,14 @@ connectors.
 
 ## Limits
 
-How many custom MCP connections you can keep depends on your plan; the pricing
-page lists the figures once connectors are open. A workspace administrator can
-restrict which connectors a managed workspace permits.
+How many custom MCP connections you can keep depends on your plan. A workspace
+administrator can restrict which connectors a managed workspace permits.
+
+{{#purchase}}
+
+The pricing page lists the figures once connectors are open.
+
+{{/purchase}}
 
 ## AGI as an MCP server
 

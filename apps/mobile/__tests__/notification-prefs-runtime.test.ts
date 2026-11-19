@@ -36,6 +36,10 @@ jest.mock('../services/api', () => ({
   api: { post: jest.fn().mockResolvedValue(undefined), delete: jest.fn() },
 }));
 
+jest.mock('@/lib/safeOpenURL', () => ({
+  openInAppBrowser: jest.fn().mockResolvedValue(true),
+}));
+
 jest.mock('@/lib/deviceId', () => ({ getDeviceId: jest.fn().mockResolvedValue('device-fake') }));
 
 jest.mock('@/lib/mmkv', () => ({

@@ -120,7 +120,7 @@ jest.mock('@/src/features/settings/Common', () => {
   };
 });
 
-jest.mock('@/lib/safeOpenURL', () => ({ openExternalUrl: jest.fn() }));
+jest.mock('@/lib/safeOpenURL', () => ({ openExternalUrl: jest.fn(), openInAppBrowser: jest.fn() }));
 let mockWebBillingLinksAllowed = true;
 jest.mock('@/src/features/billing/webBillingLinks', () => ({
   useWebBillingLinksAllowed: () => mockWebBillingLinksAllowed,
@@ -157,7 +157,7 @@ jest.mock('@/src/features/auth/store', () => ({
 import CloudBillingScreen from '../src/features/settings/cloud-billing/index';
 import * as mobileIapHook from '../src/features/billing/useMobileIap';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
-import { openExternalUrl } from '../lib/safeOpenURL';
+import { openExternalUrl, openInAppBrowser } from '../lib/safeOpenURL';
 import { fetchPortalSessionUrl } from '../src/features/billing/service';
 import * as releaseState from '../src/features/release-state';
 import { ApiHttpError } from '../services/apiErrors';
@@ -714,9 +714,9 @@ describe('buying and changing plans in the app', () => {
 
     expect(screen.getByText(/Cancel at least 24 hours before renewal/)).toBeTruthy();
     fireEvent.press(screen.getByLabelText('Terms of Use'));
-    expect(openExternalUrl).toHaveBeenCalledWith('https://agiworkforce.com/terms');
+    expect(openInAppBrowser).toHaveBeenCalledWith('https://agiworkforce.com/terms?from=mobile');
     fireEvent.press(screen.getByLabelText('Privacy Policy'));
-    expect(openExternalUrl).toHaveBeenCalledWith('https://agiworkforce.com/privacy');
+    expect(openInAppBrowser).toHaveBeenCalledWith('https://agiworkforce.com/privacy?from=mobile');
   });
 
   it('describes Google Play renewal and cancellation to an Android buyer', () => {
@@ -1030,6 +1030,84 @@ describe('web billing links outside the US App Store and on Android', () => {
     expect(getByLabelText('Invoices').props.accessibilityState.disabled).toBe(true);
     expect(fetchPortalSessionUrl).not.toHaveBeenCalled();
     expect(openExternalUrl).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['pro', 'Included with your account', 'By your organization'],
+    ['team', 'By your organization', 'Included with your account'],
+  ])('names who bills a %s plan given without a purchase', (planTier, shown, hidden) => {
+    Object.assign(mockFeatures, { billing: true });
+    Object.assign(mockTierState, {
+      tier: planTier,
+      billingTier: planTier,
+      billingStatus: 'active',
+      billingSource: 'manual',
+    });
+
+    const { getByText, queryByText } = render(<CloudBillingScreen />);
+
+    expect(getByText(shown)).toBeTruthy();
+    expect(queryByText(hidden)).toBeNull();
+  });
+
+  describe('the end date of a plan', () => {
+    const PERIOD_END = 1_800_000_000;
+
+    afterEach(() => {
+      Reflect.deleteProperty(mockTierState, 'billingPeriodEnd');
+      Object.assign(mockTierState, { billingCancelsAtPeriodEnd: false });
+    });
+
+    it.each([
+      ['pro', 'manual'],
+      ['team', 'manual'],
+    ])('shows no renewal or end date for a %s plan from %s billing', (planTier, source) => {
+      Object.assign(mockTierState, {
+        tier: planTier,
+        billingTier: planTier,
+        billingStatus: 'active',
+        billingSource: source,
+        billingPeriodEnd: PERIOD_END,
+      });
+
+      const { getByText, queryByText } = render(<CloudBillingScreen />);
+
+      expect(queryByText(/Included with your account until/)).toBeNull();
+      expect(queryByText(/until .*2027/)).toBeNull();
+      expect(queryByText(/Renews/)).toBeNull();
+      expect(queryByText(/renews/)).toBeNull();
+    });
+
+    it('keeps the end date of a plan given without a purchase once it is set to end', () => {
+      Object.assign(mockTierState, {
+        tier: 'pro',
+        billingTier: 'pro',
+        billingStatus: 'active',
+        billingSource: 'manual',
+        billingPeriodEnd: PERIOD_END,
+        billingCancelsAtPeriodEnd: true,
+      });
+
+      const { getByText, queryByText } = render(<CloudBillingScreen />);
+
+      expect(getByText(/^Access ends .*2027\./)).toBeTruthy();
+      expect(queryByText(/Renews/)).toBeNull();
+    });
+
+    it('keeps the renewal line for a plan bought on the web', () => {
+      Object.assign(mockTierState, {
+        tier: 'pro',
+        billingTier: 'pro',
+        billingStatus: 'active',
+        billingSource: 'stripe',
+        billingPeriodEnd: PERIOD_END,
+      });
+
+      const { getByText, queryByText } = render(<CloudBillingScreen />);
+
+      expect(getByText(/^Renews .*2027$/)).toBeTruthy();
+      expect(queryByText(/Included with your account until/)).toBeNull();
+    });
   });
 
   it('keeps the double-billing warning but drops its web button', () => {

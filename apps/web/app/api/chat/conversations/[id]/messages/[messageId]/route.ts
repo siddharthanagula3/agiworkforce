@@ -7,6 +7,7 @@ import {
 import { TERMINAL_AGENT_TASK_STATES } from '@agiworkforce/types';
 import { applyAssistantFenceEdit } from '@agiworkforce/unified-chat/assistant-fence-edits';
 import { EXPLICIT_ARTIFACT_DERIVATION_POLICY } from '@agiworkforce/artifacts';
+import { stripCitationMarkup } from '@agiworkforce/provider-protocol';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -30,6 +31,7 @@ import {
   spliceMessageChildren,
   wantsSubtreeDelete,
 } from '../lib/message-thread';
+import { mergeJsonbObjectSql } from '@/lib/server/jsonb-object-merge';
 
 type RouteContext = { params: Promise<{ id: string; messageId: string }> };
 
@@ -146,7 +148,7 @@ async function handlePatchMessage(request: NextRequest, context: RouteContext) {
     }
     if (message.busy)
       throw createError.conflict('Wait for this response to finish before editing.');
-    const content = applyAssistantFenceEdit(message.content, patch.fenceEdit);
+    const content = applyAssistantFenceEdit(stripCitationMarkup(message.content), patch.fenceEdit);
     if (content === null) {
       throw createError.conflict('This block changed. Reopen the chat before saving your edit.');
     }
@@ -172,7 +174,7 @@ async function handlePatchMessage(request: NextRequest, context: RouteContext) {
     });
     return NextResponse.json({
       ok: true,
-      content: saved.content,
+      content: stripCitationMarkup(saved.content),
       editRevision: saved.edit_revision,
     });
   }
@@ -206,7 +208,7 @@ async function handlePatchMessage(request: NextRequest, context: RouteContext) {
 
   const count = await db.execute(
     `update web_messages
-        set metadata = coalesce(metadata, '{}'::jsonb) || $1::jsonb
+        set metadata = ${mergeJsonbObjectSql('metadata', '$1::jsonb')}
       where id = $2 and conversation_id = $3 and deleted_at is null`,
     [JSON.stringify(patch), messageId, conversationId],
   );

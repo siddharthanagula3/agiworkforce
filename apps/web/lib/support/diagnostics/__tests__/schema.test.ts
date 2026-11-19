@@ -121,7 +121,7 @@ describe('describeDiagnostics', () => {
     for (const expected of [
       'surface: web',
       'app version: 1.2.3',
-      'release: abc1234',
+      'server release: abc1234',
       'environment: production',
       'locale: en-GB',
       'time zone: Europe/London',

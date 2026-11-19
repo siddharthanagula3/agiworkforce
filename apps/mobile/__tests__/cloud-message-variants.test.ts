@@ -33,6 +33,7 @@ jest.mock('../services/managedCloudChat', () => ({
 jest.mock('../src/features/chat/services/cloudMessageMutations', () => ({
   deleteCloudMessagesRemote: jest.fn(async () => undefined),
   setCloudMessageReactionRemote: jest.fn(async () => undefined),
+  recordResponseRatingRemote: jest.fn(async () => undefined),
 }));
 
 jest.mock('../services/remoteChatGate', () => {
@@ -68,12 +69,20 @@ import { REDUCED_SENSITIVE_CONTENT_REFUSAL } from '../lib/contentFilter';
 import { managedCloudChat } from '../services/managedCloudChat';
 import {
   deleteCloudMessagesRemote,
+  recordResponseRatingRemote,
   setCloudMessageReactionRemote,
 } from '../src/features/chat/services/cloudMessageMutations';
+import {
+  RESPONSE_RATING_RATE_LIMITED,
+  RESPONSE_RATING_REMOVE_FAILED,
+  RESPONSE_RATING_SEND_FAILED,
+} from '@agiworkforce/cloud-contracts';
 import { clearCloudExecutionState, useChatExecutionStore } from '../stores/chat/chatExecutionStore';
 import { useChatCloudMessageStore } from '../stores/chat/chatCloudMessageStore';
 import { useCloudSyncStateStore } from '../stores/chat/cloudSyncStateStore';
+import { ApiHttpError } from '../services/apiErrors';
 import { useChatMessageStore } from '../stores/chat/chatMessageStore';
+import { ResponseRatingError } from '../stores/chat/responseRatingError';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { requireFreeMobileCloudModel } from '../test-utils/modelFixtures';
 import {
@@ -94,6 +103,9 @@ const mockDeleteRemote = deleteCloudMessagesRemote as jest.MockedFunction<
 >;
 const mockSetReactionRemote = setCloudMessageReactionRemote as jest.MockedFunction<
   typeof setCloudMessageReactionRemote
+>;
+const mockRecordRatingRemote = recordResponseRatingRemote as jest.MockedFunction<
+  typeof recordResponseRatingRemote
 >;
 
 const CONV_ID = '0190a000-0000-7000-8000-0000000000d1';
@@ -335,6 +347,22 @@ describe('a pre-threading server keeps the replacing behaviour', () => {
     expect(mockSaveMessage).not.toHaveBeenCalled();
   });
 
+  it('sends a question before its answer when only the question carries the later server time', async () => {
+    seedConversation({}, [
+      message(U1, 'user', 'first question', '2026-06-01T00:01:15.000Z'),
+      message(A1, 'assistant', 'first answer', '2026-06-01T00:00:00.010Z'),
+      message(U2, 'user', 'second question', '2026-06-01T00:02:00.000Z'),
+      message(A2, 'assistant', 'second answer', '2026-06-01T00:02:01.000Z'),
+    ]);
+
+    useChatExecutionStore.getState().editMessage(CONV_ID, U2, 'revised question');
+    await waitFor(() => mockStreamChat.mock.calls.length > 0);
+
+    const sent = (mockStreamChat.mock.calls[0]?.[0].messages ?? []).map((m) => m.content);
+    expect(sent).toEqual(['first question', 'first answer', 'revised question']);
+    await waitFor(() => !useChatExecutionStore.getState().isEditing);
+  });
+
   it('sends the model only the trimmed history while the old tail still exists on the server', async () => {
     seedConversation({}, [
       message(U1, 'user', 'first question', '2026-06-01T00:00:00.000Z'),
@@ -479,6 +507,60 @@ describe('Cloud message ratings', () => {
     );
   });
 
+  it('records the rating as response feedback before saving it on the message', async () => {
+    const order: string[] = [];
+    mockRecordRatingRemote.mockImplementationOnce(async () => void order.push('feedback'));
+    mockSetReactionRemote.mockImplementationOnce(async () => void order.push('message'));
+
+    await useChatMessageStore.getState().setMessageReaction(CONV_ID, A1, 'thumbsDown');
+
+    expect(mockRecordRatingRemote).toHaveBeenCalledWith(
+      CONV_ID,
+      A1,
+      'down',
+      expect.objectContaining({ ownerId: 'cloud-variants-test-user' }),
+    );
+    expect(order).toEqual(['feedback', 'message']);
+  });
+
+  it('removes the response feedback when the rating is cleared', async () => {
+    await useChatMessageStore.getState().setMessageReaction(CONV_ID, A1, 'thumbsUp');
+    await useChatMessageStore.getState().setMessageReaction(CONV_ID, A1, null);
+
+    expect(mockRecordRatingRemote.mock.calls.map((call) => call[2])).toEqual(['up', null]);
+    expect(rows()[1]?.metadata?.reaction).toBeNull();
+  });
+
+  it('keeps the previous rating and says so when the feedback is not accepted', async () => {
+    await useChatMessageStore.getState().setMessageReaction(CONV_ID, A1, 'thumbsUp');
+    mockSetReactionRemote.mockClear();
+    mockRecordRatingRemote.mockRejectedValueOnce(new ApiHttpError('HTTP 503', 503));
+
+    await expect(
+      useChatMessageStore.getState().setMessageReaction(CONV_ID, A1, 'thumbsDown'),
+    ).rejects.toThrow(RESPONSE_RATING_SEND_FAILED);
+
+    expect(rows()[1]?.metadata?.reaction).toBe('thumbsUp');
+    expect(mockSetReactionRemote).not.toHaveBeenCalled();
+
+    mockRecordRatingRemote.mockRejectedValueOnce(new ApiHttpError('HTTP 503', 503));
+    await expect(
+      useChatMessageStore.getState().setMessageReaction(CONV_ID, A1, null),
+    ).rejects.toThrow(RESPONSE_RATING_REMOVE_FAILED);
+    expect(rows()[1]?.metadata?.reaction).toBe('thumbsUp');
+  });
+
+  it('tells the person to wait when ratings are rate limited', async () => {
+    mockRecordRatingRemote.mockRejectedValueOnce(new ApiHttpError('HTTP 429', 429));
+
+    const failure = useChatMessageStore.getState().setMessageReaction(CONV_ID, A1, 'thumbsUp');
+
+    await expect(failure).rejects.toThrow(RESPONSE_RATING_RATE_LIMITED);
+    await expect(failure).rejects.toBeInstanceOf(ResponseRatingError);
+
+    expect(rows()[1]?.metadata?.reaction).toBeNull();
+  });
+
   it('restores the previous rating and reports a failed Cloud write', async () => {
     mockSetReactionRemote.mockRejectedValueOnce(new Error('provider token must not appear'));
 
@@ -487,6 +569,38 @@ describe('Cloud message ratings', () => {
     ).rejects.toThrow('Could not save your rating');
 
     expect(rows()[1]?.metadata?.reaction).toBeNull();
+  });
+
+  it('reverts a rating on a response the server no longer has, and says so', async () => {
+    useChatCloudMessageStore.setState((state) => ({
+      messages: {
+        ...state.messages,
+        [CONV_ID]: (state.messages[CONV_ID] ?? []).map((row) =>
+          row.id === A1 ? { ...row, serverVersion: '7' } : row,
+        ),
+      },
+    }));
+    mockSetReactionRemote.mockRejectedValueOnce(new ApiHttpError('Message not found', 404));
+
+    await expect(
+      useChatMessageStore.getState().setMessageReaction(CONV_ID, A1, 'thumbsUp'),
+    ).rejects.toThrow(
+      'This response is no longer saved in AGI Cloud, so your rating was not kept.',
+    );
+
+    expect(rows()[1]?.metadata?.reaction).toBeNull();
+  });
+
+  it('keeps a rating on a response not yet saved to the server and sends it with the next sync', async () => {
+    mockSetReactionRemote.mockRejectedValueOnce(new ApiHttpError('Message not found', 404));
+
+    await useChatMessageStore.getState().setMessageReaction(CONV_ID, A1, 'thumbsUp');
+
+    expect(rows()[1]?.metadata?.reaction).toBe('thumbsUp');
+    expect(useCloudSyncStateStore.getState().dirtyMessages).toContainEqual({
+      conversationId: CONV_ID,
+      messageId: A1,
+    });
   });
 
   it('does not restore an old rating into the next account', async () => {
@@ -548,6 +662,131 @@ describe('Cloud message ratings', () => {
     await expect(first).resolves.toBeUndefined();
     await expect(second).rejects.toThrow('Could not save your rating');
     expect(rows()[1]?.metadata?.reaction).toBeNull();
+  });
+});
+
+describe('a reason sent with a thumbs-down', () => {
+  beforeEach(() => {
+    seedConversation({}, [
+      message(U1, 'user', 'question', '2026-06-01T00:00:00.000Z'),
+      message(A1, 'assistant', 'answer', '2026-06-01T00:00:01.000Z'),
+    ]);
+  });
+
+  it('sends the reason and the trimmed details with the down rating, without saving the rating twice', async () => {
+    await useChatMessageStore.getState().setMessageReaction(CONV_ID, A1, 'thumbsDown');
+    mockSetReactionRemote.mockClear();
+
+    await useChatMessageStore
+      .getState()
+      .submitResponseRatingDetails(CONV_ID, A1, { reason: 'inaccurate', comment: '  wrong year ' });
+
+    expect(mockRecordRatingRemote).toHaveBeenLastCalledWith(
+      CONV_ID,
+      A1,
+      'down',
+      expect.objectContaining({ ownerId: 'cloud-variants-test-user' }),
+      { reason: 'inaccurate', comment: 'wrong year' },
+    );
+    expect(mockSetReactionRemote).not.toHaveBeenCalled();
+    expect(rows()[1]?.metadata?.reaction).toBe('thumbsDown');
+  });
+
+  it('rates the answer down when the reason is the first thing sent', async () => {
+    await useChatMessageStore
+      .getState()
+      .submitResponseRatingDetails(CONV_ID, A1, { reason: null, comment: 'Too long' });
+
+    expect(mockRecordRatingRemote).toHaveBeenCalledWith(
+      CONV_ID,
+      A1,
+      'down',
+      expect.objectContaining({ ownerId: 'cloud-variants-test-user' }),
+      { reason: null, comment: 'Too long' },
+    );
+    expect(mockSetReactionRemote).toHaveBeenCalledWith(
+      CONV_ID,
+      A1,
+      'thumbsDown',
+      expect.objectContaining({ ownerId: 'cloud-variants-test-user' }),
+    );
+    expect(rows()[1]?.metadata?.reaction).toBe('thumbsDown');
+  });
+
+  it('keeps the saved down rating and tells the person to wait when the reason is rate limited', async () => {
+    await useChatMessageStore.getState().setMessageReaction(CONV_ID, A1, 'thumbsDown');
+    mockRecordRatingRemote.mockRejectedValueOnce(new ApiHttpError('HTTP 429', 429));
+
+    await expect(
+      useChatMessageStore
+        .getState()
+        .submitResponseRatingDetails(CONV_ID, A1, { reason: 'style', comment: '' }),
+    ).rejects.toThrow(RESPONSE_RATING_RATE_LIMITED);
+
+    expect(rows()[1]?.metadata?.reaction).toBe('thumbsDown');
+  });
+
+  it('puts back the earlier rating when a reason sent first is refused', async () => {
+    await useChatMessageStore.getState().setMessageReaction(CONV_ID, A1, 'thumbsUp');
+    mockRecordRatingRemote.mockRejectedValueOnce(new ApiHttpError('HTTP 503', 503));
+
+    await expect(
+      useChatMessageStore
+        .getState()
+        .submitResponseRatingDetails(CONV_ID, A1, { reason: 'incomplete', comment: '' }),
+    ).rejects.toThrow(RESPONSE_RATING_SEND_FAILED);
+
+    expect(rows()[1]?.metadata?.reaction).toBe('thumbsUp');
+  });
+
+  it('sends nothing when there is no reason and no details', async () => {
+    const refused = useChatMessageStore
+      .getState()
+      .submitResponseRatingDetails(CONV_ID, A1, { reason: null, comment: '   ' });
+
+    await expect(refused).rejects.toThrow('Choose a reason or add details first.');
+    await expect(refused).rejects.toBeInstanceOf(ResponseRatingError);
+
+    expect(mockRecordRatingRemote).not.toHaveBeenCalled();
+    expect(rows()[1]?.metadata?.reaction).toBeUndefined();
+  });
+
+  it('sends nothing for an answer in a Local chat', async () => {
+    const localId = '0190a000-0000-7000-8000-0000000000e1';
+    const localAnswer = '0190a000-0000-7000-8000-0000000000e2';
+    useChatMessageStore.setState({
+      conversations: [
+        {
+          id: localId,
+          title: 'Local Chat',
+          createdAt: '2026-06-01T00:00:00.000Z',
+          updatedAt: '2026-06-01T00:00:00.000Z',
+          messageCount: 1,
+          pinned: false,
+          executionMode: 'local',
+        },
+      ],
+      messages: {
+        [localId]: [
+          {
+            id: localAnswer,
+            conversationId: localId,
+            role: 'assistant',
+            content: 'local answer',
+            createdAt: '2026-06-01T00:00:01.000Z',
+          },
+        ],
+      },
+    });
+
+    await expect(
+      useChatMessageStore
+        .getState()
+        .submitResponseRatingDetails(localId, localAnswer, { reason: 'other', comment: 'x' }),
+    ).rejects.toThrow('A reason can be sent only for an answer in a Cloud chat.');
+
+    expect(mockRecordRatingRemote).not.toHaveBeenCalled();
+    expect(mockSetReactionRemote).not.toHaveBeenCalled();
   });
 });
 

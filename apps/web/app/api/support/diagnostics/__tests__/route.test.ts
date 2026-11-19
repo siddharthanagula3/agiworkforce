@@ -114,6 +114,44 @@ describe('POST /api/support/diagnostics', () => {
     expect(body.filename).toMatch(/^agi-diagnostics-desktop-.*\.json$/u);
   });
 
+  it('keeps the build, device class and app mode a phone reports', async () => {
+    const response = await exportDiagnostics(
+      post({
+        diagnostics: bundle({
+          surface: 'mobile',
+          appBuild: '57',
+          deviceClass: 'tablet',
+          appMode: 'cloud',
+        }),
+      }) as never,
+    );
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      diagnostics: Record<string, unknown>;
+      summary: string;
+    };
+    expect(body.diagnostics).toMatchObject({
+      appBuild: '57',
+      deviceClass: 'tablet',
+      appMode: 'cloud',
+    });
+    expect(body.summary).toContain('app build: 57');
+    expect(body.summary).toContain('device: tablet');
+    expect(body.summary).toContain('app mode: cloud');
+  });
+
+  it.each([
+    ['an unknown device class', { deviceClass: 'watch' }],
+    ['an unknown app mode', { appMode: 'hybrid' }],
+    ['an overlong build', { appBuild: 'x'.repeat(51) }],
+  ])('refuses %s', async (_label, overrides) => {
+    const response = await exportDiagnostics(
+      post({ diagnostics: bundle({ surface: 'mobile', ...overrides }) }) as never,
+    );
+    expect(response.status).toBe(400);
+  });
+
   it('refuses a bundle that does not validate rather than exporting it', async () => {
     const response = await exportDiagnostics(
       post({ diagnostics: { surface: 'toaster' } }) as never,

@@ -10,6 +10,7 @@ import {
   PRIVACY_MODE_DISPLAY,
 } from '@agiworkforce/types';
 import { describe, expect, it } from 'vitest';
+import { CANONICAL_SITE_URL } from '@/lib/seo/site';
 import {
   canUseManagedCloudChatSurface,
   getCloudChatSurfaceCapability,
@@ -916,10 +917,7 @@ function repoText(...segments: string[]): string {
 }
 
 function canonicalSupportUrl(path: string): string {
-  const site = fileText('lib/seo/site.ts');
-  const origin = /NEXT_PUBLIC_APP_URL'\]\s*\?\?\s*'([^']+)'/u.exec(site)?.[1];
-  if (!origin) throw new Error('Missing canonical public origin');
-  return new URL(path, origin).href;
+  return new URL(path, CANONICAL_SITE_URL).href;
 }
 
 describe('/byok, VS Code is named with the release state it actually has', () => {

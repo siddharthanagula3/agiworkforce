@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { PageLink } from '@shared/components/layout/EmbeddedPage';
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
@@ -337,9 +337,9 @@ export default function TrustPage() {
                     </h2>
                     <Prose>
                       Mechanisms are explained on{' '}
-                      <Link href="/security" className="agi-ds-link">
+                      <PageLink href="/security" className="agi-ds-link">
                         /security
-                      </Link>
+                      </PageLink>
                       . This table is the summary a reviewer can scan, including the rows that say a
                       control is partial or absent.
                     </Prose>

@@ -63,6 +63,40 @@ describe('ContentReportQueuePanel', () => {
     );
   });
 
+  it('names the kind of content reported and its id beside the conversation and message', async () => {
+    mocks.fetch.mockImplementation(async () =>
+      jsonResponse({
+        reports: [
+          {
+            ...OVERDUE_REPORT,
+            messageId: 'schedule-run:run-9',
+            conversationId: 'schedule:sched-3',
+            subject: { kind: 'schedule-run', id: 'run-9' },
+          },
+        ],
+        counts: COUNTS,
+      }),
+    );
+    render(<ContentReportQueuePanel />);
+
+    expect(
+      await screen.findByText(
+        /conversation schedule:sched-3 · message schedule-run:run-9 · schedule-run run-9 · reporter user-reporter/,
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('leaves the subject out of a report filed before reports named one', async () => {
+    mocks.fetch.mockImplementation(async () =>
+      jsonResponse({ reports: [{ ...OVERDUE_REPORT, subject: null }], counts: COUNTS }),
+    );
+    render(<ContentReportQueuePanel />);
+
+    expect(
+      await screen.findByText(/conversation conv-1 · message msg-1 · reporter user-reporter/),
+    ).toBeInTheDocument();
+  });
+
   it('shows the reviewer the media reference the reporter sent, as text', async () => {
     mocks.fetch.mockImplementation(async () =>
       jsonResponse({

@@ -81,6 +81,22 @@ test('a beta build reads its own channel and not the stable rings', async () => 
   expect(useRolloutStore.getState().openRings).toEqual({ plan_mode: true });
 });
 
+test('the request names the channel this build was made for', async () => {
+  mockedGet.mockResolvedValue(meResponse({}));
+
+  mockedUpdates.channel = 'production';
+  await refreshRolloutRings();
+  expect(mockedGet).toHaveBeenLastCalledWith('/api/me?surface=mobile&channel=stable');
+
+  mockedUpdates.channel = 'beta';
+  await refreshRolloutRings();
+  expect(mockedGet).toHaveBeenLastCalledWith('/api/me?surface=mobile&channel=beta');
+
+  mockedUpdates.channel = 'preview';
+  await refreshRolloutRings();
+  expect(mockedGet).toHaveBeenLastCalledWith('/api/me?surface=mobile&channel=nightly');
+});
+
 test('an unreachable server never widens a rollout and keeps the last answer', async () => {
   mockedGet.mockResolvedValue(meResponse({ 'rollout.mobile.stable.voice_mode': true }));
   await refreshRolloutRings();

@@ -12,6 +12,7 @@ import {
   type ArtifactPublication,
   type PublishedArtifactAudience,
 } from '../services/artifactPublishing';
+import { PublishedArtifactViewers } from './PublishedArtifactViewers';
 
 interface PublishedArtifactControlsProps {
   title: string;
@@ -70,12 +71,19 @@ export function PublishedArtifactControls({
               'Share with workspace',
               false,
             )
-          : await confirm(
-              'Make this public again?',
-              'Anyone with the link can open it, including people outside your workspace.',
-              'Make public',
-              false,
-            );
+          : next === 'invited'
+            ? await confirm(
+                'Limit to invited people?',
+                'Only people you invite can open the link; anyone else using it loses access.',
+                'Limit to invited people',
+                false,
+              )
+            : await confirm(
+                'Make this public again?',
+                'Anyone with the link can open it, including people outside your workspace.',
+                'Make public',
+                false,
+              );
       if (!confirmed) return;
       const mutation = onMutationStart?.();
       if (mutation === false) return;
@@ -152,6 +160,7 @@ export function PublishedArtifactControls({
           },
         ]
       : []),
+    { value: 'invited', label: 'Only people you invite' },
   ];
 
   return (
@@ -197,6 +206,9 @@ export function PublishedArtifactControls({
           );
         })}
       </View>
+      {publication.visibility === 'invited' ? (
+        <PublishedArtifactViewers shareUrl={publication.shareUrl} />
+      ) : null}
       <Pressable
         onPress={() => void handleUnpublish()}
         disabled={busy !== null}

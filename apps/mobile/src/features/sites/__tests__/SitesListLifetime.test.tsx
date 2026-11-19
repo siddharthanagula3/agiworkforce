@@ -423,7 +423,7 @@ describe('UNRUN source-only Sites list lifetime fixtures', () => {
   );
 
   it.each(['legacy', 'error', 'terminal', 'more'] as const)(
-    'uses honest first-page empty wording for %s',
+    'uses plain first-page empty wording for %s',
     async (kind) => {
       if (kind === 'error') mockGet.mockRejectedValueOnce(new Error('failed'));
       else
@@ -436,15 +436,52 @@ describe('UNRUN source-only Sites list lifetime fixtures', () => {
               }),
         });
       render(<SitesScreen />);
-      await screen.findByText(kind === 'terminal' ? 'Nothing published' : 'No sites on this page');
-      if (kind !== 'terminal')
-        expect(screen.queryByText('Nothing published')).not.toBeOnTheScreen();
-      if (kind === 'legacy')
-        expect(
-          screen.getByText('0 sites on this page. Page coverage is unknown.'),
-        ).toBeOnTheScreen();
+      if (kind === 'error') await screen.findByText('Could not load your published sites.');
+      else await screen.findByText(kind === 'more' ? 'No newer sites' : 'Nothing published');
+      if (kind === 'error') expect(screen.queryByText('Nothing published')).toBeNull();
+      expect(screen.queryByText(/sites on this page/)).toBeNull();
+      expect(screen.queryByText(/Page coverage|older sites|No older sites/i)).toBeNull();
     },
   );
+
+  it('shows no page wording for an empty account or a single page of sites', async () => {
+    mockGet.mockResolvedValueOnce({ artifacts: [], pageInfo: { nextCursor: null } });
+    const empty = render(<SitesScreen />);
+    await screen.findByText('Nothing published');
+    expect(
+      screen.getByText('Tap + to build a site, or publish an artifact from a Cloud chat.'),
+    ).toBeOnTheScreen();
+    expect(screen.queryByText(/sites on this page|older sites|No older sites/i)).toBeNull();
+    empty.unmount();
+
+    mockGet.mockResolvedValueOnce(response());
+    render(<SitesScreen />);
+    await screen.findByText(SITE.title);
+    expect(screen.queryByText(/sites on this page|older sites|Page coverage/i)).toBeNull();
+    expect(screen.queryByText(/Showing/)).toBeNull();
+  });
+
+  it('shows only the error banner when a refresh fails after an empty first page', async () => {
+    mockGet.mockResolvedValueOnce({ artifacts: [], pageInfo: { nextCursor: null } });
+    render(<SitesScreen />);
+    await screen.findByText('Nothing published');
+    mockGet.mockRejectedValueOnce(new Error('offline'));
+    act(() => refresh()());
+    await screen.findByText('Could not load your published sites.');
+    expect(screen.queryByText('Nothing published')).toBeNull();
+    expect(screen.queryByText('No newer sites')).toBeNull();
+  });
+
+  it('says which part of a longer list is on screen', async () => {
+    mockGet.mockResolvedValueOnce(response(SITE.title, 'older'));
+    render(<SitesScreen />);
+    await screen.findByText(SITE.title);
+    expect(screen.getByText('Showing your 1 newest site.')).toBeOnTheScreen();
+    mockGet.mockResolvedValueOnce(response('Earlier site'));
+    act(() => pagePress('Older')());
+    await screen.findByText('Earlier site');
+    expect(screen.getByText('Showing 1 older site.')).toBeOnTheScreen();
+  });
 
   it('keeps a terminal empty continuation recoverable with a current Back control', async () => {
     mockGet.mockResolvedValueOnce(response(SITE.title, 'older'));
@@ -452,7 +489,7 @@ describe('UNRUN source-only Sites list lifetime fixtures', () => {
     await screen.findByText(SITE.title);
     mockGet.mockResolvedValueOnce({ artifacts: [], pageInfo: { nextCursor: null } });
     act(() => pagePress('Older')());
-    await screen.findByText('No sites on this page');
+    await screen.findByText('No more sites');
     expect(screen.queryByText('Nothing published')).not.toBeOnTheScreen();
     mockGet.mockResolvedValueOnce(response('Recovered first'));
     act(() => pagePress('Back to first page')());

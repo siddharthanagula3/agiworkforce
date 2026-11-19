@@ -1,4 +1,5 @@
 import { fireEvent, render } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
 
 jest.mock('@/lib/clipboard', () => ({
   copyToClipboard: jest.fn().mockResolvedValue(true),
@@ -242,6 +243,61 @@ describe('ArtifactFullScreen version history', () => {
     fireEvent.press(view.getByLabelText('Previous version'));
     expect(view.getByTestId('artifact-restore-version')).toBeTruthy();
   });
+  it('shows what changed from the previous version when Show changes is pressed', () => {
+    const store = useArtifactStore.getState();
+    store.addArtifacts([storeArtifact(V1)]);
+    store.addArtifacts([storeArtifact(V2)]);
+
+    const view = render(
+      <ArtifactFullScreen artifact={viewerArtifact} visible onClose={() => undefined} />,
+    );
+
+    const toggle = view.getByTestId('artifact-show-changes');
+    expect(toggle.props.accessibilityState).toEqual({ selected: false });
+    expect(view.queryByTestId('artifact-changes')).toBeNull();
+
+    fireEvent.press(toggle);
+
+    expect(view.getByTestId('artifact-show-changes').props.accessibilityState).toEqual({
+      selected: true,
+    });
+    expect(view.getByTestId('artifact-changes')).toBeTruthy();
+    expect(view.getByLabelText(`Removed line: ${V1}`)).toBeTruthy();
+    expect(view.getByLabelText(`Added line: ${V2}`)).toBeTruthy();
+
+    fireEvent.press(view.getByTestId('artifact-show-changes'));
+    expect(view.queryByTestId('artifact-changes')).toBeNull();
+    expect(view.getByText(V2)).toBeTruthy();
+  });
+
+  it('gives every version control a bare 44 point target with no box behind it', () => {
+    const store = useArtifactStore.getState();
+    store.addArtifacts([storeArtifact(V1)]);
+    store.addArtifacts([storeArtifact(V2)]);
+    const view = render(
+      <ArtifactFullScreen artifact={viewerArtifact} visible onClose={() => undefined} />,
+    );
+    const showChanges = StyleSheet.flatten(view.getByTestId('artifact-show-changes').props.style);
+    expect(showChanges.minHeight).toBe(44);
+    expect(showChanges.backgroundColor).toBeUndefined();
+    fireEvent.press(view.getByLabelText('Previous version'));
+
+    const chip = StyleSheet.flatten(view.getByTestId('artifact-version-chip').props.style);
+    expect(chip.borderWidth).toBeUndefined();
+    expect(chip.backgroundColor).toBeUndefined();
+    for (const label of ['Previous version', 'Next version']) {
+      expect(StyleSheet.flatten(view.getByLabelText(label).props.style)).toMatchObject({
+        width: 44,
+        height: 44,
+      });
+    }
+    for (const testID of ['artifact-version-history-button', 'artifact-restore-version']) {
+      const target = StyleSheet.flatten(view.getByTestId(testID).props.style);
+      expect(target.minHeight).toBe(44);
+      expect(target.backgroundColor).toBeUndefined();
+    }
+  });
+
   it('carries the full-screen chrome contract on its dismiss control', () => {
     const onClose = jest.fn();
     const view = render(<ArtifactFullScreen artifact={viewerArtifact} visible onClose={onClose} />);

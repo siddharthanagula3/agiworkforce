@@ -28,6 +28,7 @@ import {
   captureCloudAccountEpoch,
   isCloudAccountEpochCurrent,
 } from '@/src/features/auth/services/cloudAccountSession';
+import { ApiHttpError } from '@/services/apiErrors';
 
 export type RecurrenceType = ManagedCloudScheduleRecurrence;
 
@@ -125,6 +126,61 @@ async function loadRecentRunsPage(
 
 export type RecentRunsReadKind = 'refresh' | 'more';
 
+let localChangeSeq = 0;
+const localChangeSeqById = new Map<string, number>();
+const localChangesInFlight = new Map<string, number>();
+const createdLocally = new Set<string>();
+
+function markLocalChange(id: string): void {
+  localChangeSeq += 1;
+  localChangeSeqById.set(id, localChangeSeq);
+}
+
+function beginLocalChange(id: string): () => void {
+  markLocalChange(id);
+  localChangesInFlight.set(id, (localChangesInFlight.get(id) ?? 0) + 1);
+  return () => {
+    markLocalChange(id);
+    const remaining = (localChangesInFlight.get(id) ?? 1) - 1;
+    if (remaining > 0) localChangesInFlight.set(id, remaining);
+    else localChangesInFlight.delete(id);
+  };
+}
+
+function forgetLocalChanges(): void {
+  localChangeSeqById.clear();
+  localChangesInFlight.clear();
+  createdLocally.clear();
+}
+
+function mergeFetchedSchedules(
+  fetched: Schedule[],
+  local: Schedule[],
+  readStartedAt: number,
+): Schedule[] {
+  const changedLocally = (id: string) =>
+    localChangesInFlight.has(id) || (localChangeSeqById.get(id) ?? 0) > readStartedAt;
+  const localById = new Map(local.map((schedule) => [schedule.id, schedule]));
+  const fetchedIds = new Set(fetched.map((schedule) => schedule.id));
+  for (const id of fetchedIds) createdLocally.delete(id);
+  const added = local.filter(
+    (schedule) =>
+      createdLocally.has(schedule.id) &&
+      changedLocally(schedule.id) &&
+      !fetchedIds.has(schedule.id),
+  );
+  const kept = fetched.flatMap((schedule) => {
+    if (!changedLocally(schedule.id)) return [schedule];
+    const current = localById.get(schedule.id);
+    return current ? [current] : [];
+  });
+  return [...added, ...kept];
+}
+
+function isAlreadyDeleted(error: unknown): boolean {
+  return error instanceof ApiHttpError && error.status === 404;
+}
+
 interface ScheduleState {
   schedules: Schedule[];
   recentRuns: RecentScheduleRun[];
@@ -179,10 +235,13 @@ export const useScheduleStore = create<ScheduleState>()(
         const account = captureCloudAccountEpoch();
         if (!account) return;
         set({ loading: true, error: null });
+        const readStartedAt = localChangeSeq;
         try {
-          const schedules = await apiFetchSchedules();
+          const fetched = await apiFetchSchedules();
           if (!isCloudAccountEpochCurrent(account)) return;
-          set({ schedules });
+          set((state) => ({
+            schedules: mergeFetchedSchedules(fetched, state.schedules, readStartedAt),
+          }));
         } catch (error) {
           if (!isCloudAccountEpochCurrent(account)) return;
           console.warn('Failed to fetch schedules:', error);
@@ -199,8 +258,10 @@ export const useScheduleStore = create<ScheduleState>()(
         try {
           const schedule = await apiCreateSchedule(data);
           if (!isCloudAccountEpochCurrent(account)) return false;
+          markLocalChange(schedule.id);
+          createdLocally.add(schedule.id);
           set((state) => ({
-            schedules: [schedule, ...state.schedules],
+            schedules: [schedule, ...state.schedules.filter((s) => s.id !== schedule.id)],
           }));
           return true;
         } catch (error) {
@@ -220,6 +281,7 @@ export const useScheduleStore = create<ScheduleState>()(
         try {
           const updated = await apiUpdateSchedule(id, data);
           if (!isCloudAccountEpochCurrent(account)) return;
+          markLocalChange(id);
           set((state) => ({
             schedules: state.schedules.map((s) => (s.id === id ? updated : s)),
           }));
@@ -239,16 +301,26 @@ export const useScheduleStore = create<ScheduleState>()(
         const previousSchedules = get().schedules;
         const removedSchedule = previousSchedules.find((schedule) => schedule.id === id);
         const removedIndex = previousSchedules.findIndex((schedule) => schedule.id === id);
-        set((state) => ({
-          schedules: state.schedules.filter((s) => s.id !== id),
-        }));
+        const removeFromList = () =>
+          set((state) => ({
+            schedules: state.schedules.filter((s) => s.id !== id),
+          }));
+        const endLocalChange = beginLocalChange(id);
+        removeFromList();
 
         try {
           await apiDeleteSchedule(id);
+          endLocalChange();
           if (!isCloudAccountEpochCurrent(account)) return false;
+          removeFromList();
           return true;
         } catch (error) {
+          endLocalChange();
           if (!isCloudAccountEpochCurrent(account)) return false;
+          if (isAlreadyDeleted(error)) {
+            removeFromList();
+            return true;
+          }
           console.warn('Failed to delete schedule:', error);
           if (removedSchedule) {
             set((state) => {
@@ -281,8 +353,10 @@ export const useScheduleStore = create<ScheduleState>()(
           schedules: state.schedules.map((s) => (s.id === id ? { ...s, isActive: newActive } : s)),
         }));
 
+        const endLocalChange = beginLocalChange(id);
         try {
           const updated = await apiToggleSchedule(id, newActive);
+          endLocalChange();
           if (!isCloudAccountEpochCurrent(account)) return;
           set((state) => ({
             schedules: state.schedules.map((item) =>
@@ -290,6 +364,7 @@ export const useScheduleStore = create<ScheduleState>()(
             ),
           }));
         } catch (error) {
+          endLocalChange();
           if (!isCloudAccountEpochCurrent(account)) return;
           console.warn('Failed to toggle schedule:', error);
           set((state) => ({
@@ -454,6 +529,7 @@ export const useScheduleStore = create<ScheduleState>()(
       },
 
       clearAccountSchedules: () => {
+        forgetLocalChanges();
         set({
           schedules: [],
           recentRuns: [],

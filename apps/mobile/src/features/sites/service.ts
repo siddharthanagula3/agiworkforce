@@ -1,4 +1,6 @@
 import {
+  ArtifactsSharedWithMeResponseSchema,
+  artifactsSharedWithMePath,
   MANAGED_CLOUD_PUBLISHED_ARTIFACTS_PATH,
   MANAGED_CLOUD_PUBLISHED_ARTIFACT_PAGE_MAX_ITEMS,
   MANAGED_CLOUD_PUBLISHED_ARTIFACT_CURSOR_MAX_CHARS,
@@ -14,6 +16,7 @@ import {
   managedCloudPublishedArtifactPath,
   managedCloudPublishedArtifactVersionPath,
   managedCloudPublishedArtifactVersionsPath,
+  type ArtifactSharedWithMe,
   type ManagedCloudPublishedArtifact,
   type ManagedCloudPublishedArtifactDataResponse,
   type ManagedCloudPublishedArtifactDetailResponse,
@@ -22,6 +25,12 @@ import {
   type ManagedCloudPublishedArtifactVersion,
 } from '@agiworkforce/cloud-contracts';
 import { api, ApiHttpError } from '@/services/api';
+import { API_URL } from '@/lib/constants';
+import {
+  sharedResourcesForMe,
+  type ProjectSharingOverview,
+} from '@/src/features/projects/projectSharing';
+import { withoutHiddenSharers } from '@/src/features/shared-with-you/hiddenSharers';
 import type { CloudAccountEpoch } from '@/src/features/auth/services/cloudAccountSession';
 
 export class SiteMutationUncertainError extends Error {
@@ -92,6 +101,92 @@ export async function listPublishedSitesPage(
     workspaceMemberCount: body.workspace?.memberCount ?? null,
     nextCursor: body.pageInfo?.nextCursor,
   };
+}
+
+export type SiteSharedWithMe = ArtifactSharedWithMe;
+
+export interface SitesSharedWithMePage {
+  items: SiteSharedWithMe[];
+  nextCursor: string | null;
+  emailVerified: boolean;
+}
+
+export async function listSitesSharedWithMe(
+  cursor: string | null,
+  authority: SiteRequestAuthority,
+): Promise<SitesSharedWithMePage> {
+  if (
+    cursor !== null &&
+    (cursor.length === 0 || cursor.length > MANAGED_CLOUD_PUBLISHED_ARTIFACT_CURSOR_MAX_CHARS)
+  ) {
+    throw new Error('Invalid shared sites page cursor');
+  }
+  const raw = await api.get<unknown>(artifactsSharedWithMePath(cursor), requestOptions(authority));
+  authority.assertCurrent();
+  const body = ArtifactsSharedWithMeResponseSchema.parse(raw);
+  if (cursor !== null && body.nextCursor === cursor) {
+    throw new Error('The next shared sites page could not be confirmed. Refresh to try again.');
+  }
+  return { items: body.items, nextCursor: body.nextCursor, emailVerified: body.emailVerified };
+}
+
+export interface SharedSite {
+  token: string;
+  title: string;
+  updatedAt: string | null;
+  sharedBy: string | null;
+  sharerId: string | null;
+  reportId: string;
+  url: string;
+}
+
+function sharedSiteUrl(token: string): string {
+  return `${API_URL.replace(/\/+$/, '')}/shared-artifact/${encodeURIComponent(token)}`;
+}
+
+export function sharedSiteRows(
+  invited: readonly SiteSharedWithMe[],
+  overview: ProjectSharingOverview | null,
+): SharedSite[] {
+  const visible = overview ? withoutHiddenSharers(overview) : null;
+  const sources = new Map(
+    (visible?.sharedArtifacts ?? []).map((source) => [source.publishedArtifactId, source]),
+  );
+  const workspace: SharedSite[] = visible
+    ? sharedResourcesForMe(visible, API_URL).artifacts.flatMap((entry) => {
+        const source = sources.get(entry.id);
+        return source
+          ? [
+              {
+                token: source.token,
+                title: entry.title,
+                updatedAt: null,
+                sharedBy: entry.ownerName,
+                sharerId: source.ownerUserId,
+                reportId: entry.id,
+                url: entry.url,
+              },
+            ]
+          : [];
+      })
+    : [];
+  const seen = new Set(workspace.map((site) => site.token));
+  const shared = invited.flatMap((site): SharedSite[] => {
+    if (seen.has(site.token)) return [];
+    seen.add(site.token);
+    return [
+      {
+        token: site.token,
+        title: site.title,
+        updatedAt: site.updatedAt,
+        sharedBy: null,
+        sharerId: null,
+        reportId: site.token,
+        url: sharedSiteUrl(site.token),
+      },
+    ];
+  });
+  return [...workspace, ...shared];
 }
 
 export async function readPublishedSite(
@@ -233,9 +328,3 @@ export const SITE_VISIBILITY_LABELS: Record<ManagedCloudPublishedArtifact['visib
   organization: 'Only your workspace',
   invited: 'Invited people',
 };
-
-export function siteSizeLabel(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}

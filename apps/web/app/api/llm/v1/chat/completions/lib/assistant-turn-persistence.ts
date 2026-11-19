@@ -11,6 +11,7 @@ import {
 } from '@agiworkforce/types';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
+import { withoutStoredCitationMarkupRow } from '@/lib/server/stored-assistant-text';
 import { logger } from '@/lib/logger';
 import {
   isRoutingRedirectUrl,
@@ -40,11 +41,12 @@ import type {
 import type { PersistedTurnResearch } from './assistant-turn-research';
 import type { ProcessedRequest } from './request-processor';
 import { recordExternalResourceReferences } from '@/lib/server/external-resource-references';
-import { ASSISTANT_CONTENT_EDIT_METADATA_KEY } from '@/features/chat/lib/assistant-content-edit-contract';
+import { ASSISTANT_CONTENT_EDIT_METADATA_KEY } from '@agiworkforce/cloud-contracts';
 import {
   ASSISTANT_CONTENT_PRESERVED_METADATA_SQL,
   SERVER_ASSISTANT_CONTENT_WRITE_ALLOWED_SQL,
 } from '@/lib/server/assistant-content-edits';
+import { mergeJsonbObjectSql } from '@/lib/server/jsonb-object-merge';
 
 export const TRUNCATED_ASSISTANT_TURN_REASON = 'stream_cancelled';
 
@@ -67,7 +69,7 @@ const INSERT_ASSISTANT_TURN_SQL = `insert into web_messages
               provider = excluded.provider,
               input_tokens = excluded.input_tokens,
               output_tokens = excluded.output_tokens,
-              metadata = web_messages.metadata || ${ASSISTANT_CONTENT_PRESERVED_METADATA_SQL}
+              metadata = ${mergeJsonbObjectSql('web_messages.metadata', ASSISTANT_CONTENT_PRESERVED_METADATA_SQL)}
         where web_messages.conversation_id = excluded.conversation_id
           and ${SERVER_ASSISTANT_CONTENT_WRITE_ALLOWED_SQL}`;
 
@@ -89,7 +91,7 @@ const SELECT_ASSISTANT_TURN_METADATA_SQL = `select m.metadata
 // only while the citation keys still hold exactly what that read saw; a save
 // that landed in between is re-read and patched instead of overwritten.
 const PATCH_ASSISTANT_TURN_SOURCE_URLS_SQL = `update web_messages m
-          set metadata = m.metadata || $4::jsonb
+          set metadata = ${mergeJsonbObjectSql('m.metadata', '$4::jsonb')}
          from public.web_conversations c
         where m.id = $1::uuid
           and m.conversation_id = c.id
@@ -139,6 +141,7 @@ export interface AssistantTurnSnapshot {
   inputTokens: number;
   outputTokens: number;
   truncated: boolean;
+  finishReason?: string | null;
   fallbackReason?: string;
   /**
    * The pages this turn cited. Written under the same `searchResults` key the
@@ -316,6 +319,9 @@ export async function persistAssistantTurn(params: {
     // this message id, and a key left out would keep the cancelled attempt's.
     truncated: snapshot.truncated,
     truncationReason: snapshot.truncated ? TRUNCATED_ASSISTANT_TURN_REASON : null,
+    // Written only when the caller knows it: the `||` merge would let an
+    // unknown reason erase the one a client already saved on this row.
+    ...(snapshot.finishReason !== undefined ? { finishReason: snapshot.finishReason } : {}),
     // The keys the reader renders the move from, asserted for the same reason
     // as truncated: a second attempt that stayed on the pinned model must not
     // inherit the first attempt's disclosure.
@@ -642,8 +648,12 @@ export async function readPersistedAssistantTurn(params: {
     truncated && typeof metadata['truncationReason'] === 'string'
       ? metadata['truncationReason']
       : null;
-  return {
+  const { content } = withoutStoredCitationMarkupRow({
+    role: 'assistant',
     content: row.content ?? '',
+  });
+  return {
+    content,
     model: row.model ?? '',
     truncated,
     truncationReason,
@@ -668,4 +678,31 @@ export function extractAssistantTextDelta(value: Uint8Array): string {
     }
   }
   return out;
+}
+
+export function wireFinishReason(events: readonly unknown[]): string | null {
+  let reason: string | null = null;
+  for (const event of events) {
+    const choices = (event as { choices?: unknown } | null)?.choices;
+    if (!Array.isArray(choices)) continue;
+    for (const choice of choices) {
+      const value = (choice as { finish_reason?: unknown } | null)?.finish_reason;
+      if (typeof value === 'string' && value.length > 0) reason = value;
+    }
+  }
+  return reason;
+}
+
+export function extractAssistantFinishReason(value: Uint8Array): string | null {
+  const events: unknown[] = [];
+  for (const rawLine of new TextDecoder().decode(value).split('\n')) {
+    const line = rawLine.trim();
+    if (!line.startsWith('data: ') || !line.includes('"finish_reason"')) continue;
+    try {
+      events.push(JSON.parse(line.slice(6)));
+    } catch {
+      continue;
+    }
+  }
+  return wireFinishReason(events);
 }

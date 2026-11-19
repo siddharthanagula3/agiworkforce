@@ -90,6 +90,14 @@ function providerSearchUrl(provider: 'google_maps' | 'openstreetmap', query: str
   return url.toString();
 }
 
+export const MAP_RESULTS_UNAVAILABLE_TITLE = 'Map results are not available';
+
+const NO_PLACE_DATA_PREFIX = 'No place data for "';
+
+export function isMapSearchNoPlacesResult(content: unknown): boolean {
+  return typeof content === 'string' && content.startsWith(NO_PLACE_DATA_PREFIX);
+}
+
 export type MapSearchToolOutcome =
   { ok: true; content: string; card: InteractiveCard } | { ok: false; content: string };
 
@@ -113,23 +121,33 @@ export async function executeMapSearchTool(
   }
 
   const { query } = parsed.data;
-  const title = parsed.data.title ?? `Map search: ${query}`;
-  const actions = [
-    {
-      provider: 'google_maps' as const,
-      label: 'Open in Google Maps',
-      url: providerSearchUrl('google_maps', query),
-    },
-    {
-      provider: 'openstreetmap' as const,
-      label: 'Open in OpenStreetMap',
-      url: providerSearchUrl('openstreetmap', query),
-    },
-  ];
   const resolved = await (context.resolveView ?? resolveMapView)(query, {
     tilesAcross: MAP_SEARCH_TILES_ACROSS,
     tilesDown: MAP_SEARCH_TILES_DOWN,
   });
+  const title = resolved
+    ? (parsed.data.title ?? `Map search: ${query}`)
+    : MAP_RESULTS_UNAVAILABLE_TITLE;
+  const actions = resolved
+    ? [
+        {
+          provider: 'google_maps' as const,
+          label: 'Open in Google Maps',
+          url: providerSearchUrl('google_maps', query),
+        },
+        {
+          provider: 'openstreetmap' as const,
+          label: 'Open in OpenStreetMap',
+          url: providerSearchUrl('openstreetmap', query),
+        },
+      ]
+    : [
+        {
+          provider: 'google_maps' as const,
+          label: 'Search in Google Maps',
+          url: providerSearchUrl('google_maps', query),
+        },
+      ];
 
   const rawCard = {
     schemaVersion: INTERACTIVE_CARD_SCHEMA_VERSION,
@@ -167,14 +185,24 @@ export async function executeMapSearchTool(
         'Tell the user which stops are missing and do not describe the map as the complete trip.'
       : '';
 
+  if (!resolved) {
+    return {
+      ok: true,
+      content:
+        `${NO_PLACE_DATA_PREFIX}${query}": the map search found no places, so there is no map ` +
+        `and no list of places. The user sees "${MAP_RESULTS_UNAVAILABLE_TITLE}" with one ` +
+        `link to search in a maps app. Do not call ${MAP_SEARCH_TOOL_NAME} again for this ` +
+        'request. Answer in text from what you know, say plainly that you could not look up ' +
+        'places, and do not name a place as verified or repeat the link as markdown.',
+      card,
+    };
+  }
+
   return {
     ok: true,
     content:
-      `Rendered a map card for "${query}"${
-        resolved
-          ? ' with a live map the user can already see'
-          : ' (link-only: the location could not be geocoded)'
-      }. Do not repeat the links as markdown and do not describe them as a ` +
+      `Rendered a map card for "${query}" with a live map the user can already see. ` +
+      'Do not repeat the links as markdown and do not describe them as a ' +
       `verified place or turn-by-turn route.${partialNotice}`,
     card,
   };

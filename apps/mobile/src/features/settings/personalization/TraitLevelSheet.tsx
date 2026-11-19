@@ -6,6 +6,7 @@ import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 
 export function TraitLevelSheet({
   trait,
@@ -26,7 +27,11 @@ export function TraitLevelSheet({
         style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: c.scrim }}
         onPress={onClose}
       >
-        <Pressable accessible={false} onPress={(event) => event.stopPropagation()}>
+        <Pressable
+          accessible={false}
+          style={contentColumn('reading')}
+          onPress={(event) => event.stopPropagation()}
+        >
           <View
             accessibilityViewIsModal
             style={{

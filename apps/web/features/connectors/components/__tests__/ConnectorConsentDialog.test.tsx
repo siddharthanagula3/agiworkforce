@@ -5,9 +5,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   CONNECTOR_CONSENT_ALLOW,
   CONNECTOR_CONSENT_DENY,
-  askConnectorConsent,
   connectorConsentTitle,
-} from '../ConnectorConsentDialog';
+} from '@agiworkforce/cloud-contracts';
+import { askConnectorConsent } from '../ConnectorConsentDialog';
 
 async function openConsent(connector = { id: 'gmail', name: 'Gmail' }) {
   let decision!: Promise<boolean>;

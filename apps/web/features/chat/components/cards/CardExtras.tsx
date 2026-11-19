@@ -1,32 +1,6 @@
 'use client';
 
-export interface ExtraSection {
-  heading: string;
-  lines: string[];
-}
-
-export function openExtraSection(sections: ExtraSection[], heading: string): void {
-  sections.push({ heading, lines: [] });
-}
-
-export function appendExtraLine(sections: ExtraSection[], heading: string, line: string): void {
-  const text = line.trim();
-  if (!text) return;
-  const last = sections[sections.length - 1];
-  if (last && last.heading === heading) {
-    last.lines.push(text);
-    return;
-  }
-  sections.push({ heading, lines: [text] });
-}
-
-export function stripListMarker(line: string): string {
-  return line
-    .replace(/^[-*]\s+/, '')
-    .replace(/^\d+\.\s+/, '')
-    .replace(/\*\*/g, '')
-    .trim();
-}
+import type { ExtraSection } from '@agiworkforce/unified-chat/message-format-cards';
 
 /**
  * Every card parser classifies only the shapes its layout has a slot for. What

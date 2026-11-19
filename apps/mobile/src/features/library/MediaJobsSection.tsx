@@ -3,7 +3,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, View } from 'react-native';
 import { MessageSquare, RotateCcw, X, type LucideIcon } from 'lucide-react-native';
 import type { MediaJobEntry } from '@agiworkforce/cloud-contracts';
-import { isInFlightMediaJobStatus, type MediaJobStatus } from '@agiworkforce/types';
+import {
+  isInFlightMediaJobStatus,
+  modelDisplayNameById,
+  type MediaJobStatus,
+} from '@agiworkforce/types';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
 import { toUserMessage } from '@/services/userMessage';
@@ -193,7 +197,7 @@ export function MediaJobsSection({
                       {job.prompt}
                     </Text>
                     <Text style={{ color: c.textMuted, fontSize: typeScale.caption }}>
-                      {`${KIND_LABEL[job.kind]} · ${job.model} · ${new Date(
+                      {`${KIND_LABEL[job.kind]} · ${modelDisplayNameById(job.model) ?? job.model} · ${new Date(
                         job.created_at,
                       ).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}`}
                     </Text>

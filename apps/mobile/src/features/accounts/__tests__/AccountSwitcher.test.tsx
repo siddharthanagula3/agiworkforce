@@ -506,6 +506,19 @@ describe('accounts signed in on this phone', () => {
     ).toBeGreaterThan(0);
   });
 
+  it('names this device, not a phone, when a switch cannot be made', async () => {
+    signInFirstAccount({ multiSession: false });
+    await expect(useAuthStore.getState().switchAccount('sess_b')).rejects.toThrow(
+      'This device can hold only one account.',
+    );
+
+    signInFirstAccount({ multiSession: true });
+    await expect(useAuthStore.getState().switchAccount('sess_gone')).rejects.toThrow(
+      'That account is no longer signed in on this device.',
+    );
+    expect(mockClerk.setActive).not.toHaveBeenCalled();
+  });
+
   it('never activates the other account when the push registration cannot be released', async () => {
     signInFirstAccount({ multiSession: true });
     leaveUnsentWorkOnFirstAccount();

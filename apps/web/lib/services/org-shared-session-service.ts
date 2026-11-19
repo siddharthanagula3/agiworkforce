@@ -5,6 +5,8 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { createError } from '@/lib/errors';
 import { assertOrganizationSharedViewerAdmission } from '@/lib/services/organization-shared-viewer-admission';
 import { resolveOrgMembershipForOrganization } from '@/lib/services/org-sharing-service';
+import { stripCitationMarkup } from '@agiworkforce/provider-protocol';
+import { withoutStoredCitationMarkupRow } from '@/lib/server/stored-assistant-text';
 import {
   UNATTENDED_RUN_DENIED_STATUSES,
   ownerMayRunUnattendedSql,
@@ -184,6 +186,34 @@ export interface OrgReadableSession {
   createdAt: string;
 }
 
+function withoutArtifactCitationMarkup(message: Record<string, unknown>): Record<string, unknown> {
+  const artifacts = message['artifacts'];
+  if (message['role'] !== 'assistant' || !Array.isArray(artifacts)) return message;
+  return {
+    ...message,
+    artifacts: artifacts.map((artifact: unknown) => {
+      if (artifact === null || typeof artifact !== 'object') return artifact;
+      const content = (artifact as Record<string, unknown>)['content'];
+      return typeof content === 'string'
+        ? { ...artifact, content: stripCitationMarkup(content) }
+        : artifact;
+    }),
+  };
+}
+
+function withoutSharedCitationMarkup(messages: unknown): unknown {
+  if (!Array.isArray(messages)) return messages;
+  return messages.map((message: unknown) =>
+    message !== null && typeof message === 'object'
+      ? withoutArtifactCitationMarkup(
+          withoutStoredCitationMarkupRow(
+            message as { role?: unknown; content?: unknown },
+          ) as Record<string, unknown>,
+        )
+      : message,
+  );
+}
+
 function rowToSession(row: OrgReadableSessionRow): OrgReadableSession {
   return {
     id: row.id,
@@ -192,7 +222,7 @@ function rowToSession(row: OrgReadableSessionRow): OrgReadableSession {
     title: row.title ?? 'Shared conversation',
     modelId: row.model_id,
     provider: row.provider,
-    messages: row.messages,
+    messages: withoutSharedCitationMarkup(row.messages),
     messageCount: toCount(row.total_messages),
     visibility: toSharedSessionVisibility(row.visibility),
     expiresAt: toIso(row.expires_at),

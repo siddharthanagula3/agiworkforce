@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, RotateCcw, Shuffle } from 'lucide-react';
 import { Button } from '@agiworkforce/ui';
-import type { FlashcardSet } from './study-set';
+import type { FlashcardSet } from '@agiworkforce/unified-chat/study-set';
 
 function shuffled(length: number): number[] {
   const order = Array.from({ length }, (_, index) => index);

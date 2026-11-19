@@ -23,12 +23,23 @@ export interface LibraryAssetsState {
   signedOut: boolean;
   storageUsedBytes: number | null;
   storageLimitBytes: number | null;
+  downloadUsedBytes: number | null;
+  downloadLimitBytes: number | null;
   refresh: () => void;
+  revalidate: () => void;
   loadMore: () => void;
   removeAsset: (id: string) => Promise<void>;
   restoreAsset: (id: string) => Promise<void>;
   permanentlyDeleteAsset: (id: string) => Promise<void>;
 }
+
+const NO_STORAGE = {
+  ownerId: null,
+  used: null,
+  limit: null,
+  downloadUsed: null,
+  downloadLimit: null,
+};
 
 const LIBRARY_LOAD_ERROR = 'The Library could not be reached. Pull to try again.';
 
@@ -65,7 +76,9 @@ export function useLibraryAssets(
     ownerId: string | null;
     used: number | null;
     limit: number | null;
-  }>({ ownerId: null, used: null, limit: null });
+    downloadUsed: number | null;
+    downloadLimit: number | null;
+  }>(NO_STORAGE);
   const [showingCachedPage, setShowingCachedPage] = useState(false);
   const requestRef = useRef(0);
   const assetsRef = useRef(assets);
@@ -81,7 +94,7 @@ export function useLibraryAssets(
   }, []);
 
   const loadFirstPage = useCallback(
-    async (mode: 'initial' | 'refresh') => {
+    async (mode: 'initial' | 'refresh' | 'silent') => {
       if (!ownerId) {
         requestRef.current += 1;
         clearLibraryCache();
@@ -89,7 +102,7 @@ export function useLibraryAssets(
         setHasMore(false);
         setNextOffset(null);
         setLoadedScope(null);
-        setStorage({ ownerId: null, used: null, limit: null });
+        setStorage(NO_STORAGE);
         setShowingCachedPage(false);
         setError(null);
         setLoading(false);
@@ -100,10 +113,12 @@ export function useLibraryAssets(
       const request = requestRef.current + 1;
       requestRef.current = request;
       if (mode === 'refresh') setRefreshing(true);
-      else setLoading(true);
+      else if (mode === 'initial') setLoading(true);
       setLoadingMore(false);
-      setError(null);
-      setShowingCachedPage(false);
+      if (mode !== 'silent') {
+        setError(null);
+        setShowingCachedPage(false);
+      }
 
       try {
         const page = await fetchLibraryPage({ offset: 0, search, sort, origin, kind, deleted });
@@ -119,18 +134,21 @@ export function useLibraryAssets(
             ownerId,
             used: page.storageUsedBytes ?? null,
             limit: page.storageLimitBytes ?? null,
+            downloadUsed: page.downloadUsedBytes ?? null,
+            downloadLimit: page.downloadLimitBytes ?? null,
           });
         }
         if (!search.trim() && sort === LIBRARY_DEFAULT_SORT && defaultScope)
           rememberLibraryPage(ownerId, page.assets);
       } catch {
         if (requestRef.current !== request || ownerIdRef.current !== ownerId) return;
+        if (mode === 'silent') return;
         const cached =
           search.trim() || sort !== LIBRARY_DEFAULT_SORT || !defaultScope
             ? null
             : readLibraryPage(ownerId);
         setAssets(cached ?? []);
-        if (!deleted) setStorage({ ownerId: null, used: null, limit: null });
+        if (!deleted) setStorage(NO_STORAGE);
         setLoadedScope({ ownerId, search, sort, scopeKey });
         setHasMore(false);
         setNextOffset(null);
@@ -165,6 +183,17 @@ export function useLibraryAssets(
   const refresh = useCallback(() => {
     void loadFirstPage('refresh');
   }, [loadFirstPage]);
+
+  const scopeLoaded =
+    loadedScope?.ownerId === ownerId &&
+    loadedScope.search === search &&
+    loadedScope.sort === sort &&
+    loadedScope.scopeKey === scopeKey;
+
+  const revalidate = useCallback(() => {
+    if (loading || refreshing || !scopeLoaded) return;
+    void loadFirstPage('silent');
+  }, [loadFirstPage, loading, refreshing, scopeLoaded]);
 
   const loadMore = useCallback(() => {
     if (
@@ -262,14 +291,8 @@ export function useLibraryAssets(
   );
 
   return {
-    assets:
-      loadedScope?.ownerId === ownerId &&
-      loadedScope.search === search &&
-      loadedScope.sort === sort &&
-      loadedScope.scopeKey === scopeKey
-        ? assets
-        : [],
-    loading,
+    assets: scopeLoaded ? assets : [],
+    loading: loading || (Boolean(ownerId) && !scopeLoaded),
     refreshing,
     loadingMore,
     hasMore,
@@ -278,7 +301,10 @@ export function useLibraryAssets(
     signedOut: !ownerId,
     storageUsedBytes: storage.ownerId === ownerId ? storage.used : null,
     storageLimitBytes: storage.ownerId === ownerId ? storage.limit : null,
+    downloadUsedBytes: storage.ownerId === ownerId ? storage.downloadUsed : null,
+    downloadLimitBytes: storage.ownerId === ownerId ? storage.downloadLimit : null,
     refresh,
+    revalidate,
     loadMore,
     removeAsset,
     restoreAsset,

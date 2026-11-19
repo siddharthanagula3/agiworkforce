@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
-import { fireEvent, render } from '@testing-library/react-native';
+import { Keyboard, Platform } from 'react-native';
+import { act, fireEvent, render } from '@testing-library/react-native';
 import { Plus } from 'lucide-react-native';
 import { lightColors } from '../src/ui/theme/tokens';
 
@@ -90,6 +91,76 @@ describe('BottomSearchBar', () => {
     );
     fireEvent.press(filled.getByLabelText('Clear everything search'));
     expect(onChangeText).toHaveBeenCalledWith('');
+  });
+
+  describe('with the keyboard open', () => {
+    type KeyboardListener = (event: { endCoordinates: { height: number } }) => void;
+    const originalOS = Platform.OS;
+
+    function setPlatform(os: 'ios' | 'android'): void {
+      Object.defineProperty(Platform, 'OS', { get: () => os, configurable: true });
+    }
+
+    function emit(event: string, height = 0): void {
+      const add = Keyboard.addListener as unknown as jest.Mock;
+      for (const call of add.mock.calls) {
+        if (call[0] === event)
+          act(() => (call[1] as KeyboardListener)({ endCoordinates: { height } }));
+      }
+    }
+
+    function renderBar() {
+      return render(
+        <BottomSearchBar
+          testID="bar"
+          value=""
+          onChangeText={jest.fn()}
+          placeholder="Search"
+          accessibilityLabel="Search everything"
+        />,
+      );
+    }
+
+    beforeEach(() => {
+      jest
+        .spyOn(Keyboard, 'addListener')
+        .mockImplementation(() => ({ remove: jest.fn() }) as never);
+    });
+
+    afterEach(() => {
+      jest.restoreAllMocks();
+      Object.defineProperty(Platform, 'OS', { get: () => originalOS, configurable: true });
+    });
+
+    it('rides on top of the iOS keyboard, whose height runs to the bottom of the screen', () => {
+      setPlatform('ios');
+      const screen = renderBar();
+
+      emit('keyboardWillShow', 336);
+      expect(screen.getByTestId('bar').props.style.marginBottom).toBe(
+        336 + BOTTOM_SEARCH_BAR_MARGIN,
+      );
+
+      emit('keyboardWillHide');
+      expect(screen.getByTestId('bar').props.style.marginBottom).toBe(
+        mockInsetBottom + BOTTOM_SEARCH_BAR_MARGIN,
+      );
+    });
+
+    it('rides on top of the Android keyboard, whose height stops at the navigation bar', () => {
+      setPlatform('android');
+      const screen = renderBar();
+
+      emit('keyboardDidShow', 300);
+      expect(screen.getByTestId('bar').props.style.marginBottom).toBe(
+        300 + mockInsetBottom + BOTTOM_SEARCH_BAR_MARGIN,
+      );
+
+      emit('keyboardDidHide');
+      expect(screen.getByTestId('bar').props.style.marginBottom).toBe(
+        mockInsetBottom + BOTTOM_SEARCH_BAR_MARGIN,
+      );
+    });
   });
 });
 

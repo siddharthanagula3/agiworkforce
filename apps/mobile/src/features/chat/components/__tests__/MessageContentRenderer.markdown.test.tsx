@@ -1,4 +1,5 @@
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { Dimensions } from 'react-native';
 import type { ReactTestInstance } from 'react-test-renderer';
 
 jest.mock('../MathBlock', () => ({ MathBlock: () => null }));
@@ -162,7 +163,7 @@ describe('renderMarkdownContent table cells', () => {
 
     const cellWidth = ancestorStyleNumber(cell, 'width');
     expect(cellWidth).toBeGreaterThanOrEqual(120);
-    expect(cellWidth).toBeLessThanOrEqual(260);
+    expect(cellWidth).toBeLessThanOrEqual(260 * Math.max(1, Dimensions.get('window').fontScale));
     expect(ancestorStyleNumber(getByText('short'), 'width')).toBeGreaterThanOrEqual(120);
   });
 });
@@ -238,7 +239,7 @@ describe('renderMarkdownContent code download', () => {
     mockShareFile.mockResolvedValue(undefined);
     const { getByLabelText } = renderMarkdown('```python\nprint("hi")\n```');
 
-    fireEvent.press(getByLabelText('Download code'));
+    fireEvent.press(getByLabelText('Download code.py'));
 
     await waitFor(() => expect(mockShareFile).toHaveBeenCalledWith('file:///exports/code.py'));
     expect(mockExportSourceFile).toHaveBeenCalledWith('print("hi")', 'code', 'py');
@@ -249,7 +250,7 @@ describe('renderMarkdownContent code download', () => {
     mockShareFile.mockResolvedValue(undefined);
     const { getByLabelText } = renderMarkdown('```diff\n+added\n```');
 
-    fireEvent.press(getByLabelText('Download code'));
+    fireEvent.press(getByLabelText('Download code.diff'));
 
     await waitFor(() =>
       expect(mockExportSourceFile).toHaveBeenCalledWith('+added', 'code', 'diff'),
@@ -261,6 +262,6 @@ describe('renderMarkdownContent code download', () => {
       highlightCode: false,
     });
 
-    expect(queryByLabelText('Download code')).toBeNull();
+    expect(queryByLabelText(/^Download/)).toBeNull();
   });
 });

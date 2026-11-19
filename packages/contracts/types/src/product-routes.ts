@@ -95,6 +95,50 @@ export const SIGN_IN_ENTRY_ROUTES = [
   '/auth/update-password',
 ] as const;
 
+/**
+ * A phone app opens public content pages and its account pages in its in-app
+ * browser with this query parameter, and the web renders those pages with no
+ * route to pricing, plans, sign-up or sales (App Store guideline 3.1.1). The
+ * app sets it and the web reads it, so neither may spell it on its own.
+ */
+export const EMBEDDED_PAGE_PARAM = 'from';
+export const EMBEDDED_PAGE_PARAM_VALUE = 'mobile';
+
+export const EMBEDDABLE_PAGE_PREFIXES = [
+  '/help',
+  '/privacy',
+  '/terms',
+  '/acceptable-use',
+  '/data-use',
+  '/cookies',
+  '/security',
+  '/subprocessors',
+  '/trust',
+  '/status',
+  '/support',
+  '/release-notes',
+] as const;
+
+/**
+ * The signed-in pages the phone app opens for account management. With the
+ * marker the web renders them on their own, without the product around them,
+ * so nothing on the page leads to a plan, a price or a purchase. Exact paths:
+ * no other settings section renders in that view.
+ */
+export const EMBEDDABLE_ACCOUNT_PAGE_PATHS = ['/settings/account', '/settings/security'] as const;
+
+/**
+ * The signed-out recovery pages the phone app opens when someone cannot sign
+ * in. With the marker the web renders them with no route to pricing, plans or
+ * sign-up. Exact paths, and only with the marker: an ordinary visitor sees the
+ * full page.
+ */
+export const EMBEDDABLE_RECOVERY_PAGE_PATHS = [
+  '/recover',
+  '/appeal',
+  '/auth/reset-password',
+] as const;
+
 export type ProductRoutePrefix = (typeof PRODUCT_ROUTE_PREFIXES)[number];
 export type AuthRoutePrefix = (typeof AUTH_ROUTE_PREFIXES)[number];
 
@@ -125,6 +169,24 @@ export function isAuthPath(pathname: string): boolean {
 
 export function isShellAppPath(pathname: string): boolean {
   return matchesPrefix(pathname, SHELL_APP_ROUTE_PREFIXES);
+}
+
+export function isEmbeddablePagePath(pathname: string): boolean {
+  return matchesPrefix(pathname, EMBEDDABLE_PAGE_PREFIXES);
+}
+
+export function isEmbeddableAccountPagePath(pathname: string): boolean {
+  return (EMBEDDABLE_ACCOUNT_PAGE_PATHS as readonly string[]).includes(normalizePath(pathname));
+}
+
+export function isEmbeddableRecoveryPagePath(pathname: string): boolean {
+  return (EMBEDDABLE_RECOVERY_PAGE_PATHS as readonly string[]).includes(normalizePath(pathname));
+}
+
+export function hasEmbeddedPageMarker(
+  search: Pick<URLSearchParams, 'getAll'> | null | undefined,
+): boolean {
+  return search?.getAll(EMBEDDED_PAGE_PARAM).includes(EMBEDDED_PAGE_PARAM_VALUE) ?? false;
 }
 
 export function isSignInEntryPath(pathname: string): boolean {

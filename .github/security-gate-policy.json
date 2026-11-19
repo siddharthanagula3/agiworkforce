@@ -112,10 +112,10 @@
       "tracking": "SEC-\u00a7111"
     },
     {
-      "id": "picomatch-redos-no-patched-release",
+      "id": "picomatch-redos-no-upstream-fix",
       "kind": "pnpm-audit-advisory-ignore",
-      "package": "picomatch",
       "advisories": ["GHSA-fc5q-39xc-vjpf"],
+      "package": "picomatch",
       "dependents": {
         "packages": [
           "@expo/cli",
@@ -199,10 +199,10 @@
           "services/upload-scanner"
         ]
       },
-      "reason": "GHSA-fc5q-39xc-vjpf covers every released picomatch and no patched release exists, so there is nothing to upgrade or override to. Every dependent listed is build, bundler, test or lint tooling that matches file paths against patterns this repository supplies. The owner approved the waiver on 2026-11-18; remove it and the manifest entry when a patched release ships.",
-      "owner": "Platform lead",
-      "tracking": "SUPPLY-PICOMATCH-REDOS-WAIVER-01 (audit/registers/known-flaws.md)",
-      "expires": "2026-12-18"
+      "reason": "The advisory (CVE-2026-112366, a regular expression denial of service) covers every released picomatch version and upstream has published no fix, so no override or upgrade can clear the audit. Readings on 2026-11-17 found picomatch 4.0.7 used only by build, lint and test tooling (bundlers, command-line tools, code generation, test runners), with no shipped code that lets another party supply a pattern to it; four workspaces install it through production dependencies whose build-time parts pull it in. The owner approved a dated exception on 2026-11-17.",
+      "owner": "Founder",
+      "tracking": "DEPS-PICOMATCH-REDOS-ADVISORY-01 (audit/registers/known-flaws.md)",
+      "expires": "2026-12-17"
     }
   ]
 }

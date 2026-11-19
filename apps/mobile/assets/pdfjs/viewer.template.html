@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src blob: data:; font-src blob: data:; connect-src blob: data:; base-uri 'none'; form-action 'none'"
+    />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=5, user-scalable=yes"
+    />
+    <meta name="color-scheme" content="light dark" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        background: var(--viewer-background);
+        -webkit-text-size-adjust: 100%;
+        -webkit-tap-highlight-color: transparent;
+      }
+      #pages {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+        padding: 8px;
+      }
+      .page {
+        position: relative;
+        overflow: hidden;
+        background: #ffffff;
+        outline: 1px solid var(--viewer-border);
+      }
+      .page canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="pages"></div>
+    <script type="module">
+      __PDFJS_WORKER__;
+    </script>
+    <script type="module">
+      __PDFJS_LIBRARY__;
+    </script>
+    <script type="module">
+      {
+        const { getDocument } = globalThis.pdfjsLib;
+        const MAX_ZOOM = 5;
+        const GUTTER = 8;
+        const MAX_CANVAS_PIXELS = 8000000;
+        const FALLBACK_RATIO = 1.4142;
+        const NEAR_VIEWPORT = '150% 0px';
+        const ZOOM_SETTLE_MS = 200;
+
+        const root = document.getElementById('pages');
+        const visible = new Set();
+        let slots = [];
+        let pdf = null;
+        let bytes = null;
+        let received = 0;
+        let initialPage = 1;
+        let currentPage = 0;
+        let painted = false;
+        let touched = false;
+        let layoutWidth = 0;
+        let frame = 0;
+        let zoomTimer = 0;
+
+        const send = (message) => {
+          try {
+            window.ReactNativeWebView.postMessage(JSON.stringify(message));
+          } catch (error) {
+            void error;
+          }
+        };
+
+        const fail = (reason) => send({ type: 'failed', reason });
+
+        const failureReason = (error) => {
+          const name = error && error.name;
+          if (name === 'PasswordException') return 'password';
+          if (
+            name === 'InvalidPDFException' ||
+            name === 'MissingPDFException' ||
+            name === 'FormatError'
+          ) {
+            return 'invalid';
+          }
+          return 'error';
+        };
+
+        const zoom = () =>
+          Math.min(MAX_ZOOM, window.visualViewport ? window.visualViewport.scale : 1);
+
+        const outputScaleFor = (cssWidth, cssHeight) => {
+          const wanted = Math.min(4, Math.max(1, window.devicePixelRatio || 1) * zoom());
+          const area = cssWidth * cssHeight * wanted * wanted;
+          return area > MAX_CANVAS_PIXELS ? wanted * Math.sqrt(MAX_CANVAS_PIXELS / area) : wanted;
+        };
+
+        const contentWidth = () => root.clientWidth - GUTTER * 2;
+
+        const sizeSlot = (slot) => {
+          slot.el.style.height = Math.round(slot.ratio * contentWidth()) + 'px';
+        };
+
+        const unload = (slot) => {
+          slot.generation += 1;
+          if (slot.task) {
+            slot.task.cancel();
+            slot.task = null;
+          }
+          if (slot.canvas) {
+            slot.canvas.width = 0;
+            slot.canvas.height = 0;
+            slot.canvas.remove();
+            slot.canvas = null;
+          }
+          slot.scale = 0;
+        };
+
+        const alignInitialPage = () => {
+          if (touched || initialPage <= 1 || !slots[initialPage - 1]) return;
+          window.scrollTo(0, slots[initialPage - 1].el.offsetTop - 8);
+        };
+
+        const render = async (slot) => {
+          if (!pdf) return;
+          slot.generation += 1;
+          const generation = slot.generation;
+          if (slot.task) {
+            slot.task.cancel();
+            slot.task = null;
+          }
+          try {
+            const page = await pdf.getPage(slot.index + 1);
+            if (slot.generation !== generation) return;
+            const base = page.getViewport({ scale: 1 });
+            const cssWidth = contentWidth();
+            const cssHeight = (cssWidth * base.height) / base.width;
+            slot.ratio = base.height / base.width;
+            sizeSlot(slot);
+            if (slot.index + 1 === initialPage) alignInitialPage();
+            const outputScale = outputScaleFor(cssWidth, cssHeight);
+            const viewport = page.getViewport({ scale: (cssWidth / base.width) * outputScale });
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.floor(viewport.width);
+            canvas.height = Math.floor(viewport.height);
+            const task = page.render({ canvasContext: canvas.getContext('2d'), viewport });
+            slot.task = task;
+            await task.promise;
+            if (slot.generation !== generation) return;
+            if (slot.canvas) slot.canvas.remove();
+            slot.canvas = canvas;
+            slot.scale = outputScale;
+            slot.task = null;
+            slot.el.appendChild(canvas);
+            painted = true;
+            page.cleanup();
+          } catch (error) {
+            if (slot.generation === generation && !painted) fail(failureReason(error));
+          }
+        };
+
+        const refresh = () => {
+          for (const index of visible) {
+            const slot = slots[index];
+            const cssWidth = contentWidth();
+            const wanted = outputScaleFor(cssWidth, cssWidth * slot.ratio);
+            if (!slot.canvas || slot.scale < wanted * 0.9) void render(slot);
+          }
+        };
+
+        const observer = new IntersectionObserver(
+          (entries) => {
+            for (const entry of entries) {
+              const slot = slots[Number(entry.target.dataset.index)];
+              if (!slot) continue;
+              if (entry.isIntersecting) {
+                visible.add(slot.index);
+                void render(slot);
+              } else {
+                visible.delete(slot.index);
+                unload(slot);
+              }
+            }
+          },
+          { rootMargin: NEAR_VIEWPORT },
+        );
+
+        const reportPage = () => {
+          frame = 0;
+          if (slots.length === 0) return;
+          const viewport = window.visualViewport;
+          const middle =
+            (viewport ? viewport.pageTop : window.scrollY) +
+            (viewport ? viewport.height : window.innerHeight) / 2;
+          let index = 0;
+          for (let i = 0; i < slots.length; i += 1) {
+            if (slots[i].el.offsetTop <= middle) index = i;
+            else break;
+          }
+          if (index + 1 !== currentPage) {
+            currentPage = index + 1;
+            send({ type: 'page', page: currentPage });
+          }
+        };
+
+        const schedulePageReport = () => {
+          if (frame === 0) frame = requestAnimationFrame(reportPage);
+        };
+
+        const relayout = () => {
+          if (root.clientWidth === layoutWidth) return;
+          layoutWidth = root.clientWidth;
+          for (const slot of slots) {
+            sizeSlot(slot);
+            if (visible.has(slot.index)) {
+              unload(slot);
+              void render(slot);
+            }
+          }
+          schedulePageReport();
+        };
+
+        const open = async () => {
+          const data = bytes;
+          bytes = null;
+          try {
+            const task = getDocument({
+              data,
+              isEvalSupported: false,
+              useWasm: false,
+              useWorkerFetch: false,
+              isOffscreenCanvasSupported: false,
+              enableXfa: false,
+              verbosity: 0,
+            });
+            pdf = await task.promise;
+          } catch (error) {
+            fail(failureReason(error));
+            return;
+          }
+          const count = pdf.numPages;
+          layoutWidth = root.clientWidth;
+          slots = [];
+          for (let index = 0; index < count; index += 1) {
+            const el = document.createElement('div');
+            el.className = 'page';
+            el.dataset.index = String(index);
+            el.setAttribute('role', 'img');
+            el.setAttribute('aria-label', 'Page ' + (index + 1) + ' of ' + count);
+            const slot = {
+              index,
+              el,
+              ratio: FALLBACK_RATIO,
+              canvas: null,
+              task: null,
+              scale: 0,
+              generation: 0,
+            };
+            sizeSlot(slot);
+            root.appendChild(el);
+            slots.push(slot);
+            observer.observe(el);
+          }
+          send({ type: 'loaded', pages: count });
+          alignInitialPage();
+          reportPage();
+        };
+
+        window.pdfViewer = {
+          begin(options) {
+            if (!options || !(options.size > 0)) {
+              fail('invalid');
+              return;
+            }
+            const style = document.documentElement.style;
+            style.setProperty('--viewer-background', options.background);
+            style.setProperty('--viewer-border', options.border);
+            initialPage = options.page > 0 ? options.page : 1;
+            bytes = new Uint8Array(options.size);
+            received = 0;
+            send({ type: 'received', bytes: 0 });
+          },
+          chunk(encoded) {
+            if (!bytes) return;
+            const binary = atob(encoded);
+            const length = Math.min(binary.length, bytes.length - received);
+            for (let i = 0; i < length; i += 1) bytes[received + i] = binary.charCodeAt(i);
+            received += length;
+            if (received >= bytes.length) {
+              void open();
+              return;
+            }
+            send({ type: 'received', bytes: received });
+          },
+        };
+
+        window.addEventListener('scroll', schedulePageReport, { passive: true });
+        window.addEventListener(
+          'touchstart',
+          () => {
+            touched = true;
+          },
+          { passive: true },
+        );
+        window.addEventListener('resize', relayout);
+        if (window.visualViewport) {
+          window.visualViewport.addEventListener('scroll', schedulePageReport);
+          window.visualViewport.addEventListener('resize', () => {
+            clearTimeout(zoomTimer);
+            zoomTimer = setTimeout(refresh, ZOOM_SETTLE_MS);
+            schedulePageReport();
+          });
+        }
+        const failBeforeOpen = () => {
+          if (!pdf) fail('error');
+        };
+        window.addEventListener('error', failBeforeOpen);
+        window.addEventListener('unhandledrejection', failBeforeOpen);
+
+        send({ type: 'ready' });
+      }
+    </script>
+  </body>
+</html>

@@ -40,5 +40,5 @@ else
   eas_build android "${PROFILE}"
   log_ok "Android production build queued."
   log "submit it later with the exact build id:"
-  log "  pnpm --filter @agiworkforce/mobile release:android:prod:submit -- --build-id <id>"
+  log "  pnpm --filter @agiworkforce/mobile release:android:prod:submit --build-id <id>"
 fi

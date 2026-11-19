@@ -1079,6 +1079,71 @@ const V16_SECTIONS: ChatSystemPromptSections = {
     'turn.',
 };
 
+const V15_INLINE_BLOCK_FENCES = (V15_SECTIONS['inline_blocks'] ?? '')
+  .split('\n')
+  .filter((line) => line.startsWith('- '));
+
+const INLINE_VISUALIZATION_FENCES = ['- chart:', '- mermaid:', '- cards:'];
+
+const V17_INLINE_TEXT_FENCES = V15_INLINE_BLOCK_FENCES.filter(
+  (line) => !INLINE_VISUALIZATION_FENCES.some((fence) => line.startsWith(fence)),
+);
+
+const V17_INLINE_FENCES_WITHOUT_ARTIFACTS = V15_INLINE_BLOCK_FENCES.map((line) =>
+  line.replace(', without the artifact marker.', '.'),
+);
+
+const V17_INLINE_BLOCKS_LEAD_WITHOUT_ARTIFACTS =
+  'Inline blocks render inside the reply. Use actual text, Markdown and controls when asked ' +
+  'to show, render or visualize content. An email, document, reusable prompt, copyable ' +
+  'snippet, form, card, carousel, chart, math or diagram is never a reason to generate an ' +
+  'image or search the web. Search only when the task also needs external facts or sources. ' +
+  'Use Markdown for headings, lists, tables and code, and $...$ or $$...$$ for math. These ' +
+  'fence languages render inline:';
+
+const V17_INLINE_BLOCKS_CLOSE_WITHOUT_ARTIFACTS =
+  'Use small inline blocks for content belonging in the answer. Finish each block, and split ' +
+  'independent requested deliverables into independent blocks.';
+
+const V15_INLINE_BLOCK_LINES = (V15_SECTIONS['inline_blocks'] ?? '').split('\n');
+
+/**
+ * v17 adds what the turn renders when the account turned artifacts or inline
+ * visualizations off in Settings: inline block guidance with the artifact
+ * sentences or the chart, mermaid and cards fences left out, and one line for
+ * each switch that is off. Every other section renders as v16.
+ */
+const V17_SECTIONS: ChatSystemPromptSections = {
+  ...V16_SECTIONS,
+  artifacts_off:
+    'The user turned artifacts off in Settings, under Capabilities. Do not write an artifact ' +
+    'or an artifact marker. Write a page, app or tool the user asks for as ordinary code in ' +
+    'the reply, and say they can turn artifacts on in Settings to get a live preview.',
+  inline_visualizations_off:
+    'The user turned inline visualizations off in Settings, under Capabilities. Do not write ' +
+    'chart, mermaid or cards blocks or draw charts and diagrams inside the reply: give numbers ' +
+    'as a Markdown table and steps, processes and structures as a list.',
+  inline_blocks_without_artifacts: [
+    V17_INLINE_BLOCKS_LEAD_WITHOUT_ARTIFACTS,
+    ...V17_INLINE_FENCES_WITHOUT_ARTIFACTS,
+    V17_INLINE_BLOCKS_CLOSE_WITHOUT_ARTIFACTS,
+  ].join('\n'),
+  inline_blocks_without_visualizations: [
+    V15_INLINE_BLOCK_LINES[0] ?? '',
+    ...V17_INLINE_TEXT_FENCES,
+    V15_INLINE_BLOCK_LINES[V15_INLINE_BLOCK_LINES.length - 1] ?? '',
+  ].join('\n'),
+  inline_blocks_without_artifacts_or_visualizations: [
+    V17_INLINE_BLOCKS_LEAD_WITHOUT_ARTIFACTS,
+    ...V17_INLINE_TEXT_FENCES,
+    V17_INLINE_BLOCKS_CLOSE_WITHOUT_ARTIFACTS,
+  ].join('\n'),
+  inline_blocks_unavailable_without_artifacts:
+    'Use Markdown text, lists, tables, code and $...$ or $$...$$ math in the reply. This ' +
+    'surface does not advertise rich inline controls. Rendering and formatting content does ' +
+    'not require image generation or a web search.',
+};
+
 export const CHAT_SYSTEM_PROMPT_VERSIONS: readonly ChatSystemPromptVersion[] = [
   { version: 1, sections: V1_SECTIONS },
   { version: 2, sections: V2_SECTIONS },
@@ -1096,6 +1161,7 @@ export const CHAT_SYSTEM_PROMPT_VERSIONS: readonly ChatSystemPromptVersion[] = [
   { version: 14, sections: V14_SECTIONS },
   { version: 15, sections: V15_SECTIONS },
   { version: 16, sections: V16_SECTIONS },
+  { version: 17, sections: V17_SECTIONS },
 ];
 
 /** The version the chat route serves unless a variant or a rollout picks another. */

@@ -33,9 +33,9 @@ export const MANAGED_USAGE_LIMITS: Readonly<Record<BillingPlanTier, ManagedUsage
     'local-only': NO_MANAGED_USAGE,
     byok: NO_MANAGED_USAGE,
     free: {
-      monthlyCredits: 20,
-      weeklyCredits: 15,
-      fiveHourCredits: 2,
+      monthlyCredits: 2_000,
+      weeklyCredits: 1_500,
+      fiveHourCredits: 200,
       dailyCredits: 0,
       unlimited: false,
     },
@@ -157,7 +157,6 @@ export function managedUsageMultipliers(
 
 export const MANAGED_USAGE_BASELINES: Readonly<Partial<Record<BillingPlanTier, BillingPlanTier>>> =
   Object.freeze({
-    basic: 'free',
     pro: 'basic',
     max: 'pro',
     max_15x: 'pro',

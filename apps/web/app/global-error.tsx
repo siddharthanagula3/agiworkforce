@@ -1,12 +1,26 @@
 'use client';
 
-import { type CSSProperties, useEffect } from 'react';
+import { type CSSProperties, useEffect, useSyncExternalStore } from 'react';
 import { getFriendlyError } from '@agiworkforce/utils';
 import { useUiTranslation } from '@agiworkforce/ui/i18n';
 import { languageFor } from '@agiworkforce/i18n/languages';
 import i18n from '@/app/i18n/index';
 import { logger } from '@shared/lib/logger';
 import { useFriendlyErrorCopy } from '@/shared/hooks/use-friendly-error-copy';
+import { isEmbeddedPageView } from '@/lib/embedded-page';
+
+const noAddressChanges = () => () => {};
+
+function ordinaryVisit(): boolean {
+  try {
+    return !isEmbeddedPageView(
+      window.location.pathname,
+      new URLSearchParams(window.location.search),
+    );
+  } catch {
+    return false;
+  }
+}
 
 export default function GlobalError({
   error,
@@ -25,6 +39,7 @@ export default function GlobalError({
   const { t } = useUiTranslation('errors');
   const friendly = useFriendlyErrorCopy(getFriendlyError(error));
   const language = i18n.resolvedLanguage ?? i18n.language;
+  const linksAllowed = useSyncExternalStore(noAddressChanges, ordinaryVisit, () => false);
 
   const errorTheme = {
     '--global-error-bg': 'black',
@@ -161,42 +176,46 @@ export default function GlobalError({
             >
               {t('boundary.tryAgain', 'Try again')}
             </button>
-            <a
-              href="/"
-              style={{
-                display: 'inline-flex',
-                height: '2.5rem',
-                alignItems: 'center',
-                justifyContent: 'center',
-                borderRadius: '9999px',
-                border: '1px solid var(--global-error-border)',
-                backgroundColor: 'var(--global-error-panel)',
-                padding: '0 1.5rem',
-                fontSize: '0.875rem',
-                fontWeight: 500,
-                color: 'var(--global-error-fg)',
-                textDecoration: 'none',
-              }}
-            >
-              {t('boundary.goHome', 'Go home')}
-            </a>
+            {linksAllowed && (
+              <a
+                href="/"
+                style={{
+                  display: 'inline-flex',
+                  height: '2.5rem',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: '9999px',
+                  border: '1px solid var(--global-error-border)',
+                  backgroundColor: 'var(--global-error-panel)',
+                  padding: '0 1.5rem',
+                  fontSize: '0.875rem',
+                  fontWeight: 500,
+                  color: 'var(--global-error-fg)',
+                  textDecoration: 'none',
+                }}
+              >
+                {t('boundary.goHome', 'Go home')}
+              </a>
+            )}
           </div>
 
-          <div
-            style={{
-              marginTop: '3rem',
-              paddingTop: '1.5rem',
-              borderTop: '1px solid var(--global-error-border)',
-            }}
-          >
-            <p style={{ color: 'var(--global-error-quiet)', fontSize: '0.875rem' }}>
-              {t('boundary.keepsHappening', 'If this keeps happening,')}{' '}
-              <a href="/contact" style={{ color: 'var(--global-error-link)' }}>
-                {t('boundary.contactSupport', 'contact support')}
-              </a>
-              .
-            </p>
-          </div>
+          {linksAllowed && (
+            <div
+              style={{
+                marginTop: '3rem',
+                paddingTop: '1.5rem',
+                borderTop: '1px solid var(--global-error-border)',
+              }}
+            >
+              <p style={{ color: 'var(--global-error-quiet)', fontSize: '0.875rem' }}>
+                {t('boundary.keepsHappening', 'If this keeps happening,')}{' '}
+                <a href="/contact" style={{ color: 'var(--global-error-link)' }}>
+                  {t('boundary.contactSupport', 'contact support')}
+                </a>
+                .
+              </p>
+            </div>
+          )}
         </div>
       </body>
     </html>

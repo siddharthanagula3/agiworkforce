@@ -77,3 +77,37 @@ export function citationPublisherDomain(citation: {
   }
   return host;
 }
+
+export const CITATION_SNIPPET_MAX_CHARS = 180;
+const CITATION_PUBLISHED_PHRASE_MAX_CHARS = 32;
+const CITATION_DATE_FORMAT: Intl.DateTimeFormatOptions = {
+  year: 'numeric',
+  month: 'short',
+  day: 'numeric',
+};
+
+export function citationSnippet(citation: { snippet?: string }): string | undefined {
+  const trimmed = citation.snippet?.replace(/\s+/g, ' ').trim();
+  if (!trimmed) return undefined;
+  return trimmed.length > CITATION_SNIPPET_MAX_CHARS
+    ? `${trimmed.slice(0, CITATION_SNIPPET_MAX_CHARS).trimEnd()}\u2026`
+    : trimmed;
+}
+
+// Backends report this field in their own shape: an ISO instant from one, a
+// relative phrase from another, so only a parseable value is reformatted.
+export function citationPublishedLabel(citation: { publishedDate?: string }): string | undefined {
+  const raw = citation.publishedDate?.trim();
+  if (!raw) return undefined;
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) {
+    return raw.length > CITATION_PUBLISHED_PHRASE_MAX_CHARS ? undefined : raw;
+  }
+  return parsed.toLocaleDateString(undefined, CITATION_DATE_FORMAT);
+}
+
+export function citationRetrievedLabel(citation: { retrievedAt?: string }): string | undefined {
+  const parsed = citation.retrievedAt ? new Date(citation.retrievedAt) : null;
+  if (!parsed || Number.isNaN(parsed.getTime())) return undefined;
+  return `Retrieved ${parsed.toLocaleDateString(undefined, CITATION_DATE_FORMAT)}`;
+}

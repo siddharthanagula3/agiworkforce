@@ -88,6 +88,13 @@
       "owner": "@siddhartha",
       "expires": "2027-02-28",
       "reason": "Negative renderer fixtures only, reviewed against CI run 41138065885. HtmlCodePreview sends a literal script-shaped render-error through a mocked sandbox message and asserts the untrusted error is absent from the visible status. assistantFenceEdits passes literal nested script source through the Markdown editor, asserts a longer outer fence preserves it as code, and verifies reopening edits only that fence. Neither fixture executes or inserts this source into a parent DOM. Keep the scanner findings visible; the same rule in any production path must fail."
+    },
+    {
+      "rule": "javascript.lang.security.audit.unknown-value-with-script-tag.unknown-value-with-script-tag",
+      "paths": ["apps/web/lib/server/chat-file-preparation/__tests__/text-stream.test.ts"],
+      "owner": "@siddhartha",
+      "expires": "2027-02-28",
+      "reason": "Test fixture only. 'reads HTML as text and never renders it' uploads a literal HTML page containing a script element to the in-memory fake storage, prepares it, and reads it back through readPreparedText; Semgrep flags the call because the fixture's length is passed beside the fake storage. The test asserts the file is classified as html and the prepared text equals the page byte for byte, so the markup is stored and returned as plain text, never parsed, rendered or executed. The same rule in any production path must fail."
     }
   ]
 }

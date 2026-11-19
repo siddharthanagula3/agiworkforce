@@ -235,11 +235,40 @@ describe('POST /api/projects/sync, shared cloud contract', () => {
     expect(sql).toContain('deleted_at = case when incoming.should_delete then now() else null end');
     expect(sql).toContain('assert_user_resource_limit(');
     expect(sql).toContain("'projects'");
-    expect(params[2]).toBe(1);
+    expect(params[2]).toBe(getProjectLimit('free'));
     expect(params[3]).toBe(ORGANIZATION_ID);
     const pushed = JSON.parse(String(params[1]));
     expect(pushed[0].baseVersion).toBe('0');
     expect(pushed[0].updatedAt).toBeUndefined();
+  });
+
+  it('creates a project with the memory scope its push carries and never rewrites it on an edit', async () => {
+    mockQuery.mockResolvedValueOnce([
+      { kind: 'applied', id: PROJ_ID, server_version: '5', current: null },
+    ]);
+
+    const res = await POST(
+      new Request('http://localhost:3000/api/projects/sync', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          projects: [
+            { id: PROJ_ID, name: 'Client work', usesGlobalMemory: false, baseVersion: '0' },
+          ],
+        }),
+      }) as never,
+    );
+
+    expect(res.status).toBe(200);
+    const [sql, params] = mockQuery.mock.calls[0] as [string, unknown[]];
+    expect(JSON.parse(String(params[1]))[0].usesGlobalMemory).toBe(false);
+    expect(sql).toContain(
+      "coalesce((item ->> 'usesGlobalMemory')::boolean, true) as uses_global_memory",
+    );
+    expect(sql).toContain('uses_global_memory, created_at, updated_at, deleted_at)');
+    expect(sql).toContain('incoming.uses_global_memory, now(), now()');
+    const updateClause = sql.slice(sql.indexOf('updated as ('), sql.indexOf('inserted as ('));
+    expect(updateClause).not.toContain('uses_global_memory');
   });
 
   it.each([
@@ -307,7 +336,9 @@ describe('POST /api/projects/sync, shared cloud contract', () => {
     expect(compact).toContain('incoming.should_delete as tombstoned');
     expect(compact).toContain('where not updated.tombstoned');
     expect(compact).toContain('updated.id in (select id from prior_tombstones)');
-    expect(compact).toContain('case when dependency.admitted_count > 0 then $3 else null end');
+    expect(compact).toContain(
+      'case when dependency.admitted_count > 0 then $3::integer else null end',
+    );
     expect(compact).not.toContain('inserted_count');
     expect(params[2]).toBe(getProjectLimit('free'));
   });

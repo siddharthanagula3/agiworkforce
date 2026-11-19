@@ -1,5 +1,11 @@
 import { MAX_FILE_TEXT_CHARS } from '@agiworkforce/types';
 import {
+  WorkbookPreviewLimitError,
+  XLSX_NOT_CALCULATED,
+  readWorkbookSheets,
+  type WorkbookSheet,
+} from '@agiworkforce/unified-chat/tabular';
+import {
   officeMemberText,
   openOfficeArchive,
   readOfficeMember,
@@ -16,10 +22,6 @@ const IMAGE_TYPES: Record<string, string> = {
   webp: 'image/webp',
 };
 const RELATIONSHIP_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
-const DEFAULT_SHEET_PATH = 'xl/worksheets/sheet1.xml';
-const WORKBOOK_PATH = 'xl/workbook.xml';
-const WORKBOOK_RELS_PATH = 'xl/_rels/workbook.xml.rels';
-const MAX_SHEETS = 50;
 
 function parseXml(source: string): Document {
   return new DOMParser().parseFromString(source, 'application/xml');
@@ -226,164 +228,12 @@ export async function pptxToSlidesMarkdown(data: ArrayBuffer): Promise<string> {
 export const WORKBOOK_PREVIEW_TOO_LARGE =
   'Workbook preview is too large to display. Download the original XLSX file to view all sheets.';
 
-export class WorkbookPreviewLimitError extends Error {
-  constructor() {
-    super(WORKBOOK_PREVIEW_TOO_LARGE);
-    this.name = 'WorkbookPreviewLimitError';
-  }
-}
-
-function columnIndex(reference: string, remaining: number): number {
-  const letters = /^[A-Z]+/.exec(reference)?.[0] ?? 'A';
-  let column = 0;
-  for (const letter of letters) {
-    const digit = letter.charCodeAt(0) - 64;
-    if (column > Math.floor((remaining + 1 - digit) / 26)) {
-      throw new WorkbookPreviewLimitError();
-    }
-    column = column * 26 + digit;
-  }
-  return column - 1;
-}
-
-function csvCell(value: string): string {
-  return /[",\n\r]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
-}
-
-export const XLSX_NOT_CALCULATED = 'not calculated';
-
-export interface WorkbookSheet {
-  name: string;
-  csv: string;
-}
-
-function escapedCellLength(parts: readonly string[], remaining: number): number {
-  let length = 0;
-  let quoted = false;
-  for (const part of parts) {
-    if (part.length > remaining - length) throw new WorkbookPreviewLimitError();
-    length += part.length;
-    for (const character of part) {
-      if (character === '"') {
-        if (length === remaining) throw new WorkbookPreviewLimitError();
-        length += 1;
-      }
-      if (character === '"' || character === ',' || character === '\n' || character === '\r') {
-        quoted = true;
-      }
-    }
-  }
-  if (quoted) {
-    if (remaining - length < 2) throw new WorkbookPreviewLimitError();
-    length += 2;
-  }
-  return length;
-}
-
-function sheetCsv(sheetXml: string, shared: readonly string[], remaining: number): string {
-  const rows: Map<number, readonly string[]>[] = [];
-  let width = 0;
-  for (const row of elementsByLocalName(parseXml(sheetXml), 'row')) {
-    if (rows.length > remaining) throw new WorkbookPreviewLimitError();
-    const cells = new Map<number, readonly string[]>();
-    for (const cell of elementsByLocalName(row, 'c')) {
-      const index = columnIndex(cell.getAttribute('r') ?? '', remaining);
-      width = Math.max(width, index + 1);
-      const type = cell.getAttribute('t');
-      const cachedNode = elementsByLocalName(cell, 'v')[0];
-      const raw = cachedNode?.textContent ?? '';
-      const hasFormula = elementsByLocalName(cell, 'f').length > 0;
-      const parts =
-        hasFormula && (!cachedNode || raw === '')
-          ? [XLSX_NOT_CALCULATED]
-          : type === 's'
-            ? [shared[Number(raw)] ?? '']
-            : type === 'inlineStr'
-              ? elementsByLocalName(cell, 't').map((node) => node.textContent ?? '')
-              : [raw];
-      cells.set(index, parts);
-    }
-    rows.push(cells);
-  }
-  const newlines = Math.max(0, rows.length - 1);
-  const commasPerRow = Math.max(0, width - 1);
-  if (
-    newlines > remaining ||
-    (rows.length > 0 && commasPerRow > Math.floor((remaining - newlines) / rows.length))
-  ) {
-    throw new WorkbookPreviewLimitError();
-  }
-  let length = newlines + rows.length * commasPerRow;
-  for (const row of rows) {
-    for (const parts of row.values()) {
-      length += escapedCellLength(parts, remaining - length);
-    }
-  }
-  return rows
-    .map((row) => {
-      const chunks: string[] = [];
-      let previous = 0;
-      for (const [index, parts] of [...row.entries()].sort(([a], [b]) => a - b)) {
-        chunks.push(','.repeat(index - previous), csvCell(parts.join('')));
-        previous = index;
-      }
-      chunks.push(','.repeat(Math.max(0, width - 1 - previous)));
-      return chunks.join('');
-    })
-    .join('\n');
-}
-
-async function sheetEntries(archive: OfficeArchive): Promise<{ name: string; path: string }[]> {
-  const workbookXml = await officeMemberText(archive, WORKBOOK_PATH);
-  const relsXml = await officeMemberText(archive, WORKBOOK_RELS_PATH);
-  if (!workbookXml || !relsXml) return [{ name: 'Sheet1', path: DEFAULT_SHEET_PATH }];
-  const targets = new Map(
-    elementsByLocalName(parseXml(relsXml), 'Relationship').map((relation) => [
-      relation.getAttribute('Id') ?? '',
-      relation.getAttribute('Target') ?? '',
-    ]),
-  );
-  const entries: { name: string; path: string }[] = [];
-  for (const sheet of elementsByLocalName(parseXml(workbookXml), 'sheet').slice(0, MAX_SHEETS)) {
-    const id = sheet.getAttributeNS(RELATIONSHIP_NS, 'id') ?? sheet.getAttribute('r:id') ?? '';
-    const target = targets.get(id);
-    const name = sheet.getAttribute('name')?.trim();
-    if (!target || !name) continue;
-    entries.push({
-      name,
-      path: target.startsWith('/') ? target.slice(1) : resolveTarget(WORKBOOK_PATH, target),
-    });
-  }
-  return entries;
-}
-
-export async function xlsxSheets(data: ArrayBuffer): Promise<WorkbookSheet[]> {
-  const archive = await openOfficeArchive(data);
-  const sharedXml = await officeMemberText(archive, 'xl/sharedStrings.xml');
-  const shared = sharedXml
-    ? elementsByLocalName(parseXml(sharedXml), 'si').map((item) =>
-        elementsByLocalName(item, 't')
-          .map((node) => node.textContent ?? '')
-          .join(''),
-      )
-    : [];
-  const sheets: WorkbookSheet[] = [];
-  let remaining = MAX_FILE_TEXT_CHARS;
-  for (const entry of await sheetEntries(archive)) {
-    const sheetXml = await officeMemberText(archive, entry.path);
-    if (sheetXml !== undefined) {
-      const csv = sheetCsv(sheetXml, shared, remaining);
-      remaining -= csv.length;
-      sheets.push({ name: entry.name, csv });
-    }
-  }
-  return sheets;
-}
+export { WorkbookPreviewLimitError, XLSX_NOT_CALCULATED, type WorkbookSheet };
 
 export function loadWorkbookSheets(uri: string): Promise<WorkbookSheet[]> {
   return fetch(uri, { credentials: 'same-origin', cache: 'no-store' })
     .then((response) =>
       response.ok ? response.arrayBuffer() : Promise.reject(new Error(`HTTP ${response.status}`)),
     )
-    .then(xlsxSheets);
+    .then((data) => readWorkbookSheets(new Uint8Array(data)));
 }

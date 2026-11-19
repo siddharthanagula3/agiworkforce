@@ -1,9 +1,11 @@
 import {
   ObjectStorageTimeoutError,
   supportsMultipartUploads,
+  supportsObjectListing,
   type CompleteMultipartUploadInput,
   type CopyObjectIfMatchInput,
   type CreateMultipartUploadInput,
+  type ListedObject,
   type MultipartUploadHandle,
   type ObjectStore,
   type PendingMultipartUpload,
@@ -151,6 +153,16 @@ function isReplayable(input: PutObjectInput): boolean {
   return input.body instanceof Uint8Array;
 }
 
+export function objectStorageBackoffMs(
+  policy: ObjectStorageRetryPolicy,
+  attempt: number,
+  random: () => number = Math.random,
+): number {
+  const exponential = policy.baseDelayMs * BACKOFF_FACTOR ** (attempt - 1);
+  const bounded = Math.min(exponential, policy.maxDelayMs);
+  return Math.round(bounded * (FULL_JITTER_FLOOR + random() * FULL_JITTER_FLOOR));
+}
+
 function defaultSleep(milliseconds: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, milliseconds);
@@ -165,12 +177,6 @@ export function createRetryingObjectStore(
   const sleep = options.sleep ?? defaultSleep;
   const random = options.random ?? Math.random;
 
-  function backoffFor(attempt: number): number {
-    const exponential = policy.baseDelayMs * BACKOFF_FACTOR ** (attempt - 1);
-    const bounded = Math.min(exponential, policy.maxDelayMs);
-    return Math.round(bounded * (FULL_JITTER_FLOOR + random() * FULL_JITTER_FLOOR));
-  }
-
   async function run<T>(
     operation: string,
     call: () => Promise<T>,
@@ -182,7 +188,7 @@ export function createRetryingObjectStore(
         return await call();
       } catch (error) {
         if (attempt >= attempts || !isRetryableObjectStorageError(error)) throw error;
-        const delayMs = backoffFor(attempt);
+        const delayMs = objectStorageBackoffMs(policy, attempt, random);
         options.onRetry?.({ operation, attempt, delayMs, error });
         await sleep(delayMs);
         attempt += 1;
@@ -256,6 +262,19 @@ export function createRetryingObjectStore(
 
           presignUploadPart(input: PresignUploadPartInput): Promise<string> {
             return run('presignUploadPart', () => store.presignUploadPart(input));
+          },
+        }
+      : {}),
+
+    ...(supportsObjectListing(store)
+      ? {
+          listObjects(
+            bucket: string,
+            prefix: string,
+            limit?: number,
+            startAfter?: string,
+          ): Promise<ListedObject[]> {
+            return run('listObjects', () => store.listObjects(bucket, prefix, limit, startAfter));
           },
         }
       : {}),

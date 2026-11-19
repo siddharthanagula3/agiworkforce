@@ -2,6 +2,8 @@ import {
   isValidExternalHttpUrl,
   classifyExternalLink,
   getSystemIntentPrompt,
+  appleMapsUrlFromGeo,
+  systemIntentTarget,
 } from '../src/features/chat/utils/externalUrls';
 
 describe('externalUrls', () => {
@@ -61,11 +63,12 @@ describe('externalUrls', () => {
   });
 
   describe('getSystemIntentPrompt', () => {
-    it('returns the scheme-specific confirmation title with the URL as message', () => {
+    it('returns the scheme-specific confirmation title with the link as message', () => {
       expect(getSystemIntentPrompt('mailto:a@b.com')).toEqual({
         title: 'Open in Mail?',
-        message: 'mailto:a@b.com',
+        message: 'To: a@b.com',
       });
+      expect(getSystemIntentPrompt('sms:+15551234567')?.message).toBe('sms:+15551234567');
       expect(getSystemIntentPrompt('sms:+15551234567')?.title).toBe('Compose SMS?');
       expect(getSystemIntentPrompt('tel:+15551234567')?.title).toBe('Open in Phone?');
       expect(getSystemIntentPrompt('geo:0,0')?.title).toBe('Open in Maps?');
@@ -79,9 +82,100 @@ describe('externalUrls', () => {
       expect(prompt!.message.endsWith('…')).toBe(true);
     });
 
+    it('shows the recipient and subject of an email link in plain words, not percent codes', () => {
+      expect(
+        getSystemIntentPrompt(
+          'mailto:landlord%40example.com?subject=Leaking%20tap&body=Hi%20Sam%2C%0D%0AThe%20tap%20leaks.',
+        ),
+      ).toEqual({
+        title: 'Open in Mail?',
+        message: 'To: landlord@example.com\nSubject: Leaking tap',
+      });
+      expect(getSystemIntentPrompt('mailto:?to=a%40b.com&cc=c%40d.com')?.message).toBe(
+        'To: a@b.com\nCc: c@d.com',
+      );
+    });
+
+    it('shows a blind copy recipient of an email link', () => {
+      expect(getSystemIntentPrompt('mailto:a@b.com?bcc=hidden%40x.com&subject=Hi')?.message).toBe(
+        'To: a@b.com\nBcc: hidden@x.com\nSubject: Hi',
+      );
+    });
+
+    it('keeps each field of an email link on its own line when the link encodes line breaks', () => {
+      expect(
+        getSystemIntentPrompt(
+          'mailto:a@b.com%0ATo%3A%20c%40d.com?subject=Hi%0D%0ASubject%3A%20Fake',
+        )?.message,
+      ).toBe('To: a@b.com To: c@d.com\nSubject: Hi Subject: Fake');
+    });
+
+    it('falls back to the link itself when an email link cannot be decoded', () => {
+      expect(getSystemIntentPrompt('mailto:a@b.com?subject=%E0%A4%A')?.message).toBe(
+        'mailto:a@b.com?subject=%E0%A4%A',
+      );
+    });
+
     it('returns null for http and blocked URLs', () => {
       expect(getSystemIntentPrompt('https://example.com')).toBeNull();
       expect(getSystemIntentPrompt('javascript:alert(1)')).toBeNull();
+    });
+  });
+
+  describe('appleMapsUrlFromGeo', () => {
+    it('turns a coordinate into the Apple Maps ll link', () => {
+      expect(appleMapsUrlFromGeo('geo:37.7749,-122.4194')).toBe(
+        'https://maps.apple.com/?ll=37.7749,-122.4194',
+      );
+    });
+
+    it('drops geo uncertainty and altitude parameters', () => {
+      expect(appleMapsUrlFromGeo('geo:37.786971,-122.399677,12;u=35')).toBe(
+        'https://maps.apple.com/?ll=37.786971,-122.399677',
+      );
+    });
+
+    it('carries a text label as q next to the coordinate', () => {
+      expect(appleMapsUrlFromGeo('geo:48.8584,2.2945?q=Eiffel%20Tower')).toBe(
+        'https://maps.apple.com/?ll=48.8584,2.2945&q=Eiffel%20Tower',
+      );
+    });
+
+    it('reads the label and coordinate of the lat,lon(label) query form', () => {
+      expect(appleMapsUrlFromGeo('geo:0,0?q=34.99,-106.61(Treasure)')).toBe(
+        'https://maps.apple.com/?ll=34.99,-106.61&q=Treasure',
+      );
+    });
+
+    it('searches by text when there is no coordinate', () => {
+      expect(appleMapsUrlFromGeo('geo:0,0?q=coffee+near+me')).toBe(
+        'https://maps.apple.com/?q=coffee%20near%20me',
+      );
+      expect(appleMapsUrlFromGeo('geo:0,0')).toBeNull();
+    });
+
+    it('refuses coordinates outside the globe and anything that is not a geo uri', () => {
+      expect(appleMapsUrlFromGeo('geo:91,10')).toBeNull();
+      expect(appleMapsUrlFromGeo('geo:10,181')).toBeNull();
+      expect(appleMapsUrlFromGeo('geo:somewhere')).toBeNull();
+      expect(appleMapsUrlFromGeo('https://example.com')).toBeNull();
+    });
+  });
+
+  describe('systemIntentTarget', () => {
+    it('opens a geo link in Apple Maps on iOS', () => {
+      expect(systemIntentTarget('geo:37.7749,-122.4194', 'ios')).toBe(
+        'https://maps.apple.com/?ll=37.7749,-122.4194',
+      );
+    });
+
+    it('leaves a geo link alone where the system handles it', () => {
+      expect(systemIntentTarget('geo:37.7749,-122.4194', 'android')).toBe('geo:37.7749,-122.4194');
+    });
+
+    it('leaves the other system links alone on iOS', () => {
+      expect(systemIntentTarget('mailto:a@b.com', 'ios')).toBe('mailto:a@b.com');
+      expect(systemIntentTarget('tel:+15551234567', 'ios')).toBe('tel:+15551234567');
     });
   });
 });

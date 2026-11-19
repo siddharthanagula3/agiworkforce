@@ -5,7 +5,7 @@ import { getDefaultModelFor } from '@agiworkforce/types';
 import { selectIsConversationStreaming, useChatStore } from '@shared/stores/web-chat-store';
 import { useThinkingStore } from '@shared/stores/thinking-store';
 import { useFreeTrialStore } from '@/features/chat/stores/freeTrialStore';
-import { ASSISTANT_CONTENT_CHANGED_REASON } from '@/features/chat/lib/assistant-content-edit-contract';
+import { ASSISTANT_CONTENT_CHANGED_REASON } from '@agiworkforce/cloud-contracts';
 import { isMessageContinuable } from '@/features/chat/lib/continue-generation';
 import { isStoppedTurn } from '@/features/chat/lib/turn-error-notice';
 import {

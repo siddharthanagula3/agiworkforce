@@ -137,6 +137,26 @@ describe('artifact tool-loop cancellation', () => {
   });
 });
 
+describe('artifact tool-loop text', () => {
+  it('keeps the model reasoning out of the text the app receives', async () => {
+    mocks.reserve.mockResolvedValue({ userId: 'viewer-1', idempotencyKey: 'key-1' });
+    const delta = (content: string) =>
+      new TextEncoder().encode(
+        `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`,
+      );
+    mocks.runToolLoop.mockImplementationOnce(async function* () {
+      yield delta('<think');
+      yield delta('ing>Check the open issues first.</thin');
+      yield delta('king>You have three open ');
+      yield delta('issues.');
+    });
+
+    const text = await completeArtifactPrompt(input({ plan: CONNECTOR_PLAN }));
+
+    expect(text).toBe('You have three open issues.');
+  });
+});
+
 describe('completeArtifactPrompt prompt-injection boundary', () => {
   it('runs a connector call as a run carrying untrusted content', async () => {
     mocks.reserve.mockResolvedValue({ userId: 'viewer-1', idempotencyKey: 'key-1' });

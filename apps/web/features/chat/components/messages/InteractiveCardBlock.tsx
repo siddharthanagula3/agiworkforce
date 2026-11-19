@@ -14,7 +14,7 @@ import {
   interactiveCardAcceptsResponse,
   interactiveCardNeedsResume,
   interactiveCardResponseDeadlineMs,
-} from '@/app/api/interactive-cards/response-contract';
+} from '@agiworkforce/cloud-contracts';
 import {
   useInteractiveCardResume,
   type InteractiveCardResponseBinding,

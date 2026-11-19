@@ -8,7 +8,7 @@ import {
   readProductLink,
 } from '@/src/features/notifications/productLinks';
 import { storage, whenMmkvReady } from '@/lib/mmkv';
-import { API_URL } from '@/lib/constants';
+import { webContentPageUrl } from '@/src/platform/webContentPage';
 import { isConversationOpenInForeground } from './conversationFocus';
 import { notificationAllowedOnceReadable, vibrationAllowed } from './notificationGate';
 import {
@@ -24,10 +24,20 @@ import {
   postPushRegistration,
   stopPushPreferenceSync,
 } from './pushPreferenceSync';
+import {
+  toPushPermissionStatus,
+  trackPushPermissionRequest,
+  type PushPermissionStatus,
+} from './pushPermissionStatus';
 
 let _isSignedIn = false;
 export function setSignedIn(value: boolean): void {
   _isSignedIn = value;
+}
+
+let notePushTypeReceived: (type: unknown) => void = () => {};
+export function setPushTypeReceivedListener(listener: (type: unknown) => void): void {
+  notePushTypeReceived = listener;
 }
 
 export type { NotificationEventType };
@@ -49,6 +59,7 @@ function isReplyForOpenConversation(data: NotificationData | undefined): boolean
 Notifications.setNotificationHandler({
   handleNotification: async (notification) => {
     const data = notification.request.content.data as NotificationData | undefined;
+    notePushTypeReceived(data?.type);
 
     if (
       isReplyForOpenConversation(data) ||
@@ -128,7 +139,7 @@ export function setPushAccountContext(accountContext: PushNotificationAccountCon
   _accountContext = accountContext;
 }
 
-export type PushPermissionStatus = 'granted' | 'denied' | 'undetermined';
+export type { PushPermissionStatus };
 
 export type PushDeliveryStatus = PushPermissionStatus | 'unregistered';
 
@@ -137,15 +148,8 @@ export async function getPushDeliveryStatus(): Promise<PushDeliveryStatus> {
   return status === 'granted' && _registrationIssue ? 'unregistered' : status;
 }
 
-function toPushPermissionStatus(status: string): PushPermissionStatus {
-  if (status === 'granted') return 'granted';
-  if (status === 'undetermined') return 'undetermined';
-  return 'denied';
-}
-
 export async function getPushPermissionStatus(): Promise<PushPermissionStatus> {
-  const { status } = await Notifications.getPermissionsAsync();
-  return toPushPermissionStatus(status);
+  return toPushPermissionStatus(await Notifications.getPermissionsAsync());
 }
 
 // The OS prompt fires exactly once per install, so it is spent from an explicit
@@ -154,10 +158,11 @@ export async function enablePushNotifications(): Promise<PushDeliveryStatus> {
   const current = await getPushPermissionStatus();
   let status = current;
   if (status !== 'granted') {
-    const requested = await Notifications.requestPermissionsAsync({
-      ios: { allowAlert: true, allowBadge: true, allowSound: true },
-    });
-    status = toPushPermissionStatus(requested.status);
+    status = await trackPushPermissionRequest(() =>
+      Notifications.requestPermissionsAsync({
+        ios: { allowAlert: true, allowBadge: true, allowSound: true },
+      }),
+    );
   }
   if (status !== 'granted') return status;
 
@@ -166,6 +171,20 @@ export async function enablePushNotifications(): Promise<PushDeliveryStatus> {
     await registerForPushNotifications(_accountContext);
   }
   return _registrationIssue ? 'unregistered' : 'granted';
+}
+
+export async function clearDeliveredNotifications(): Promise<void> {
+  const steps: Array<[string, () => Promise<unknown>]> = [
+    ['dismiss delivered notifications', () => Notifications.dismissAllNotificationsAsync()],
+    ['reset app badge', () => Notifications.setBadgeCountAsync(0)],
+  ];
+  for (const [label, step] of steps) {
+    try {
+      await step();
+    } catch (error) {
+      console.warn(`[notifications] Could not ${label}:`, error);
+    }
+  }
 }
 
 export async function registerForPushNotifications(
@@ -294,7 +313,7 @@ function readConversationId(data: NotificationData): string | null {
 export function releaseNoteUrl(data: NotificationData): string | null {
   const release = data.release;
   if (typeof release !== 'string' || !RELEASE_NOTE_SLUG.test(release)) return null;
-  return `${API_URL.replace(/\/+$/, '')}/release-notes/${release}?from=mobile`;
+  return webContentPageUrl(`/release-notes/${release}`);
 }
 
 function openConversation(conversationId: string): void {
@@ -340,6 +359,12 @@ function safeNavigate(route: Parameters<typeof router.push>[0]): void {
   }
 }
 
+function companionHomeRoute(): Parameters<typeof router.push>[0] {
+  return isAllowedRoute('/(app)/companion')
+    ? { pathname: '/(app)/companion' as const }
+    : { pathname: '/(app)/notifications' as const };
+}
+
 /**
  * Where an approval notification opens.
  *
@@ -350,23 +375,24 @@ function safeNavigate(route: Parameters<typeof router.push>[0]): void {
  * can put it in front.
  */
 function approvalRoute(data: NotificationData): Parameters<typeof router.push>[0] {
+  const companionOpen = isAllowedRoute('/(app)/companion');
   const approvalId = readIdentifier(data, 'approvalId') ?? readIdentifier(data, 'requestId');
   const threadId = readIdentifier(data, 'threadId');
   const rootId = readIdentifier(data, 'rootId');
-  if (threadId && rootId) {
+  if (companionOpen && threadId && rootId) {
     return {
       pathname: '/(app)/companion/code/[threadId]' as const,
       params: { threadId, rootId, ...(approvalId ? { approvalId } : {}) },
     };
   }
   const agentId = readIdentifier(data, 'agentId');
-  if (agentId) {
+  if (companionOpen && agentId) {
     return {
       pathname: '/(app)/companion/agent/[id]' as const,
       params: { id: agentId, ...(approvalId ? { approvalId } : {}) },
     };
   }
-  return { pathname: '/(app)/companion' as const };
+  return companionHomeRoute();
 }
 
 const CLOUD_RUN_NOTIFICATION_TYPES: readonly NotificationEventType[] = [
@@ -403,6 +429,7 @@ function handleNotificationResponse(response: Notifications.NotificationResponse
   }
 
   notificationCenterStore.add(response.notification);
+  notePushTypeReceived(data.type);
 
   const localConversationId = data.type === 'chat_message' ? readConversationId(data) : null;
   if (localConversationId && LOCAL_CONVERSATION_ID.test(localConversationId)) {
@@ -433,6 +460,17 @@ function handleNotificationResponse(response: Notifications.NotificationResponse
   const runRoute = cloudRunNotificationRoute(data);
   if (runRoute) {
     safeNavigate(runRoute);
+    return;
+  }
+
+  const researchConversationId =
+    data.type === 'research_completed' ? readConversationId(data) : null;
+  if (researchConversationId) {
+    safeNavigate(
+      `/(app)/open/chat/${encodeURIComponent(researchConversationId)}` as Parameters<
+        typeof router.push
+      >[0],
+    );
     return;
   }
 
@@ -483,7 +521,7 @@ function handleNotificationResponse(response: Notifications.NotificationResponse
       break;
 
     case 'companion_connected':
-      safeNavigate({ pathname: '/(app)/companion' as const });
+      safeNavigate(companionHomeRoute());
       break;
 
     case 'chat_message':
@@ -504,6 +542,20 @@ function handleNotificationResponse(response: Notifications.NotificationResponse
     case 'status_update':
     case 'heartbeat_info':
       safeNavigate({ pathname: '/(app)/notifications' as const });
+      break;
+
+    case 'usage_limit_reset':
+      safeNavigate({ pathname: '/(app)/(tabs)/chat' as const });
+      break;
+
+    case 'research_completed':
+      safeNavigate({ pathname: '/(app)/reports' as const });
+      break;
+
+    case 'code_session_completed':
+    case 'code_session_failed':
+    case 'code_session_needs_input':
+      safeNavigate({ pathname: '/(app)/cloud-code' as const });
       break;
 
     case 'product_update': {
@@ -727,11 +779,15 @@ function inferPriority(type: NotificationEventType | undefined): NotificationPri
   switch (type) {
     case 'agent_failed':
     case 'emergency_stop_triggered':
+    case 'code_session_failed':
       return 'critical';
     case 'agent_approval_needed':
     case 'approval_pending_escalation':
+    case 'code_session_needs_input':
       return 'high';
     case 'task_completed':
+    case 'research_completed':
+    case 'code_session_completed':
     case 'agent_paused':
     case 'schedule_triggered':
     case 'companion_connected':

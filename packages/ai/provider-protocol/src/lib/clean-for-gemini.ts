@@ -373,6 +373,27 @@ function withRefMeta(obj: Record<string, unknown>, cleaned: unknown): unknown {
   return result;
 }
 
+// Gemini's Schema.type and Schema.items are single values, not lists: a JSON
+// Schema type array or tuple items fails the whole request with "Proto field is
+// not repeating, cannot start list". A string can carry any scalar the other
+// listed types can, so it wins when listed, and a number can carry an integer.
+function singleGeminiType(types: readonly unknown[]): string | undefined {
+  const named = types.filter(
+    (entry): entry is string => typeof entry === 'string' && entry !== 'null',
+  );
+  if (named.includes('string')) return 'string';
+  if (named.includes('number') && named.includes('integer')) return 'number';
+  return named[0];
+}
+
+function dropKeywordsForOtherTypes(cleaned: Record<string, unknown>): void {
+  if (cleaned['type'] !== 'array') delete cleaned['items'];
+  if (cleaned['type'] !== 'object') {
+    delete cleaned['properties'];
+    delete cleaned['required'];
+  }
+}
+
 function cleanSchemaForGeminiWithDefs(
   schema: unknown,
   defs: SchemaDefs | undefined,
@@ -501,13 +522,14 @@ function cleanSchemaForGeminiWithDefs(
     if (key === 'type' && (hasAnyOf || hasOneOf)) {
       continue;
     }
-    if (
-      key === 'type' &&
-      Array.isArray(value) &&
-      value.every((entry) => typeof entry === 'string')
-    ) {
-      const types = value.filter((entry) => entry !== 'null');
-      cleaned['type'] = types.length === 1 ? types[0] : types;
+    if (key === 'type' && Array.isArray(value)) {
+      const type = singleGeminiType(value);
+      if (type !== undefined) {
+        cleaned['type'] = type;
+      } else if (value.includes('null')) {
+        cleaned['type'] = 'string';
+        cleaned['nullable'] = true;
+      }
       continue;
     }
 
@@ -525,9 +547,10 @@ function cleanSchemaForGeminiWithDefs(
       }
     } else if (key === 'items' && value) {
       if (Array.isArray(value)) {
-        cleaned[key] = value.map((entry) =>
-          cleanSchemaForGeminiWithDefs(entry, nextDefs, refStack, depth + 1, budget),
-        );
+        const [first] = value;
+        if (first && typeof first === 'object') {
+          cleaned[key] = cleanSchemaForGeminiWithDefs(first, nextDefs, refStack, depth + 1, budget);
+        }
       } else if (typeof value === 'object') {
         cleaned[key] = cleanSchemaForGeminiWithDefs(value, nextDefs, refStack, depth + 1, budget);
       } else {
@@ -557,6 +580,10 @@ function cleanSchemaForGeminiWithDefs(
       copySchemaMeta(obj, merged);
       return sanitizeRequiredFields(sanitizeDefault(merged));
     }
+  }
+
+  if (Array.isArray(obj['type']) && cleaned['type'] !== undefined) {
+    dropKeywordsForOtherTypes(cleaned);
   }
 
   if (cleaned['anyOf'] && Array.isArray(cleaned['anyOf'])) {

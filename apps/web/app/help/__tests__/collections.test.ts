@@ -51,7 +51,7 @@ describe('the /help collection index is derived from the support corpus', () => 
   });
 
   it('renders the index instead of a hand-kept link list', () => {
-    expect(PAGE).toContain('supportCollectionIndex()');
+    expect(PAGE).toContain('supportCollectionIndex(view)');
     for (const hardcoded of ["href: '/download'", "href: '/byok'", "href: '/local'"]) {
       expect(PAGE.includes(hardcoded), `/help is back to a hardcoded ${hardcoded}`).toBe(false);
     }

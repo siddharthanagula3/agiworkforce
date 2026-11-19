@@ -5,9 +5,8 @@ import type { Artifact } from '../../stores/artifacts-store';
 import {
   collectMessageResearchSources,
   dedupeResearchSources,
-  sourceDisplayHost,
-  sourceFaviconUrl,
-} from '../../utils/research-sources';
+} from '@agiworkforce/unified-chat/message-sources';
+import { sourceDisplayHost, sourceFaviconUrl } from '../../utils/research-sources';
 import { humanizeToolName } from '../messages/ToolTimeline';
 
 export type TaskDockStepStatus =

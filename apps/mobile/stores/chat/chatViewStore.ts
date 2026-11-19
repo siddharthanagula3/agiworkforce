@@ -5,6 +5,7 @@ import {
   captureCloudAccountEpoch,
   isCloudAccountEpochCurrent,
 } from '@/src/features/auth/services/cloudAccountSession';
+import { answerPlainText } from '@/src/features/chat/utils/markdownPlainText';
 import type { CloudWorkMode } from '@agiworkforce/types';
 import { SEARCH_INPUT_DEBOUNCE_MS } from '@agiworkforce/utils';
 
@@ -69,6 +70,11 @@ interface ViewState {
    * only permits execution; this asks the server to run code on every turn.
    */
   runCodeByConversation: Record<string, true>;
+  /**
+   * Deep research chosen in a composer applies to that chat only, as on web.
+   * `features.research` mirrors the entry of the composer on screen.
+   */
+  researchByConversation: Record<string, true>;
   features: ChatFeatures;
   /** Output kind the composer is aimed at. See {@link MediaMode}. */
   mediaMode: MediaMode;
@@ -93,6 +99,7 @@ interface ViewState {
   setVideoAspectRatio: (aspectRatio: string) => void;
   setVideoResolution: (resolution: string) => void;
   setImageAspectRatio: (aspectRatio: string) => void;
+  resetMediaChoice: (kind: 'image' | 'video') => void;
   setImageTransparentBackground: (enabled: boolean) => void;
   setVideoDurationSecs: (durationSecs: number) => void;
   clearCloudSearchState: () => void;
@@ -101,6 +108,21 @@ interface ViewState {
 
 let searchDebounceTimer: ReturnType<typeof setTimeout> | undefined;
 let searchGeneration = 0;
+
+function searchableText(markdown: string): string {
+  return answerPlainText(markdown).replace(/\s+/g, ' ').trim();
+}
+
+const messageTextCache = new WeakMap<object, { content: string; text: string }>();
+
+function messageSearchText(message: { content?: string | null }): string {
+  const content = message.content ?? '';
+  const cached = messageTextCache.get(message);
+  if (cached && cached.content === content) return cached.text;
+  const text = searchableText(content);
+  messageTextCache.set(message, { content, text });
+  return text;
+}
 
 function buildSnippet(
   text: string,
@@ -118,6 +140,36 @@ function buildSnippet(
     snippet: prefix + text.slice(start, end) + (end < text.length ? '...' : ''),
     matchStart: idx - start + prefix.length,
     matchLength: query.length,
+  };
+}
+
+function nearestIndexOf(text: string, needle: string, anchor: number): number {
+  const haystack = text.toLowerCase();
+  const target = needle.toLowerCase();
+  let best = -1;
+  let from = haystack.indexOf(target);
+  while (from !== -1) {
+    if (best === -1 || Math.abs(from - anchor) < Math.abs(best - anchor)) best = from;
+    from = haystack.indexOf(target, from + 1);
+  }
+  return best;
+}
+
+function buildServerSnippet(
+  row: ServerSearchRow,
+  query: string,
+): { snippet: string; matchStart: number; matchLength: number } {
+  const before = row.contextBefore ?? '';
+  const matched = row.matchedText ?? '';
+  const after = row.contextAfter ?? '';
+  const text = searchableText(before + matched + after);
+  const needle = searchableText(matched) || query;
+  const idx = nearestIndexOf(text, needle, searchableText(before).length);
+  const prefix = searchableText(before) ? '...' : '';
+  return {
+    snippet: prefix + text + (searchableText(after) ? '...' : ''),
+    matchStart: idx === -1 ? 0 : prefix.length + idx,
+    matchLength: idx === -1 ? 0 : needle.length,
   };
 }
 
@@ -160,7 +212,7 @@ function remoteProjectMatches(rows: ServerProjectRow[]): RemoteSearchMatch[] {
   return rows.map((row) => ({
     id: row.projectId,
     title: row.projectName?.trim() || 'Untitled project',
-    subtitle: row.content?.trim() || 'Project',
+    subtitle: searchableText(row.content ?? '') || 'Project',
   }));
 }
 
@@ -200,17 +252,11 @@ async function runSearch(
         );
         if (!isCurrent() || !useAuthStore.getState().isClerkSignedIn) return;
         const rows = data.results ?? [];
-        const results: ConversationSearchResult[] = rows.map((r) => {
-          const text = (r.contextBefore ?? '') + (r.matchedText ?? '') + (r.contextAfter ?? '');
-          const prefix = r.contextBefore ? '...' : '';
-          return {
-            conversationId: r.sessionId,
-            messageId: r.messageId ?? '',
-            snippet: prefix + text + (r.contextAfter ? '...' : ''),
-            matchStart: prefix.length + (r.contextBefore?.length ?? 0),
-            matchLength: r.matchedText?.length ?? trimmed.length,
-          };
-        });
+        const results: ConversationSearchResult[] = rows.map((r) => ({
+          conversationId: r.sessionId,
+          messageId: r.messageId ?? '',
+          ...buildServerSnippet(r, trimmed),
+        }));
         set({
           searchResults: results,
           remoteSearchChats: remoteChatMatches(rows),
@@ -245,8 +291,9 @@ async function runSearch(
   for (const [convId, msgs] of Object.entries(msgState.messages)) {
     if (hidden.has(convId)) continue;
     for (const msg of msgs) {
-      if ((msg.content ?? '').toLowerCase().includes(lower)) {
-        const { snippet, matchStart, matchLength } = buildSnippet(msg.content ?? '', trimmed);
+      const text = messageSearchText(msg);
+      if (text.toLowerCase().includes(lower)) {
+        const { snippet, matchStart, matchLength } = buildSnippet(text, trimmed);
         results.push({
           conversationId: convId,
           messageId: msg.id,
@@ -306,6 +353,29 @@ export function migratePersistedChatView(
   return next;
 }
 
+/** Whether a turn sent in this conversation asks for deep research. */
+export function isResearchChosenFor(
+  state: Pick<ViewState, 'researchByConversation' | 'styleConversationId' | 'features'>,
+  conversationId: string,
+): boolean {
+  if (state.researchByConversation?.[conversationId] === true) return true;
+  return (
+    (state.styleConversationId === null || state.styleConversationId === conversationId) &&
+    state.features.research
+  );
+}
+
+const DEFAULT_IMAGE_CHOICE = {
+  imageAspectRatio: '1:1',
+  imageTransparentBackground: false,
+} as const;
+
+const DEFAULT_VIDEO_CHOICE = {
+  videoAspectRatio: '16:9',
+  videoResolution: '720p',
+  videoDurationSecs: null,
+} as const;
+
 export const useChatViewStore = create<ViewState>()(
   persist(
     (set, get) => ({
@@ -320,6 +390,7 @@ export const useChatViewStore = create<ViewState>()(
       chatStyleByConversation: {},
       disabledConnectorIdsByConversation: {},
       runCodeByConversation: {},
+      researchByConversation: {},
       features: {
         webSearch: true,
         imageGen: true,
@@ -329,11 +400,8 @@ export const useChatViewStore = create<ViewState>()(
       },
       mediaMode: 'text',
       selectedMediaModel: {},
-      videoAspectRatio: '16:9',
-      videoResolution: '720p',
-      imageAspectRatio: '1:1',
-      imageTransparentBackground: false,
-      videoDurationSecs: null,
+      ...DEFAULT_VIDEO_CHOICE,
+      ...DEFAULT_IMAGE_CHOICE,
 
       searchConversations: (query: string) => {
         searchGeneration += 1;
@@ -390,6 +458,10 @@ export const useChatViewStore = create<ViewState>()(
             : {
                 styleConversationId: conversationId,
                 chatStyle: state.chatStyleByConversation[conversationId] ?? DEFAULT_CHAT_STYLE,
+                features: {
+                  ...state.features,
+                  research: state.researchByConversation[conversationId] === true,
+                },
               },
         ),
       adoptStyleSelection: (fromKey, toKey) =>
@@ -398,7 +470,9 @@ export const useChatViewStore = create<ViewState>()(
           const pending = state.chatStyleByConversation[fromKey];
           const pendingSources = state.disabledConnectorIdsByConversation[fromKey];
           const pendingRunCode = state.runCodeByConversation[fromKey];
-          if (!pending && !pendingSources && !pendingRunCode) return state;
+          const pendingResearch = state.researchByConversation[fromKey];
+          if (!pending && !pendingSources && !pendingRunCode && !pendingResearch) return state;
+          const { [fromKey]: _pendingResearch, ...restResearch } = state.researchByConversation;
           const { [fromKey]: _pending, ...rest } = state.chatStyleByConversation;
           const { [fromKey]: _pendingSources, ...restSources } =
             state.disabledConnectorIdsByConversation;
@@ -413,6 +487,9 @@ export const useChatViewStore = create<ViewState>()(
             runCodeByConversation: pendingRunCode
               ? { ...restRunCode, [toKey]: pendingRunCode }
               : state.runCodeByConversation,
+            researchByConversation: pendingResearch
+              ? { ...restResearch, [toKey]: pendingResearch }
+              : state.researchByConversation,
             ...(state.styleConversationId === fromKey ? { styleConversationId: toKey } : {}),
           };
         }),
@@ -433,13 +510,24 @@ export const useChatViewStore = create<ViewState>()(
           return { runCodeByConversation: enabled ? { ...rest, [key]: true } : rest };
         }),
       setFeature: (feature, enabled) =>
-        set((state) => ({ features: { ...state.features, [feature]: enabled } })),
+        set((state) => {
+          const features = { ...state.features, [feature]: enabled };
+          const key = state.styleConversationId;
+          if (feature !== 'research' || !key) return { features };
+          const { [key]: _previous, ...rest } = state.researchByConversation;
+          return { features, researchByConversation: enabled ? { ...rest, [key]: true } : rest };
+        }),
       setMediaMode: (mode) => set({ mediaMode: mode }),
       setMediaModel: (kind, modelId) =>
         set((state) => ({ selectedMediaModel: { ...state.selectedMediaModel, [kind]: modelId } })),
       setVideoAspectRatio: (aspectRatio) => set({ videoAspectRatio: aspectRatio }),
       setVideoResolution: (resolution) => set({ videoResolution: resolution }),
       setImageAspectRatio: (aspectRatio) => set({ imageAspectRatio: aspectRatio }),
+      resetMediaChoice: (kind) =>
+        set({
+          mediaMode: 'text',
+          ...(kind === 'image' ? DEFAULT_IMAGE_CHOICE : DEFAULT_VIDEO_CHOICE),
+        }),
       setImageTransparentBackground: (enabled) => set({ imageTransparentBackground: enabled }),
       setVideoDurationSecs: (durationSecs) => set({ videoDurationSecs: durationSecs }),
       clearCloudSearchState: () => {
@@ -478,7 +566,7 @@ export const useChatViewStore = create<ViewState>()(
         chatStyle: state.chatStyle,
         chatStyleByConversation: state.chatStyleByConversation,
         disabledConnectorIdsByConversation: state.disabledConnectorIdsByConversation,
-        features: state.features,
+        features: { ...state.features, research: false },
         selectedMediaModel: state.selectedMediaModel,
         videoAspectRatio: state.videoAspectRatio,
         videoResolution: state.videoResolution,

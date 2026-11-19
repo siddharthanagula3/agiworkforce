@@ -1,7 +1,13 @@
 {
   "version": 1,
-  "lastUpdated": "2026-10-25",
+  "lastUpdated": "2026-11-16",
   "verificationLog": [
+    {
+      "date": "2026-11-16",
+      "verifiedBy": "official-anthropic-vision-and-pdf-guides-and-openai-images-vision-and-pdf-files-guides",
+      "status": "ADDITION",
+      "notes": "Added imageInput.maxInputTokensPerImage and documentInput.maxInputTokensPerPageImage, the most input tokens one image or one PDF page image can bill, so the Free allowance reserves what a picture or a PDF can cost instead of counting its encoded bytes as tokens. claude-haiku-5-5 takes 4784: platform.claude.com/docs/en/build-with-claude/vision caps an image at 4,784 visual tokens on Claude 4.7 and later, and the PDF support guide bills each page as its extracted text plus an image under the same calculation, so the page image bound falls back to the image bound. gpt-6-luna takes 73800 per image and 15115 per page image: developers.openai.com/api/docs/guides/images-vision rejects an image over 30,000 patches and lists multipliers up to 2.46 (gpt-4.1-nano), and gpt-6-luna is not in its table, so 30,000 x 2.46 bounds any detail; the PDF files guide says page images use detail auto, which is high on GPT-5.6 and later, and the largest high budget the vision guide lists is 6,144 patches, so 6,144 x 2.46 rounded up bounds a page image. Both figures for gpt-6-luna are inferred from the guides' largest listed values because the model is not listed; the family multiplier of 1.2 would give 36000 and 7373. No live provider call or token count was made."
+    },
     {
       "date": "2026-10-25",
       "verifiedBy": "bundled-claude-api-reference-and-platform-extended-thinking-page",
@@ -565,6 +571,12 @@
       "verifiedBy": "official-google-omni-guide-interactions-reference-pricing-and-deprecations-no-live-call",
       "status": "CORRECTION",
       "notes": "gemini-omni-1.1-flash gains its video generation block, on the owner's decision of 2026-10-22 that it replaces Veo 3.1 for video. Read on 2026-10-22 from https://ai.google.dev/gemini-api/docs/omni, https://ai.google.dev/gemini-api/docs/models/gemini-omni-flash, https://ai.google.dev/api/interactions-api (VideoResponseFormat and VideoConfig), https://ai.google.dev/gemini-api/docs/background-execution, https://ai.google.dev/gemini-api/docs/pricing and https://ai.google.dev/gemini-api/docs/deprecations, which names gemini-omni-1.1-flash as the replacement for veo-3.1-generate-preview, veo-3.1-fast-generate-preview, veo-3.1-lite-generate-preview and gemini-omni-flash-preview, all shut down 2026-10-22. The model is served on POST v1beta/interactions, not on predictLongRunning: input is text plus inline image parts, response_format takes type video, aspect_ratio 16:9 or 9:16, resolution 360p, 720p (default), 1080p (upscaled) or 4k (upscaled) and a duration string, generation_config.video_config.task takes text_to_video, image_to_video (first image is the starting frame), reference_to_video, edit or extend, and background true returns an interaction id to poll. Output is 3 to 10 seconds at 24 frames per second, and the model generates an audio track with every video; the API has no switch to turn audio off, no seed for video and no negative prompt. Input is text, image and video (video up to 10 seconds, for editing and extension, which the managed route does not offer). Google publishes no maximum for reference images and its prompt guide shows six, so imageInput.maxImagesPerRequest is 4, the managed route's own limit. Pricing: $1.50 per million input tokens and $17.50 per million video output tokens, billed at 5,792 tokens per second of 720p video, which is $0.10136 per second; videoPerSecondCost moves from the rounded 0.1 to 0.10136 and videoPerSecondCostByResolution carries 720p only. Google publishes no token rate for 360p, 1080p or 4K, so the output sizes list 720p in both orientations and the other three resolutions stay out until their rate is published or measured; the managed contract has no 360p value either. No live provider call was made; the duration string format and background execution for this model are documented but were not exercised. The lifecycle stage stays registered: the model has no answered probe and no eval measurement, so no family slot moves with this entry."
+    },
+    {
+      "date": "2026-11-16",
+      "verifiedBy": "owner-direction-2026-11-16",
+      "status": "ROSTER",
+      "notes": "On the owner's instruction of 2026-11-16 that Free accounts get the fast OpenAI model and Claude Haiku 5.5, the anthropic/claude-haiku family joins tierAllowedModels.economy and claude-haiku-5-5 takes tierPolicy.minTier free. Together those are what admit a model to the Free plan, as they already do for the openai/gpt-fast family, so the Free roster, the web and phone pickers and the server's Free admission all read the same answer. A Free turn on it is metered against the Free usage windows in packages/contracts/types/src/managed-usage-limits.ts like any other Free turn; it does not go through the ended free model promotion. Paid plans already reached the model, because its price put its derived floor at Basic, so no paid plan gains or loses a model. No routing slot, task route or default changes: Auto on Free stays on the free_workhorse slot. The row lists $0.10/$0.50 per million input/output for prompts up to 100,000 tokens, the same as gpt-6-luna. No provider call was made."
     }
   ],
   "providers": {
@@ -1190,7 +1202,11 @@
           "budgetPath": null
         }
       },
-      "imageInput": { "detailValues": ["low", "high", "original", "auto"] },
+      "imageInput": {
+        "detailValues": ["low", "high", "original", "auto"],
+        "maxInputTokensPerImage": 73800
+      },
+      "documentInput": { "maxInputTokensPerPageImage": 15115 },
       "endpoints": ["v1/chat/completions", "v1/responses", "v1/batch"],
       "cachePolicy": {
         "writeMultiplier": 1.25,
@@ -1474,6 +1490,7 @@
       "maxInputTokens": 1000000,
       "maxOutputTokens": 128000,
       "knowledgeCutoff": "2026-06",
+      "imageInput": { "maxInputTokensPerImage": 4784 },
       "documentInput": { "maxPagesPerRequest": 600 },
       "reasoning": {
         "capable": true,
@@ -1493,7 +1510,7 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": { "minTier": "pro" },
+      "tierPolicy": { "minTier": "free" },
       "promptCacheMinimumTokens": 512,
       "lifecycle": {
         "stage": "promoted",
@@ -21604,7 +21621,13 @@
     }
   },
   "tierAllowedModels": {
-    "economy": ["gpt-6-luna", "gemini-3.5-flash-lite", "gemini-3.8-flash", "qwen-3.8-flash"],
+    "economy": [
+      "gpt-6-luna",
+      "gemini-3.5-flash-lite",
+      "gemini-3.8-flash",
+      "qwen-3.8-flash",
+      "claude-haiku-5-5"
+    ],
     "pro_additions": [
       "gpt-6.1-sol",
       "claude-sonnet-5-5",

@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useEmbeddedAccountPage } from '@shared/components/layout/EmbeddedPage';
 
 import { useAuthCopy } from './authCopy';
 import { AUTH_RULE_CLASS, AUTH_STANDALONE_LINK_CLASS, AUTH_SWITCH_CLASS } from './authStyles';
@@ -30,7 +31,9 @@ export const SWITCH_INSTEAD_COPY: Readonly<Record<AuthMode, { key: string; label
 
 export function AuthSwitchLine({ mode, href }: { mode: AuthMode; href: string }) {
   const copy = useAuthCopy();
+  const embeddedAccountPage = useEmbeddedAccountPage();
   const prompt = PROMPTS[mode];
+  if (embeddedAccountPage) return null;
   return (
     <>
       <hr aria-hidden="true" className={`${AUTH_RULE_CLASS} border-0`} />

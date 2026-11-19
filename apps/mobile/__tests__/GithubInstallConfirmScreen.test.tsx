@@ -2,13 +2,20 @@ import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockReplace = jest.fn();
+const mockBack = jest.fn();
+const mockCanGoBack = jest.fn(() => false);
 const mockPending = jest.fn();
 const mockComplete = jest.fn();
 let mockParams: Record<string, string> = {};
 
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
-  useRouter: () => ({ push: jest.fn(), replace: mockReplace, back: jest.fn() }),
+  useRouter: () => ({
+    push: jest.fn(),
+    replace: mockReplace,
+    back: mockBack,
+    canGoBack: mockCanGoBack,
+  }),
   useLocalSearchParams: () => mockParams,
 }));
 jest.mock('@clerk/expo', () => ({
@@ -35,6 +42,7 @@ describe('GitHub install confirm screen', () => {
       accountType: 'Organization',
     });
     mockComplete.mockResolvedValue('connected');
+    mockCanGoBack.mockReturnValue(false);
   });
 
   it('names the installation and this account and links nothing until confirmed', async () => {
@@ -52,6 +60,21 @@ describe('GitHub install confirm screen', () => {
 
     expect(mockComplete).toHaveBeenCalledWith({ state: STATE, code: 'one-time-code' });
     expect(mockReplace).toHaveBeenCalledWith('/(app)/cloud-code');
+    expect(mockBack).not.toHaveBeenCalled();
+  });
+
+  it('goes back to the screen that started the connection when there is one', async () => {
+    mockCanGoBack.mockReturnValue(true);
+    const screen = render(<GitHubInstallReturnRoute />);
+
+    await waitFor(() => screen.getByText('Link GitHub'));
+    await act(async () => {
+      fireEvent.press(screen.getByText('Link GitHub'));
+    });
+
+    expect(mockComplete).toHaveBeenCalledWith({ state: STATE, code: 'one-time-code' });
+    expect(mockBack).toHaveBeenCalledTimes(1);
+    expect(mockReplace).not.toHaveBeenCalled();
   });
 
   it('closes the install without the code when the user cancels', async () => {

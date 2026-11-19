@@ -16,6 +16,13 @@ jest.mock('@/src/features/chat/store/appModeStore', () => ({
   },
 }));
 
+let mockSharingCurrent: () => boolean = () => true;
+let mockWithdrawing = false;
+jest.mock('@/services/providerConsent', () => ({
+  hasCurrentCloudProviderConsent: () => mockSharingCurrent(),
+  cloudProviderConsentWithdrawalInProgress: () => mockWithdrawing,
+}));
+
 import {
   CONTENT_REPORT_PATH,
   guardedFetch,
@@ -30,6 +37,8 @@ beforeEach(() => {
   mockSecureFetch.mockReset().mockResolvedValue(new Response('ok', { status: 200 }));
   mockNetInfoRefresh.mockClear();
   mockAppMode = 'local';
+  mockSharingCurrent = () => true;
+  mockWithdrawing = false;
 });
 
 describe('isOurCloudHost, host classification', () => {
@@ -156,6 +165,14 @@ describe('guardedFetch, a content report the user chose to send from Local mode'
     expect(mockSecureFetch).toHaveBeenCalledTimes(1);
   });
 
+  it('holds the report back while sharing with AI providers is being withdrawn', async () => {
+    mockWithdrawing = true;
+    await expect(guardedFetch(reportUrl, post, { consentedReport: true })).rejects.toBeInstanceOf(
+      EgressBlockedError,
+    );
+    expect(mockSecureFetch).not.toHaveBeenCalled();
+  });
+
   it('does not turn report consent into a general managed-cloud bypass', async () => {
     const requests = [
       [new URL('/api/chat/send', API_URL).toString(), post],
@@ -183,6 +200,73 @@ describe('guardedFetch, Cloud mode (managed allows our-cloud)', () => {
       'https://agiworkforce.com/api/usage/summary',
       undefined,
     );
+  });
+});
+
+describe('guardedFetch, Cloud mode without permission to share with AI providers', () => {
+  const termsUrl = new URL(TERMS_ACCEPTANCE_PATH, API_URL).toString();
+  const reportUrl = new URL(CONTENT_REPORT_PATH, API_URL).toString();
+
+  beforeEach(() => {
+    mockAppMode = 'cloud';
+    mockSharingCurrent = () => false;
+  });
+
+  it('BLOCKS our-cloud requests before any network I/O', async () => {
+    for (const url of [
+      'https://agiworkforce.com/api/chat/send',
+      'https://api.agiworkforce.com/api/agent/runs',
+      'https://my-app.vercel.app/api/voice/realtime',
+    ]) {
+      await expect(guardedFetch(url, { method: 'POST' })).rejects.toBeInstanceOf(
+        EgressBlockedError,
+      );
+    }
+    expect(mockSecureFetch).not.toHaveBeenCalled();
+    expect(mockNetInfoRefresh).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when the permission cannot be read', async () => {
+    mockSharingCurrent = () => {
+      throw new Error('storage unavailable');
+    };
+    await expect(guardedFetch('https://agiworkforce.com/api/chat/send')).rejects.toBeInstanceOf(
+      EgressBlockedError,
+    );
+    expect(mockSecureFetch).not.toHaveBeenCalled();
+  });
+
+  it('keeps only the signed-in Terms control and a content report the person chose', async () => {
+    await guardedFetch(
+      termsUrl,
+      { method: 'GET', headers: { Authorization: 'Bearer session-token' } },
+      { authControl: true },
+    );
+    await guardedFetch(reportUrl, { method: 'POST' }, { consentedReport: true });
+    expect(mockSecureFetch).toHaveBeenCalledTimes(2);
+
+    await expect(
+      guardedFetch(
+        new URL('/api/chat/send', API_URL).toString(),
+        { method: 'POST' },
+        {
+          authControl: true,
+          consentedReport: true,
+        },
+      ),
+    ).rejects.toBeInstanceOf(EgressBlockedError);
+    expect(mockSecureFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("still lets a request to a provider of the person's own key through", async () => {
+    await guardedFetch('https://api.openai.com/v1/chat/completions', { method: 'POST' });
+    expect(mockSecureFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens again once the permission is current', async () => {
+    mockSharingCurrent = () => true;
+    await guardedFetch('https://agiworkforce.com/api/chat/send');
+    expect(mockSecureFetch).toHaveBeenCalledTimes(1);
   });
 });
 

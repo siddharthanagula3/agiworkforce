@@ -15,6 +15,7 @@ import {
   type ManagedCloudScheduleRunPendingApproval,
   type ManagedCloudScheduleTask,
 } from '@agiworkforce/cloud-contracts';
+import { createPublicTextDeltaProjector } from '@/app/api/llm/v1/chat/completions/lib/agent-event-stream';
 import type { ToolLoopApprovalCheckpoint } from '@/app/api/llm/v1/chat/completions/lib/tool-loop';
 import { APPROVAL_CHECKPOINT_TTL_HOURS } from '@/lib/services/cloud-agent-run-service';
 import {
@@ -440,7 +441,18 @@ function pendingApprovalOf(row: RunRow): ManagedCloudScheduleRunPendingApproval 
   };
 }
 
+function answerText(text: string): string {
+  const projector = createPublicTextDeltaProjector();
+  return (projector.push(text) + projector.flush()).trim();
+}
+
+function answerOf(result: Record<string, unknown> | null): Record<string, unknown> | null {
+  const text = result?.['text'];
+  return typeof text === 'string' ? { ...result, text: answerText(text) } : result;
+}
+
 export function mapScheduleRun(row: RunRow): ScheduleRun {
+  const result = answerOf(row.result);
   return {
     id: row.id,
     taskId: row.task_id,
@@ -450,8 +462,8 @@ export function mapScheduleRun(row: RunRow): ScheduleRun {
     startedAt: timestampString(row.started_at),
     completedAt: timestampString(row.completed_at),
     durationMs: row.duration_ms,
-    result: row.result,
-    output: typeof row.result?.['text'] === 'string' ? row.result['text'] : null,
+    result,
+    output: typeof result?.['text'] === 'string' ? result['text'] : null,
     error: row.error,
     idempotencyKey: row.idempotency_key,
     leaseExpiresAt: timestampString(row.lease_expires_at),

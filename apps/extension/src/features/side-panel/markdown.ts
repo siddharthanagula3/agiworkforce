@@ -11,9 +11,9 @@ import {
   classifyAssistantFence,
   renderClassifiedFenceHtml,
 } from '@agiworkforce/unified-chat/assistant-fence';
+import { resolveHighlightLanguage } from '@agiworkforce/unified-chat/highlight-languages';
 import {
   highlightToLines,
-  resolveHighlightLanguage,
   type HighlightedLine,
 } from '@agiworkforce/unified-chat/shiki-highlighter';
 import { Copy, ImageIcon, ImageOff, renderIcon } from '../../assets/icons';

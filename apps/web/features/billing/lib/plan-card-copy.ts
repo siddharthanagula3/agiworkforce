@@ -167,7 +167,11 @@ function scheduledTasksAndSandboxesFeature(plan: BillingPlanTier, t: PricingT) {
 function projectsWithStorageFeature(plan: BillingPlanTier, t: PricingT) {
   const limits = getBillingPlanProductLimits(plan);
   const storage = limits?.knowledgeStorageBytes;
-  if (typeof limits?.projects !== 'number' || typeof storage !== 'number') return null;
+  if (!limits || typeof storage !== 'number') return null;
+  if (limits.projects === 'unlimited') {
+    return t('projectsNoSetLimitWithStorage', { storage: formatBytes(storage, 0) });
+  }
+  if (typeof limits.projects !== 'number') return null;
   return t('projectsWithStorage', { count: limits.projects, storage: formatBytes(storage, 0) });
 }
 

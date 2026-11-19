@@ -1,6 +1,6 @@
 import 'server-only';
 
-import type { PastChatCitation } from '@/lib/past-chat-citation';
+import type { PastChatCitation } from '@agiworkforce/types';
 
 import { contextFenceTag, contextSource, type ContextSource } from '@agiworkforce/context';
 import type { ContextCandidate, ContextSourceLoader } from '@agiworkforce/context-engine';

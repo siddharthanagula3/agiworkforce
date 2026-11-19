@@ -5,7 +5,7 @@ path: /download
 category: surfaces
 tags: install, download, desktop app, macos, windows, linux, dmg, installer, mobile app, ios, android, release notes, signature, notarized, get notified
 platforms: desktop, mobile, macos, windows, linux, ios, android
-updated: 2026-11-10
+updated: 2026-11-16
 description: How to check release availability and install the desktop and mobile apps.
 scope: public
 ---
@@ -43,6 +43,11 @@ To use AGI from a phone browser, open [AGI Chat](https://agiworkforce.com/chat).
 
 ## Before choosing a client
 
-Review the client's setup guide and your [plan](https://agiworkforce.com/pricing).
-Check workspace permissions and the operating-system or browser requirements for
-the workflow you want to use.
+Review the client's setup guide. Check workspace permissions and the
+operating-system or browser requirements for the workflow you want to use.
+
+{{#purchase}}
+
+Review your [plan](https://agiworkforce.com/pricing) as well.
+
+{{/purchase}}

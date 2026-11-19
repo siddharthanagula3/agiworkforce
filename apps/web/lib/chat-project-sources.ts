@@ -1,15 +1,17 @@
 import {
   MANAGED_MEMORY_CITATIONS_HEADER,
+  PAST_CHAT_CITATIONS_HEADER,
   parseManagedMemoryCitations,
+  parsePastChatCitations,
   parseProjectFileCitations,
   PROJECT_FILE_CITATIONS_HEADER,
   type ManagedMemoryCitation,
   type ManagedMemoryCitations,
+  type PastChatCitation,
   type ProjectFileCitation,
 } from '@agiworkforce/types';
-import type { PastChatCitation } from '@/lib/past-chat-citation';
 
-export { PROJECT_FILE_CITATIONS_HEADER };
+export { PAST_CHAT_CITATIONS_HEADER, PROJECT_FILE_CITATIONS_HEADER };
 
 /**
  * A header, not a stream frame: the passages are chosen before the first token,
@@ -68,8 +70,6 @@ export function toMemoryCitationsHeaderValue(
   return encodeHeaderValue({ count: citations.length, memories: [] });
 }
 
-export const PAST_CHAT_CITATIONS_HEADER = 'x-agi-past-chat-citations';
-
 export const PAST_CHAT_LINKS_REQUEST_KEY = 'x_past_chat_links' as const;
 
 export function toPastChatSourcesHeaderValue(
@@ -80,23 +80,11 @@ export function toPastChatSourcesHeaderValue(
   return encoded && encoded.length <= MAX_PROJECT_SOURCES_HEADER_CHARS ? encoded : null;
 }
 
-function isPastChatCitation(value: unknown): value is PastChatCitation {
-  if (typeof value !== 'object' || value === null) return false;
-  const row = value as Record<string, unknown>;
-  return (
-    typeof row['id'] === 'string' &&
-    typeof row['conversationId'] === 'string' &&
-    typeof row['messageId'] === 'string' &&
-    typeof row['title'] === 'string' &&
-    typeof row['createdAt'] === 'string'
-  );
-}
-
 export function readPastChatSourcesHeaderValue(value: string | null): PastChatCitation[] {
   if (!value) return [];
   try {
     const parsed: unknown = JSON.parse(new TextDecoder().decode(decodeHeaderBytes(value)));
-    return Array.isArray(parsed) ? parsed.filter(isPastChatCitation) : [];
+    return parsePastChatCitations(parsed);
   } catch {
     return [];
   }

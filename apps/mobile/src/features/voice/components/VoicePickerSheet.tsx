@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { FlatList, View, useWindowDimensions } from 'react-native';
+import { FlatList, View } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
-import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
+import type { LayoutChangeEvent, NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import BottomSheet, {
   BottomSheetBackdrop,
   BottomSheetView,
@@ -14,9 +14,15 @@ import Svg, { Defs, LinearGradient, Stop, Circle } from 'react-native-svg';
 import { Text } from '@/components/ui/Text';
 import { useThemeColors, sheetRadius } from '@/src/ui/theme';
 import { dialogPadding, typeScale } from '@/src/ui/theme/tokens';
+import { contentColumnInset, contentColumnWidth } from '@/src/shared/layout/contentColumn';
+import { useResponsiveLayout } from '@/src/shared/hooks/useResponsiveLayout';
 import { LIVE_VOICES } from '@agiworkforce/types/live-voices';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useAuthStore } from '@/src/features/auth/store';
+import {
+  useHardwareBackDismiss,
+  useSystemScreenSheet,
+} from '@/src/shared/hooks/useHardwareBackDismiss';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { liveVoiceModeUnavailableReason } from '../services/liveVoiceAvailability';
 import { VOICE_PRESETS } from '../voicePresets';
@@ -128,11 +134,24 @@ export interface VoicePickerSheetProps {
   onDismiss: () => void;
 }
 
+const ignoreUnmount = (): void => undefined;
+
 export function VoicePickerSheet({ visible, onStart, onDismiss }: VoicePickerSheetProps) {
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
+  const { contentWidth } = useResponsiveLayout();
+  const [pageWidth, setPageWidth] = useState(() => contentColumnWidth('reading', contentWidth));
   const sheetRef = useRef<BottomSheet>(null);
+  const sheetHandleRef = useRef<BottomSheet>(null);
+  const closeSheet = useCallback(() => sheetHandleRef.current?.close(), []);
+  useHardwareBackDismiss(visible, closeSheet);
+  const sheet = useSystemScreenSheet({
+    forwardedRef: sheetHandleRef,
+    sheetRef,
+    closeSheet,
+    onUnmount: ignoreUnmount,
+  });
+  const launchSystemScreen = sheet.launch;
   const [opened, setOpened] = useState(visible);
   if (visible && !opened) setOpened(true);
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
@@ -175,20 +194,13 @@ export function VoicePickerSheet({ visible, onStart, onDismiss }: VoicePickerShe
 
   useEffect(() => {
     if (!visible) {
-      sheetRef.current?.close();
+      sheetHandleRef.current?.close();
       return;
     }
     setIndex(initialIndex);
-    listRef.current?.scrollToOffset({ offset: initialIndex * width, animated: false });
-    sheetRef.current?.snapToIndex(0);
-  }, [visible, initialIndex, width]);
-
-  const handleSheetChange = useCallback(
-    (next: number) => {
-      if (next === -1) onDismiss();
-    },
-    [onDismiss],
-  );
+    listRef.current?.scrollToOffset({ offset: initialIndex * pageWidth, animated: false });
+    sheetHandleRef.current?.snapToIndex(0);
+  }, [visible, initialIndex, pageWidth]);
 
   const renderBackdrop = useCallback(
     (props: BottomSheetBackdropProps) => (
@@ -203,9 +215,14 @@ export function VoicePickerSheet({ visible, onStart, onDismiss }: VoicePickerShe
     [],
   );
 
+  const handlePagerLayout = useCallback((event: LayoutChangeEvent) => {
+    setPageWidth(event.nativeEvent.layout.width);
+  }, []);
+
   const handleMomentumEnd = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const next = Math.round(event.nativeEvent.contentOffset.x / width);
+      if (pageWidth <= 0) return;
+      const next = Math.round(event.nativeEvent.contentOffset.x / pageWidth);
       if (next !== index) {
         setIndex(next);
         if (hapticsEnabled) {
@@ -213,34 +230,47 @@ export function VoicePickerSheet({ visible, onStart, onDismiss }: VoicePickerShe
         }
       }
     },
-    [width, index, hapticsEnabled],
+    [pageWidth, index, hapticsEnabled],
   );
 
   const handleStart = useCallback(() => {
-    const choice = choices[index];
-    if (choice) {
-      if (live) setLiveVoice(choice.id);
-      else applyVoicePreset(choice.id, installedVoices);
-    }
-    if (hapticsEnabled) {
-      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    }
-    onStart();
-  }, [choices, index, live, setLiveVoice, installedVoices, hapticsEnabled, onStart]);
+    launchSystemScreen(() => {
+      const choice = choices[index];
+      if (choice) {
+        if (live) setLiveVoice(choice.id);
+        else applyVoicePreset(choice.id, installedVoices);
+      }
+      if (hapticsEnabled) {
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      }
+      onStart();
+    });
+  }, [
+    launchSystemScreen,
+    choices,
+    index,
+    live,
+    setLiveVoice,
+    installedVoices,
+    hapticsEnabled,
+    onStart,
+  ]);
 
   const active = choices[index];
 
-  if (!opened) return null;
+  if (!opened || !sheet.mounted) return null;
 
   return (
     <BottomSheet
+      key={sheet.generation}
       ref={sheetRef}
-      index={-1}
+      index={sheet.index}
       accessible={false}
+      style={{ marginHorizontal: contentColumnInset('reading', contentWidth) }}
       enablePanDownToClose
       enableDynamicSizing
       topInset={insets.top}
-      onChange={handleSheetChange}
+      onClose={onDismiss}
       backdropComponent={renderBackdrop}
       backgroundStyle={{
         backgroundColor: colors.surfaceElevated,
@@ -267,7 +297,7 @@ export function VoicePickerSheet({ visible, onStart, onDismiss }: VoicePickerShe
             Choose your voice
           </Text>
           <PressableBox
-            onPress={() => sheetRef.current?.close()}
+            onPress={closeSheet}
             accessibilityRole="button"
             accessibilityLabel="Close voice picker"
             hitSlop={12}
@@ -284,41 +314,43 @@ export function VoicePickerSheet({ visible, onStart, onDismiss }: VoicePickerShe
           </PressableBox>
         </View>
 
-        <View style={{ paddingTop: 24 }}>
-          <FlatList
-            ref={listRef}
-            data={choices}
-            keyExtractor={(choice) => choice.id}
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            initialScrollIndex={initialIndex}
-            getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
-            onMomentumScrollEnd={handleMomentumEnd}
-            accessibilityLabel="Voices"
-            accessibilityValue={{ text: voicePositionLabel(index, choices.length) }}
-            renderItem={({ item }) => (
-              <View style={{ width, alignItems: 'center', justifyContent: 'center' }}>
-                <Orb />
-                <Text
-                  style={{
-                    color: colors.textPrimary,
-                    fontSize: typeScale.title1,
-                    fontWeight: '700',
-                    marginTop: 28,
-                  }}
-                >
-                  {item.name}
-                </Text>
-                <Text
-                  style={{ color: colors.textMuted, fontSize: typeScale.headline, marginTop: 6 }}
-                >
-                  {item.description}
-                </Text>
-                {live ? <VoiceSampleButton voiceId={item.id} voiceName={item.name} /> : null}
-              </View>
-            )}
-          />
+        <View testID="voice-picker-pager" style={{ paddingTop: 24 }} onLayout={handlePagerLayout}>
+          {pageWidth > 0 ? (
+            <FlatList
+              ref={listRef}
+              data={choices}
+              keyExtractor={(choice) => choice.id}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              initialScrollIndex={initialIndex}
+              getItemLayout={(_, i) => ({ length: pageWidth, offset: pageWidth * i, index: i })}
+              onMomentumScrollEnd={handleMomentumEnd}
+              accessibilityLabel="Voices"
+              accessibilityValue={{ text: voicePositionLabel(index, choices.length) }}
+              renderItem={({ item }) => (
+                <View style={{ width: pageWidth, alignItems: 'center', justifyContent: 'center' }}>
+                  <Orb />
+                  <Text
+                    style={{
+                      color: colors.textPrimary,
+                      fontSize: typeScale.title1,
+                      fontWeight: '700',
+                      marginTop: 28,
+                    }}
+                  >
+                    {item.name}
+                  </Text>
+                  <Text
+                    style={{ color: colors.textMuted, fontSize: typeScale.headline, marginTop: 6 }}
+                  >
+                    {item.description}
+                  </Text>
+                  {live ? <VoiceSampleButton voiceId={item.id} voiceName={item.name} /> : null}
+                </View>
+              )}
+            />
+          ) : null}
         </View>
 
         <View

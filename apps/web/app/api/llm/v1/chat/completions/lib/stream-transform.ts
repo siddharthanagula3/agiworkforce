@@ -8,7 +8,7 @@ import { getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { recordModelUsage, toOtelAttributes } from '@/lib/cost-tracker';
 import { buildCpstUsageFields } from '@/lib/cpst-telemetry';
 import { addFallbackReasonHeader, addModelEscalationHeaders } from '@/lib/chat-fallback-reason';
-import { addSecretRedactionNoticeHeader } from '@/lib/chat-secret-redaction-notice';
+import { addSecretRedactionNoticeHeader } from '@agiworkforce/cloud-contracts';
 import { addAttachmentTruncationHeader } from '@agiworkforce/cloud-contracts';
 import { addProjectSourcesHeader } from '@/lib/chat-project-sources';
 import { addRouteLaneHeader } from '@/lib/services/free-lane/plan';
@@ -38,6 +38,7 @@ import {
   canPersistAssistantTurn,
   patchAssistantTurnSourceUrls,
   persistAssistantTurn,
+  wireFinishReason,
 } from './assistant-turn-persistence';
 import { AssistantTurnSourceCollector } from './assistant-turn-sources';
 import {
@@ -512,6 +513,7 @@ export async function buildAdapterStreamResponse(
   const pendingClarifyArgs = new Map<string, string>();
   const interactiveCards: InteractiveCard[] = [];
   let lastStopReason: string | null = null;
+  let lastWireFinishReason: string | null = null;
   let lastErrorCode: string | undefined;
 
   /**
@@ -550,7 +552,10 @@ export async function buildAdapterStreamResponse(
 
   const assistantTurnPersistable = canPersistAssistantTurn(processed);
   let assistantTurnPersisted = false;
-  const persistAssistantTurnSnapshot = async (truncated: boolean): Promise<void> => {
+  const persistAssistantTurnSnapshot = async (
+    truncated: boolean,
+    stoppedByReader = false,
+  ): Promise<void> => {
     if (!assistantTurnPersistable || assistantTurnPersisted) return;
     assistantTurnPersisted = true;
     await persistAssistantTurn({
@@ -563,6 +568,9 @@ export async function buildAdapterStreamResponse(
         inputTokens: usage.inputTokens,
         outputTokens: usage.outputTokens,
         truncated,
+        ...(lastWireFinishReason !== null || !stoppedByReader
+          ? { finishReason: lastWireFinishReason }
+          : {}),
         ...(sourceCollector.snapshot() ? { sources: sourceCollector.snapshot() } : {}),
         ...(sourceCollector.citationSnapshot()
           ? { citations: sourceCollector.citationSnapshot() }
@@ -659,6 +667,7 @@ export async function buildAdapterStreamResponse(
             /* scanning is best-effort; never break the stream */
           }
           const wireEvents = assembler.sseChunks(chunk);
+          if (chunk.type === 'stop') lastWireFinishReason = wireFinishReason(wireEvents);
           for (const event of wireEvents) sourceCollector.ingestWireEvent(event);
           if (wireEvents.length === 0) continue;
 
@@ -738,7 +747,7 @@ export async function buildAdapterStreamResponse(
             'CRITICAL: Credit reconciliation failed after stream threw - may require manual adjustment',
           );
         }
-        await persistAssistantTurnSnapshot(true);
+        await persistAssistantTurnSnapshot(true, request.signal.aborted);
         controller.error(streamError);
         return;
       }
@@ -940,7 +949,7 @@ export async function buildAdapterStreamResponse(
           cancelled: true,
         });
       }
-      await persistAssistantTurnSnapshot(true);
+      await persistAssistantTurnSnapshot(true, true);
     },
   });
 

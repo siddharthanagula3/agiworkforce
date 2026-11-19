@@ -1,11 +1,17 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import {
+  EXPECTED_IOS_PATHS,
   normalizeSha256Fingerprint,
   verifyProductionAssociations,
 } from './verify-production-associations.mjs';
 
+const AASA_BUILDER_SOURCE = fileURLToPath(
+  new URL('../../../web/lib/server/mobile-app-association.ts', import.meta.url),
+);
 const RAW_FINGERPRINT = 'AA'.repeat(32);
 const NORMALIZED_FINGERPRINT = normalizeSha256Fingerprint(RAW_FINGERPRINT);
 
@@ -19,7 +25,7 @@ function jsonResponse(value, init = {}) {
   });
 }
 
-function appleDocument(paths = ['/pair', '/pair/*', '/auth/reset-password']) {
+function appleDocument(paths = EXPECTED_IOS_PATHS) {
   return {
     applinks: {
       apps: [],
@@ -86,11 +92,45 @@ test('rejects an overbroad Apple path contract', async () => {
     verifyProductionAssociations({
       rawFingerprints: RAW_FINGERPRINT,
       fetchImpl: associationFetch({
-        apple: appleDocument(['/pair', '/pair/*', '/auth/reset-password', '*']),
+        apple: appleDocument([...EXPECTED_IOS_PATHS, '*']),
       }),
     }),
     /Apple association paths do not match/u,
   );
+});
+
+test('rejects production still claiming the pairing paths', async () => {
+  await assert.rejects(
+    verifyProductionAssociations({
+      rawFingerprints: RAW_FINGERPRINT,
+      fetchImpl: associationFetch({
+        apple: appleDocument([...EXPECTED_IOS_PATHS, '/pair', '/pair/*']),
+      }),
+    }),
+    /Apple association paths do not match/u,
+  );
+});
+
+test('rejects production dropping a path the app routes', async () => {
+  for (const dropped of EXPECTED_IOS_PATHS) {
+    await assert.rejects(
+      verifyProductionAssociations({
+        rawFingerprints: RAW_FINGERPRINT,
+        fetchImpl: associationFetch({
+          apple: appleDocument(EXPECTED_IOS_PATHS.filter((path) => path !== dropped)),
+        }),
+      }),
+      /Apple association paths do not match/u,
+    );
+  }
+});
+
+test('expects exactly the paths the web builder declares', () => {
+  const declared = [...readFileSync(AASA_BUILDER_SOURCE, 'utf8').matchAll(/'\/':\s*'([^']+)'/gu)]
+    .map((match) => match[1])
+    .sort();
+  assert.deepEqual(declared, [...EXPECTED_IOS_PATHS]);
+  assert.deepEqual([...EXPECTED_IOS_PATHS], [...EXPECTED_IOS_PATHS].sort());
 });
 
 test('rejects a malformed protected fingerprint before network access', async () => {

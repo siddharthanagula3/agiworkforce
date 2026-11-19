@@ -15,6 +15,8 @@ import {
 } from '@/src/features/model-picker/service';
 import { NATIVE_PURCHASES_AVAILABLE } from '@/src/features/billing/nativePurchaseAvailability';
 import { getModelMetadataById, getModelReasoning } from '@agiworkforce/types';
+import { isProviderRoutingAllowed } from '@agiworkforce/compliance';
+import { mmkvRoutingConsentLedger } from '@/services/complianceLedger';
 import {
   useModelInstallStore,
   type ModelInstallJob,
@@ -26,6 +28,7 @@ import { upcomingRetirementLabel } from '@/src/features/model-picker/retirement'
 import { ProviderMark, hasProviderMark } from './ProviderMark';
 
 const ROW_TEXT_INSET = 58;
+const PROVIDER_TURNED_OFF_NOTE = 'Turned off for your account. You can turn it on when you send.';
 
 interface ModelRowProps {
   model: ModelDef;
@@ -76,6 +79,9 @@ export function ModelRow({
   const outage = useProviderOutage(model.provider, !isLocal && !isLocked);
   const disabled = isDownloading || isUnavailable || outage !== null;
   const metadata = isLocal ? undefined : getModelMetadataById(model.id);
+  const providerTurnedOff = Boolean(
+    metadata && !isLocked && !isProviderRoutingAllowed(metadata.provider, mmkvRoutingConsentLedger),
+  );
   const retirementLabel = upcomingRetirementLabel(metadata);
   const drawsProviderMark = !isLocal && hasProviderMark(model.provider);
   const origin = detail
@@ -139,7 +145,7 @@ export function ModelRow({
           onLongPress={handleLongPress}
           delayLongPress={400}
           disabled={disabled}
-          accessibilityLabel={`${model.name}${visiblySelected ? ', selected' : ''}${isFavorite ? ', favorite' : ''}${isLocked ? `, ${isSignInLock ? 'sign in required' : NATIVE_PURCHASES_AVAILABLE ? 'upgrade required' : 'not included in your plan'}, ${model.lockReason ?? ''}` : ''}${isDownloading ? `, downloading ${progressPercent}%` : ''}${isFailed ? ', download failed' : ''}${isUnavailable ? ', unavailable' : ''}${outage ? ', unavailable right now' : ''}${isLocal && isReady ? ', ready' : ''}${isLocal && installStatus.status === 'download_required' ? ', not downloaded' : ''}`}
+          accessibilityLabel={`${model.name}${visiblySelected ? ', selected' : ''}${isFavorite ? ', favorite' : ''}${isLocked ? `, ${isSignInLock ? 'sign in required' : NATIVE_PURCHASES_AVAILABLE ? 'upgrade required' : 'not included in your plan'}, ${model.lockReason ?? ''}` : ''}${isDownloading ? `, downloading ${progressPercent}%` : ''}${isFailed ? ', download failed' : ''}${isUnavailable ? ', unavailable' : ''}${outage ? ', unavailable right now' : ''}${providerTurnedOff ? ', turned off for your account' : ''}${isLocal && isReady ? ', ready' : ''}${isLocal && installStatus.status === 'download_required' ? ', not downloaded' : ''}`}
           accessibilityRole="button"
           accessibilityHint={
             isLocked
@@ -152,13 +158,15 @@ export function ModelRow({
                 ? unavailableHint
                 : outage
                   ? outage.reason || 'This model is unavailable right now.'
-                  : isDownloading
-                    ? 'Model download is in progress'
-                    : isFailed
-                      ? 'Tap to retry download'
-                      : installStatus.status === 'download_required'
-                        ? 'Tap to download, long press to favorite'
-                        : 'Tap to select, long press to favorite'
+                  : providerTurnedOff
+                    ? PROVIDER_TURNED_OFF_NOTE
+                    : isDownloading
+                      ? 'Model download is in progress'
+                      : isFailed
+                        ? 'Tap to retry download'
+                        : installStatus.status === 'download_required'
+                          ? 'Tap to download, long press to favorite'
+                          : 'Tap to select, long press to favorite'
           }
           accessibilityState={{ selected: visiblySelected, disabled }}
           style={{
@@ -293,6 +301,16 @@ export function ModelRow({
             {outage.reason
               ? `Unavailable right now: ${outage.reason}`
               : 'Unavailable right now. Try again soon or pick another model.'}
+          </Text>
+        </View>
+      ) : providerTurnedOff ? (
+        <View style={{ paddingLeft: ROW_TEXT_INSET, paddingRight: 16, paddingBottom: 10 }}>
+          <Text
+            testID="model-row-provider-turned-off"
+            numberOfLines={2}
+            style={{ color: colors.textMuted, fontSize: typeScale.caption, lineHeight: 16 }}
+          >
+            {PROVIDER_TURNED_OFF_NOTE}
           </Text>
         </View>
       ) : null}

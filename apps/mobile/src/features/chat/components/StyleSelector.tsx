@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Modal, View } from 'react-native';
+import { Modal, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
@@ -9,6 +9,7 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/src/ui/theme';
 import { dialogPadding, typeScale } from '@/src/ui/theme/tokens';
+import { contentColumn, contentColumnInset } from '@/src/shared/layout/contentColumn';
 
 const STYLE_OPTIONS: Array<{
   id: ChatStyle;
@@ -29,6 +30,8 @@ interface StyleSelectorProps {
 export function StyleSelector({ openSignal }: StyleSelectorProps) {
   const { colors: themeColors } = useTheme();
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
+  const sheetIsNarrowerThanWindow = contentColumnInset('reading', windowWidth) > 0;
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const [visible, setVisible] = useState(false);
 
@@ -75,6 +78,15 @@ export function StyleSelector({ openSignal }: StyleSelectorProps) {
           backgroundColor: themeColors.scrim,
         }}
       >
+        {sheetIsNarrowerThanWindow ? (
+          <PressableBox
+            testID="style-selector-side-scrim"
+            accessible={false}
+            importantForAccessibility="no"
+            style={StyleSheet.absoluteFill}
+            onPress={closeSheet}
+          />
+        ) : null}
         <PressableBox
           style={{ flex: 1 }}
           onPress={closeSheet}
@@ -82,7 +94,9 @@ export function StyleSelector({ openSignal }: StyleSelectorProps) {
           accessibilityRole="button"
         />
         <View
+          testID="style-selector-sheet"
           style={{
+            ...contentColumn('reading'),
             backgroundColor: themeColors.surfaceElevated,
             borderTopLeftRadius: 24,
             borderTopRightRadius: 24,

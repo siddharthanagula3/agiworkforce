@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 type ScanModule0 = typeof import('@/lib/support/tickets/service');
 
+type IdentityModule = typeof import('@/lib/server/identity');
+
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
@@ -16,9 +18,16 @@ const mocks = vi.hoisted(() => ({
   replyToTicket: vi.fn(),
   moveTicket: vi.fn(),
   normalizeDiagnostics: vi.fn(() => null),
+  getIdentityUser: vi.fn(),
 }));
 
 vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: mocks.getClerkAuthUser }));
+vi.mock('@/lib/server/identity', async (importOriginal) => ({
+  ...(await importOriginal<IdentityModule>()),
+  getIdentityProvider: vi.fn(),
+  getIdentityUser: mocks.getIdentityUser,
+  getRequestIdentity: vi.fn(),
+}));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mocks.requireCsrfToken }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
 vi.mock('@/lib/support/diagnostics/schema', () => ({
@@ -127,6 +136,77 @@ describe('support ticket routes', () => {
     );
 
     await expect(response.json()).resolves.toEqual({ ticket: TICKET, staffNotified: false });
+  });
+
+  describe('from a native app session, whose token carries no email claim', () => {
+    const NATIVE_SESSION = {
+      userId: 'user_phone',
+      sessionIdentity: { subject: 'user_phone', sessionId: 'sess_mobile_native' },
+      boundSurface: 'mobile',
+    };
+
+    beforeEach(() => {
+      mocks.getClerkAuthUser.mockResolvedValue(NATIVE_SESSION);
+    });
+
+    it('raises the ticket with the account primary email', async () => {
+      mocks.getIdentityUser.mockResolvedValue({
+        primaryEmail: 'phone@example.com',
+        primaryEmailVerification: 'verified',
+      });
+
+      const response = await createTicketRoute(
+        post({ subject: 'Invoice doubled', message: 'twice what it should be' }) as never,
+      );
+
+      expect(response.status).toBe(201);
+      expect(mocks.getIdentityUser).toHaveBeenCalledWith('user_phone');
+      expect(mocks.openTicket).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 'user_phone',
+          email: 'phone@example.com',
+          name: 'phone@example.com',
+        }),
+      );
+    });
+
+    it('still asks for an email when the account has none', async () => {
+      mocks.getIdentityUser.mockResolvedValue({
+        primaryEmail: null,
+        primaryEmailVerification: null,
+      });
+
+      const response = await createTicketRoute(post({ subject: 'a', message: 'b' }) as never);
+
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toMatchObject({
+        error: expect.objectContaining({
+          message: 'Add an email address to your account so support can reply.',
+        }),
+      });
+      expect(mocks.openTicket).not.toHaveBeenCalled();
+    });
+
+    it('does not send replies to an address the account has not confirmed', async () => {
+      mocks.getIdentityUser.mockResolvedValue({
+        primaryEmail: 'unconfirmed@example.com',
+        primaryEmailVerification: 'unverified',
+      });
+
+      const response = await createTicketRoute(post({ subject: 'a', message: 'b' }) as never);
+
+      expect(response.status).toBe(400);
+      expect(mocks.openTicket).not.toHaveBeenCalled();
+    });
+  });
+
+  it('uses the email the token carries without a second lookup', async () => {
+    await createTicketRoute(post({ subject: 'a', message: 'b' }) as never);
+
+    expect(mocks.getIdentityUser).not.toHaveBeenCalled();
+    expect(mocks.openTicket).toHaveBeenCalledWith(
+      expect.objectContaining({ email: 'a@example.com' }),
+    );
   });
 
   it('refuses a body with no message before it reaches the service', async () => {

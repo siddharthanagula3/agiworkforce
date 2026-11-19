@@ -171,6 +171,28 @@
     {
       "surface": "mobile",
       "kind": "page",
+      "url": "/chat",
+      "file": "apps/mobile/app/(app)/(tabs)/chat.tsx",
+      "segments": [
+        "(app)",
+        "(tabs)",
+        "chat"
+      ]
+    },
+    {
+      "surface": "mobile",
+      "kind": "page",
+      "url": "/chat",
+      "file": "apps/mobile/app/(app)/(tabs)/chat.tsx",
+      "segments": [
+        "(app)",
+        "(tabs)",
+        "chat"
+      ]
+    },
+    {
+      "surface": "mobile",
+      "kind": "page",
       "url": "/chats",
       "file": "apps/mobile/app/(app)/chats/index.tsx",
       "segments": [
@@ -369,6 +391,16 @@
     {
       "surface": "mobile",
       "kind": "page",
+      "url": "/images",
+      "file": "apps/mobile/app/(app)/images.tsx",
+      "segments": [
+        "(app)",
+        "images"
+      ]
+    },
+    {
+      "surface": "mobile",
+      "kind": "page",
       "url": "/legal/article-50",
       "file": "apps/mobile/app/legal/article-50.tsx",
       "segments": [
@@ -476,6 +508,17 @@
         "(app)",
         "plugins",
         "[id]"
+      ]
+    },
+    {
+      "surface": "mobile",
+      "kind": "page",
+      "url": "/plugins/installed",
+      "file": "apps/mobile/app/(app)/plugins/installed.tsx",
+      "segments": [
+        "(app)",
+        "plugins",
+        "installed"
       ]
     },
     {
@@ -741,6 +784,17 @@
     {
       "surface": "mobile",
       "kind": "page",
+      "url": "/settings/chat-privacy",
+      "file": "apps/mobile/app/(app)/settings/chat-privacy.tsx",
+      "segments": [
+        "(app)",
+        "settings",
+        "chat-privacy"
+      ]
+    },
+    {
+      "surface": "mobile",
+      "kind": "page",
       "url": "/settings/cloud-account",
       "file": "apps/mobile/app/(app)/settings/cloud-account.tsx",
       "segments": [
@@ -796,6 +850,17 @@
     {
       "surface": "mobile",
       "kind": "page",
+      "url": "/settings/code-environments",
+      "file": "apps/mobile/app/(app)/settings/code-environments/index.tsx",
+      "segments": [
+        "(app)",
+        "settings",
+        "code-environments"
+      ]
+    },
+    {
+      "surface": "mobile",
+      "kind": "page",
       "url": "/settings/code",
       "file": "apps/mobile/app/(app)/settings/code.tsx",
       "segments": [
@@ -818,6 +883,17 @@
     {
       "surface": "mobile",
       "kind": "page",
+      "url": "/settings/data-use",
+      "file": "apps/mobile/app/(app)/settings/data-use.tsx",
+      "segments": [
+        "(app)",
+        "settings",
+        "data-use"
+      ]
+    },
+    {
+      "surface": "mobile",
+      "kind": "page",
       "url": "/settings/general",
       "file": "apps/mobile/app/(app)/settings/general.tsx",
       "segments": [
@@ -835,6 +911,28 @@
         "(app)",
         "settings",
         "integrations"
+      ]
+    },
+    {
+      "surface": "mobile",
+      "kind": "page",
+      "url": "/settings/map-provider",
+      "file": "apps/mobile/app/(app)/settings/map-provider.tsx",
+      "segments": [
+        "(app)",
+        "settings",
+        "map-provider"
+      ]
+    },
+    {
+      "surface": "mobile",
+      "kind": "page",
+      "url": "/settings/media",
+      "file": "apps/mobile/app/(app)/settings/media.tsx",
+      "segments": [
+        "(app)",
+        "settings",
+        "media"
       ]
     },
     {
@@ -1035,6 +1133,17 @@
         "(app)",
         "settings",
         "storage"
+      ]
+    },
+    {
+      "surface": "mobile",
+      "kind": "page",
+      "url": "/settings/time-and-focus",
+      "file": "apps/mobile/app/(app)/settings/time-and-focus.tsx",
+      "segments": [
+        "(app)",
+        "settings",
+        "time-and-focus"
       ]
     },
     {
@@ -3361,6 +3470,41 @@
     {
       "surface": "web",
       "kind": "endpoint",
+      "url": "/api/chat/conversations/:id/tool-grants/:grantId",
+      "file": "apps/web/app/api/chat/conversations/[id]/tool-grants/[grantId]/route.ts",
+      "segments": [
+        "api",
+        "chat",
+        "conversations",
+        "[id]",
+        "tool-grants",
+        "[grantId]"
+      ],
+      "methods": [
+        "DELETE",
+        "OPTIONS"
+      ]
+    },
+    {
+      "surface": "web",
+      "kind": "endpoint",
+      "url": "/api/chat/conversations/:id/tool-grants",
+      "file": "apps/web/app/api/chat/conversations/[id]/tool-grants/route.ts",
+      "segments": [
+        "api",
+        "chat",
+        "conversations",
+        "[id]",
+        "tool-grants"
+      ],
+      "methods": [
+        "GET",
+        "OPTIONS"
+      ]
+    },
+    {
+      "surface": "web",
+      "kind": "endpoint",
       "url": "/api/chat/conversations/:id",
       "file": "apps/web/app/api/chat/conversations/[id]/route.ts",
       "segments": [
@@ -3436,6 +3580,37 @@
       "methods": [
         "POST",
         "OPTIONS"
+      ]
+    },
+    {
+      "surface": "web",
+      "kind": "endpoint",
+      "url": "/api/code/environments/:environmentId",
+      "file": "apps/web/app/api/code/environments/[environmentId]/route.ts",
+      "segments": [
+        "api",
+        "code",
+        "environments",
+        "[environmentId]"
+      ],
+      "methods": [
+        "PATCH",
+        "DELETE"
+      ]
+    },
+    {
+      "surface": "web",
+      "kind": "endpoint",
+      "url": "/api/code/environments",
+      "file": "apps/web/app/api/code/environments/route.ts",
+      "segments": [
+        "api",
+        "code",
+        "environments"
+      ],
+      "methods": [
+        "GET",
+        "POST"
       ]
     },
     {
@@ -4835,6 +5010,20 @@
     {
       "surface": "web",
       "kind": "endpoint",
+      "url": "/api/cron/sweep-chat-file-intakes",
+      "file": "apps/web/app/api/cron/sweep-chat-file-intakes/route.ts",
+      "segments": [
+        "api",
+        "cron",
+        "sweep-chat-file-intakes"
+      ],
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "surface": "web",
+      "kind": "endpoint",
       "url": "/api/csrf",
       "file": "apps/web/app/api/csrf/route.ts",
       "segments": [
@@ -5470,6 +5659,22 @@
     {
       "surface": "web",
       "kind": "endpoint",
+      "url": "/api/files/:id/thumbnail",
+      "file": "apps/web/app/api/files/[id]/thumbnail/route.ts",
+      "segments": [
+        "api",
+        "files",
+        "[id]",
+        "thumbnail"
+      ],
+      "methods": [
+        "GET",
+        "OPTIONS"
+      ]
+    },
+    {
+      "surface": "web",
+      "kind": "endpoint",
       "url": "/api/files/:id",
       "file": "apps/web/app/api/files/[id]/route.ts",
       "segments": [
@@ -5479,6 +5684,23 @@
       ],
       "methods": [
         "GET",
+        "OPTIONS"
+      ]
+    },
+    {
+      "surface": "web",
+      "kind": "endpoint",
+      "url": "/api/files/intakes/:intakeId",
+      "file": "apps/web/app/api/files/intakes/[intakeId]/route.ts",
+      "segments": [
+        "api",
+        "files",
+        "intakes",
+        "[intakeId]"
+      ],
+      "methods": [
+        "GET",
+        "DELETE",
         "OPTIONS"
       ]
     },
@@ -7632,6 +7854,24 @@
         "projects",
         "[id]",
         "knowledge-files"
+      ],
+      "methods": [
+        "GET",
+        "POST",
+        "OPTIONS"
+      ]
+    },
+    {
+      "surface": "web",
+      "kind": "endpoint",
+      "url": "/api/projects/:id/memory/edit",
+      "file": "apps/web/app/api/projects/[id]/memory/edit/route.ts",
+      "segments": [
+        "api",
+        "projects",
+        "[id]",
+        "memory",
+        "edit"
       ],
       "methods": [
         "GET",
@@ -13369,6 +13609,15 @@
       "kind": "layout",
       "url": "/support",
       "file": "apps/web/app/support/layout.tsx",
+      "segments": [
+        "support"
+      ]
+    },
+    {
+      "surface": "web",
+      "kind": "loading",
+      "url": "/support",
+      "file": "apps/web/app/support/loading.tsx",
       "segments": [
         "support"
       ]

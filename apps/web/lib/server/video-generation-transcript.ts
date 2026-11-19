@@ -3,6 +3,7 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { authenticatedMediaUrl } from '@/lib/server/media-storage';
 import type { VideoGenerationJob } from '@/lib/server/video-generation-jobs';
+import { mergeJsonbObjectSql } from '@/lib/server/jsonb-object-merge';
 
 export type VideoTranscriptSyncDisposition = 'updated' | 'detached' | 'not_found';
 
@@ -52,7 +53,7 @@ export async function syncVideoGenerationTranscript(
         set model = $4,
             provider = $5,
             content = case when $6::text is null then message.content else $6::text end,
-            metadata = coalesce(message.metadata, '{}'::jsonb) || $7::jsonb
+            metadata = ${mergeJsonbObjectSql('message.metadata', '$7::jsonb')}
        from public.web_conversations conversation
       where message.id = $1
         and message.conversation_id = $2
@@ -93,7 +94,7 @@ export async function failUnboundVideoGenerationTranscript(input: {
   const rows = await input.db.query<VideoTranscriptFailureRow>(
     `update public.web_messages message
         set content = $4,
-            metadata = coalesce(message.metadata, '{}'::jsonb) || $5::jsonb
+            metadata = ${mergeJsonbObjectSql('message.metadata', '$5::jsonb')}
        from public.web_conversations conversation
       where message.id = $1
         and message.conversation_id = $2

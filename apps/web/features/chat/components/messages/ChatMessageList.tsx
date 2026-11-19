@@ -64,7 +64,7 @@ import {
   type SaveAsSkill,
 } from '@/features/skills/components/save-as-skill';
 import { useGeneratedFollowUps } from '../../hooks/use-generated-follow-ups';
-import { collectMessageResearchSources } from '../../utils/research-sources';
+import { collectMessageResearchSources } from '@agiworkforce/unified-chat/message-sources';
 import { GreetingBanner } from '../GreetingBanner/GreetingBanner';
 import { ComposerFeedbackDialog } from '../Composer/ComposerFeedbackDialog';
 import { useSoftKeyboardInset } from '../Composer/soft-keyboard-inset';

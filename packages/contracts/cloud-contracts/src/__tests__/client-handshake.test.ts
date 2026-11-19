@@ -4,11 +4,14 @@ import {
   API_CONTRACT_VERSION,
   API_CONTRACT_VERSIONS,
   API_VERSION_REQUEST_HEADER,
+  LARGE_CHAT_FILES_CAPABILITY,
   MINIMUM_SUPPORTED_API_CONTRACT_VERSION,
   SUPPORTED_API_CONTRACT_VERSIONS,
   SURFACE_REQUEST_HEADER,
   clientHandshakeHeaders,
+  hasClientCapability,
 } from '../client-handshake';
+import { CLIENT_CAPABILITIES_REQUEST_HEADER } from '../header-names';
 import { CLIENT_VERSION_HEADER } from '../me';
 
 describe('the handshake a surface sends', () => {
@@ -31,6 +34,70 @@ describe('the handshake a surface sends', () => {
   it('trims a version a build padded, so one series does not become two labels', () => {
     const headers = clientHandshakeHeaders({ surface: 'mobile', version: ' 1.2.0\n' });
     expect(headers[CLIENT_VERSION_HEADER]).toBe('1.2.0');
+  });
+
+  it("sends exactly today's headers when the caller names no capability", () => {
+    for (const build of [
+      { surface: 'web' as const, version: '1.2.0' },
+      { surface: 'mobile' as const, version: undefined },
+      { surface: 'web' as const, version: '1.2.0', capabilities: [] },
+    ]) {
+      const headers = clientHandshakeHeaders(build);
+      expect(Object.keys(headers)).not.toContain(CLIENT_CAPABILITIES_REQUEST_HEADER);
+      expect(headers).toStrictEqual({
+        [SURFACE_REQUEST_HEADER]: build.surface,
+        ...(build.version ? { [CLIENT_VERSION_HEADER]: build.version } : {}),
+        [API_VERSION_REQUEST_HEADER]: API_CONTRACT_VERSION,
+      });
+    }
+    expect(API_CONTRACT_VERSION).toBe('2026-09-17');
+  });
+
+  it('lists the capabilities a caller names, once each', () => {
+    const headers = clientHandshakeHeaders({
+      surface: 'web',
+      version: '1.2.0',
+      capabilities: [LARGE_CHAT_FILES_CAPABILITY, LARGE_CHAT_FILES_CAPABILITY],
+    });
+    expect(LARGE_CHAT_FILES_CAPABILITY).toBe('large-chat-files-v1');
+    expect(headers[CLIENT_CAPABILITIES_REQUEST_HEADER]).toBe('large-chat-files-v1');
+    expect(headers[API_VERSION_REQUEST_HEADER]).toBe(API_CONTRACT_VERSION);
+    expect(
+      hasClientCapability(headers[CLIENT_CAPABILITIES_REQUEST_HEADER], LARGE_CHAT_FILES_CAPABILITY),
+    ).toBe(true);
+  });
+});
+
+describe('reading the capabilities a client lists', () => {
+  it('finds the token in a comma list, spaces and all', () => {
+    for (const value of [
+      'large-chat-files-v1',
+      ' large-chat-files-v1 ',
+      'other-v2, large-chat-files-v1',
+      'large-chat-files-v1,other-v2',
+      'a ,  large-chat-files-v1  , b',
+    ]) {
+      expect(hasClientCapability(value, LARGE_CHAT_FILES_CAPABILITY), value).toBe(true);
+    }
+  });
+
+  it('refuses a missing header, an empty value and a token that only contains it', () => {
+    for (const value of [
+      null,
+      undefined,
+      '',
+      '   ',
+      ',',
+      'large-chat-files-v10',
+      'large-chat-files-v1x',
+      'xlarge-chat-files-v1',
+      'large-chat-files',
+      'large-chat-files-v1;q=1',
+      'large-chat-files-v1-beta',
+      'LARGE-CHAT-FILES-V1x',
+    ]) {
+      expect(hasClientCapability(value, LARGE_CHAT_FILES_CAPABILITY), String(value)).toBe(false);
+    }
   });
 });
 

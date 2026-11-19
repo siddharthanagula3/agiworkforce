@@ -1,9 +1,9 @@
 import { restoreHyphenatedLabels } from '@agiworkforce/unified-chat';
+import { buildReactPreviewDocument } from '@agiworkforce/unified-chat/react-preview-document';
 import type { ArtifactKind, ArtifactRenderPayload } from '@/lib/artifact-sandbox';
 import {
   buildArtifactCspMeta,
   buildSandboxSrcDoc,
-  escapeForInlineScript,
   escapeHTML,
   sanitizeSVG,
 } from '@shared/utils/html-sanitizer';
@@ -34,31 +34,8 @@ export function buildArtifactPreviewDocument(type: ArtifactData['type'], content
     case 'html':
       return buildSandboxSrcDoc(restoreHyphenatedLabels(content));
 
-    case 'react': {
-      const reactSource = escapeForInlineScript(content);
-      return `
-<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    ${buildArtifactCspMeta()}
-    <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z" crossorigin="anonymous"></script>
-    <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1" crossorigin="anonymous"></script>
-    <script src="https://unpkg.com/@babel/standalone@8.0.4/babel.min.js" integrity="sha384-bdF7m0Y1IFKt9Q6xC8X9qkXn0OBriQWKyWwZKYsN05zF6P/g9OakjjL0G2Sd4pB4" crossorigin="anonymous"></script>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="text/babel" data-presets="env,react">
-${reactSource}
-;var __AgiApp = (typeof App !== 'undefined' && App) || (typeof Component !== 'undefined' && Component);
-if (__AgiApp) {
-  ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(__AgiApp));
-}
-    </script>
-  </body>
-</html>`;
-    }
+    case 'react':
+      return buildReactPreviewDocument(content, buildArtifactCspMeta());
 
     case 'svg': {
       const sanitizedSVG = sanitizeSVG(content);

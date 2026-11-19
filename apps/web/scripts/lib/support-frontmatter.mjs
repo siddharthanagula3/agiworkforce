@@ -1,6 +1,6 @@
 const REQUIRED_KEYS = ['id', 'title', 'path', 'category', 'tags', 'updated', 'scope'];
 
-const OPTIONAL_KEYS = ['platforms', 'description'];
+const OPTIONAL_KEYS = ['platforms', 'description', 'phone'];
 
 export const DESCRIPTION_MAX_CHARS = 200;
 
@@ -53,6 +53,9 @@ export function parseFrontmatter(raw, file) {
     throw new BuildError(
       `${file}: description must be one plain sentence ending in a full stop, at most ${DESCRIPTION_MAX_CHARS} characters`,
     );
+  }
+  if ('phone' in data && data['phone'] !== 'unlisted') {
+    throw new BuildError(`${file}: phone may only be "unlisted" (got "${data['phone']}")`);
   }
   if (!/^[a-z0-9][a-z0-9-]*$/.test(data['id'])) {
     throw new BuildError(`${file}: id must be kebab-case (got "${data['id']}")`);

@@ -71,4 +71,19 @@ describe('MathBlock follows the appearance the app resolved', () => {
     expect(light).toContain('background: transparent');
     expect(light).toContain(`color: ${highContrastLightColors.textPrimary}`);
   });
+
+  it('draws a display equation with no bar or tint, so it never reads as a quote', () => {
+    mockTheme = { colors, isDark: true, isHighContrast: false };
+    const html = renderedHtml(true);
+    expect(html).not.toContain('border-left');
+
+    let tree!: ReturnType<typeof create>;
+    act(() => {
+      tree = create(React.createElement(MathBlock, { latex: 'x^2', display: true }));
+    });
+    const frame = tree.root.findByProps({ accessibilityRole: 'image' });
+    const flat = Object.assign({}, ...[frame.props.style].flat(2).filter(Boolean));
+    expect(flat.backgroundColor).toBeUndefined();
+    expect(flat.borderLeftWidth).toBeUndefined();
+  });
 });

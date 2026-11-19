@@ -1,4 +1,4 @@
-import type { FlashcardSet, Quiz } from './study-set';
+import type { FlashcardSet, Quiz } from '@agiworkforce/unified-chat/study-set';
 
 function escapeHtml(value: string): string {
   return value

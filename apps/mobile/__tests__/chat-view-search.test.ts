@@ -8,6 +8,12 @@ jest.mock('../lib/mmkv', () => ({
 const mockApiGet = jest.fn();
 jest.mock('../services/api', () => ({ api: { get: (...a: unknown[]) => mockApiGet(...a) } }));
 
+jest.mock('../src/features/chat/utils/markdownPlainText', () => {
+  const actual = jest.requireActual('../src/features/chat/utils/markdownPlainText');
+  return { ...actual, answerPlainText: jest.fn(actual.answerPlainText) };
+});
+
+import { answerPlainText } from '../src/features/chat/utils/markdownPlainText';
 import { useChatViewStore } from '../stores/chat/chatViewStore';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useChatMessageStore } from '../stores/chat/chatMessageStore';
@@ -298,5 +304,140 @@ describe('chatViewStore.searchConversations, mode routing', () => {
     useChatViewStore.getState().searchConversations('   ');
     expect(useChatViewStore.getState().searchResults).toEqual([]);
     expect(useChatViewStore.getState().isSearching).toBe(false);
+  });
+});
+
+describe('chatViewStore.searchConversations, snippets', () => {
+  it('shows a message that matches in plain text, without its Markdown, and marks the match', async () => {
+    useChatMessageStore.setState({
+      conversations: [
+        { id: 'c2', title: 'Rivers', updatedAt: '', createdAt: '', messageCount: 1, pinned: false },
+      ],
+      messages: {
+        c2: [
+          {
+            id: 'm2',
+            conversationId: 'c2',
+            role: 'assistant',
+            content: '# The History of the Nile\n\nThe **river** runs north.',
+            createdAt: '',
+          },
+        ],
+      },
+    });
+
+    useChatViewStore.getState().searchConversations('nile');
+    await flushDebounce();
+
+    const [result] = useChatViewStore.getState().searchResults;
+    expect(result!.snippet).toBe('The History of the Nile The river runs north.');
+    expect(
+      result!.snippet.slice(result!.matchStart, result!.matchStart + result!.matchLength),
+    ).toBe('Nile');
+  });
+
+  it('finds text that Markdown splits, and ignores the markup itself', async () => {
+    useChatMessageStore.setState({
+      conversations: [
+        { id: 'c3', title: 'Notes', updatedAt: '', createdAt: '', messageCount: 1, pinned: false },
+      ],
+      messages: {
+        c3: [
+          {
+            id: 'm3',
+            conversationId: 'c3',
+            role: 'assistant',
+            content: 'The **river** runs north.',
+            createdAt: '',
+          },
+        ],
+      },
+    });
+
+    useChatViewStore.getState().searchConversations('river runs');
+    await flushDebounce();
+    expect(useChatViewStore.getState().searchResults.map((r) => r.conversationId)).toContain('c3');
+
+    useChatViewStore.getState().searchConversations('**');
+    await flushDebounce();
+    expect(useChatViewStore.getState().searchResults.map((r) => r.conversationId)).not.toContain(
+      'c3',
+    );
+  });
+
+  it('converts a message to plain text once, however many searches and matches read it', async () => {
+    useChatMessageStore.setState({
+      conversations: [
+        { id: 'c4', title: 'Notes', updatedAt: '', createdAt: '', messageCount: 1, pinned: false },
+      ],
+      messages: {
+        c4: [
+          {
+            id: 'm4',
+            conversationId: 'c4',
+            role: 'assistant',
+            content: 'The **river** runs north past the delta.',
+            createdAt: '',
+          },
+        ],
+      },
+    });
+    jest.mocked(answerPlainText).mockClear();
+
+    useChatViewStore.getState().searchConversations('river');
+    await flushDebounce();
+    expect(jest.mocked(answerPlainText)).toHaveBeenCalledTimes(1);
+
+    useChatViewStore.getState().searchConversations('delta');
+    await flushDebounce();
+    expect(useChatViewStore.getState().searchResults.map((r) => r.conversationId)).toContain('c4');
+    expect(jest.mocked(answerPlainText)).toHaveBeenCalledTimes(1);
+  });
+
+  it('strips Markdown from a server snippet and keeps the match offsets on the plain text', async () => {
+    useChatAppModeStore.getState().setAppMode('cloud');
+    useAuthStore.setState({ isClerkSignedIn: true });
+    activateCloudAccount('search-user');
+    mockApiGet.mockResolvedValue({
+      results: [
+        {
+          type: 'message',
+          sessionId: 'cloud-1',
+          messageId: 'cm-1',
+          matchedText: 'Nile',
+          contextBefore: '# The History of the ',
+          contextAfter: '\n\nThe **river** runs north',
+        },
+      ],
+    });
+
+    useChatViewStore.getState().searchConversations('nile');
+    await flushDebounce();
+
+    const [result] = useChatViewStore.getState().searchResults;
+    expect(result!.snippet).toBe('...The History of the Nile The river runs north...');
+    expect(result!.snippet).not.toContain('#');
+    expect(
+      result!.snippet.slice(result!.matchStart, result!.matchStart + result!.matchLength),
+    ).toBe('Nile');
+  });
+
+  it('shows a project match as plain text', async () => {
+    useChatAppModeStore.getState().setAppMode('cloud');
+    useAuthStore.setState({ isClerkSignedIn: true });
+    activateCloudAccount('search-user');
+    mockApiGet.mockResolvedValue({
+      results: [],
+      projects: [
+        { projectId: 'p-2', projectName: 'Nile', content: '## Goals\n\n- **Map** the river' },
+      ],
+    });
+
+    useChatViewStore.getState().searchConversations('nile');
+    await flushDebounce();
+
+    expect(useChatViewStore.getState().remoteSearchProjects).toEqual([
+      { id: 'p-2', title: 'Nile', subtitle: 'Goals • Map the river' },
+    ]);
   });
 });

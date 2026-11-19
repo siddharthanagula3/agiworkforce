@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 type ScanModule0 = typeof import('@/lib/services/managed-usage-accounting-service');
 type ScanModule1 = typeof import('@/lib/services/managed-usage-request-service');
 
@@ -128,6 +128,7 @@ import {
 } from '@/lib/services/managed-usage-accounting-service';
 import { nativeServerToolMicrousdPerRequest } from '@/lib/web-search/native-search-pricing';
 import { buildManagedAgentStream, managedAgentReportedFailureCode } from './managed-agent-stream';
+import { recordStoppedRunAssistantTurn } from './stopped-run-turn';
 import type { ProcessedRequest } from './request-processor';
 import { INTERACTIVE_CARDS_MAX_PER_MESSAGE, AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
 import type { AgentEvent } from '@agiworkforce/types/protocol';
@@ -1495,5 +1496,338 @@ describe('managed agent stream', () => {
       processed.managedUsage!.db,
       expect.objectContaining({ state: 'cancelled' }),
     );
+  });
+});
+
+describe('the finish reason a managed agent turn is stored with', () => {
+  const persistable = {
+    ...processed,
+    requestId: 'request-finish-reason-fixture',
+    conversationId: '0190a000-0000-7000-8000-000000000017',
+    assistantMessageId: '0190a000-0000-7000-8000-000000000018',
+    conversationIsTemporary: false,
+  } as ProcessedRequest;
+
+  function storedMetadata(): Record<string, unknown> {
+    const call = persistenceMocks.execute.mock.calls.find(([sql]) =>
+      String(sql).includes('insert into web_messages'),
+    );
+    expect(call).toBeDefined();
+    return JSON.parse(String((call?.[1] as unknown[] | undefined)?.[7])) as Record<string, unknown>;
+  }
+
+  function stream(generator: AsyncGenerator<Uint8Array>) {
+    return buildManagedAgentStream({
+      generator,
+      processed: persistable,
+      usage: createObservedProviderUsage(),
+      completionReason: 'tool_loop_completed',
+      cancellationReason: 'client_cancelled_tool_loop',
+      userId: 'user-fixture',
+    });
+  }
+
+  it('stores the last finish reason the client was sent', async () => {
+    persistenceMocks.execute.mockClear();
+    async function* cutOff(): AsyncGenerator<Uint8Array> {
+      const encoder = new TextEncoder();
+      yield encoder.encode('data: {"choices":[{"delta":{"content":"The first half"}}]}\n\n');
+      yield encoder.encode('data: {"choices":[{"delta":{},"finish_reason":"length"}]}\n\n');
+      yield encoder.encode('data: [DONE]\n\n');
+    }
+
+    await readAll(stream(cutOff()));
+
+    expect(storedMetadata()['finishReason']).toBe('length');
+  });
+
+  it('stores no reason when the stream named none', async () => {
+    persistenceMocks.execute.mockClear();
+
+    await readAll(stream(completedGenerator()));
+
+    expect(storedMetadata()).toHaveProperty('finishReason', null);
+  });
+
+  it('leaves the reason of a turn the reader stopped to the client', async () => {
+    persistenceMocks.execute.mockClear();
+    const reader = stream(completedGenerator()).getReader();
+    await reader.read();
+    await reader.cancel();
+
+    expect(storedMetadata()).not.toHaveProperty('finishReason');
+  });
+});
+
+describe('a turn the person stopped, as stored for every device', () => {
+  const RUN_ID = '0190a000-0000-7000-8000-000000000021';
+  const LEG_REQUEST_ID = 'request-person-stop-fixture';
+  const MESSAGE_ID = '0190a000-0000-7000-8000-000000000028';
+  const PHONE_MESSAGE_ID = '0190a000-0000-7000-8000-000000000029';
+  const persistable = {
+    ...processed,
+    requestId: LEG_REQUEST_ID,
+    conversationId: '0190a000-0000-7000-8000-000000000027',
+    assistantMessageId: MESSAGE_ID,
+    conversationIsTemporary: false,
+  } as ProcessedRequest;
+  const phoneLeg = {
+    ...persistable,
+    assistantMessageId: undefined,
+  } as unknown as ProcessedRequest;
+
+  const store = {
+    run: { requestId: LEG_REQUEST_ID, state: 'running', cancellationRequested: false },
+    rows: new Map<string, Record<string, unknown>>(),
+  };
+
+  // Mirrors the statement's predicate over the run row and the stored rows, so
+  // the run's own request id, its state and the leg's request id are separate
+  // inputs here as they are in the database. The statement itself is checked
+  // against real rows outside this suite.
+  function stampStoppedRows(params: unknown[]): number {
+    expect(params[0]).toBe(RUN_ID);
+    const { run } = store;
+    if (!run.cancellationRequested || run.state !== 'cancelled') return 0;
+    const [, , , reason, legRequestId, messageId] = params;
+    let written = 0;
+    for (const [id, row] of store.rows) {
+      if (messageId !== null && id !== messageId) continue;
+      const ownedByServerWrite =
+        row['truncated'] === true &&
+        (row['requestId'] === run.requestId || row['requestId'] === legRequestId) &&
+        (!('finishReason' in row) || typeof row['finishReason'] === 'string');
+      const reference = row['cloudAgentRun'] as { runId?: unknown } | undefined;
+      const ownedByClientWrite = reference?.runId === RUN_ID && !('finishReason' in row);
+      if (ownedByServerWrite || ownedByClientWrite) {
+        row['finishReason'] = reason;
+        written += 1;
+      }
+    }
+    return written;
+  }
+
+  function storedRow(id = MESSAGE_ID): Record<string, unknown> {
+    const row = store.rows.get(id);
+    expect(row, 'the turn should have been written').toBeDefined();
+    return row ?? {};
+  }
+
+  function phoneRow(extra: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+      agentActivity: [],
+      cloudApproval: null,
+      cloudAgentRun: { runId: RUN_ID, runPath: `/api/llm/v1/chat/completions/runs/${RUN_ID}` },
+      ...extra,
+    };
+  }
+
+  beforeEach(() => {
+    store.run = { requestId: LEG_REQUEST_ID, state: 'running', cancellationRequested: false };
+    store.rows.clear();
+    transitionCloudAgentRun.mockImplementation(async (_db: unknown, input: { state: string }) => {
+      store.run.state = input.state;
+      return { state: input.state };
+    });
+    appendCloudAgentEvents.mockImplementation(
+      async (_db: unknown, input: { envelopes: readonly { event: { state?: string } }[] }) => {
+        const state = input.envelopes.at(-1)?.event.state ?? 'running';
+        store.run.state = state;
+        return { state };
+      },
+    );
+    persistenceMocks.execute.mockImplementation(async (...args: unknown[]) => {
+      const sql = String(args[0]);
+      const params = (args[1] ?? []) as unknown[];
+      if (sql.includes('insert into web_messages')) {
+        const id = String(params[0]);
+        const incoming = JSON.parse(String(params[7])) as Record<string, unknown>;
+        store.rows.set(id, { ...(store.rows.get(id) ?? {}), ...incoming });
+        return 1 as unknown as undefined;
+      }
+      if (sql.includes('update web_messages') && sql.includes('cancellation_requested_at')) {
+        return stampStoppedRows(params) as unknown as undefined;
+      }
+      return undefined;
+    });
+  });
+
+  afterEach(() => {
+    persistenceMocks.execute.mockImplementation(async () => undefined);
+    transitionCloudAgentRun.mockImplementation(async (_db: unknown, input: { state: string }) => ({
+      state: input.state,
+    }));
+    appendCloudAgentEvents.mockImplementation(
+      async (_db: unknown, input: { envelopes: readonly { event: { state?: string } }[] }) => {
+        events.push('event-persisted');
+        return { state: input.envelopes.at(-1)?.event.state ?? 'running' };
+      },
+    );
+  });
+
+  function runStream(generator: AsyncGenerator<Uint8Array>, leg = persistable) {
+    return buildManagedAgentStream({
+      generator,
+      processed: leg,
+      usage: createObservedProviderUsage(),
+      completionReason: 'tool_loop_completed',
+      cancellationReason: 'client_cancelled_tool_loop',
+      userId: 'user-fixture',
+      runJournal: { db: processed.managedUsage!.db, userId: 'user-fixture', runId: RUN_ID },
+    });
+  }
+
+  async function stopFromRoute(): Promise<void> {
+    store.run.cancellationRequested = true;
+    await recordStoppedRunAssistantTurn({
+      userId: 'user-fixture',
+      organizationId: null,
+      runId: RUN_ID,
+    });
+  }
+
+  async function dropAfterFirstChunk(leg = persistable): Promise<void> {
+    const reader = runStream(completedGenerator(), leg).getReader();
+    await reader.read();
+    await reader.cancel();
+  }
+
+  it('records stopped when the cancel request arrived before the turn was written', async () => {
+    store.run.cancellationRequested = true;
+    await dropAfterFirstChunk();
+
+    expect(storedRow()).toMatchObject({ truncated: true, finishReason: 'stopped' });
+  });
+
+  it('records stopped when the cancel request ends the run before the client drops', async () => {
+    store.run.cancellationRequested = true;
+
+    await readAll(runStream(canonicalEventGenerator('cancelled')));
+
+    expect(storedRow()).toMatchObject({ truncated: true, finishReason: 'stopped' });
+  });
+
+  it('records stopped when the cancel request lands after the turn was written', async () => {
+    await dropAfterFirstChunk();
+    expect(storedRow()).not.toHaveProperty('finishReason');
+
+    await stopFromRoute();
+
+    expect(storedRow()).toMatchObject({ truncated: true, finishReason: 'stopped' });
+  });
+
+  it('does not record a dropped connection without a cancel request as stopped', async () => {
+    await dropAfterFirstChunk();
+
+    expect(storedRow()).toMatchObject({ truncated: true });
+    expect(storedRow()).not.toHaveProperty('finishReason');
+  });
+
+  it('still records a failure as having no reason, even after a cancel request', async () => {
+    store.run.cancellationRequested = true;
+    async function* broken(): AsyncGenerator<Uint8Array> {
+      yield new TextEncoder().encode('data: {"choices":[{"delta":{"content":"Half"}}]}\n\n');
+      throw new Error('provider connection reset');
+    }
+
+    const failure = await readAll(runStream(broken())).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(String(failure)).toContain('provider connection reset');
+
+    expect(storedRow()).toMatchObject({ truncated: true });
+    expect(storedRow()).toHaveProperty('finishReason', null);
+  });
+
+  it('leaves a finished turn alone when a late cancel request arrives', async () => {
+    await readAll(runStream(completedGenerator()));
+    await stopFromRoute();
+
+    expect(storedRow()).toMatchObject({ truncated: false, finishReason: null });
+  });
+
+  it('records stopped on a resumed leg whose request is not the run request', async () => {
+    store.run.requestId = 'request-run-first-leg';
+    store.run.cancellationRequested = true;
+    await dropAfterFirstChunk();
+
+    expect(storedRow()).toMatchObject({
+      requestId: LEG_REQUEST_ID,
+      truncated: true,
+      finishReason: 'stopped',
+    });
+  });
+
+  it('records stopped on a Continue that kept the cut-off reason of the attempt before it', async () => {
+    store.rows.set(MESSAGE_ID, {
+      requestId: 'request-earlier-attempt',
+      truncated: false,
+      finishReason: 'length',
+    });
+    store.run.cancellationRequested = true;
+    await dropAfterFirstChunk();
+
+    expect(storedRow()).toMatchObject({ truncated: true, finishReason: 'stopped' });
+  });
+
+  it('keeps the cut-off reason when a Continue drops without a cancel request', async () => {
+    store.rows.set(MESSAGE_ID, {
+      requestId: 'request-earlier-attempt',
+      truncated: false,
+      finishReason: 'length',
+    });
+    await dropAfterFirstChunk();
+
+    expect(storedRow()).toMatchObject({ truncated: true, finishReason: 'length' });
+  });
+
+  describe('a turn the phone saved itself', () => {
+    it('records stopped once the run the person stopped is cancelled', async () => {
+      store.rows.set(PHONE_MESSAGE_ID, phoneRow());
+      await stopFromRoute();
+      expect(storedRow(PHONE_MESSAGE_ID)).not.toHaveProperty('finishReason');
+
+      await dropAfterFirstChunk(phoneLeg);
+
+      expect(store.run.state).toBe('cancelled');
+      expect(store.rows.has(MESSAGE_ID)).toBe(false);
+      expect(storedRow(PHONE_MESSAGE_ID)).toMatchObject({ finishReason: 'stopped' });
+    });
+
+    it('records stopped when the cancel request lands after the run was cancelled', async () => {
+      store.rows.set(PHONE_MESSAGE_ID, phoneRow());
+      await dropAfterFirstChunk(phoneLeg);
+      expect(storedRow(PHONE_MESSAGE_ID)).not.toHaveProperty('finishReason');
+
+      await stopFromRoute();
+
+      expect(storedRow(PHONE_MESSAGE_ID)).toMatchObject({ finishReason: 'stopped' });
+    });
+
+    it('does not record a cancelled run without a cancel request as stopped', async () => {
+      store.rows.set(PHONE_MESSAGE_ID, phoneRow());
+      await dropAfterFirstChunk(phoneLeg);
+
+      expect(store.run.state).toBe('cancelled');
+      expect(storedRow(PHONE_MESSAGE_ID)).not.toHaveProperty('finishReason');
+    });
+
+    it('leaves a finished run alone when a late cancel request arrives', async () => {
+      store.rows.set(PHONE_MESSAGE_ID, phoneRow());
+      await readAll(runStream(completedGenerator(), phoneLeg));
+      await stopFromRoute();
+
+      expect(store.run.state).toBe('ready_for_review');
+      expect(storedRow(PHONE_MESSAGE_ID)).not.toHaveProperty('finishReason');
+    });
+
+    it('leaves the reason the phone saved', async () => {
+      store.rows.set(PHONE_MESSAGE_ID, phoneRow({ finishReason: 'stop' }));
+      store.run.cancellationRequested = true;
+      await dropAfterFirstChunk(phoneLeg);
+
+      expect(storedRow(PHONE_MESSAGE_ID)).toMatchObject({ finishReason: 'stop' });
+    });
   });
 });

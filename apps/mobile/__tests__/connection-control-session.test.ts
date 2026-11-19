@@ -13,6 +13,11 @@ const mockSignalingClient = jest.fn().mockImplementation(() => ({
   close: jest.fn(),
 }));
 
+jest.mock('@/lib/v1FeatureFlags', () => {
+  const actual = jest.requireActual('@/lib/v1FeatureFlags');
+  return { FEATURES: { ...actual.FEATURES, companion: true, dispatch: true } };
+});
+
 jest.mock('@/services/secureFetch', () => ({ secureFetch: jest.fn() }));
 
 jest.mock('@/services/manualPairing', () => ({

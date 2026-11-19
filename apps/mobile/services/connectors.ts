@@ -29,6 +29,9 @@ import {
   type BankAccountsItem,
   CONNECTOR_CALLS_PATH,
   ConnectorCallLogResponseSchema,
+  ListConnectorAccountsResponseSchema,
+  connectorAccountsPath,
+  type ConnectorAccount,
   type ConnectorCallEntry,
 } from '@agiworkforce/cloud-contracts';
 import {
@@ -297,6 +300,12 @@ export async function completeConnectorAuthorization(
     await api.post<unknown>(CONNECTOR_OAUTH_COMPLETE_PATH, request.data),
   );
   return response.status;
+}
+
+export async function fetchConnectorAccounts(connectorId: string): Promise<ConnectorAccount[]> {
+  return ListConnectorAccountsResponseSchema.parse(
+    await api.get<unknown>(connectorAccountsPath(connectorId)),
+  ).accounts;
 }
 
 export async function fetchConnectorCalls(connectorId: string): Promise<ConnectorCallEntry[]> {

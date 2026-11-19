@@ -233,4 +233,68 @@ describe('plugin sources on mobile', () => {
     );
     alert.mockRestore();
   });
+
+  describe('when there is nothing to show', () => {
+    function answerWith(overrides: Record<string, unknown>) {
+      mockGet.mockImplementation((path: string) =>
+        path in overrides ? Promise.resolve(overrides[path]) : routeGet(path),
+      );
+    }
+
+    it('says what a plugin source is and that none has been added', async () => {
+      mockGet.mockImplementation((path: string) =>
+        path === '/api/plugins/organization'
+          ? Promise.reject(new Error('no workspace'))
+          : path === '/api/plugins/marketplaces'
+            ? Promise.resolve({ sources: [] })
+            : path === '/api/plugins/marketplaces/entries'
+              ? Promise.resolve({ entries: [] })
+              : path === '/api/plugins/marketplace-installations'
+                ? Promise.resolve({ installations: [] })
+                : Promise.resolve({ submissions: [] }),
+      );
+      const { findByText, getByText, queryByLabelText } = render(<PluginSourcesScreen />);
+
+      expect(await findByText('No plugin sources yet')).toBeTruthy();
+      expect(getByText(/A plugin source is where plugins come from/)).toBeTruthy();
+      expect(queryByLabelText('Loading')).toBeNull();
+    });
+
+    it('does not show the empty message when a workspace publishes plugins', async () => {
+      answerWith({ '/api/plugins/marketplaces': { sources: [] } });
+      const { findByText, queryByText } = render(<PluginSourcesScreen />);
+
+      expect(await findByText('From Acme')).toBeTruthy();
+      expect(queryByText('No plugin sources yet')).toBeNull();
+    });
+
+    it('shows a loading state until the sources arrive', async () => {
+      mockGet.mockImplementation(() => new Promise(() => undefined));
+      const { findByLabelText, queryByText } = render(<PluginSourcesScreen />);
+
+      expect(await findByLabelText('Loading')).toBeTruthy();
+      expect(queryByText('No plugin sources yet')).toBeNull();
+    });
+
+    it('shows the failure with a retry instead of a blank screen, and loads on retry', async () => {
+      let failing = true;
+      mockGet.mockImplementation((path: string) =>
+        failing && path === '/api/plugins/marketplaces'
+          ? Promise.reject(new Error('offline'))
+          : routeGet(path),
+      );
+      const { findByText, findByLabelText, getByLabelText, queryByText } = render(
+        <PluginSourcesScreen />,
+      );
+
+      expect(await findByText('Could not load your plugin sources.')).toBeTruthy();
+      expect(queryByText('No plugin sources yet')).toBeNull();
+
+      failing = false;
+      fireEvent.press(getByLabelText('Try again'));
+
+      expect(await findByLabelText('Install Notes helper')).toBeTruthy();
+      expect(queryByText('Could not load your plugin sources.')).toBeNull();
+    });
+  });
 });

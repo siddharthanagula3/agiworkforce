@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { act } from 'react';
 import { Modal } from 'react-native';
+import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';
 
 const mockPush = jest.fn();
 jest.mock('expo-router', () => ({
@@ -84,8 +85,17 @@ function liveEvent(event: Record<string, unknown>) {
   });
 }
 
+const METRICS: Metrics = {
+  frame: { x: 0, y: 0, width: 390, height: 844 },
+  insets: { top: 47, left: 0, right: 0, bottom: 34 },
+};
+
 function renderSession(props: { focusApprovalId?: string } = {}) {
-  return render(<CodeSessionView rootId="root-1" threadId="thread-1" onBack={onBack} {...props} />);
+  return render(
+    <SafeAreaProvider initialMetrics={METRICS}>
+      <CodeSessionView rootId="root-1" threadId="thread-1" onBack={onBack} {...props} />
+    </SafeAreaProvider>,
+  );
 }
 
 const idle = { status: 'idle', activeTurnId: null, pendingApprovals: [] };

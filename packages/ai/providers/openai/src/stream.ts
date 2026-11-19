@@ -1,3 +1,4 @@
+import { withoutCitationMarkup } from '@agiworkforce/provider-protocol';
 import { EmptyStreamError } from '@agiworkforce/provider-runtime';
 import type { StreamChunk } from '@agiworkforce/types';
 
@@ -49,9 +50,15 @@ function usageChunk(usage: NonNullable<OpenAIChatCompletionChunk['usage']>): Str
   };
 }
 
+export function translateOpenAIStream(
+  chunks: AsyncIterable<OpenAIChatCompletionChunk>,
+): AsyncIterable<StreamChunk> {
+  return withoutCitationMarkup(translateChatCompletionChunks(chunks));
+}
+
 // `stop` is emitted at finish_reason, not held to the end: the passthrough wire
 // owes OpenAI's own frame order, which puts the usage-only chunk last.
-export async function* translateOpenAIStream(
+async function* translateChatCompletionChunks(
   chunks: AsyncIterable<OpenAIChatCompletionChunk>,
 ): AsyncIterable<StreamChunk> {
   const toolCalls = new Map<number, ToolCallState>();

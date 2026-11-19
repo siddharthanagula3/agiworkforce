@@ -21,10 +21,7 @@ import { cn } from '@shared/lib/utils';
 import { ToolCallCard, type ToolCall, type ToolCallStatus } from '../ToolCallCard';
 import { FileTypeIcon } from './FileTypeIcon';
 import type { ResearchSource } from '../../stores/research-panel-store';
-import {
-  parseQualifiedMcpToolName,
-  describeMcpTool,
-} from '@/features/connectors/lib/mcp-tool-name';
+import { parseQualifiedMcpToolName, describeMcpTool } from '@agiworkforce/cloud-contracts';
 import { runStatusLabel } from '@agiworkforce/types';
 import {
   readConnectorConnectRequest,

@@ -4,6 +4,7 @@ const createConversationMock = jest.fn();
 const sendMessageMock = jest.fn();
 const guardedFetchMock = jest.fn();
 const getAuthTokenMock = jest.fn();
+const modelState = { selectedModel: '', endConversationModel: jest.fn() };
 
 const SSE = ['data: {"choices":[{"delta":{"content":"ok"}}]}', '', 'data: [DONE]', ''].join('\n');
 
@@ -20,8 +21,10 @@ async function loadStartWork() {
       }),
     },
   }));
+  modelState.selectedModel = requireMobileCloudModel().id;
+  modelState.endConversationModel.mockReset();
   jest.doMock('@/src/features/model-picker/store', () => ({
-    useModelStore: { getState: () => ({ selectedModel: requireMobileCloudModel().id }) },
+    useModelStore: { getState: () => modelState },
   }));
   jest.doMock('@/src/features/billing/store', () => ({
     useTierStore: { getState: () => ({ tier: 'pro' }) },
@@ -108,6 +111,30 @@ describe('starting an AGI Work run from mobile', () => {
       constraints: 'Public sources only',
     });
     finishSend?.(true);
+  });
+
+  it('starts the work chat on the new-chat model, not one shown only for a project', async () => {
+    const { startCloudWorkRun } = await loadStartWork();
+    const projectModel = requireMobileCloudModel().id;
+    const ownModel = requireMobileCloudModel((model) => model.id !== projectModel).id;
+    modelState.selectedModel = projectModel;
+    modelState.endConversationModel.mockImplementation(() => {
+      modelState.selectedModel = ownModel;
+    });
+    createConversationMock.mockImplementation(async () => {
+      expect(modelState.selectedModel).toBe(ownModel);
+      return 'conversation-1';
+    });
+    sendMessageMock.mockImplementation((_id, _content, _model, _attachments, options) => {
+      options.onAccepted();
+      return Promise.resolve(true);
+    });
+
+    await startCloudWorkRun({ goal: 'Draft the launch plan' });
+
+    expect(modelState.endConversationModel).toHaveBeenCalledTimes(1);
+    expect(createConversationMock).toHaveBeenCalledTimes(1);
+    expect(sendMessageMock.mock.calls[0][2]).toBe(ownModel);
   });
 
   it('refuses an empty goal before any conversation is created', async () => {

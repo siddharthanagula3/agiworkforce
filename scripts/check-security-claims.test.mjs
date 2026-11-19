@@ -74,7 +74,7 @@ function baseIndex() {
         section: 'Ceiling table',
         kind: 'rows',
         rows: 2,
-        implementation: ['apps/web/lib/connectors/oauth-scope-allowlist.ts'],
+        implementation: ['packages/contracts/cloud-contracts/src/connector-scopes.ts'],
         proof: [{ kind: 'guard', file: 'scripts/check-gate.mjs' }],
       },
     ],
@@ -93,7 +93,7 @@ function makeRoot(mutate = () => {}) {
   mutate(state, write);
   write('docs/security/security.md', state.document);
   write('docs/security/security-claims.json', JSON.stringify(state.index, null, 2));
-  write('apps/web/lib/connectors/oauth-scope-allowlist.ts', state.manifest);
+  write('packages/contracts/cloud-contracts/src/connector-scopes.ts', state.manifest);
   if (state.keepSources !== false) {
     write('apps/web/lib/gate.ts', 'export function resolveGate() {}\n');
     write('apps/web/lib/gate.test.ts', "describe('the gate table', () => {});\n");

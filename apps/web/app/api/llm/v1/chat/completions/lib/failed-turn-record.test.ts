@@ -72,6 +72,7 @@ describe('recording a turn that produced nothing', () => {
           provider: 'openrouter',
           inputTokens: 0,
           outputTokens: 0,
+          finishReason: null,
         },
       }),
     );

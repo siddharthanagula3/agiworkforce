@@ -9,6 +9,7 @@ const mockGoBack = jest.fn();
 let mockBlur: () => void = () => {};
 let mockRefocus: () => void = () => {};
 
+jest.mock('../src/features/chat/components/WorkModeSwitch', () => ({ HEADER_TEXT_SCALE_LIMIT: 2 }));
 jest.mock('../lib/mmkv', () => ({
   storage: { getString: jest.fn(), set: jest.fn(), delete: jest.fn() },
 }));

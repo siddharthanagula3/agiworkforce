@@ -26,7 +26,7 @@ import {
 import { randomUUID } from 'node:crypto';
 import { isAppError } from '@agiworkforce/utils';
 import { assertAssistantContinuationSeed } from '@/lib/server/assistant-content-edits';
-import { ASSISTANT_CONTENT_CHANGED_REASON } from '@/features/chat/lib/assistant-content-edit-contract';
+import { ASSISTANT_CONTENT_CHANGED_REASON } from '@agiworkforce/cloud-contracts';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import {
@@ -78,7 +78,12 @@ import {
 import { demoteLowConfidencePremiumSelection } from './route-selection';
 import { hostedToolRunsUnasked, loadToolApprovalPolicy } from './tool-approval-policy';
 import { readLockdown } from './connector-tool-permissions';
-import { MAX_MESSAGE_LENGTH, ToolChoiceSchema, ToolDefinitionSchema } from '@/lib/validations/llm';
+import {
+  MAX_MESSAGE_LENGTH,
+  MAX_STATELESS_TOTAL_LENGTH,
+  ToolChoiceSchema,
+  ToolDefinitionSchema,
+} from '@/lib/validations/llm';
 import { logger } from '@/lib/logger';
 import { stagedAttachmentPaths, type TurnAttachment } from '@/lib/e2b/attachment-staging';
 import { EXECUTE_CODE_TOOL, resolveTurnCodeExecutionTools } from '@/lib/e2b/execution-tools';
@@ -174,7 +179,11 @@ import {
   memoryLearningText,
 } from '@/lib/services/memory-commands';
 import { isMemoryTool, memoryToolDefinitions } from '@/lib/server/tools/memory-tools';
-import { fileSearchToolDefinitions, isFileSearchTool } from '@/lib/server/tools/file-search-tool';
+import {
+  OPEN_FILE_TOOL_NAME,
+  fileSearchToolDefinitions,
+  isFileSearchTool,
+} from '@/lib/server/tools/file-search-tool';
 import { buildWorkspaceFeatureGateResponse } from '@/lib/managed-compute-gate';
 import {
   asksForSchedule,
@@ -467,7 +476,7 @@ import {
   surfacePublishesArtifactApps,
   surfaceRendersWritingCards,
 } from '@/lib/chat-surface-rendering';
-import type { PastChatCitation } from '@/lib/past-chat-citation';
+import type { PastChatCitation } from '@agiworkforce/types';
 import {
   createSkillToolDefinition,
   formatSkillsForToolPrompt,
@@ -507,6 +516,17 @@ import {
   MAP_SEARCH_TOOL_NAME,
 } from '@/lib/services/map-search-tool-service';
 import { ChatAttachmentHydrationError, hydrateChatAttachments } from './chat-attachment-hydration';
+import {
+  applyAttachmentTurnStep,
+  attachmentTurnTokenLimitForRoute,
+  type AttachmentTurnLedgerState,
+} from './attachment-turn-budget';
+import {
+  appendLargeFileText,
+  attachedFilePassageSearch,
+  attachmentAssetIdsOf,
+  createPreparedAttachmentResolver,
+} from './prepared-attachments';
 import { buildCustomInstructionsPreamble } from '@/lib/server/user-identity';
 import {
   buildComputerUseSoftCapWarningHeader,
@@ -1514,6 +1534,16 @@ export function resolveManagedUsageLeaseSeconds(
   return canEnterToolLoop ? 86_400 : 900;
 }
 
+export type LargeFileTurn = AttachmentTurnLedgerState & {
+  assetIds: string[];
+  attachmentAssetIds: string[];
+  /**
+   * Set while the step processing built and charged is unsent: the file-tool
+   * allowance of that step, which the tool loop's first step uses as is.
+   */
+  pendingStepAllowance?: number;
+};
+
 export type ProcessedRequest = {
   toolSchemaState?: ToolSchemaState;
   requestId: string;
@@ -1658,6 +1688,12 @@ export type ProcessedRequest = {
    */
   turnAttachments?: readonly TurnAttachment[];
   truncatedAttachments?: readonly string[];
+  /**
+   * Present only in a turn where hydration resolved a file above the inline
+   * limit: the large files' ids and the turn ledger, carried through every
+   * checkpoint and continuation of the turn.
+   */
+  largeFileTurn?: LargeFileTurn;
   /**
    * Whether this turn is a place question, and how the places tool was
    * arranged. The tool loop reads it to release the forced choice after the
@@ -1935,6 +1971,33 @@ export function extractTextContent(
     .join('\n');
 }
 
+/**
+ * Only the newest user message is held to a length here. Earlier messages of a
+ * saved chat are fitted to the model's context window by compaction, which then
+ * refuses a newest message that no fit can send.
+ */
+export function messageLengthRefusal(
+  messages: ReadonlyArray<{ role: string; content: Parameters<typeof extractTextContent>[0] }>,
+  conversationBound: boolean,
+): string | null {
+  let latestUserIndex = -1;
+  messages.forEach((message, index) => {
+    if (message.role === 'user') latestUserIndex = index;
+  });
+  let totalLength = 0;
+  for (const [index, message] of messages.entries()) {
+    const length = extractTextContent(message.content).length;
+    if (index === latestUserIndex && length > MAX_MESSAGE_LENGTH) {
+      return `Message content exceeds maximum length of ${MAX_MESSAGE_LENGTH} characters`;
+    }
+    totalLength += length;
+  }
+  if (!conversationBound && totalLength > MAX_STATELESS_TOTAL_LENGTH) {
+    return `Total message content exceeds maximum length of ${MAX_STATELESS_TOTAL_LENGTH} characters`;
+  }
+  return null;
+}
+
 export function collectManagedPromptMaterials(request: {
   messages: ReadonlyArray<{ content: Parameters<typeof extractTextContent>[0] }>;
   tools?: readonly unknown[];
@@ -1942,6 +2005,40 @@ export function collectManagedPromptMaterials(request: {
   const materials = request.messages.map((message) => extractTextContent(message.content));
   if (request.tools?.length) materials.push(JSON.stringify(request.tools));
   return materials;
+}
+
+const MAX_ESTIMATED_PROMPT_TOKENS = 1_000_000;
+
+/**
+ * The prompt a turn reserves usage for. Compaction fits the messages to the
+ * selected model's context window before anything is sent, so a long saved chat
+ * reserves no more than that window.
+ */
+export function estimateManagedPromptTokens(request: {
+  model: string;
+  messages: ReadonlyArray<{ content: Parameters<typeof extractTextContent>[0] }>;
+  tools?: readonly unknown[];
+}): number {
+  return managedPromptTokensFor(rawManagedPromptTokens(request), request.model);
+}
+
+function rawManagedPromptTokens(request: {
+  messages: ReadonlyArray<{ content: Parameters<typeof extractTextContent>[0] }>;
+  tools?: readonly unknown[];
+}): number {
+  return collectManagedPromptMaterials(request).reduce(
+    (sum, material) => sum + Math.ceil(material.length / 3.5) + 4,
+    0,
+  );
+}
+
+function managedPromptTokensFor(rawTokens: number, model: string): number {
+  const contextWindow = getModelMetadataById(model)?.contextWindow;
+  return Math.min(
+    rawTokens,
+    MAX_ESTIMATED_PROMPT_TOKENS,
+    contextWindow && contextWindow > 0 ? contextWindow : MAX_ESTIMATED_PROMPT_TOKENS,
+  );
 }
 
 /**
@@ -2881,14 +2978,14 @@ function modelPolicyDenialResponse(decision: ModelAccessDecision): NextResponse 
 function findCheaperFallbackModel(
   currentModel: string,
   currentProvider: string,
-  estimatedPromptTokens: number,
+  promptTokensFor: (model: string) => number,
   maxTokens: number,
   isPolicyAllowed: (model: string) => boolean,
 ): { model: string; provider: string } | null {
   const currentCost = LLMCostCalculator.estimateCost(
     currentProvider,
     currentModel,
-    estimatedPromptTokens,
+    promptTokensFor(currentModel),
     maxTokens,
   );
 
@@ -2903,7 +3000,7 @@ function findCheaperFallbackModel(
       LLMCostCalculator.estimateCost(
         fallback.provider,
         fallback.model,
-        estimatedPromptTokens,
+        promptTokensFor(fallback.model),
         maxTokens,
       ),
   });
@@ -3058,7 +3155,6 @@ async function freeTrialBudgetReachedResponse(
 }
 
 const MAX_BODY_BYTES = 2_000_000;
-const MAX_TOTAL_LENGTH = 1000000;
 
 function contextPolicyRestartResponse(): ProcessFailure {
   return {
@@ -3555,7 +3651,8 @@ async function processAdmittedRequest(
     applyFreeModelPromotion(chatRequest, promotionTurn.promotion);
   } else if (
     freeModelPromotionCoversPlan(subscription.plan_tier) &&
-    namesFreeModelPromotionModel(chatRequest.model)
+    namesFreeModelPromotionModel(chatRequest.model) &&
+    !isFreeTrialRequest({ requestedModel: chatRequest.model, planTier: subscription.plan_tier })
   ) {
     selectedModel = chatRequest.model;
     chatRequest.model = FREE_TRIAL_MODEL;
@@ -4061,6 +4158,19 @@ async function processAdmittedRequest(
       });
 
   const truncatedAttachments: string[] = [];
+  const attachmentAssetIds = attachmentAssetIdsOf(chatRequest.messages);
+  const preparedAttachments = createPreparedAttachmentResolver({
+    db: contextPolicyScope.db,
+    userId,
+    temporaryChat: conversationIsTemporary,
+    query: lastUserMessageText(chatRequest),
+    onTruncated: (filename) => truncatedAttachments.push(filename),
+    searchPassages: attachedFilePassageSearch({
+      db: contextPolicyScope.db,
+      userId,
+      organizationId: contextPolicyScope.organizationId,
+    }),
+  });
   const [hydration, managedMemoryPolicyRead] = await timePhase(
     CHAT_TURN_PHASE.attachmentsAndMemoryPolicy,
     () =>
@@ -4071,6 +4181,7 @@ async function processAdmittedRequest(
           (filename) => truncatedAttachments.push(filename),
           getPlanMaxAttachmentsPerMessage(subscription.plan_tier),
           contextPolicyScope.organizationId,
+          { resolveOversizeAttachment: preparedAttachments.resolve },
         ).then(
           (attachments) => ({ ok: true as const, attachments: attachments ?? [] }),
           (error: unknown) => ({ ok: false as const, error }),
@@ -4114,6 +4225,8 @@ async function processAdmittedRequest(
       ),
     };
   }
+  const largeFiles = preparedAttachments.largeFiles();
+  appendLargeFileText(chatRequest.messages, preparedAttachments.textSections());
 
   const dynamicSystemMessageRefs = new Map<object, InstructionLayer>();
 
@@ -4239,7 +4352,7 @@ async function processAdmittedRequest(
       response: NextResponse.json(
         {
           error: {
-            message: `The Free plan includes the free model only. Select it in the model picker, or use your own provider key. ${PAID_UPGRADE_ACCESS_NOTE}`,
+            message: `The Free plan includes the free models only. Select one in the model picker, or use your own provider key. ${PAID_UPGRADE_ACCESS_NOTE}`,
             type: 'invalid_request_error',
             code: 'free_trial_model_only',
             ...(recovery ? { recovery } : {}),
@@ -4689,6 +4802,7 @@ async function processAdmittedRequest(
         ? 'off'
         : resolveFreeLaneMode(),
     isFreePlan: isFreePlanTier(subscription.plan_tier),
+    requestedModel: chatRequest.model,
   });
   const freeLaneMode = freeLane.mode;
   // The slot preference rides this branch and no other, so it reaches the
@@ -5442,6 +5556,19 @@ async function processAdmittedRequest(
     projectHasKnowledgeFiles: ownership.projectHasKnowledgeFiles,
     ambientToolsAllowed,
   });
+  if (
+    largeFiles.length > 0 &&
+    chatRequest.stream &&
+    (resolvedModelCaps?.tools ?? true) &&
+    ambientToolsAllowed &&
+    AMBIENT_TOOL_SURFACES.has(chatSurface) &&
+    turnToolProhibition?.allTools !== true
+  ) {
+    chatRequest.tools = [
+      ...(chatRequest.tools ?? []).filter((tool) => !isFileSearchTool(tool.function.name)),
+      ...fileSearchToolDefinitions({ largeFileTurn: true }),
+    ];
+  }
 
   const ambientToolSurface = {
     surface: chatSurface,
@@ -5541,51 +5668,23 @@ async function processAdmittedRequest(
     }
   }
 
-  let totalLength = 0;
-  for (const msg of chatRequest.messages) {
-    const textContent = extractTextContent(msg.content);
-    if (textContent.length > MAX_MESSAGE_LENGTH) {
-      return {
-        ok: false,
-        response: NextResponse.json(
-          {
-            error: {
-              message: `Message content exceeds maximum length of ${MAX_MESSAGE_LENGTH} characters`,
-              type: 'invalid_request_error',
-            },
-          },
-          { status: 400 },
-        ),
-      };
-    }
-    totalLength += textContent.length;
-  }
-
-  if (totalLength > MAX_TOTAL_LENGTH) {
+  const lengthRefusal = messageLengthRefusal(
+    chatRequest.messages,
+    Boolean(chatRequest.conversation_id),
+  );
+  if (lengthRefusal) {
     return {
       ok: false,
       response: NextResponse.json(
-        {
-          error: {
-            message: `Total message content exceeds maximum length of ${MAX_TOTAL_LENGTH} characters`,
-            type: 'invalid_request_error',
-          },
-        },
+        { error: { message: lengthRefusal, type: 'invalid_request_error' } },
         { status: 400 },
       ),
     };
   }
 
-  const rawEstimatedPromptTokens = collectManagedPromptMaterials(chatRequest).reduce(
-    (sum, material) => {
-      const baseTokens = Math.ceil(material.length / 3.5);
-      const overheadTokens = 4;
-      return sum + baseTokens + overheadTokens;
-    },
-    0,
-  );
-  const MAX_ESTIMATED_PROMPT_TOKENS = 1_000_000;
-  const estimatedPromptTokens = Math.min(rawEstimatedPromptTokens, MAX_ESTIMATED_PROMPT_TOKENS);
+  const rawPromptTokens = rawManagedPromptTokens(chatRequest);
+  const promptTokensFor = (model: string) => managedPromptTokensFor(rawPromptTokens, model);
+  let estimatedPromptTokens = promptTokensFor(chatRequest.model);
 
   const providerLower = provider.toLowerCase();
 
@@ -5955,7 +6054,7 @@ async function processAdmittedRequest(
         : findCheaperFallbackModel(
             chatRequest.model,
             provider,
-            estimatedPromptTokens,
+            promptTokensFor,
             maxTokens,
             (candidate) =>
               fallbackAllowedByPolicy(candidate) &&
@@ -5970,7 +6069,7 @@ async function processAdmittedRequest(
         const forbidden = findCheaperFallbackModel(
           chatRequest.model,
           provider,
-          estimatedPromptTokens,
+          promptTokensFor,
           maxTokens,
           () => true,
         );
@@ -5990,10 +6089,11 @@ async function processAdmittedRequest(
         if (trainingOptOut && !providerKeepsInputsOutOfTraining(fallbackProvider)) {
           return monthlyLimitRefusal();
         }
+        const fallbackPromptTokens = promptTokensFor(fallbackModel.model);
         const fallbackCostMicrousd = LLMCostCalculator.estimateCostMicrousd(
           fallbackProvider,
           fallbackModel.model,
-          estimatedPromptTokens,
+          fallbackPromptTokens,
           maxTokens,
         );
 
@@ -6009,6 +6109,7 @@ async function processAdmittedRequest(
           fallbackReason = 'insufficient_credits';
           chatRequest.model = fallbackModel.model;
           provider = fallbackProvider;
+          estimatedPromptTokens = fallbackPromptTokens;
           estimatedCostMicrousd = fallbackCostMicrousd;
           fastTier = null;
         } else {
@@ -6323,6 +6424,29 @@ async function processAdmittedRequest(
     codeExecutionUnavailable = turnCodeExecution.unavailable;
   }
   if (turnToolProhibition?.allTools) resolvedTools = undefined;
+
+  let largeFileTurn: LargeFileTurn | undefined;
+  if (largeFiles.length > 0) {
+    largeFileTurn = {
+      assetIds: [...new Set(largeFiles.map((file) => file.assetId))],
+      attachmentAssetIds,
+      limitTokens: attachmentTurnTokenLimitForRoute(chatRequest.model, routeDecision.routeId),
+      charged: 0,
+      readingClosed: false,
+      fileToolsOffered:
+        !researchMode &&
+        (resolvedTools ?? []).some(
+          (tool) =>
+            (tool as { function?: { name?: unknown } } | null)?.function?.name ===
+            OPEN_FILE_TOOL_NAME,
+        ),
+    };
+    const firstStep = applyAttachmentTurnStep(internalMessages, largeFileTurn);
+    largeFileTurn.pendingStepAllowance = firstStep.resultsAllowanceTokens;
+    for (const filename of firstStep.cutLiveFilenames) {
+      if (!truncatedAttachments.includes(filename)) truncatedAttachments.push(filename);
+    }
+  }
 
   const autoMemoryFactsRequireToolFreeTurn = !managedMemoryPolicy.allowToolAssistedGeneration;
   if (autoMemoryFactsRequireToolFreeTurn && isUnreportedToolAssistedTurn(chatRequest)) {
@@ -6779,7 +6903,8 @@ async function processAdmittedRequest(
     autoMemoryIncludeSensitiveTopics: managedMemoryPolicy.includeSensitiveTopics === true,
     promptVariants: rolloutInputs.promptVariants,
     ...(dynamicSystemBlocks.some((block) => block.layer === 'untrusted_context') ||
-    contextTrim?.droppedUntrustedToolContent === true
+    contextTrim?.droppedUntrustedToolContent === true ||
+    attachmentAssetIds.length > 0
       ? { untrustedContextPresent: true }
       : {}),
     ...(toolApprovalPolicy ? { toolApprovalPolicy } : {}),
@@ -6821,6 +6946,7 @@ async function processAdmittedRequest(
     ...(resolvedTools && turnWithheldTools.length > 0 ? { turnWithheldTools } : {}),
     turnAttachments,
     truncatedAttachments,
+    ...(largeFileTurn ? { largeFileTurn } : {}),
     placesRequirement,
     placesEnforcement,
     classifierConfidence: classifierResult.confidence,

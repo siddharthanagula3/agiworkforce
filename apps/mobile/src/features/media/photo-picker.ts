@@ -7,16 +7,30 @@ import {
 } from '@/src/features/media/image-normalization';
 import { withoutPictureMetadata } from '@/src/features/media/image-metadata';
 
-type PickImageAssetsOptions = {
+type PickedCallback = {
+  onPicked?: (count: number) => void;
+};
+
+type PickImageAssetsOptions = PickedCallback & {
   allowsMultipleSelection?: boolean;
   orderedSelection?: boolean;
   selectionLimit?: number;
 };
 
+function cleanedPickerResult(
+  result: ImagePicker.ImagePickerResult,
+  onPicked: PickedCallback['onPicked'],
+): Promise<ImagePicker.ImagePickerAsset[]> {
+  if (result.canceled || result.assets.length === 0) return Promise.resolve([]);
+  onPicked?.(result.assets.length);
+  return Promise.all(result.assets.map(withoutPictureMetadata));
+}
+
 export async function pickImageAssetsFromLibrary({
   allowsMultipleSelection = false,
   orderedSelection = false,
   selectionLimit,
+  onPicked,
 }: PickImageAssetsOptions = {}): Promise<ImagePicker.ImagePickerAsset[]> {
   const result = await ImagePicker.launchImageLibraryAsync({
     ...SAFE_IMAGE_PICKER_OPTIONS,
@@ -25,20 +39,18 @@ export async function pickImageAssetsFromLibrary({
     selectionLimit,
     orderedSelection,
   });
-
-  if (result.canceled) return [];
-  return Promise.all(result.assets.map(withoutPictureMetadata));
+  return cleanedPickerResult(result, onPicked);
 }
 
-export async function captureImageAssetsFromCamera(): Promise<ImagePicker.ImagePickerAsset[]> {
+export async function captureImageAssetsFromCamera({ onPicked }: PickedCallback = {}): Promise<
+  ImagePicker.ImagePickerAsset[]
+> {
   const result = await ImagePicker.launchCameraAsync({
     ...SAFE_IMAGE_PICKER_OPTIONS,
     mediaTypes: ['images'],
     allowsEditing: false,
   });
-
-  if (result.canceled) return [];
-  return Promise.all(result.assets.map(withoutPictureMetadata));
+  return cleanedPickerResult(result, onPicked);
 }
 
 export function imageAssetsToChatAttachments(
@@ -54,5 +66,6 @@ export function imageAssetsToChatAttachments(
     width: asset.width,
     height: asset.height,
     fileSize: asset.fileSize,
+    ...(asset.assetId ? { pickerAssetId: asset.assetId } : {}),
   }));
 }

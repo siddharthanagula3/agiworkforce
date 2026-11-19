@@ -18,6 +18,8 @@
 {"path":".github/rulesets/main.json","unit":".github","role":"config","lanes":["release-ci"],"unparsed":"notCode"}
 {"path":".github/rulesets/README.md","unit":".github","role":"doc","lanes":["release-ci"],"unparsed":"notCode"}
 {"path":".github/security-gate-policy.json","unit":".github","role":"config","lanes":["release-ci"],"unparsed":"notCode"}
+{"path":".github/security-gate-policy.json","unit":".github","role":"config","lanes":["release-ci"],"unparsed":"notCode"}
+{"path":".github/security-gate-policy.json","unit":".github","role":"config","lanes":["release-ci"],"unparsed":"notCode"}
 {"path":".github/workflows/actions-pinned-check.yml","unit":".github","role":"config","lanes":["release-ci"],"unparsed":"notCode"}
 {"path":".github/workflows/agiworkforce-bot.yml","unit":".github","role":"config","lanes":["release-ci"],"unparsed":"notCode"}
 {"path":".github/workflows/bot-author-gate-check.yml","unit":".github","role":"config","lanes":["release-ci"],"unparsed":"notCode"}

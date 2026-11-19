@@ -7,8 +7,13 @@ import {
   type PdfRgb,
   type PdfSlide,
 } from '@features/chat/services/export-pdf';
-import { parseDeck, slideSegments } from './deck-model';
-import { INSIGHTS_TITLE, parseInsights, parseKpiTiles, type KpiTile } from './deck-insights';
+import { parseDeck, slideSegments } from '@agiworkforce/unified-chat/deck-model';
+import {
+  INSIGHTS_TITLE,
+  parseInsights,
+  parseKpiTiles,
+  type KpiTile,
+} from '@agiworkforce/unified-chat/deck-insights';
 import { parseShapes, type DeckShape } from './deck-shapes';
 import { resolveDeckTheme, type DeckTheme } from './deck-themes';
 

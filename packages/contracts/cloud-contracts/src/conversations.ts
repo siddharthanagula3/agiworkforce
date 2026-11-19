@@ -20,6 +20,40 @@ export const MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH = 100_000;
 export const MANAGED_CLOUD_CHAT_MAX_STORED_MESSAGE_LENGTH = 1_000_000;
 
 /**
+ * The newest user message of a managed completion turn. The selected model's
+ * context window bounds it first; earlier messages of a saved chat are fitted
+ * to that window, never refused for length. A server that predates this does
+ * not announce it, and a client must then keep MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH.
+ */
+export const MANAGED_CLOUD_CHAT_MAX_LATEST_MESSAGE_LENGTH =
+  MANAGED_CLOUD_CHAT_MAX_STORED_MESSAGE_LENGTH;
+
+/**
+ * Announced on `/api/me` for `/api/llm/v1/chat/completions` turns only. The
+ * free-quota completion route keeps MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH for
+ * its whole request.
+ */
+export const ManagedCloudChatMessageLimitsWireSchema = z.object({
+  latest_message_max_chars: z.number().int().positive(),
+});
+export type ManagedCloudChatMessageLimitsWire = z.infer<
+  typeof ManagedCloudChatMessageLimitsWireSchema
+>;
+
+export function managedCloudChatMessageLimitsWire(): ManagedCloudChatMessageLimitsWire {
+  return { latest_message_max_chars: MANAGED_CLOUD_CHAT_MAX_LATEST_MESSAGE_LENGTH };
+}
+
+export function managedCloudChatLatestMessageMaxChars(
+  announced: ManagedCloudChatMessageLimitsWire | null | undefined,
+): number {
+  return Math.min(
+    announced?.latest_message_max_chars ?? MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH,
+    MANAGED_CLOUD_CHAT_MAX_LATEST_MESSAGE_LENGTH,
+  );
+}
+
+/**
  * A draft is unsent text, so it is capped well below a message: the composer
  * turns anything longer into an attachment before it could reach this.
  */

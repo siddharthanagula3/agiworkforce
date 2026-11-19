@@ -161,6 +161,14 @@ describe('deriving artifacts from a side-panel reply', () => {
     const done = messageArtifactView(finished(), CONVERSATION_ID);
     expect(done.artifacts[0]!.id).toBe(view.creating!.id);
   });
+
+  it('titles the half-written block the way the finished artifact is titled', () => {
+    const source = '```markdown\n<!-- @artifact -->\nUse this to revise.\n\n# Cell biology quiz\n';
+    const view = messageArtifactView(reply(source, { streaming: true }), CONVERSATION_ID);
+    const done = messageArtifactView(reply(`${source}\`\`\``), CONVERSATION_ID);
+    expect(done.artifacts[0]!.title).toBe('Cell biology quiz');
+    expect(view.creating?.title).toBe(done.artifacts[0]!.title);
+  });
 });
 
 describe('artifact downloads', () => {

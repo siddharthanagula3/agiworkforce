@@ -1,5 +1,14 @@
 import React from 'react';
+import { StyleSheet } from 'react-native';
+
+let mockWindowWidth = 402;
+jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
+  __esModule: true,
+  default: () => ({ width: mockWindowWidth, height: 874, scale: 3, fontScale: 1 }),
+}));
+
 import { render, fireEvent } from '@testing-library/react-native';
+import { READING_COLUMN_MAX_WIDTH } from '@/src/shared/layout/contentColumn';
 import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';
 import { ComposerFullScreenEditor } from '@/src/features/chat/components/ComposerFullScreenEditor';
 
@@ -87,4 +96,25 @@ describe('ComposerFullScreenEditor', () => {
 
     expect(onSend).toHaveBeenCalledTimes(1);
   });
+
+  it.each([
+    [402, 16],
+    [440, 16],
+    [1032, 16 + (1032 - READING_COLUMN_MAX_WIDTH) / 2],
+    [1376, 16 + (1376 - READING_COLUMN_MAX_WIDTH) / 2],
+  ])(
+    'keeps the whole area typeable at %ipt and insets the text to the reading column',
+    (windowWidth, sidePadding) => {
+      mockWindowWidth = windowWidth;
+      const { getByTestId } = renderEditor();
+
+      const input = StyleSheet.flatten(getByTestId('chat.composer.fullscreen.input').props.style);
+      expect(input.flex).toBe(1);
+      expect(input.maxWidth).toBeUndefined();
+      expect(input.alignSelf).toBeUndefined();
+      expect(input.paddingHorizontal).toBe(sidePadding);
+      expect(windowWidth - 2 * sidePadding).toBeLessThanOrEqual(READING_COLUMN_MAX_WIDTH);
+      mockWindowWidth = 402;
+    },
+  );
 });

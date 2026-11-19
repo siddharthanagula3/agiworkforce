@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
+import { useRecyclingState } from '@shopify/flash-list';
 import { View } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { ChevronDown, ChevronRight, List } from 'lucide-react-native';
@@ -11,15 +12,19 @@ const MIN_SECTIONS = 3;
 
 interface ResearchReportSectionsProps {
   content: string;
+  messageId?: string;
   defaultExpanded?: boolean;
+  onSelectSection?: (sectionId: string) => void;
 }
 
 export function ResearchReportSections({
   content,
+  messageId,
   defaultExpanded = false,
+  onSelectSection,
 }: ResearchReportSectionsProps) {
   const sections = useMemo(() => extractReportSections(content), [content]);
-  const [expanded, setExpanded] = useState(defaultExpanded);
+  const [expanded, setExpanded] = useRecyclingState(defaultExpanded, [messageId ?? content]);
   const colors = useThemeColors();
 
   if (sections.length < MIN_SECTIONS) return null;
@@ -47,7 +52,7 @@ export function ResearchReportSections({
         accessibilityState={{ expanded }}
         testID="research-report-sections-toggle"
         hitSlop={6}
-        style={{ flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 28 }}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 32 }}
       >
         <List size={13} color={colors.textMuted} />
         <Text
@@ -69,19 +74,36 @@ export function ResearchReportSections({
 
       {expanded ? (
         <View style={{ paddingBottom: 4 }}>
-          {sections.map((section) => (
-            <Text
-              key={section.id}
-              style={{
-                fontSize: typeScale.caption,
-                lineHeight: 19,
-                color: colors.textSecondary,
-                paddingLeft: Math.max(0, section.level - baseLevel) * 12,
-              }}
-            >
-              {section.text}
-            </Text>
-          ))}
+          {sections.map((section) => {
+            const indent = Math.max(0, section.level - baseLevel) * 12;
+            const label = (
+              <Text
+                style={{
+                  fontSize: typeScale.caption,
+                  lineHeight: 19,
+                  color: onSelectSection ? colors.textPrimary : colors.textSecondary,
+                }}
+              >
+                {section.text}
+              </Text>
+            );
+            return onSelectSection ? (
+              <PressableBox
+                key={section.id}
+                onPress={() => onSelectSection(section.id)}
+                accessibilityRole="button"
+                accessibilityLabel={`Go to ${section.text}`}
+                hitSlop={6}
+                style={{ minHeight: 32, justifyContent: 'center', paddingLeft: indent }}
+              >
+                {label}
+              </PressableBox>
+            ) : (
+              <View key={section.id} style={{ paddingLeft: indent }}>
+                {label}
+              </View>
+            );
+          })}
         </View>
       ) : null}
     </View>

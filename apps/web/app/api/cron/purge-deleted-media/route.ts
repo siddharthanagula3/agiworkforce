@@ -3,8 +3,11 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import {
   abortOrphanedMultipartUploads,
+  deleteObjectsUnderPrefix,
   hasObjectStorageCredentials,
+  DEFAULT_ORPHAN_MULTIPART_AGE_MS,
   type OrphanedMultipartSweep,
+  type PrefixObjectSweep,
 } from '@agiworkforce/object-storage';
 import { logger } from '@/lib/logger';
 import { verifyCronRequest } from '@/lib/server/cron-auth';
@@ -15,6 +18,7 @@ import { countHeldRows, legalHoldExclusion } from '@/lib/services/legal-hold-gat
 import { serializeDestructionWithHolds } from '@/lib/services/legal-hold-placement';
 import { purgeDerivedRecords } from '@/lib/resources/purge-soft-deleted';
 import { getObjectStore, objectStorageConfig } from '@/lib/server/object-storage-runtime';
+import { RELAY_SEGMENTS_PREFIX } from '@/app/api/files/uploads/relay-segments';
 import {
   sweepAbandonedFeedbackScreenshots,
   type FeedbackScreenshotSweep,
@@ -33,6 +37,10 @@ const RECOVERY_WINDOW_DAYS = 30;
 const MAX_ASSETS_PER_RUN = 500;
 
 const MAX_MULTIPART_ABORTS_PER_RUN = 200;
+
+const MAX_RELAY_SEGMENTS_DELETED_PER_RUN = 1_000;
+
+const MAX_RELAY_SEGMENTS_LISTED_PER_RUN = 20_000;
 
 /**
  * Parts uploaded into a session nobody completed are billed bytes no request
@@ -62,6 +70,31 @@ async function sweepOrphanedMultipartUploads(): Promise<Record<string, OrphanedM
     }
   }
   return swept;
+}
+
+/**
+ * A relayed segment waits for the rest of its part under a key no row records.
+ * One older than an upload session can live belongs to an upload that can no
+ * longer finish, so nothing will read it again.
+ */
+async function sweepAbandonedRelaySegments(): Promise<PrefixObjectSweep | null> {
+  const config = objectStorageConfig();
+  if (!hasObjectStorageCredentials(config) || !config.privateBucket) return null;
+  try {
+    return await deleteObjectsUnderPrefix(getObjectStore(), {
+      bucket: config.privateBucket,
+      prefix: RELAY_SEGMENTS_PREFIX,
+      olderThanMs: DEFAULT_ORPHAN_MULTIPART_AGE_MS,
+      limit: MAX_RELAY_SEGMENTS_DELETED_PER_RUN,
+      scanLimit: MAX_RELAY_SEGMENTS_LISTED_PER_RUN,
+    });
+  } catch (error) {
+    logger.error(
+      { error: error instanceof Error ? error.message : String(error) },
+      'Abandoned relay segment sweep failed',
+    );
+    return null;
+  }
 }
 
 async function sweepFeedbackScreenshots(
@@ -207,6 +240,7 @@ export async function GET(request: NextRequest) {
   try {
     const db = getNeonDb();
     const multipart = await sweepOrphanedMultipartUploads();
+    const relaySegments = await sweepAbandonedRelaySegments();
     const feedbackScreenshots = await sweepFeedbackScreenshots(db);
     const projectFiles = await sweepDeletedProjectFiles(db);
 
@@ -241,6 +275,7 @@ export async function GET(request: NextRequest) {
         purged: 0,
         heldFromPurge,
         multipart,
+        relaySegments,
         feedbackScreenshots,
         projectFiles,
       });
@@ -257,6 +292,7 @@ export async function GET(request: NextRequest) {
         ...tally,
         heldFromPurge,
         multipart,
+        relaySegments,
         feedbackScreenshots,
         projectFiles,
       },
@@ -274,6 +310,7 @@ export async function GET(request: NextRequest) {
       derivedRecordsPurged: tally.derivedRecordsPurged,
       heldFromPurge,
       multipart,
+      relaySegments,
       feedbackScreenshots,
       projectFiles,
     });

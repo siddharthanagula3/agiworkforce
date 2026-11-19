@@ -17,6 +17,7 @@ import { useAgentControlStore } from '@/stores/agentControlStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 
 const ALL_EFFORTS = Object.keys(EFFORT_LABEL) as Effort[];
+const DIAL_END_BELOW_HORIZONTAL = Math.atan2(19 - 14, 12 - 3.34);
 
 const effortModel = requireCatalogModel((model) => {
   const count = effortStepsForModel(model.id).length;
@@ -77,31 +78,39 @@ describe('composer effort control', () => {
     );
   });
 
-  it('lays the gauge needle flat to the left at the lowest level and flat to the right at the highest', () => {
+  it("rests the gauge needle on the dial's left end at the lowest level and on its right end at the highest", () => {
     const first = needleTip(ALL_EFFORTS[0]!);
     const last = needleTip(ALL_EFFORTS[ALL_EFFORTS.length - 1]!);
 
     expect(first.dx).toBeLessThan(0);
-    expect(first.dy).toBe(0);
-    expect(last.dx).toBe(-first.dx);
-    expect(last.dy).toBe(0);
+    expect(first.dy).toBeGreaterThan(0);
+    expect(Math.atan2(first.dy, -first.dx)).toBeCloseTo(DIAL_END_BELOW_HORIZONTAL, 2);
+    expect(last.dx).toBeCloseTo(-first.dx, 5);
+    expect(last.dy).toBeCloseTo(first.dy, 5);
   });
 
-  it('turns the gauge needle by the same amount for each level, from 0 to 180 degrees', () => {
+  it('turns the gauge needle by the same amount for each level across the whole dial', () => {
     const angles = ALL_EFFORTS.map(effortGaugeAngle);
-    const step = 180 / (ALL_EFFORTS.length - 1);
+    const step = (angles[angles.length - 1]! - angles[0]!) / (ALL_EFFORTS.length - 1);
 
-    expect(angles).toEqual(ALL_EFFORTS.map((_, index) => index * step));
+    expect(angles[0]).toBeLessThan(0);
+    expect(angles[angles.length - 1]).toBeCloseTo(180 - angles[0]!, 5);
+    angles.forEach((angle, index) => {
+      expect(angle).toBeCloseTo(angles[0]! + index * step, 5);
+    });
   });
 
-  it('sweeps the gauge needle over the top, further right with each level', () => {
+  it('draws the needle at the angle of its level, over the top for every level between the ends', () => {
     const tips = ALL_EFFORTS.map(needleTip);
 
     for (const tip of tips.slice(1, -1)) {
       expect(tip.dy).toBeLessThan(0);
     }
-    tips.slice(1).forEach((tip, index) => {
-      expect(tip.dx).toBeGreaterThan(tips[index]!.dx);
+    tips.forEach((tip, index) => {
+      const drawn = (Math.atan2(-tip.dy, -tip.dx) * 180) / Math.PI;
+      const expected = effortGaugeAngle(ALL_EFFORTS[index]!);
+      const turn = (((drawn - expected) % 360) + 360) % 360;
+      expect(Math.min(turn, 360 - turn)).toBeLessThan(1);
     });
   });
 

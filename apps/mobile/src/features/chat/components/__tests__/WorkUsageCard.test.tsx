@@ -50,6 +50,7 @@ jest.mock('@/lib/mmkv', () => ({
 
 jest.mock('@/src/features/chat/draftStore', () => ({
   getDraft: jest.fn(() => ''),
+  getDraftAttachments: jest.fn(() => []),
   setDraft: jest.fn(),
   clearDraft: jest.fn(),
 }));

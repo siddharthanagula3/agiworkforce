@@ -27,8 +27,11 @@ interface TimeFocusSync {
 interface TimeFocusOwner {
   account: CloudAccountEpoch;
   controller: AbortController;
+  readController: AbortController;
   pendingSave: ReturnType<typeof setTimeout> | null;
 }
+
+let settlingSave: { ownerId: string; done: Promise<void> } | null = null;
 
 function ownerIsCurrent(owner: TimeFocusOwner): boolean {
   const auth = useAuthStore.getState();
@@ -50,21 +53,65 @@ export function useTimeFocusSync(): TimeFocusSync {
   const [error, setError] = useState<string | null>(null);
   const ownerRef = useRef<TimeFocusOwner | null>(null);
 
+  const send = useCallback((owner: TimeFocusOwner, announce: boolean) => {
+    const { quietHours, breakReminderMinutes } = useNotificationPrefsStore.getState();
+    const preferences: TimeFocusPreferences = normalizeTimeFocusPreferences(
+      { quietHours, breakReminderMinutes },
+      quietHours.timezone,
+    );
+
+    if (announce) {
+      setStatus('saving');
+      setError(null);
+    }
+    const saving = savePreferenceNamespace(TIME_FOCUS_PREFERENCES_NAMESPACE, preferences, {
+      accountEpoch: owner.account,
+      signal: owner.controller.signal,
+    });
+    const done = saving.then(
+      () => undefined,
+      () => undefined,
+    );
+    const record = { ownerId: owner.account.ownerId, done };
+    settlingSave = record;
+    void done.then(() => {
+      if (settlingSave === record) settlingSave = null;
+    });
+    void saving
+      .then(() => {
+        if (ownerRef.current !== owner || !ownerIsCurrent(owner)) return;
+        setStatus('synced');
+      })
+      .catch(() => {
+        if (ownerRef.current !== owner || !ownerIsCurrent(owner)) return;
+        setStatus('error');
+        setError('Could not save time and focus settings. Check your connection and try again.');
+      });
+  }, []);
+
   useEffect(() => {
-    const retire = () => {
+    const retire = (closing: boolean) => {
       const owner = ownerRef.current;
       ownerRef.current = null;
       if (!owner) return;
-      owner.controller.abort();
+      owner.readController.abort();
+      const flush = closing && owner.pendingSave !== null && ownerIsCurrent(owner);
+      if (!closing) owner.controller.abort();
       if (owner.pendingSave !== null) clearTimeout(owner.pendingSave);
       owner.pendingSave = null;
+      if (flush) send(owner, false);
     };
     const renew = () => {
-      retire();
+      retire(false);
       setError(null);
       const account = captureCloudAccountEpoch();
       const owner: TimeFocusOwner | null = account
-        ? { account, controller: new AbortController(), pendingSave: null }
+        ? {
+            account,
+            controller: new AbortController(),
+            readController: new AbortController(),
+            pendingSave: null,
+          }
         : null;
       if (!owner || !ownerIsCurrent(owner)) {
         setStatus('local');
@@ -74,9 +121,11 @@ export function useTimeFocusSync(): TimeFocusSync {
       setStatus('loading');
       void (async () => {
         try {
+          if (settlingSave?.ownerId === owner.account.ownerId) await settlingSave.done;
+          if (owner.readController.signal.aborted) return;
           const stored = await fetchPreferenceNamespace(TIME_FOCUS_PREFERENCES_NAMESPACE, {
             accountEpoch: owner.account,
-            signal: owner.controller.signal,
+            signal: owner.readController.signal,
           });
           if (ownerRef.current !== owner || !ownerIsCurrent(owner)) return;
           const { quietHours } = useNotificationPrefsStore.getState();
@@ -105,12 +154,12 @@ export function useTimeFocusSync(): TimeFocusSync {
     });
     renew();
     return () => {
-      retire();
       stopAccount();
       stopAuth();
       stopMode();
+      retire(true);
     };
-  }, [applyTimeFocusPreferences]);
+  }, [applyTimeFocusPreferences, send]);
 
   const push = useCallback(() => {
     const owner = ownerRef.current;
@@ -122,30 +171,10 @@ export function useTimeFocusSync(): TimeFocusSync {
         return;
       }
       owner.pendingSave = null;
-      const { quietHours, breakReminderMinutes } = useNotificationPrefsStore.getState();
-      const preferences: TimeFocusPreferences = normalizeTimeFocusPreferences(
-        { quietHours, breakReminderMinutes },
-        quietHours.timezone,
-      );
-
-      setStatus('saving');
-      setError(null);
-      void savePreferenceNamespace(TIME_FOCUS_PREFERENCES_NAMESPACE, preferences, {
-        accountEpoch: owner.account,
-        signal: owner.controller.signal,
-      })
-        .then(() => {
-          if (ownerRef.current !== owner || !ownerIsCurrent(owner)) return;
-          setStatus('synced');
-        })
-        .catch(() => {
-          if (ownerRef.current !== owner || !ownerIsCurrent(owner)) return;
-          setStatus('error');
-          setError('Could not save time and focus settings. Check your connection and try again.');
-        });
+      send(owner, true);
     }, 600);
     owner.pendingSave = timer;
-  }, []);
+  }, [send]);
 
   return { status, error, push };
 }

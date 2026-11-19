@@ -6,6 +6,7 @@ import type {
   ManagedCloudConversationWire,
 } from '@agiworkforce/cloud-contracts';
 import { createError } from '@/lib/errors';
+import { jsonbObjectSql } from '@/lib/server/jsonb-object-merge';
 import { scheduleArtifactIndexing } from '@/app/api/chat/conversations/[id]/messages/lib/index-artifacts';
 import { EXPLICIT_ARTIFACT_DERIVATION_POLICY } from '@agiworkforce/artifacts';
 import {
@@ -417,7 +418,7 @@ export async function forkConversation(
                 input_tokens,
                 output_tokens,
                 cost_cents,
-                coalesce(metadata, '{}'::jsonb),
+                ${jsonbObjectSql('metadata')},
                 created_at
            from messages_to_copy
           order by message_position

@@ -6,7 +6,7 @@ import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { resolveSecretHandlingPolicy } from '@/lib/services/organization-policy-gate';
 import { redactAuditedSecrets, scanForSecrets } from '@/lib/security/secrets-audit';
-import { describeSecretRedactionNotice } from '@/lib/chat-secret-redaction-notice';
+import { describeSecretRedactionNotice } from '@agiworkforce/cloud-contracts';
 import type { ProcessedRequest } from './request-processor';
 import {
   MESSAGE_SCAN_BOUNDARY,

@@ -271,3 +271,65 @@ describe('buildAdapterStreamResponse, a clarify call on a turn answered inline',
     expect(body).not.toContain('x_interactive_card');
   });
 });
+
+describe('buildAdapterStreamResponse, the finish reason stored with the turn', () => {
+  async function persistedFinishReason(
+    chunks: StreamChunk[],
+    wireMode: 'legacy-web' | 'openai-passthrough',
+  ): Promise<unknown> {
+    const response = await buildAdapterStreamResponse(
+      makeRequest() as never,
+      chunksOf(chunks),
+      makeProcessed(),
+      'user-1',
+      Date.now(),
+      wireMode,
+    );
+    await drain(response);
+    return mockPersistAssistantTurn.mock.calls[0]?.[0].snapshot.finishReason;
+  }
+
+  it('stores the finish reason the client was sent', async () => {
+    const answer: StreamChunk = { type: 'text-delta', delta: 'Here is the answer.' };
+    await expect(
+      persistedFinishReason([answer, { type: 'stop', reason: 'end_turn' }], 'legacy-web'),
+    ).resolves.toBe('stop');
+    vi.clearAllMocks();
+    await expect(
+      persistedFinishReason([answer, { type: 'stop', reason: 'max_tokens' }], 'legacy-web'),
+    ).resolves.toBe('max_tokens');
+    vi.clearAllMocks();
+    await expect(
+      persistedFinishReason([answer, { type: 'stop', reason: 'max_tokens' }], 'openai-passthrough'),
+    ).resolves.toBe('length');
+  });
+
+  it('stores no reason for a stream that ended without one', async () => {
+    await expect(
+      persistedFinishReason([{ type: 'text-delta', delta: 'Half an ans' }], 'legacy-web'),
+    ).resolves.toBeNull();
+  });
+
+  it('leaves the reason of a turn the reader stopped to the client', async () => {
+    async function* stalled(): AsyncIterable<StreamChunk> {
+      yield { type: 'text-delta', delta: 'The first half' };
+      await new Promise(() => undefined);
+    }
+    const response = await buildAdapterStreamResponse(
+      makeRequest() as never,
+      stalled(),
+      makeProcessed(),
+      'user-1',
+      Date.now(),
+      'legacy-web',
+    );
+    const reader = response.body!.getReader();
+    await reader.read();
+    await reader.cancel();
+
+    expect(mockPersistAssistantTurn).toHaveBeenCalledTimes(1);
+    const stored = mockPersistAssistantTurn.mock.calls[0]?.[0].snapshot;
+    expect(stored).toMatchObject({ truncated: true });
+    expect(stored).not.toHaveProperty('finishReason');
+  });
+});

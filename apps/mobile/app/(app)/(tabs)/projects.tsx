@@ -1,13 +1,15 @@
 import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, View, ScrollView, FlatList, RefreshControl } from 'react-native';
+import { useNetInfo } from '@react-native-community/netinfo';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect, useNavigation } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useRouter } from 'expo-router';
 import { ArrowUpDown, Filter, FolderOpen, Plus } from 'lucide-react-native';
 import { Text } from '@/components/ui/Text';
+import { HEADER_TEXT_SCALE_LIMIT } from '@/src/features/chat/components/WorkModeSwitch';
 import { Badge } from '@/components/ui/Badge';
 import { ProjectCard } from '@/src/features/projects';
 import { ProjectEditorModal } from '@/src/features/projects/components/ProjectEditorModal';
@@ -33,6 +35,7 @@ import { ActionMenuSheet } from '@/src/features/conversation-actions/RenameConve
 import type { ConversationMenuState } from '@/src/features/conversation-actions/useConversationActions';
 import { useTheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 import { BottomSearchBar } from '@/src/shared/components/BottomSearchBar';
 import { DrawerButton } from '@/src/shared/components/DrawerButton';
 import {
@@ -44,8 +47,11 @@ import { useAuthStore } from '@/src/features/auth/store';
 import { useCloudSyncStateStore } from '@/stores/chat/cloudSyncStateStore';
 import { syncNow } from '@/services/cloudSyncEngine';
 import { refreshCloudProjectDetails } from '@/src/features/projects/service';
+import { NETWORK_UNREACHABLE_MESSAGE, toUserMessage } from '@/services/userMessage';
 
 const SHARED_EMPTY_MESSAGE = 'Nothing is shared with you yet.';
+const PROJECTS_REFRESH_FAILED_MESSAGE = 'Projects could not be refreshed.';
+const PROJECTS_REFRESH_OFFLINE_MESSAGE = `${PROJECTS_REFRESH_FAILED_MESSAGE} Check your connection and try again.`;
 
 export default function ProjectsTabScreen() {
   const { colors, isDark, statusBarStyle } = useTheme();
@@ -56,6 +62,12 @@ export default function ProjectsTabScreen() {
   const isCloud = appMode === 'cloud';
   const clerkUserId = useAuthStore((state) => state.clerkUserId);
   const syncStatus = useCloudSyncStateStore((state) => state.status);
+  const syncError = useCloudSyncStateStore((state) => state.lastError);
+  const netInfo = useNetInfo();
+  const connectionFailed =
+    netInfo.isConnected === false ||
+    netInfo.isInternetReachable === false ||
+    (syncError !== null && toUserMessage(new Error(syncError), '') === NETWORK_UNREACHABLE_MESSAGE);
 
   const localProjects = useProjectStore((s) => s.projects);
   const cloudProjectsRaw = useCloudProjectStore((s) => s.projects);
@@ -71,11 +83,6 @@ export default function ProjectsTabScreen() {
   );
   const projects = useMemo(() => projectsForFilter(allProjects, 'all'), [allProjects]);
 
-  const localActiveId = useProjectStore((s) => s.activeProjectId);
-  const cloudActiveId = useCloudProjectStore((s) => s.activeProjectId);
-  const activeProjectId = isCloud ? cloudActiveId : localActiveId;
-  const setActiveProject = useProjectStore((s) => s.setActiveProject);
-
   const [query, setQuery] = useState('');
   const [manualRefresh, setManualRefresh] = useState(false);
   const [sort, setSort] = useState<ProjectSort>('recent');
@@ -90,10 +97,28 @@ export default function ProjectsTabScreen() {
   const editor = useProjectEditor(resetForScope);
   const { isScopeCurrent, currentScope, openCreate, openEdit } = editor;
   const projectActions = useProjectActions(openEdit);
+  const params = useLocalSearchParams<{ create?: string | string[] }>();
+  const createRequested = (Array.isArray(params.create) ? params.create[0] : params.create) === '1';
+
+  useEffect(() => {
+    if (!createRequested) return;
+    router.setParams({ create: undefined });
+    openCreate();
+  }, [createRequested, openCreate, router]);
 
   useEffect(() => {
     if (syncStatus !== 'syncing') setManualRefresh(false);
   }, [syncStatus]);
+
+  useFocusEffect(
+    useCallback(
+      () => () => {
+        setFilterChoice('all');
+        setFilterMenuOpen(false);
+      },
+      [],
+    ),
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -129,11 +154,6 @@ export default function ProjectsTabScreen() {
     [currentScope, isScopeCurrent, projectActions],
   );
 
-  const handleClearActiveProject = useCallback(() => {
-    if (!isScopeCurrent(currentScope())) return;
-    setActiveProject(null);
-  }, [currentScope, isScopeCurrent, setActiveProject]);
-
   const filteredProjects = useMemo(
     () => projectsForFilter(allProjects, filter),
     [allProjects, filter],
@@ -148,8 +168,8 @@ export default function ProjectsTabScreen() {
             project.description.toLocaleLowerCase().includes(normalized),
         )
       : filteredProjects;
-    return sortDisplayProjects(matches, sort, activeProjectId);
-  }, [activeProjectId, filteredProjects, query, sort]);
+    return sortDisplayProjects(matches, sort);
+  }, [filteredProjects, query, sort]);
 
   const openSort = useCallback(() => {
     const option = (value: ProjectSort) => ({
@@ -159,7 +179,6 @@ export default function ProjectsTabScreen() {
     Alert.alert('Sort projects', 'Choose the order projects appear in this list.', [
       option('recent'),
       option('name'),
-      option('active'),
       { text: 'Cancel', style: 'cancel' },
     ]);
   }, [sort]);
@@ -185,12 +204,11 @@ export default function ProjectsTabScreen() {
 
   const showEmptyState = projects.length === 0 && (filter === 'all' || filter === 'mine');
   const showSharedSection = isCloud && (filter === 'all' || filter === 'shared');
-  const activeProjectName = projects.find((p) => p.id === activeProjectId)?.name;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: pageBackground }} edges={['top']}>
       <StatusBar style={statusBarStyle} />
-      <View className="flex-row items-center px-3 h-12 gap-2">
+      <View className="flex-row items-center px-3 min-h-12 gap-2">
         <DrawerButton onPress={handleOpenDrawer} />
         <View
           testID="projects-title-group"
@@ -204,6 +222,7 @@ export default function ProjectsTabScreen() {
         >
           <Text
             variant="subheading"
+            maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
             style={{
               color: colors.textPrimary,
               fontSize: typeScale.headline,
@@ -212,9 +231,7 @@ export default function ProjectsTabScreen() {
           >
             Projects
           </Text>
-          {projects.length > 0 && (
-            <Badge label={`${projects.length}`} color={activeProjectId ? 'teal' : 'gray'} />
-          )}
+          {projects.length > 0 && <Badge label={`${projects.length}`} color="gray" />}
         </View>
 
         {/* Creation lives in the floating pill below: the header square that
@@ -265,39 +282,11 @@ export default function ProjectsTabScreen() {
         ) : null}
       </View>
 
-      {activeProjectId && (
-        <View
-          className="mx-4 mb-2 px-3 py-2 rounded-lg flex-row items-center gap-2"
-          style={{
-            backgroundColor: colors.accentSurface,
-            borderWidth: 1,
-            borderColor: colors.accentBorder,
-          }}
-        >
-          <FolderOpen size={14} color={colors.teal} />
-          <Text className="text-sm flex-1" style={{ color: colors.teal }} numberOfLines={1}>
-            Active: {activeProjectName}
-          </Text>
-          <Pressable
-            onPress={handleClearActiveProject}
-            className="px-2 py-0.5 rounded"
-            style={({ pressed }) => ({
-              backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
-            })}
-            accessibilityLabel="Clear active project"
-            accessibilityRole="button"
-          >
-            <Text className="text-sm" style={{ color: colors.textSecondary }}>
-              Clear
-            </Text>
-          </Pressable>
-        </View>
-      )}
-
       {showEmptyState ? (
         <ScrollView
           testID="projects-empty-scroll"
           contentContainerStyle={{
+            ...contentColumn('reading'),
             flexGrow: 1,
             alignItems: 'center',
             justifyContent: 'center',
@@ -321,14 +310,17 @@ export default function ProjectsTabScreen() {
           ) : isCloud && syncStatus === 'error' ? (
             <View accessibilityRole="alert" style={{ alignItems: 'center', gap: 12 }}>
               <Text style={{ color: colors.agentError, textAlign: 'center' }}>
-                Projects could not be refreshed. Check your connection and try again.
+                {connectionFailed
+                  ? PROJECTS_REFRESH_OFFLINE_MESSAGE
+                  : PROJECTS_REFRESH_FAILED_MESSAGE}
               </Text>
               <Pressable
                 onPress={refreshProjects}
                 accessibilityRole="button"
                 accessibilityLabel="Retry loading projects"
+                style={{ minHeight: 44, justifyContent: 'center' }}
               >
-                <Text style={{ color: colors.teal, fontWeight: '600' }}>Retry</Text>
+                <Text style={{ color: colors.teal, fontWeight: '600' }}>Try again</Text>
               </Pressable>
             </View>
           ) : (
@@ -387,13 +379,15 @@ export default function ProjectsTabScreen() {
                   onPress={refreshProjects}
                   accessibilityRole="button"
                   accessibilityLabel="Retry loading projects"
+                  style={{ minHeight: 44, justifyContent: 'center' }}
                 >
-                  <Text style={{ color: colors.teal, fontWeight: '600' }}>Retry</Text>
+                  <Text style={{ color: colors.teal, fontWeight: '600' }}>Try again</Text>
                 </Pressable>
               </View>
             ) : null
           }
           contentContainerStyle={{
+            ...contentColumn('reading'),
             padding: 12,
             paddingBottom: FLOATING_PRIMARY_ACTION_LIST_PADDING,
           }}
@@ -403,7 +397,6 @@ export default function ProjectsTabScreen() {
               <ProjectCard
                 project={item}
                 index={index}
-                isActive={item.id === activeProjectId}
                 onPress={handleProjectPress}
                 onLongPress={handleProjectLongPress}
               />

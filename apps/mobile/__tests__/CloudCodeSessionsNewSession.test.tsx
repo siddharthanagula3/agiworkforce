@@ -151,6 +151,7 @@ describe('Cloud code sessions new session action', () => {
 
     expect(screen.getByText(/Start one with New session/)).toBeTruthy();
     expect(screen.queryByText(/\+ button/)).toBeNull();
+    expect(screen.queryByText(/desktop app/)).toBeNull();
   });
 
   it.each([

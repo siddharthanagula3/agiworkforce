@@ -3,7 +3,7 @@ import 'server-only';
 import { openAIWireRequestToChatRequest } from '@agiworkforce/provider-protocol';
 import { estimateTokens } from '@agiworkforce/routing';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { normalizeBillingPlanTier } from '@agiworkforce/types';
+import { getModelEffortOptions, normalizeBillingPlanTier } from '@agiworkforce/types';
 import { resolveWireMode } from '@/app/api/llm/v1/chat/completions/lib/adapter-providers';
 import { drainToLlmResponse } from '@/app/api/llm/v1/chat/completions/lib/adapter-response';
 import {
@@ -45,8 +45,10 @@ const FOLLOW_UP_SYSTEM_PROMPT =
 
 /**
  * Model output rendered into app chrome and, on click, sent as the next
- * prompt. Markdown markers and newlines are stripped so a suggestion cannot
- * dress itself up as anything but one line of plain text.
+ * prompt. Each line loses its list, quote or heading marker and any emphasis
+ * wrapping the whole line, and control characters become spaces, so a
+ * suggestion is one line. Characters inside it stay: a question about the
+ * <div> tag or about x_i keeps them, and each client shows it as plain text.
  */
 export function sanitizeFollowUpSuggestions(raw: string): string[] {
   const seen = new Set<string>();
@@ -55,9 +57,9 @@ export function sanitizeFollowUpSuggestions(raw: string): string[] {
     const cleaned = line
       // eslint-disable-next-line no-control-regex -- stripping control characters is the point
       .replace(/[\r\t\x00-\x1f\x7f]+/g, ' ')
-      .replace(/^\s*(?:[-*•]|\d{1,2}[.):])\s*/, '')
-      .replace(/[*_`#>[\]]+/g, '')
+      .replace(/^\s*(?:(?:[-*+•>#]+|\d{1,2}[.):])\s+)+/, '')
       .trim()
+      .replace(/^(\*{1,2}|_{1,2})(\S(?:.*\S)?)\1$/, '$2')
       .replace(/^["'“”‘’]+|["'“”‘’]+$/g, '')
       .replace(/\s+/g, ' ')
       .trim();
@@ -73,6 +75,18 @@ export function sanitizeFollowUpSuggestions(raw: string): string[] {
     if (out.length === FOLLOW_UP_SUGGESTION_COUNT) break;
   }
   return out;
+}
+
+const OUTPUT_LIMIT_FINISH_REASON = 'length';
+
+/**
+ * A reply that ran into the output limit ends mid-sentence, so its last line
+ * is a fragment and would be shown, and sent on tap, as if it were a question.
+ */
+export function completeFollowUpLines(content: string, finishReason: string | undefined): string {
+  if (finishReason !== OUTPUT_LIMIT_FINISH_REASON) return content;
+  const lastBreak = content.lastIndexOf('\n');
+  return lastBreak === -1 ? '' : content.slice(0, lastBreak);
 }
 
 export interface GenerateFollowUpSuggestionsInput {
@@ -129,6 +143,7 @@ export async function generateFollowUpSuggestions(
     temperature: 0,
     stream: false,
   });
+  if (getModelEffortOptions(route.modelKey).includes('none')) chatRequest.effort = 'none';
 
   const sourceContent = chatRequest.messages
     .map((message) =>
@@ -215,5 +230,7 @@ export async function generateFollowUpSuggestions(
     record: { ...usage, type: FOLLOW_UP_QUOTA_FEATURE, conversationId: input.conversationId },
   });
 
-  return sanitizeFollowUpSuggestions(response.content);
+  return sanitizeFollowUpSuggestions(
+    completeFollowUpLines(response.content, response.finishReason),
+  );
 }

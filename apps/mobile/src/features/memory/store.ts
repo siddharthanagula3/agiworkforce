@@ -14,6 +14,7 @@ import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useCloudMemoryStore, type CloudMemoryEntry } from '@/stores/memory/cloudMemoryStore';
 import { writeLocalMemoryFact } from '@/src/features/memory/services/localMemoryWriter';
 import { useMemorySyncStateStore } from '@/stores/memory/memorySyncStateStore';
+import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import { api } from '@/services/api';
 import { markMemoryForSync, syncNow } from '@/services/cloudSyncEngine';
 import {
@@ -57,12 +58,19 @@ interface MemoryState {
   resetVisibleState: () => void;
 }
 
-const RESET_FAILED_MESSAGE = 'Could not reset memory, so nothing was deleted. Try again.';
 const MIN_IMPORTED_FACT_CHARS = 3;
 const ALREADY_SAVED_MESSAGE = 'That memory is already saved.';
 const SIGN_IN_REQUIRED_MESSAGE = 'Sign in to manage Cloud memories';
 const ADD_FAILED_MESSAGE = 'Could not add this memory. Try again.';
 const UPDATE_FAILED_MESSAGE = 'Could not update this memory. Try again.';
+const MEMORY_OFF_ADD_MESSAGE = 'Memory is off. Turn on Memory to add memories.';
+
+function cloudMemoryAcceptsNewEntries(): boolean {
+  return (
+    useCloudSettingsStore.getState().memoryEnabled &&
+    useMemorySyncStateStore.getState().accountMemoryEnabled !== false
+  );
+}
 
 function keptExistingMessage(keeper: string | undefined): string {
   return keeper
@@ -163,6 +171,10 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
     try {
       const isCloud = operationScope.scope === 'cloud';
       if (isCloud) {
+        if (!cloudMemoryAcceptsNewEntries()) {
+          set({ error: MEMORY_OFF_ADD_MESSAGE });
+          return MEMORY_OFF_ADD_MESSAGE;
+        }
         const id = uuidv7();
         const now = new Date().toISOString();
         const cloudEntry = {
@@ -178,6 +190,7 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
         useCloudMemoryStore.getState().upsertCloudMemory(cloudEntry);
         markMemoryForSync(id);
         set((state) => {
+          if (state.entries.some((existing) => existing.id === id)) return state;
           const entry: MemoryFact = {
             id,
             fact: fact.trim(),
@@ -353,7 +366,6 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
       }
       return true;
     } catch {
-      if (isMemoryOperationScopeCurrent(operationScope)) set({ error: RESET_FAILED_MESSAGE });
       return false;
     }
   },

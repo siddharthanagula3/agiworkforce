@@ -11,6 +11,8 @@ type ScanModule5 = typeof import('@/lib/support/tickets/service');
 type ScanModule6 = typeof import('@/lib/services/account-usage-history-service');
 type ScanModule7 = typeof import('@/lib/services/managed-usage-summary-service');
 
+type IdentityModule = typeof import('@/lib/server/identity');
+
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
   csrf: vi.fn(),
@@ -20,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   records: vi.fn(),
   summary: vi.fn(),
   openTicket: vi.fn(),
+  identityUser: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -30,6 +33,12 @@ vi.mock('@/lib/logger', async (importOriginal) => ({
 vi.mock('@/lib/api-auth', async (importOriginal) => ({
   ...(await importOriginal<ScanModule1>()),
   getClerkAuthUser: (...args: unknown[]) => mocks.auth(...args),
+}));
+vi.mock('@/lib/server/identity', async (importOriginal) => ({
+  ...(await importOriginal<IdentityModule>()),
+  getIdentityProvider: vi.fn(),
+  getIdentityUser: (...args: unknown[]) => mocks.identityUser(...args),
+  getRequestIdentity: vi.fn(),
 }));
 vi.mock('@/lib/csrf', async (importOriginal) => ({
   ...(await importOriginal<ScanModule2>()),
@@ -315,6 +324,7 @@ describe('POST /api/usage/discrepancy', () => {
 
   it('asks for an email address before filing, since support replies by email', async () => {
     mocks.auth.mockResolvedValue({ userId: USER, email: null });
+    mocks.identityUser.mockResolvedValue({ primaryEmail: null, primaryEmailVerification: null });
 
     const response = await POST(report({ from: FROM, to: TO, message: 'Wrong' }));
 
@@ -322,6 +332,40 @@ describe('POST /api/usage/discrepancy', () => {
     expect(JSON.stringify(await response.json())).toContain(
       'Add an email address to your account so support can reply.',
     );
+    expect(mocks.openTicket).not.toHaveBeenCalled();
+  });
+
+  it('files with the verified primary email when the session token carries none', async () => {
+    mocks.auth.mockResolvedValue({ userId: USER });
+    mocks.identityUser.mockResolvedValue({
+      primaryEmail: 'phone@example.com',
+      primaryEmailVerification: 'verified',
+    });
+
+    const response = await POST(report({ from: FROM, to: TO, message: 'Wrong' }));
+
+    expect(response.status).toBe(201);
+    expect(mocks.identityUser).toHaveBeenCalledWith(USER);
+    expect(mocks.openTicket).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: USER,
+        email: 'phone@example.com',
+        name: 'phone@example.com',
+      }),
+    );
+  });
+
+  it('does not file a reply address the account has not confirmed', async () => {
+    mocks.auth.mockResolvedValue({ userId: USER });
+    mocks.identityUser.mockResolvedValue({
+      primaryEmail: 'new@example.com',
+      primaryEmailVerification: 'unverified',
+    });
+
+    const response = await POST(report({ from: FROM, to: TO, message: 'Wrong' }));
+
+    expect(response.status).toBe(400);
+    expect(JSON.stringify(await response.json())).toContain('Confirm your email address first.');
     expect(mocks.openTicket).not.toHaveBeenCalled();
   });
 

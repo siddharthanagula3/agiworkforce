@@ -178,6 +178,6 @@ describe('identity security notifications', () => {
     const sections = new Set(
       IDENTITY_SECURITY_EVENT_KEYS.map((event) => IDENTITY_SECURITY_EVENTS[event].settingsSection),
     );
-    expect([...sections].sort()).toEqual(['account', 'security']);
+    expect([...sections].sort()).toEqual(['account', 'account-deletion', 'security']);
   });
 });

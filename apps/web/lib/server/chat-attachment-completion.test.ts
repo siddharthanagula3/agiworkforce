@@ -63,7 +63,10 @@ vi.mock('@/lib/moderation', async (importOriginal) => ({
   recordModerationEvent: vi.fn(),
 }));
 
-import { completeChatAttachmentUpload } from './chat-attachment-completion';
+import {
+  completeChatAttachmentUpload,
+  resolveTemporaryChatUpload,
+} from './chat-attachment-completion';
 
 const USER_ID = 'user-1';
 const CONVERSATION_ID = '11111111-1111-4111-8111-111111111111';
@@ -179,6 +182,59 @@ describe('completeChatAttachmentUpload conversation provenance', () => {
 
     expect(query).not.toHaveBeenCalled();
     expect(insertedParams()).not.toHaveProperty('conversationId');
+  });
+});
+
+describe('resolveTemporaryChatUpload', () => {
+  function resolve(
+    db: DatabaseAdapter,
+    over: { conversationId?: string; temporary?: boolean; organizationId?: string | null } = {},
+  ) {
+    return resolveTemporaryChatUpload({
+      db,
+      userId: USER_ID,
+      organizationId: over.organizationId ?? null,
+      ...(over.conversationId ? { conversationId: over.conversationId } : {}),
+      ...(over.temporary === undefined ? {} : { temporary: over.temporary }),
+    });
+  }
+
+  it('answers the owned conversation and whether it is temporary', async () => {
+    const { db, query } = dbReturning([{ id: CONVERSATION_ID, is_temporary: true }]);
+
+    expect(await resolve(db, { conversationId: CONVERSATION_ID })).toEqual({
+      temporary: true,
+      conversationId: CONVERSATION_ID,
+    });
+    expect(query.mock.calls[0]![1]).toEqual([CONVERSATION_ID, USER_ID, null]);
+  });
+
+  it('answers no conversation for an id the account does not own, keeping the declared flag', async () => {
+    const { db } = dbReturning([]);
+
+    expect(await resolve(db, { conversationId: CONVERSATION_ID, temporary: true })).toEqual({
+      temporary: true,
+      conversationId: null,
+    });
+  });
+
+  it('answers no conversation, and asks nothing, before a chat exists', async () => {
+    const { db, query } = dbReturning([]);
+
+    expect(await resolve(db)).toEqual({ temporary: false, conversationId: null });
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('refuses when the lookup fails', async () => {
+    const db = {
+      query: vi.fn(async () => {
+        throw new Error('database unavailable');
+      }),
+    } as unknown as DatabaseAdapter;
+
+    await expect(resolve(db, { conversationId: CONVERSATION_ID })).rejects.toMatchObject({
+      statusCode: 503,
+    });
   });
 });
 

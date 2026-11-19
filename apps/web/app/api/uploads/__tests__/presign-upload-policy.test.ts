@@ -63,7 +63,13 @@ vi.mock('@/lib/server/object-storage-runtime', () => ({
 }));
 
 import { POST } from '@/app/api/uploads/presign/route';
-import { PROJECT_KNOWLEDGE_UPLOAD_PROTOCOL_VERSION } from '@agiworkforce/cloud-contracts';
+import {
+  CHAT_IMAGE_ATTACHMENT_TOO_LARGE_MESSAGE,
+  MAX_CHAT_ATTACHMENT_BYTES,
+  MAX_CHAT_IMAGE_ATTACHMENT_BYTES,
+  PROJECT_KNOWLEDGE_UPLOAD_PROTOCOL_VERSION,
+} from '@agiworkforce/cloud-contracts';
+import { attachmentSizeRefusal } from '@/lib/server/attachment-allowance';
 
 const CHECKSUM = createHash('sha256').update('project source bytes').digest('hex');
 
@@ -92,7 +98,7 @@ function presignRequest(body: PresignBody, origin = 'http://localhost:3000'): Ne
       : body;
   return new NextRequest(`${origin}/api/uploads/presign`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', origin },
     body: JSON.stringify(authorized),
   });
 }
@@ -377,5 +383,46 @@ describe('POST /api/uploads/presign · avatar size policy', () => {
 
     expect(response.status).toBe(400);
     expect(mockGetPresignedUploadUrl).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/uploads/presign · chat attachment size', () => {
+  beforeEach(() => {
+    mockAdmitAttachmentUpload.mockImplementation(async (input: unknown) => {
+      const { kind, byteCount, mimeType } = input as {
+        kind: 'chat-attachment' | 'knowledge-file';
+        byteCount: number;
+        mimeType?: string;
+      };
+      const refusal = attachmentSizeRefusal('pro', kind, byteCount, mimeType);
+      if (refusal) throw refusal;
+    });
+  });
+
+  afterEach(() => mockAdmitAttachmentUpload.mockImplementation(async () => undefined));
+
+  const chatFile = (mimeType: string, fileName: string, byteCount: number) =>
+    POST(presignRequest({ kind: 'chat-attachment', fileName, mimeType, byteCount }));
+
+  it('signs a document at the chat limit and refuses one byte more', async () => {
+    const admitted = await chatFile('application/pdf', 'report.pdf', MAX_CHAT_ATTACHMENT_BYTES);
+    expect(admitted.status).toBe(200);
+    expect(mockGetPresignedPrivateUploadUrl).toHaveBeenCalledTimes(1);
+
+    const refused = await chatFile('application/pdf', 'report.pdf', MAX_CHAT_ATTACHMENT_BYTES + 1);
+    expect(refused.status).toBeGreaterThanOrEqual(400);
+    expect(mockGetPresignedPrivateUploadUrl).toHaveBeenCalledTimes(1);
+  });
+
+  it('holds an image to the image ceiling, below the document limit', async () => {
+    expect(MAX_CHAT_IMAGE_ATTACHMENT_BYTES).toBeLessThan(MAX_CHAT_ATTACHMENT_BYTES);
+    const admitted = await chatFile('image/png', 'photo.png', MAX_CHAT_IMAGE_ATTACHMENT_BYTES);
+    expect(admitted.status).toBe(200);
+
+    const refused = await chatFile('image/png', 'photo.png', MAX_CHAT_IMAGE_ATTACHMENT_BYTES + 1);
+    expect(refused.status).toBe(413);
+    const body = (await refused.json()) as { error?: { message?: string } };
+    expect(body.error?.message).toBe(CHAT_IMAGE_ATTACHMENT_TOO_LARGE_MESSAGE);
+    expect(mockGetPresignedPrivateUploadUrl).toHaveBeenCalledTimes(1);
   });
 });
