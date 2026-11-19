@@ -4,7 +4,18 @@ import JSZip from 'jszip';
 import mammoth from 'mammoth';
 
 import { MAX_FILE_TEXT_CHARS } from '@agiworkforce/types';
+import { replaceMarkupTags } from '@/lib/markup-tags';
 import { truncateExtractedText } from '@/lib/server/extraction-truncation';
+import {
+  asciiLowercase,
+  attributeValue,
+  characterReference,
+  endsTagName,
+  firstMarkupElement,
+  forwardFinder,
+  markupElements,
+  openTags,
+} from '@/lib/server/ooxml-markup';
 
 import {
   DecompressionLimitError,
@@ -99,47 +110,114 @@ function decodeXmlEntities(value: string): string {
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&apos;/g, "'")
-    .replace(/&#(\d+);/g, (_, code: string) => String.fromCodePoint(Number(code)))
-    .replace(/&#x([0-9a-fA-F]+);/g, (_, code: string) => String.fromCodePoint(parseInt(code, 16)))
+    .replace(/&#(\d+);/g, (reference, code: string) => characterReference(reference, Number(code)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (reference, code: string) =>
+      characterReference(reference, parseInt(code, 16)),
+    )
     .replace(/&amp;/g, '&');
 }
 
+const ANY_TAG_OPENING = /<[^>]/g;
+
+function stripTags(html: string): string {
+  return replaceMarkupTags(html, ANY_TAG_OPENING, ' ');
+}
+
+function tableCellTexts(rowHtml: string): string[] {
+  const lower = asciiLowercase(rowHtml);
+  const find = forwardFinder(lower);
+  const cells: string[] = [];
+  let cursor = 0;
+  while (cursor < rowHtml.length) {
+    const start = find('<t', cursor);
+    if (start === -1) break;
+    const kind = lower[start + 2];
+    if ((kind !== 'd' && kind !== 'h') || !endsTagName(lower, start + 3)) {
+      cursor = start + 2;
+      continue;
+    }
+    const tagEnd = find('>', start + 3);
+    if (tagEnd === -1) break;
+    const dataEnd = find('</td>', tagEnd + 1);
+    const headerEnd = find('</th>', tagEnd + 1);
+    const closeStart =
+      dataEnd === -1 ? headerEnd : headerEnd === -1 ? dataEnd : Math.min(dataEnd, headerEnd);
+    if (closeStart === -1) break;
+    cells.push(decodeXmlEntities(stripTags(rowHtml.slice(tagEnd + 1, closeStart))).trim());
+    cursor = closeStart + 5;
+  }
+  return cells;
+}
+
+const BLOCK_TAG_NAME = /(h[1-6]|p|li|tr)(?![A-Za-z0-9_])/iy;
+const TABLE_TAG_NAME = /table(?![A-Za-z0-9_])/iy;
+const LINE_BREAK = /br\s*\/?>/iy;
+
 function htmlToText(html: string): string {
   const lines: string[] = [];
+  const lower = asciiLowercase(html);
+  const find = forwardFinder(lower);
+  let matched = false;
   let cursor = 0;
-  const blockPattern =
-    /<(h[1-6]|p|li|tr)\b[^>]*>([\s\S]*?)<\/\1>|<table\b[^>]*>|<\/table>|<br\s*\/?>/gi;
 
-  const cellText = (row: string): string =>
-    [...row.matchAll(/<t[dh]\b[^>]*>([\s\S]*?)<\/t[dh]>/gi)]
-      .map((cell) => decodeXmlEntities((cell[1] ?? '').replace(/<[^>]+>/g, ' ')).trim())
-      .join(' | ');
+  while (cursor < html.length) {
+    const open = find('<', cursor);
+    if (open === -1) break;
+    cursor = open + 1;
 
-  let match: RegExpExecArray | null;
-  while ((match = blockPattern.exec(html)) !== null) {
-    cursor = blockPattern.lastIndex;
-    const tag = match[1]?.toLowerCase();
-    const inner = match[2] ?? '';
-    if (!tag) continue;
-    if (tag === 'tr') {
-      const row = cellText(match[0]);
-      if (row) lines.push(`| ${row} |`);
+    BLOCK_TAG_NAME.lastIndex = open + 1;
+    const block = BLOCK_TAG_NAME.exec(lower);
+    if (block) {
+      const tag = block[1] ?? '';
+      const tagEnd = find('>', open + 1 + tag.length);
+      if (tagEnd === -1) break;
+      const closeStart = find(`</${tag}>`, tagEnd + 1);
+      if (closeStart !== -1) {
+        const end = closeStart + tag.length + 3;
+        matched = true;
+        cursor = end;
+        if (tag === 'tr') {
+          const row = tableCellTexts(html.slice(open, end)).join(' | ');
+          if (row) lines.push(`| ${row} |`);
+          continue;
+        }
+        const text = decodeXmlEntities(stripTags(html.slice(tagEnd + 1, closeStart)))
+          .replace(/\s+/g, ' ')
+          .trim();
+        if (!text) continue;
+        if (tag.startsWith('h')) {
+          lines.push(`${'#'.repeat(Number(tag.slice(1)))} ${text}`);
+          continue;
+        }
+        lines.push(tag === 'li' ? `- ${text}` : text);
+        continue;
+      }
+    }
+
+    TABLE_TAG_NAME.lastIndex = open + 1;
+    if (TABLE_TAG_NAME.test(lower)) {
+      const tagEnd = find('>', open + 6);
+      if (tagEnd === -1) break;
+      matched = true;
+      cursor = tagEnd + 1;
       continue;
     }
-    const text = decodeXmlEntities(inner.replace(/<[^>]+>/g, ' '))
-      .replace(/\s+/g, ' ')
-      .trim();
-    if (!text) continue;
-    if (tag.startsWith('h')) {
-      lines.push(`${'#'.repeat(Number(tag.slice(1)))} ${text}`);
+
+    if (lower.startsWith('/table>', open + 1)) {
+      matched = true;
+      cursor = open + 8;
       continue;
     }
-    lines.push(tag === 'li' ? `- ${text}` : text);
+
+    LINE_BREAK.lastIndex = open + 1;
+    if (LINE_BREAK.test(lower)) {
+      matched = true;
+      cursor = LINE_BREAK.lastIndex;
+    }
   }
-  if (cursor === 0) {
-    const text = decodeXmlEntities(html.replace(/<[^>]+>/g, ' '))
-      .replace(/\s+/g, ' ')
-      .trim();
+
+  if (!matched) {
+    const text = decodeXmlEntities(stripTags(html)).replace(/\s+/g, ' ').trim();
     if (text) lines.push(text);
   }
   return lines.join('\n');
@@ -194,9 +272,17 @@ async function entryText(bounded: BoundedZip, path: string): Promise<string | nu
 }
 
 function xmlTextRuns(xml: string, tag: string): string {
-  return [...xml.matchAll(new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)</${tag}>`, 'g'))]
-    .map((match) => decodeXmlEntities(match[1] ?? ''))
-    .join('');
+  let text = '';
+  for (const run of markupElements(xml, tag)) text += decodeXmlEntities(run.body);
+  return text;
+}
+
+function paragraphLines(xml: string): string[] {
+  const lines: string[] = [];
+  for (const paragraph of markupElements(xml, 'a:p')) {
+    lines.push(xmlTextRuns(paragraph.body, 'a:t').replace(/\s+/g, ' ').trim());
+  }
+  return lines;
 }
 
 async function extractDocx(data: Buffer, filename: string): Promise<string> {
@@ -270,25 +356,23 @@ async function readXlsxSheets(data: Buffer, filename: string): Promise<Sheet[]> 
 
   const relationships = (await entryText(bounded, 'xl/_rels/workbook.xml.rels')) ?? '';
   const targetByRelationshipId = new Map<string, string>();
-  for (const match of relationships.matchAll(/<Relationship\b[^>]*>/g)) {
-    const id = /Id="([^"]+)"/.exec(match[0])?.[1];
-    const target = /Target="([^"]+)"/.exec(match[0])?.[1];
+  for (const tag of openTags(relationships, 'Relationship')) {
+    const id = attributeValue(tag, 'Id', '<Relationship'.length);
+    const target = attributeValue(tag, 'Target', '<Relationship'.length);
     if (id && target) targetByRelationshipId.set(id, target.replace(/^\/?xl\//, ''));
   }
 
   const sharedStringsXml = (await entryText(bounded, 'xl/sharedStrings.xml')) ?? '';
-  const sharedStrings = [...sharedStringsXml.matchAll(/<si>([\s\S]*?)<\/si>/g)].map((match) =>
-    xmlTextRuns(match[1] ?? '', 't'),
+  const sharedStrings = [...markupElements(sharedStringsXml, 'si')].map((item) =>
+    xmlTextRuns(item.body, 't'),
   );
 
   const sheets: Sheet[] = [];
   let sheetIndex = 0;
-  for (const sheetMatch of workbook.matchAll(/<sheet\b[^>]*>/g)) {
+  for (const sheetTag of openTags(workbook, 'sheet')) {
     sheetIndex += 1;
-    const name = decodeXmlEntities(
-      /name="([^"]*)"/.exec(sheetMatch[0])?.[1] ?? `Sheet${sheetIndex}`,
-    );
-    const relationshipId = /r:id="([^"]+)"/.exec(sheetMatch[0])?.[1];
+    const name = attributeValue(sheetTag, 'name', '<sheet'.length) ?? `Sheet${sheetIndex}`;
+    const relationshipId = attributeValue(sheetTag, 'r:id', '<sheet'.length);
     const target = relationshipId ? targetByRelationshipId.get(relationshipId) : undefined;
     const sheetXml =
       (target ? await entryText(bounded, `xl/${target}`) : null) ??
@@ -297,21 +381,21 @@ async function readXlsxSheets(data: Buffer, filename: string): Promise<Sheet[]> 
 
     const rows: SheetRow[] = [];
     let omitted = false;
-    for (const rowMatch of sheetXml.matchAll(/<row\b[^>]*>([\s\S]*?)<\/row>/g)) {
+    for (const row of markupElements(sheetXml, 'row')) {
       if (rows.length >= MAX_SHEET_ROWS) {
         omitted = true;
         break;
       }
       const cells: SheetCell[] = [];
-      for (const cellMatch of (rowMatch[1] ?? '').matchAll(
-        /<c\b([^>]*)(?:\/>|>([\s\S]*?)<\/c>)/g,
-      )) {
-        const attributes = cellMatch[1] ?? '';
-        const body = cellMatch[2] ?? '';
-        const reference = /r="([A-Z]+\d+)"/.exec(attributes)?.[1] ?? '';
-        const type = /t="([^"]+)"/.exec(attributes)?.[1] ?? 'n';
-        const formula = /<f\b[^>]*>([\s\S]*?)<\/f>/.exec(body)?.[1];
-        const rawValue = /<v>([\s\S]*?)<\/v>/.exec(body)?.[1] ?? '';
+      for (const cellElement of markupElements(row.body, 'c')) {
+        const attributes = cellElement.attributes;
+        const body = cellElement.body;
+        const reference = /^[A-Z]+\d+$/.exec(attributeValue(attributes, 'r') ?? '')?.[0] ?? '';
+        const type = attributeValue(attributes, 't') || 'n';
+        const formulaElement = firstMarkupElement(body, 'f');
+        const formula =
+          formulaElement && !formulaElement.selfClosing ? formulaElement.body : undefined;
+        const rawValue = firstMarkupElement(body, 'v')?.body ?? '';
         let value: string;
         if (type === 's') {
           value = sharedStrings[Number(rawValue)] ?? '';
@@ -329,7 +413,8 @@ async function readXlsxSheets(data: Buffer, filename: string): Promise<Sheet[]> 
         }
       }
       if (cells.length > 0) {
-        const number = /<row\b[^>]*r="(\d+)"/.exec(rowMatch[0])?.[1] ?? String(rows.length + 1);
+        const number =
+          /^\d+$/.exec(attributeValue(row.attributes, 'r') ?? '')?.[0] ?? String(rows.length + 1);
         rows.push({ number, cells });
       }
     }
@@ -422,23 +507,11 @@ async function extractPptx(data: Buffer, filename: string): Promise<string> {
   const sections: string[] = [];
   for (const [index, path] of slidePaths.entries()) {
     const slideXml = (await entryText(bounded, path)) ?? '';
-    const lines = [...slideXml.matchAll(/<a:p\b[^>]*>([\s\S]*?)<\/a:p>/g)]
-      .map((match) =>
-        xmlTextRuns(match[1] ?? '', 'a:t')
-          .replace(/\s+/g, ' ')
-          .trim(),
-      )
-      .filter(Boolean);
+    const lines = paragraphLines(slideXml).filter(Boolean);
     const slideNumber = rowNumber(path);
     const notesXml =
       (await entryText(bounded, `ppt/notesSlides/notesSlide${slideNumber}.xml`)) ?? '';
-    const notes = [...notesXml.matchAll(/<a:p\b[^>]*>([\s\S]*?)<\/a:p>/g)]
-      .map((match) =>
-        xmlTextRuns(match[1] ?? '', 'a:t')
-          .replace(/\s+/g, ' ')
-          .trim(),
-      )
-      .filter((line) => line && line !== String(slideNumber));
+    const notes = paragraphLines(notesXml).filter((line) => line && line !== String(slideNumber));
     sections.push(
       [
         `## Slide ${index + 1}`,

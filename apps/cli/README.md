@@ -381,7 +381,9 @@ JetBrains IDEs: in AI Chat choose Add Custom Agent, then add the agent to
   workspace isolation while clients own presentation and context selection.
   WebSocket mode requires its bearer token in `AGI_APP_SERVER_TOKEN`; no
   argument carries it, because other local users can list a process's
-  arguments, and auth tokens are never printed.
+  arguments, and auth tokens are never printed. `--allow-query-token` also
+  needs `AGI_APP_SERVER_READ_ONLY_TOKEN`, a separate secret that opens only
+  read-only connections; the owner token is never accepted in a URL.
 - CLI and VS Code sessions share `~/.agiworkforce/managed_sessions/`; they do
   not join Web/Mobile/Desktop Cloud chat sync. App-server reads never expose
   the internal system prompt, and cross-workspace read/fork/archive operations

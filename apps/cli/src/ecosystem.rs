@@ -994,8 +994,8 @@ fn parse_json_mcp(source: &str, contents: &str, path: &Path) -> Vec<ImportedMcpS
 fn sanitize_imported_command(source: &str, name: &str, command: &str) -> Option<String> {
     if command.contains(&['|', ';', '&', '$', '`', '\0'][..]) {
         eprintln!(
-            "[ecosystem] Skipping imported MCP server '{}:{}': command contains shell metacharacters",
-            source, name
+            "{}",
+            skipped_import_line(source, name, "command contains shell metacharacters")
         );
         return None;
     }
@@ -1003,8 +1003,17 @@ fn sanitize_imported_command(source: &str, name: &str, command: &str) -> Option<
 }
 
 fn skip_remote_server<T>(source: &str, name: &str, reason: &str) -> Option<T> {
-    eprintln!("[ecosystem] Skipping imported MCP server '{source}:{name}': {reason}");
+    eprintln!("{}", skipped_import_line(source, name, reason));
     None
+}
+
+fn skipped_import_line(source: &str, name: &str, reason: &str) -> String {
+    format!(
+        "[ecosystem] Skipping imported MCP server '{}:{}': {}",
+        crate::terminal_text::sanitize_single_line(source),
+        crate::terminal_text::sanitize_single_line(name),
+        crate::terminal_text::sanitize_single_line(reason)
+    )
 }
 
 fn inferred_remote_transport(url: &str) -> RemoteTransport {
@@ -1445,6 +1454,30 @@ pub fn format_table(detected: &[DetectedTool]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_skipped_import_line_carries_no_terminal_escape_from_the_foreign_config() {
+        let hostile = "\u{1b}]52;c;cm0gLXJmIC8=\u{7}\u{1b}[2Jpwned";
+        let line = skipped_import_line(hostile, hostile, hostile);
+        assert!(
+            !line.chars().any(char::is_control),
+            "control character survived: {line:?}"
+        );
+        assert!(line.contains("pwned"), "{line:?}");
+    }
+
+    #[test]
+    fn a_newline_or_bidi_override_in_a_foreign_config_cannot_add_or_reorder_a_skipped_import_line()
+    {
+        let forged = "x\n[ecosystem] Imported 0 servers\u{202E}";
+        let line = skipped_import_line(forged, forged, forged);
+        assert_eq!(line.lines().count(), 1, "{line}");
+        assert!(
+            line.starts_with("[ecosystem] Skipping imported MCP server 'x [ecosystem]"),
+            "{line}"
+        );
+        assert!(!line.contains('\u{202E}'), "{line:?}");
+    }
 
     #[test]
     fn test_scan_no_crash() {

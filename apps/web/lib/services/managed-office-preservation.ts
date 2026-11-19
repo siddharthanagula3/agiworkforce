@@ -6,6 +6,17 @@ import { posix } from 'node:path';
 import { SaxesParser } from 'saxes';
 import { decompressionBudget, readArchiveMember } from '@/lib/security/archive-bounds';
 import { MAX_GENERATED_FILE_BYTES } from '@/lib/server/generated-file-persist';
+import {
+  asciiLowercase,
+  attributeValue,
+  firstMarkupElement,
+  type MarkupElement,
+  firstOpenTag,
+  markupElements,
+  openTags,
+  replaceMarkupElements,
+  xmlAttributes,
+} from '@/lib/server/ooxml-markup';
 import type { TurnAttachment } from '@/lib/e2b/attachment-staging';
 import type { E2BExecutor } from '@/lib/e2b/types';
 
@@ -31,6 +42,19 @@ export interface ManagedOfficeVerification {
 
 function digest(data: Uint8Array): string {
   return createHash('sha256').update(data).digest('hex');
+}
+
+function resolvedPartName(relationshipsPart: string, target: string): string {
+  const base =
+    relationshipsPart === '_rels/.rels' ? '' : posix.dirname(posix.dirname(relationshipsPart));
+  return posix.normalize(target.startsWith('/') ? target.slice(1) : posix.join(base, target));
+}
+
+function relationshipTargetPart(relationshipsPart: string, target: string): string {
+  const decoded = decodeURIComponent(target.split('#')[0]!);
+  if (!decoded || decoded.includes('\\') || decoded.includes('?'))
+    throw new Error('Invalid relationship target');
+  return resolvedPartName(relationshipsPart, decoded);
 }
 
 async function officeParts(data: Buffer, requiredPart: string): Promise<Map<string, Buffer>> {
@@ -92,13 +116,7 @@ async function officeParts(data: Buffer, requiredPart: string): Promise<Map<stri
         if (!id || !target || relationshipIds.has(id)) throw new Error('Invalid relationship');
         relationshipIds.add(id);
         if (attributes['TargetMode'] === 'External') return;
-        const base = name === '_rels/.rels' ? '' : posix.dirname(posix.dirname(name));
-        const decoded = decodeURIComponent(target.split('#')[0]!);
-        if (!decoded || decoded.includes('\\') || decoded.includes('?'))
-          throw new Error('Invalid relationship target');
-        const resolved = posix.normalize(
-          decoded.startsWith('/') ? decoded.slice(1) : posix.join(base, decoded),
-        );
+        const resolved = relationshipTargetPart(name, target);
         if (resolved.startsWith('../') || !parts.has(resolved))
           throw new Error('Missing relationship target');
       });
@@ -151,56 +169,16 @@ export async function editManagedDocx(
     );
   const parts = await officeParts(original, 'word/document.xml');
   const document = parts.get('word/document.xml')!;
-  let xml = document.toString('utf8');
-  if (/<w:(?:ins|del|moveFrom|moveTo)\b/.test(xml))
+  const documentXml = document.toString('utf8');
+  if (/<w:(?:ins|del|moveFrom|moveTo)\b/.test(documentXml))
     throw new ManagedOfficeProcessingError(
       'Documents with tracked revisions are not supported by this edit operation.',
     );
-  for (const replacement of source.replacements) {
-    const find = replacement.find;
-    const value = replacement.replace;
-    const escapedFind = xmlText(find);
-    const escapedValue = xmlText(value);
-    if (!find) throw new ManagedOfficeProcessingError('An edit must name nonempty text.');
-    let count = 0;
-    for (const run of xml.matchAll(/<w:t\b[^>]*>([^<]*)<\/w:t>/g)) {
-      const text = decodedXmlText(run[1] ?? '');
-      let offset = 0;
-      while ((offset = text.indexOf(find, offset)) !== -1) {
-        count += 1;
-        if (count > replacement.expectedMatches) break;
-        offset += find.length;
-      }
-      if (count > replacement.expectedMatches) break;
-    }
-    if (count !== replacement.expectedMatches)
-      throw new ManagedOfficeProcessingError(
-        'The text match count differs, or the requested text spans unsupported formatting runs.',
-      );
-    const originalPartBytes = [...parts.values()].reduce(
-      (total, part) => total + part.byteLength,
-      0,
-    );
-    const projectedBytes =
-      originalPartBytes -
-      document.byteLength +
-      Buffer.byteLength(xml) +
-      (Buffer.byteLength(escapedValue) - Buffer.byteLength(escapedFind)) * count;
-    if (projectedBytes > MAX_GENERATED_FILE_BYTES)
-      throw new ManagedOfficeProcessingError(
-        'The edit would exceed the Office package size limit.',
-      );
-    xml = xml.replace(
-      /(<w:t\b[^>]*>)([^<]*)(<\/w:t>)/g,
-      (match, open: string, text: string, close: string) => {
-        const decoded = decodedXmlText(text);
-        const edited = decoded.split(find).join(value);
-        if (edited === decoded) return match;
-        const tag = /xml:space=/.test(open) ? open : open.replace(/>$/, ' xml:space="preserve">');
-        return tag + xmlText(edited) + close;
-      },
-    );
-  }
+  const xml = replacedWordText(
+    documentXml,
+    source.replacements,
+    [...parts.values()].reduce((total, part) => total + part.byteLength, 0) - document.byteLength,
+  );
   const output = new JSZip();
   for (const [name, bytes] of parts)
     output.file(name, name === 'word/document.xml' ? Buffer.from(xml) : bytes);
@@ -221,6 +199,112 @@ export async function editManagedDocx(
       render: 'not_run',
     },
   };
+}
+
+function isTextRun(run: MarkupElement): boolean {
+  return !run.selfClosing && !run.body.includes('<');
+}
+
+function* wordTextRuns(xml: string): Generator<MarkupElement, void> {
+  for (const run of markupElements(xml, 'w:t')) {
+    if (isTextRun(run)) yield run;
+  }
+}
+
+const RUN_SEPARATOR = '\u0000';
+const SEARCH_ANCHOR_LENGTH = 6;
+
+function nonOverlappingOffsets(text: string, pattern: string, limit: number): number[] {
+  const fallback = new Int32Array(pattern.length);
+  for (let index = 1, length = 0; index < pattern.length;) {
+    if (pattern.charCodeAt(index) === pattern.charCodeAt(length)) fallback[index++] = ++length;
+    else if (length) length = fallback[length - 1]!;
+    else fallback[index++] = 0;
+  }
+  const anchor = pattern.slice(0, SEARCH_ANCHOR_LENGTH);
+  const offsets: number[] = [];
+  let matched = 0;
+  for (let index = 0; index < text.length && offsets.length < limit; index += 1) {
+    if (matched === 0) {
+      index = text.indexOf(anchor, index);
+      if (index === -1) break;
+    }
+    const code = text.charCodeAt(index);
+    while (matched && code !== pattern.charCodeAt(matched)) matched = fallback[matched - 1]!;
+    if (code === pattern.charCodeAt(matched)) matched += 1;
+    if (matched === pattern.length) {
+      offsets.push(index + 1 - pattern.length);
+      matched = 0;
+    }
+  }
+  return offsets;
+}
+
+function replacedAt(
+  text: string,
+  offsets: readonly number[],
+  length: number,
+  value: string,
+): string {
+  const pieces: string[] = [];
+  let cursor = 0;
+  for (const offset of offsets) {
+    pieces.push(text.slice(cursor, offset), value);
+    cursor = offset + length;
+  }
+  pieces.push(text.slice(cursor));
+  return pieces.join('');
+}
+
+function replacedWordText(
+  xml: string,
+  replacements: ManagedOfficeSource['replacements'],
+  otherPartBytes: number,
+): string {
+  const sizeLimitError = () =>
+    new ManagedOfficeProcessingError('The edit would exceed the Office package size limit.');
+  for (const replacement of replacements) {
+    assertXmlText(replacement.find);
+    assertXmlText(replacement.replace);
+    if (!replacement.find)
+      throw new ManagedOfficeProcessingError('An edit must name nonempty text.');
+  }
+  const runs = [...wordTextRuns(xml)];
+  const originalTexts = runs.map((run) => decodedXmlText(run.body));
+  if (originalTexts.some((text) => text.includes(RUN_SEPARATOR)))
+    throw new ManagedOfficeProcessingError('The edit contains unsupported XML characters.');
+  let joined = originalTexts.join(RUN_SEPARATOR);
+  let projectedBytes = otherPartBytes + Buffer.byteLength(xml);
+  for (const { find, replace, expectedMatches } of replacements) {
+    const offsets = nonOverlappingOffsets(joined, find, expectedMatches + 1);
+    const count = offsets.length;
+    if (count !== expectedMatches)
+      throw new ManagedOfficeProcessingError(
+        'The text match count differs, or the requested text spans unsupported formatting runs.',
+      );
+    projectedBytes +=
+      (Buffer.byteLength(xmlText(replace)) - Buffer.byteLength(xmlText(find))) * count;
+    if (projectedBytes > MAX_GENERATED_FILE_BYTES) throw sizeLimitError();
+    joined = replacedAt(joined, offsets, find.length, replace);
+  }
+  const editedTexts = joined.split(RUN_SEPARATOR);
+  const pieces: string[] = [];
+  let cursor = 0;
+  runs.forEach((run, index) => {
+    const edited = editedTexts[index]!;
+    if (edited === originalTexts[index]) return;
+    const open = xml.slice(run.start, run.bodyStart);
+    const tag =
+      attributeValue(run.attributes, 'xml:space') === undefined
+        ? open.replace(/>$/, ' xml:space="preserve">')
+        : open;
+    pieces.push(xml.slice(cursor, run.start), tag, xmlText(edited), '</w:t>');
+    cursor = run.end;
+  });
+  pieces.push(xml.slice(cursor));
+  const edited = pieces.join('');
+  if (otherPartBytes + Buffer.byteLength(edited) > MAX_GENERATED_FILE_BYTES) throw sizeLimitError();
+  return edited;
 }
 
 function assertDistinctWorksheetNames(workbookXml: string): void {
@@ -258,10 +342,11 @@ export async function verifyManagedOfficePackage(
   for (const [name, bytes] of parts) {
     if (!/^xl\/worksheets\/[^/]+\.xml$/.test(name)) continue;
     const xml = bytes.toString('utf8');
-    for (const cell of xml.matchAll(/<c\b[^>]*>[\s\S]*?<\/c>/g)) {
-      if (!/<f\b/.test(cell[0])) continue;
+    for (const cell of cellElements(xml)) {
+      if (!hasFormula(cell)) continue;
       formulas += 1;
-      if (/\bt=["']e["']/.test(cell[0]) || !/<v>[^<]+<\/v>/.test(cell[0])) {
+      const value = firstMarkupElement(cell, 'v');
+      if (cellAttribute(cell, 't') === 'e' || !value?.body || value.body.includes('<')) {
         throw new ManagedOfficeProcessingError(
           'A workbook formula has no evaluated result or contains a calculation error.',
         );
@@ -306,6 +391,368 @@ const RECALCULABLE_FUNCTIONS: ReadonlySet<string> = new Set([
   'SUMPRODUCT',
 ]);
 
+// Rule formulas are evaluated by the engine too. Never add a function that
+// reaches outside the workbook or resolves a reference from text.
+const RULE_FUNCTIONS: ReadonlySet<string> = new Set([
+  ...RECALCULABLE_FUNCTIONS,
+  'ISERROR',
+  'ISERR',
+  'ISNA',
+  'ISBLANK',
+  'ISNUMBER',
+  'ISTEXT',
+  'ISNONTEXT',
+  'ISLOGICAL',
+  'ISEVEN',
+  'ISODD',
+  'TRUE',
+  'FALSE',
+  'SEARCH',
+  'FIND',
+  'LEFT',
+  'RIGHT',
+  'MID',
+  'LEN',
+  'TRIM',
+  'CLEAN',
+  'UPPER',
+  'LOWER',
+  'PROPER',
+  'EXACT',
+  'SUBSTITUTE',
+  'REPLACE',
+  'REPT',
+  'CONCATENATE',
+  'TEXT',
+  'VALUE',
+  'TODAY',
+  'NOW',
+  'DATE',
+  'DATEVALUE',
+  'TIME',
+  'YEAR',
+  'MONTH',
+  'DAY',
+  'HOUR',
+  'MINUTE',
+  'SECOND',
+  'WEEKDAY',
+  'WEEKNUM',
+  'EDATE',
+  'EOMONTH',
+  'FLOOR',
+  'CEILING',
+  'INT',
+  'TRUNC',
+  'MOD',
+  'SIGN',
+  'ROW',
+  'COLUMN',
+  'COUNTBLANK',
+  'AVERAGEIF',
+  'LARGE',
+  'SMALL',
+  'RANK',
+  'STDEV',
+  'STDEVP',
+]);
+
+const RULE_ELEMENTS: ReadonlySet<string> = new Set([
+  'conditionalFormatting',
+  'conditionalFormattings',
+  'cfRule',
+  'cfvo',
+  'dataValidations',
+  'dataValidation',
+]);
+
+const RULE_FORMULA_ELEMENTS: ReadonlySet<string> = new Set(['formula', 'formula1', 'formula2']);
+
+const FORMULA_ELEMENTS: ReadonlySet<string> = new Set([
+  'f',
+  'formula',
+  'formula1',
+  'formula2',
+  'calculatedColumnFormula',
+  'totalsRowFormula',
+  'definedName',
+]);
+
+function uncheckableFormula(): ManagedOfficeProcessingError {
+  return new ManagedOfficeProcessingError(
+    'A workbook formula contains markup the managed recalculation contract cannot check.',
+  );
+}
+
+function uncheckablePart(): ManagedOfficeProcessingError {
+  return new ManagedOfficeProcessingError(
+    'The workbook contains a part the managed recalculation contract cannot check.',
+  );
+}
+
+function assertRecalculablePart(xml: string): void {
+  const open: { text: string; nested: boolean; allowed: ReadonlySet<string> }[] = [];
+  let ruleDepth = 0;
+  const parser = new SaxesParser({ xmlns: true });
+  const append = (text: string) => {
+    const formula = open[open.length - 1];
+    if (!formula) return;
+    if (formula.nested && /\S/.test(text)) throw uncheckableFormula();
+    formula.text += text;
+  };
+  parser.on('xmldecl', ({ encoding }) => {
+    if (encoding !== undefined && !/^utf-?8$/i.test(encoding)) throw uncheckablePart();
+  });
+  parser.on('doctype', () => {
+    throw new ManagedOfficeProcessingError('XML entity declarations are not supported.');
+  });
+  parser.on('opentag', (tag) => {
+    if (RULE_ELEMENTS.has(tag.local)) ruleDepth += 1;
+    for (const attribute of Object.values(tag.attributes)) {
+      if (attribute.prefix === 'xmlns') continue;
+      if (attribute.local === 'formula')
+        assertRecalculableFormula(attribute.value, RECALCULABLE_FUNCTIONS);
+      else if (attribute.local === 'val' && tag.local === 'cfvo')
+        assertRecalculableFormula(attribute.value, RULE_FUNCTIONS);
+    }
+    const enclosing = open[open.length - 1];
+    if (!FORMULA_ELEMENTS.has(tag.local)) {
+      if (enclosing) throw uncheckableFormula();
+      return;
+    }
+    if (enclosing) {
+      if (/\S/.test(enclosing.text)) throw uncheckableFormula();
+      enclosing.nested = true;
+    }
+    open.push({
+      text: '',
+      nested: false,
+      allowed:
+        ruleDepth > 0 || RULE_FORMULA_ELEMENTS.has(tag.local)
+          ? RULE_FUNCTIONS
+          : RECALCULABLE_FUNCTIONS,
+    });
+  });
+  parser.on('text', append);
+  parser.on('cdata', append);
+  parser.on('closetag', (tag) => {
+    if (open.length && FORMULA_ELEMENTS.has(tag.local)) {
+      const formula = open.pop()!;
+      assertRecalculableFormula(formula.text, formula.allowed);
+    }
+    if (RULE_ELEMENTS.has(tag.local)) ruleDepth -= 1;
+  });
+  parser.write(xml).close();
+}
+
+const PASSIVE_RELATIONSHIP_TYPES: ReadonlySet<string> = new Set([
+  'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image',
+  'http://purl.oclc.org/ooxml/officeDocument/relationships/image',
+  'http://schemas.openxmlformats.org/officeDocument/2006/relationships/printerSettings',
+  'http://purl.oclc.org/ooxml/officeDocument/relationships/printerSettings',
+  'http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing',
+  'http://purl.oclc.org/ooxml/officeDocument/relationships/vmlDrawing',
+  'http://schemas.openxmlformats.org/officeDocument/2006/relationships/font',
+  'http://purl.oclc.org/ooxml/officeDocument/relationships/font',
+  'http://schemas.openxmlformats.org/officeDocument/2006/relationships/audio',
+  'http://purl.oclc.org/ooxml/officeDocument/relationships/audio',
+  'http://schemas.openxmlformats.org/officeDocument/2006/relationships/video',
+  'http://purl.oclc.org/ooxml/officeDocument/relationships/video',
+  'http://schemas.microsoft.com/office/2007/relationships/media',
+  'http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail',
+  'http://schemas.microsoft.com/office/2007/relationships/hdphoto',
+]);
+
+const PASSIVE_MEDIA_TYPES = ['image/', 'audio/', 'video/', 'font/'] as const;
+
+const PASSIVE_CONTENT_TYPES: ReadonlySet<string> = new Set([
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.printersettings',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.printersettings',
+  'application/vnd.openxmlformats-officedocument.presentationml.printersettings',
+  'application/vnd.openxmlformats-officedocument.vmldrawing',
+  'application/vnd.openxmlformats-officedocument.obfuscatedfont',
+  'application/x-fontdata',
+  'application/x-font-ttf',
+]);
+
+function relationshipTypesByPart(parts: ReadonlyMap<string, Buffer>): Map<string, string[]> {
+  const types = new Map<string, string[]>();
+  for (const [name, bytes] of parts) {
+    if (!name.endsWith('.rels')) continue;
+    const parser = new SaxesParser({ xmlns: true });
+    parser.on('opentag', (tag) => {
+      if (tag.local !== 'Relationship') return;
+      const attributes = Object.fromEntries(
+        Object.values(tag.attributes).map((attribute) => [attribute.local, attribute.value]),
+      );
+      const target = attributes['Target'];
+      if (!target || asciiLowercase((attributes['TargetMode'] ?? '').trim()) === 'external') return;
+      // The engine may open the target without percent-decoding it, or match names ignoring case.
+      const candidates = new Set(
+        [relationshipTargetPart(name, target), resolvedPartName(name, target)].map(asciiLowercase),
+      );
+      for (const part of candidates) {
+        const known = types.get(part);
+        if (known) known.push(attributes['Type'] ?? '');
+        else types.set(part, [attributes['Type'] ?? '']);
+      }
+    });
+    parser.write(bytes.toString('utf8')).close();
+  }
+  return types;
+}
+
+function declaredContentTypes(parts: ReadonlyMap<string, Buffer>): (part: string) => string[] {
+  const defaults = new Map<string, string>();
+  const decodedOverrides = new Map<string, string>();
+  const writtenOverrides = new Map<string, string>();
+  const parser = new SaxesParser({ xmlns: true });
+  parser.on('opentag', (tag) => {
+    const attributes = Object.fromEntries(
+      Object.values(tag.attributes).map((attribute) => [attribute.local, attribute.value]),
+    );
+    const contentType = asciiLowercase((attributes['ContentType'] ?? '').split(';')[0]!.trim());
+    const partName = attributes['PartName'];
+    if (tag.local === 'Default' && attributes['Extension'] !== undefined)
+      defaults.set(asciiLowercase(attributes['Extension']), contentType);
+    if (tag.local === 'Override' && partName !== undefined) {
+      decodedOverrides.set(
+        asciiLowercase(decodeURIComponent(partName).replace(/^\//, '')),
+        contentType,
+      );
+      writtenOverrides.set(asciiLowercase(partName.replace(/^\//, '')), contentType);
+    }
+  });
+  parser.write(parts.get('[Content_Types].xml')?.toString('utf8') ?? '').close();
+  return (part) => {
+    const lower = asciiLowercase(part);
+    const extension = posix.extname(lower).slice(1);
+    const fallback = (extension ? defaults.get(extension) : undefined) ?? '';
+    return [decodedOverrides.get(lower) ?? fallback, writtenOverrides.get(lower) ?? fallback];
+  };
+}
+
+function isPassiveContentType(contentType: string): boolean {
+  return (
+    PASSIVE_MEDIA_TYPES.some((mediaType) => contentType.startsWith(mediaType)) ||
+    PASSIVE_CONTENT_TYPES.has(contentType)
+  );
+}
+
+function assertEnginePartsPass(
+  parts: ReadonlyMap<string, Buffer>,
+  check: (xml: string) => void,
+  uncheckable: () => ManagedOfficeProcessingError,
+): void {
+  let relationshipTypes: Map<string, string[]>;
+  let contentTypes: (part: string) => string[];
+  try {
+    relationshipTypes = relationshipTypesByPart(parts);
+    contentTypes = declaredContentTypes(parts);
+  } catch {
+    throw uncheckable();
+  }
+  for (const [name, bytes] of parts) {
+    const inbound = relationshipTypes.get(asciiLowercase(name)) ?? [];
+    if (
+      contentTypes(name).every(isPassiveContentType) &&
+      inbound.every((type) => PASSIVE_RELATIONSHIP_TYPES.has(type))
+    ) {
+      if (inbound.length) continue;
+      try {
+        check(bytes.toString('utf8'));
+      } catch (error) {
+        if (error instanceof ManagedOfficeProcessingError) throw error;
+      }
+      continue;
+    }
+    if (asciiLowercase(name).endsWith('.bin')) throw uncheckable();
+    try {
+      check(bytes.toString('utf8'));
+    } catch (error) {
+      if (error instanceof ManagedOfficeProcessingError) throw error;
+      throw uncheckable();
+    }
+  }
+}
+
+function hasExternalRelationship(xml: string): boolean {
+  let external = false;
+  const parser = new SaxesParser({ xmlns: true });
+  parser.on('opentag', (tag) => {
+    for (const attribute of Object.values(tag.attributes)) {
+      if (
+        asciiLowercase(attribute.local) === 'targetmode' &&
+        asciiLowercase(attribute.value.trim()) === 'external'
+      )
+        external = true;
+    }
+  });
+  parser.write(xml).close();
+  return external;
+}
+
+function externalWorkbookFormula(): ManagedOfficeProcessingError {
+  return new ManagedOfficeProcessingError('External workbook formulas are not supported.');
+}
+
+const FUTURE_FUNCTION_PREFIX = /^(?:_xl(?:fn|ws|pm)\.)+/i;
+const STRUCTURED_REFERENCE_ITEM = String.raw`\[[^\[\]'"]*\]`;
+const STRUCTURED_REFERENCE = new RegExp(
+  String.raw`^(?:${STRUCTURED_REFERENCE_ITEM}|\[@${STRUCTURED_REFERENCE_ITEM}(?:\s*:\s*${STRUCTURED_REFERENCE_ITEM})?\]|\[\s*${STRUCTURED_REFERENCE_ITEM}(?:\s*[,:]\s*${STRUCTURED_REFERENCE_ITEM})*\s*\])$`,
+);
+const UNQUALIFIED_STRUCTURED_REFERENCE = /^\[[@#[]/;
+const STRUCTURED_REFERENCE_FOLLOWER = /[\s+\-*/^&=<>,:)%]/;
+
+function bracketGroupEnd(formula: string, start: number): number {
+  let depth = 0;
+  for (let index = start; index < formula.length; index += 1) {
+    if (formula[index] === '[') depth += 1;
+    else if (formula[index] === ']') {
+      depth -= 1;
+      if (depth === 0) return index + 1;
+    }
+  }
+  throw externalWorkbookFormula();
+}
+
+function assertNoOtherWorkbookReference(formula: string): void {
+  let index = 0;
+  while (index < formula.length) {
+    const character = formula[index]!;
+    if (character === '"') index = quotedEnd(formula, index);
+    else if (character === "'") {
+      const end = quotedEnd(formula, index);
+      if (/[[\]]/.test(formula.slice(index, end))) throw externalWorkbookFormula();
+      index = end;
+    } else if (character === '[') {
+      const end = bracketGroupEnd(formula, index);
+      const group = formula.slice(index, end);
+      const following = formula[end];
+      const qualified = index > 0 && IDENTIFIER_PART.test(formula[index - 1]!);
+      const thisWorkbookName = !qualified && group === '[0]' && following === '!';
+      const structured =
+        STRUCTURED_REFERENCE.test(group) &&
+        (qualified || UNQUALIFIED_STRUCTURED_REFERENCE.test(group)) &&
+        (following === undefined || STRUCTURED_REFERENCE_FOLLOWER.test(following));
+      if (!thisWorkbookName && !structured) throw externalWorkbookFormula();
+      index = end;
+    } else if (character === ']') throw externalWorkbookFormula();
+    else index += 1;
+  }
+}
+
+function assertRecalculableFormula(formula: string, allowed: ReadonlySet<string>): void {
+  if (/\\|\||:\/\/|file:/i.test(formula)) throw externalWorkbookFormula();
+  assertNoOtherWorkbookReference(formula);
+  for (const name of calledFunctionNames(formula)) {
+    if (!allowed.has(name.replace(FUTURE_FUNCTION_PREFIX, '').toUpperCase()))
+      throw new ManagedOfficeProcessingError(
+        'This workbook function is not supported by the managed recalculation contract.',
+      );
+  }
+}
+
 export async function recalculateManagedWorkbook(
   data: Buffer,
   executor: E2BExecutor,
@@ -317,29 +764,12 @@ export async function recalculateManagedWorkbook(
     );
   const parts = await officeParts(data, 'xl/workbook.xml');
   for (const [name, bytes] of parts) {
-    if (name.endsWith('.rels') && /TargetMode=["']External["']/i.test(bytes.toString('utf8')))
+    if (name.endsWith('.rels') && hasExternalRelationship(bytes.toString('utf8')))
       throw new ManagedOfficeProcessingError(
         'External workbook links are not supported during recalculation.',
       );
-    if (name === 'xl/workbook.xml' && /<definedName\b/.test(bytes.toString('utf8')))
-      throw new ManagedOfficeProcessingError(
-        'Named workbook expressions are unsupported during managed recalculation.',
-      );
-    if (/^xl\/worksheets\//.test(name)) {
-      const formulas = [...bytes.toString('utf8').matchAll(/<f\b[^>]*>([\s\S]*?)<\/f>/g)];
-      for (const formula of formulas) {
-        const body = decodedXmlText(formula[1] ?? '');
-        if (/\[|\]|\\|\||:\/\/|file:/i.test(body))
-          throw new ManagedOfficeProcessingError('External workbook formulas are not supported.');
-        for (const call of body.matchAll(/([A-Za-z_][A-Za-z0-9_.]*)\s*\(/g)) {
-          if (!RECALCULABLE_FUNCTIONS.has(call[1]!.toUpperCase()))
-            throw new ManagedOfficeProcessingError(
-              'This workbook function is not supported by the managed recalculation contract.',
-            );
-        }
-      }
-    }
   }
+  assertEnginePartsPass(parts, assertRecalculablePart, uncheckablePart);
   signal?.throwIfAborted();
   const directory = `/home/user/.agi-office-${randomUUID()}`;
   const input = `${directory}/input.xlsx`;
@@ -348,20 +778,19 @@ export async function recalculateManagedWorkbook(
   for (const [name, bytes] of parts) {
     let xml = bytes.toString('utf8');
     if (/^xl\/worksheets\/[^/]+\.xml$/.test(name)) {
-      const resultRanges = formulaResultRanges(xml);
-      xml = xml.replace(CELL_ELEMENT, (cell) =>
-        /<f\b/.test(cell) || withinRanges(cellAddress(cell), resultRanges)
-          ? cell.replace(/<v\b[^>]*>[\s\S]*?<\/v>/g, '')
-          : cell,
-      );
+      const calculated = calculatedCell(xml);
+      xml = replaceCells(xml, (cell) => (calculated(cell) ? removeCachedValues(cell) : cell));
       calculationInput.file(name, xml);
     } else if (name === 'xl/workbook.xml') {
-      xml = xml
-        .replace(/<calcPr\b[^>]*(?:\/>|>[\s\S]*?<\/calcPr>)/g, '')
-        .replace(
-          '</workbook>',
-          '<calcPr calcMode="auto" fullCalcOnLoad="1" forceFullCalc="1"/></workbook>',
-        );
+      xml = replaceMarkupElements(xml, 'calcPr', () => '');
+      const root = firstMarkupElement(xml, 'workbook');
+      if (root && !root.selfClosing) {
+        const closeStart = root.bodyStart + root.body.length;
+        xml =
+          xml.slice(0, closeStart) +
+          '<calcPr calcMode="auto" fullCalcOnLoad="1" forceFullCalc="1"/>' +
+          xml.slice(closeStart);
+      }
       calculationInput.file(name, xml);
     } else calculationInput.file(name, bytes);
   }
@@ -422,9 +851,9 @@ export async function recalculateManagedWorkbook(
     for (const [name, bytes] of parts) {
       if (!/^xl\/worksheets\/[^/]+\.xml$/.test(name)) continue;
       const cells = cellsByAddress(calculatedParts.get(name)?.toString('utf8') ?? '');
-      for (const cell of bytes.toString('utf8').matchAll(CELL_ELEMENT)) {
-        const address = cellAddress(cell[0]);
-        if (address && /<f\b/.test(cell[0]) && !/<f\b/.test(cells.get(address) ?? ''))
+      for (const cell of cellElements(bytes.toString('utf8'))) {
+        const address = cellAddress(cell);
+        if (address && hasFormula(cell) && !hasFormula(cells.get(address) ?? ''))
           throw new ManagedOfficeProcessingError('Recalculation removed a workbook formula.');
       }
     }
@@ -434,12 +863,11 @@ export async function recalculateManagedWorkbook(
       if (/^xl\/worksheets\/[^/]+\.xml$/.test(name)) {
         const original = bytes.toString('utf8');
         const caches = cellsByAddress(calculatedParts.get(name)!.toString('utf8'));
-        const resultRanges = formulaResultRanges(original);
+        const calculated = calculatedCell(original);
         content = Buffer.from(
-          original.replace(CELL_ELEMENT, (cell) => {
+          replaceCells(original, (cell) => {
             const address = cellAddress(cell);
-            if (!address || !(/<f\b/.test(cell) || withinRanges(address, resultRanges)))
-              return cell;
+            if (!address || !calculated(cell)) return cell;
             return withEvaluatedCache(cell, caches.get(address) ?? '');
           }),
         );
@@ -470,6 +898,74 @@ export async function recalculateManagedWorkbook(
   return calculated;
 }
 
+const ACTIVE_FIELD_KEYWORDS = [
+  'ddeauto',
+  'dde',
+  'includetext',
+  'includepicture',
+  'database',
+  'link',
+] as const;
+
+function isWordCharacter(character: string | undefined): boolean {
+  return character !== undefined && /\w/.test(character);
+}
+
+function isActiveInstruction(instruction: string): boolean {
+  const text = asciiLowercase(instruction);
+  return ACTIVE_FIELD_KEYWORDS.some((keyword) => {
+    for (
+      let start = text.indexOf(keyword);
+      start !== -1;
+      start = text.indexOf(keyword, start + 1)
+    ) {
+      if (!isWordCharacter(text[start - 1]) && !isWordCharacter(text[start + keyword.length]))
+        return true;
+    }
+    return false;
+  });
+}
+
+function hasActiveField(xml: string): boolean {
+  const fields: string[][] = [['']];
+  let capturing = 0;
+  let active = false;
+  // A nested field's result is spliced into its parent's instruction, so read the parent both joined and split there.
+  const check = (segments: string[]) => {
+    if (isActiveInstruction(segments.join('')) || isActiveInstruction(segments.join(' ')))
+      active = true;
+  };
+  const parser = new SaxesParser({ xmlns: true });
+  const append = (value: string) => {
+    if (!capturing) return;
+    const segments = fields[fields.length - 1]!;
+    segments.push(segments.pop()! + value);
+  };
+  parser.on('opentag', (tag) => {
+    if (tag.local === 'instrText') capturing += 1;
+    for (const attribute of Object.values(tag.attributes)) {
+      if (tag.local === 'fldSimple' && attribute.local === 'instr') check([attribute.value]);
+      if (tag.local !== 'fldChar' || attribute.local !== 'fldCharType') continue;
+      if (attribute.value === 'begin') {
+        fields[fields.length - 1]!.push('');
+        fields.push(['']);
+      } else if (attribute.value === 'separate' || attribute.value === 'end') {
+        check(fields[fields.length - 1]!);
+        if (attribute.value === 'end' && fields.length > 1) fields.pop();
+        else fields[fields.length - 1] = [''];
+      }
+    }
+  });
+  parser.on('text', append);
+  parser.on('cdata', append);
+  parser.on('closetag', (tag) => {
+    if (tag.local === 'instrText') capturing -= 1;
+  });
+  parser.write(xml).close();
+  for (const segments of fields) check(segments);
+  return active;
+}
+
 export async function renderManagedOfficeFile(
   data: Buffer,
   format: 'docx' | 'xlsx' | 'pptx' | 'pdf',
@@ -497,37 +993,26 @@ export async function renderManagedOfficeFile(
               : 'ppt/presentation.xml',
         );
   for (const [name, bytes] of parts) {
-    if (name.endsWith('.rels') && /TargetMode=["']External["']/i.test(bytes.toString('utf8')))
+    if (name.endsWith('.rels') && hasExternalRelationship(bytes.toString('utf8')))
       throw new ManagedOfficeProcessingError(
         'External document links must be removed before managed rendering.',
       );
-    if (name.endsWith('.xml')) {
-      const instructions: string[] = [];
-      let capturing = false;
-      const fields = new SaxesParser({ xmlns: true });
-      fields.on('opentag', (tag) => {
-        if (tag.local === 'instrText') capturing = true;
-        if (tag.local === 'fldSimple') {
-          for (const attribute of Object.values(tag.attributes)) {
-            if (attribute.local === 'instr') instructions.push(attribute.value);
-          }
-        }
-      });
-      fields.on('text', (value) => {
-        if (capturing) instructions.push(value);
-      });
-      fields.on('closetag', (tag) => {
-        if (tag.local === 'instrText') capturing = false;
-      });
-      fields.write(bytes.toString('utf8')).close();
-      if (
-        /\b(?:DDEAUTO|DDE|INCLUDETEXT|INCLUDEPICTURE|DATABASE|LINK)\b/i.test(instructions.join(' '))
-      )
-        throw new ManagedOfficeProcessingError(
-          'Active document fields are unsupported during rendering.',
-        );
-    }
   }
+  if (format !== 'pdf')
+    assertEnginePartsPass(
+      parts,
+      (xml) => {
+        if (hasActiveField(xml))
+          throw new ManagedOfficeProcessingError(
+            'Active document fields are unsupported during rendering.',
+          );
+        if (format === 'xlsx') assertRecalculablePart(xml);
+      },
+      () =>
+        new ManagedOfficeProcessingError(
+          'The document contains a part that cannot be checked before rendering.',
+        ),
+    );
   signal?.throwIfAborted();
   const directory = `/home/user/.agi-office-${randomUUID()}`;
   let created = false;
@@ -657,14 +1142,65 @@ export interface ManagedWorkbookSource {
 function decodedXmlText(xml: string): string {
   let text = '';
   const parser = new SaxesParser({ xmlns: false });
-  parser.on('text', (value) => {
+  const append = (value: string) => {
     text += value;
-  });
+  };
+  parser.on('text', append);
+  parser.on('cdata', append);
   parser.write(`<text>${xml}</text>`).close();
   return text;
 }
 
-const CELL_ELEMENT = /<c\b[^>]*?(?:\/>|>[\s\S]*?<\/c>)/g;
+function hasFormula(cell: string): boolean {
+  return cell.includes('<f') && firstMarkupElement(cell, 'f') !== undefined;
+}
+
+function* cellElements(sheetXml: string): Generator<string, void> {
+  for (const cell of markupElements(sheetXml, 'c')) yield sheetXml.slice(cell.start, cell.end);
+}
+
+function replaceCells(sheetXml: string, replace: (cell: string) => string): string {
+  return replaceMarkupElements(sheetXml, 'c', (cell) =>
+    replace(sheetXml.slice(cell.start, cell.end)),
+  );
+}
+
+function removeCachedValues(cell: string): string {
+  return replaceMarkupElements(cell, 'v', () => '');
+}
+
+const IDENTIFIER_START = /[A-Za-z_]/;
+const IDENTIFIER_PART = /[A-Za-z0-9_.]/;
+
+function quotedEnd(formula: string, start: number): number {
+  const quote = formula[start]!;
+  for (let index = start + 1; index < formula.length; index += 1) {
+    if (formula[index] !== quote) continue;
+    if (formula[index + 1] !== quote) return index + 1;
+    index += 1;
+  }
+  throw uncheckableFormula();
+}
+
+function calledFunctionNames(formula: string): string[] {
+  const names: string[] = [];
+  let index = 0;
+  while (index < formula.length) {
+    const character = formula[index]!;
+    if (character === '"' || character === "'") {
+      if (index > 0 && IDENTIFIER_PART.test(formula[index - 1]!)) throw uncheckableFormula();
+      index = quotedEnd(formula, index);
+      if (character === "'" && formula[index] !== '!') throw uncheckableFormula();
+    } else if (IDENTIFIER_START.test(character)) {
+      const start = index;
+      while (index < formula.length && IDENTIFIER_PART.test(formula[index]!)) index += 1;
+      const name = formula.slice(start, index);
+      while (/\s/.test(formula[index] ?? '')) index += 1;
+      if (formula[index] === '(') names.push(name);
+    } else index += 1;
+  }
+  return names;
+}
 
 interface CellRange {
   firstColumn: number;
@@ -673,15 +1209,19 @@ interface CellRange {
   lastRow: number;
 }
 
+function cellAttribute(cell: string, name: string): string | undefined {
+  return attributeValue(cell, name, '<c'.length);
+}
+
 function cellAddress(cell: string): string | undefined {
-  return cell.match(/^<c\b[^>]*\br=["']([^"']+)["']/)?.[1];
+  return cellAttribute(cell, 'r') || undefined;
 }
 
 function cellsByAddress(sheetXml: string): Map<string, string> {
   const cells = new Map<string, string>();
-  for (const cell of sheetXml.matchAll(CELL_ELEMENT)) {
-    const address = cellAddress(cell[0]);
-    if (address) cells.set(address, cell[0]);
+  for (const cell of cellElements(sheetXml)) {
+    const address = cellAddress(cell);
+    if (address) cells.set(address, cell);
   }
   return cells;
 }
@@ -694,51 +1234,126 @@ function cellCoordinates(address: string): { column: number; row: number } | nul
   return { column, row: Number(parts[2]) };
 }
 
-function formulaResultRanges(sheetXml: string): CellRange[] {
-  const ranges: CellRange[] = [];
-  for (const cell of sheetXml.matchAll(CELL_ELEMENT)) {
-    const attributes = cell[0].match(/<f\b([^>]*)>/)?.[1];
-    if (attributes === undefined || !/\bt=["'](?:array|dataTable)["']/.test(attributes)) continue;
-    const reference = attributes.match(/\bref=["']([^"']+)["']/)?.[1] ?? cellAddress(cell[0]) ?? '';
-    const [from, to = from] = reference.split(':');
-    const first = cellCoordinates(from ?? '');
-    const last = cellCoordinates(to ?? '');
-    if (!first || !last)
-      throw new ManagedOfficeProcessingError('An array formula result range is unreadable.');
-    ranges.push({
-      firstColumn: Math.min(first.column, last.column),
-      firstRow: Math.min(first.row, last.row),
-      lastColumn: Math.max(first.column, last.column),
-      lastRow: Math.max(first.row, last.row),
-    });
-  }
-  return ranges;
+function formulaResultRange(cell: string, address: string | undefined): CellRange | undefined {
+  const formula = firstOpenTag(cell, 'f');
+  if (formula === undefined) return undefined;
+  const kind = attributeValue(formula, 't', '<f'.length);
+  if (kind !== 'array' && kind !== 'dataTable') return undefined;
+  const reference = attributeValue(formula, 'ref', '<f'.length) || address || '';
+  const [from, to = from] = reference.split(':');
+  const first = cellCoordinates(from ?? '');
+  const last = cellCoordinates(to ?? '');
+  if (!first || !last)
+    throw new ManagedOfficeProcessingError('An array formula result range is unreadable.');
+  return {
+    firstColumn: Math.min(first.column, last.column),
+    firstRow: Math.min(first.row, last.row),
+    lastColumn: Math.max(first.column, last.column),
+    lastRow: Math.max(first.row, last.row),
+  };
 }
 
-function withinRanges(address: string | undefined, ranges: readonly CellRange[]): boolean {
-  const coordinates = address ? cellCoordinates(address) : null;
-  if (!coordinates) return false;
-  return ranges.some(
-    (range) =>
-      coordinates.column >= range.firstColumn &&
-      coordinates.column <= range.lastColumn &&
-      coordinates.row >= range.firstRow &&
-      coordinates.row <= range.lastRow,
+function byNumber(a: number, b: number): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+function addressesWithinRanges(
+  addresses: readonly string[],
+  ranges: readonly CellRange[],
+): Set<string> {
+  const within = new Set<string>();
+  if (!ranges.length) return within;
+  const points = addresses
+    .map((address) => ({ address, coordinates: cellCoordinates(address) }))
+    .filter((point) => point.coordinates !== null)
+    .sort((a, b) => byNumber(a.coordinates!.row, b.coordinates!.row));
+  const opening = [...ranges].sort((a, b) => byNumber(a.firstRow, b.firstRow));
+  const closing = [...ranges].sort((a, b) => byNumber(a.lastRow, b.lastRow));
+  let columns = 1;
+  for (const range of ranges) columns = Math.max(columns, range.lastColumn + 1);
+  const tree = new Int32Array(columns + 1);
+  const add = (column: number, change: number) => {
+    for (let index = column; index <= columns; index += index & -index)
+      tree[index] = (tree[index] ?? 0) + change;
+  };
+  const cover = (range: CellRange, change: number) => {
+    add(range.firstColumn, change);
+    add(range.lastColumn + 1, -change);
+  };
+  const coverage = (column: number) => {
+    let total = 0;
+    for (let index = Math.min(column, columns); index > 0; index -= index & -index)
+      total += tree[index] ?? 0;
+    return total;
+  };
+  let opened = 0;
+  let closed = 0;
+  for (const { address, coordinates } of points) {
+    const { column, row } = coordinates!;
+    while (opened < opening.length && opening[opened]!.firstRow <= row)
+      cover(opening[opened++]!, 1);
+    while (closed < closing.length && closing[closed]!.lastRow < row) cover(closing[closed++]!, -1);
+    if (coverage(column) > 0) within.add(address);
+  }
+  return within;
+}
+
+function arrayResultAddresses(sheetXml: string, queried: readonly string[] = []): Set<string> {
+  const addresses = [...queried];
+  const ranges: CellRange[] = [];
+  for (const cell of cellElements(sheetXml)) {
+    const address = cellAddress(cell);
+    if (address) addresses.push(address);
+    const range = formulaResultRange(cell, address);
+    if (range) ranges.push(range);
+  }
+  return addressesWithinRanges(addresses, ranges);
+}
+
+function calculatedCell(sheetXml: string): (cell: string) => boolean {
+  const results = arrayResultAddresses(sheetXml);
+  return (cell) => {
+    if (hasFormula(cell)) return true;
+    const address = cellAddress(cell);
+    return address !== undefined && results.has(address);
+  };
+}
+
+const FORMULA_KIND_ATTRIBUTES: ReadonlySet<string> = new Set(['t', 'ref', 'si']);
+
+function hasFormulaKindAttribute(formulaTag: string): boolean {
+  return xmlAttributes(formulaTag, '<f'.length).some(({ name }) =>
+    FORMULA_KIND_ATTRIBUTES.has(name.slice(name.indexOf(':') + 1)),
   );
+}
+
+function plainOpeningTag(tag: string): string {
+  let end = tag.length - 1;
+  if (tag[end - 1] === '/') end -= 1;
+  while (end > 0 && /\s/.test(tag[end - 1] ?? '')) end -= 1;
+  return `${tag.slice(0, end)}>`;
+}
+
+function withoutTypeAttribute(openingTag: string): string {
+  const type = xmlAttributes(openingTag, '<c'.length).find((attribute) => attribute.name === 't');
+  if (!type) return openingTag;
+  let start = type.start;
+  while (start > 0 && /\s/.test(openingTag[start - 1] ?? '')) start -= 1;
+  return openingTag.slice(0, start) + openingTag.slice(type.end);
 }
 
 function withEvaluatedCache(cell: string, evaluated: string): string {
   const value = evaluated.match(/<v>([^<]+)<\/v>/)?.[0];
-  const type = evaluated.match(/^<c\b[^>]*\bt=["']([^"']+)["']/)?.[1];
+  const type = cellAttribute(evaluated, 't') || undefined;
   if (!value || (type && !['n', 'str', 'b'].includes(type)))
     throw new ManagedOfficeProcessingError('The evaluator returned an unsupported formula cache.');
   const closed = cell.endsWith('/>') ? `${cell.slice(0, -2).trimEnd()}></c>` : cell;
-  return closed
-    .replace(/^<c\b[^>]*>/, (open: string) =>
-      open.replace(/\s+t=["'][^"']*["']/, '').replace(/>$/, type ? ` t="${type}">` : '>'),
-    )
-    .replace(/<v\b[^>]*>[\s\S]*?<\/v>/g, '')
-    .replace(/<\/c>$/, value + '</c>');
+  const open = firstOpenTag(closed, 'c')!;
+  const opened =
+    withoutTypeAttribute(open).slice(0, -1) +
+    (type ? ` t="${type}">` : '>') +
+    closed.slice(open.length);
+  return removeCachedValues(opened).replace(/<\/c\s*>$/, (close) => value + close);
 }
 
 export async function editManagedWorkbook(
@@ -787,44 +1402,49 @@ export async function editManagedWorkbook(
   });
   parser.write(parts.get('xl/workbook.xml')!.toString('utf8')).close();
   const shared = [
-    ...(parts.get('xl/sharedStrings.xml')?.toString('utf8') ?? '').matchAll(
-      /<si\b[^>]*>([\s\S]*?)<\/si>/g,
-    ),
-  ].map((item) => decodedXmlText(item[1]!));
-  const touched = new Set<string>();
+    ...markupElements(parts.get('xl/sharedStrings.xml')?.toString('utf8') ?? '', 'si'),
+  ].map((item) => decodedXmlText(item.body));
+  const editsByPart = new Map<string, Map<string, ManagedWorkbookSource['edits'][number]>>();
   for (const edit of source.edits) {
     const part = sheets.get(edit.sheet);
     if (!part || !/^xl\/worksheets\/[^/]+\.xml$/.test(part) || !parts.has(part))
       throw new ManagedOfficeProcessingError(
         'The requested worksheet is unavailable or unsupported.',
       );
-    const key = `${part}:${edit.cell}`;
-    if (touched.has(key))
+    const edits = editsByPart.get(part) ?? new Map();
+    if (edits.has(edit.cell))
       throw new ManagedOfficeProcessingError('Each workbook cell may be edited once per request.');
-    touched.add(key);
-    let found = false;
+    editsByPart.set(part, edits.set(edit.cell, edit));
+  }
+  for (const [part, edits] of editsByPart) {
+    const found = new Set<string>();
     const sheetXml = parts.get(part)!.toString('utf8');
-    if (withinRanges(edit.cell, formulaResultRanges(sheetXml)))
+    const arrayResults = arrayResultAddresses(sheetXml, [...edits.keys()]);
+    if ([...edits.keys()].some((cell) => arrayResults.has(cell)))
       throw new ManagedOfficeProcessingError(
         'Shared, array and spill formula edits are unsupported.',
       );
-    const xml = sheetXml.replace(CELL_ELEMENT, (cell) => {
-      if (cellAddress(cell) !== edit.cell) return cell;
-      if (/<f\b[^>]*\b(?:t|ref|si)=/.test(cell))
+    const xml = replaceCells(sheetXml, (cell) => {
+      const address = cellAddress(cell);
+      const edit = address === undefined ? undefined : edits.get(address);
+      if (!edit) return cell;
+      if ([...openTags(cell, 'f')].some(hasFormulaKindAttribute))
         throw new ManagedOfficeProcessingError(
           'Shared, array and spill formula edits are unsupported.',
         );
-      found = true;
-      const formula = cell.match(/<f\b[^>]*>([\s\S]*?)<\/f>/)?.[1];
-      const value = cell.match(/<v>([\s\S]*?)<\/v>/)?.[1] ?? '';
-      const type = cell.match(/^<c\b[^>]*\bt=["']([^"']+)["']/)?.[1];
+      found.add(edit.cell);
+      const formulaElement = firstMarkupElement(cell, 'f');
+      const formula =
+        formulaElement && !formulaElement.selfClosing ? formulaElement.body : undefined;
+      const value = firstMarkupElement(cell, 'v')?.body ?? '';
+      const type = cellAttribute(cell, 't');
       const current =
         formula !== undefined
           ? '=' + decodedXmlText(formula)
           : type === 's'
             ? shared[Number(value)]
             : type === 'inlineStr'
-              ? decodedXmlText(cell.match(/<is>([\s\S]*?)<\/is>/)?.[1] ?? '')
+              ? decodedXmlText(firstMarkupElement(cell, 'is')?.body ?? '')
               : type === 'str'
                 ? decodedXmlText(value)
                 : Number(value);
@@ -832,10 +1452,7 @@ export async function editManagedWorkbook(
         throw new ManagedOfficeProcessingError(
           'A workbook cell differs from the expected value; refresh the source before editing.',
         );
-      const open = cell
-        .match(/^<c\b[^>]*?\/?>/)![0]
-        .replace(/\s*\/?>$/, '>')
-        .replace(/\s+t=["'][^"']*["']/, '');
+      const open = withoutTypeAttribute(plainOpeningTag(firstOpenTag(cell, 'c')!));
       if (typeof edit.value === 'number') return open + `<v>${edit.value}</v></c>`;
       if (edit.value.startsWith('=')) return open + `<f>${xmlText(edit.value.slice(1))}</f></c>`;
       return (
@@ -843,7 +1460,7 @@ export async function editManagedWorkbook(
         `<is><t xml:space="preserve">${xmlText(edit.value)}</t></is></c>`
       );
     });
-    if (!found)
+    if (found.size !== edits.size)
       throw new ManagedOfficeProcessingError(
         'Inserting new workbook cells is unsupported; select an existing explicit cell.',
       );

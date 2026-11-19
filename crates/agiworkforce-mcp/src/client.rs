@@ -34,6 +34,8 @@ const INPUT_REQUIRED_METHODS: &[&str] = &["tools/call", "prompts/get", "resource
 const MAX_INPUT_ROUNDS: usize = 10;
 const STATE_ONLY_PACING: Duration = Duration::from_millis(250);
 const STDIO_SUBSCRIPTION_ID: &str = "subscription-1";
+const MAX_PRINTED_VERSION_CHARS: usize = 80;
+const MAX_PRINTED_VERSION_LIST_CHARS: usize = 400;
 
 #[derive(Debug, Clone, Default)]
 pub struct NegotiatedServer {
@@ -379,7 +381,7 @@ impl McpClient {
             server: self.server_name.clone(),
             detail: format!(
                 "server supports MCP {}, which this client does not implement (supported: {})",
-                versions.join(", "),
+                crate::security::printable(&versions.join(", "), MAX_PRINTED_VERSION_LIST_CHARS),
                 supported_versions().join(", ")
             ),
         }
@@ -451,7 +453,8 @@ impl McpClient {
             return Err(ProtocolMismatch {
                 server: self.server_name.clone(),
                 detail: format!(
-                    "server selected MCP protocol revision '{version}', which this client does not implement (supported: {})",
+                    "server selected MCP protocol revision '{}', which this client does not implement (supported: {})",
+                    crate::security::printable(&version, MAX_PRINTED_VERSION_CHARS),
                     supported_versions().join(", ")
                 ),
             }
@@ -869,7 +872,9 @@ impl McpClient {
                 }
                 Err(reason) => {
                     tracing::warn!(
-                        "[{server}] excluding tool '{name}' from tools/list: invalid x-mcp-header declaration, {reason}"
+                        "[{server}] excluding tool '{}' from tools/list: invalid x-mcp-header declaration, {}",
+                        crate::security::printable(name, 200),
+                        crate::security::printable(&reason, 1000)
                     );
                     false
                 }

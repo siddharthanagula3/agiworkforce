@@ -8,6 +8,60 @@ const disabledReactRules = Object.fromEntries(
   Object.keys(reactPlugin.rules ?? {}).map((ruleName) => [`react/${ruleName}`, 'off']),
 );
 
+const TEST_FILE_IGNORES = ['**/*.{test,spec}.{ts,tsx}', '**/__tests__/**'];
+
+const SOURCE_RESTRICTIONS = [
+  {
+    selector:
+      'NewExpression[callee.name="Blob"] ObjectExpression Property[key.name="type"][value.value=/text\\/html/]',
+    message:
+      "Use 'text/plain' or 'application/octet-stream' for Blob; text/html in a Blob allows XSS via download attribute.",
+  },
+  {
+    selector:
+      'CallExpression:matches([callee.name=/^discover(OAuthServerInfo|AuthorizationServerMetadata)$/], [callee.property.name=/^discover(OAuthServerInfo|AuthorizationServerMetadata)$/]):not(:has(ObjectExpression > Property[key.name="fetchFn"]))',
+    message:
+      'Pass { fetchFn: mcpOAuthFetch } (or a wrapper around it) inline to MCP OAuth discovery; without fetchFn the SDK uses the global fetch and bypasses the egress guard.',
+  },
+  {
+    // esquery compares String(value), so a missing `name` equals "undefined": test `type` first.
+    selector:
+      'CallExpression:matches([callee.name="discoverOAuthProtectedResourceMetadata"], [callee.property.name="discoverOAuthProtectedResourceMetadata"]):matches(:not([arguments.2]), [arguments.2.type="Identifier"][arguments.2.name="undefined"], [arguments.2.type="UnaryExpression"][arguments.2.operator="void"])',
+    message:
+      'Pass mcpOAuthFetch (or a wrapper around it) as the third argument of discoverOAuthProtectedResourceMetadata; without it the SDK uses the global fetch and bypasses the egress guard.',
+  },
+  {
+    selector:
+      'ImportSpecifier[imported.name=/^discover(OAuthServerInfo|AuthorizationServerMetadata|OAuthProtectedResourceMetadata)$/]:not([local.name=/^discover(OAuthServerInfo|AuthorizationServerMetadata|OAuthProtectedResourceMetadata)$/])',
+    message:
+      'Import MCP OAuth discovery functions under their own names so the fetchFn lint check can see every call.',
+  },
+];
+
+const INNER_HTML_RESTRICTION = {
+  // llm-guardrail-allow: rule selector/message naming the banned sink
+  selector: "JSXAttribute[name.name='dangerouslySetInnerHTML']",
+  message:
+    // llm-guardrail-allow: rule message naming the banned sink
+    'dangerouslySetInnerHTML can introduce XSS. Sanitize via DOMPurify (@shared/utils/html-sanitizer) and add a per-line eslint-disable with WEB-37 justification, or render via JSX.',
+};
+
+const AUTH_GET_SESSION_RESTRICTION = {
+  selector: "CallExpression[callee.property.name='getSession'][callee.object.property.name='auth']",
+  message:
+    'Page/layout auth gates must use auth.getUser() (re-validates the JWT) not auth.getSession() (only reads cookies), WEB-18.',
+};
+
+const MATH_RANDOM_RESTRICTION = {
+  selector: "CallExpression[callee.object.name='Math'][callee.property.name='random']",
+  message:
+    'Use secureToken() / secureRandomFloat() / secureFilenameSegment() from @/lib/secure-random, Math.random is not cryptographically secure (WEB-13).',
+};
+
+function restrictSyntax(...restrictions) {
+  return { 'no-restricted-syntax': ['error', ...SOURCE_RESTRICTIONS, ...restrictions] };
+}
+
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
@@ -83,37 +137,29 @@ const eslintConfig = defineConfig([
       'react/no-unescaped-entities': 'off',
     },
   },
+  // A later block's no-restricted-syntax options replace an earlier block's, so
+  // every block below lists each ban that applies to its files, overlaps included.
+  {
+    files: [
+      'app/**/*.{ts,tsx}',
+      'components/**/*.{ts,tsx}',
+      'features/**/*.{ts,tsx}',
+      'lib/**/*.{ts,tsx}',
+      'shared/**/*.{ts,tsx}',
+    ],
+    ignores: TEST_FILE_IGNORES,
+    rules: restrictSyntax(),
+  },
   // eslint-disable comments with WEB-37 justification.
   {
     files: ['features/**/*.{ts,tsx}', 'components/**/*.{ts,tsx}'],
-    ignores: ['shared/utils/html-sanitizer.ts', '**/*.{test,spec}.{ts,tsx}', '**/__tests__/**'],
-    rules: {
-      'no-restricted-syntax': [
-        'error',
-        {
-          // llm-guardrail-allow: rule selector/message naming the banned sink
-          selector: "JSXAttribute[name.name='dangerouslySetInnerHTML']",
-          message:
-            // llm-guardrail-allow: rule message naming the banned sink
-            'dangerouslySetInnerHTML can introduce XSS. Sanitize via DOMPurify (@shared/utils/html-sanitizer) and add a per-line eslint-disable with WEB-37 justification, or render via JSX.',
-        },
-      ],
-    },
+    ignores: ['shared/utils/html-sanitizer.ts', ...TEST_FILE_IGNORES],
+    rules: restrictSyntax(INNER_HTML_RESTRICTION),
   },
   {
     files: ['app/**/layout.tsx', 'app/**/page.tsx'],
-    ignores: ['**/*.{test,spec}.{ts,tsx}', '**/__tests__/**'],
-    rules: {
-      'no-restricted-syntax': [
-        'error',
-        {
-          selector:
-            "CallExpression[callee.property.name='getSession'][callee.object.property.name='auth']",
-          message:
-            'Page/layout auth gates must use auth.getUser() (re-validates the JWT) not auth.getSession() (only reads cookies), WEB-18.',
-        },
-      ],
-    },
+    ignores: TEST_FILE_IGNORES,
+    rules: restrictSyntax(AUTH_GET_SESSION_RESTRICTION),
   },
   // local-only client queue IDs) carry per-line eslint-disable comments with
   {
@@ -123,38 +169,18 @@ const eslintConfig = defineConfig([
       'lib/**/*.{ts,tsx}',
       'app/api/**/*.{ts,tsx}',
     ],
-    ignores: ['**/*.{test,spec}.{ts,tsx}', '**/__tests__/**', 'lib/secure-random.ts'],
-    rules: {
-      'no-restricted-syntax': [
-        'error',
-        {
-          selector: "CallExpression[callee.object.name='Math'][callee.property.name='random']",
-          message:
-            'Use secureToken() / secureRandomFloat() / secureFilenameSegment() from @/lib/secure-random, Math.random is not cryptographically secure (WEB-13).',
-        },
-      ],
-    },
+    ignores: [...TEST_FILE_IGNORES, 'lib/secure-random.ts'],
+    rules: restrictSyntax(MATH_RANDOM_RESTRICTION),
   },
   {
-    files: [
-      'app/**/*.{ts,tsx}',
-      'components/**/*.{ts,tsx}',
-      'features/**/*.{ts,tsx}',
-      'lib/**/*.{ts,tsx}',
-      'shared/**/*.{ts,tsx}',
-    ],
-    ignores: ['**/*.{test,spec}.{ts,tsx}', '**/__tests__/**'],
-    rules: {
-      'no-restricted-syntax': [
-        'error',
-        {
-          selector:
-            'NewExpression[callee.name="Blob"] ObjectExpression Property[key.name="type"][value.value=/text\\/html/]',
-          message:
-            "Use 'text/plain' or 'application/octet-stream' for Blob; text/html in a Blob allows XSS via download attribute.",
-        },
-      ],
-    },
+    files: ['features/chat/services/**/*.{ts,tsx}', 'features/chat/hooks/**/*.{ts,tsx}'],
+    ignores: TEST_FILE_IGNORES,
+    rules: restrictSyntax(INNER_HTML_RESTRICTION, MATH_RANDOM_RESTRICTION),
+  },
+  {
+    files: ['app/api/**/layout.tsx', 'app/api/**/page.tsx'],
+    ignores: TEST_FILE_IGNORES,
+    rules: restrictSyntax(AUTH_GET_SESSION_RESTRICTION, MATH_RANDOM_RESTRICTION),
   },
 ]);
 

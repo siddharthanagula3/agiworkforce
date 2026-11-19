@@ -1,7 +1,10 @@
 import { OTHER_CATEGORY, type DirectoryCategory } from '@/lib/connectors/directory/categorize';
+import { replaceMarkupTags } from '@/lib/markup-tags';
 
 export const MAX_DESCRIPTION_LENGTH = 120;
 export const MIN_TAGLINE_LENGTH = 20;
+const MAX_DESCRIPTION_SOURCE_LENGTH = 2_000;
+const MAX_MARKUP_SOURCE_LENGTH = 100_000;
 const MIN_SENTENCE_LENGTH = 20;
 const MIN_SENTENCE_WORDS = 4;
 const MIN_CLAUSE_CUT_LENGTH = 60;
@@ -12,7 +15,7 @@ const EM_DASH_CODE_POINT = 0x2014;
 const EN_DASH_CODE_POINT = 0x2013;
 const EM_DASH = String.fromCodePoint(EM_DASH_CODE_POINT);
 const DASH_LIKE_CLASS = `[${String.fromCodePoint(EN_DASH_CODE_POINT)}${EM_DASH}]`;
-const DASH_LIKE = new RegExp(`\\s*${DASH_LIKE_CLASS}\\s*`, 'gu');
+const DASH_LIKE = new RegExp(DASH_LIKE_CLASS, 'u');
 const DESCRIPTION_DASH_REPLACEMENT = ', ';
 const ABBREVIATIONS: ReadonlySet<string> = new Set([
   'e.g',
@@ -54,21 +57,26 @@ const CATEGORY_FALLBACK_PHRASES: Readonly<Record<DirectoryCategory, string | nul
   Other: null,
 };
 
-const MARKDOWN_IMAGE = /!\[[^\]]*\]\([^)]*\)/gu;
-const MARKDOWN_LINK = /\[([^\]]*)\]\([^)]*\)/gu;
-const MARKDOWN_AUTOLINK = /<https?:\/\/[^>]*>/gu;
+const MARKDOWN_IMAGE_OPENING = '![';
+const MARKDOWN_LINK_OPENING = '[';
+const MARKDOWN_LABEL_CLOSE = ']';
+const MARKDOWN_TARGET_OPEN = '(';
+const MARKDOWN_TARGET_CLOSE = ')';
 const CODE_FENCE = /```[\s\S]*?```/gu;
 const INLINE_CODE = /`([^`]*)`/gu;
-const HTML_TAG = /<\/?[a-zA-Z][^>]*>/gu;
+const MARKDOWN_AUTOLINK_OPENING = /<https?:\/\//gu;
+const HTML_TAG_OPENING = /<\/?[a-zA-Z]/gu;
+const MARKUP_REPLACEMENT = ' ';
 const EMPHASIS_MARKERS = /(\*{1,3}|_{1,3}|~{2})(?=\S)([^*_~]+?)(?<=\S)\1/gu;
-const LINE_PREFIX_NOISE = /^\s*(?:#{1,6}\s+|[-*+]\s+|\d+[.)]\s+|>\s*)/gmu;
+// The optional group keeps this linear: each line start consumes its whitespace run once.
+const LINE_PREFIX_NOISE = /^\s*(#{1,6}\s+|[-*+]\s+|\d+[.)]\s+|>\s*)?/gmu;
 const URL = /\b(?:https?:\/\/|www\.)\S+/giu;
 const EMOJI = /\p{Extended_Pictographic}|\uFE0F|\u200D|[\u{1F1E6}-\u{1F1FF}]/gu;
 const WHITESPACE_RUN = /\s+/gu;
 const NOISE_CLASS = `[\\s\\-${String.fromCodePoint(EN_DASH_CODE_POINT)}${EM_DASH}:;,|*_~"'\`([{]`;
 const LEADING_NOISE = new RegExp(`^${NOISE_CLASS}+`, 'u');
 const TRAILING_NOISE = new RegExp(`${NOISE_CLASS}+$`, 'u');
-const TRAILING_ELLIPSIS = /(?:\.{2,}|…)+$/u;
+const MIN_ELLIPSIS_DOTS = 2;
 const SENTENCE_TERMINATOR = /[.!?]/gu;
 const SENTENCE_BOUNDARY_FOLLOWER = /^\s+[\p{Lu}\p{N}"'([]/u;
 const CLAUSE_BOUNDARY = /[,;:]\s|\s\(/gu;
@@ -82,19 +90,61 @@ const NON_ALPHANUMERIC = /[^\p{L}\p{N}]/gu;
 function normalizeDashes(value: string): string {
   let result = value;
   for (const sequence of MOJIBAKE_EM_DASHES) result = result.split(sequence).join(EM_DASH);
-  return result.replace(DASH_LIKE, DESCRIPTION_DASH_REPLACEMENT);
+  const pieces = result.split(DASH_LIKE);
+  const last = pieces.length - 1;
+  return pieces
+    .map((piece, index) => {
+      const afterDash = index > 0 ? piece.trimStart() : piece;
+      return index < last ? afterDash.trimEnd() : afterDash;
+    })
+    .join(DESCRIPTION_DASH_REPLACEMENT);
 }
 
-function stripMarkup(value: string): string {
+function replaceMarkdownLinks(text: string, opening: string, keepLabel: boolean): string {
+  let out = '';
+  let cursor = 0;
+  let from = 0;
+  for (;;) {
+    const start = text.indexOf(opening, from);
+    if (start === -1) break;
+    const labelStart = start + opening.length;
+    const labelEnd = text.indexOf(MARKDOWN_LABEL_CLOSE, labelStart);
+    if (labelEnd === -1) break;
+    if (text[labelEnd + 1] !== MARKDOWN_TARGET_OPEN) {
+      from = labelEnd + 1;
+      continue;
+    }
+    const targetEnd = text.indexOf(MARKDOWN_TARGET_CLOSE, labelEnd + 2);
+    if (targetEnd === -1) break;
+    out += text.slice(cursor, start);
+    out += keepLabel ? text.slice(labelStart, labelEnd) : MARKUP_REPLACEMENT;
+    cursor = targetEnd + 1;
+    from = cursor;
+  }
+  return out + text.slice(cursor);
+}
+
+function stripBlockMarkup(value: string): string {
+  const withoutCode = value.replace(CODE_FENCE, MARKUP_REPLACEMENT);
+  const withoutImages = replaceMarkdownLinks(withoutCode, MARKDOWN_IMAGE_OPENING, false);
+  const withoutLinks = replaceMarkdownLinks(withoutImages, MARKDOWN_LINK_OPENING, true);
+  const withoutAutolinks = replaceMarkupTags(
+    withoutLinks,
+    MARKDOWN_AUTOLINK_OPENING,
+    MARKUP_REPLACEMENT,
+  );
+  return replaceMarkupTags(withoutAutolinks, HTML_TAG_OPENING, MARKUP_REPLACEMENT);
+}
+
+function dropLinePrefix(lineStart: string, prefix: string | undefined): string {
+  return prefix === undefined ? lineStart : '';
+}
+
+function stripInlineMarkup(value: string): string {
   return value
-    .replace(CODE_FENCE, ' ')
-    .replace(MARKDOWN_IMAGE, ' ')
-    .replace(MARKDOWN_LINK, '$1')
-    .replace(MARKDOWN_AUTOLINK, ' ')
-    .replace(HTML_TAG, ' ')
     .replace(INLINE_CODE, '$1')
     .replace(EMPHASIS_MARKERS, '$2')
-    .replace(LINE_PREFIX_NOISE, '')
+    .replace(LINE_PREFIX_NOISE, dropLinePrefix)
     .replace(URL, ' ')
     .replace(EMOJI, ' ')
     .replace(WHITESPACE_RUN, ' ')
@@ -169,8 +219,23 @@ function truncate(text: string): string {
   return `${window.slice(0, cut).replace(TRAILING_NOISE, '')}${ELLIPSIS}`;
 }
 
+function stripTrailingEllipsis(text: string): string {
+  let end = text.length;
+  while (end > 0) {
+    if (text[end - 1] === ELLIPSIS) {
+      end -= 1;
+      continue;
+    }
+    let dotsStart = end;
+    while (dotsStart > 0 && text[dotsStart - 1] === SENTENCE_END) dotsStart -= 1;
+    if (end - dotsStart < MIN_ELLIPSIS_DOTS) break;
+    end = dotsStart;
+  }
+  return text.slice(0, end);
+}
+
 function finishSentence(text: string): string {
-  const trimmed = text.replace(TRAILING_ELLIPSIS, '').replace(TRAILING_NOISE, '');
+  const trimmed = stripTrailingEllipsis(text).replace(TRAILING_NOISE, '');
   if (!trimmed) return '';
   if (TERMINAL_PUNCTUATION.test(trimmed) || CLOSING_BRACKET_END.test(trimmed)) return trimmed;
   return `${trimmed}${SENTENCE_END}`;
@@ -191,9 +256,12 @@ function isScaffold(raw: string): boolean {
   return SCAFFOLD_DESCRIPTIONS.has(raw.trim().toLowerCase()) || STRUCTURED_PAYLOAD_START.test(raw);
 }
 
-export function summarizeDescription(raw: string, name: string, category: string): string {
-  if (isScaffold(raw)) return fallbackDescription(name, category);
-  const cleaned = stripMarkup(normalizeDashes(raw)).replace(LEADING_NOISE, '');
+export function summarizeDescription(source: string, name: string, category: string): string {
+  const capped = source.slice(0, MAX_MARKUP_SOURCE_LENGTH);
+  if (isScaffold(capped)) return fallbackDescription(name, category);
+  const cleaned = stripInlineMarkup(stripBlockMarkup(normalizeDashes(capped)))
+    .replace(LEADING_NOISE, '')
+    .slice(0, MAX_DESCRIPTION_SOURCE_LENGTH);
   const sentence = capitalize(finishSentence(leadingSentences(cleaned)));
   if (!sentence) return fallbackDescription(name, category);
   const bounded = truncate(sentence);

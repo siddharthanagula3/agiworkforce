@@ -194,8 +194,8 @@ function FormulaDisplay({
     return (
       <div
         className={cn('formula-katex overflow-x-auto', displayMode && 'py-2 text-center')}
-        // llm-guardrail-allow: KaTeX emits markup, so the string cannot be text-rendered; it is
-        // sanitized on the line below before it reaches the DOM.
+        // llm-guardrail-allow: KaTeX emits markup, sanitized below before it reaches the DOM.
+
         dangerouslySetInnerHTML={{
           __html: DOMPurify.sanitize(rendered, { USE_PROFILES: { html: true } }),
         }}

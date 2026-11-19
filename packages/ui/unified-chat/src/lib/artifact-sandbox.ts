@@ -13,24 +13,57 @@ const BASE_STYLES =
   `body { margin: 0; padding: 16px; font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; line-height: 1.5; color: CanvasText; background: Canvas; } ` +
   `</style>`;
 
-const META_TAG_PATTERN = /<meta\b[^>]*>/gi;
+export interface OpeningTag {
+  start: number;
+  end: number;
+}
+
+export function findOpeningTags(html: string, name: string, firstOnly = false): OpeningTag[] {
+  const opening = new RegExp(`<${name}\\b`, 'gi');
+  const tags: OpeningTag[] = [];
+  let cursor = 0;
+  for (let match = opening.exec(html); match; match = opening.exec(html)) {
+    const close = html.indexOf('>', match.index + match[0].length);
+    if (close === -1) break;
+    tags.push({ start: match.index, end: close + 1 });
+    if (firstOnly) break;
+    cursor = close + 1;
+    opening.lastIndex = cursor;
+  }
+  return tags;
+}
 
 function stripCspMetaTags(content: string): string {
-  return content.replace(META_TAG_PATTERN, (tag) => {
+  let out = '';
+  let cursor = 0;
+  for (const { start, end } of findOpeningTags(content, 'meta')) {
+    const tag = content.slice(start, end);
     const lower = tag.toLowerCase();
-    return lower.includes('http-equiv') && lower.includes('content-security-policy') ? '' : tag;
-  });
+    const isCsp = lower.includes('http-equiv') && lower.includes('content-security-policy');
+    out += content.slice(cursor, isCsp ? start : end);
+    cursor = end;
+  }
+  return out + content.slice(cursor);
+}
+
+export function insertAfterOpeningTag(
+  html: string,
+  name: string,
+  insertion: string,
+): string | null {
+  const [tag] = findOpeningTags(html, name, true);
+  return tag ? `${html.slice(0, tag.end)}${insertion}${html.slice(tag.end)}` : null;
 }
 
 function injectHeadContent(documentHtml: string, headContent: string): string {
-  if (/<head\b[^>]*>/i.test(documentHtml)) {
-    return documentHtml.replace(/<head\b[^>]*>/i, (match) => `${match}\n${headContent}`);
-  }
+  return (
+    insertAfterOpeningTag(documentHtml, 'head', `\n${headContent}`) ??
+    insertAfterOpeningTag(documentHtml, 'html', `<head>${headContent}</head>`) ??
+    wrapBareDocument(documentHtml, headContent)
+  );
+}
 
-  if (/<html\b[^>]*>/i.test(documentHtml)) {
-    return documentHtml.replace(/<html\b[^>]*>/i, (match) => `${match}<head>${headContent}</head>`);
-  }
-
+function wrapBareDocument(documentHtml: string, headContent: string): string {
   const doctype = documentHtml.match(/^\s*<!doctype[^>]*>/i)?.[0] ?? '';
   const body = documentHtml.slice(doctype.length);
   return `${doctype}<html><head>${headContent}</head><body>${body}</body></html>`;
@@ -57,13 +90,7 @@ export const __ARTIFACT_SANDBOX_INTERNALS = { CSP_META, BASE_STYLES };
 export const ARTIFACT_SANDBOX_SCHEME = 'artifact';
 
 export type ArtifactSandboxKind =
-  | 'html'
-  | 'react'
-  | 'svg'
-  | 'mermaid'
-  | 'markdown'
-  | 'text'
-  | 'code';
+  'html' | 'react' | 'svg' | 'mermaid' | 'markdown' | 'text' | 'code';
 
 export interface ArtifactRenderPayload {
   type: 'render';
@@ -116,8 +143,7 @@ function normalizeSandboxOrigin(raw: string): string | null {
 
 function tauriArtifactOrigin(): string | null {
   const internals = (globalThis as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ as
-    | { convertFileSrc?: (path: string, protocol?: string) => string }
-    | undefined;
+    { convertFileSrc?: (path: string, protocol?: string) => string } | undefined;
   if (typeof internals?.convertFileSrc !== 'function') return null;
   try {
     return normalizeSandboxOrigin(internals.convertFileSrc('', ARTIFACT_SANDBOX_SCHEME));

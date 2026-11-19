@@ -1,6 +1,8 @@
 import DOMPurify, { type Config as DOMPurifyConfig } from 'dompurify';
 import { buildArtifactCspContent } from '@agiworkforce/types';
 
+import { markupTagRanges } from '@/lib/markup-tags';
+
 export type SanitizeLevel = 'strict' | 'standard' | 'extended';
 
 const DEFAULT_ALLOWED_TAGS = [
@@ -376,8 +378,18 @@ function runSandboxDOMPurify(html: string, wholeDoc: boolean): string {
   }
 }
 
+const META_OPENING = /<meta/gi;
+const REFRESH_HTTP_EQUIV = /http-equiv\s*=\s*['"]?refresh/i;
+
 export function stripMetaRefreshFromSandboxHtml(html: string): string {
-  return html.replace(/<meta[^>]*http-equiv\s*=\s*['"]?refresh['"]?[^>]*>/gi, '');
+  let out = '';
+  let cursor = 0;
+  for (const { start, end } of markupTagRanges(html, META_OPENING)) {
+    if (!REFRESH_HTTP_EQUIV.test(html.slice(start, end))) continue;
+    out += html.slice(cursor, start);
+    cursor = end;
+  }
+  return out + html.slice(cursor);
 }
 
 export { ARTIFACT_SCRIPT_CDN_HOSTS } from '@agiworkforce/types';

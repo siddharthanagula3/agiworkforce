@@ -927,7 +927,7 @@ async fn every_websocket_reader_of_a_host_receives_its_live_events() {
             agiworkforce_app_server::WebSocketSecurity {
                 auth_token: Some("test-secret".to_string()),
                 allowed_origins: Vec::new(),
-                allow_query_token: false,
+                read_only_token: None,
                 allow_public_listen: false,
             },
             server_host,
@@ -1264,7 +1264,7 @@ async fn websocket_transport_carries_typed_approval_round_trips() {
             agiworkforce_app_server::WebSocketSecurity {
                 auth_token: Some("test-secret".to_string()),
                 allowed_origins: Vec::new(),
-                allow_query_token: false,
+                read_only_token: None,
                 allow_public_listen: false,
             },
             server_host,
@@ -2756,7 +2756,7 @@ async fn an_unauthenticated_websocket_never_reaches_the_account_surface() {
         agiworkforce_app_server::WebSocketSecurity {
             auth_token: Some("secret-token".to_string()),
             allowed_origins: Vec::new(),
-            allow_query_token: false,
+            read_only_token: None,
             allow_public_listen: false,
         },
         host,
@@ -2804,6 +2804,96 @@ async fn an_unauthenticated_websocket_never_reaches_the_account_surface() {
     server.abort();
 }
 
+async fn account_token_over(
+    upgrade: tokio_tungstenite::tungstenite::handshake::client::Request,
+) -> serde_json::Value {
+    let (mut socket, _) = tokio_tungstenite::connect_async(upgrade)
+        .await
+        .expect("credential-carrying upgrade is accepted");
+    socket
+        .send(Message::text(
+            serde_json::to_string(&initialize()).expect("initialize frame"),
+        ))
+        .await
+        .expect("send initialize");
+    let _ = socket.next().await.expect("handshake response");
+    socket
+        .send(Message::text(
+            serde_json::to_string(&request(2, method::ACCOUNT_TOKEN, serde_json::json!({})))
+                .expect("token frame"),
+        ))
+        .await
+        .expect("send account/token");
+    let raw = socket.next().await.expect("token response").expect("frame");
+    serde_json::from_str(raw.to_text().expect("text frame")).expect("json response")
+}
+
+#[tokio::test]
+async fn a_token_leaked_from_a_url_never_replays_as_the_owner() {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind loopback listener");
+    let addr = listener.local_addr().expect("listener address");
+    let server = tokio::spawn(agiworkforce_app_server::serve_developer_session_websocket(
+        listener,
+        agiworkforce_app_server::WebSocketSecurity {
+            auth_token: Some("owner-secret".to_string()),
+            read_only_token: Some("read-only-secret".to_string()),
+            ..Default::default()
+        },
+        Arc::new(SurfaceHost::new()),
+        capabilities(),
+    ));
+
+    assert!(
+        tokio_tungstenite::connect_async(format!("ws://{addr}/ws?token=owner-secret"))
+            .await
+            .is_err(),
+        "the owner token must never be accepted from a URL"
+    );
+
+    let from_url = account_token_over(
+        format!("ws://{addr}/ws?token=read-only-secret")
+            .into_client_request()
+            .expect("client request"),
+    )
+    .await;
+    assert!(from_url.get("result").is_none(), "{from_url}");
+    assert!(from_url.get("error").is_some(), "{from_url}");
+
+    for header in ["x-agi-app-server-token", "authorization"] {
+        let value = if header == "authorization" {
+            "Bearer read-only-secret"
+        } else {
+            "read-only-secret"
+        };
+        let mut replayed = format!("ws://{addr}/ws")
+            .into_client_request()
+            .expect("client request");
+        replayed
+            .headers_mut()
+            .insert(header, HeaderValue::from_static(value));
+        let response = account_token_over(replayed).await;
+        assert!(response.get("result").is_none(), "{header}: {response}");
+        assert!(response.get("error").is_some(), "{header}: {response}");
+    }
+
+    let mut owner = format!("ws://{addr}/ws")
+        .into_client_request()
+        .expect("client request");
+    owner.headers_mut().insert(
+        "authorization",
+        HeaderValue::from_static("Bearer owner-secret"),
+    );
+    let response = account_token_over(owner).await;
+    assert_eq!(
+        response["result"]["token"],
+        serde_json::json!("fixture-token")
+    );
+
+    server.abort();
+}
+
 #[tokio::test]
 async fn the_library_refuses_a_public_bind_whatever_the_caller_checked() {
     let outcome = tokio::time::timeout(
@@ -2813,7 +2903,7 @@ async fn the_library_refuses_a_public_bind_whatever_the_caller_checked() {
             agiworkforce_app_server::WebSocketSecurity {
                 auth_token: Some("secret-token".to_string()),
                 allowed_origins: Vec::new(),
-                allow_query_token: false,
+                read_only_token: None,
                 allow_public_listen: false,
             },
             Arc::new(SurfaceHost::new()),

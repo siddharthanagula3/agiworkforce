@@ -4,7 +4,11 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { execFileSync } from 'node:child_process';
-import { gitIgnoredPaths, resolveContextFile } from '../data/contextExclusion';
+import {
+  gitIgnoredPaths,
+  resolveContextFile,
+  settingsWithholdReason,
+} from '../data/contextExclusion';
 import {
   buildContextAttachment,
   captureEditorContext,
@@ -240,5 +244,113 @@ describe('context exclusion at editor and submission boundaries', () => {
     const submitted = await withholdGitIgnoredContext(raw);
 
     expect(submitted.contextFiles).toEqual([target]);
+  });
+
+  describe('files.exclude globs from the workspace settings', () => {
+    function excludedBy(glob: string, relativePath: string): boolean {
+      const previous = vi.mocked(vscode.workspace.getConfiguration).getMockImplementation();
+      vi.mocked(vscode.workspace.getConfiguration).mockImplementation(
+        (section?: string) =>
+          ({
+            get: (key: string) =>
+              section === 'files' && key === 'exclude' ? { [glob]: true } : {},
+          }) as unknown as vscode.WorkspaceConfiguration,
+      );
+      try {
+        return settingsWithholdReason(path.join(root, relativePath)) === 'excluded';
+      } finally {
+        if (previous !== undefined) {
+          vi.mocked(vscode.workspace.getConfiguration).mockImplementation(previous);
+        }
+      }
+    }
+
+    it.each([
+      ['**/node_modules', 'node_modules', true],
+      ['**/node_modules', 'a/b/node_modules', true],
+      ['**/node_modules', 'a/node_modules_x', false],
+      ['**/*.{log,tmp}', 'logs/server.log', true],
+      ['**/*.{log,tmp}', 'server.tmp', true],
+      ['**/*.{log,tmp}', 'server.txt', false],
+      ['build/**', 'build/out/x.js', true],
+      ['build/**', 'src/build/x', false],
+      ['src/*.ts', 'src/a.ts', true],
+      ['src/*.ts', 'src/a/b.ts', false],
+      ['[ab].txt', 'a.txt', true],
+      ['[ab].txt', 'c.txt', false],
+      ['[a-c]x', 'bx', true],
+      ['a**b', 'a/b', false],
+      ['a**b', 'axxb', true],
+      ['x/**/y', 'x/y', true],
+      ['x/**/y', 'x/a/b/y', true],
+      ['file?.log', 'file1.log', true],
+      ['file?.log', 'file/.log', false],
+      ['{a,b}/{c,d}', 'b/c', true],
+      ['{a,b}/{c,d}', 'b/e', false],
+      ['a.b', 'aXb', false],
+    ])('keeps the meaning of %s for %s', (glob, relativePath, expected) => {
+      expect(excludedBy(glob, relativePath)).toBe(expected);
+    });
+
+    it('answers a hostile glob in time proportional to its length', () => {
+      const started = performance.now();
+      expect(excludedBy(`${'*a'.repeat(17)}b`, 'a'.repeat(34))).toBe(false);
+      expect(performance.now() - started).toBeLessThan(2_000);
+    });
+
+    it.each([
+      ['**/*.[0-9][0-9]', 'logs/app.12', true],
+      ['**/*.[0-9][0-9]', 'logs/app.1x', false],
+      ['**/[一-鿿]*', 'docs/中文.md', true],
+      ['**/[一-鿿]*', 'docs/notes.md', false],
+      ['**/[a-zA-Z0-9]*', 'src/app.ts', true],
+      ['**/[a-zA-Z0-9]*', '_x', false],
+      ['[!a]*', 'b.ts', true],
+      ['[!a]*', 'app.ts', false],
+      ['[^a]*', 'app.ts', false],
+      ['[!]', '\n', true],
+      [`${'**/'.repeat(7)}*.log`, 'a/b/c.log', true],
+      [`${'**/'.repeat(7)}*.log`, 'a/b/c.txt', false],
+      ['{a,b}'.repeat(7), 'abababa', true],
+      ['{a,b}'.repeat(7), 'abababc', false],
+      ['?.txt', '\u{1F600}.txt', true],
+      ['?.txt', '\u{1F600}\u{1F600}.txt', false],
+      ['x/**/y', 'x/a\nb/y', true],
+      ['**/secrets/**', 'a\nb/secrets/key', true],
+      ['[][]', 'src/app.ts', false],
+      ['[]x[]', 'x', false],
+      ['**/{[][],*.log}', 'logs/server.log', true],
+      ['**/{[][],*.log}', 'src/app.ts', false],
+      ['[]*[]', 'src/app.ts', false],
+      ['[](?<n>x)[y]', 'src/app.ts', false],
+      ['{a,[])(x[]}', 'src/app.ts', false],
+      ['{src,[]*[]}', 'src/app.ts', true],
+      ['{src,[]*[]}', 'lib/app.ts', false],
+    ])('matches %j against %j as the old expression did', (glob, relativePath, expected) => {
+      expect(excludedBy(glob, relativePath)).toBe(expected);
+    });
+
+    it.each([
+      ['K', 'K'],
+      ['s', 'ſ'],
+      ['K', 'k'],
+      ['[a-z]', 'K'],
+      ['É.txt', 'é.txt'],
+    ])('folds %j onto %j only where file names ignore case', (glob, relativePath) => {
+      expect(excludedBy(glob, relativePath)).toBe(process.platform !== 'linux');
+    });
+
+    it('keeps a negated class from matching a case variant where file names ignore case', () => {
+      expect(excludedBy('[!k]', 'K')).toBe(process.platform === 'linux');
+    });
+
+    it.each([
+      ['a glob past the length limit', 'x'.repeat(2_000)],
+      ['a group without its closing brace', '{a,b'],
+      ['a class range out of order', '[z-a]'],
+      ['a class that starts with a closing bracket', '[]a]'],
+    ])('withholds the file rather than guessing when it meets %s', (_name, glob) => {
+      expect(excludedBy(glob, 'src/app.ts')).toBe(true);
+    });
   });
 });

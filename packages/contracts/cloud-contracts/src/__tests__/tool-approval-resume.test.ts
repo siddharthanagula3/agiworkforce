@@ -9,6 +9,8 @@ import {
   ToolApprovalResumeErrorResponseSchema,
   TOOL_APPROVAL_GUIDANCE_MAX_LENGTH,
   TOOL_CALL_ID_MAX_LENGTH,
+  MAX_TOOL_INPUT_RESPONSES_SERIALIZED_LENGTH,
+  ToolInputResponseSchema,
 } from '../tool-approval-resume';
 
 describe('CloudToolApprovalProjectionSchema', () => {
@@ -250,5 +252,36 @@ describe('readToolApprovalReview', () => {
         approval_scopes: ['once'],
       }),
     ).toBeUndefined();
+  });
+});
+
+describe('ToolInputResponseSchema size bound', () => {
+  const response = (input_responses: Record<string, unknown>) => ({
+    tool_call_id: 'call_1',
+    input_responses,
+  });
+  const deepArrays = (depth: number) =>
+    JSON.parse(`${'['.repeat(depth)}${']'.repeat(depth)}`) as unknown;
+
+  it('accepts ordinary responses and refuses ones past the size limit', () => {
+    expect(
+      ToolInputResponseSchema.safeParse(response({ answer: 'yes', n: [1, { a: 2 }] })).success,
+    ).toBe(true);
+    expect(
+      ToolInputResponseSchema.safeParse(
+        response({ pad: 'x'.repeat(MAX_TOOL_INPUT_RESPONSES_SERIALIZED_LENGTH) }),
+      ).success,
+    ).toBe(false);
+  });
+
+  it('refuses nested responses instead of throwing', () => {
+    for (const depth of [33, 32_000]) {
+      expect(() =>
+        ToolInputResponseSchema.safeParse(response({ a: deepArrays(depth) })),
+      ).not.toThrow();
+      expect(ToolInputResponseSchema.safeParse(response({ a: deepArrays(depth) })).success).toBe(
+        false,
+      );
+    }
   });
 });

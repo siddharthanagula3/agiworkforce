@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   countPorcelainStatus,
   GIT_OPERATION_PROBES,
-  globToRegExp,
+  compileGlob,
   grepLines,
   isDetachedHead,
   isSkippedDirectory,
@@ -15,18 +15,18 @@ import {
 
 describe('workspace file semantics', () => {
   it('keeps a single star inside one path segment and lets a double star cross', () => {
-    expect(globToRegExp('*.ts').test('index.ts')).toBe(true);
-    expect(globToRegExp('*.ts').test('src/index.ts')).toBe(false);
-    expect(globToRegExp('**/*.ts').test('src/nested/deep.ts')).toBe(true);
+    expect(compileGlob('*.ts')('index.ts')).toBe(true);
+    expect(compileGlob('*.ts')('src/index.ts')).toBe(false);
+    expect(compileGlob('**/*.ts')('src/nested/deep.ts')).toBe(true);
     expect(matchesGlob('src/**', 'src\\nested\\a.ts')).toBe(true);
   });
 
   it('escapes regex metacharacters rather than honouring them', () => {
-    expect(globToRegExp('a+b.txt').test('a+b.txt')).toBe(true);
-    expect(globToRegExp('a+b.txt').test('aab.txt')).toBe(false);
-    expect(globToRegExp('file.(1)').test('file.(1)')).toBe(true);
-    expect(globToRegExp('a?.ts').test('ab.ts')).toBe(true);
-    expect(globToRegExp('a?.ts').test('abc.ts')).toBe(false);
+    expect(compileGlob('a+b.txt')('a+b.txt')).toBe(true);
+    expect(compileGlob('a+b.txt')('aab.txt')).toBe(false);
+    expect(compileGlob('file.(1)')('file.(1)')).toBe(true);
+    expect(compileGlob('a?.ts')('ab.ts')).toBe(true);
+    expect(compileGlob('a?.ts')('abc.ts')).toBe(false);
   });
 
   it('calls a file binary on a NUL byte in its opening bytes', () => {

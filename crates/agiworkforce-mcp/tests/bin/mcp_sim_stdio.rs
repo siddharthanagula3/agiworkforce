@@ -99,7 +99,7 @@ fn main() {
                     };
                     stdout.write_all(&bytes[..4096]).unwrap();
                     stdout.flush().unwrap();
-                    writeln!(std::io::stderr(), "stdout frame prefix flushed").unwrap();
+                    eprintln!("stdout frame prefix flushed");
                     let _ = stdout.write_all(&bytes[4096..]);
                     let _ = stdout.flush();
                     continue;

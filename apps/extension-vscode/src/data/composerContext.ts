@@ -179,13 +179,49 @@ function terminalOutput(): ContextAttachment | undefined {
 }
 
 const HTML_BLOCK_TAGS = /<\/(?:p|div|li|h[1-6]|tr|section|article|header|footer)>|<br\s*\/?>/giu;
-const HTML_DROPPED = /<(script|style|noscript|svg)[\s\S]*?<\/\1>/giu;
+const HTML_DROPPED_OPEN = /<(script|style|noscript|svg)/giu;
+
+function dropElements(html: string): string {
+  const unclosed = new Set<string>();
+  let out = '';
+  let cursor = 0;
+  for (let match = HTML_DROPPED_OPEN.exec(html); match; match = HTML_DROPPED_OPEN.exec(html)) {
+    const name = (match[1] ?? '').toLowerCase();
+    if (unclosed.has(name) || match.index < cursor) continue;
+    const close = new RegExp(`</${name}>`, 'giu');
+    close.lastIndex = match.index + match[0].length;
+    const found = close.exec(html);
+    if (!found) {
+      unclosed.add(name);
+      continue;
+    }
+    out += `${html.slice(cursor, match.index)} `;
+    cursor = found.index + found[0].length;
+    HTML_DROPPED_OPEN.lastIndex = cursor;
+  }
+  HTML_DROPPED_OPEN.lastIndex = 0;
+  return out + html.slice(cursor);
+}
+
+function tagsToSpaces(html: string): string {
+  let out = '';
+  let cursor = 0;
+  for (let open = html.indexOf('<'); open !== -1; open = html.indexOf('<', cursor)) {
+    const close = html.indexOf('>', open + 1);
+    if (close === -1) break;
+    if (close === open + 1) {
+      out += html.slice(cursor, open + 1);
+      cursor = open + 1;
+      continue;
+    }
+    out += `${html.slice(cursor, open)} `;
+    cursor = close + 1;
+  }
+  return out + html.slice(cursor);
+}
 
 function pageText(html: string): string {
-  return html
-    .replace(HTML_DROPPED, ' ')
-    .replace(HTML_BLOCK_TAGS, '\n')
-    .replace(/<[^>]+>/gu, ' ')
+  return tagsToSpaces(dropElements(html).replace(HTML_BLOCK_TAGS, '\n'))
     .replace(/&nbsp;/gu, ' ')
     .replace(/&amp;/gu, '&')
     .replace(/&lt;/gu, '<')

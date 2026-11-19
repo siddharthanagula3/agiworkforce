@@ -14,6 +14,7 @@ pub const CLIENT_METADATA_DOCUMENT_PATH: &str = "/.well-known/oauth-client-metad
 const OAUTH_INTERACTIVE_TIMEOUT: Duration = Duration::from_secs(120);
 const CALLBACK_READ_TIMEOUT: Duration = Duration::from_secs(5);
 const CALLBACK_PATH: &str = "/callback";
+const MAX_PRINTED_URL_CHARS: usize = 8192;
 
 pub fn client_metadata_document_url(origin: &str, surface: &str) -> Option<String> {
     let parsed = reqwest::Url::parse(origin).ok()?;
@@ -51,20 +52,12 @@ async fn failure_detail(resp: reqwest::Response, what: &str) -> String {
 fn oauth_error_detail(body: &[u8]) -> Option<String> {
     let parsed: serde_json::Value = serde_json::from_slice(body).ok()?;
     let code = parsed.get("error")?.as_str()?;
-    let mut detail = clamp(code, 80);
+    let mut detail = security::printable(code, 80);
     if let Some(description) = parsed.get("error_description").and_then(|d| d.as_str()) {
         detail.push_str(": ");
-        detail.push_str(&clamp(description, 200));
+        detail.push_str(&security::printable(description, 200));
     }
     Some(detail)
-}
-
-fn clamp(text: &str, max_chars: usize) -> String {
-    let cleaned: String = text.chars().filter(|c| !c.is_control()).collect();
-    match cleaned.char_indices().nth(max_chars) {
-        Some((idx, _)) => format!("{}…", &cleaned[..idx]),
-        None => cleaned,
-    }
 }
 
 fn confidential_client_secret<'a>(
@@ -202,7 +195,23 @@ fn protected_resource_candidates(server_url: &str) -> Result<Vec<String>> {
     Ok(candidates)
 }
 
-pub async fn discover_authorization_server(issuer: &str, server_url: &str) -> Result<AsMetadata> {
+pub async fn discover_authorization_server(
+    issuer: &str,
+    server_url: &str,
+    overrides: &OAuthConfig,
+) -> Result<AsMetadata> {
+    let (metadata_url, meta) = fetch_authorization_server_metadata(issuer, server_url).await?;
+    canonical_metadata(meta, overrides)
+        .with_context(|| format!("authorization-server metadata at {metadata_url}"))
+}
+
+async fn fetch_authorization_server_metadata(
+    issuer: &str,
+    server_url: &str,
+) -> Result<(String, AsMetadata)> {
+    if issuer.chars().any(char::is_control) {
+        bail!("the protected-resource metadata names an issuer containing control characters");
+    }
     for metadata_url in authorization_server_candidates(issuer)? {
         let Some(body) =
             fetch_metadata(&metadata_url, server_url, "authorization-server metadata").await?
@@ -214,12 +223,54 @@ pub async fn discover_authorization_server(issuer: &str, server_url: &str) -> Re
         if meta.issuer != issuer {
             bail!(
                 "authorization-server metadata at {metadata_url} names issuer {} instead of {issuer}, refusing to use it",
-                meta.issuer
+                security::printable(&meta.issuer, 200)
             );
         }
-        return Ok(meta);
+        return Ok((metadata_url, meta));
     }
     bail!("no authorization-server metadata was found for {issuer}")
+}
+
+fn canonical_url(raw: &str, what: &str) -> Result<String> {
+    reqwest::Url::parse(raw)
+        .map(String::from)
+        .map_err(|e| anyhow!("{what} is not a valid URL: {e}"))
+}
+
+fn required_endpoint(
+    configured: Option<&str>,
+    advertised: &str,
+    config_key: &str,
+    field: &str,
+) -> Result<String> {
+    match configured {
+        Some(url) => canonical_url(url, config_key),
+        None => canonical_url(advertised, field),
+    }
+}
+
+fn optional_endpoint(advertised: Option<&str>) -> Option<String> {
+    reqwest::Url::parse(advertised?).ok().map(String::from)
+}
+
+fn canonical_metadata(meta: AsMetadata, overrides: &OAuthConfig) -> Result<AsMetadata> {
+    Ok(AsMetadata {
+        authorization_endpoint: required_endpoint(
+            overrides.authorize_url.as_deref(),
+            &meta.authorization_endpoint,
+            "[auth.authorize_url]",
+            "authorization_endpoint",
+        )?,
+        token_endpoint: required_endpoint(
+            overrides.token_url.as_deref(),
+            &meta.token_endpoint,
+            "[auth.token_url]",
+            "token_endpoint",
+        )?,
+        registration_endpoint: optional_endpoint(meta.registration_endpoint.as_deref()),
+        revocation_endpoint: optional_endpoint(meta.revocation_endpoint.as_deref()),
+        ..meta
+    })
 }
 
 fn authorization_server_candidates(issuer: &str) -> Result<Vec<String>> {
@@ -298,7 +349,8 @@ fn select_resource(server_url: &str, advertised: Option<&str>) -> Result<String>
         Ok(advertised.to_string())
     } else {
         bail!(
-            "protected-resource metadata names resource {advertised}, which does not cover {server_url}, refusing to use it"
+            "protected-resource metadata names resource {}, which does not cover {server_url}, refusing to use it",
+            security::printable(advertised, MAX_PRINTED_URL_CHARS)
         )
     }
 }
@@ -507,7 +559,7 @@ async fn choose_client(
     {
         eprintln!(
             "[mcp oauth] warning: failed to persist the client registration for {}: {e}",
-            meta.issuer
+            security::printable(&meta.issuer, 200)
         );
     }
     Ok(ChosenClient {
@@ -537,19 +589,11 @@ pub async fn start_pkce_flow(
     let pkce = generate_pkce();
     let state = generate_random_string(32);
 
-    let authorize_endpoint = flow
-        .config
-        .authorize_url
-        .as_deref()
-        .unwrap_or(&flow.metadata.authorization_endpoint);
+    let authorize_endpoint = flow.metadata.authorization_endpoint.as_str();
     security::validate_browser_endpoint(authorize_endpoint, flow.server_url)
         .with_context(|| format!("authorization endpoint {authorize_endpoint}"))?;
 
-    let token_url = flow
-        .config
-        .token_url
-        .as_deref()
-        .unwrap_or(&flow.metadata.token_endpoint);
+    let token_url = flow.metadata.token_endpoint.as_str();
     let client_secret = if flow.confidential {
         confidential_client_secret(flow.config, token_url)?
     } else {
@@ -573,8 +617,9 @@ pub async fn start_pkce_flow(
         );
     } else {
         eprintln!(
-            "\n  [mcp oauth] could not open browser for {}, copy this URL manually:\n  {authorize_url}\n",
-            flow.server_url
+            "\n  [mcp oauth] could not open browser for {}, copy this URL manually:\n  {}\n",
+            flow.server_url,
+            security::printable(&authorize_url, MAX_PRINTED_URL_CHARS)
         );
     }
 
@@ -716,6 +761,28 @@ fn revocation_endpoint_allowed(issuer: &str, endpoint: &str) -> bool {
         && security::enforce_same_origin(issuer, endpoint, "revocation endpoint").is_ok()
 }
 
+fn check_revocation_target(token: &OAuthToken, issuer: &str, endpoint: &str) -> Result<()> {
+    if !revocation_endpoint_allowed(issuer, endpoint) {
+        bail!(
+            "the advertised revocation endpoint is not an https address on the authorization server's own origin, so the token was not sent there"
+        );
+    }
+    if token.issuer.is_some() {
+        return Ok(());
+    }
+    let Some(token_url) = token.token_url.as_deref() else {
+        bail!(
+            "this sign-in records neither its authorization server nor its token endpoint, so the revocation endpoint the MCP server names now cannot be trusted and the token was not sent there"
+        );
+    };
+    if !revocation_endpoint_allowed(token_url, endpoint) {
+        bail!(
+            "this sign-in does not record its authorization server, and the revocation endpoint the MCP server names now is not on the origin of the token endpoint that issued the grant, so the token was not sent there"
+        );
+    }
+    Ok(())
+}
+
 pub async fn revoke_token(
     token: &OAuthToken,
     oauth_cfg: &OAuthConfig,
@@ -731,15 +798,12 @@ pub async fn revoke_token(
                 .ok_or_else(|| anyhow!("no authorization_servers in protected-resource metadata"))?
         }
     };
-    let metadata = discover_authorization_server(&issuer, server_url).await?;
-    let Some(revocation_url) = metadata.revocation_endpoint.as_deref() else {
+    let (_, metadata) = fetch_authorization_server_metadata(&issuer, server_url).await?;
+    let Some(revocation_url) = optional_endpoint(metadata.revocation_endpoint.as_deref()) else {
         return Ok(false);
     };
-    if !revocation_endpoint_allowed(&issuer, revocation_url) {
-        bail!(
-            "the advertised revocation endpoint is not an https address on the authorization server's own origin, so the token was not sent there"
-        );
-    }
+    let revocation_url = revocation_url.as_str();
+    check_revocation_target(token, &issuer, revocation_url)?;
     let client_id = token
         .client_id
         .as_deref()
@@ -995,7 +1059,8 @@ fn accept_authorization_response(
     }
     match response.iss.as_deref() {
         Some(iss) if iss != issuer => bail!(
-            "the authorization response names issuer {iss}, not {issuer}, refusing to continue (RFC 9207)"
+            "the authorization response names issuer {}, not {issuer}, refusing to continue (RFC 9207)",
+            security::printable(iss, 200)
         ),
         None if iss_required => bail!(
             "authorization server {issuer} promises an iss parameter but the response carried none, refusing to continue (RFC 9207)"
@@ -1004,10 +1069,11 @@ fn accept_authorization_response(
     }
     if let Some(error) = response.error {
         bail!(
-            "authorization server returned error: {error}{}",
+            "authorization server returned error: {}{}",
+            security::printable(&error, 80),
             response
                 .error_description
-                .map(|d| format!(", {d}"))
+                .map(|d| format!(", {}", security::printable(&d, 200)))
                 .unwrap_or_default()
         );
     }
@@ -1089,9 +1155,9 @@ pub async fn discover_token_endpoint(server_url: &str) -> Result<String> {
         .authorization_servers
         .first()
         .ok_or_else(|| anyhow!("no authorization_servers in protected-resource metadata"))?;
-    Ok(discover_authorization_server(issuer, server_url)
-        .await?
-        .token_endpoint)
+    let (metadata_url, metadata) = fetch_authorization_server_metadata(issuer, server_url).await?;
+    canonical_url(&metadata.token_endpoint, "token_endpoint")
+        .with_context(|| format!("authorization-server metadata at {metadata_url}"))
 }
 
 pub async fn perform_full_oauth(
@@ -1106,7 +1172,7 @@ pub async fn perform_full_oauth(
         .authorization_servers
         .first()
         .ok_or_else(|| anyhow!("no authorization_servers in protected-resource metadata"))?;
-    let metadata = discover_authorization_server(issuer, server_url).await?;
+    let metadata = discover_authorization_server(issuer, server_url, cfg).await?;
     require_pkce_s256(&metadata)?;
 
     let previous = hooks.token_store.get(server_url);
@@ -1261,6 +1327,39 @@ mod tests {
         assert!(msg.contains("user declined"));
     }
 
+    fn shows_no_terminal_controls(text: &str) -> bool {
+        !text.chars().any(|c| {
+            c.is_control() || matches!(c, '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}')
+        })
+    }
+
+    #[test]
+    fn callback_refusals_show_peer_text_without_terminal_controls() {
+        for line in [
+            "GET /callback?state=XYZ&iss=https%3A%2F%2Fevil%1B%5D52%3Bc%3Bx%07%E2%80%AE HTTP/1.1\r\n",
+            "GET /callback?state=XYZ&error=denied%1B%5B2J%0AApprove%3F&error_description=%1B%5D52%3Bc%3Bx%07%E2%80%AEspoof HTTP/1.1\r\n",
+        ] {
+            let response = parse_authorization_response(line).unwrap();
+            let err =
+                accept_authorization_response(response, "XYZ", "https://as.example.com", false)
+                    .unwrap_err();
+            let msg = format!("{err:#}");
+            assert!(shows_no_terminal_controls(&msg), "{msg:?}");
+        }
+    }
+
+    #[test]
+    fn a_resource_that_does_not_cover_the_server_is_named_without_terminal_controls() {
+        let err = select_resource(
+            "https://mcp.example.com/mcp",
+            Some("https://other.example.com/\u{1b}]52;c;x\u{07}\u{202E}"),
+        )
+        .unwrap_err();
+        let msg = format!("{err:#}");
+        assert!(msg.contains("does not cover"), "{msg}");
+        assert!(shows_no_terminal_controls(&msg), "{msg:?}");
+    }
+
     #[test]
     fn build_authorize_url_with_query_existing() {
         let u = build_authorize_url(
@@ -1316,6 +1415,131 @@ mod tests {
             "https://collector.evil.test/revoke"
         ));
         assert!(!revocation_endpoint_allowed(issuer, "not a url"));
+    }
+
+    #[test]
+    fn advertised_endpoints_are_kept_only_in_parsed_form() {
+        let mut meta = as_meta_with(
+            "https://as.example.com/authorize\u{1b}]52;c;x\u{07}",
+            "https://as.example.com/tok\u{1b}]52;c;cHduZWQ=\u{07}en",
+        );
+        meta.registration_endpoint = Some("https://as.example.com/reg\u{9b}31m".into());
+        meta.revocation_endpoint = Some("https://as.example.com/revoke\u{1b}[2J".into());
+        let meta = canonical_metadata(meta, &OAuthConfig::default()).expect("parseable endpoints");
+        for url in [
+            meta.authorization_endpoint.as_str(),
+            meta.token_endpoint.as_str(),
+            meta.registration_endpoint.as_deref().unwrap(),
+            meta.revocation_endpoint.as_deref().unwrap(),
+        ] {
+            assert!(!url.chars().any(char::is_control), "{url:?}");
+            assert!(url.starts_with("https://as.example.com/"), "{url}");
+        }
+        assert_eq!(
+            meta.token_endpoint,
+            "https://as.example.com/tok%1B]52;c;cHduZWQ=%07en"
+        );
+        let record = token_response_to_record(
+            TokenResponseRaw {
+                access_token: "a".into(),
+                refresh_token: None,
+                token_type: None,
+                expires_in: None,
+                scope: None,
+            },
+            GrantContext {
+                token_url: &meta.token_endpoint,
+                client_id: "cid",
+                requested_scope: None,
+                issuer: Some("https://as.example.com"),
+                resource: None,
+            },
+        );
+        let err = format!(
+            "token refresh at {} returned 400",
+            record.token_url.as_deref().unwrap()
+        );
+        assert!(!err.chars().any(char::is_control), "{err:?}");
+    }
+
+    #[tokio::test]
+    async fn an_issuer_with_control_characters_is_refused_before_any_fetch() {
+        let err = discover_authorization_server(
+            "https://as.example.com/\u{1b}]52;c;x\u{07}",
+            "https://mcp.example.com/mcp",
+            &OAuthConfig::default(),
+        )
+        .await
+        .unwrap_err();
+        let msg = format!("{err:#}");
+        assert!(msg.contains("control characters"), "{msg}");
+        assert!(!msg.chars().any(char::is_control), "{msg:?}");
+    }
+
+    #[test]
+    fn an_issuerless_record_never_sends_credentials_to_a_server_named_foreign_issuer() {
+        let legacy = token_with("https://as.legit.example/oauth/token");
+        let err = check_revocation_target(
+            &legacy,
+            "https://as.attacker.example",
+            "https://as.attacker.example/revoke",
+        )
+        .expect_err("a rediscovered issuer must not receive the stored grant");
+        assert!(
+            format!("{err:#}").contains("not sent"),
+            "unexpected refusal: {err:#}"
+        );
+
+        let no_token_url = OAuthToken {
+            token_url: None,
+            ..legacy
+        };
+        assert!(
+            check_revocation_target(
+                &no_token_url,
+                "https://as.legit.example",
+                "https://as.legit.example/revoke",
+            )
+            .is_err(),
+            "with nothing pinned there is no origin to trust"
+        );
+    }
+
+    #[test]
+    fn an_issuerless_record_still_revokes_at_the_origin_that_issued_it() {
+        let legacy = token_with("https://as.legit.example/oauth/token");
+        assert!(
+            check_revocation_target(
+                &legacy,
+                "https://as.legit.example",
+                "https://as.legit.example/oauth/revoke",
+            )
+            .is_ok()
+        );
+    }
+
+    #[test]
+    fn a_record_with_a_stored_issuer_keeps_its_issuer_check() {
+        let pinned = OAuthToken {
+            issuer: Some("https://as.example.com".into()),
+            ..token_with("https://as.example.com/token")
+        };
+        assert!(
+            check_revocation_target(
+                &pinned,
+                "https://as.example.com",
+                "https://as.example.com/revoke"
+            )
+            .is_ok()
+        );
+        assert!(
+            check_revocation_target(
+                &pinned,
+                "https://as.example.com",
+                "https://collector.evil.test/revoke"
+            )
+            .is_err()
+        );
     }
 
     fn as_meta_with(authorization_endpoint: &str, token_endpoint: &str) -> AsMetadata {
@@ -1403,9 +1627,13 @@ mod tests {
 
     #[tokio::test]
     async fn discovery_refuses_a_loopback_authorization_server_named_by_a_remote_server() {
-        let err = discover_authorization_server("http://127.0.0.1:9200/", REMOTE_SERVER)
-            .await
-            .expect_err("a public MCP server must not point discovery at this machine");
+        let err = discover_authorization_server(
+            "http://127.0.0.1:9200/",
+            REMOTE_SERVER,
+            &OAuthConfig::default(),
+        )
+        .await
+        .expect_err("a public MCP server must not point discovery at this machine");
         let msg = format!("{err:#}");
         assert!(msg.contains("SSRF protection"), "unexpected error: {msg}");
         assert!(msg.contains("loopback"), "unexpected error: {msg}");
@@ -1447,6 +1675,176 @@ mod tests {
             .expect("loopback discovery must keep working");
         assert!(url.ends_with("/.well-known/oauth-protected-resource"));
         assert_eq!(prm.authorization_servers, vec!["http://127.0.0.1"]);
+    }
+
+    async fn serve_as_metadata(endpoints: serde_json::Value) -> String {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let issuer = format!("http://{}", listener.local_addr().unwrap());
+        let mut body = serde_json::json!({
+            "issuer": issuer,
+            "code_challenge_methods_supported": ["S256"]
+        });
+        for (key, value) in endpoints.as_object().expect("endpoint map") {
+            body[key] = value.clone();
+        }
+        let app = axum::Router::new().route(
+            "/.well-known/oauth-authorization-server",
+            axum::routing::get(move || {
+                let body = body.clone();
+                async move { axum::Json(body) }
+            }),
+        );
+        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        issuer
+    }
+
+    #[tokio::test]
+    async fn unparseable_optional_endpoints_are_ignored_rather_than_failing_discovery() {
+        let issuer = serve_as_metadata(serde_json::json!({
+            "authorization_endpoint": "https://as.example.com/authorize",
+            "token_endpoint": "https://as.example.com/token",
+            "registration_endpoint": "not a url",
+            "revocation_endpoint": ""
+        }))
+        .await;
+        let meta = discover_authorization_server(
+            &issuer,
+            &format!("{issuer}/mcp"),
+            &OAuthConfig::default(),
+        )
+        .await
+        .expect("an unusable optional endpoint must not block sign-in");
+        assert_eq!(meta.registration_endpoint, None);
+        assert_eq!(meta.revocation_endpoint, None);
+        assert_eq!(
+            meta.authorization_endpoint,
+            "https://as.example.com/authorize"
+        );
+        assert_eq!(meta.token_endpoint, "https://as.example.com/token");
+    }
+
+    #[tokio::test]
+    async fn a_malformed_required_endpoint_fails_discovery_unless_the_config_overrides_it() {
+        let issuer = serve_as_metadata(serde_json::json!({
+            "authorization_endpoint": "/authorize",
+            "token_endpoint": ""
+        }))
+        .await;
+        let server_url = format!("{issuer}/mcp");
+        let err = discover_authorization_server(&issuer, &server_url, &OAuthConfig::default())
+            .await
+            .expect_err("the flow cannot run without an authorization endpoint");
+        assert!(
+            format!("{err:#}").contains("authorization_endpoint is not a valid URL"),
+            "{err:#}"
+        );
+
+        let overrides = OAuthConfig {
+            authorize_url: Some("https://AS.example.com/authorize".into()),
+            token_url: Some("https://as.example.com/token".into()),
+            ..Default::default()
+        };
+        let meta = discover_authorization_server(&issuer, &server_url, &overrides)
+            .await
+            .expect("configured endpoints replace the malformed advertised ones");
+        assert_eq!(
+            meta.authorization_endpoint,
+            "https://as.example.com/authorize"
+        );
+        assert_eq!(meta.token_endpoint, "https://as.example.com/token");
+
+        let unparseable = OAuthConfig {
+            token_url: Some("not a url".into()),
+            ..overrides
+        };
+        let err = discover_authorization_server(&issuer, &server_url, &unparseable)
+            .await
+            .expect_err("an override is validated like an advertised endpoint");
+        assert!(
+            format!("{err:#}").contains("[auth.token_url] is not a valid URL"),
+            "{err:#}"
+        );
+    }
+
+    #[tokio::test]
+    async fn revocation_does_not_depend_on_endpoints_or_overrides_it_never_uses() {
+        let issuer = serve_as_metadata(serde_json::json!({
+            "authorization_endpoint": "/authorize",
+            "token_endpoint": ""
+        }))
+        .await;
+        let server_url = format!("{issuer}/mcp");
+        let token = OAuthToken {
+            issuer: Some(issuer.clone()),
+            ..token_from(&server_url, "https://as.example.com/token")
+        };
+        let stale_overrides = OAuthConfig {
+            authorize_url: Some("not a url either".into()),
+            token_url: Some("not a url".into()),
+            ..Default::default()
+        };
+        let revoked = revoke_token(&token, &stale_overrides, &server_url)
+            .await
+            .expect("revocation needs only the revocation endpoint");
+        assert!(!revoked, "no revocation endpoint is advertised");
+    }
+
+    async fn serve_resource_and_as_metadata(as_endpoints: serde_json::Value) -> String {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let origin = format!("http://{}", listener.local_addr().unwrap());
+        let resource = serde_json::json!({ "authorization_servers": [origin] });
+        let mut metadata = serde_json::json!({
+            "issuer": origin,
+            "code_challenge_methods_supported": ["S256"]
+        });
+        for (key, value) in as_endpoints.as_object().expect("endpoint map") {
+            metadata[key] = value.clone();
+        }
+        let app = axum::Router::new()
+            .route(
+                "/.well-known/oauth-protected-resource",
+                axum::routing::get(move || {
+                    let body = resource.clone();
+                    async move { axum::Json(body) }
+                }),
+            )
+            .route(
+                "/.well-known/oauth-authorization-server",
+                axum::routing::get(move || {
+                    let body = metadata.clone();
+                    async move { axum::Json(body) }
+                }),
+            );
+        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        format!("{origin}/")
+    }
+
+    #[tokio::test]
+    async fn token_endpoint_discovery_parses_only_the_token_endpoint() {
+        let server_url = serve_resource_and_as_metadata(serde_json::json!({
+            "authorization_endpoint": "/authorize",
+            "token_endpoint": "https://AS.example.com/token"
+        }))
+        .await;
+        assert_eq!(
+            discover_token_endpoint(&server_url)
+                .await
+                .expect("a malformed authorization endpoint is not needed here"),
+            "https://as.example.com/token"
+        );
+
+        let server_url = serve_resource_and_as_metadata(serde_json::json!({
+            "authorization_endpoint": "https://as.example.com/authorize",
+            "token_endpoint": "/token"
+        }))
+        .await;
+        let err = discover_token_endpoint(&server_url)
+            .await
+            .expect_err("the token endpoint is the one value this discovery returns");
+        assert!(
+            format!("{err:#}").contains("token_endpoint is not a valid URL"),
+            "{err:#}"
+        );
     }
 
     #[tokio::test]

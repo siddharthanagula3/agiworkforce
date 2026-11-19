@@ -1424,7 +1424,7 @@ async fn run_execution_loop(
                     let record = event.clone();
                     if let Err(err)= execute_trigger(event, &config, &hooks_config, &log_dir).await
                     {
-                        eprintln!("{} Trigger execution failed: {:#}", ts::danger("daemon:"), err);
+                        eprintln!("{}", trigger_failure_line(&err));
                         record_unfinished_trigger(&log_dir, &record, "error", &format!("{err:#}"));
                     }
                     in_flight.finish(&running);
@@ -1713,10 +1713,28 @@ async fn wait_for_shutdown_signal() {
 // Tests
 // ---------------------------------------------------------------------------
 
+fn trigger_failure_line(error: &anyhow::Error) -> String {
+    format!(
+        "{} Trigger execution failed: {}",
+        ts::danger("daemon:"),
+        crate::terminal_text::sanitize_terminal_text(&format!("{error:#}"))
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::hooks::{TriggerConfig, TriggerType, TriggersConfig};
+
+    #[test]
+    fn a_failed_trigger_line_carries_no_terminal_escape_from_the_provider() {
+        let failure = anyhow::anyhow!("upstream said \u{1b}]52;c;cm0gLXJmIC8=\u{7}\u{1b}[2Jpwned");
+        let line = trigger_failure_line(&failure);
+        assert!(!line.contains('\u{7}'), "{line:?}");
+        assert!(!line.contains("\u{1b}]"), "{line:?}");
+        assert!(!line.contains("\u{1b}[2J"), "{line:?}");
+        assert!(line.contains("pwned"), "{line:?}");
+    }
 
     fn turn(
         response: &str,

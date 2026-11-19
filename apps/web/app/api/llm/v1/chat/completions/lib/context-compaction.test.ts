@@ -101,6 +101,13 @@ interface StoredMessage {
   id: string;
   version: number;
   deletedAt: string | null;
+  role?: 'user' | 'assistant' | 'system';
+}
+
+function rolesTheStatementReads(sql: string): Set<string> | null {
+  const list = /\brole in \(([^)]*)\)/.exec(sql)?.[1];
+  if (list === undefined) return null;
+  return new Set(list.split(',').map((item) => item.trim().replace(/^'|'$/g, '')));
 }
 
 interface StoredConversation {
@@ -151,9 +158,12 @@ function makeDb(
       return [conversation];
     }
     if (/from web_messages/.test(text)) {
-      const visible = /deleted_at is null/.test(text)
-        ? messages.filter((message) => message.deletedAt === null)
-        : messages;
+      const roles = rolesTheStatementReads(text);
+      const visible = (
+        /deleted_at is null/.test(text)
+          ? messages.filter((message) => message.deletedAt === null)
+          : messages
+      ).filter((message) => roles === null || roles.has(message.role ?? 'user'));
       const limit = Number(params[1]);
       return visible
         .slice(0, limit)
@@ -435,6 +445,19 @@ describe('compactContextWindow', () => {
     expect(db.conversation.compaction_summary_through_message_id).toBe(
       `msg-${persistableDropped + 2}`,
     );
+  });
+
+  it('counts a stored system row that clients replay as an assistant turn inside the span', async () => {
+    const persistableDropped = droppedPersistableCount();
+    expect(persistableDropped).toBeGreaterThan(2);
+    const messages = storedMessages(24);
+    messages[1]!.role = 'system';
+    const db = makeDb({ messages });
+
+    await compactContextWindow(baseInput({ messages: buildMessages(), db: db as never }));
+
+    expect(drainToLlmResponse).toHaveBeenCalledTimes(1);
+    expect(db.conversation.compaction_summary_through_message_id).toBe(`msg-${persistableDropped}`);
   });
 
   it('retires the cached summary when a message inside the span is deleted', async () => {

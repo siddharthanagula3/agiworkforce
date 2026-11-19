@@ -137,3 +137,70 @@ describe('E2B session-store tenant isolation', () => {
     );
   });
 });
+
+describe('E2B sandbox create lock', () => {
+  const LOCK_KEY = 'e2b:create-lock:v1:managed-cloud:user-a';
+
+  beforeEach(() => {
+    vi.resetModules();
+    vi.clearAllMocks();
+    vi.stubEnv('UPSTASH_REDIS_REST_URL', 'https://redis.example.test');
+    vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', 'test-token');
+    vi.stubEnv(KEY_VALUE_PROVIDER_ENV, 'upstash');
+    redisMocks.del.mockResolvedValue(1);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  async function acquireTokens(count: number): Promise<string[]> {
+    const tokens: string[] = [];
+    let stored: unknown = null;
+    redisMocks.set.mockImplementation(async (...args: unknown[]) => {
+      const value = args[1];
+      stored = value;
+      tokens.push(String(value));
+      return 'OK';
+    });
+    redisMocks.get.mockImplementation(async () => stored as never);
+    const { withUserSandboxLock } = await import('../session-store');
+    for (let i = 0; i < count; i++) {
+      await expect(
+        withUserSandboxLock({ tenantId: 'managed-cloud', userId: 'user-a' }, async () => i),
+      ).resolves.toEqual({ locked: true, result: i });
+    }
+    return tokens;
+  }
+
+  it('draws the lock ownership token from a cryptographic source, not Math.random', async () => {
+    const mathRandom = vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000);
+
+    const tokens = await acquireTokens(2);
+
+    expect(mathRandom).not.toHaveBeenCalled();
+    expect(tokens).toHaveLength(2);
+    expect(tokens[0]).not.toBe(tokens[1]);
+    for (const token of tokens) {
+      expect(token).toMatch(/^1700000000000-[A-Za-z0-9_-]{24}$/);
+    }
+  });
+
+  it('releases the lock only while it still holds its own token', async () => {
+    await acquireTokens(1);
+
+    expect(redisMocks.set).toHaveBeenCalledWith(LOCK_KEY, expect.any(String), {
+      nx: true,
+      px: 30_000,
+    });
+    expect(redisMocks.del).toHaveBeenCalledWith(LOCK_KEY);
+
+    redisMocks.del.mockClear();
+    redisMocks.set.mockResolvedValue('OK');
+    redisMocks.get.mockResolvedValue('someone-else' as never);
+    const { withUserSandboxLock } = await import('../session-store');
+    await withUserSandboxLock({ tenantId: 'managed-cloud', userId: 'user-a' }, async () => 0);
+    expect(redisMocks.del).not.toHaveBeenCalled();
+  });
+});

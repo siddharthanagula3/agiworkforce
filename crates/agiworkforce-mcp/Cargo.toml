@@ -34,6 +34,7 @@ nix = { version = "0.31", features = ["signal", "process"] }
 tokio = { version = "1", features = ["full"] }
 axum = { version = "0.8", features = ["tokio"] }
 tempfile = "3"
+tokio-rustls = { version = "0.26", default-features = false, features = ["aws-lc-rs"] }
 
 # Scripted fake stdio MCP server used by the integration sim harness. Kept as a
 # real bin target so integration tests can spawn it via CARGO_BIN_EXE_mcp_sim_stdio.

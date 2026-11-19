@@ -237,6 +237,36 @@ describe('stripMetaRefreshFromSandboxHtml', () => {
     const input = '<p>Hello <strong>world</strong></p>';
     expect(stripMetaRefreshFromSandboxHtml(input)).toBe(input);
   });
+
+  it.each([
+    ['<meta http-equiv="refresh" content="0;url=https://evil.com">', ''],
+    ["<META HTTP-EQUIV='Refresh' CONTENT=5>", ''],
+    ['<meta http-equiv=refresh content=0>', ''],
+    ['<meta content="0;url=x" http-equiv = "refresh">', ''],
+    ['<meta\nhttp-equiv\t=\n"refresh">', ''],
+    ['<metadata http-equiv=refresh>', ''],
+    ['<meta http-equiv="refreshing">', ''],
+    ['<meta name="x" content="http-equiv=refresh">', ''],
+    ['<meta <meta http-equiv=refresh>after', 'after'],
+    ['a<meta http-equiv=refresh>b<META HTTP-EQUIV=REFRESH>c', 'abc'],
+    ['<meta name="x"><meta http-equiv="refresh" content="1">', '<meta name="x">'],
+    ['<div title="<meta http-equiv=refresh>">x</div>', '<div title="">x</div>'],
+    ['<meta http-equiv="refresh"', '<meta http-equiv="refresh"'],
+    ['<meta http-equiv="Content-Security-Policy" content="refresh">', null],
+    ['<meta data-x=">" http-equiv="refresh">', null],
+    ['<meta http-equiv="re fresh">', null],
+  ])('strips exactly the meta refresh tags in %j', (input, expected) => {
+    expect(stripMetaRefreshFromSandboxHtml(input)).toBe(expected ?? input);
+  });
+
+  it('strips in linear time when one tag holds many meta openers', () => {
+    const input = `<div title="${'<meta http-equiv '.repeat(40_000)}">x</div>`;
+    const started = performance.now();
+    const result = stripMetaRefreshFromSandboxHtml(input);
+    const ms = performance.now() - started;
+    expect(result).toBe(input);
+    expect(ms).toBeLessThan(2000);
+  }, 30_000);
 });
 
 describe('hasXSSRisk', () => {

@@ -21,6 +21,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { withIsoTimestamps } from '@/lib/server/iso-timestamps';
+import { withClientMessageRole } from '@/lib/server/client-message-role';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { buildChatSyncGateResponse } from '@/lib/managed-compute-gate';
 import { assertFreeDailyAllowance } from '@/lib/services/tier-unit-quota-service';
@@ -166,7 +167,7 @@ async function handlePull(request: NextRequest) {
     return NextResponse.json(
       ChatSyncPullResponseSchema.parse({
         conversations: withIsoTimestamps(conversations),
-        messages: withIsoTimestamps(messages),
+        messages: withIsoTimestamps(messages).map(withClientMessageRole),
         artifacts: withIsoTimestamps(artifacts),
         cursor,
         hasMore,
@@ -672,7 +673,13 @@ async function handlePush(request: NextRequest) {
     if (messages.length > 0) {
       await markSyncedConversationsGoogleUserData(db, userId, organizationId ?? null, messages);
       const rows = await pushMessages(db, userId, messages);
-      collectBatchRows(rows, applied.messages, conflicts.messages);
+      collectBatchRows(
+        rows.map((row) =>
+          row.current ? { ...row, current: withClientMessageRole(row.current) } : row,
+        ),
+        applied.messages,
+        conflicts.messages,
+      );
 
       // Device sync (desktop/mobile) is another real path that writes
       // assistant-authored web_messages rows, index the same way the live

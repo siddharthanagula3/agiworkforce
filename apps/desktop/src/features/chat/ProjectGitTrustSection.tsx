@@ -29,7 +29,7 @@ export function ProjectGitTrustSection({ projectPath }: { projectPath: string })
     try {
       const trusted = await trustProjectGitSettings(projectPath);
       if (trusted.length === 0) {
-        toast.success('No git settings in this repository run programs');
+        toast.success('No git settings in this repository run programs or route connections');
       } else {
         toast.success(`Trusted ${trusted.length} git settings`, {
           description: (
@@ -60,9 +60,10 @@ export function ProjectGitTrustSection({ projectPath }: { projectPath: string })
         <span className="break-all text-foreground" title={projectPath}>
           {folderLabel}
         </span>{' '}
-        that run programs, such as filters, diff drivers and config hooks, unless they were there
-        when the folder was first opened or you trust them here. Trusted settings run outside the
-        sandbox. Before anything is trusted, a system dialog lists each setting and asks you.
+        that run programs or decide where git connects, such as filters, diff drivers, config hooks
+        and proxies, unless they were there when the folder was first opened or you trust them here.
+        Trusted settings apply outside the sandbox. Before anything is trusted, a system dialog
+        lists each setting and asks you.
       </p>
       <Button
         variant="outline"

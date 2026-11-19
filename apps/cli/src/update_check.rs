@@ -154,7 +154,11 @@ pub fn spawn_startup_check(config: &CliConfig, privacy: PrivacyMode) {
 }
 
 pub fn parse_release(body: &str) -> Result<CliRelease, serde_json::Error> {
-    serde_json::from_str(body)
+    let mut release: CliRelease = serde_json::from_str(body)?;
+    release.version = crate::terminal_text::sanitize_terminal_text(&release.version).into_owned();
+    release.published_at =
+        crate::terminal_text::sanitize_terminal_text(&release.published_at).into_owned();
+    Ok(release)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -842,6 +846,29 @@ mod tests {
         assert_eq!(release.version, "1.7.2");
         assert_eq!(release.downloads.len(), 1);
         assert_eq!(release.downloads[0].platform, "darwin-arm64");
+    }
+
+    #[test]
+    fn a_release_feed_carries_no_terminal_escape_into_the_update_output() {
+        let release = parse_release(
+            r#"{"version":"9.9.9\u001b]52;c;cm0gLXJmIC8=\u0007\u001b[2Jpwned","publishedAt":"2026-09-12T10:00:00Z","downloads":[]}"#,
+        )
+        .expect("feed parses");
+        let rendered = render_verdict("1.0.0", &release, "agi update").join("\n");
+        let plan = InstallPlan::new(
+            "1.0.0",
+            &release,
+            std::path::Path::new("/usr/local/bin/agi"),
+        )
+        .render()
+        .join("\n");
+        for text in [rendered, plan, release.version.clone()] {
+            assert!(
+                !text.chars().any(|c| c.is_control() && c != '\n'),
+                "control character survived: {text:?}"
+            );
+        }
+        assert!(release.version.contains("pwned"));
     }
 
     #[test]

@@ -660,21 +660,12 @@ impl CliConfig {
 
             let approved = if interactive {
                 eprintln!(
-                    "\n  security: project config {:?} defines provider '{}' pointing at a remote endpoint:\n    {}\n  Using it routes your prompts and {} to that server.",
-                    project_path, name, base_url, sent
+                    "{}",
+                    provider_consent_notice(&project_path, &name, &base_url, &sent)
                 );
-                crate::output::confirm(
-                    format!(
-                        "  Trust provider '{}' -> {} with {} for this project?",
-                        name, base_url, sent
-                    ),
-                    false,
-                )
+                crate::output::confirm(provider_trust_question(&name, &base_url, &sent), false)
             } else {
-                eprintln!(
-                    "  security: skipping untrusted project provider '{}' ({}, {}), non-interactive session; run interactively to approve.",
-                    name, base_url, sent
-                );
+                eprintln!("{}", provider_skip_notice(&name, &base_url, &sent));
                 false
             };
 
@@ -1883,8 +1874,55 @@ fn report_ignored_repository_settings(ignored: &[String]) {
     }
 }
 
+fn provider_consent_notice(project_path: &str, name: &str, base_url: &str, sent: &str) -> String {
+    use crate::terminal_text::sanitize_approval_text as shown;
+    format!(
+        "\n  security: project config {:?} defines provider '{}' pointing at a remote endpoint:\n    {}\n  Using it routes your prompts and {} to that server.",
+        shown(project_path),
+        shown(name),
+        shown(base_url),
+        sent
+    )
+}
+
+fn provider_trust_question(name: &str, base_url: &str, sent: &str) -> String {
+    use crate::terminal_text::sanitize_approval_text as shown;
+    format!(
+        "  Trust provider '{}' -> {} with {} for this project?",
+        shown(name),
+        shown(base_url),
+        sent
+    )
+}
+
+fn provider_skip_notice(name: &str, base_url: &str, sent: &str) -> String {
+    use crate::terminal_text::sanitize_approval_text as shown;
+    format!(
+        "  security: skipping untrusted project provider '{}' ({}, {}), non-interactive session; run interactively to approve.",
+        shown(name),
+        shown(base_url),
+        sent
+    )
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_project_providers_trust_prompt_shows_every_terminal_escape_as_text() {
+        let hostile = "evil\u{1b}[2K\u{1b}[1A\u{1b}]52;c;cm0gLXJmIC8=\u{7}";
+        for shown in [
+            super::provider_consent_notice(hostile, hostile, hostile, "no API key"),
+            super::provider_trust_question(hostile, hostile, "no API key"),
+            super::provider_skip_notice(hostile, hostile, "no API key"),
+        ] {
+            assert!(
+                !shown.chars().any(|c| c.is_control() && c != '\n'),
+                "control character survived: {shown:?}"
+            );
+            assert!(shown.contains("<U+001B>"), "{shown:?}");
+        }
+    }
+
     #[test]
     fn worktree_apply_limits_load_from_global_config_and_cannot_be_raised_by_project_merge() {
         let root = tempfile::tempdir().unwrap();

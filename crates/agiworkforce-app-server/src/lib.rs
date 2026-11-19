@@ -38,10 +38,12 @@ use std::sync::Arc;
 #[derive(Debug, Clone, Default)]
 pub struct WebSocketSecurity {
     pub auth_token: Option<String>,
+    /// A credential separate from `auth_token` that opens only a read-only
+    /// connection, in whatever placement it arrives. It is the only
+    /// credential `?token=` accepts, because URLs are captured by logs and
+    /// browser history; when it is unset the query is never read.
+    pub read_only_token: Option<String>,
     pub allowed_origins: Vec<String>,
-    /// Accept `?token=` during the WebSocket upgrade. Disabled by default
-    /// because URL tokens are commonly captured by logs and browser history.
-    pub allow_query_token: bool,
     pub allow_public_listen: bool,
 }
 
@@ -52,12 +54,22 @@ impl WebSocketSecurity {
                 "app-server refuses non-loopback listen address {addr}; pass --allow-public-listen only after adding network/firewall controls"
             );
         }
-        if self
+        let Some(owner_token) = self
             .auth_token
             .as_deref()
-            .is_none_or(|token| token.trim().is_empty())
-        {
+            .filter(|token| !token.trim().is_empty())
+        else {
             anyhow::bail!("WebSocket app-server requires a non-empty auth token");
+        };
+        if let Some(read_only_token) = self.read_only_token.as_deref() {
+            if read_only_token.trim().is_empty() {
+                anyhow::bail!("the app-server read-only token must not be empty");
+            }
+            if tokens_match(read_only_token.as_bytes(), owner_token.as_bytes()) {
+                anyhow::bail!(
+                    "the app-server read-only token must differ from the auth token, which is never accepted in a URL"
+                );
+            }
         }
         Ok(())
     }
@@ -120,11 +132,11 @@ pub async fn serve_developer_session_websocket(
     Ok(())
 }
 
-/// Validate an upgrade and report how the connection proved itself.
+/// Validate an upgrade and report which credential the connection proved.
 ///
-/// A token presented in a header stays out of browser history, proxy logs and
-/// referrers; a `?token=` query does not. The caller carries that difference
-/// forward so credential-minting methods can refuse the weaker proof.
+/// Trust follows the credential, never its placement: anyone who reads a URL
+/// can replay its token in a header. The owner token is accepted only in a
+/// header, and the read-only token never grants more than read-only access.
 fn validate_ws_request(
     headers: &HeaderMap,
     uri: &Uri,
@@ -135,25 +147,33 @@ fn validate_ws_request(
         return Err(StatusCode::FORBIDDEN);
     }
 
-    let expected_token = security
+    let owner_token = security
         .auth_token
         .as_deref()
         .filter(|token| !token.trim().is_empty())
         .ok_or(StatusCode::UNAUTHORIZED)?;
+    let read_only_token = security
+        .read_only_token
+        .as_deref()
+        .filter(|token| !token.trim().is_empty());
 
-    let presented = request_token(headers, uri, security.allow_query_token);
-    let Some(presented) = presented else {
+    let Some(presented) = request_token(headers, uri, read_only_token.is_some()) else {
         return Err(StatusCode::UNAUTHORIZED);
     };
-    if !tokens_match(presented.token.as_bytes(), expected_token.as_bytes()) {
-        return Err(StatusCode::UNAUTHORIZED);
-    }
+    let is_owner = tokens_match(presented.token.as_bytes(), owner_token.as_bytes());
+    let is_read_only = read_only_token
+        .is_some_and(|expected| tokens_match(presented.token.as_bytes(), expected.as_bytes()));
+    let trust = match (presented.placement, is_owner, is_read_only) {
+        (TokenPlacement::Header, true, false) => DeveloperConnectionTrust::LoopbackOwner,
+        (_, false, true) => DeveloperConnectionTrust::Untrusted,
+        _ => return Err(StatusCode::UNAUTHORIZED),
+    };
 
     if !origin_allowed(headers, addr, &security.allowed_origins) {
         return Err(StatusCode::FORBIDDEN);
     }
 
-    Ok(presented.trust)
+    Ok(trust)
 }
 
 fn host_allowed(headers: &HeaderMap, uri: &Uri, addr: SocketAddr) -> bool {
@@ -190,21 +210,23 @@ fn tokens_match(presented: &[u8], expected: &[u8]) -> bool {
     std::hint::black_box(difference) == 0
 }
 
-struct PresentedToken {
-    token: String,
-    trust: DeveloperConnectionTrust,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TokenPlacement {
+    Header,
+    Query,
 }
 
-fn request_token(
-    headers: &HeaderMap,
-    uri: &Uri,
-    allow_query_token: bool,
-) -> Option<PresentedToken> {
+struct PresentedToken {
+    token: String,
+    placement: TokenPlacement,
+}
+
+fn request_token(headers: &HeaderMap, uri: &Uri, read_query: bool) -> Option<PresentedToken> {
     if let Some(value) = headers.get(AUTHORIZATION).and_then(|v| v.to_str().ok()) {
         if let Some(token) = value.strip_prefix("Bearer ") {
             return Some(PresentedToken {
                 token: token.to_string(),
-                trust: DeveloperConnectionTrust::LoopbackOwner,
+                placement: TokenPlacement::Header,
             });
         }
     }
@@ -215,16 +237,16 @@ fn request_token(
     {
         return Some(PresentedToken {
             token: value.to_string(),
-            trust: DeveloperConnectionTrust::LoopbackOwner,
+            placement: TokenPlacement::Header,
         });
     }
 
-    if allow_query_token {
+    if read_query {
         uri.query()?.split('&').find_map(|pair| {
             let (key, value) = pair.split_once('=')?;
             (key == "token").then(|| PresentedToken {
                 token: value.to_string(),
-                trust: DeveloperConnectionTrust::Untrusted,
+                placement: TokenPlacement::Query,
             })
         })
     } else {
@@ -432,9 +454,16 @@ mod tests {
     fn ws_security() -> WebSocketSecurity {
         WebSocketSecurity {
             auth_token: Some("secret-token".into()),
+            read_only_token: None,
             allowed_origins: Vec::new(),
-            allow_query_token: false,
             allow_public_listen: false,
+        }
+    }
+
+    fn ws_security_with_read_only_token() -> WebSocketSecurity {
+        WebSocketSecurity {
+            read_only_token: Some("read-only-token".into()),
+            ..ws_security()
         }
     }
 
@@ -492,19 +521,84 @@ mod tests {
     }
 
     #[test]
-    fn ws_security_accepts_query_token_when_explicitly_enabled() {
+    fn ws_security_accepts_the_read_only_token_in_the_query_as_untrusted() {
+        let headers = loopback_headers();
+        let uri: Uri = "/ws?token=read-only-token".parse().unwrap();
+        let addr: SocketAddr = "127.0.0.1:8787".parse().unwrap();
+        assert_eq!(
+            validate_ws_request(&headers, &uri, addr, &ws_security_with_read_only_token()),
+            Ok(DeveloperConnectionTrust::Untrusted)
+        );
+    }
+
+    #[test]
+    fn ws_security_refuses_the_owner_token_in_the_query() {
         let headers = loopback_headers();
         let uri: Uri = "/ws?token=secret-token".parse().unwrap();
         let addr: SocketAddr = "127.0.0.1:8787".parse().unwrap();
-        let mut security = ws_security();
-        security.allow_query_token = true;
-
-        // A URL token authenticates the connection but is logged by browsers
-        // and proxies, so it never carries credential-minting trust.
         assert_eq!(
-            validate_ws_request(&headers, &uri, addr, &security),
-            Ok(DeveloperConnectionTrust::Untrusted)
+            validate_ws_request(&headers, &uri, addr, &ws_security_with_read_only_token()),
+            Err(StatusCode::UNAUTHORIZED)
         );
+    }
+
+    #[test]
+    fn ws_security_never_makes_the_read_only_token_an_owner_in_a_header() {
+        let uri: Uri = "/ws".parse().unwrap();
+        let addr: SocketAddr = "127.0.0.1:8787".parse().unwrap();
+        for (name, value) in [
+            (AUTHORIZATION.as_str(), "Bearer read-only-token"),
+            ("x-agi-app-server-token", "read-only-token"),
+        ] {
+            let mut headers = loopback_headers();
+            headers.insert(name, value.parse().unwrap());
+            assert_eq!(
+                validate_ws_request(&headers, &uri, addr, &ws_security_with_read_only_token()),
+                Ok(DeveloperConnectionTrust::Untrusted),
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
+    fn ws_security_keeps_the_owner_token_in_a_header_as_owner() {
+        let mut headers = loopback_headers();
+        headers.insert(AUTHORIZATION, "Bearer secret-token".parse().unwrap());
+        let uri: Uri = "/ws?token=read-only-token".parse().unwrap();
+        let addr: SocketAddr = "127.0.0.1:8787".parse().unwrap();
+        assert_eq!(
+            validate_ws_request(&headers, &uri, addr, &ws_security_with_read_only_token()),
+            Ok(DeveloperConnectionTrust::LoopbackOwner)
+        );
+    }
+
+    #[test]
+    fn ws_security_refuses_a_read_only_token_that_matches_neither_secret() {
+        let headers = loopback_headers();
+        let uri: Uri = "/ws?token=read-only-tokeN".parse().unwrap();
+        let addr: SocketAddr = "127.0.0.1:8787".parse().unwrap();
+        assert_eq!(
+            validate_ws_request(&headers, &uri, addr, &ws_security_with_read_only_token()),
+            Err(StatusCode::UNAUTHORIZED)
+        );
+    }
+
+    #[test]
+    fn a_read_only_token_must_be_its_own_secret() {
+        let loopback: SocketAddr = "127.0.0.1:8788".parse().unwrap();
+        assert!(ws_security_with_read_only_token()
+            .authorize_listen_address(loopback)
+            .is_ok());
+        for read_only_token in ["secret-token", "", "  "] {
+            let security = WebSocketSecurity {
+                read_only_token: Some(read_only_token.into()),
+                ..ws_security()
+            };
+            assert!(
+                security.authorize_listen_address(loopback).is_err(),
+                "{read_only_token:?}"
+            );
+        }
     }
 
     #[test]

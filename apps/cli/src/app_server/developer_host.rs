@@ -7291,6 +7291,9 @@ fn repository_without_credentials(remote: &str) -> Option<String> {
         Some(index) => rest.split_at(index),
         None => (rest, ""),
     };
+    if authority.contains('\\') {
+        return None;
+    }
     let host = authority
         .rsplit_once('@')
         .map_or(authority, |(_, host)| host);
@@ -12661,6 +12664,12 @@ mod tests {
             Some("git@github.com:org/repo.git")
         );
         assert_eq!(repository_without_credentials("bad\nremote"), None);
+        for remote in [
+            "https://evil.example\\@github.com/org/repo.git",
+            "ssh://evil.example\\@github.com/org/repo",
+        ] {
+            assert_eq!(repository_without_credentials(remote), None, "{remote}");
+        }
         assert_eq!(repository_without_credentials("  "), None);
     }
 

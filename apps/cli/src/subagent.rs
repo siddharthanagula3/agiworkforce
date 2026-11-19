@@ -754,12 +754,7 @@ impl SubagentManager {
                             *task_status.write().await = failed;
 
                             if !crate::tui::tui_active() {
-                                eprintln!(
-                                    "  {} Subagent {} failed: {}",
-                                    ts::danger_header("[task]"),
-                                    task_id.bold(),
-                                    err_msg.dimmed()
-                                );
+                                eprintln!("{}", subagent_failure_line(&task_id, &err_msg));
                             }
                         }
                     }
@@ -1231,9 +1226,30 @@ pub(crate) fn workflow_prompt(goal: &str) -> String {
     )
 }
 
+fn subagent_failure_line(task_id: &str, message: &str) -> String {
+    format!(
+        "  {} Subagent {} failed: {}",
+        ts::danger_header("[task]"),
+        task_id.bold(),
+        crate::terminal_text::sanitize_terminal_text(message).dimmed()
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_failed_subagent_line_carries_no_terminal_escape_from_the_provider() {
+        let line = subagent_failure_line(
+            "task-1",
+            "upstream said \u{1b}]52;c;cm0gLXJmIC8=\u{7}\u{1b}[2Jpwned",
+        );
+        assert!(!line.contains('\u{7}'), "{line:?}");
+        assert!(!line.contains("\u{1b}]"), "{line:?}");
+        assert!(!line.contains("\u{1b}[2J"), "{line:?}");
+        assert!(line.contains("pwned"), "{line:?}");
+    }
 
     #[test]
     fn a_subagent_transcript_shows_its_messages_and_tool_steps() {

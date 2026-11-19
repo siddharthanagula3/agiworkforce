@@ -33,7 +33,7 @@ type RouteContext = { params: Promise<{ id: string }> };
 
 const MessageItemSchema = z.object({
   id: z.string().uuid().optional(),
-  role: z.enum(['user', 'assistant', 'system']).default('user'),
+  role: z.enum(['user', 'assistant']).default('user'),
   content: z.string().min(1).max(100_000),
   model: z.string().max(200).optional(),
   metadata: z.record(z.string(), z.unknown()).optional().default({}),

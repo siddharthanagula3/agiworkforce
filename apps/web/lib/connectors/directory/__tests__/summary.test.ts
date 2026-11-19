@@ -75,6 +75,18 @@ describe('summarizeDescription', () => {
     expect(summarize('Search issues (beta)')).toBe('Search issues (beta)');
   });
 
+  it.each([
+    ['Search issues in any project...', 'Search issues in any project.'],
+    ['Search issues in any project…', 'Search issues in any project.'],
+    ['Search issues in any project…...', 'Search issues in any project.'],
+    ['Search issues in any project.…', 'Search issues in any project.'],
+    ['Search issues in any project.…..', 'Search issues in any project.'],
+    ['Search issues in any project….', 'Search issues in any project….'],
+    ['Search issues in any project!..', 'Search issues in any project!'],
+  ])('replaces the trailing ellipsis in %j', (raw, expected) => {
+    expect(summarize(raw)).toBe(expected);
+  });
+
   it('bounds the sentence at the maximum length on a clause or word boundary', () => {
     const long =
       'Every Tactical RMM endpoint as a typed command, plus an offline SQLite mirror and cross-entity joins that answer the questions the vendor console cannot.';

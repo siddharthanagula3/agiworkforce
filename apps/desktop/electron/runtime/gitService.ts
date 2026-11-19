@@ -43,10 +43,56 @@ const INHERITED_ENV = ['PATH', 'HOME', 'TMPDIR', 'TEMP', 'TMP', 'SYSTEMROOT'] as
  * Repository settings that make a read-only status or diff run a program the
  * repository names. Keys arrive with section and variable lowercased.
  */
-const CODE_RUNNING_CONFIG =
-  '^(filter\\..+\\.(clean|smudge|process)|diff\\..+\\.(textconv|command)|hook\\..+\\.(command|event)|lfs\\.extension\\..+\\.(clean|smudge)|lfs\\.customtransfer\\..+\\.(path|args)|lfs\\.(.+\\.)?standalonetransferagent|annex\\..+-(command|hook)|remote\\..+\\.annex-(.+-command|shell|rsync-transport)|include\\.path|includeif\\..+\\.path)$';
+const CODE_RUNNING_KEYS =
+  'filter\\..+\\.(clean|smudge|process)|diff\\..+\\.(textconv|command)|hook\\..+\\.(command|event)|lfs\\.extension\\..+\\.(clean|smudge)|lfs\\.customtransfer\\..+\\.(path|args)|lfs\\.(.+\\.)?standalonetransferagent|annex\\..+-(command|hook)|remote\\..+\\.annex-(.+-command|shell|rsync-transport)|include\\.path|includeif\\..+\\.path';
+
+const CODE_RUNNING_KEY = new RegExp(`^(${CODE_RUNNING_KEYS})$`);
+
+/**
+ * Settings that decide where a push goes, how the connection is verified and
+ * which credentials it carries, as listed in git-config(1): `http.*`, plain or
+ * scoped to a URL, and a remote's proxy. Mirrors `CODE_RUNNING_KEYS` in
+ * crates/agiworkforce-worktree/src/config_guard.rs.
+ */
+const TRANSPORT_KEYS =
+  'http\\.(.+\\.)?(sslverify|sslcainfo|sslcapath|sslcert|sslkey|sslcertpasswordprotected|sslcerttype|sslkeytype|sslversion|sslcipherlist|sslbackend|schannelcheckrevoke|schannelusesslcainfo|pinnedpubkey|proxy|proxyauthmethod|proxysslcert|proxysslkey|proxysslcertpasswordprotected|proxysslcainfo|emptyauth|proactiveauth|delegation|cookiefile|savecookies|curloptresolve|followredirects)|remote\\..+\\.(proxy|proxyauthmethod)';
+
+/**
+ * What only a command that talks to a remote obeys: the programs it runs to
+ * reach one, and [`TRANSPORT_KEYS`].
+ */
+const REMOTE_KEYS = `core\\.(sshcommand|askpass|gitproxy|alternaterefscommand)|credential\\.(.+\\.)?helper|url\\..+\\.(insteadof|pushinsteadof)|protocol\\..+|remote\\..+\\.(uploadpack|receivepack|vcs)|${TRANSPORT_KEYS}`;
+
+/**
+ * The programs git runs to sign, which a push does for a push certificate
+ * when `push.gpgSign` asks and the remote accepts one. Mirrors the `gpg` keys
+ * in `CODE_RUNNING_KEYS` in crates/agiworkforce-worktree/src/config_guard.rs.
+ */
+const SIGNING_KEYS = 'gpg\\.(.+\\.)?program|gpg\\.ssh\\.defaultkeycommand';
+
+/**
+ * Settings that make the repository a partial or promisor clone, which
+ * fetches a missing object whenever a status or diff needs one, obeying every
+ * setting a fetch obeys.
+ */
+const PROMISOR_KEYS = 'extensions\\.partialclone|remote\\..+\\.promisor';
+
+const LISTED_CONFIG = `^(${CODE_RUNNING_KEYS}|${REMOTE_KEYS}|${SIGNING_KEYS}|${PROMISOR_KEYS})$`;
+
+const REMOTE_KEY = new RegExp(`^(${REMOTE_KEYS})$`);
+
+const SIGNING_KEY = new RegExp(`^(${SIGNING_KEYS})$`);
+
+const PROMISOR_KEY = new RegExp(`^(${PROMISOR_KEYS})$`);
+
+const TRANSPORT_KEY = new RegExp(`^(${TRANSPORT_KEYS})$`);
 
 const INCLUDE_KEY = /^include(if\..+)?\.path$/;
+
+const GIT_FALSE = /^(false|no|off|[-+]?0+)?$/i;
+
+const MOVE_TO_GLOBAL =
+  'If you added that setting yourself, move it to your global git configuration (git config --global), which commands run in this folder cannot change, and try again.';
 
 /**
  * Keeps status and diff out of submodule work trees. A submodule's gitfile,
@@ -179,10 +225,11 @@ export interface HostGitOptions {
 
 /**
  * How the host runs git: outside any sandbox, in a work tree an agent's
- * commands can write. Mirrors `HOST_GIT_HARDENING` in
+ * commands can write. Mirrors `host_git_hardening` in
  * crates/agiworkforce-worktree/src/git.rs, so nothing git would execute on its
- * own may run, and `--no-optional-locks` keeps a status from rewriting the
- * index, which is what fires `post-index-change`.
+ * own may run, no command recurses into a submodule whose git directory and
+ * configuration a command can write, and `--no-optional-locks` keeps a status
+ * from rewriting the index, which is what fires `post-index-change`.
  */
 export async function hostGitInvocation(
   cwd: string,
@@ -197,6 +244,8 @@ export async function hostGitInvocation(
     args: [
       '-c',
       `core.hooksPath=${await emptyHooksDirectory()}`,
+      '-c',
+      'submodule.recurse=false',
       '-c',
       'core.fsmonitor=false',
       '-c',
@@ -285,48 +334,124 @@ async function writableByCommands(root: string, origin: string): Promise<string 
 }
 
 /**
- * Why a read-only status or diff must not run in `root`, or null when it may,
- * as a clause the page shows after "Git status is off for this folder:". The
- * repository's own configuration can name programs git would run for them,
- * and an agent's command may have written that configuration or a file it
- * includes, so such a repository is reported as unavailable instead.
+ * `text` with the user name and password of every URL in it hidden: what
+ * precedes the last `@` of the authority, which ends at the first `/`, `?` or
+ * `#`. A key scoped to a URL, such as `http.<url>.sslVerify`, can carry one.
+ */
+function withoutCredentials(text: string): string {
+  return text.replace(/:\/\/[^/?#]*@/g, '://(hidden)@');
+}
+
+interface ConfigEntry {
+  scope: string;
+  origin: string;
+  key: string;
+  value: string;
+  valueGiven: boolean;
+}
+
+function configEntries(listing: string): ConfigEntry[] {
+  const fields = listing.split('\0');
+  const entries: ConfigEntry[] = [];
+  for (let index = 0; index + 2 < fields.length; index += 3) {
+    const entry = fields[index + 2] ?? '';
+    const newline = entry.indexOf('\n');
+    entries.push({
+      scope: fields[index] ?? '',
+      origin: fields[index + 1] ?? '',
+      key: newline === -1 ? entry : entry.slice(0, newline),
+      value: newline === -1 ? '' : entry.slice(newline + 1),
+      valueGiven: newline !== -1,
+    });
+  }
+  return entries;
+}
+
+/**
+ * Whether git fetches a missing object on demand here: the repository is a
+ * partial clone, or names a promisor remote. A key with no value is true.
+ */
+function fetchesOnDemand(entries: readonly ConfigEntry[]): boolean {
+  return entries.some(
+    (entry) =>
+      PROMISOR_KEY.test(entry.key) &&
+      (entry.key === 'extensions.partialclone' ||
+        !entry.valueGiven ||
+        !GIT_FALSE.test(entry.value.trim())),
+  );
+}
+
+interface ConfigRefusal {
+  reason: string;
+  local: boolean;
+}
+
+type HostGitUse = 'refs' | 'work-tree' | 'push';
+
+/**
+ * Why host git must not run in `root`, or null when it may. The repository's
+ * own configuration can name programs git would run, or connection settings a
+ * fetch obeys, and an agent's command may have written that configuration or
+ * a file it includes, so such a repository is reported as unavailable
+ * instead. A status or diff obeys connection settings only in a partial or
+ * promisor clone, which fetches the objects they need; a push always does,
+ * and it also runs the program that signs a push certificate. Reading refs
+ * runs nothing at all unless it fetches a missing commit, which only a partial
+ * or promisor clone does.
  */
 async function codeRunningConfig(
   root: string,
   options: GitRunOptions = {},
-): Promise<string | null> {
+  use: HostGitUse = 'work-tree',
+): Promise<ConfigRefusal | null> {
   let listing: string;
   try {
     listing = await git(
       root,
-      ['config', '--show-scope', '--show-origin', '-z', '--get-regexp', CODE_RUNNING_CONFIG],
+      ['config', '--show-scope', '--show-origin', '-z', '--get-regexp', LISTED_CONFIG],
       options,
     );
   } catch (error) {
     if ((error as { code?: unknown }).code === 1) return null;
-    return 'its repository settings could not be read';
+    return { reason: 'its repository settings could not be read', local: false };
   }
-  const fields = listing.split('\0');
-  for (let index = 0; index + 2 < fields.length; index += 3) {
-    const scope = fields[index];
-    const origin = fields[index + 1] ?? '';
-    const entry = fields[index + 2] ?? '';
-    const newline = entry.indexOf('\n');
-    const key = newline === -1 ? entry : entry.slice(0, newline);
-    const value = newline === -1 ? '' : entry.slice(newline + 1);
+  const entries = configEntries(listing);
+  const fetches = fetchesOnDemand(entries);
+  if (use === 'refs' && !fetches) return null;
+  const pushes = use === 'push';
+  const reachesRemote = pushes || fetches;
+  const obeyed = (key: string) =>
+    CODE_RUNNING_KEY.test(key) ||
+    (reachesRemote && REMOTE_KEY.test(key)) ||
+    (pushes && SIGNING_KEY.test(key));
+  for (const { scope, origin, key: rawKey, value } of entries) {
+    if (!obeyed(rawKey)) continue;
+    const key = withoutCredentials(rawKey);
+    const effect = TRANSPORT_KEY.test(rawKey)
+      ? 'change where git sends credentials or how it checks the connection'
+      : 'run programs';
     if (scope !== 'local' && scope !== 'worktree') {
-      if (INCLUDE_KEY.test(key)) continue;
+      if (INCLUDE_KEY.test(rawKey)) continue;
       const writable = await writableByCommands(root, origin);
       if (writable) {
-        return `its git settings run programs (${key} in ${writable}, a file a command can write)`;
+        return {
+          reason: `its git settings ${effect} (${key} in ${writable}, a file a command can write)`,
+          local: false,
+        };
       }
       continue;
     }
-    if (!INCLUDE_KEY.test(key)) {
-      return `its repository settings run programs (${key} in ${originLabel(root, origin)})`;
+    if (!INCLUDE_KEY.test(rawKey)) {
+      return {
+        reason: `its repository settings ${effect} (${key} in ${originLabel(root, origin)})`,
+        local: true,
+      };
     }
     if (await includesFromInside(root, origin, value)) {
-      return `its repository settings read a file inside the folder (${value} from ${originLabel(root, origin)})`;
+      return {
+        reason: `its repository settings read a file inside the folder (${value} from ${originLabel(root, origin)})`,
+        local: false,
+      };
     }
   }
   return null;
@@ -335,15 +460,24 @@ async function codeRunningConfig(
 /**
  * Refuses a host git command that changes the work tree or talks to a remote
  * where the repository's settings name programs git would run for it, read
- * from the same configuration that command reads.
+ * from the same configuration that command reads. The app keeps no record of
+ * which repository settings the user trusts, so a setting the user added
+ * there is refused too; one in the global configuration, which no command in
+ * the folder can write, is obeyed.
  */
-async function assertHostGitAllowed(root: string, options: GitRunOptions = {}): Promise<void> {
-  const reason = await codeRunningConfig(root, options);
-  if (reason) throw new Error(`Git is off for this folder: ${reason}.`);
+async function assertHostGitAllowed(
+  root: string,
+  options: GitRunOptions = {},
+  use: HostGitUse = 'work-tree',
+): Promise<void> {
+  const refusal = await codeRunningConfig(root, options, use);
+  if (!refusal) return;
+  const remedy = refusal.local ? ` ${MOVE_TO_GLOBAL}` : '';
+  throw new Error(`Git is off for this folder: ${refusal.reason}.${remedy}`);
 }
 
 async function refusesHostGit(root: string): Promise<boolean> {
-  const reason = await codeRunningConfig(root);
+  const reason = (await codeRunningConfig(root))?.reason;
   if (!reason) return false;
   const report = `${root}\0${reason}`;
   if (!refusalsReported.has(report)) {
@@ -369,8 +503,8 @@ async function detectOperation(cwd: string): Promise<WorkspaceGitState['operatio
 async function inspectGit(directory: string): Promise<WorkspaceGitRead> {
   const root = await findRepositoryRoot(directory);
   if (!root) return { git: null };
-  const unavailableReason = await codeRunningConfig(root);
-  if (unavailableReason) return { git: null, unavailableReason };
+  const refusal = await codeRunningConfig(root);
+  if (refusal) return { git: null, unavailableReason: refusal.reason };
   return { git: await stateAt(root) };
 }
 
@@ -516,6 +650,7 @@ export async function discardWorkingTreeChanges(
 export async function listLocalBranches(directory: string): Promise<LocalBranches | null> {
   const root = await findRepositoryRoot(directory);
   if (!root) return null;
+  await assertHostGitAllowed(root, {}, 'refs');
   const listed = await git(root, [
     'for-each-ref',
     `--count=${LOCAL_BRANCH_LIMIT}`,
@@ -526,7 +661,9 @@ export async function listLocalBranches(directory: string): Promise<LocalBranche
   return {
     current: await gitOrNull(root, ['symbolic-ref', '--short', '--quiet', 'HEAD']),
     branches: listed.split('\n').filter(Boolean),
-    remoteUrl: await gitOrNull(root, ['remote', 'get-url', PUSH_REMOTE]),
+    remoteUrl: await gitOrNull(root, ['remote', 'get-url', PUSH_REMOTE]).then(
+      (url) => url && withoutUrlSecrets(url),
+    ),
     baseBranch: await remoteDefaultBranch(root),
   };
 }
@@ -591,6 +728,157 @@ async function createBranchAtHead(root: string, request: NewBranchRequest): Prom
   throw new Error(`Branches named ${base} already exist. Rename one and try again.`);
 }
 
+const SCP_LIKE_URL = /^([^-@/:\s][^@/:\s]*@)?(\[[^\]/\s]+\]|[^-[\]/:@\s][^/:@\s]*):/;
+
+const REMOTE_HELPER_URL = /^([A-Za-z0-9][A-Za-z0-9+.-]*)::/;
+
+const URL_SCHEME = /^([A-Za-z0-9][A-Za-z0-9+.-]*):\/\//;
+
+const URL_USERINFO = /^([A-Za-z0-9][A-Za-z0-9+.-]*):\/\/([^/?#]*)@/;
+
+const SSH_SCHEMES = new Set(['ssh', 'git+ssh', 'ssh+git']);
+
+const PUSHABLE_SCHEMES = new Set(['https', ...SSH_SCHEMES]);
+
+const NETWORK_REMOTE_REMEDY = 'Set origin to an https:// or ssh:// address and try again.';
+
+/**
+ * A setting for one protocol outranks `protocol.allow`, whichever file sets
+ * it, so the transports that run on this computer are refused by name too.
+ */
+const PUSH_PROTOCOLS = [
+  '-c',
+  'protocol.allow=never',
+  '-c',
+  'protocol.file.allow=never',
+  '-c',
+  'protocol.ext.allow=never',
+  '-c',
+  'protocol.https.allow=always',
+  '-c',
+  'protocol.ssh.allow=always',
+];
+
+function isLocalPath(url: string): boolean {
+  const colon = url.indexOf(':');
+  const slash = url.indexOf('/');
+  return (
+    colon === -1 ||
+    (slash !== -1 && slash < colon) ||
+    (process.platform === 'win32' && /^[A-Za-z]:/.test(url))
+  );
+}
+
+/**
+ * Whether `url` is the scp-like `[user@]host:path` git sends over ssh. Outside
+ * a bracketed IPv6 host it may hold no `::` or `://`, which git reads as a
+ * remote helper or a scheme, so an address the patterns above misread is
+ * refused rather than pushed to.
+ */
+function isScpLike(url: string): boolean {
+  const host = SCP_LIKE_URL.exec(url);
+  if (!host) return false;
+  const rest = url.slice(host[0].length - 1);
+  return !rest.includes('::') && !rest.includes('://');
+}
+
+/**
+ * `url` as it may leave this module: the user information of a `scheme://`
+ * address dropped, except the user name of an ssh address, which carries no
+ * secret and names the account the host expects. A password, or an https
+ * user name, which is often a token, never leaves.
+ */
+function withoutUrlSecrets(url: string): string {
+  const match = URL_USERINFO.exec(url);
+  if (!match) return url;
+  const scheme = match[1] ?? '';
+  const user = SSH_SCHEMES.has(scheme.toLowerCase()) ? (match[2] ?? '').split(':')[0] : '';
+  return `${scheme}://${user ? `${user}@` : ''}${url.slice(match[0].length)}`;
+}
+
+function decodedOrSame(text: string): string {
+  try {
+    return decodeURIComponent(text);
+  } catch {
+    return text;
+  }
+}
+
+function escapedForRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\/-]/g, '\\$&');
+}
+
+/**
+ * `text`, such as git's or ssh's output for a push to `url`, with the secret
+ * part of `url`'s user information removed wherever it stands before an `@`
+ * on its own, whether as written or as git decodes it before handing it to
+ * ssh. Where a name character precedes it, it only ends a longer name, such
+ * as the address `max@example.com` for the user name `x`, and is kept.
+ */
+function withoutRemoteSecrets(text: string, url: string): string {
+  const userinfo = URL_USERINFO.exec(url)?.[2];
+  let redacted = text;
+  if (userinfo) {
+    const kept = URL_USERINFO.exec(withoutUrlSecrets(url))?.[2];
+    const replacement = kept ? `${kept}@` : '';
+    for (const form of new Set([userinfo, decodedOrSame(userinfo)])) {
+      if (form === kept) continue;
+      const standalone = new RegExp(`(?<![A-Za-z0-9._+-])${escapedForRegExp(form)}@`, 'g');
+      redacted = redacted.replace(standalone, () => replacement);
+    }
+  }
+  return withoutCredentials(redacted);
+}
+
+/**
+ * Why the push must not go to `url`, as git resolved it, or null when it may.
+ * A push to a repository on this computer runs that repository's own hooks
+ * and configuration with none of the host's hardening, and a remote helper is
+ * a program on this computer, so only an address git sends over https or ssh
+ * is pushed to. It is classified in git's own order, with git's own first
+ * characters: a helper's `name::` prefix, then a `scheme://`, then a local
+ * path, then the scp-like `[user@]host:path`. The push itself is held to the
+ * same protocols, since the configuration can change after this check.
+ */
+function pushTargetRefusal(url: string): string | null {
+  const shown = withoutCredentials(url);
+  const local = `Origin is a folder on this computer (${shown}), and pushing there runs that repository's own hooks on this computer, so nothing was pushed. ${NETWORK_REMOTE_REMEDY}`;
+  const other = `Origin's address (${shown}) is not an https:// or ssh:// address, so nothing was pushed. ${NETWORK_REMOTE_REMEDY}`;
+  const helper = REMOTE_HELPER_URL.exec(url)?.[1];
+  if (helper) {
+    return `Origin pushes through the ${helper} remote helper (${shown}), a program on this computer, so nothing was pushed. ${NETWORK_REMOTE_REMEDY}`;
+  }
+  const scheme = URL_SCHEME.exec(url)?.[1];
+  if (scheme !== undefined) {
+    if (PUSHABLE_SCHEMES.has(scheme)) return null;
+    return scheme === 'file' ? local : other;
+  }
+  if (isLocalPath(url)) return local;
+  return isScpLike(url) ? null : other;
+}
+
+/**
+ * The one address origin pushes to, once nothing refuses it. Read and judged
+ * before the push changes anything in the repository.
+ */
+async function checkedPushAddress(root: string, pushing: GitRunOptions): Promise<string> {
+  const pushUrls = (
+    await git(root, ['remote', 'get-url', '--push', '--all', PUSH_REMOTE], pushing).catch(() => '')
+  )
+    .split('\n')
+    .filter((url) => url !== '');
+  const remoteUrl = pushUrls[0];
+  if (!remoteUrl) throw new Error('This repository has no origin remote to push to.');
+  if (pushUrls.length > 1) {
+    throw new Error(
+      'Origin pushes to more than one address, so nothing was pushed. Leave one push address and try again.',
+    );
+  }
+  const refusal = pushTargetRefusal(remoteUrl);
+  if (refusal) throw new Error(refusal);
+  return remoteUrl;
+}
+
 export async function pushLocalBranch(
   directory: string,
   newBranch?: NewBranchRequest,
@@ -601,15 +889,27 @@ export async function pushLocalBranch(
     env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
     systemConfig: true,
   };
-  await assertHostGitAllowed(root, pushing);
+  await assertHostGitAllowed(root, pushing, 'push');
   const current = await gitOrNull(root, ['symbolic-ref', '--short', '--quiet', 'HEAD']);
-  const branch = current ?? (newBranch ? await createBranchAtHead(root, newBranch) : null);
-  if (!branch) throw new Error('Check out a branch before opening a pull request.');
-  const remoteUrl = await gitOrNull(root, ['remote', 'get-url', PUSH_REMOTE]);
-  if (!remoteUrl) throw new Error('This repository has no origin remote to push to.');
-  await git(root, ['push', '--set-upstream', PUSH_REMOTE, branch], {
-    ...pushing,
-    timeoutMs: PUSH_TIMEOUT_MS,
-  });
-  return { branch, remoteUrl, baseBranch: await remoteDefaultBranch(root) };
+  const target = current ?? newBranch;
+  if (!target) throw new Error('Check out a branch before opening a pull request.');
+  const remoteUrl = await checkedPushAddress(root, pushing);
+  const branch = typeof target === 'string' ? target : await createBranchAtHead(root, target);
+  try {
+    await git(
+      root,
+      [...PUSH_PROTOCOLS, 'push', '--no-recurse-submodules', '--set-upstream', PUSH_REMOTE, branch],
+      {
+        ...pushing,
+        timeoutMs: PUSH_TIMEOUT_MS,
+      },
+    );
+  } catch (error) {
+    throw new Error(withoutRemoteSecrets((error as Error).message, remoteUrl));
+  }
+  return {
+    branch,
+    remoteUrl: withoutUrlSecrets(remoteUrl),
+    baseBranch: await remoteDefaultBranch(root),
+  };
 }

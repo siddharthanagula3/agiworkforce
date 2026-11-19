@@ -9,6 +9,7 @@ import {
   researchDomainAllowed,
   type ResearchDomainPolicy,
 } from '@/app/api/llm/v1/chat/completions/lib/research-sources';
+import { stripMarkupTags } from '@/lib/markup-tags';
 import { resolvePromptText } from '@/lib/prompts/prompt-registry';
 import { decodeResponseText } from '@/lib/url-fetch/decode-response-text';
 import {
@@ -154,6 +155,14 @@ function bound(html: string): string {
     : html;
 }
 
+const ASCII_UPPERCASE_RUN = /[A-Z]+/g;
+
+// toLowerCase changes length for some characters (U+0130 becomes two), which shifts every index
+// taken from the lowered copy; this one leaves the length alone.
+function asciiLower(text: string): string {
+  return text.replace(ASCII_UPPERCASE_RUN, (run) => run.toLowerCase());
+}
+
 function findOpenTag(lower: string, tag: string, from: number): number {
   const needle = `<${tag}`;
   for (let at = lower.indexOf(needle, from); at !== -1; at = lower.indexOf(needle, at + 1)) {
@@ -219,7 +228,7 @@ function stripDoctype(html: string, lower: string): string {
 }
 
 function stripElement(html: string, tag: string): string {
-  const lower = html.toLowerCase();
+  const lower = asciiLower(html);
   let out = '';
   let cursor = 0;
   while (cursor < html.length) {
@@ -231,25 +240,6 @@ function stripElement(html: string, tag: string): string {
     cursor = close.end;
   }
   return out + html.slice(cursor);
-}
-
-function stripAllTags(html: string): string {
-  let out = '';
-  let cursor = 0;
-  while (cursor < html.length) {
-    const lt = html.indexOf('<', cursor);
-    if (lt === -1) return out + html.slice(cursor);
-    out += html.slice(cursor, lt);
-    const gt = html.indexOf('>', lt + 1);
-    if (gt === -1) return out;
-    if (gt === lt + 1) {
-      out += '<';
-      cursor = lt + 1;
-      continue;
-    }
-    cursor = gt + 1;
-  }
-  return out;
 }
 
 function tagNameAt(html: string, lt: number, gt: number): { name: string; closing: boolean } {
@@ -285,29 +275,25 @@ function toText(html: string): string {
 
 export function extractHtmlTitle(html: string): string | undefined {
   const doc = bound(html);
-  const region = findRegion(doc, doc.toLowerCase(), 'title');
+  const region = findRegion(doc, asciiLower(doc), 'title');
   if (!region) return undefined;
   const title = decodeHtmlEntities(doc.slice(region.start, region.end)).replace(/\s+/g, ' ').trim();
   return title || undefined;
 }
 
-const META_ATTR =
-  /([a-zA-Z][a-zA-Z0-9:-]*)\s*=\s*"([^"]*)"|([a-zA-Z][a-zA-Z0-9:-]*)\s*=\s*'([^']*)'/g;
+const META_ATTR = /(?<![a-zA-Z0-9:-])([a-zA-Z][a-zA-Z0-9:-]*)\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
 
 function metaTagAttrs(tagSource: string): Record<string, string> {
   const attrs: Record<string, string> = {};
-  META_ATTR.lastIndex = 0;
-  let match: RegExpExecArray | null;
-  while ((match = META_ATTR.exec(tagSource))) {
-    const name = (match[1] ?? match[3])?.toLowerCase();
-    const value = match[2] ?? match[4] ?? '';
-    if (name) attrs[name] = value;
+  for (const match of tagSource.matchAll(META_ATTR)) {
+    const name = match[1]?.toLowerCase();
+    if (name) attrs[name] = match[2] ?? match[3] ?? '';
   }
   return attrs;
 }
 
 function metaTagContent(html: string, keys: readonly string[]): string | undefined {
-  const lower = html.toLowerCase();
+  const lower = asciiLower(html);
   let cursor = 0;
   while (cursor < html.length) {
     const open = findOpenTag(lower, 'meta', cursor);
@@ -360,7 +346,7 @@ export function extractPageDescription(html: string): string | undefined {
 }
 
 const JSON_LD_DATE_KEYS = ['datePublished', 'dateCreated', 'uploadDate'] as const;
-const JSON_LD_BLOCK = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+const JSON_LD_TYPE = 'application/ld+json';
 
 /**
  * When the page says it was published, taken from the metadata it publishes
@@ -381,12 +367,20 @@ export function extractPagePublishedDate(html: string): string | undefined {
   return candidate.slice(0, 40);
 }
 
-function jsonLdPublishedDate(html: string): string | undefined {
-  JSON_LD_BLOCK.lastIndex = 0;
-  let match: RegExpExecArray | null;
-  while ((match = JSON_LD_BLOCK.exec(html)) !== null) {
-    const body = match[1];
-    if (!body) continue;
+export function jsonLdPublishedDate(html: string): string | undefined {
+  const lower = asciiLower(html);
+  let cursor = 0;
+  while (cursor < html.length) {
+    const open = findOpenTag(lower, 'script', cursor);
+    if (open === -1) return undefined;
+    const gt = html.indexOf('>', open);
+    if (gt === -1) return undefined;
+    cursor = gt + 1;
+    if (metaTagAttrs(html.slice(open, cursor))['type']?.toLowerCase() !== JSON_LD_TYPE) continue;
+    const close = findCloseTag(lower, 'script', cursor);
+    if (!close) return undefined;
+    const body = html.slice(cursor, close.start);
+    cursor = close.end;
     for (const key of JSON_LD_DATE_KEYS) {
       const found = new RegExp(`"${key}"\\s*:\\s*"([^"]{4,40})"`).exec(body);
       if (found?.[1]) return found[1];
@@ -413,18 +407,18 @@ export function hasStructuredPageData(html: string): boolean {
 export function extractHtmlText(html: string): string {
   const bounded = bound(html);
   let doc = stripComments(bounded);
-  doc = stripDoctype(doc, doc.toLowerCase());
+  doc = stripDoctype(doc, asciiLower(doc));
 
   for (const tag of DROP_ELEMENTS) doc = stripElement(doc, tag);
 
-  const lower = doc.toLowerCase();
+  const lower = asciiLower(doc);
   const article = findRegion(doc, lower, 'article');
   const main = findRegion(doc, lower, 'main');
   const region =
     article && main ? (article.start <= main.start ? article : main) : (article ?? main);
   const regionText = region ? doc.slice(region.start, region.end) : '';
 
-  if (regionText && stripAllTags(regionText).trim().length >= 200) {
+  if (regionText && stripMarkupTags(regionText).trim().length >= 200) {
     doc = regionText;
   } else {
     const body = findRegion(doc, lower, 'body');

@@ -24141,6 +24141,9 @@
     "CODE_RUN_STOPPED_MESSAGE": [
       "apps/web/lib/e2b/types.ts"
     ],
+    "code_running_keys": [
+      "crates/agiworkforce-worktree/src/config_guard.rs"
+    ],
     "CODE_RUNNING_KEYS": [
       "crates/agiworkforce-worktree/src/config_guard.rs"
     ],
@@ -25846,6 +25849,13 @@
     ],
     "compiledSourceWitness": [
       "scripts/public-runtime/proof.mjs"
+    ],
+    "compileExcludeGlob": [
+      "apps/extension-vscode/src/data/contextExclusion.ts"
+    ],
+    "compileGlob": [
+      "packages/client/ide-runtime/src/index.ts",
+      "packages/client/ide-runtime/src/workspace.ts"
     ],
     "complete": [
       "apps/cli/src/app_server/upload_destination.rs",
@@ -38485,9 +38495,6 @@
     "destination": [
       "apps/cli/src/safety/push_consent.rs"
     ],
-    "destination_host": [
-      "apps/cli/src/safety/network_target.rs"
-    ],
     "DESTINATION_SCOPE": [
       "apps/mobile/src/features/shell/destinationScope.ts"
     ],
@@ -50518,6 +50525,9 @@
     "findOpenGitHubPullRequest": [
       "apps/web/lib/github-app.ts"
     ],
+    "findOpeningTags": [
+      "packages/ui/unified-chat/src/lib/artifact-sandbox.ts"
+    ],
     "findOperationalDomain": [
       "apps/web/lib/observability/ownership.ts"
     ],
@@ -58256,13 +58266,14 @@
       "apps/desktop/src-tauri/src/sys/commands/code_search.rs",
       "apps/desktop/src/api/codeSearch.ts"
     ],
+    "GlobOptions": [
+      "packages/client/ide-runtime/src/index.ts",
+      "packages/client/ide-runtime/src/workspace.ts"
+    ],
     "GlobSearchResult": [
       "apps/desktop/src-tauri/src/sys/commands/code_search.rs"
     ],
     "globToRegExp": [
-      "apps/extension-vscode/src/data/contextExclusion.ts",
-      "packages/client/ide-runtime/src/index.ts",
-      "packages/client/ide-runtime/src/workspace.ts",
       "scripts/check-model-change-suites.mjs"
     ],
     "glyph": [
@@ -61531,6 +61542,12 @@
     "htmlDeclaresScripts": [
       "packages/ui/unified-chat/src/lib/artifact-preview-capability.ts"
     ],
+    "HtmlTagToken": [
+      "packages/ui/unified-chat/src/components/markdown/splitMarkdownBlocks.ts"
+    ],
+    "htmlTagTokens": [
+      "packages/ui/unified-chat/src/components/markdown/splitMarkdownBlocks.ts"
+    ],
     "http": [
       "apps/cli/src/mcp/mod.rs",
       "crates/agiworkforce-mcp/src/transport/mod.rs"
@@ -63535,6 +63552,9 @@
     ],
     "insert_text": [
       "apps/cli/src/tui/widgets/question_overlay.rs"
+    ],
+    "insertAfterOpeningTag": [
+      "packages/ui/unified-chat/src/lib/artifact-sandbox.ts"
     ],
     "insertCitationMarkers": [
       "packages/ui/unified-chat/src/index.ts"
@@ -68889,6 +68909,9 @@
     ],
     "JsonLd": [
       "apps/web/shared/components/seo/JsonLd.tsx"
+    ],
+    "jsonLdPublishedDate": [
+      "apps/web/lib/url-fetch/url-fetch-tool.ts"
     ],
     "JsonObjectExtraction": [
       "apps/web/app/api/llm/v1/chat/completions/lib/json-object-mode.ts"
@@ -79075,6 +79098,10 @@
     "MAX_GENERATED_FILE_BYTES": [
       "apps/web/lib/server/generated-file-persist.ts"
     ],
+    "MAX_GLOB_PATTERN_CHARS": [
+      "packages/client/ide-runtime/src/index.ts",
+      "packages/client/ide-runtime/src/workspace.ts"
+    ],
     "MAX_GREP_MATCHES": [
       "packages/contracts/local-runtime/src/filesystem.ts",
       "packages/contracts/local-runtime/src/index.ts"
@@ -79162,6 +79189,9 @@
     ],
     "MAX_JSON_LD_BYTES": [
       "apps/extension/src/background/policy.ts"
+    ],
+    "MAX_JSON_NESTING_DEPTH": [
+      "services/signaling-server/src/constants.ts"
     ],
     "MAX_KEEP": [
       "crates/agiworkforce-worktree/src/managed.rs"
@@ -89833,6 +89863,9 @@
     "openInEditor": [
       "apps/desktop/electron/runtime/appsService.ts"
     ],
+    "OpeningTag": [
+      "packages/ui/unified-chat/src/lib/artifact-sandbox.ts"
+    ],
     "openInteractiveCardUrl": [
       "apps/extension/src/features/side-panel/bubbles.ts"
     ],
@@ -96469,6 +96502,9 @@
     "PLUGIN_DESKTOP_ONLY_LABEL": [
       "packages/ui/ui/src/directory/constants.ts"
     ],
+    "plugin_diagnostic": [
+      "apps/cli/src/features/plugins/plugins.rs"
+    ],
     "PLUGIN_DIRECTORY_BUILTIN_READ_LIMIT": [
       "apps/web/features/plugins/server/directory/constants.ts"
     ],
@@ -99368,6 +99404,9 @@
     "print_warn": [
       "apps/cli/src/output.rs"
     ],
+    "printable": [
+      "crates/agiworkforce-mcp/src/security.rs"
+    ],
     "printConversation": [
       "apps/mobile/services/fileCreation.ts",
       "apps/web/features/chat/lib/print-conversation.ts"
@@ -101144,6 +101183,9 @@
     ],
     "ProjectWriteAccess": [
       "apps/web/lib/services/org-sharing-service.ts"
+    ],
+    "promisor_keys": [
+      "crates/agiworkforce-worktree/src/config_guard.rs"
     ],
     "promotablePlanTiers": [
       "apps/web/lib/services/usage-limit-promotion-service.ts"
@@ -119331,6 +119373,9 @@
     ],
     "sanitize_multiline_for_prompt": [
       "apps/desktop/src-tauri/src/sys/commands/chat/prompt_context.rs"
+    ],
+    "sanitize_single_line": [
+      "apps/cli/src/terminal_text.rs"
     ],
     "sanitize_terminal_line": [
       "apps/cli/src/terminal_text.rs"
@@ -150729,6 +150774,9 @@
     ],
     "withoutStandingApprovals": [
       "apps/web/app/api/llm/v1/chat/completions/lib/connector-tool-permissions.ts"
+    ],
+    "withoutSystemMessages": [
+      "apps/web/features/chat/lib/shared-conversation-snapshot.ts"
     ],
     "withoutTestModules": [
       "scripts/check-cli-local-secret.mjs"

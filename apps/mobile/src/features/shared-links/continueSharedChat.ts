@@ -6,7 +6,7 @@ const BATCH_SIZE = 200;
 const MAX_MESSAGE_CHARS = 100_000;
 const TITLE_MAX_CHARS = 500;
 
-export type SharedChatRole = 'user' | 'assistant' | 'system';
+export type SharedChatRole = 'user' | 'assistant';
 
 export interface SharedChatCopy {
   title: string;
@@ -35,7 +35,7 @@ export function readSharedChat(body: unknown): SharedChatCopy {
   const messages = Array.isArray(record.messages)
     ? record.messages.flatMap((item) => {
         const { role, content } = (item ?? {}) as { role?: unknown; content?: unknown };
-        if (role !== 'user' && role !== 'assistant' && role !== 'system') return [];
+        if (role !== 'user' && role !== 'assistant') return [];
         if (typeof content !== 'string') return [];
         const trimmed = content.trim().slice(0, MAX_MESSAGE_CHARS);
         return trimmed ? [{ role: role as SharedChatRole, content: trimmed }] : [];

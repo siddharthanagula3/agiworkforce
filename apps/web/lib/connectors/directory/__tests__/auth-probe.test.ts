@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   execute: vi.fn(),
   assertResolvedPublicHostname: vi.fn(async (..._args: unknown[]) => undefined),
   discoverOAuthServerInfo: vi.fn(),
+  guardedFetch: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -19,10 +20,12 @@ vi.mock('@/lib/server/neon-db', () => ({
 vi.mock('@/lib/egress-policy', () => ({
   assertResolvedPublicHostname: (...args: unknown[]) => mocks.assertResolvedPublicHostname(...args),
 }));
+vi.mock('@/lib/connectors/mcp-oauth-fetch', () => ({ mcpOAuthFetch: mocks.guardedFetch }));
 vi.mock('@modelcontextprotocol/client', () => ({
   discoverOAuthServerInfo: (...args: unknown[]) => mocks.discoverOAuthServerInfo(...args),
 }));
 
+import { mcpOAuthFetch } from '@/lib/connectors/mcp-oauth-fetch';
 import {
   AUTH_PROBE_TIMEOUT_MS,
   authModeFromProbe,
@@ -55,6 +58,16 @@ describe('probeRemoteAuthMode', () => {
     await expect(probeRemoteAuthMode('https://protected.example.com/mcp')).resolves.toBe(
       'oauth-required',
     );
+  });
+
+  it('discovers through the guarded fetch', async () => {
+    mocks.discoverOAuthServerInfo.mockResolvedValueOnce({});
+
+    await probeRemoteAuthMode('https://open.example.com/mcp');
+
+    expect(mocks.discoverOAuthServerInfo).toHaveBeenCalledWith('https://open.example.com/mcp', {
+      fetchFn: mcpOAuthFetch,
+    });
   });
 
   it('reports unresolved when the hostname fails the egress guard, without calling discovery', async () => {
@@ -160,7 +173,9 @@ describe('resolveAuthModeForRecord', () => {
 
     const resolved = await resolveAuthModeForRecord(record);
 
-    expect(mocks.discoverOAuthServerInfo).toHaveBeenCalledWith('https://remote.example.com/mcp');
+    expect(mocks.discoverOAuthServerInfo).toHaveBeenCalledWith('https://remote.example.com/mcp', {
+      fetchFn: mcpOAuthFetch,
+    });
     expect(resolved.authMode).toBe('oauth');
     expect(resolved.connectable).toBe('connect');
   });

@@ -38,7 +38,7 @@ export interface SnapshotArtifact {
 }
 
 export interface SnapshotMessage {
-  role: 'user' | 'assistant' | 'system';
+  role: 'user' | 'assistant';
   content: string;
   attachments: SnapshotAttachment[];
   artifactDerivation: string | null;
@@ -117,12 +117,16 @@ function readArtifacts(value: unknown): SnapshotArtifact[] {
   });
 }
 
+export function withoutSystemMessages<T extends { role?: unknown }>(messages: readonly T[]): T[] {
+  return messages.filter((message) => message.role !== 'system');
+}
+
 export function readSnapshotMessages(raw: unknown, maxContentChars: number): SnapshotMessage[] {
   if (!Array.isArray(raw)) return [];
   return raw.flatMap((item) => {
     if (!isRecord(item)) return [];
     const { role, content } = item;
-    if (role !== 'user' && role !== 'assistant' && role !== 'system') return [];
+    if (role !== 'user' && role !== 'assistant') return [];
     if (typeof content !== 'string') return [];
     const trimmed = content.trim().slice(0, maxContentChars);
     if (!trimmed) return [];

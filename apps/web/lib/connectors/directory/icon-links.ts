@@ -1,4 +1,6 @@
-const LINK_TAG = /<link\b[^>]*>/giu;
+import { markupTagRanges } from '@/lib/markup-tags';
+
+const LINK_OPENING = /<link\b/giu;
 const LINK_ATTRIBUTE = /\b(rel|href)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/giu;
 const ESCAPED_AMPERSAND = /&amp;/gu;
 const WHITESPACE = /\s+/u;
@@ -49,7 +51,8 @@ function resolveHref(href: string, baseUrl: string): string | null {
 
 export function discoverIconLinks(html: string, baseUrl: string): string[] {
   const ranked = new Map<string, number>();
-  for (const tag of html.match(LINK_TAG) ?? []) {
+  for (const { start, end } of markupTagRanges(html, LINK_OPENING)) {
+    const tag = html.slice(start, end);
     const { rel, href } = linkAttributes(tag);
     const rank = iconRank(rel);
     if (rank === null) continue;

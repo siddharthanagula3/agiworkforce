@@ -293,6 +293,8 @@ async function resolveCompactionSummary(params: {
     );
   }
 
+  // Stored system rows count: every read route hands them to clients as
+  // assistant turns, so the request carries them among the dropped messages.
   const [conversationRows, persistedRows] = await Promise.all([
     params.db.query<ConversationCompactionRow>(
       `select compaction_summary, compaction_summary_through_message_id, compaction_summary_digest
@@ -307,7 +309,7 @@ async function resolveCompactionSummary(params: {
       `select id, server_version::text as server_version
          from web_messages
         where conversation_id = $1
-          and role in ('user', 'assistant')
+          and role in ('user', 'assistant', 'system')
           and deleted_at is null
         order by created_at asc, id asc
         limit $2`,

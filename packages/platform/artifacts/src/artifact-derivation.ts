@@ -180,6 +180,18 @@ function betweenTags(content: string, openTag: string, closeTag: string): string
   return end === -1 ? undefined : content.slice(start, end);
 }
 
+function stripTags(text: string): string {
+  let out = '';
+  let cursor = 0;
+  for (let open = text.indexOf('<'); open !== -1; open = text.indexOf('<', cursor)) {
+    const close = text.indexOf('>', open + 1);
+    if (close === -1) break;
+    out += text.slice(cursor, open);
+    cursor = close + 1;
+  }
+  return out + text.slice(cursor);
+}
+
 export function extractArtifactTitle(content: string): string | undefined {
   const titleText = betweenTags(content, '<title', '</title>');
   if (titleText?.trim()) return titleText.trim();
@@ -193,7 +205,7 @@ export function extractArtifactTitle(content: string): string | undefined {
     let prev: string;
     do {
       prev = text;
-      text = text.replace(/<[^>]*>/g, '');
+      text = stripTags(text);
     } while (text !== prev);
     const trimmed = text.trim();
     if (trimmed) return trimmed;

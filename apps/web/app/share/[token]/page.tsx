@@ -5,6 +5,7 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { getCurrentCookieUserRlsDb } from '@/lib/server/rls-db';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
+import { withoutSystemMessages } from '@/features/chat/lib/shared-conversation-snapshot';
 import { SharedSessionViewer } from '@/features/chat/components/share/SharedSessionViewer';
 import type { SharedSession } from '@/features/chat/components/share/SharedSessionViewer';
 import { ReportContentLink } from '@/app/copyright/report/ReportContentLink';
@@ -54,16 +55,21 @@ async function viewerIsSignedIn(): Promise<boolean> {
   }
 }
 
+function viewerMessages(session: OrgReadableSession): SharedSession['messages'] {
+  return withoutSystemMessages(
+    (Array.isArray(session.messages) ? session.messages : []) as SharedSession['messages'],
+  );
+}
+
 function toViewerSession(session: OrgReadableSession, sharedBy: string | null): SharedSession {
+  const messages = viewerMessages(session);
   return {
     title: session.title,
     ...(sharedBy ? { shared_by: sharedBy } : {}),
     ...(session.modelId ? { model_id: session.modelId } : {}),
     ...(session.provider ? { provider: session.provider } : {}),
-    messages: (Array.isArray(session.messages)
-      ? session.messages
-      : []) as SharedSession['messages'],
-    total_messages: session.messageCount,
+    messages,
+    total_messages: messages.length,
     expires_at: session.expiresAt,
     created_at: session.createdAt,
   };
@@ -84,7 +90,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   return {
     title: live ? `${live.title} - AGI` : 'Shared Session - AGI',
-    description: live ? `${live.messageCount} message conversation shared from AGI` : undefined,
+    description: live
+      ? `${viewerMessages(live).length} message conversation shared from AGI`
+      : undefined,
     robots: { index: false, follow: false },
   };
 }

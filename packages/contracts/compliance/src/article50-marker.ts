@@ -7,6 +7,8 @@ import {
 
 export type { SyntheticContentKind };
 
+const HEAD_OPEN_LENGTH = '<head'.length;
+
 export type C2paStyleClaim = AiActProvenanceClaim;
 
 export const buildProvenanceClaim = buildAiActProvenanceClaim;
@@ -44,9 +46,10 @@ export function injectAiGeneratedMetaTag(args: {
     '',
   );
 
-  const headMatch = stripped.match(/<head[^>]*>/i);
-  if (headMatch) {
-    const insertAt = (headMatch.index ?? 0) + headMatch[0].length;
+  const headOpen = stripped.search(/<head/i);
+  const headClose = headOpen === -1 ? -1 : stripped.indexOf('>', headOpen + HEAD_OPEN_LENGTH);
+  if (headClose !== -1) {
+    const insertAt = headClose + 1;
     return stripped.slice(0, insertAt) + '\n  ' + tag + stripped.slice(insertAt);
   }
 

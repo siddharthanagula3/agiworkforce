@@ -785,6 +785,44 @@ describe('existing workbook preservation', () => {
     );
   });
 
+  it('checks the formulas of a workbook with no cell formula before rendering it', async () => {
+    const input = await workbook();
+    const sheetXml = await input.zip.file('xl/worksheets/sheet1.xml')!.async('string');
+    input.zip.file(
+      'xl/worksheets/sheet1.xml',
+      sheetXml.replace(
+        '</sheetData>',
+        '</sheetData><conditionalFormatting sqref="B2"><cfRule type="expression" priority="1"><formula>WEBSERVICE(A1)</formula></cfRule></conditionalFormatting>',
+      ),
+    );
+    const data = await input.zip.generateAsync({ type: 'nodebuffer' });
+    const execution = recalculationFixture();
+    const result = await generateManagedOfficeFile(
+      {
+        format: 'xlsx',
+        filename: 'updated.xlsx',
+        title: 'Updated',
+        verify_render: true,
+        source: {
+          filename: input.filename,
+          sha256: createHash('sha256').update(data).digest('hex'),
+          edits: [{ sheet: 'Budget', cell: 'B2', expected: 25, value: 30 }],
+        },
+      },
+      {
+        attachments: [
+          { filename: input.filename, mimeType: input.mimeType, base64: data.toString('base64') },
+        ],
+        executor: async () => execution.executor,
+      },
+    );
+    expect(result).toMatchObject({
+      ok: false,
+      message: 'This workbook function is not supported by the managed recalculation contract.',
+    });
+    expect(execution.commands()).toBe(0);
+  });
+
   it('requires a real rendering executor when rendering was requested', async () => {
     const result = await generateManagedOfficeFile({
       format: 'docx',

@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { MAX_CODE_CONTROL_PAYLOAD_SIZE, MAX_CONTROL_PAYLOAD_SIZE } from './constants.js';
+import { withinJsonBounds } from './bounded-json.js';
+import {
+  MAX_CODE_CONTROL_PAYLOAD_SIZE,
+  MAX_CONTROL_PAYLOAD_SIZE,
+  MAX_JSON_NESTING_DEPTH,
+} from './constants.js';
 
 export const ALLOWED_CONTROL_ACTIONS = [
   'approval_request',
@@ -62,7 +67,10 @@ export const controlPayloadSchema = z
   })
   .refine(
     (val) =>
-      JSON.stringify(val).length <=
-      (LARGE_ACTION_SET.has(val.action) ? MAX_CODE_CONTROL_PAYLOAD_SIZE : MAX_CONTROL_PAYLOAD_SIZE),
+      withinJsonBounds(
+        val,
+        LARGE_ACTION_SET.has(val.action) ? MAX_CODE_CONTROL_PAYLOAD_SIZE : MAX_CONTROL_PAYLOAD_SIZE,
+        MAX_JSON_NESTING_DEPTH,
+      ),
     { message: 'Control payload too large' },
   );

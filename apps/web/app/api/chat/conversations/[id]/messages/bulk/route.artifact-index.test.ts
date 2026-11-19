@@ -125,19 +125,12 @@ describe('POST /api/chat/conversations/[id]/messages/bulk, artifact indexing', (
     );
   });
 
-  it('leaves user and system messages unindexed', async () => {
+  it('leaves user messages unindexed', async () => {
     const userMessageId = '33333333-3333-4333-8333-333333333333';
-    const systemMessageId = '44444444-4444-4444-8444-444444444444';
     mockSavedRow(userMessageId, 'user', 'hello');
-    mockSavedRow(systemMessageId, 'system', 'context note');
 
     const res = await postBulkMessages(
-      makeRequest({
-        messages: [
-          { id: userMessageId, role: 'user', content: 'hello' },
-          { id: systemMessageId, role: 'system', content: 'context note' },
-        ],
-      }),
+      makeRequest({ messages: [{ id: userMessageId, role: 'user', content: 'hello' }] }),
       makeContext(),
     );
 

@@ -245,6 +245,14 @@ pub const VALUE_DIGEST_PREFIX: &str = "sha256:";
 /// pinned by.
 const PINNED_QUERY: &str = " query ";
 
+/// Schemes a WHATWG parser, and so a browser, Node and reqwest, reads a host
+/// after whatever follows the colon.
+const SPECIAL_SCHEMES: [&str; 5] = ["http", "https", "ws", "wss", "ftp"];
+
+/// Query parameters a database client connects by in place of the host
+/// before the path.
+const HOST_PARAMETERS: [&str; 2] = ["host", "hostaddr"];
+
 /// What a variable's name says about its value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum NameClass {
@@ -359,8 +367,15 @@ pub fn holds_a_credential(name: &str, value: &str) -> bool {
 /// endpoint written without `://` is a path or a `host:port` and is shown as
 /// written, unless it holds an `@`, a `?` or a `#`, which is where a
 /// credential would sit. A credential, a name that may be one, and an
-/// endpoint that cannot be read with confidence are not shown. Every other
-/// value is shown whole.
+/// endpoint that cannot be read with confidence are not shown: one whose
+/// authority holds a backslash or a second `@`, whose scheme holds a host of
+/// its own (`https:other.example://`), whose special scheme is followed by
+/// more than two slashes, whose scheme is not special and that holds a `#`
+/// before any `?`, which libpq reads as part of the host or database name,
+/// or whose query names the host a database client
+/// connects to (`?host=`, `?hostaddr=`, also after a `#`), or that holds an
+/// `@` after a `?` or `#` and before the path, which libpq reads as the end
+/// of a userinfo. Every other value is shown whole.
 pub fn shown_value<'a>(name: &str, value: &'a str) -> Option<Cow<'a, str>> {
     match value_class(name, value) {
         NameClass::Plain => Some(Cow::Borrowed(value)),
@@ -379,7 +394,8 @@ pub fn shown_value<'a>(name: &str, value: &'a str) -> Option<Cow<'a, str>> {
 /// hold a credential, and for an endpoint of its query and fragment with the
 /// value of each credential parameter taken out, so that
 /// `?host=other&sslmode=disable` asks again and `?password=` rotated does
-/// not. Only a credential by name ([`value_is_secret`]) is left out
+/// not. The user before the host is pinned with them, the password after it
+/// is not. Only a credential by name ([`value_is_secret`]) is left out
 /// altogether, so that rotating a token is not a different launch; a
 /// credential inside a value pinned whole by digest does ask again when it
 /// rotates.
@@ -396,20 +412,30 @@ pub fn pinned_value<'a>(
         NameClass::Unclear => Some(whole(digest(value))),
         NameClass::Endpoint => Some(match endpoint(value) {
             None => whole(digest(value)),
-            Some(endpoint) if endpoint.left_out.is_empty() => endpoint.shown,
+            Some(endpoint) if endpoint.left_out.is_empty() && endpoint.user.is_none() => {
+                endpoint.shown
+            }
             Some(endpoint) => Cow::Owned(format!(
                 "{}{PINNED_QUERY}{VALUE_DIGEST_PREFIX}{}",
                 endpoint.shown,
-                digest(&without_credential_parameters(endpoint.left_out))
+                digest(&format!(
+                    "{}{}",
+                    endpoint
+                        .user
+                        .map(|user| format!("{user}@"))
+                        .unwrap_or_default(),
+                    without_credential_parameters(endpoint.left_out)
+                ))
             )),
         }),
     }
 }
 
-/// An endpoint as it is shown, and the query and fragment that were left
-/// out of that, as written.
+/// An endpoint as it is shown, the user it names, and the query and fragment
+/// that were left out of that, as written.
 struct Endpoint<'a> {
     shown: Cow<'a, str>,
+    user: Option<&'a str>,
     left_out: &'a str,
 }
 
@@ -446,6 +472,7 @@ fn endpoint(value: &str) -> Option<Endpoint<'_>> {
     let Some((scheme, rest)) = value.split_once("://") else {
         return (!value.contains(['@', '?', '#'])).then_some(Endpoint {
             shown: Cow::Borrowed(value),
+            user: None,
             left_out: "",
         });
     };
@@ -453,29 +480,103 @@ fn endpoint(value: &str) -> Option<Endpoint<'_>> {
         && scheme
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.' | ':'));
-    if !names_a_scheme {
+    if !names_a_scheme || scheme_holds_a_host(scheme) {
+        return None;
+    }
+    // A WHATWG parser skips every `/` and `\` after a special scheme, so
+    // `https:///user:pass@other.example/` connects to other.example.
+    let special = SPECIAL_SCHEMES
+        .iter()
+        .any(|special| special.eq_ignore_ascii_case(scheme));
+    if special && rest.starts_with(['/', '\\']) {
+        return None;
+    }
+    // libpq's host scan does not stop at `#`, so in
+    // `postgres://trusted.example#.attacker.example/` it resolves the whole name.
+    let before_query = rest.split('?').next().unwrap_or(rest);
+    if !special && before_query.contains('#') {
         return None;
     }
     let authority_end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
     let (authority, after) = rest.split_at(authority_end);
-    let (user, host) = match authority.rsplit_once('@') {
-        Some((user, host)) => (Some(user), host),
+    // A WHATWG parser ends a special scheme's authority at a backslash, so
+    // text this reader takes for userinfo can be the host a client connects to.
+    if authority.contains('\\') {
+        return None;
+    }
+    let (userinfo, host) = match authority.rsplit_once('@') {
+        Some((userinfo, host)) => (Some(userinfo), host),
         None => (None, authority),
     };
+    if userinfo.is_some_and(|userinfo| !is_userinfo(userinfo)) {
+        return None;
+    }
+    let user = userinfo.map(|userinfo| userinfo.split_once(':').map_or(userinfo, |(name, _)| name));
     let (path, left_out) = after.split_at(after.find(['?', '#']).unwrap_or(after.len()));
     // A password with a slash in it ends the authority early: what is left
     // reads as `user:digits` with the rest of the password, an `@` and the
     // real host in the path. Such a value is not one to show.
-    let split_password = user.is_none() && host.contains(':') && path.contains('@');
-    if !names_a_host(host) || split_password || (host.is_empty() && user.is_some()) {
+    let split_password = userinfo.is_none() && host.contains(':') && path.contains('@');
+    if !names_a_host(host) || split_password || (host.is_empty() && userinfo.is_some()) {
         return None;
     }
-    let shown = if user.is_none() && left_out.is_empty() {
+    // libpq ends the userinfo at the first `@` before a `/`, past any `?` or
+    // `#`, so `postgres://trusted.example?@other.example/` connects to
+    // other.example.
+    let userinfo_past_the_authority = userinfo.is_none()
+        && after
+            .split('/')
+            .next()
+            .is_some_and(|before_path| before_path.contains('@'));
+    if !special && (userinfo_past_the_authority || query_names_a_host(left_out)) {
+        return None;
+    }
+    let shown = if userinfo.is_none() && left_out.is_empty() {
         Cow::Borrowed(value)
     } else {
         Cow::Owned(format!("{scheme}://{host}{path}{REDACTED_SUFFIX}"))
     };
-    Some(Endpoint { shown, left_out })
+    Some(Endpoint {
+        shown,
+        user,
+        left_out,
+    })
+}
+
+/// Whether `userinfo` is read as userinfo by every client: nothing in it can
+/// end the authority or start another userinfo, so the host after its `@` is
+/// the one they all connect to. A second `@` is read as part of the password
+/// by one client and as the end of the userinfo by another.
+fn is_userinfo(userinfo: &str) -> bool {
+    !userinfo
+        .chars()
+        .any(|c| matches!(c, '@' | '/' | '?' | '#' | '\\') || c.is_whitespace() || c.is_control())
+}
+
+/// Whether a scheme before `://` holds a host of its own. `jdbc:postgresql`
+/// does not; in `https:other.example://trusted.example/` a WHATWG parser
+/// connects to `other.example` and reads the rest as a path.
+fn scheme_holds_a_host(scheme: &str) -> bool {
+    let first = scheme.split(':').next().unwrap_or_default();
+    scheme.contains(':')
+        && (SPECIAL_SCHEMES
+            .iter()
+            .any(|special| special.eq_ignore_ascii_case(first))
+            || scheme.split(':').any(|part| part.contains('.')))
+}
+
+/// Whether a query names the host a database client connects to in place of
+/// the one before the path, as `?host=` and `?hostaddr=` do for libpq. A
+/// percent-encoded name may decode to one, so it counts as one. libpq has no
+/// fragment, so a parameter after a `#` counts too.
+fn query_names_a_host(left_out: &str) -> bool {
+    left_out.split(['?', '&', ';', '#']).any(|parameter| {
+        let name = parameter.split('=').next().unwrap_or_default();
+        name.contains('%')
+            || HOST_PARAMETERS
+                .iter()
+                .any(|host| host.eq_ignore_ascii_case(name))
+    })
 }
 
 /// Whether `host` is a host with an optional port and nothing else: a name
@@ -933,6 +1034,10 @@ mod tests {
                 "jdbc:postgresql://db.example.com/main?user=app&password=EXAMPLE",
                 "jdbc:postgresql://db.example.com/main (credentials hidden)",
             ),
+            (
+                "https://us%40er:p%40ss!$&'()*+,;=~-._@id.example.com/x",
+                "https://id.example.com/x (credentials hidden)",
+            ),
         ] {
             for name in ["DATABASE_URL", "MONGODB_URI", "SENTRY_DSN", "mongodb_uri"] {
                 assert_eq!(shown(name, value).as_deref(), Some(reduced), "{name}");
@@ -975,11 +1080,11 @@ mod tests {
         for (value, pin) in [
             (
                 "postgres://app:EXAMPLE@db.example.com:5432/main",
-                "postgres://db.example.com:5432/main (credentials hidden)",
+                "postgres://db.example.com:5432/main (credentials hidden) query sha256:<app@>",
             ),
             (
-                "postgres://db/main?host=planted.invalid&sslmode=disable",
-                "postgres://db/main (credentials hidden) query sha256:<?host=planted.invalid&sslmode=disable>",
+                "postgres://db/main?port=6432&sslmode=disable",
+                "postgres://db/main (credentials hidden) query sha256:<?port=6432&sslmode=disable>",
             ),
             (
                 "https://hooks.example.com/notify?token=EXAMPLE&room=7",
@@ -991,7 +1096,7 @@ mod tests {
             ),
             (
                 "https://user:EXAMPLE@[2001:db8::1]:8443/v1?key=EXAMPLE",
-                "https://[2001:db8::1]:8443/v1 (credentials hidden) query sha256:<?key=>",
+                "https://[2001:db8::1]:8443/v1 (credentials hidden) query sha256:<user@?key=>",
             ),
             (
                 "jdbc:postgresql://db.example.com/main?user=app&password=EXAMPLE",
@@ -1022,7 +1127,6 @@ mod tests {
         for moved in [
             "postgres://db/main",
             "postgres://db/main?sslmode=disable&password=EXAMPLE",
-            "postgres://db/main?sslmode=require&password=EXAMPLE&host=planted.invalid",
             "postgres://db/main?password=EXAMPLE&sslmode=require",
             "postgres://db/main?sslmode=require#password=EXAMPLE",
         ] {
@@ -1041,6 +1145,144 @@ mod tests {
             shown("DATABASE_URL", approved),
             "the digest is pinned and not shown"
         );
+        let moved_host = "postgres://db/main?sslmode=require&password=EXAMPLE&host=planted.invalid";
+        assert_ne!(
+            pinned_from("DATABASE_URL", approved),
+            pinned_from("DATABASE_URL", moved_host),
+        );
+        assert_eq!(shown("DATABASE_URL", moved_host), None);
+    }
+
+    #[test]
+    fn a_libpq_host_written_past_a_hash_or_question_mark_hides_the_endpoint() {
+        for value in [
+            "postgres://trusted-db.example/main#?host=attacker.example",
+            "postgres://trusted-db.example/main?application_name=x#&host=attacker.example",
+            "postgres://trusted-db.example#?host=attacker.example",
+            "postgres://trusted-db.example?@attacker.example/main",
+            "postgres://trusted-db.example#@attacker.example/main",
+            "postgres://trusted-db.example:5432?x@attacker.example/main",
+        ] {
+            for name in ["DATABASE_URL", "MCP_SERVER_URL"] {
+                assert_eq!(shown(name, value), None, "{value} is shown");
+                assert_eq!(
+                    pinned(name, value),
+                    Some(format!("sha256:digest-of-{}", value.len())),
+                    "{value}"
+                );
+            }
+        }
+        for (value, reduced) in [
+            (
+                "postgres://trusted-db.example/main?sslmode=require#part",
+                "postgres://trusted-db.example/main (credentials hidden)",
+            ),
+            (
+                "postgres://app:EXAMPLE@trusted-db.example/main?x=a@b",
+                "postgres://trusted-db.example/main (credentials hidden)",
+            ),
+            (
+                "https://hooks.example.com/notify#?host=other.example",
+                "https://hooks.example.com/notify (credentials hidden)",
+            ),
+        ] {
+            assert_eq!(shown("DATABASE_URL", value).as_deref(), Some(reduced));
+        }
+    }
+
+    #[test]
+    fn a_hash_before_the_query_of_a_database_url_hides_the_endpoint_and_pins_it_whole() {
+        for value in [
+            "postgres://trusted.example#.attacker.example/main",
+            "postgresql://app:EXAMPLE@trusted.example#.attacker.example:5432/main?sslmode=require",
+            "jdbc:postgresql://trusted.example#x/main",
+            "postgres://trusted.example/main#part",
+            "postgres://trusted.example/ma#in?sslmode=require",
+        ] {
+            for name in ["DATABASE_URL", "MCP_SERVER_URL"] {
+                assert_eq!(shown(name, value), None, "{value} is shown");
+                assert_eq!(
+                    pinned(name, value),
+                    Some(format!("sha256:digest-of-{}", value.len())),
+                    "{value}"
+                );
+            }
+        }
+        for (value, reduced) in [
+            (
+                "postgres://trusted.example/main?sslmode=require#part",
+                "postgres://trusted.example/main (credentials hidden)",
+            ),
+            (
+                "https://hooks.example.com/notify#section",
+                "https://hooks.example.com/notify (credentials hidden)",
+            ),
+        ] {
+            assert_eq!(shown("DATABASE_URL", value).as_deref(), Some(reduced));
+        }
+    }
+
+    #[test]
+    fn a_database_query_that_names_the_host_hides_the_endpoint_and_pins_it_whole() {
+        for value in [
+            "postgres://trusted-db.example/main?host=attacker.example",
+            "postgresql://app:EXAMPLE@trusted-db.example/main?sslmode=require&hostaddr=203.0.113.9",
+            "postgres://trusted-db.example/main?HOST=attacker.example",
+            "postgres://trusted-db.example/main?h%6fst=attacker.example",
+            "jdbc:postgresql://trusted-db.example/main?host=attacker.example",
+            "postgres://trusted-db.example/main?host",
+        ] {
+            for name in ["DATABASE_URL", "MYSQL_DSN", "MCP_SERVER_URL"] {
+                assert_eq!(shown(name, value), None, "{value} is shown");
+                assert_eq!(
+                    pinned(name, value),
+                    Some(format!("sha256:digest-of-{}", value.len())),
+                    "{value}"
+                );
+            }
+        }
+        for (value, reduced) in [
+            (
+                "https://hooks.example.com/notify?host=other.example",
+                "https://hooks.example.com/notify (credentials hidden)",
+            ),
+            (
+                "postgres://trusted-db.example/main?sslmode=require&application_name=hostname",
+                "postgres://trusted-db.example/main (credentials hidden)",
+            ),
+        ] {
+            assert_eq!(shown("DATABASE_URL", value).as_deref(), Some(reduced));
+        }
+    }
+
+    #[test]
+    fn a_password_any_client_reads_as_one_is_hidden_and_rotates_freely() {
+        let approved = "postgres://app:p^ss@db.example.com/main";
+        for name in ["DATABASE_URL", "MCP_SERVER_URL"] {
+            for value in [
+                approved,
+                "postgres://app:EXAMPLE€@db.example.com/main",
+                "postgres://app:p{a|s}s@db.example.com/main",
+                "postgres://app:EXAMPLE\"[]`<>@db.example.com/main",
+                "postgres://app:us%2gr%@db.example.com/main",
+            ] {
+                assert_eq!(
+                    shown(name, value).as_deref(),
+                    Some("postgres://db.example.com/main (credentials hidden)"),
+                    "{value}"
+                );
+                assert_eq!(
+                    pinned_from(name, value).as_deref(),
+                    Some("postgres://db.example.com/main (credentials hidden) query sha256:<app@>"),
+                    "rotating the password in {value} asks again"
+                );
+            }
+            assert_ne!(
+                pinned_from(name, approved),
+                pinned_from(name, "postgres://other:p^ss@db.example.com/main"),
+                "a swapped user is another launch"
+            );
+        }
     }
 
     #[test]
@@ -1065,6 +1307,42 @@ mod tests {
     }
 
     #[test]
+    fn a_swapped_user_is_another_launch_and_a_rotated_password_is_not() {
+        for name in ["MCP_SERVER_URL", "DATABASE_URL"] {
+            let approved = pinned_from(name, "https://app:EXAMPLE@id.example.com/token");
+            assert_eq!(
+                approved.as_deref(),
+                Some("https://id.example.com/token (credentials hidden) query sha256:<app@>")
+            );
+            assert_eq!(
+                approved,
+                pinned_from(name, "https://app:ROTATED@id.example.com/token"),
+                "a rotated password is the same launch"
+            );
+            for swapped in [
+                "https://other:EXAMPLE@id.example.com/token",
+                "https://other@id.example.com/token",
+                "https://:EXAMPLE@id.example.com/token",
+                "https://id.example.com/token",
+            ] {
+                assert_ne!(approved, pinned_from(name, swapped), "{swapped}");
+            }
+            assert_eq!(
+                shown(name, "https://app:EXAMPLE@id.example.com/token").as_deref(),
+                Some("https://id.example.com/token (credentials hidden)")
+            );
+        }
+        assert_ne!(
+            pinned_from("MCP_SERVER_URL", "https://a@h.example/?x=1"),
+            pinned_from("MCP_SERVER_URL", "https://a@h.example/?x=1@"),
+        );
+        assert_ne!(
+            pinned_from("MCP_SERVER_URL", "https://a@@h.example/"),
+            pinned_from("MCP_SERVER_URL", "https://a@h.example/"),
+        );
+    }
+
+    #[test]
     fn an_endpoint_that_cannot_be_read_is_hidden_and_still_pinned() {
         for value in [
             "https://pypi.org/simple https://planted.invalid/simple",
@@ -1079,6 +1357,22 @@ mod tests {
             "1https://example.com",
             "https://ex\u{0}ample.com/",
             "https://example.com/a\nb",
+            "https://attacker.example\\@well-known.example/",
+            "http://attacker.example\\@well-known.example/",
+            "wss://attacker.example\\@well-known.example/socket",
+            "ws://attacker.example\\@well-known.example/socket",
+            "https://attacker.example\\?@well-known.example/",
+            "https://user:pass\\@well-known.example/",
+            "https://well-known.example\\@attacker.example/",
+            "https://a@b@well-known.example/",
+            "https:attacker.example://u:p@trusted.example/sse?x=1",
+            "http:attacker.example://trusted.example/",
+            "HTTPS:attacker.example://trusted.example/",
+            "wss:attacker.example://trusted.example/socket",
+            "jdbc:attacker.example://trusted.example/main",
+            "https:///attacker.example/",
+            "https:///u:EXAMPLE@attacker.example/",
+            "ws:///attacker.example/socket",
         ] {
             for name in ["PIP_EXTRA_INDEX_URL", "MONGODB_URI", "MYSQL_DSN"] {
                 assert_eq!(shown(name, value), None, "{value:?} is shown");

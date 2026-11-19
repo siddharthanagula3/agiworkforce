@@ -23,8 +23,8 @@ function CellOutput({ output }: { output: NotebookCellOutput }) {
     return (
       <div
         className={styles['outputTable']}
-        // llm-guardrail-allow: a DataFrame's repr from the reader's own sandbox
-        // execution, sanitized on the line below before it reaches the DOM.
+        // llm-guardrail-allow: a sandbox DataFrame repr, sanitized before it reaches the DOM.
+
         dangerouslySetInnerHTML={{ __html: sanitizeHTML(output.data, 'standard') }}
       />
     );
