@@ -1212,7 +1212,7 @@ impl CliDeveloperSessionHost {
             agent.loaded_fingerprint = fingerprint;
         }
         self.emit(
-            "thread/reloaded",
+            method::THREAD_RELOADED,
             serde_json::json!({ "threadId": thread_id }),
         );
         Ok(())
@@ -1262,7 +1262,10 @@ impl CliDeveloperSessionHost {
             return;
         }
 
-        self.emit("mcp/loading", serde_json::json!({ "threadId": thread_id }));
+        self.emit(
+            method::MCP_LOADING,
+            serde_json::json!({ "threadId": thread_id }),
+        );
         let notifications = self.notifications.clone();
         let shutdown_started = self.shutdown_started.clone();
         let lifecycle = self.lifecycle.clone();
@@ -1302,7 +1305,7 @@ impl CliDeveloperSessionHost {
                         return;
                     }
                     (
-                        "mcp/ready",
+                        method::MCP_READY,
                         crate::mcp::consent::withheld_message(&workspace_root),
                     )
                 }
@@ -1312,7 +1315,7 @@ impl CliDeveloperSessionHost {
                     }
                     eprintln!("MCP integration discovery failed: {error:#}");
                     (
-                        "mcp/unavailable",
+                        method::MCP_UNAVAILABLE,
                         Some("MCP integrations could not be loaded for this session".to_string()),
                     )
                 }
@@ -1321,7 +1324,7 @@ impl CliDeveloperSessionHost {
                         return;
                     }
                     (
-                        "mcp/unavailable",
+                        method::MCP_UNAVAILABLE,
                         Some(format!(
                             "MCP integration discovery timed out after {MCP_LOAD_TIMEOUT_SECONDS} seconds"
                         )),
@@ -2727,7 +2730,10 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         .map_err(internal_error)?
         .map_err(internal_error)?;
         let summary = self.resolved_summary(resolved).await;
-        self.emit("thread/started", serde_json::json!({ "thread": summary }));
+        self.emit(
+            method::THREAD_STARTED,
+            serde_json::json!({ "thread": summary }),
+        );
         Ok(summary)
     }
 
@@ -2996,7 +3002,10 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         .await
         .map_err(internal_error)??;
         let summary = self.resolved_summary(resolved).await;
-        self.emit("thread/forked", serde_json::json!({ "thread": summary }));
+        self.emit(
+            method::THREAD_FORKED,
+            serde_json::json!({ "thread": summary }),
+        );
         Ok(summary)
     }
 
@@ -3279,7 +3288,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             }
         }
         self.emit(
-            "thread/archived",
+            method::THREAD_ARCHIVED,
             serde_json::json!({ "threadId": id_for_event.clone() }),
         );
         if let Ok(notification) = task_state_notification(
@@ -3310,7 +3319,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         .map_err(internal_error)?
         .map_err(not_found_error)?;
         self.emit(
-            "thread/unarchived",
+            method::THREAD_UNARCHIVED,
             serde_json::json!({ "threadId": id_for_event }),
         );
         Ok(())
@@ -3547,7 +3556,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 .collect::<Vec<_>>()
         };
         self.emit(
-            "thread/rewound",
+            method::THREAD_REWOUND,
             serde_json::json!({
                 "threadId": params.thread_id,
                 "conversationRestored": outcome.conversation_restored,
@@ -3675,7 +3684,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         });
         let released_worktrees = self.release_worktrees(&params.thread_id).await;
         self.emit(
-            "thread/deleted",
+            method::THREAD_DELETED,
             serde_json::json!({ "threadId": params.thread_id }),
         );
         Ok(ThreadDeleteResponse {
@@ -4352,9 +4361,9 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             // not identify the rejected token, so do not mutate the current login.
 
             let method = if final_status == TurnStatus::Completed {
-                "turn/completed"
+                method::TURN_COMPLETED
             } else {
-                "turn/failed"
+                method::TURN_FAILED
             };
             let (state, summary) = if final_status == TurnStatus::Completed {
                 (
@@ -4529,7 +4538,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 turn_id: turn_id.clone(),
             },
         );
-        if let Ok(notification) = AppServerNotification::new("turn/model", announced_model) {
+        if let Ok(notification) = AppServerNotification::new(method::TURN_MODEL, announced_model) {
             let _ = self.notifications.send(notification);
         }
         Ok(TurnSummary {
@@ -4577,7 +4586,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         drop(steering);
         drop(running);
         self.emit(
-            "turn/steered",
+            method::TURN_STEERED,
             serde_json::json!({ "threadId": params.thread_id, "turnId": turn_id }),
         );
         Ok(TurnSummary {
@@ -4694,7 +4703,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             let _ = self.notifications.send(notification);
         }
         self.emit(
-            "turn/interrupted",
+            method::TURN_INTERRUPTED,
             serde_json::json!({
                 "threadId": params.thread_id,
                 "turnId": params.turn_id,
@@ -5080,7 +5089,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             tokio::task::spawn_blocking(move || surfaces::install_skill(&workspace_root, params))
                 .await
                 .map_err(internal_error)??;
-        self.emit("skills/changed", serde_json::json!({}));
+        self.emit(method::SKILLS_CHANGED, serde_json::json!({}));
         Ok(changed)
     }
 
@@ -5094,7 +5103,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             tokio::task::spawn_blocking(move || surfaces::remove_skill(&workspace_root, params))
                 .await
                 .map_err(internal_error)??;
-        self.emit("skills/changed", serde_json::json!({}));
+        self.emit(method::SKILLS_CHANGED, serde_json::json!({}));
         Ok(changed)
     }
 
@@ -5120,7 +5129,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             }
             changed.notices = setup.notices(&root);
         }
-        self.emit("plugins/changed", serde_json::json!({}));
+        self.emit(method::PLUGINS_CHANGED, serde_json::json!({}));
         self.reload_integrations().await;
         Ok(changed)
     }
@@ -5135,7 +5144,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             tokio::task::spawn_blocking(move || surfaces::remove_plugin(&workspace_root, params))
                 .await
                 .map_err(internal_error)??;
-        self.emit("plugins/changed", serde_json::json!({}));
+        self.emit(method::PLUGINS_CHANGED, serde_json::json!({}));
         self.reload_integrations().await;
         Ok(changed)
     }
@@ -5151,7 +5160,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 .await
                 .map_err(internal_error)??;
         if updated.updated {
-            self.emit("plugins/changed", serde_json::json!({}));
+            self.emit(method::PLUGINS_CHANGED, serde_json::json!({}));
             self.reload_integrations().await;
         }
         Ok(updated)
@@ -5167,7 +5176,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             tokio::task::spawn_blocking(move || surfaces::add_mcp_server(&workspace_root, params))
                 .await
                 .map_err(internal_error)??;
-        self.emit("mcp/changed", serde_json::json!({}));
+        self.emit(method::MCP_CHANGED, serde_json::json!({}));
         self.reload_integrations().await;
         Ok(changed)
     }
@@ -5183,7 +5192,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         })
         .await
         .map_err(internal_error)??;
-        self.emit("mcp/changed", serde_json::json!({}));
+        self.emit(method::MCP_CHANGED, serde_json::json!({}));
         self.reload_integrations().await;
         Ok(changed)
     }
@@ -5201,7 +5210,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         .await
         .map_err(internal_error)??;
         if changed {
-            self.emit("mcp/changed", serde_json::json!({}));
+            self.emit(method::MCP_CHANGED, serde_json::json!({}));
             self.reload_integrations().await;
         }
         Ok(listed)
@@ -5217,7 +5226,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             tokio::task::spawn_blocking(move || surfaces::add_hook(&workspace_root, params))
                 .await
                 .map_err(internal_error)??;
-        self.emit("hooks/changed", serde_json::json!({}));
+        self.emit(method::HOOKS_CHANGED, serde_json::json!({}));
         Ok(changed)
     }
 
@@ -5231,7 +5240,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             tokio::task::spawn_blocking(move || surfaces::remove_hook(&workspace_root, params))
                 .await
                 .map_err(internal_error)??;
-        self.emit("hooks/changed", serde_json::json!({}));
+        self.emit(method::HOOKS_CHANGED, serde_json::json!({}));
         Ok(changed)
     }
 
@@ -5307,7 +5316,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         .await
         .map_err(internal_error)??;
         self.emit(
-            "memory/added",
+            method::MEMORY_ADDED,
             serde_json::json!({ "scope": added.scope, "path": added.path }),
         );
         Ok(added)
@@ -5326,7 +5335,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         .map_err(invalid_request)?;
         let summary = worktree_summary(&worktree).await?;
         self.emit(
-            "worktree/created",
+            method::WORKTREE_CREATED,
             serde_json::json!({ "worktree": summary }),
         );
         Ok(summary)
@@ -5556,7 +5565,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             .await
             .map_err(invalid_request)?;
         self.emit(
-            "worktree/removed",
+            method::WORKTREE_REMOVED,
             serde_json::json!({ "name": worktree.name }),
         );
         let mut worktrees = Vec::new();
@@ -6047,7 +6056,7 @@ fn emit_writer_change(
     previous: Option<WriterLease>,
 ) {
     if let Ok(notification) = AppServerNotification::new(
-        "thread/writer_changed",
+        method::THREAD_WRITER_CHANGED,
         ThreadWriterChangedNotification {
             thread_id: thread_id.to_string(),
             change,
@@ -6930,7 +6939,7 @@ fn fallback_callback(
             fallback_reason: Some(reason.to_string()),
             ..turn_model.clone()
         };
-        if let Ok(notification) = AppServerNotification::new("turn/model", notification) {
+        if let Ok(notification) = AppServerNotification::new(method::TURN_MODEL, notification) {
             let _ = notifications.send(notification);
         }
     })
@@ -7464,6 +7473,77 @@ fn internal_error(error: impl std::fmt::Display) -> DeveloperSessionHostError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn host_emit_sites() -> Vec<(usize, String)> {
+        let source = include_str!("developer_host.rs");
+        let production = source
+            .split("#[cfg(test)]\nmod tests {")
+            .next()
+            .expect("the host has a production part");
+        let mut sites = Vec::new();
+        for opener in ["self.emit(", "AppServerNotification::new("] {
+            for (position, _) in production.match_indices(opener) {
+                let argument = production[position + opener.len()..]
+                    .trim_start()
+                    .split([',', '\n'])
+                    .next()
+                    .unwrap_or_default()
+                    .trim()
+                    .to_string();
+                sites.push((position, argument));
+            }
+        }
+        sites
+    }
+
+    #[test]
+    fn every_notification_the_host_emits_is_in_the_generated_table() {
+        let table = agiworkforce_protocol::developer_session::DeveloperSessionTable::current();
+        let production = include_str!("developer_host.rs")
+            .split("#[cfg(test)]\nmod tests {")
+            .next()
+            .expect("the host has a production part");
+        let sites = host_emit_sites();
+        assert!(sites.len() > 30, "read {} emit sites", sites.len());
+
+        let constants_named = |text: &str| -> Vec<String> {
+            text.match_indices("method::")
+                .map(|(at, marker)| {
+                    text[at + marker.len()..]
+                        .chars()
+                        .take_while(|c| c.is_ascii_uppercase() || *c == '_')
+                        .collect()
+                })
+                .filter(|name: &String| !name.is_empty())
+                .collect()
+        };
+
+        for (position, argument) in sites {
+            assert!(
+                !argument.starts_with('"'),
+                "{argument} is emitted as a literal; name it with a constant in developer_session::method"
+            );
+            let named = if argument.chars().next().is_some_and(char::is_lowercase)
+                && !argument.contains("::")
+            {
+                let before = &production[..position];
+                let binding = before
+                    .rfind(&format!("let {argument} ="))
+                    .or_else(|| before.rfind(&format!("let ({argument},")))
+                    .unwrap_or_else(|| panic!("{argument} is bound from method constants"));
+                constants_named(&before[binding..])
+            } else {
+                constants_named(&argument)
+            };
+            assert!(!named.is_empty(), "{argument} names no method constant");
+            for name in named {
+                assert!(
+                    table.notifications.iter().any(|(tabled, _)| *tabled == name),
+                    "{name} is emitted by the host but is not a notification in the generated table"
+                );
+            }
+        }
+    }
 
     #[tokio::test]
     async fn a_local_or_byok_host_reads_no_account_memory_or_skills() {

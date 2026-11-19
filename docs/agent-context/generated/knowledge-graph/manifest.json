@@ -7,14 +7,14 @@
   "units": 194,
   "routes": 1059,
   "migrations": 752,
-  "symbols": 48208,
+  "symbols": 48136,
   "workspaceEdges": 220,
   "generatorEdges": 15,
   "unparsed": {
     "binary": 163,
     "oversize": 26,
     "lockfile": 2,
-    "notCode": 2567,
+    "notCode": 2600,
     "parseError": 0
   },
   "unmappedDependencies": [

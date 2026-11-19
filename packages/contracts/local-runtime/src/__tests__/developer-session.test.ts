@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   DEVELOPER_AGENT_MODES,
@@ -19,81 +17,49 @@ import {
   DEVELOPER_CHILD_TASK_STATE_LABELS,
 } from '../developer-session';
 import { getModelMetadataById, listCanonicalModels } from '@agiworkforce/types';
-
-const rustContract = readFileSync(
-  fileURLToPath(
-    new URL(
-      '../../../../../crates/agiworkforce-protocol/src/developer_session.rs',
-      import.meta.url,
-    ),
-  ),
-  'utf8',
-);
-
-function rustConstant(name: string): number {
-  const match = rustContract.match(new RegExp(`pub const ${name}: u32 = (\\d+);`, 'u'));
-  expect(match, `${name} is declared in the Rust contract`).not.toBeNull();
-  return Number(match![1]);
-}
+import { DEVELOPER_SESSION_TABLE } from '@agiworkforce/types/protocol';
 
 describe('developer-session protocol versions', () => {
   it('carries the same numbers as the Rust contract, which owns them', () => {
-    expect(DEVELOPER_SESSION_PROTOCOL_VERSION).toBe(
-      rustConstant('DEVELOPER_SESSION_PROTOCOL_VERSION'),
-    );
+    expect(DEVELOPER_SESSION_PROTOCOL_VERSION).toBe(DEVELOPER_SESSION_TABLE.protocolVersion);
     expect(LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION).toBe(
-      rustConstant('LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION'),
+      DEVELOPER_SESSION_TABLE.legacyProtocolVersion,
     );
-
-    const supported = rustContract
-      .match(
-        /pub const SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS: &\[u32\] = &\[([^\]]+)\]/u,
-      )?.[1]
-      ?.split(',')
-      .map((part) => Number(part.trim()))
-      .filter((value) => Number.isFinite(value));
-    expect(supported).toEqual([...SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS]);
-
-    const errorCode = rustContract.match(
-      /pub const PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE: i32 = (-?\d+);/u,
+    expect([...SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS]).toEqual([
+      ...DEVELOPER_SESSION_TABLE.supportedProtocolVersions,
+    ]);
+    expect(PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE).toBe(
+      DEVELOPER_SESSION_TABLE.errorCodes.PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE,
     );
-    expect(Number(errorCode![1])).toBe(PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE);
+  });
+
+  it('answers the version it speaks and the legacy one, nothing else', () => {
+    expect([...SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS]).toEqual([
+      DEVELOPER_SESSION_PROTOCOL_VERSION,
+      LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION,
+    ]);
   });
 
   it('reads a writer conflict by the code the Rust contract gives it', () => {
-    const errorCode = rustContract.match(
-      /pub const THREAD_WRITER_CONFLICT_ERROR_CODE: i32 = (-?\d+);/u,
+    expect(THREAD_WRITER_CONFLICT_ERROR_CODE).toBe(
+      DEVELOPER_SESSION_TABLE.errorCodes.THREAD_WRITER_CONFLICT_ERROR_CODE,
     );
-    expect(Number(errorCode![1])).toBe(THREAD_WRITER_CONFLICT_ERROR_CODE);
   });
 
   it('reads a stale MCP approval by the code the Rust contract gives it', () => {
-    const errorCode = rustContract.match(
-      /pub const MCP_APPROVAL_STALE_ERROR_CODE: i32 = (-?\d+);/u,
+    expect(MCP_APPROVAL_STALE_ERROR_CODE).toBe(
+      DEVELOPER_SESSION_TABLE.errorCodes.MCP_APPROVAL_STALE_ERROR_CODE,
     );
-    expect(Number(errorCode![1])).toBe(MCP_APPROVAL_STALE_ERROR_CODE);
   });
 
   it('names the same four postures as the wire enum', () => {
-    const variants = rustContract
-      .slice(rustContract.indexOf('pub enum DeveloperAgentMode {'))
-      .split('}')[0]!
-      .split('\n')
-      .map((line) => line.trim().replace(/,$/u, ''))
-      .filter((line) => /^[A-Z][A-Za-z]*$/u.test(line))
-      .map((variant) => variant.toLowerCase());
-    expect(variants.sort()).toEqual([...DEVELOPER_AGENT_MODES].sort());
+    expect([...DEVELOPER_AGENT_MODES].sort()).toEqual(
+      [...DEVELOPER_SESSION_TABLE.agentModes].sort(),
+    );
   });
 
   it('names the same reasoning levels as the wire enum, in its order', () => {
-    const variants = rustContract
-      .slice(rustContract.indexOf('pub enum DeveloperReasoningEffort {'))
-      .split('}')[0]!
-      .split('\n')
-      .map((line) => line.trim().replace(/,$/u, ''))
-      .filter((line) => /^[A-Z][A-Za-z]*$/u.test(line))
-      .map((variant) => variant.toLowerCase());
-    expect(variants).toEqual([...DEVELOPER_REASONING_EFFORTS]);
+    expect([...DEVELOPER_REASONING_EFFORTS]).toEqual([...DEVELOPER_SESSION_TABLE.reasoningEfforts]);
   });
 });
 
@@ -150,14 +116,9 @@ describe('developer effort levels per model', () => {
   });
 
   it('names every child task state the wire carries', () => {
-    const variants = rustContract
-      .slice(rustContract.indexOf('pub enum DeveloperChildTaskState {'))
-      .split('}')[0]!
-      .split('\n')
-      .map((line) => line.trim().replace(/,$/u, ''))
-      .filter((line) => /^[A-Z][A-Za-z]*$/u.test(line))
-      .map((variant) => variant.replace(/(?<!^)([A-Z])/gu, '_$1').toLowerCase());
-    expect(Object.keys(DEVELOPER_CHILD_TASK_STATE_LABELS).sort()).toEqual(variants.sort());
+    expect(Object.keys(DEVELOPER_CHILD_TASK_STATE_LABELS).sort()).toEqual(
+      [...DEVELOPER_SESSION_TABLE.childTaskStates].sort(),
+    );
   });
 });
 

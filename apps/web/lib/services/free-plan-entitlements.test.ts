@@ -64,9 +64,9 @@ describe('managed cloud resource entitlements', () => {
 
   describe('file storage quota', () => {
     it.each([
-      ['free', 100 * 1024 ** 2],
-      ['basic', 1024 ** 3],
-      ['pro', 10 * 1024 ** 3],
+      ['free', 500 * 1024 ** 2],
+      ['basic', 4 * 1024 ** 3],
+      ['pro', 20 * 1024 ** 3],
       ['team', 25 * 1024 ** 3],
     ] as const)('caps %s at a finite byte allowance', (plan, expected) => {
       expect(getFileStorageLimitBytes(plan)).toBe(expected);

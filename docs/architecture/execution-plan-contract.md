@@ -164,8 +164,8 @@ jsonb). That jsonb is the existing, already-used, no-migration channel for
 accounting metadata.
 
 Everything else is narrower: `apps/web/app/api/usage/route.ts` returns only
-aggregate percentages; `apps/web/lib/cost-tracker.ts` is an in-memory span-attribute
-tracker that resets on cold start and is not wired to the ledger;
+aggregate percentages; `apps/web/lib/cost-tracker.ts` formats span
+attributes, keeps no usage state and is not wired to the ledger;
 `apps/desktop/src-tauri/src/core/llm/daily_budget.rs` is a per-day spend cap in
 local SQLite with no per-request granularity.
 
@@ -303,7 +303,7 @@ extend.
 Managed Cloud, including Web and the public Electron Desktop that uses the same
 hosted request path. Retained Tauri has only `daily_budget.rs` (a daily cap, no
 per-request rows); CLI, mobile, and the extensions have nothing. `cost-tracker.ts`
-is in-memory and resets on cold start, it is **not** a CPST source. The first
+keeps no usage state, it is **not** a CPST source. The first
 CPST numbers therefore describe Managed Cloud only. Extending CPST to retained
 Tauri BYOK/Local or other non-managed surfaces is a separate slice.
 

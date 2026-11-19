@@ -26,7 +26,10 @@ describe('the storage meter is computed over the same set the cap enforces', () 
     const query = functionBody(storage, 'export async function sumFileStorageBytes');
     expect(query).toContain('from public.media_assets m');
     expect(query).toContain('m.organization_id is not distinct from $2::uuid');
-    expect(query).toContain('not m.temporary_chat');
+    expect(query.replace(/\s+/g, ' ')).toContain(
+      "(not m.temporary_chat or (m.byte_size > $3 and (m.metadata ->> 'source' = 'chat-attachment' or m.storage_pathname like 'chat-attachments/%')))",
+    );
+    expect(query).toContain('MAX_CHAT_ATTACHMENT_BYTES]');
     expect(query).toContain('m.deleted_at is null');
     expect(query).toContain('from public.project_knowledge_files k');
     expect(query).toContain('p.organization_id is not distinct from $2::uuid');

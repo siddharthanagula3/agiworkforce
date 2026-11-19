@@ -651,7 +651,6 @@
       "apps/desktop/gpui/src/attachment_recovery.rs",
       "apps/desktop/gpui/src/chat_upload.rs",
       "apps/desktop/gpui/src/cloud_models.rs",
-      "apps/desktop/gpui/src/code_composer_drafts.rs",
       "apps/desktop/gpui/src/project_download.rs",
       "apps/desktop/gpui/src/project_upload.rs",
       "apps/desktop/src-tauri/src/automation/computer_use/consent.rs",
@@ -664,9 +663,6 @@
     "accept_apply_result": [
       "apps/desktop/gpui/src/code_worktree_apply.rs"
     ],
-    "accept_archive": [
-      "apps/desktop/gpui/src/code_sessions.rs"
-    ],
     "accept_change": [
       "apps/desktop/gpui/src/attachment_recovery.rs"
     ],
@@ -675,9 +671,6 @@
     ],
     "accept_created": [
       "apps/desktop/gpui/src/code_worktrees.rs"
-    ],
-    "accept_delete": [
-      "apps/desktop/gpui/src/code_sessions.rs"
     ],
     "accept_detail": [
       "apps/desktop/gpui/src/cloud_history.rs"
@@ -720,9 +713,6 @@
     "accept_reindex": [
       "apps/desktop/gpui/src/project_files.rs"
     ],
-    "accept_rename": [
-      "apps/desktop/gpui/src/code_sessions.rs"
-    ],
     "accept_runs": [
       "apps/desktop/gpui/src/cloud_history.rs"
     ],
@@ -743,9 +733,6 @@
     ],
     "accept_without_content": [
       "crates/agiworkforce-mcp/src/elicitation.rs"
-    ],
-    "accept_write": [
-      "apps/desktop/gpui/src/host_defaults.rs"
     ],
     "AcceptableUsePage": [
       "apps/web/app/acceptable-use/page.tsx"
@@ -2712,9 +2699,6 @@
     ],
     "admit_additional": [
       "apps/cli/src/cloud/attachments.rs"
-    ],
-    "admit_models": [
-      "apps/desktop/gpui/src/host_defaults.rs"
     ],
     "admitAttachments": [
       "apps/mobile/src/features/chat/utils/attachmentValidation.ts"
@@ -4829,9 +4813,6 @@
     "allow_always": [
       "apps/cli/src/permissions.rs"
     ],
-    "allow_clear_reload": [
-      "apps/desktop/gpui/src/code_composer_drafts.rs"
-    ],
     "allow_file_always": [
       "apps/cli/src/permissions.rs"
     ],
@@ -6241,6 +6222,9 @@
     "app_server": [
       "apps/cli/src/lib.rs"
     ],
+    "app_server_capability_keys": [
+      "crates/agiworkforce-protocol/src/developer_session.rs"
+    ],
     "APP_UID": [
       "scripts/public-runtime/database-authority.mjs"
     ],
@@ -6533,9 +6517,6 @@
       "apps/desktop/gpui/src/conversation.rs",
       "apps/desktop/src-tauri/src/ui/hooks/mod.rs"
     ],
-    "apply_accepted": [
-      "apps/desktop/gpui/src/mcp_servers.rs"
-    ],
     "apply_commit_params": [
       "apps/desktop/gpui/src/code_worktree_apply.rs"
     ],
@@ -6601,9 +6582,6 @@
     ],
     "apply_quick_query_hotkey_preferences": [
       "apps/desktop/src-tauri/src/sys/commands/shortcuts.rs"
-    ],
-    "apply_refused": [
-      "apps/desktop/gpui/src/mcp_servers.rs"
     ],
     "apply_remote_gate": [
       "apps/desktop/src-tauri/src/features/speech/wake.rs"
@@ -7528,9 +7506,6 @@
     ],
     "Archive": [
       "packages/ui/icons/src/glyphs/RowActions.tsx"
-    ],
-    "archive_code_session": [
-      "apps/desktop/gpui/src/ui/code_sessions.rs"
     ],
     "ARCHIVE_COMMAND": [
       "scripts/lib/policy-archive.mjs"
@@ -9747,9 +9722,6 @@
     ],
     "attachVideoGenerationWorkflow": [
       "apps/web/lib/server/video-generation-jobs.ts"
-    ],
-    "attempt": [
-      "apps/desktop/gpui/src/cloud_new_chat_defaults.rs"
     ],
     "ATTEMPT_ID_PREFIX": [
       "apps/web/lib/identity/operation-identity.ts"
@@ -12022,25 +11994,16 @@
     "begin": [
       "apps/desktop/gpui/src/changes.rs",
       "apps/desktop/gpui/src/cloud_models.rs",
-      "apps/desktop/gpui/src/code_composer_drafts.rs",
       "apps/desktop/gpui/src/code_search.rs",
-      "apps/desktop/gpui/src/code_sessions.rs",
       "apps/desktop/gpui/src/code_settings.rs",
       "apps/desktop/gpui/src/code_worktrees.rs",
       "apps/desktop/gpui/src/drafts.rs",
       "apps/desktop/gpui/src/editor_recovery.rs",
       "apps/desktop/gpui/src/editor.rs",
-      "apps/desktop/gpui/src/host_defaults.rs",
       "apps/desktop/gpui/src/recovery_browser.rs",
       "apps/desktop/gpui/src/terminal.rs",
       "apps/desktop/src-tauri/src/features/speech/dictation/coordinator.rs",
       "apps/desktop/src-tauri/src/sys/commands/chat/interrupted_turns.rs"
-    ],
-    "begin_code_rename": [
-      "apps/desktop/gpui/src/ui/code_sessions.rs"
-    ],
-    "begin_load": [
-      "apps/desktop/gpui/src/code_composer_drafts.rs"
     ],
     "BEGIN_RLS_SCOPE_STATEMENT": [
       "packages/platform/data-layer/src/adapters/sql-session.ts"
@@ -12904,14 +12867,6 @@
       "packages/ui/unified-chat/src/index.ts"
     ],
     "BranchNavigator": [
-      "packages/ui/unified-chat/src/components/BranchNavigator.tsx",
-      "packages/ui/unified-chat/src/index.ts"
-    ],
-    "BranchNavigatorContainer": [
-      "packages/ui/unified-chat/src/components/BranchNavigator.tsx",
-      "packages/ui/unified-chat/src/index.ts"
-    ],
-    "BranchNavigatorContainerProps": [
       "packages/ui/unified-chat/src/components/BranchNavigator.tsx",
       "packages/ui/unified-chat/src/index.ts"
     ],
@@ -15812,6 +15767,9 @@
     "can_own_child_tasks": [
       "apps/cli/src/agent/mod.rs"
     ],
+    "can_persist_allow_command": [
+      "apps/cli/src/features/exec/exec_policy.rs"
+    ],
     "can_prompt": [
       "apps/cli/src/interactive.rs"
     ],
@@ -15875,7 +15833,6 @@
       "apps/cli/src/app_server/account_uploads.rs",
       "apps/cli/src/app_server/project_downloads.rs",
       "apps/cli/src/subagent.rs",
-      "apps/desktop/gpui/src/code_composer_drafts.rs",
       "apps/desktop/src-tauri/src/core/agent/background_agent.rs",
       "apps/desktop/src-tauri/src/core/research/orchestrator.rs",
       "apps/desktop/src-tauri/src/ui/events/tool_stream.rs",
@@ -20534,10 +20491,6 @@
     "CLASSES_FILE": [
       "scripts/check-attachment-class-coverage.mjs"
     ],
-    "ClassificationResult": [
-      "packages/ui/unified-chat/src/index.ts",
-      "packages/ui/unified-chat/src/lib/promptClassifier.ts"
-    ],
     "ClassifiedError": [
       "packages/ai/provider-runtime/src/errors.ts",
       "packages/ai/provider-runtime/src/index.ts"
@@ -20722,18 +20675,11 @@
     "classifyNavigation": [
       "apps/extension/src/features/auth/authInterop.ts"
     ],
-    "ClassifyOptions": [
-      "packages/ui/unified-chat/src/index.ts",
-      "packages/ui/unified-chat/src/lib/promptClassifier.ts"
-    ],
     "classifyPlanChange": [
       "apps/web/lib/server/stripe-plan-change.ts"
     ],
     "classifyPluginTree": [
       "apps/web/features/plugins/server/directory/inspection.ts"
-    ],
-    "classifyPrompt": [
-      "packages/ui/unified-chat/src/index.ts"
     ],
     "classifyProviderCallbackError": [
       "apps/web/lib/auth/error-taxonomy.ts",
@@ -20966,9 +20912,6 @@
     "clear_cloud_session": [
       "apps/desktop/src-tauri/src/sys/account/mod.rs"
     ],
-    "clear_code_draft": [
-      "apps/desktop/gpui/src/ui/code_drafts.rs"
-    ],
     "clear_cookies": [
       "apps/desktop/src-tauri/src/automation/browser/advanced.rs"
     ],
@@ -20997,7 +20940,6 @@
       "apps/desktop/src-tauri/src/sys/security/machine_key.rs"
     ],
     "clear_params": [
-      "apps/desktop/gpui/src/code_composer_drafts.rs",
       "apps/desktop/gpui/src/recovery_browser.rs"
     ],
     "clear_pending_selected_context_handoff": [
@@ -21011,9 +20953,6 @@
     ],
     "clear_remembered_choices": [
       "apps/desktop/src-tauri/src/sys/commands/tool_confirmation.rs"
-    ],
-    "clear_requested": [
-      "apps/desktop/gpui/src/code_composer_drafts.rs"
     ],
     "CLEAR_SEARCH_LABEL": [
       "packages/ui/ui/src/directory/constants.ts"
@@ -22628,9 +22567,6 @@
     ],
     "CLOUD_NAME": [
       "apps/web/features/marketing/components/landing/landing-content.ts"
-    ],
-    "cloud_new_chat_defaults": [
-      "apps/desktop/gpui/src/lib.rs"
     ],
     "CLOUD_OFFLINE_MESSAGE": [
       "apps/desktop/src/features/offline-indicator/index.tsx"
@@ -24302,9 +24238,6 @@
       "crates/agiworkforce-protocol/src/account_cloud.rs",
       "packages/contracts/types/src/generated/protocol/CloudModelSummary.ts"
     ],
-    "CloudNewChatDefaults": [
-      "apps/desktop/gpui/src/cloud_new_chat_defaults.rs"
-    ],
     "CloudNotifications": [
       "apps/mobile/services/cloudSettingsMapping.ts"
     ],
@@ -25222,9 +25155,6 @@
     "CODE_CLI_SIGN_IN_COMMAND": [
       "apps/web/features/code/code-surface.ts"
     ],
-    "code_composer_drafts": [
-      "apps/desktop/gpui/src/lib.rs"
-    ],
     "CODE_COPY": [
       "apps/web/features/code/code-surface.ts"
     ],
@@ -25236,15 +25166,6 @@
       "packages/client/ide-runtime/src/index.ts"
     ],
     "code_domain": [
-      "crates/agiworkforce-protocol/src/lib.rs"
-    ],
-    "CODE_DRAFT_READ": [
-      "crates/agiworkforce-protocol/src/developer_session.rs"
-    ],
-    "CODE_DRAFT_WRITE": [
-      "crates/agiworkforce-protocol/src/developer_session.rs"
-    ],
-    "code_drafts": [
       "crates/agiworkforce-protocol/src/lib.rs"
     ],
     "CODE_ENVIRONMENTS": [
@@ -25391,8 +25312,7 @@
       "apps/mobile/src/features/companion/remote-code/useCodeSessionStart.ts"
     ],
     "code_sessions": [
-      "apps/cli/src/cloud/mod.rs",
-      "apps/desktop/gpui/src/lib.rs"
+      "apps/cli/src/cloud/mod.rs"
     ],
     "CODE_SESSIONS_PATH": [
       "apps/cli/src/cloud/code_sessions.rs"
@@ -25578,33 +25498,6 @@
     ],
     "CodeDraft": [
       "apps/web/features/code/components/CodeComposer.tsx"
-    ],
-    "CodeDraftAction": [
-      "apps/desktop/gpui/src/code_composer_drafts.rs"
-    ],
-    "CodeDraftChange": [
-      "crates/agiworkforce-protocol/bindings/CodeDraftChange.ts",
-      "crates/agiworkforce-protocol/src/code_drafts.rs",
-      "packages/contracts/types/src/generated/protocol/CodeDraftChange.ts"
-    ],
-    "CodeDraftParams": [
-      "crates/agiworkforce-protocol/bindings/CodeDraftParams.ts",
-      "crates/agiworkforce-protocol/src/code_drafts.rs",
-      "packages/contracts/types/src/generated/protocol/CodeDraftParams.ts"
-    ],
-    "CodeDraftQueue": [
-      "apps/desktop/gpui/src/code_composer_drafts.rs"
-    ],
-    "CodeDraftSnapshot": [
-      "crates/agiworkforce-protocol/src/code_drafts.rs"
-    ],
-    "CodeDraftWriteParams": [
-      "crates/agiworkforce-protocol/bindings/CodeDraftWriteParams.ts",
-      "crates/agiworkforce-protocol/src/code_drafts.rs",
-      "packages/contracts/types/src/generated/protocol/CodeDraftWriteParams.ts"
-    ],
-    "CodeDraftWriteResponse": [
-      "crates/agiworkforce-protocol/src/code_drafts.rs"
     ],
     "codeEditing": [
       "packages/client/desktop-command-client/src/index.ts"
@@ -25923,9 +25816,6 @@
     ],
     "CodeSessionRoute": [
       "apps/web/app/code/[sessionId]/page.tsx"
-    ],
-    "CodeSessions": [
-      "apps/desktop/gpui/src/code_sessions.rs"
     ],
     "CodeSessionsCard": [
       "apps/mobile/src/features/companion/components/CodeSessionsCard.tsx"
@@ -26515,6 +26405,9 @@
     "COMMAND_ACTIONS": [
       "apps/cli/src/output_styles.rs"
     ],
+    "command_argvs": [
+      "apps/cli/src/features/exec/exec_policy.rs"
+    ],
     "COMMAND_CALL_PATTERN": [
       "apps/desktop/scripts/check-wiring.mjs"
     ],
@@ -26571,6 +26464,9 @@
     ],
     "CommandDeps": [
       "apps/extension-vscode/src/core/commandSetup.ts"
+    ],
+    "CommandEvaluation": [
+      "apps/cli/src/features/exec/exec_policy.rs"
     ],
     "CommandExecutionResult": [
       "apps/web/lib/e2b/types.ts"
@@ -26760,14 +26656,8 @@
     "COMMIT": [
       "crates/agiworkforce-worktree/src/config_guard.rs"
     ],
-    "commit_before_switch": [
-      "apps/desktop/gpui/src/code_composer_drafts.rs"
-    ],
     "commit_line": [
       "apps/cli/src/approval_details.rs"
-    ],
-    "commit_open_draft": [
-      "apps/desktop/gpui/src/ui/code_drafts.rs"
     ],
     "COMMIT_STATEMENT": [
       "packages/platform/data-layer/src/adapters/sql-session.ts"
@@ -27205,9 +27095,6 @@
       "apps/desktop/src-tauri/src/ui/events/tool_stream.rs",
       "crates/agiworkforce-mcp/src/server.rs"
     ],
-    "complete_load": [
-      "apps/desktop/gpui/src/code_composer_drafts.rs"
-    ],
     "complete_oauth": [
       "apps/desktop/src-tauri/src/integrations/cloud/mod.rs"
     ],
@@ -27407,9 +27294,6 @@
     "COMPOSER_ACTION_CIRCLE_SIZE": [
       "apps/mobile/src/features/chat/components/composerMetrics.ts"
     ],
-    "composer_after_show": [
-      "apps/desktop/gpui/src/code_composer_drafts.rs"
-    ],
     "COMPOSER_BLOCK_SEPARATOR": [
       "packages/ui/unified-chat/src/composer-editor/index.ts",
       "packages/ui/unified-chat/src/composer-editor/serialization.ts"
@@ -27592,13 +27476,6 @@
     "composerDocumentToText": [
       "packages/ui/unified-chat/src/composer-editor/index.ts",
       "packages/ui/unified-chat/src/composer-editor/serialization.ts"
-    ],
-    "ComposerDraftError": [
-      "crates/agiworkforce-protocol/src/code_drafts.rs"
-    ],
-    "ComposerDraftStore": [
-      "apps/desktop/gpui/src/code_composer_drafts.rs",
-      "crates/agiworkforce-protocol/src/code_drafts.rs"
     ],
     "ComposerEditor": [
       "packages/ui/unified-chat/src/composer-editor/ComposerEditor.tsx",
@@ -28717,6 +28594,9 @@
     ],
     "confluence": [
       "packages/contracts/cloud-contracts/src/connector-scopes.ts"
+    ],
+    "conform": [
+      "apps/cli/src/tier_cache.rs"
     ],
     "CONFUSABLE": [
       "scripts/check-device-auth-grant.mjs"
@@ -32038,9 +31918,6 @@
     "conversation_available": [
       "apps/cli/src/agent/checkpoints.rs"
     ],
-    "conversation_contract": [
-      "apps/cli/src/cloud/mod.rs"
-    ],
     "conversation_controls": [
       "apps/desktop/gpui/src/lib.rs"
     ],
@@ -33106,7 +32983,6 @@
       "apps/cli/src/app_server/cloud_projects.rs",
       "apps/cli/src/app_server/pull_request.rs",
       "apps/cli/src/app_server/upload_destination.rs",
-      "apps/cli/src/app_server/workspace_files.rs",
       "apps/cli/src/cloud/code_handoff.rs",
       "apps/cli/src/cloud/project_files/upload.rs",
       "apps/cli/src/cloud/projects/api.rs",
@@ -33155,17 +33031,11 @@
       "apps/desktop/src-tauri/src/data/db/mod.rs",
       "apps/desktop/src-tauri/src/data/db/repository.rs"
     ],
-    "create_editor_file": [
-      "apps/cli/src/path_security/file_authority/editor.rs"
-    ],
     "create_ephemeral": [
       "apps/desktop/src-tauri/src/core/artifacts/store.rs"
     ],
     "create_excel": [
       "apps/desktop/src-tauri/src/features/document/mod.rs"
-    ],
-    "create_file": [
-      "apps/desktop/gpui/src/ui/file_changes.rs"
     ],
     "create_file_appender": [
       "apps/desktop/src-tauri/src/sys/telemetry/logging.rs"
@@ -33218,9 +33088,6 @@
     "create_or_resume_named_worktree": [
       "crates/agiworkforce-worktree/src/lib.rs",
       "crates/agiworkforce-worktree/src/named.rs"
-    ],
-    "create_params": [
-      "apps/desktop/gpui/src/file_changes.rs"
     ],
     "create_pdf": [
       "apps/desktop/src-tauri/src/features/document/mod.rs"
@@ -35212,9 +35079,9 @@
       "apps/cli/src/cloud/data_export.rs",
       "apps/cli/src/cloud/project_files.rs",
       "apps/cli/src/features/exec/tools/web/site_rules.rs",
-      "apps/desktop/gpui/src/cloud_new_chat_defaults.rs",
       "apps/desktop/gpui/src/terminal.rs",
-      "apps/desktop/src-tauri/src/automation/computer_use/control.rs"
+      "apps/desktop/src-tauri/src/automation/computer_use/control.rs",
+      "crates/agiworkforce-protocol/src/developer_session.rs"
     ],
     "CURRENT": [
       "apps/desktop/src-tauri/src/sys/security/master_password.rs"
@@ -35277,9 +35144,6 @@
     ],
     "current_text": [
       "apps/desktop/src-tauri/src/features/speech/tts.rs"
-    ],
-    "current_thread": [
-      "apps/desktop/gpui/src/code_composer_drafts.rs"
     ],
     "current_values": [
       "apps/cli/src/features/plugins/settings.rs"
@@ -37901,6 +37765,10 @@
     "DEFAULT_PLUGIN_SYNC_STATE": [
       "apps/web/features/plugins/server/directory/snapshot-cache.ts"
     ],
+    "default_policy": [
+      "apps/cli/src/features/exec/exec_policy.rs",
+      "apps/desktop/src-tauri/src/sys/security/exec_gate.rs"
+    ],
     "default_policy_baseline": [
       "crates/agiworkforce-licensing/src/lib.rs",
       "crates/agiworkforce-licensing/src/org_policy.rs"
@@ -38184,9 +38052,6 @@
       "packages/ui/unified-chat/src/index.ts",
       "packages/ui/unified-chat/src/queue/sendQueue.ts"
     ],
-    "DefaultChange": [
-      "apps/desktop/gpui/src/host_defaults.rs"
-    ],
     "DefaultColors": [
       "apps/cli/src/tui/terminal_palette.rs"
     ],
@@ -38271,9 +38136,6 @@
     "defaultWorld": [
       "apps/web/app/api/settings/organization/__tests__/workspace-admin-api-world.ts"
     ],
-    "defer_load": [
-      "apps/desktop/gpui/src/code_composer_drafts.rs"
-    ],
     "deferImageGenerationJobFailure": [
       "apps/web/lib/server/image-generation-jobs.ts"
     ],
@@ -38344,7 +38206,6 @@
       "packages/platform/files/src/library.ts"
     ],
     "delete": [
-      "apps/cli/src/app_server/workspace_files.rs",
       "apps/cli/src/cloud/client.rs",
       "apps/cli/src/mcp/oauth_store.rs",
       "apps/cli/src/output_styles.rs",
@@ -38461,9 +38322,6 @@
     "delete_bounded": [
       "apps/cli/src/cloud/client.rs"
     ],
-    "delete_code_session": [
-      "apps/desktop/gpui/src/ui/code_sessions.rs"
-    ],
     "delete_conversation": [
       "apps/cli/src/cloud/mod.rs",
       "apps/cli/src/conversations.rs",
@@ -38477,17 +38335,8 @@
     "delete_custom_agent": [
       "apps/desktop/src-tauri/src/sys/commands/custom_agents.rs"
     ],
-    "delete_detail": [
-      "apps/desktop/gpui/src/file_changes.rs"
-    ],
     "delete_document": [
       "apps/desktop/src-tauri/src/features/projects/knowledge.rs"
-    ],
-    "delete_editor_file": [
-      "apps/cli/src/path_security/file_authority/editor.rs"
-    ],
-    "delete_file": [
-      "apps/desktop/gpui/src/ui/file_changes.rs"
     ],
     "delete_job": [
       "apps/desktop/src-tauri/src/sys/commands/scheduler_store.rs"
@@ -38507,10 +38356,6 @@
     ],
     "delete_message_for_user": [
       "apps/desktop/src-tauri/src/data/db/repository.rs"
-    ],
-    "delete_params": [
-      "apps/desktop/gpui/src/code_sessions.rs",
-      "apps/desktop/gpui/src/file_changes.rs"
     ],
     "delete_project": [
       "apps/cli/src/cloud/mod.rs"
@@ -40687,10 +40532,6 @@
     "detectFreshnessIntent": [
       "apps/web/lib/web-search/required-search.ts"
     ],
-    "detectGoalIntent": [
-      "packages/ui/unified-chat/src/index.ts",
-      "packages/ui/unified-chat/src/lib/goalIntent.ts"
-    ],
     "detectGreenhouseCustomFields": [
       "apps/extension/src/features/content/autofill/greenhouse.ts"
     ],
@@ -40945,6 +40786,10 @@
     "DEVELOPER_SESSION_SURFACES": [
       "crates/agiworkforce-protocol/src/projects.rs",
       "packages/contracts/types/src/suite-contracts.ts"
+    ],
+    "DEVELOPER_SESSION_TABLE": [
+      "crates/agiworkforce-protocol/bindings/DeveloperSessionTable.ts",
+      "packages/contracts/types/src/generated/protocol/DeveloperSessionTable.ts"
     ],
     "DEVELOPER_SESSION_TRUST_LABELS": [
       "packages/contracts/local-runtime/src/developer-sessions.ts",
@@ -41521,6 +41366,9 @@
     ],
     "DeveloperSessionSurface": [
       "packages/contracts/types/src/suite-contracts.ts"
+    ],
+    "DeveloperSessionTable": [
+      "crates/agiworkforce-protocol/src/developer_session.rs"
     ],
     "DeveloperSessionToolEventPayload": [
       "packages/contracts/types/src/suite-contracts.ts"
@@ -43513,12 +43361,6 @@
     ],
     "DISALLOW_APP": [
       "apps/web/lib/seo/site.ts"
-    ],
-    "discard_code_archives": [
-      "apps/desktop/gpui/src/ui/code_sessions.rs"
-    ],
-    "discard_params": [
-      "apps/desktop/gpui/src/code_sessions.rs"
     ],
     "discard_pending_messages_for_conversation": [
       "apps/desktop/src-tauri/src/sys/commands/chat/pending.rs"
@@ -45630,8 +45472,6 @@
       "crates/agiworkforce-protocol/src/lib.rs"
     ],
     "dynamicParams": [
-      "apps/web/app/help/[slug]/page.tsx",
-      "apps/web/app/help/collections/[id]/page.tsx",
       "apps/web/app/legal/archive/[policy]/[date]/page.tsx",
       "apps/web/app/legal/archive/[policy]/page.tsx"
     ],
@@ -45821,7 +45661,6 @@
       "apps/web/lib/services/ediscovery-export-service.ts"
     ],
     "edit": [
-      "apps/desktop/gpui/src/code_composer_drafts.rs",
       "apps/desktop/gpui/src/drafts.rs"
     ],
     "edit_excel": [
@@ -46884,9 +46723,6 @@
     "enable_managed_session_as": [
       "apps/cli/src/agent/mod.rs"
     ],
-    "enable_request": [
-      "apps/desktop/gpui/src/mcp_servers.rs"
-    ],
     "enable_team_mode": [
       "apps/cli/src/agent/mod.rs"
     ],
@@ -47861,9 +47697,7 @@
       "apps/cli/src/terminal_style.rs"
     ],
     "error_message": [
-      "apps/desktop/gpui/src/code_sessions.rs",
-      "apps/desktop/gpui/src/code_settings.rs",
-      "apps/desktop/gpui/src/host_defaults.rs"
+      "apps/desktop/gpui/src/code_settings.rs"
     ],
     "error_report": [
       "apps/desktop/src-tauri/src/sys/commands/error_reporting.rs"
@@ -48286,16 +48120,25 @@
       "tools/evals/src/types.ts"
     ],
     "evaluate": [
+      "apps/cli/src/features/exec/exec_policy.rs",
       "apps/cli/src/platform/policy/engine.rs",
       "apps/desktop/src-tauri/src/automation/browser/cdp_client.rs",
+      "apps/desktop/src-tauri/src/sys/security/exec_gate.rs",
       "scripts/check-document-classes.mjs",
       "scripts/check-file-reference-canonical.mjs"
     ],
     "evaluate_action": [
       "apps/desktop/src-tauri/src/automation/computer_use/safety.rs"
     ],
+    "evaluate_command": [
+      "apps/cli/src/features/exec/exec_policy.rs",
+      "apps/desktop/src-tauri/src/sys/security/exec_gate.rs"
+    ],
     "evaluate_connector_access": [
       "apps/cli/src/claude_parity.rs"
+    ],
+    "evaluate_full": [
+      "apps/desktop/src-tauri/src/sys/security/exec_gate.rs"
     ],
     "evaluate_mcp_host_access": [
       "apps/cli/src/claude_parity.rs"
@@ -51790,8 +51633,7 @@
       "apps/cli/src/platform/runtime/session_handoff.rs"
     ],
     "file_changes": [
-      "apps/cli/src/platform/runtime/session_activity.rs",
-      "apps/desktop/gpui/src/lib.rs"
+      "apps/cli/src/platform/runtime/session_activity.rs"
     ],
     "file_delete": [
       "apps/desktop/src-tauri/src/sys/commands/file_ops.rs"
@@ -53247,9 +53089,6 @@
     "finishCredentialRegistration": [
       "apps/web/lib/server/account-security/service.ts"
     ],
-    "finished": [
-      "apps/desktop/gpui/src/code_composer_drafts.rs"
-    ],
     "FinishedAnswer": [
       "packages/ui/unified-chat/src/components/markdown/MarkdownContent.tsx",
       "packages/ui/unified-chat/src/index.ts"
@@ -53618,6 +53457,9 @@
     ],
     "FloatingPrimaryAction": [
       "apps/mobile/src/shared/components/FloatingPrimaryAction.tsx"
+    ],
+    "floor": [
+      "crates/agiworkforce-execpolicy/src/lib.rs"
     ],
     "floor_char_boundary": [
       "apps/desktop/src-tauri/src/core/agi/mod.rs"
@@ -56011,9 +55853,6 @@
       "apps/cli/src/platform/runtime/session.rs",
       "apps/cli/src/tui/widgets/theme_picker.rs"
     ],
-    "from_bytes": [
-      "crates/agiworkforce-protocol/src/code_drafts.rs"
-    ],
     "from_catalog_name": [
       "apps/cli/src/design_system.rs"
     ],
@@ -56481,6 +56320,9 @@
     ],
     "gateFindings": [
       "scripts/check-scan-findings.mjs"
+    ],
+    "GateOutcome": [
+      "apps/desktop/src-tauri/src/sys/security/exec_gate.rs"
     ],
     "GatePolicy": [
       "tools/evals/scripts/promotion-gate.d.mts"
@@ -57104,7 +56946,6 @@
     ],
     "generateStaticParams": [
       "apps/web/app/gallery/[templateId]/page.tsx",
-      "apps/web/app/help/[slug]/page.tsx",
       "apps/web/app/help/collections/[id]/page.tsx",
       "apps/web/app/legal/archive/[policy]/[date]/page.tsx",
       "apps/web/app/legal/archive/[policy]/page.tsx",
@@ -58820,9 +58661,6 @@
     "getGitHubUserAuthorizationUrl": [
       "apps/web/lib/github-app.ts"
     ],
-    "getGreeting": [
-      "packages/ui/unified-chat/src/lib/greetings.ts"
-    ],
     "getHandoffConfig": [
       "apps/web/lib/support/handoff/config.ts"
     ],
@@ -59177,9 +59015,6 @@
     ],
     "getModelStorageBytes": [
       "apps/mobile/services/modelDownload.ts"
-    ],
-    "getModelUsageReport": [
-      "apps/web/lib/cost-tracker.ts"
     ],
     "getModelVariantPartner": [
       "packages/contracts/types/src/model-catalog.ts"
@@ -59847,9 +59682,6 @@
     ],
     "getSessionToken": [
       "apps/mobile/src/integrations/clerk.ts"
-    ],
-    "getSessionTotalCostUsd": [
-      "apps/web/lib/cost-tracker.ts"
     ],
     "getSettings": [
       "apps/desktop/electron/settingsStore.ts"
@@ -60871,10 +60703,6 @@
     ],
     "goal_start": [
       "apps/desktop/src-tauri/src/ui/hooks/types.rs"
-    ],
-    "GoalIntent": [
-      "packages/ui/unified-chat/src/index.ts",
-      "packages/ui/unified-chat/src/lib/goalIntent.ts"
     ],
     "GoodwillGrant": [
       "apps/web/features/admin/services/operator-metrics.ts"
@@ -63632,6 +63460,9 @@
     "hooks_allowed": [
       "apps/cli/src/cloud/workspace_policy.rs"
     ],
+    "HOOKS_CHANGED": [
+      "crates/agiworkforce-protocol/src/developer_session.rs"
+    ],
     "hooks_config": [
       "apps/cli/src/agent/mod.rs"
     ],
@@ -63774,9 +63605,6 @@
     "HOST_CUSTOM_INSTRUCTIONS_KEY": [
       "apps/extension-vscode/src/features/instructions/customInstructions.ts",
       "apps/extension-vscode/src/features/instructions/index.ts"
-    ],
-    "host_defaults": [
-      "apps/desktop/gpui/src/lib.rs"
     ],
     "host_developer_dir": [
       "crates/agiworkforce-sandbox-policy/src/wrap.rs"
@@ -63923,9 +63751,6 @@
     ],
     "hostConfigPaths": [
       "apps/desktop/electron/runtime/shellSandbox.ts"
-    ],
-    "HostDefaults": [
-      "apps/desktop/gpui/src/host_defaults.rs"
     ],
     "hostDeveloperDir": [
       "apps/desktop/electron/runtime/shellSandbox.ts"
@@ -66229,14 +66054,6 @@
       "packages/ui/unified-chat/src/components/InlineToolCall.tsx",
       "packages/ui/unified-chat/src/index.ts"
     ],
-    "InlineToolCallStack": [
-      "packages/ui/unified-chat/src/components/InlineToolCall.tsx",
-      "packages/ui/unified-chat/src/index.ts"
-    ],
-    "InlineToolCallStackProps": [
-      "packages/ui/unified-chat/src/components/InlineToolCall.tsx",
-      "packages/ui/unified-chat/src/index.ts"
-    ],
     "InlineToolCallStatus": [
       "packages/ui/unified-chat/src/components/InlineToolCall.tsx",
       "packages/ui/unified-chat/src/index.ts"
@@ -67385,7 +67202,6 @@
     ],
     "invalidate": [
       "apps/cli/src/trust/mod.rs",
-      "apps/desktop/gpui/src/code_composer_drafts.rs",
       "apps/desktop/src-tauri/src/data/cache/tool_results.rs"
     ],
     "invalidate_for_request": [
@@ -72158,9 +71974,6 @@
     "KeptAfterCancel": [
       "apps/web/features/chat/services/chat-attachment-upload.ts"
     ],
-    "KeptArchives": [
-      "apps/desktop/gpui/src/code_sessions.rs"
-    ],
     "KeptArtifactDraft": [
       "apps/mobile/src/features/artifacts/artifactDrafts.ts"
     ],
@@ -73158,6 +72971,9 @@
       "tools/evals/scripts/prompt-coverage.d.mts",
       "tools/evals/scripts/prompt-coverage.mjs"
     ],
+    "LEDGER_REPLAY_SCENARIOS": [
+      "apps/web/lib/services/__tests__/billing-ledger-replay-scenarios.ts"
+    ],
     "LEDGER_SCHEMA_VERSION": [
       "tools/evals/scripts/measurement-integrity.d.mts",
       "tools/evals/scripts/measurement-integrity.mjs"
@@ -73195,6 +73011,9 @@
     ],
     "ledgerRows": [
       "scripts/check-trust-claims.mjs"
+    ],
+    "LedgerScenario": [
+      "apps/web/lib/services/__tests__/billing-ledger-replay-scenarios.ts"
     ],
     "LedgerSection": [
       "apps/web/features/marketing/components/LandingSections.tsx"
@@ -75965,9 +75784,6 @@
     "load_cloud_workspaces": [
       "apps/desktop/gpui/src/ui/workspaces.rs"
     ],
-    "load_code_draft": [
-      "apps/desktop/gpui/src/ui/code_drafts.rs"
-    ],
     "load_code_instruction_sources": [
       "apps/desktop/gpui/src/ui/code_settings.rs"
     ],
@@ -76094,9 +75910,6 @@
     "load_manifest_for": [
       "apps/cli/src/features/plugins/plugins.rs"
     ],
-    "load_mcp_servers": [
-      "apps/desktop/gpui/src/ui/mcp_servers.rs"
-    ],
     "load_memory_cache": [
       "apps/cli/src/cloud/mod.rs"
     ],
@@ -76121,6 +75934,9 @@
     ],
     "load_persistent_memory": [
       "apps/cli/src/memory_pipeline.rs"
+    ],
+    "load_policy": [
+      "apps/cli/src/features/exec/exec_policy.rs"
     ],
     "load_previous_iteration": [
       "packages/tools/skills/reference-bundles/skill-creator/eval-viewer/generate_review.py"
@@ -76279,9 +76095,6 @@
     ],
     "loadDraftMigrations": [
       "scripts/check-migration-dependencies.mjs"
-    ],
-    "loaded": [
-      "apps/desktop/gpui/src/code_composer_drafts.rs"
     ],
     "loaded_profiles": [
       "scripts/collect-linux-sandbox-metadata.py"
@@ -83571,6 +83384,9 @@
     "mcp_call_tool": [
       "apps/desktop/src-tauri/src/sys/commands/mcp.rs"
     ],
+    "MCP_CHANGED": [
+      "crates/agiworkforce-protocol/src/developer_session.rs"
+    ],
     "MCP_CLIENT_METADATA_PATH": [
       "packages/contracts/cloud-contracts/src/connectors.ts"
     ],
@@ -83680,6 +83496,9 @@
     "mcp_list_tools": [
       "apps/desktop/src-tauri/src/sys/commands/mcp.rs"
     ],
+    "MCP_LOADING": [
+      "crates/agiworkforce-protocol/src/developer_session.rs"
+    ],
     "MCP_LOGIN": [
       "crates/agiworkforce-protocol/src/developer_session.rs"
     ],
@@ -83721,6 +83540,9 @@
     ],
     "MCP_PROTOCOL_ERAS": [
       "packages/contracts/cloud-contracts/src/connectors.ts"
+    ],
+    "MCP_READY": [
+      "crates/agiworkforce-protocol/src/developer_session.rs"
     ],
     "MCP_REGISTRY_ACTIVE_STATUS": [
       "apps/web/lib/connectors/directory/registry-client.ts"
@@ -83799,9 +83621,6 @@
     "mcp_server_update_config": [
       "apps/desktop/src-tauri/src/sys/commands/mcp_server.rs"
     ],
-    "mcp_servers": [
-      "apps/desktop/gpui/src/lib.rs"
-    ],
     "mcp_set_credential": [
       "apps/desktop/src-tauri/src/sys/commands/mcp.rs"
     ],
@@ -83846,6 +83665,9 @@
       "packages/contracts/cloud-contracts/src/connector-capabilities.ts"
     ],
     "MCP_TOOLS": [
+      "crates/agiworkforce-protocol/src/developer_session.rs"
+    ],
+    "MCP_UNAVAILABLE": [
       "crates/agiworkforce-protocol/src/developer_session.rs"
     ],
     "MCP_UNTRUSTED_CONTEXT_PROMPT_ID": [
@@ -84434,9 +84256,6 @@
     "mcpOpenElicitationUrl": [
       "packages/client/desktop-command-client/src/mcp.ts"
     ],
-    "McpPanel": [
-      "apps/desktop/gpui/src/mcp_servers.rs"
-    ],
     "McpPendingAuthorizationDraft": [
       "apps/web/lib/connectors/mcp-oauth-provider.ts"
     ],
@@ -84521,9 +84340,6 @@
     ],
     "McpRevocation": [
       "apps/cli/src/mcp/mod.rs"
-    ],
-    "McpRow": [
-      "apps/desktop/gpui/src/mcp_servers.rs"
     ],
     "McpRuntimeServerConfig": [
       "apps/desktop/src/api/mcp.ts",
@@ -85312,6 +85128,9 @@
     "MEMORY_ADD": [
       "crates/agiworkforce-protocol/src/developer_session.rs"
     ],
+    "MEMORY_ADDED": [
+      "crates/agiworkforce-protocol/src/developer_session.rs"
+    ],
     "memory_cache_path": [
       "apps/cli/src/cloud/mod.rs"
     ],
@@ -86054,10 +85873,6 @@
     ],
     "MentionTarget": [
       "apps/extension-vscode/src/data/mentionSearch.ts"
-    ],
-    "MentionTrigger": [
-      "packages/ui/unified-chat/src/index.ts",
-      "packages/ui/unified-chat/src/stores/mentionStore.ts"
     ],
     "Menu": [
       "packages/ui/icons/src/glyphs/Account.tsx",
@@ -86931,6 +86746,9 @@
     "Method": [
       "apps/cli/src/cloud/client.rs",
       "apps/cli/src/cloud/mod.rs"
+    ],
+    "method_constants": [
+      "crates/agiworkforce-protocol/src/developer_session.rs"
     ],
     "method_effect": [
       "crates/agiworkforce-app-server/src/developer_sessions.rs",
@@ -88192,6 +88010,9 @@
     "MODEL_SAFE_FACT_KEYS": [
       "apps/web/lib/support/account/model-safe-facts.ts"
     ],
+    "model_samples": [
+      "apps/cli/src/tier_cache.rs"
+    ],
     "MODEL_SELECTOR_TRIGGER_ID": [
       "apps/web/features/chat/lib/model-picker-trigger.ts"
     ],
@@ -88767,6 +88588,9 @@
     "ModelSafeAccountFacts": [
       "packages/contracts/cloud-contracts/src/support.ts"
     ],
+    "ModelSample": [
+      "apps/cli/src/tier_cache.rs"
+    ],
     "modelsById": [
       "packages/contracts/types/src/model-catalog.ts"
     ],
@@ -88879,9 +88703,6 @@
     ],
     "ModelUpgrade": [
       "crates/agiworkforce-protocol/src/openai_models.rs"
-    ],
-    "ModelUsage": [
-      "apps/web/lib/cost-tracker.ts"
     ],
     "modelUsageFromStats": [
       "apps/desktop/src/features/settings/UsageDashboard.tsx"
@@ -89724,9 +89545,6 @@
     "needs_input": [
       "crates/agiworkforce-protocol/src/task_state.rs"
     ],
-    "needs_load": [
-      "apps/desktop/gpui/src/code_composer_drafts.rs"
-    ],
     "needs_migration": [
       "apps/desktop/src-tauri/src/sys/security/master_password.rs"
     ],
@@ -89945,6 +89763,13 @@
     ],
     "NEVER_REMEMBERABLE": [
       "apps/desktop/src-tauri/src/sys/commands/tool_confirmation.rs"
+    ],
+    "NEVER_RUN_FLOOR": [
+      "crates/agiworkforce-execpolicy/src/floor.rs",
+      "crates/agiworkforce-execpolicy/src/lib.rs"
+    ],
+    "never_run_policy": [
+      "crates/agiworkforce-execpolicy/src/lib.rs"
     ],
     "NEVER_SURVIVING_SEGMENTS": [
       "apps/web/lib/observability/log-field-policy.ts"
@@ -90194,7 +90019,6 @@
       "crates/agiworkforce-protocol/src/approvals.rs",
       "crates/agiworkforce-protocol/src/auth.rs",
       "crates/agiworkforce-protocol/src/code_domain.rs",
-      "crates/agiworkforce-protocol/src/code_drafts.rs",
       "crates/agiworkforce-protocol/src/developer_session.rs",
       "crates/agiworkforce-protocol/src/exec_output.rs",
       "crates/agiworkforce-protocol/src/items.rs",
@@ -90457,9 +90281,6 @@
     ],
     "next_run": [
       "apps/desktop/src-tauri/src/core/scheduler/schedule.rs"
-    ],
-    "next_write": [
-      "apps/desktop/gpui/src/code_composer_drafts.rs"
     ],
     "nextAttempt": [
       "apps/web/lib/identity/operation-identity.ts"
@@ -91843,6 +91664,9 @@
     "notifications": [
       "crates/agiworkforce-mcp/src/client.rs",
       "packages/client/desktop-command-client/src/index.ts"
+    ],
+    "NOTIFICATIONS": [
+      "crates/agiworkforce-protocol/src/developer_session.rs"
     ],
     "NOTIFICATIONS_PATH": [
       "packages/contracts/cloud-contracts/src/notifications.ts"
@@ -93250,9 +93074,6 @@
     "open_files": [
       "apps/desktop/gpui/src/ui/files.rs"
     ],
-    "open_host_defaults": [
-      "apps/desktop/gpui/src/ui/host_defaults.rs"
-    ],
     "open_in_desktop": [
       "apps/cli/src/cloud/mod.rs"
     ],
@@ -93264,9 +93085,6 @@
     ],
     "open_managed_worktree": [
       "apps/desktop/gpui/src/ui/code_worktrees.rs"
-    ],
-    "open_mcp_servers": [
-      "apps/desktop/gpui/src/ui/mcp_servers.rs"
     ],
     "open_mcp_settings_db": [
       "apps/desktop/src-tauri/src/core/mcp/config.rs"
@@ -94699,6 +94517,9 @@
     "ORDER": [
       "apps/cli/src/design_system.rs"
     ],
+    "order_universe": [
+      "apps/cli/src/tier_cache.rs"
+    ],
     "orderByPrecedence": [
       "apps/web/lib/context/precedence.ts"
     ],
@@ -95453,6 +95274,9 @@
     ],
     "OwnedCompanionFile": [
       "apps/web/lib/services/plugin-owned-source-service.ts"
+    ],
+    "OwnedCopy": [
+      "apps/cli/src/tier_cache.rs"
     ],
     "OwnedDependencyRoots": [
       "apps/web/features/plugins/server/directory/install.ts"
@@ -99050,6 +98874,12 @@
     "persist": [
       "apps/cli/src/cloud/mod.rs"
     ],
+    "persist_allow_command": [
+      "apps/cli/src/features/exec/exec_policy.rs"
+    ],
+    "persist_allow_prefix": [
+      "apps/cli/src/features/exec/exec_policy.rs"
+    ],
     "persist_compacted_context": [
       "apps/desktop/src-tauri/src/sys/commands/chat/compaction.rs"
     ],
@@ -100140,6 +99970,9 @@
     ],
     "PLAN_CHANGE_REFUSED_DURING_DISPUTE": [
       "apps/web/lib/services/billing-plan-change-gate.ts"
+    ],
+    "plan_conformance": [
+      "apps/cli/src/tier_cache.rs"
     ],
     "PLAN_CREDIT_ALLOWANCES": [
       "packages/contracts/types/src/managed-usage-limits.ts"
@@ -102005,6 +101838,9 @@
     ],
     "PLUGINS_CAPABILITY": [
       "apps/cli/src/tier_cache.rs"
+    ],
+    "PLUGINS_CHANGED": [
+      "crates/agiworkforce-protocol/src/developer_session.rs"
     ],
     "PLUGINS_FAILED_COPY": [
       "apps/web/features/directory/constants.ts"
@@ -104093,6 +103929,9 @@
     "probe": [
       "scripts/prepare-linux-sandbox.py"
     ],
+    "Probe": [
+      "apps/cli/src/tier_cache.rs"
+    ],
     "PROBE_DETAIL_MAX_LENGTH": [
       "scripts/probe-models.mjs"
     ],
@@ -104761,7 +104600,6 @@
       "apps/web/app/api/llm/v1/chat/completions/lib/turn-tool-prohibition.ts"
     ],
     "project": [
-      "apps/desktop/gpui/src/mcp_servers.rs",
       "apps/mobile/src/features/chat/services/mapTiles.ts"
     ],
     "Project": [
@@ -105980,6 +105818,9 @@
       "tools/evals/scripts/prompt-coverage.d.mts",
       "tools/evals/scripts/prompt-coverage.mjs"
     ],
+    "PROMPT_PATTERNS": [
+      "apps/desktop/src-tauri/src/sys/security/exec_gate.rs"
+    ],
     "prompt_policy": [
       "apps/desktop/src-tauri/src/core/llm/mod.rs"
     ],
@@ -106213,6 +106054,9 @@
     ],
     "proposeAction": [
       "apps/web/features/support/lib/support-client.ts"
+    ],
+    "proposed_allow_prefix": [
+      "apps/cli/src/features/exec/exec_policy.rs"
     ],
     "proposed_edits": [
       "apps/cli/src/diff_model.rs"
@@ -108788,7 +108632,6 @@
       "apps/cli/src/app_server/cloud_projects.rs",
       "apps/cli/src/app_server/cloud_threads.rs",
       "apps/cli/src/app_server/cloud_turns.rs",
-      "apps/cli/src/app_server/code_drafts.rs",
       "apps/cli/src/app_server/instruction_settings.rs",
       "apps/cli/src/app_server/project_downloads.rs",
       "apps/cli/src/app_server/workspace_files.rs",
@@ -108800,7 +108643,6 @@
       "apps/desktop/src-tauri/src/features/document/excel.rs",
       "apps/desktop/src-tauri/src/features/document/pdf.rs",
       "apps/desktop/src-tauri/src/features/document/word.rs",
-      "crates/agiworkforce-protocol/src/code_drafts.rs",
       "scripts/check-attachment-class-coverage.mjs",
       "scripts/collect-linux-sandbox-metadata.py",
       "scripts/lib/managed-safety-floor.mjs",
@@ -108890,9 +108732,6 @@
     "read_history_page": [
       "apps/cli/src/cloud/chat.rs"
     ],
-    "read_host_defaults": [
-      "apps/desktop/gpui/src/ui/host_defaults.rs"
-    ],
     "read_installed_versions": [
       "apps/desktop/src-tauri/src/upgrade/installed.rs"
     ],
@@ -108926,9 +108765,6 @@
     ],
     "read_output": [
       "apps/desktop/src-tauri/src/features/terminal/pty.rs"
-    ],
-    "read_params": [
-      "apps/desktop/gpui/src/code_composer_drafts.rs"
     ],
     "read_plan_models_cache": [
       "apps/cli/src/tier_cache.rs"
@@ -112392,9 +112228,6 @@
     "recordMobileIapStoreCommission": [
       "apps/web/lib/services/mobile-iap-ledger-service.ts"
     ],
-    "recordModelUsage": [
-      "apps/web/lib/cost-tracker.ts"
-    ],
     "recordModerationEvent": [
       "apps/web/lib/moderation/index.ts",
       "apps/web/lib/moderation/reporting.ts"
@@ -114502,9 +114335,6 @@
     "rememberChatTab": [
       "apps/web/features/desktop-host/lib/chat-tab-strip.ts"
     ],
-    "remembered": [
-      "apps/desktop/gpui/src/host_defaults.rs"
-    ],
     "REMEMBERED_EMAIL_METHOD": [
       "apps/mobile/src/features/auth/services/rememberedAccount.ts"
     ],
@@ -115021,12 +114851,11 @@
       "apps/cli/src/installs.rs",
       "apps/desktop/src-tauri/src/core/skills/manager.rs"
     ],
-    "remove_thread": [
-      "apps/desktop/gpui/src/code_search.rs",
-      "apps/desktop/gpui/src/code_sessions.rs"
-    ],
     "remove_trigger": [
       "apps/cli/src/daemon.rs"
+    ],
+    "remove_user_approved_rule": [
+      "apps/cli/src/features/exec/exec_policy.rs"
     ],
     "remove_user_mcp_rule": [
       "apps/cli/src/platform/policy/engine.rs",
@@ -115168,7 +114997,6 @@
       "apps/mobile/src/features/team/service.ts"
     ],
     "rename": [
-      "apps/cli/src/app_server/workspace_files.rs",
       "apps/web/features/code/code-surface.ts"
     ],
     "RENAME_ARTIFACT_LABEL": [
@@ -115176,19 +115004,6 @@
     ],
     "rename_cloud": [
       "apps/desktop/gpui/src/ui/conversation_management.rs"
-    ],
-    "rename_detail": [
-      "apps/desktop/gpui/src/file_changes.rs"
-    ],
-    "rename_editor_file": [
-      "apps/cli/src/path_security/file_authority/editor.rs"
-    ],
-    "rename_file": [
-      "apps/desktop/gpui/src/ui/file_changes.rs"
-    ],
-    "rename_params": [
-      "apps/desktop/gpui/src/code_sessions.rs",
-      "apps/desktop/gpui/src/file_changes.rs"
     ],
     "rename_session": [
       "apps/cli/src/sessions.rs"
@@ -115304,9 +115119,6 @@
     "render_cloud_workspaces": [
       "apps/desktop/gpui/src/ui/workspaces.rs"
     ],
-    "render_code_session_actions": [
-      "apps/desktop/gpui/src/ui/code_sessions.rs"
-    ],
     "render_code_settings": [
       "apps/desktop/gpui/src/ui/code_settings.rs"
     ],
@@ -115362,9 +115174,6 @@
     "render_help": [
       "apps/cli/src/keybindings.rs"
     ],
-    "render_host_defaults": [
-      "apps/desktop/gpui/src/ui/host_defaults.rs"
-    ],
     "render_ide": [
       "apps/cli/src/claude_parity.rs",
       "apps/cli/src/tui/widgets/screen_renderers.rs"
@@ -115412,9 +115221,6 @@
     ],
     "render_mcp_list": [
       "apps/cli/src/tui/widgets/screen_renderers.rs"
-    ],
-    "render_mcp_servers": [
-      "apps/desktop/gpui/src/ui/mcp_servers.rs"
     ],
     "render_mobile": [
       "apps/cli/src/claude_parity.rs"
@@ -115543,6 +115349,9 @@
     ],
     "render_triggers": [
       "apps/cli/src/schedules/triggers.rs"
+    ],
+    "render_typescript": [
+      "crates/agiworkforce-protocol/src/developer_session.rs"
     ],
     "render_usage": [
       "apps/cli/src/tui/widgets/screen_renderers.rs"
@@ -115846,10 +115655,6 @@
     "replace_private_file_if_revision": [
       "apps/cli/src/path_security/file_authority.rs"
     ],
-    "replace_thread": [
-      "apps/desktop/gpui/src/code_search.rs",
-      "apps/desktop/gpui/src/code_sessions.rs"
-    ],
     "replaceAuthoredPlugin": [
       "apps/web/lib/services/plugin-owned-source-service.ts"
     ],
@@ -115914,6 +115719,21 @@
     "REPLAY_CACHE_LIMIT": [
       "apps/desktop/electron/browser/envelope.ts"
     ],
+    "REPLAY_EMAIL": [
+      "apps/web/lib/services/__tests__/billing-ledger-replay-scenarios.ts"
+    ],
+    "REPLAY_PRICES": [
+      "apps/web/lib/services/__tests__/billing-ledger-replay-scenarios.ts"
+    ],
+    "REPLAY_USER_ID": [
+      "apps/web/lib/services/__tests__/billing-ledger-replay-scenarios.ts"
+    ],
+    "replayClock": [
+      "apps/web/lib/services/__tests__/billing-ledger-replay-scenarios.ts"
+    ],
+    "ReplayClock": [
+      "apps/web/lib/services/__tests__/billing-ledger-replay-scenarios.ts"
+    ],
     "replayErasureTombstones": [
       "apps/web/lib/server/erasure-tombstones.ts"
     ],
@@ -115937,6 +115757,12 @@
     ],
     "ReplayShortcutMessage": [
       "apps/extension/src/types.ts"
+    ],
+    "ReplayStep": [
+      "apps/web/lib/services/__tests__/billing-ledger-replay-scenarios.ts"
+    ],
+    "ReplayStripe": [
+      "apps/web/lib/services/__tests__/billing-ledger-replay-scenarios.ts"
     ],
     "replayToSendOptions": [
       "apps/web/features/chat/lib/regenerateReplay.ts",
@@ -116387,9 +116213,6 @@
     ],
     "request_automation_permission": [
       "apps/desktop/src-tauri/src/sys/commands/system_permissions.rs"
-    ],
-    "request_clear": [
-      "apps/desktop/gpui/src/code_composer_drafts.rs"
     ],
     "request_close": [
       "apps/desktop/gpui/src/ui/conversations.rs"
@@ -117704,9 +117527,6 @@
     "reset_view": [
       "apps/desktop/gpui/src/cloud_history.rs"
     ],
-    "resetAllSessions": [
-      "apps/web/lib/cost-tracker.ts"
-    ],
     "resetAllUsersUsage": [
       "apps/web/features/admin/services/operator-metrics.ts"
     ],
@@ -117834,9 +117654,6 @@
     ],
     "ResetMode": [
       "apps/cli/src/platform/runtime/git.rs"
-    ],
-    "resetModelUsage": [
-      "apps/web/lib/cost-tracker.ts"
     ],
     "resetModuleGraphCache": [
       "scripts/lib/module-graph.mjs"
@@ -120509,9 +120326,6 @@
     "restoreConversationOwnerIfCurrent": [
       "apps/extension/src/features/background/conversation-session.ts"
     ],
-    "restored_text": [
-      "apps/desktop/gpui/src/code_composer_drafts.rs"
-    ],
     "restoreDeferredScheduledRecoveryAttempt": [
       "apps/extension/src/features/background/scheduled-task-runs.ts"
     ],
@@ -122850,9 +122664,6 @@
     "Row": [
       "apps/web/lib/services/__tests__/statement-scan-postgres.ts"
     ],
-    "row_label": [
-      "apps/desktop/gpui/src/code_sessions.rs"
-    ],
     "ROW_LABEL_FOLDER": [
       "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx"
     ],
@@ -124840,14 +124651,8 @@
     "save_cloud_title": [
       "apps/desktop/gpui/src/ui/conversation_management.rs"
     ],
-    "save_code_draft": [
-      "apps/desktop/gpui/src/ui/code_drafts.rs"
-    ],
     "save_code_instructions": [
       "apps/desktop/gpui/src/ui/code_settings.rs"
-    ],
-    "save_code_rename": [
-      "apps/desktop/gpui/src/ui/code_sessions.rs"
     ],
     "save_custom_agent": [
       "apps/desktop/src-tauri/src/sys/commands/custom_agents.rs"
@@ -124879,9 +124684,6 @@
     ],
     "save_full_output": [
       "apps/cli/src/features/exec/tools/common/mod.rs"
-    ],
-    "save_host_default": [
-      "apps/desktop/gpui/src/ui/host_defaults.rs"
     ],
     "save_local_registry": [
       "apps/cli/src/features/a2a/mod.rs",
@@ -125592,6 +125394,9 @@
     ],
     "ScanWithheldReason": [
       "apps/web/lib/server/scanned-document-text.ts"
+    ],
+    "ScenarioInput": [
+      "apps/web/lib/services/__tests__/billing-ledger-replay-scenarios.ts"
     ],
     "SCENE_BASELINE": [
       "packages/ui/ui/src/auth-scene/sceneConfig.ts"
@@ -126525,6 +126330,9 @@
       "apps/cli/src/session_browser.rs",
       "crates/agiworkforce-protocol/src/cloud_uploads.rs",
       "crates/agiworkforce-worktree/src/checkpoint.rs"
+    ],
+    "Scope": [
+      "apps/cli/src/tier_cache.rs"
     ],
     "scope_managed_auth_boundary": [
       "apps/desktop/src-tauri/src/sys/account/mod.rs"
@@ -128219,10 +128027,6 @@
     "selectActiveLeafId": [
       "apps/web/shared/stores/web-chat-store.ts"
     ],
-    "selectActiveMentionTrigger": [
-      "packages/ui/unified-chat/src/index.ts",
-      "packages/ui/unified-chat/src/stores/mentionStore.ts"
-    ],
     "selectActiveSession": [
       "apps/desktop/src/stores/researchStore.ts"
     ],
@@ -128539,10 +128343,6 @@
     "SELECTIVELY_RELEASED_CONNECTOR_IDS": [
       "packages/contracts/types/src/connector-release.ts"
     ],
-    "selectKeptInChat": [
-      "apps/web/features/work/escalation.ts",
-      "apps/web/features/work/index.ts"
-    ],
     "selectKeyValueProvider": [
       "packages/platform/key-value/src/factory.ts",
       "packages/platform/key-value/src/index.ts"
@@ -128594,14 +128394,6 @@
     ],
     "selectMemorySyncStatus": [
       "packages/ui/unified-chat/src/stores/memoryStore.ts"
-    ],
-    "selectMentionCursorIndex": [
-      "packages/ui/unified-chat/src/index.ts",
-      "packages/ui/unified-chat/src/stores/mentionStore.ts"
-    ],
-    "selectMentionQuery": [
-      "packages/ui/unified-chat/src/index.ts",
-      "packages/ui/unified-chat/src/stores/mentionStore.ts"
     ],
     "selectMessages": [
       "apps/web/shared/stores/web-chat-store.ts"
@@ -128791,10 +128583,6 @@
     "selectVisibleAlerts": [
       "packages/ui/unified-chat/src/index.ts",
       "packages/ui/unified-chat/src/stores/budgetStore.ts"
-    ],
-    "selectWorkEscalation": [
-      "apps/web/features/work/escalation.ts",
-      "apps/web/features/work/index.ts"
     ],
     "SELF_HARM_HELPLINE": [
       "apps/mobile/lib/contentFilter.ts"
@@ -130407,9 +130195,6 @@
     "set_managed_cloud": [
       "apps/desktop/src-tauri/src/core/llm/llm_router.rs"
     ],
-    "set_mcp_enabled": [
-      "apps/desktop/gpui/src/ui/mcp_servers.rs"
-    ],
     "set_mcp_manager": [
       "apps/cli/src/agent/mod.rs"
     ],
@@ -130433,9 +130218,6 @@
     ],
     "set_openai_max_tokens": [
       "crates/agiworkforce-llm/src/serialize.rs"
-    ],
-    "set_params": [
-      "apps/desktop/gpui/src/code_composer_drafts.rs"
     ],
     "set_permission": [
       "apps/desktop/src-tauri/src/automation/computer_use/app_permissions.rs"
@@ -132719,10 +132501,6 @@
     "shouldDismissViewer": [
       "apps/mobile/src/features/chat/components/imageViewerDismiss.ts"
     ],
-    "shouldEscalateToWork": [
-      "apps/web/features/work/escalation.ts",
-      "apps/web/features/work/index.ts"
-    ],
     "shouldExecuteScheduledTask": [
       "apps/extension/src/background/policy.ts"
     ],
@@ -134674,6 +134452,9 @@
     ],
     "SKILLS_CAPABILITY": [
       "apps/cli/src/tier_cache.rs"
+    ],
+    "SKILLS_CHANGED": [
+      "crates/agiworkforce-protocol/src/developer_session.rs"
     ],
     "SKILLS_CONSENT": [
       "crates/agiworkforce-protocol/src/developer_session.rs"
@@ -137243,20 +137024,8 @@
       "apps/web/features/work/index.ts",
       "apps/web/features/work/launch.ts"
     ],
-    "StartWork": [
-      "apps/web/features/work/index.ts",
-      "apps/web/features/work/launch.ts"
-    ],
     "startWorkFailureMessage": [
       "apps/mobile/src/features/tasks/startWork.ts"
-    ],
-    "StartWorkMenuItem": [
-      "apps/web/features/work/components/StartWorkMenuItem.tsx",
-      "apps/web/features/work/index.ts"
-    ],
-    "StartWorkMenuItemProps": [
-      "apps/web/features/work/components/StartWorkMenuItem.tsx",
-      "apps/web/features/work/index.ts"
     ],
     "StartWorkSheet": [
       "apps/mobile/src/features/tasks/components/StartWorkSheet.tsx"
@@ -138764,6 +138533,9 @@
     ],
     "StripeCogsImportSummary": [
       "apps/web/lib/services/cogs-ledger-service.ts"
+    ],
+    "StripeEdge": [
+      "apps/web/lib/services/__tests__/billing-ledger-replay-scenarios.ts"
     ],
     "stripeIdOf": [
       "apps/web/app/api/stripe-webhook/lib/stripe-ref.ts"
@@ -141389,9 +141161,6 @@
     "take_bytes_at_char_boundary": [
       "crates/agiworkforce-protocol/src/string_utils.rs"
     ],
-    "take_deferred_load": [
-      "apps/desktop/gpui/src/code_composer_drafts.rs"
-    ],
     "take_events": [
       "apps/desktop/gpui/src/runtime.rs"
     ],
@@ -141649,7 +141418,8 @@
       "packages/ui/unified-chat/src/components/tasks/TasksPage.tsx"
     ],
     "TASK_LABEL": [
-      "packages/ui/unified-chat/src/index.ts"
+      "packages/ui/unified-chat/src/index.ts",
+      "packages/ui/unified-chat/src/lib/promptClassifier.ts"
     ],
     "TASK_LIMIT": [
       "apps/cli/src/cloud/code_handoff.rs"
@@ -143334,6 +143104,9 @@
     "THREAD_ARCHIVE": [
       "crates/agiworkforce-protocol/src/developer_session.rs"
     ],
+    "THREAD_ARCHIVED": [
+      "crates/agiworkforce-protocol/src/developer_session.rs"
+    ],
     "THREAD_CHECKPOINTS": [
       "crates/agiworkforce-protocol/src/developer_session.rs"
     ],
@@ -143343,10 +143116,16 @@
     "THREAD_DELETE": [
       "crates/agiworkforce-protocol/src/developer_session.rs"
     ],
+    "THREAD_DELETED": [
+      "crates/agiworkforce-protocol/src/developer_session.rs"
+    ],
     "thread_entry": [
       "apps/cli/src/teams.rs"
     ],
     "THREAD_FORK": [
+      "crates/agiworkforce-protocol/src/developer_session.rs"
+    ],
+    "THREAD_FORKED": [
       "crates/agiworkforce-protocol/src/developer_session.rs"
     ],
     "THREAD_HANDOFF": [
@@ -143367,6 +143146,9 @@
     "THREAD_RECONNECT": [
       "crates/agiworkforce-protocol/src/developer_session.rs"
     ],
+    "THREAD_RELOADED": [
+      "crates/agiworkforce-protocol/src/developer_session.rs"
+    ],
     "THREAD_RENAME": [
       "crates/agiworkforce-protocol/src/developer_session.rs"
     ],
@@ -143382,16 +143164,10 @@
     "THREAD_REWIND": [
       "crates/agiworkforce-protocol/src/developer_session.rs"
     ],
+    "THREAD_REWOUND": [
+      "crates/agiworkforce-protocol/src/developer_session.rs"
+    ],
     "THREAD_SEARCH": [
-      "crates/agiworkforce-protocol/src/developer_session.rs"
-    ],
-    "THREAD_SEARCH_DEFAULT_LIMIT": [
-      "crates/agiworkforce-protocol/src/developer_session.rs"
-    ],
-    "THREAD_SEARCH_MAX_LIMIT": [
-      "crates/agiworkforce-protocol/src/developer_session.rs"
-    ],
-    "THREAD_SEARCH_QUERY_MAX_CHARS": [
       "crates/agiworkforce-protocol/src/developer_session.rs"
     ],
     "THREAD_SIDE_QUESTION": [
@@ -143406,10 +143182,16 @@
     "THREAD_START": [
       "crates/agiworkforce-protocol/src/developer_session.rs"
     ],
-    "THREAD_TITLE_MAX_CHARS": [
+    "THREAD_STARTED": [
       "crates/agiworkforce-protocol/src/developer_session.rs"
     ],
     "THREAD_UNARCHIVE": [
+      "crates/agiworkforce-protocol/src/developer_session.rs"
+    ],
+    "THREAD_UNARCHIVED": [
+      "crates/agiworkforce-protocol/src/developer_session.rs"
+    ],
+    "THREAD_WRITER_CHANGED": [
       "crates/agiworkforce-protocol/src/developer_session.rs"
     ],
     "THREAD_WRITER_CONFLICT_ERROR_CODE": [
@@ -144037,9 +143819,6 @@
     "to_ascii_json_string": [
       "crates/agiworkforce-protocol/src/string_utils.rs"
     ],
-    "to_bytes": [
-      "crates/agiworkforce-protocol/src/code_drafts.rs"
-    ],
     "to_citation": [
       "apps/desktop/src-tauri/src/core/research/agents.rs"
     ],
@@ -144316,9 +144095,6 @@
     ],
     "toggle_archived_cloud": [
       "apps/desktop/gpui/src/ui/conversation_management.rs"
-    ],
-    "toggle_archived_sessions": [
-      "apps/desktop/gpui/src/ui/code_sessions.rs"
     ],
     "toggle_fast_mode": [
       "apps/cli/src/agent/mod.rs"
@@ -147455,6 +147231,9 @@
     "TURN_STEER": [
       "crates/agiworkforce-protocol/src/developer_session.rs"
     ],
+    "TURN_STEERED": [
+      "crates/agiworkforce-protocol/src/developer_session.rs"
+    ],
     "TurnAbortedEvent": [
       "crates/agiworkforce-protocol/bindings/TurnAbortedEvent.ts",
       "crates/agiworkforce-protocol/src/protocol.rs",
@@ -148194,9 +147973,6 @@
     ],
     "Unavailable": [
       "scripts/compliance/collect-soc2-evidence.mjs"
-    ],
-    "UNAVAILABLE": [
-      "apps/desktop/gpui/src/cloud_new_chat_defaults.rs"
     ],
     "UNAVAILABLE_MEMORY": [
       "apps/web/features/memory/cloud-memory-controller.ts"
@@ -151743,10 +151519,6 @@
     "useMentionFolders": [
       "apps/web/features/chat/hooks/use-mention-folders.ts"
     ],
-    "useMentionStore": [
-      "packages/ui/unified-chat/src/index.ts",
-      "packages/ui/unified-chat/src/stores/mentionStore.ts"
-    ],
     "useMenuKeyboard": [
       "packages/ui/ui/src/index.ts",
       "packages/ui/ui/src/primitives/useMenuKeyboard.ts"
@@ -152039,6 +151811,9 @@
     "USER_ANSWER_TIMEOUT_SECS": [
       "apps/desktop/src-tauri/src/sys/commands/chat/state.rs"
     ],
+    "user_approved_rules": [
+      "apps/cli/src/features/exec/exec_policy.rs"
+    ],
     "user_changed_paths": [
       "crates/agiworkforce-protocol/src/code_domain.rs"
     ],
@@ -152151,6 +151926,9 @@
       "apps/desktop/src-tauri/src/integrations/realtime/mod.rs",
       "apps/desktop/src-tauri/src/integrations/realtime/presence.rs",
       "apps/web/features/settings/hooks/use-settings-queries.ts"
+    ],
+    "UserApprovedRule": [
+      "apps/cli/src/features/exec/exec_policy.rs"
     ],
     "UserAvatar": [
       "apps/mobile/src/shared/components/UserAvatar.tsx"
@@ -152660,10 +152438,6 @@
     "useSpokenReplies": [
       "apps/desktop/src/features/voice/SpokenReplies.tsx"
     ],
-    "useStartWork": [
-      "apps/web/features/work/index.ts",
-      "apps/web/features/work/launch.ts"
-    ],
     "useStepUp": [
       "apps/mobile/src/features/auth/hooks/useStepUp.tsx",
       "apps/web/features/settings/hooks/useStepUp.tsx"
@@ -153017,10 +152791,6 @@
     "useWindowZoom": [
       "apps/web/features/desktop-host/hooks/use-window-zoom.ts",
       "apps/web/features/desktop-host/index.ts"
-    ],
-    "useWorkEscalationStore": [
-      "apps/web/features/work/escalation.ts",
-      "apps/web/features/work/index.ts"
     ],
     "useWorkIntroSources": [
       "apps/mobile/src/features/tasks/useWorkIntroSources.ts"
@@ -155724,9 +155494,6 @@
     "waiting": [
       "apps/desktop/src-tauri/src/sys/commands/hooks.rs"
     ],
-    "waiting_for_pause": [
-      "apps/desktop/gpui/src/code_composer_drafts.rs"
-    ],
     "WaitingHooks": [
       "apps/desktop/src-tauri/src/sys/commands/hooks.rs",
       "packages/client/desktop-command-client/src/hooks.ts"
@@ -157846,10 +157613,6 @@
       "apps/web/features/work/index.ts",
       "apps/web/features/work/launch.ts"
     ],
-    "WORK_ESCALATION_MIN_CONFIDENCE": [
-      "apps/web/features/work/escalation.ts",
-      "apps/web/features/work/index.ts"
-    ],
     "WORK_HISTORY_LABEL": [
       "apps/web/features/chat/lib/agi-work.ts"
     ],
@@ -157947,14 +157710,6 @@
     ],
     "WorkersAiAdapterConfig": [
       "packages/ai/providers/workers-ai/src/index.ts"
-    ],
-    "WorkEscalation": [
-      "apps/web/features/work/escalation.ts",
-      "apps/web/features/work/index.ts"
-    ],
-    "WorkEscalationNotice": [
-      "apps/web/features/work/components/WorkEscalationNotice.tsx",
-      "apps/web/features/work/index.ts"
     ],
     "workflow_blocker": [
       "apps/cli/src/subagent.rs"
@@ -158055,10 +157810,6 @@
     "WorkingTreeChangeState": [
       "packages/contracts/local-runtime/src/developer-sessions.ts",
       "packages/contracts/local-runtime/src/index.ts"
-    ],
-    "WorkIntentSignal": [
-      "apps/web/features/work/escalation.ts",
-      "apps/web/features/work/index.ts"
     ],
     "WorkIntroCard": [
       "apps/mobile/src/features/tasks/components/WorkIntroCard.tsx"
@@ -158213,12 +157964,6 @@
     "workspace_file_candidates": [
       "apps/cli/src/mentions.rs"
     ],
-    "WORKSPACE_FILE_CREATE": [
-      "crates/agiworkforce-protocol/src/developer_session.rs"
-    ],
-    "WORKSPACE_FILE_DELETE": [
-      "crates/agiworkforce-protocol/src/developer_session.rs"
-    ],
     "WORKSPACE_FILE_READ": [
       "crates/agiworkforce-protocol/src/developer_session.rs"
     ],
@@ -158232,9 +157977,6 @@
       "crates/agiworkforce-protocol/src/developer_session.rs"
     ],
     "WORKSPACE_FILE_RECOVERY_WRITE": [
-      "crates/agiworkforce-protocol/src/developer_session.rs"
-    ],
-    "WORKSPACE_FILE_RENAME": [
       "crates/agiworkforce-protocol/src/developer_session.rs"
     ],
     "WORKSPACE_FILE_WRITE": [
@@ -158619,19 +158361,6 @@
       "apps/cli/src/path_security.rs",
       "apps/cli/src/path_security/file_authority.rs"
     ],
-    "WorkspaceFileCreateParams": [
-      "crates/agiworkforce-protocol/bindings/WorkspaceFileCreateParams.ts",
-      "crates/agiworkforce-protocol/src/workspace_files.rs",
-      "packages/contracts/types/src/generated/protocol/WorkspaceFileCreateParams.ts"
-    ],
-    "WorkspaceFileDeleteParams": [
-      "crates/agiworkforce-protocol/bindings/WorkspaceFileDeleteParams.ts",
-      "crates/agiworkforce-protocol/src/workspace_files.rs",
-      "packages/contracts/types/src/generated/protocol/WorkspaceFileDeleteParams.ts"
-    ],
-    "WorkspaceFileDeleteResponse": [
-      "crates/agiworkforce-protocol/src/workspace_files.rs"
-    ],
     "workspaceFileFixture": [
       "apps/extension-vscode/src/__tests__/workspaceFileFixture.ts"
     ],
@@ -158697,14 +158426,6 @@
     ],
     "WorkspaceFileReference": [
       "apps/extension-vscode/src/features/chat-participant/promptReferences.ts"
-    ],
-    "WorkspaceFileRenameParams": [
-      "crates/agiworkforce-protocol/bindings/WorkspaceFileRenameParams.ts",
-      "crates/agiworkforce-protocol/src/workspace_files.rs",
-      "packages/contracts/types/src/generated/protocol/WorkspaceFileRenameParams.ts"
-    ],
-    "WorkspaceFileRenameResponse": [
-      "crates/agiworkforce-protocol/src/workspace_files.rs"
     ],
     "WorkspaceFileResponse": [
       "crates/agiworkforce-protocol/bindings/WorkspaceFileResponse.ts",
@@ -159164,6 +158885,9 @@
     "WORKTREE_CREATE": [
       "crates/agiworkforce-protocol/src/developer_session.rs"
     ],
+    "WORKTREE_CREATED": [
+      "crates/agiworkforce-protocol/src/developer_session.rs"
+    ],
     "WORKTREE_DELETE": [
       "crates/agiworkforce-protocol/src/developer_session.rs"
     ],
@@ -159180,6 +158904,9 @@
       "crates/agiworkforce-protocol/src/developer_session.rs"
     ],
     "WORKTREE_REMOVE": [
+      "crates/agiworkforce-protocol/src/developer_session.rs"
+    ],
+    "WORKTREE_REMOVED": [
       "crates/agiworkforce-protocol/src/developer_session.rs"
     ],
     "WORKTREE_SETUP_FINISHED": [
@@ -159477,13 +159204,11 @@
       "crates/agiworkforce-protocol/src/protocol.rs"
     ],
     "write": [
-      "apps/cli/src/app_server/code_drafts.rs",
       "apps/cli/src/app_server/instruction_settings.rs",
       "apps/cli/src/app_server/workspace_files.rs",
       "apps/cli/src/app_server/workspace_recovery.rs",
       "apps/cli/src/app_server/workspace_terminal.rs",
-      "apps/desktop/src-tauri/src/features/terminal/pty.rs",
-      "crates/agiworkforce-protocol/src/code_drafts.rs"
+      "apps/desktop/src-tauri/src/features/terminal/pty.rs"
     ],
     "write_account_skills": [
       "apps/cli/src/cloud/skills.rs"
@@ -159530,8 +159255,7 @@
     ],
     "write_params": [
       "apps/desktop/gpui/src/code_settings.rs",
-      "apps/desktop/gpui/src/editor.rs",
-      "apps/desktop/gpui/src/host_defaults.rs"
+      "apps/desktop/gpui/src/editor.rs"
     ],
     "write_paths_from_tree": [
       "crates/agiworkforce-worktree/src/snapshot.rs"
