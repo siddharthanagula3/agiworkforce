@@ -38,7 +38,6 @@ vi.mock('@/lib/services/llm-cost-calculator', () => ({
   resolveCacheRates: vi.fn(),
 }));
 vi.mock('@/lib/cost-tracker', () => ({
-  recordModelUsage: vi.fn(),
   toOtelAttributes: vi.fn(() => ({})),
 }));
 vi.mock('@/lib/rate-limit', () => ({

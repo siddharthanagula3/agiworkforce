@@ -23,7 +23,7 @@
 //! BEFORE this gate, the execpolicy engine is argv-prefix based and cannot
 //! model any of those. Removing the pre-filter would weaken blocking.
 
-use agiworkforce_execpolicy::{Decision, Policy, RuleMatch};
+use agiworkforce_execpolicy::{Decision, Policy, RuleMatch, NEVER_RUN_FLOOR};
 use std::sync::LazyLock;
 
 use super::command_validator::matches_dangerous_pattern;
@@ -31,8 +31,8 @@ use super::command_validator::matches_dangerous_pattern;
 /// Catastrophic argv prefixes that are `Forbidden` outright, "no human
 /// should be able to approve this in an agent loop" cases.
 ///
-/// This is the UNION of the CLI gate's catastrophic list
-/// (`apps/cli/src/features/exec/exec_policy.rs::FORBIDDEN_PREFIXES`) and every
+/// These are the entries the desktop adds on top of the shared
+/// `agiworkforce_execpolicy::NEVER_RUN_FLOOR`: every
 /// `command_validator::DANGEROUS_PATTERNS` entry that is genuinely an
 /// argv-prefix catastrophe. Substring-shaped patterns (pipe-to-shell,
 /// redirects to /etc or devices, `/dev/tcp/` paths, Windows backslash forms
@@ -42,14 +42,7 @@ use super::command_validator::matches_dangerous_pattern;
 /// Matching happens against a lowercased copy of the argv, so every token
 /// here must be lowercase. `default_policy` also registers a `sudo`-prefixed
 /// variant of every entry.
-const FORBIDDEN_PREFIXES: &[&[&str]] = &[
-    //, CLI catastrophic list (kept verbatim for cross-app parity).
-    &["rm", "-rf", "/"],
-    &["rm", "-rf", "/*"],
-    &["rm", "-rf", "--no-preserve-root", "/"],
-    &["mkfs.ext4", "/dev/sda"],
-    &["dd", "if=/dev/zero", "of=/dev/sda"],
-    &[":(){", ":|:&};:"], // classic fork bomb (best-effort literal match)
+const DESKTOP_FORBIDDEN_PREFIXES: &[&[&str]] = &[
     //, desktop DANGEROUS_PATTERNS, argv-prefix catastrophes.
     // System destruction. The argv rules also catch quoted forms such as
     // `rm -rf "/"` that dodge the substring blocklist (shlex strips quotes).
@@ -187,7 +180,7 @@ pub(crate) const PROMPT_PATTERNS: &[&str] = &[
 
 static DEFAULT_POLICY: LazyLock<Policy> = LazyLock::new(|| {
     let mut policy = Policy::empty();
-    for prefix in FORBIDDEN_PREFIXES {
+    for prefix in NEVER_RUN_FLOOR.iter().chain(DESKTOP_FORBIDDEN_PREFIXES) {
         let owned: Vec<String> = prefix.iter().map(|s| (*s).to_string()).collect();
         // add_prefix_rule only errors on an empty prefix; every entry above is
         // non-empty, so a failure here is a programming error worth surfacing.
@@ -360,5 +353,23 @@ mod tests {
     fn fork_bomb_is_forbidden_in_both_tokenizations() {
         assert_eq!(evaluate_command(":(){ :|:& };:"), Decision::Forbidden);
         assert_eq!(evaluate_command(":(){ :|:&};:"), Decision::Forbidden);
+    }
+
+    #[test]
+    fn default_policy_is_a_superset_of_the_never_run_floor() {
+        for prefix in NEVER_RUN_FLOOR {
+            let argv: Vec<String> = prefix.iter().map(|token| (*token).to_string()).collect();
+            let evaluation = default_policy().check(&argv, &|_: &[String]| Decision::Allow);
+            assert_eq!(evaluation.decision, Decision::Forbidden, "{prefix:?}");
+            let mut sudo_argv = vec!["sudo".to_string()];
+            sudo_argv.extend(argv);
+            let sudo_evaluation =
+                default_policy().check(&sudo_argv, &|_: &[String]| Decision::Allow);
+            assert_eq!(
+                sudo_evaluation.decision,
+                Decision::Forbidden,
+                "sudo {prefix:?}"
+            );
+        }
     }
 }

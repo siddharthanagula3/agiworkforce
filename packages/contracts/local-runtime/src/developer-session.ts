@@ -1,9 +1,10 @@
 /**
  * The cross-surface half of the developer-session contract: the one permission
  * vocabulary and the one version rule that the CLI, VS Code, the desktop shell
- * and the Chrome bridge all answer to. Mirrors
- * `crates/agiworkforce-protocol/src/developer_session.rs`, which is the source
- * of truth; the test beside this file fails if the two drift.
+ * and the Chrome bridge all answer to. Versions and error codes are read from
+ * the table generated from `crates/agiworkforce-protocol/src/developer_session.rs`,
+ * which is the source of truth; the test beside this file holds the
+ * vocabularies written out here to that table.
  */
 
 import {
@@ -11,10 +12,11 @@ import {
   PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE,
   getModelMetadataById,
 } from '@agiworkforce/types';
-import type {
-  DeveloperAgentMode,
-  DeveloperChildTaskState,
-  DeveloperReasoningEffort,
+import {
+  DEVELOPER_SESSION_TABLE,
+  type DeveloperAgentMode,
+  type DeveloperChildTaskState,
+  type DeveloperReasoningEffort,
 } from '@agiworkforce/types/protocol';
 
 export type { DeveloperAgentMode, DeveloperChildTaskState, DeveloperReasoningEffort };
@@ -162,16 +164,17 @@ export const DEVELOPER_CHILD_TASK_STATE_LABELS: Record<DeveloperChildTaskState, 
 };
 
 export { DEVELOPER_SESSION_PROTOCOL_VERSION, PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE };
-export const LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION = 7;
-export const SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS = [
-  DEVELOPER_SESSION_PROTOCOL_VERSION,
-  LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION,
-] as const;
+export const LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION =
+  DEVELOPER_SESSION_TABLE.legacyProtocolVersion;
+export const SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS =
+  DEVELOPER_SESSION_TABLE.supportedProtocolVersions;
 /** JSON-RPC code of a request refused because another program holds the thread's writer lease. */
-export const THREAD_WRITER_CONFLICT_ERROR_CODE = -32011;
+export const THREAD_WRITER_CONFLICT_ERROR_CODE =
+  DEVELOPER_SESSION_TABLE.errorCodes.THREAD_WRITER_CONFLICT_ERROR_CODE;
 /**
  * JSON-RPC code of an `mcp/approval/grant` refused because the launch is no
  * longer the one the fingerprint names. Its `data` is the approval request
  * for the launch as it is now.
  */
-export const MCP_APPROVAL_STALE_ERROR_CODE = -32012;
+export const MCP_APPROVAL_STALE_ERROR_CODE =
+  DEVELOPER_SESSION_TABLE.errorCodes.MCP_APPROVAL_STALE_ERROR_CODE;

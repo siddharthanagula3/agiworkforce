@@ -29,7 +29,6 @@ vi.mock('@/lib/services/llm-cost-calculator', () => ({
   resolveCacheRates: vi.fn(() => ({ read: 0, write5m: 0, write1h: 0 })),
 }));
 vi.mock('@/lib/cost-tracker', () => ({
-  recordModelUsage: vi.fn(),
   toOtelAttributes: vi.fn(() => ({})),
 }));
 vi.mock('@/lib/services/free-trial-service', () => ({
@@ -52,7 +51,7 @@ import { buildAdapterStreamResponse } from '../lib/stream-transform';
 import type { ProcessedRequest } from '../lib/request-processor';
 import type { StreamChunk } from '@agiworkforce/types';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
-import { recordModelUsage } from '@/lib/cost-tracker';
+import { toOtelAttributes } from '@/lib/cost-tracker';
 import { logger } from '@/lib/logger';
 import { settleFreeTrialRequest } from '@/lib/services/free-trial-service';
 import { finalizeManagedUsageRequest } from '@/lib/services/managed-usage-request-service';
@@ -62,7 +61,7 @@ const mockCalculateCost = LLMCostCalculator.calculateCost as ReturnType<typeof v
 const mockCalculateCostMicrousd = LLMCostCalculator.calculateCostMicrousd as ReturnType<
   typeof vi.fn
 >;
-const mockRecordModelUsage = recordModelUsage as ReturnType<typeof vi.fn>;
+const mockToOtelAttributes = toOtelAttributes as ReturnType<typeof vi.fn>;
 const mockLoggerInfo = logger.info as ReturnType<typeof vi.fn>;
 const mockSettleFreeTrialRequest = settleFreeTrialRequest as ReturnType<typeof vi.fn>;
 
@@ -475,8 +474,8 @@ describe('buildAdapterStreamResponse · billing reconciliation', () => {
     );
     await readAllText(response as any);
 
-    expect(mockRecordModelUsage).toHaveBeenCalledWith(
-      'user-005',
+    expect(mockToOtelAttributes).toHaveBeenCalledWith(
+      'anthropic',
       'fixture-model',
       expect.objectContaining({
         inputTokens: 500,
@@ -486,7 +485,7 @@ describe('buildAdapterStreamResponse · billing reconciliation', () => {
         cacheCreation1hInputTokens: 300,
         reasoningOutputTokens: 20,
       }),
-      expect.any(Date),
+      expect.anything(),
     );
   });
 });

@@ -1,0 +1,189 @@
+{
+  "scenario": "app store upgrade",
+  "outcomes": [
+    {
+      "outcome": {
+        "currentPeriodEnd": "T0+20d",
+        "kind": "subscription",
+        "planTier": "pro",
+        "productKey": "subscription_pro_monthly",
+        "status": "active",
+        "success": true
+      },
+      "step": "app verify apple-ledger-replay-1"
+    },
+    {
+      "outcome": "processed",
+      "step": "App Store SUBSCRIBED apple-ledger-replay-1"
+    },
+    {
+      "outcome": {
+        "currentPeriodEnd": "T0+30d",
+        "kind": "subscription",
+        "planTier": "max",
+        "productKey": "subscription_max_monthly",
+        "status": "active",
+        "success": true
+      },
+      "step": "app verify apple-ledger-replay-upgrade"
+    },
+    {
+      "outcome": "processed",
+      "step": "App Store DID_CHANGE_RENEWAL_PREF apple-ledger-replay-upgrade"
+    }
+  ],
+  "ledger": {
+    "billing_disputes": [],
+    "credit_transactions": [
+      {
+        "amount_cents": 2920,
+        "amount_microusd": 29200000,
+        "credit_account_id": "<id 1>",
+        "description": "paid plan upgrade allocation",
+        "id": "<id 2>",
+        "metadata": {
+          "upgrade_allocation_key": "<id 3>:T0:T0+30d:2920"
+        },
+        "transaction_type": "adjustment"
+      },
+      {
+        "amount_cents": 741,
+        "amount_microusd": 7410000,
+        "credit_account_id": "<id 1>",
+        "description": "initial credit allocation for billing period",
+        "id": "<id 4>",
+        "metadata": null,
+        "transaction_type": "allocation"
+      }
+    ],
+    "expiring_credit_purchases": [],
+    "mobile_iap_transactions": [
+      {
+        "environment": "production",
+        "expires_at": "T0+20d",
+        "intended_amount_cents": 2000,
+        "plan_tier": "pro",
+        "platform": "ios",
+        "product_key": "subscription_pro_monthly",
+        "product_kind": "subscription",
+        "purchased_at": "T0-10d",
+        "refund_state_signed_at": null,
+        "refunded_amount_cents": 0,
+        "status": "active",
+        "store_transaction_id": "apple-ledger-replay-1",
+        "units_granted": 0
+      },
+      {
+        "environment": "production",
+        "expires_at": "T0+30d",
+        "intended_amount_cents": 10000,
+        "plan_tier": "max",
+        "platform": "ios",
+        "product_key": "subscription_max_monthly",
+        "product_kind": "subscription",
+        "purchased_at": "T0",
+        "refund_state_signed_at": null,
+        "refunded_amount_cents": 0,
+        "status": "active",
+        "store_transaction_id": "apple-ledger-replay-upgrade",
+        "units_granted": 0
+      }
+    ],
+    "subscriptions": [
+      {
+        "apple_original_transaction_id": "apple-ledger-replay-original",
+        "cancel_at_period_end": false,
+        "canceled_at": null,
+        "current_period_end": "T0+30d",
+        "current_period_start": "T0",
+        "google_purchase_token": null,
+        "id": "<id 3>",
+        "last_stripe_event_at": null,
+        "plan_catalog_version": 4,
+        "plan_tier": "max",
+        "status": "active",
+        "stripe_customer_id": null,
+        "stripe_price_id": null,
+        "stripe_subscription_id": null
+      }
+    ],
+    "token_credits": [
+      {
+        "bonus_granted_cents": 0,
+        "credits_allocated_cents": 3661,
+        "credits_allocated_microusd": 36610000,
+        "credits_used_cents": 0,
+        "credits_used_microusd": 0,
+        "id": "<id 1>",
+        "period_end": "T0+30d",
+        "period_start": "T0",
+        "plan_catalog_version": 4,
+        "subscription_id": "<id 3>",
+        "top_up_allocated_cents": 0,
+        "top_up_allocated_microusd": 0
+      }
+    ]
+  },
+  "outcomesDeliveredTwice": [
+    {
+      "outcome": {
+        "currentPeriodEnd": "T0+20d",
+        "kind": "subscription",
+        "planTier": "pro",
+        "productKey": "subscription_pro_monthly",
+        "status": "active",
+        "success": true
+      },
+      "step": "app verify apple-ledger-replay-1"
+    },
+    {
+      "outcome": {
+        "currentPeriodEnd": "T0+20d",
+        "kind": "subscription",
+        "planTier": "pro",
+        "productKey": "subscription_pro_monthly",
+        "status": "already_processed",
+        "success": true
+      },
+      "step": "app verify apple-ledger-replay-1"
+    },
+    {
+      "outcome": "processed",
+      "step": "App Store SUBSCRIBED apple-ledger-replay-1"
+    },
+    {
+      "outcome": "duplicate",
+      "step": "App Store SUBSCRIBED apple-ledger-replay-1"
+    },
+    {
+      "outcome": {
+        "currentPeriodEnd": "T0+30d",
+        "kind": "subscription",
+        "planTier": "max",
+        "productKey": "subscription_max_monthly",
+        "status": "active",
+        "success": true
+      },
+      "step": "app verify apple-ledger-replay-upgrade"
+    },
+    {
+      "outcome": {
+        "currentPeriodEnd": "T0+30d",
+        "kind": "subscription",
+        "planTier": "max",
+        "productKey": "subscription_max_monthly",
+        "status": "already_processed",
+        "success": true
+      },
+      "step": "app verify apple-ledger-replay-upgrade"
+    },
+    {
+      "outcome": "processed",
+      "step": "App Store DID_CHANGE_RENEWAL_PREF apple-ledger-replay-upgrade"
+    },
+    {
+      "outcome": "duplicate",
+      "step": "App Store DID_CHANGE_RENEWAL_PREF apple-ledger-replay-upgrade"
+    }
+  ]
+}
