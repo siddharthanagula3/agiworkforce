@@ -374,7 +374,7 @@ const messagePort: MessageStorePort = {
         {
           ...kept,
           id: record.id,
-          role: record.role,
+          role: record.role === 'system' ? 'assistant' : record.role,
           content: record.content,
           ...(record.model ? { model: record.model } : {}),
           ...(record.provider ? { provider: record.provider } : {}),

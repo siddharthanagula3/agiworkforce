@@ -8872,6 +8872,9 @@
     "ascii_mode": [
       "apps/cli/src/tui/icons.rs"
     ],
+    "asciiLowercase": [
+      "apps/web/lib/server/ooxml-markup.ts"
+    ],
     "asCloudCodeSessionStatusFilter": [
       "apps/web/lib/services/cloud-code-session-service.ts"
     ],
@@ -9842,6 +9845,9 @@
     ],
     "attributeReferralSignup": [
       "apps/web/lib/services/referral-service.ts"
+    ],
+    "attributeValue": [
+      "apps/web/lib/server/ooxml-markup.ts"
     ],
     "audience_label": [
       "apps/cli/src/cloud/artifacts.rs"
@@ -12814,6 +12820,9 @@
     ],
     "BoundedDurableWriter": [
       "apps/web/lib/workflows/durable-stream-write.ts"
+    ],
+    "boundedJsonLength": [
+      "services/signaling-server/src/bounded-json.ts"
     ],
     "BoundedPageText": [
       "apps/extension/src/features/content/in-page-panel/pageActions.ts"
@@ -17573,6 +17582,9 @@
       "packages/ai/routing/src/promotion/channels.ts",
       "packages/ai/routing/src/promotion/index.ts"
     ],
+    "characterReference": [
+      "apps/web/lib/server/ooxml-markup.ts"
+    ],
     "characterReferenceFinder": [
       "apps/web/lib/server/chat-file-intake/xml-reference-decoder.ts"
     ],
@@ -21908,6 +21920,12 @@
     "clientMarkerExecution": [
       "apps/web/e2e/lib/public-runtime-browser.ts"
     ],
+    "clientMessageRole": [
+      "apps/web/lib/server/client-message-role.ts"
+    ],
+    "ClientMessageRole": [
+      "apps/web/lib/server/client-message-role.ts"
+    ],
     "clientMetadataResponse": [
       "apps/web/app/.well-known/oauth-client-metadata/client-metadata-response.ts"
     ],
@@ -25437,6 +25455,9 @@
     "CODE_RUN_TOOK_TOO_LONG": [
       "apps/mobile/src/features/chat/components/CodeRunAgain.tsx"
     ],
+    "code_running_keys": [
+      "crates/agiworkforce-worktree/src/config_guard.rs"
+    ],
     "CODE_RUNNING_KEYS": [
       "crates/agiworkforce-worktree/src/config_guard.rs"
     ],
@@ -27311,6 +27332,9 @@
     ],
     "compiledSourceWitness": [
       "scripts/public-runtime/proof.mjs"
+    ],
+    "compileExcludeGlob": [
+      "apps/extension-vscode/src/data/contextExclusion.ts"
     ],
     "compileGlob": [
       "packages/client/ide-runtime/src/index.ts",
@@ -40604,9 +40628,6 @@
     "destination": [
       "apps/cli/src/safety/push_consent.rs"
     ],
-    "destination_host": [
-      "apps/cli/src/safety/network_target.rs"
-    ],
     "DESTINATION_SCOPE": [
       "apps/mobile/src/features/shell/destinationScope.ts"
     ],
@@ -47309,6 +47330,9 @@
     "endsPairing": [
       "packages/platform/utils/src/signaling.ts"
     ],
+    "endsTagName": [
+      "apps/web/lib/server/ooxml-markup.ts"
+    ],
     "endStalledCloudAgentRun": [
       "apps/web/lib/services/cloud-agent-run-termination.ts"
     ],
@@ -48872,6 +48896,9 @@
     ],
     "EXAMPLE_TURN": [
       "apps/web/features/marketing/components/landing/landing-content.ts"
+    ],
+    "exceedsJsonDepth": [
+      "services/signaling-server/src/bounded-json.ts"
     ],
     "excel": [
       "apps/desktop/src-tauri/src/features/document/mod.rs"
@@ -53162,6 +53189,9 @@
     "findOpenGitHubPullRequest": [
       "apps/web/lib/github-app.ts"
     ],
+    "findOpeningTags": [
+      "packages/ui/unified-chat/src/lib/artifact-sandbox.ts"
+    ],
     "findOperationalDomain": [
       "apps/web/lib/observability/ownership.ts"
     ],
@@ -53566,8 +53596,14 @@
     "firstManagedMemoryContentOffset": [
       "apps/web/lib/services/managed-memory-context-service.ts"
     ],
+    "firstMarkupElement": [
+      "apps/web/lib/server/ooxml-markup.ts"
+    ],
     "firstNotebookCursor": [
       "apps/web/lib/server/chat-file-intake/notebook-inspection.ts"
+    ],
+    "firstOpenTag": [
+      "apps/web/lib/server/ooxml-markup.ts"
     ],
     "firstPackageCursor": [
       "apps/web/lib/server/chat-file-intake/package-inspection.ts"
@@ -55169,6 +55205,9 @@
     ],
     "forwardedChain": [
       "services/signaling-server/src/client-ip.ts"
+    ],
+    "forwardFinder": [
+      "apps/web/lib/server/ooxml-markup.ts"
     ],
     "forwarding_reasoning": [
       "apps/cli/src/models/mod.rs",
@@ -61058,11 +61097,14 @@
       "apps/desktop/src-tauri/src/sys/commands/code_search.rs",
       "apps/desktop/src/api/codeSearch.ts"
     ],
+    "GlobOptions": [
+      "packages/client/ide-runtime/src/index.ts",
+      "packages/client/ide-runtime/src/workspace.ts"
+    ],
     "GlobSearchResult": [
       "apps/desktop/src-tauri/src/sys/commands/code_search.rs"
     ],
     "globToRegExp": [
-      "apps/extension-vscode/src/data/contextExclusion.ts",
       "scripts/check-model-change-suites.mjs"
     ],
     "glyph": [
@@ -64438,6 +64480,12 @@
     "htmlDeclaresScripts": [
       "packages/ui/unified-chat/src/lib/artifact-preview-capability.ts"
     ],
+    "HtmlTagToken": [
+      "packages/ui/unified-chat/src/components/markdown/splitMarkdownBlocks.ts"
+    ],
+    "htmlTagTokens": [
+      "packages/ui/unified-chat/src/components/markdown/splitMarkdownBlocks.ts"
+    ],
     "http": [
       "apps/cli/src/mcp/mod.rs",
       "crates/agiworkforce-mcp/src/transport/mod.rs"
@@ -66608,6 +66656,9 @@
     ],
     "insert_text": [
       "apps/cli/src/tui/widgets/question_overlay.rs"
+    ],
+    "insertAfterOpeningTag": [
+      "packages/ui/unified-chat/src/lib/artifact-sandbox.ts"
     ],
     "insertCitationMarkers": [
       "packages/ui/unified-chat/src/index.ts"
@@ -72265,6 +72316,9 @@
     ],
     "JsonLd": [
       "apps/web/shared/components/seo/JsonLd.tsx"
+    ],
+    "jsonLdPublishedDate": [
+      "apps/web/lib/url-fetch/url-fetch-tool.ts"
     ],
     "JsonObjectExtraction": [
       "apps/web/app/api/llm/v1/chat/completions/lib/json-object-mode.ts"
@@ -82303,8 +82357,20 @@
     "markUnsavedAnswerEdit": [
       "apps/mobile/src/features/chat/components/AssistantDraftScope.tsx"
     ],
+    "MarkupElement": [
+      "apps/web/lib/server/ooxml-markup.ts"
+    ],
+    "markupElements": [
+      "apps/web/lib/server/ooxml-markup.ts"
+    ],
     "markUploaded": [
       "apps/web/lib/server/chat-file-intake/store.ts"
+    ],
+    "MarkupTagRange": [
+      "apps/web/lib/markup-tags.ts"
+    ],
+    "markupTagRanges": [
+      "apps/web/lib/markup-tags.ts"
     ],
     "markVideoGenerationOutcomeUnknown": [
       "apps/web/lib/server/video-generation-jobs.ts"
@@ -83053,6 +83119,10 @@
     "MAX_GENERATED_FILE_BYTES": [
       "apps/web/lib/server/generated-file-persist.ts"
     ],
+    "MAX_GLOB_PATTERN_CHARS": [
+      "packages/client/ide-runtime/src/index.ts",
+      "packages/client/ide-runtime/src/workspace.ts"
+    ],
     "MAX_GREP_MATCHES": [
       "packages/contracts/local-runtime/src/filesystem.ts",
       "packages/contracts/local-runtime/src/index.ts"
@@ -83143,6 +83213,10 @@
     ],
     "MAX_JSON_LD_BYTES": [
       "apps/extension/src/background/policy.ts"
+    ],
+    "MAX_JSON_NESTING_DEPTH": [
+      "packages/contracts/cloud-contracts/src/bounded-json.ts",
+      "services/signaling-server/src/constants.ts"
     ],
     "MAX_KEEP": [
       "crates/agiworkforce-worktree/src/managed.rs"
@@ -94226,6 +94300,9 @@
     "openInEditor": [
       "apps/desktop/electron/runtime/appsService.ts"
     ],
+    "OpeningTag": [
+      "packages/ui/unified-chat/src/lib/artifact-sandbox.ts"
+    ],
     "openInteractiveCardUrl": [
       "apps/extension/src/features/side-panel/bubbles.ts"
     ],
@@ -94457,6 +94534,9 @@
     ],
     "openSystemPermissionSettings": [
       "apps/web/features/desktop-host/lib/runtime-client.ts"
+    ],
+    "openTags": [
+      "apps/web/lib/server/ooxml-markup.ts"
     ],
     "openTeamSeatBilling": [
       "apps/web/lib/server/stripe-plan-change.ts"
@@ -101319,6 +101399,9 @@
     "PLUGIN_DETAIL_CONCURRENCY": [
       "apps/mobile/src/features/plugins/pluginsModel.ts"
     ],
+    "plugin_diagnostic": [
+      "apps/cli/src/features/plugins/plugins.rs"
+    ],
     "PLUGIN_DIRECTORY_BUILTIN_READ_LIMIT": [
       "apps/web/features/plugins/server/directory/constants.ts"
     ],
@@ -104439,6 +104522,9 @@
     "print_warn": [
       "apps/cli/src/output.rs"
     ],
+    "printable": [
+      "crates/agiworkforce-mcp/src/security.rs"
+    ],
     "printConversation": [
       "apps/mobile/services/fileCreation.ts",
       "apps/web/features/chat/lib/print-conversation.ts"
@@ -106389,6 +106475,9 @@
     ],
     "ProjectWriteAccess": [
       "apps/web/lib/services/org-sharing-service.ts"
+    ],
+    "promisor_keys": [
+      "crates/agiworkforce-worktree/src/config_guard.rs"
     ],
     "promotablePlanTiers": [
       "apps/web/lib/services/usage-limit-promotion-service.ts"
@@ -116410,6 +116499,12 @@
     "replaceImageInHtml": [
       "apps/web/features/chat/components/artifacts/design/design-edits.ts"
     ],
+    "replaceMarkupElements": [
+      "apps/web/lib/server/ooxml-markup.ts"
+    ],
+    "replaceMarkupTags": [
+      "apps/web/lib/markup-tags.ts"
+    ],
     "replaceNativeWebSearchTool": [
       "apps/web/lib/web-search/required-search.ts"
     ],
@@ -125234,6 +125329,9 @@
     ],
     "sanitize_multiline_for_prompt": [
       "apps/desktop/src-tauri/src/sys/commands/chat/prompt_context.rs"
+    ],
+    "sanitize_single_line": [
+      "apps/cli/src/terminal_text.rs"
     ],
     "sanitize_terminal_line": [
       "apps/cli/src/terminal_text.rs"
@@ -139416,6 +139514,9 @@
     ],
     "stripMarkdownForSpeech": [
       "apps/desktop/src/hooks/useTTS.ts"
+    ],
+    "stripMarkupTags": [
+      "apps/web/lib/markup-tags.ts"
     ],
     "stripMetaRefreshFromSandboxHtml": [
       "apps/web/shared/utils/html-sanitizer.ts"
@@ -157964,6 +158065,9 @@
     "withChatPrompt": [
       "tools/evals/src/chat-prompt.ts"
     ],
+    "withClientMessageRole": [
+      "apps/web/lib/server/client-message-role.ts"
+    ],
     "withCloudAgentRunCancellation": [
       "apps/web/lib/services/cloud-agent-run-cancellation.ts"
     ],
@@ -158195,6 +158299,10 @@
     "withinDeadline": [
       "services/signaling-server/src/deadline.ts"
     ],
+    "withinJsonBounds": [
+      "packages/contracts/cloud-contracts/src/bounded-json.ts",
+      "services/signaling-server/src/bounded-json.ts"
+    ],
     "withInstallBlock": [
       "apps/web/features/directory/services/plugins-directory.ts"
     ],
@@ -158330,6 +158438,9 @@
     ],
     "withoutStoredCitationMarkupRow": [
       "apps/web/lib/server/stored-assistant-text.ts"
+    ],
+    "withoutSystemMessages": [
+      "apps/web/features/chat/lib/shared-conversation-snapshot.ts"
     ],
     "withoutTestModules": [
       "scripts/check-cli-local-secret.mjs"
@@ -160567,6 +160678,12 @@
     ],
     "xml_tag": [
       "apps/cli/src/memory.rs"
+    ],
+    "XmlAttribute": [
+      "apps/web/lib/server/ooxml-markup.ts"
+    ],
+    "xmlAttributes": [
+      "apps/web/lib/server/ooxml-markup.ts"
     ],
     "XmlElement": [
       "apps/web/lib/server/office-document-text.ts"

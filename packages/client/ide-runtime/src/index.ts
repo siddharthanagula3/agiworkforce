@@ -35,11 +35,12 @@ export {
   joinWorkspacePath,
   looksBinary,
   matchesGlob,
+  MAX_GLOB_PATTERN_CHARS,
   MAX_WORKSPACE_WALK_DEPTH,
   SKIPPED_WORKSPACE_DIRECTORIES,
   toPosixPath,
 } from './workspace';
-export type { GrepOptions, WorkspaceGrepMatch } from './workspace';
+export type { GlobOptions, GrepOptions, WorkspaceGrepMatch } from './workspace';
 
 export {
   countPorcelainStatus,

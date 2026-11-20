@@ -880,7 +880,9 @@ enum Command {
         allowed_origin: Vec<String>,
         /// Accept `?token=` for browser clients, which then get a read-only connection:
         /// they cannot start turns, answer approvals or change settings. URLs are logged,
-        /// so a header token is what grants full access.
+        /// so the URL carries AGI_APP_SERVER_READ_ONLY_TOKEN, a separate credential that
+        /// is read-only wherever it is presented; AGI_APP_SERVER_TOKEN is never accepted
+        /// in a URL.
         #[arg(long)]
         allow_query_token: bool,
         /// Run without saved memory: sessions neither read memories nor save new ones.
@@ -2651,7 +2653,7 @@ async fn teleport_code_session(session_id: Option<&str>) -> Result<String> {
         teleported.branch,
         teleported.remote,
     );
-    let shown_title = terminal_text::sanitize_terminal_text(&title);
+    let shown_title = terminal_text::sanitize_single_line(&title);
     let loaded = match &imported {
         sessions::HostedImport::KeptLocal => format!(
             "kept this computer's copy of '{shown_title}', which already holds every cloud turn plus the work you did here"
@@ -2673,8 +2675,8 @@ fn code_session_choice(index: usize, session: &cloud::code_sessions::CodeSession
     format!(
         "  {}. {}  {}",
         index + 1,
-        terminal_text::sanitize_terminal_text(&cloud::code_teleport::title(session)),
-        terminal_text::sanitize_terminal_text(session.working_branch.as_deref().unwrap_or(""))
+        terminal_text::sanitize_single_line(&cloud::code_teleport::title(session)),
+        terminal_text::sanitize_single_line(session.working_branch.as_deref().unwrap_or(""))
     )
 }
 
@@ -2766,7 +2768,7 @@ pub(crate) async fn add_marketplace(
     .map_err(|error| anyhow::anyhow!("{error}"))?;
     Ok(format!(
         "Added {} to your account ({} plugins).",
-        terminal_text::sanitize_terminal_text(&source.name),
+        terminal_text::sanitize_single_line(&source.name),
         source.entry_count
     ))
 }
@@ -2800,7 +2802,7 @@ async fn marketplace_entry(
         .ok_or_else(|| {
             anyhow::anyhow!(
                 "No marketplace named {} on your account. Add it with `agi marketplace add <owner/repo>`.",
-                terminal_text::sanitize_terminal_text(marketplace_name)
+                terminal_text::sanitize_single_line(marketplace_name)
             )
         })?;
     let entries = cloud::marketplaces::entries(&client)
@@ -2812,9 +2814,9 @@ async fn marketplace_entry(
         .ok_or_else(|| {
             anyhow::anyhow!(
                 "{} does not list a plugin named {}. `agi marketplace browse {}` lists them.",
-                terminal_text::sanitize_terminal_text(&source.name),
-                terminal_text::sanitize_terminal_text(plugin),
-                terminal_text::sanitize_terminal_text(&source.name)
+                terminal_text::sanitize_single_line(&source.name),
+                terminal_text::sanitize_single_line(plugin),
+                terminal_text::sanitize_single_line(&source.name)
             )
         })?;
     Ok((client, source, entry))
@@ -2850,7 +2852,7 @@ async fn adopt_hosted_conversation(conversation_id: &str) -> Result<String> {
             workspace_root: None,
         },
     )?;
-    let shown_title = terminal_text::sanitize_terminal_text(&conversation.title);
+    let shown_title = terminal_text::sanitize_single_line(&conversation.title);
     if adoption == sessions::HostedAdoption::Kept {
         eprintln!(
             "Resuming '{shown_title}'. This device already has everything your account holds for it."
@@ -2885,22 +2887,95 @@ async fn print_project_history(project: &str, limit: usize) -> Result<()> {
         })
         .collect();
     if filed.is_empty() {
-        println!("No conversations are filed under {} yet.", found.name);
+        println!("{}", project_conversations_empty(&found.name));
         return Ok(());
     }
-    println!("Conversations in {}:", found.name);
+    println!("{}", project_conversations_heading(&found.name));
     for conversation in filed.iter().take(limit) {
-        println!(
-            "  {}  {}  {} messages  {}",
-            conversation.id,
-            conversation.title,
-            conversation.messages.len(),
-            conversation.updated_at
-        );
+        println!("{}", hosted_conversation_row(conversation));
     }
     println!();
     println!("Resume one with `agi resume --cloud <id>`.");
     Ok(())
+}
+
+fn project_conversations_empty(project: &str) -> String {
+    format!(
+        "No conversations are filed under {} yet.",
+        terminal_text::sanitize_single_line(project)
+    )
+}
+
+fn project_conversations_heading(project: &str) -> String {
+    format!(
+        "Conversations in {}:",
+        terminal_text::sanitize_single_line(project)
+    )
+}
+
+fn hosted_conversation_row(conversation: &cloud::chat::HostedConversation) -> String {
+    format!(
+        "  {}  {}  {} messages  {}",
+        terminal_text::sanitize_single_line(&conversation.id),
+        terminal_text::sanitize_single_line(&conversation.title),
+        conversation.messages.len(),
+        terminal_text::sanitize_single_line(&conversation.updated_at)
+    )
+}
+
+fn project_list_entry(project: &cloud::projects::CachedProject) -> String {
+    let archived = if project.is_archived {
+        "  [archived]"
+    } else {
+        ""
+    };
+    let mut entry = format!(
+        "{}  {}{}",
+        terminal_text::sanitize_single_line(&project.id),
+        terminal_text::sanitize_single_line(&project.name),
+        archived
+    );
+    if let Some(description) = project.description.as_deref() {
+        entry.push_str(&format!(
+            "\n  {}",
+            terminal_text::sanitize_single_line(description)
+        ));
+    }
+    entry
+}
+
+fn image_model_entry(model: &cloud::image::ImageModelAdmission) -> String {
+    let mut entry = format!(
+        "{}  {}  {}  {}{}",
+        terminal_text::sanitize_single_line(&model.model_id),
+        terminal_text::sanitize_single_line(&model.name),
+        terminal_text::sanitize_single_line(&model.provider),
+        terminal_text::sanitize_single_line(&model.state),
+        if model.supports_edit {
+            "  transparent background"
+        } else {
+            ""
+        }
+    );
+    if !model.aspect_ratios.is_empty() {
+        let ratios: Vec<_> = model
+            .aspect_ratios
+            .iter()
+            .map(|ratio| terminal_text::sanitize_single_line(ratio))
+            .collect();
+        entry.push_str(&format!("\n    aspect ratios: {}", ratios.join(", ")));
+    }
+    if let Some(max) = model.max_images {
+        entry.push_str(&format!("\n    up to {max} per request"));
+    }
+    entry
+}
+
+fn project_reference(project: &cloud::projects::CachedProject) -> (String, String) {
+    (
+        terminal_text::sanitize_single_line(&project.id).into_owned(),
+        terminal_text::sanitize_single_line(&project.name).into_owned(),
+    )
 }
 
 async fn print_hosted_history(limit: usize) {
@@ -2921,19 +2996,16 @@ async fn print_hosted_history(limit: usize) {
                 .filter(|conversation| !conversation.archived)
                 .take(limit)
             {
-                println!(
-                    "  {}  {}  {} messages  {}",
-                    conversation.id,
-                    conversation.title,
-                    conversation.messages.len(),
-                    conversation.updated_at
-                );
+                println!("{}", hosted_conversation_row(conversation));
             }
             println!();
             println!("Resume one with `agi resume --cloud <id>`.");
             print_archived_note(&conversations);
         }
-        Err(error) => println!("Account history unavailable: {error}"),
+        Err(error) => println!(
+            "Account history unavailable: {}",
+            terminal_text::sanitize_single_line(&error.to_string())
+        ),
     }
 }
 
@@ -3063,7 +3135,7 @@ async fn handle_code_command(
             println!(
                 "{} ({}). `agi code show {session}` shows what it did next.",
                 if approve { "Approved" } else { "Rejected" },
-                terminal_text::sanitize_terminal_text(status)
+                terminal_text::sanitize_single_line(status)
             );
             Ok(())
         }
@@ -3404,24 +3476,7 @@ async fn handle_image_command(
             return Ok(());
         }
         for model in &models {
-            println!(
-                "{}  {}  {}  {}{}",
-                model.model_id,
-                model.name,
-                model.provider,
-                model.state,
-                if model.supports_edit {
-                    "  transparent background"
-                } else {
-                    ""
-                }
-            );
-            if !model.aspect_ratios.is_empty() {
-                println!("    aspect ratios: {}", model.aspect_ratios.join(", "));
-            }
-            if let Some(max) = model.max_images {
-                println!("    up to {max} per request");
-            }
+            println!("{}", image_model_entry(model));
         }
         return Ok(());
     }
@@ -3526,9 +3581,10 @@ async fn handle_projects_command(
                 .find(project)
                 .ok_or_else(|| anyhow::anyhow!("No project '{project}' in your AGI account"))?;
             let (id, name) = (found.id.clone(), found.name.clone());
+            let (shown_id, shown_name) = project_reference(found);
             if !confirm_destructive(
                 &format!(
-                    "Delete project '{name}'? Its knowledge files are deleted with it and every \
+                    "Delete project '{shown_name}'? Its knowledge files are deleted with it and every \
                      client loses the workspace. Its conversations stay in your history, unfiled. \
                      This cannot be undone."
                 ),
@@ -3542,7 +3598,7 @@ async fn handle_projects_command(
                 .map_err(|error| anyhow::anyhow!("{error}"))?;
             render_structured(
                 serde_json::json!({ "deleted": id, "name": name }),
-                format!("Deleted project '{name}' ({id}) from your account."),
+                format!("Deleted project '{shown_name}' ({shown_id}) from your account."),
                 *json,
                 output,
             )
@@ -3559,13 +3615,14 @@ async fn handle_projects_command(
                 .find(project)
                 .ok_or_else(|| anyhow::anyhow!("No project '{project}' in your AGI account"))?;
             let (id, name) = (found.id.clone(), found.name.clone());
+            let (shown_id, shown_name) = project_reference(found);
             cloud::set_project_archived(privacy, &id, !*undo)
                 .await
                 .map_err(|error| anyhow::anyhow!("{error}"))?;
             let verb = if *undo { "Unarchived" } else { "Archived" };
             render_structured(
                 serde_json::json!({ "id": id, "name": name, "isArchived": !*undo }),
-                format!("{verb} '{name}' ({id}) in your account."),
+                format!("{verb} '{shown_name}' ({shown_id}) in your account."),
                 *json,
                 output,
             )
@@ -3593,15 +3650,15 @@ async fn handle_projects_command(
                     .map(|project| {
                         format!(
                             "  linked to '{}'",
-                            terminal_text::sanitize_terminal_text(&project.name)
+                            terminal_text::sanitize_single_line(&project.name)
                         )
                     })
                     .unwrap_or_default();
                 println!(
                     "  {}. {}  last used {}{account}",
                     index + 1,
-                    terminal_text::sanitize_terminal_text(path),
-                    terminal_text::sanitize_terminal_text(
+                    terminal_text::sanitize_single_line(path),
+                    terminal_text::sanitize_single_line(
                         entry.last_seen.get(..10).unwrap_or(&entry.last_seen)
                     )
                 );
@@ -3619,15 +3676,7 @@ async fn handle_projects_command(
                 return Ok(());
             }
             for project in &cache.projects {
-                let archived = if project.is_archived {
-                    "  [archived]"
-                } else {
-                    ""
-                };
-                println!("{}  {}{}", project.id, project.name, archived);
-                if let Some(description) = project.description.as_deref() {
-                    println!("  {description}");
-                }
+                println!("{}", project_list_entry(project));
             }
             Ok(())
         }
@@ -3650,14 +3699,13 @@ async fn handle_projects_command(
                 );
                 return Ok(());
             }
-            let text = |key: &str| {
-                detail
-                    .get(key)
-                    .and_then(serde_json::Value::as_str)
-                    .map(|value| terminal_text::sanitize_terminal_text(value).into_owned())
+            let field = |key: &str| detail.get(key).and_then(serde_json::Value::as_str);
+            let line = |key: &str| {
+                field(key).map(|value| terminal_text::sanitize_single_line(value).into_owned())
             };
-            println!("{}  {}", found.id, text("name").unwrap_or_default());
-            if let Some(description) = text("description") {
+            let (shown_id, _) = project_reference(found);
+            println!("{shown_id}  {}", line("name").unwrap_or_default());
+            if let Some(description) = line("description") {
                 println!("  {description}");
             }
             println!(
@@ -3672,7 +3720,7 @@ async fn handle_projects_command(
                     ""
                 }
             );
-            match text("instructions") {
+            match field("instructions").map(terminal_text::sanitize_terminal_text) {
                 Some(instructions) => println!(
                     "  Instructions:\n    {}",
                     instructions.replace('\n', "\n    ")
@@ -3689,13 +3737,10 @@ async fn handle_projects_command(
                         .or_else(|| file.get("name"))
                         .and_then(serde_json::Value::as_str)
                         .unwrap_or("(unnamed)");
-                    println!("    {}", terminal_text::sanitize_terminal_text(name));
+                    println!("    {}", terminal_text::sanitize_single_line(name));
                 }
             }
-            println!(
-                "\n`agi history --project {}` lists its conversations.",
-                found.id
-            );
+            println!("\n`agi history --project {shown_id}` lists its conversations.");
             Ok(())
         }
         ProjectsSubcommand::Edit {
@@ -3732,7 +3777,7 @@ async fn handle_projects_command(
             cloud::refresh_projects(privacy)
                 .await
                 .map_err(|error| anyhow::anyhow!("{error}"))?;
-            println!("Updated project {}.", found.id);
+            println!("Updated project {}.", project_reference(found).0);
             Ok(())
         }
         ProjectsSubcommand::Create { name, description } => {
@@ -3781,14 +3826,21 @@ async fn handle_projects_command(
             project_registry::ProjectRegistry::update(&home, |registry| {
                 registry.link_cloud_project(&cwd, &found.id)
             })?;
-            println!(
-                "{} is linked to the account project '{}'. Managed turns here use its instructions and knowledge files, and their conversations are filed under it.",
-                cwd.display(),
-                found.name
-            );
+            println!("{}", linked_project_line(&cwd, found));
             Ok(())
         }
     }
+}
+
+fn linked_project_line(
+    folder: &std::path::Path,
+    project: &cloud::projects::CachedProject,
+) -> String {
+    format!(
+        "{} is linked to the account project '{}'. Managed turns here use its instructions and knowledge files, and their conversations are filed under it.",
+        terminal_text::sanitize_single_line(&folder.display().to_string()),
+        project_reference(project).1
+    )
 }
 
 async fn handle_artifacts_command(
@@ -4048,7 +4100,9 @@ async fn handle_memory_command(action: &MemorySubcommand) -> Result<()> {
                 cloud::active_workspace_label(privacy)
             );
             let cache = cache.map_err(|error| anyhow::anyhow!("{error}"))?;
-            let workspace = workspace.unwrap_or_else(|_| "your active workspace".to_string());
+            let workspace = workspace
+                .map(|label| terminal_text::sanitize_single_line(&label).into_owned())
+                .unwrap_or_else(|_| "your active workspace".to_string());
             if cache.account_memory_off {
                 println!("Memory is off for your account. Turn it on with `agi memory on`.");
             }
@@ -4070,36 +4124,42 @@ async fn handle_memory_command(action: &MemorySubcommand) -> Result<()> {
                 cache.entries.len()
             );
             for topic in topics {
-                println!("\n{topic}");
+                println!("\n{}", terminal_text::sanitize_single_line(topic));
                 for entry in cache
                     .entries
                     .iter()
                     .filter(|entry| entry.category.as_deref().unwrap_or("General") == topic)
                 {
                     let pin = if entry.pinned { "*" } else { " " };
-                    let origin = entry.source.as_deref().unwrap_or("web");
+                    let origin = terminal_text::sanitize_single_line(
+                        entry.source.as_deref().unwrap_or("web"),
+                    );
                     let updated = entry.updated_at.get(..10).unwrap_or(&entry.updated_at);
                     let scope = match entry.project_id.as_deref() {
                         Some(project) if Some(project) == linked.as_deref() => ", this project",
                         Some(_) => ", another project",
                         None => "",
                     };
-                    println!("{pin} {}  [{origin}{scope}, updated {updated}]", entry.id);
+                    println!(
+                        "{pin} {}  [{origin}{scope}, updated {}]",
+                        terminal_text::sanitize_single_line(&entry.id),
+                        terminal_text::sanitize_single_line(updated)
+                    );
                     println!(
                         "    {}",
-                        terminal_text::sanitize_terminal_text(&entry.content)
+                        terminal_text::sanitize_single_line(&entry.content)
                     );
                     if let Some(conversation) = entry.source_conversation_id.as_deref() {
                         let title = entry
                             .source_conversation_title
                             .as_deref()
                             .map(|title| {
-                                format!("'{}'", terminal_text::sanitize_terminal_text(title))
+                                format!("'{}'", terminal_text::sanitize_single_line(title))
                             })
                             .unwrap_or_else(|| "a chat".to_string());
                         println!(
                             "    learned in {title}; agi resume --cloud {} opens it",
-                            terminal_text::sanitize_terminal_text(conversation)
+                            terminal_text::sanitize_single_line(conversation)
                         );
                     }
                 }
@@ -4125,7 +4185,10 @@ async fn handle_memory_command(action: &MemorySubcommand) -> Result<()> {
                 }
                 Some(refusals) => {
                     for refusal in &refusals {
-                        println!("Not updated: {refusal}");
+                        println!(
+                            "Not updated: {}",
+                            terminal_text::sanitize_single_line(refusal)
+                        );
                     }
                     anyhow::bail!("Your account did not store this change")
                 }
@@ -4255,7 +4318,10 @@ async fn handle_memory_command(action: &MemorySubcommand) -> Result<()> {
                 return Ok(());
             }
             for refusal in &refusals {
-                println!("Not remembered: {refusal}");
+                println!(
+                    "Not remembered: {}",
+                    terminal_text::sanitize_single_line(refusal)
+                );
             }
             anyhow::bail!("Your account did not store this memory")
         }
@@ -4947,6 +5013,82 @@ fn mcp_switch_message(name: &str, enabled: bool, changed: bool) -> String {
     }
 }
 
+fn mcp_server_identity_line(name: &str, version: &str) -> String {
+    format!(
+        "{:<10} {} {}",
+        "server",
+        terminal_text::sanitize_single_line(name),
+        terminal_text::sanitize_single_line(version)
+    )
+}
+
+fn mcp_tool_line(name: &str, description: &str) -> String {
+    format!(
+        "  {}  {}",
+        terminal_text::sanitize_single_line(name),
+        terminal_text::sanitize_single_line(description.lines().next().unwrap_or_default())
+    )
+}
+
+fn imported_mcp_server_row(server: &ecosystem::ImportedMcpServer) -> String {
+    format!(
+        "  {} ({}) [{}]",
+        terminal_text::sanitize_single_line(&server.name),
+        terminal_text::sanitize_single_line(&server.source),
+        if server.url.is_some() {
+            "HTTP/SSE"
+        } else {
+            "stdio"
+        }
+    )
+}
+
+fn importable_mcp_server_row(server: &ecosystem::ImportedMcpServer) -> String {
+    format!(
+        "  {}, {}",
+        terminal_text::sanitize_single_line(&server.name),
+        terminal_text::sanitize_single_line(
+            server
+                .command
+                .as_deref()
+                .or(server.url.as_deref())
+                .unwrap_or("(unknown)")
+        )
+    )
+}
+
+fn plugin_list_row(
+    config_name: &str,
+    format_tag: &str,
+    status: impl std::fmt::Display,
+    signature_tag: &str,
+    root: &std::path::Path,
+) -> String {
+    format!(
+        "  {} {} [{}] [{}] {}",
+        terminal_text::sanitize_single_line(config_name),
+        format_tag,
+        status,
+        terminal_text::sanitize_single_line(signature_tag),
+        terminal_text::sanitize_single_line(&root.display().to_string())
+    )
+}
+
+fn marketplace_install_receipt(
+    plugin: &str,
+    installed_version: Option<&str>,
+    marketplace: &str,
+) -> String {
+    format!(
+        "Installed {} {} on your account from {}, as the web marketplace does; it is listed with your plugins on the web and desktop apps.",
+        terminal_text::sanitize_single_line(plugin),
+        installed_version
+            .map(terminal_text::sanitize_single_line)
+            .unwrap_or_default(),
+        terminal_text::sanitize_single_line(marketplace)
+    )
+}
+
 async fn run_mcp_registry_command(action: &McpSubcommand) -> Result<()> {
     use crate::mcp::registry::McpRegistry;
 
@@ -5024,20 +5166,20 @@ async fn run_mcp_registry_command(action: &McpSubcommand) -> Result<()> {
                     .and_then(|config| mcp::policy_refusal(&row.name, config));
                 println!(
                     "{:<24} {:<8} {:<6} {}",
-                    terminal_text::sanitize_terminal_text(&row.name),
+                    terminal_text::sanitize_single_line(&row.name),
                     match (&refusal, row.enabled) {
                         (Some(_), _) => "blocked",
                         (None, true) => "enabled",
                         (None, false) => "disabled",
                     },
-                    terminal_text::sanitize_terminal_text(&row.kind),
-                    terminal_text::sanitize_terminal_text(&row.target)
+                    terminal_text::sanitize_single_line(&row.kind),
+                    terminal_text::sanitize_single_line(&row.target)
                 );
                 if let Some(reason) = refusal {
                     println!(
                         "{:<24} {}",
                         "",
-                        terminal_text::sanitize_terminal_text(&reason)
+                        terminal_text::sanitize_single_line(&reason)
                     );
                 }
             }
@@ -5060,7 +5202,7 @@ async fn run_mcp_registry_command(action: &McpSubcommand) -> Result<()> {
             println!(
                 "{:<10} {}",
                 "name",
-                terminal_text::sanitize_terminal_text(&row.name)
+                terminal_text::sanitize_single_line(&row.name)
             );
             println!(
                 "{:<10} {}",
@@ -5070,12 +5212,12 @@ async fn run_mcp_registry_command(action: &McpSubcommand) -> Result<()> {
             println!(
                 "{:<10} {}",
                 "transport",
-                terminal_text::sanitize_terminal_text(&row.kind)
+                terminal_text::sanitize_single_line(&row.kind)
             );
             println!(
                 "{:<10} {}",
                 "target",
-                terminal_text::sanitize_terminal_text(&row.target)
+                terminal_text::sanitize_single_line(&row.target)
             );
             println!("{:<10} {}", "file", McpRegistry::default_path()?.display());
             let prefix = crate::platform::policy::mcp_rule_target(name, None);
@@ -5091,7 +5233,7 @@ async fn run_mcp_registry_command(action: &McpSubcommand) -> Result<()> {
                 println!(
                     "{:<10} {} {}",
                     "rule",
-                    terminal_text::sanitize_terminal_text(&scope),
+                    terminal_text::sanitize_single_line(&scope),
                     match decision {
                         crate::platform::policy::PolicyDecision::Allow => "runs without asking",
                         crate::platform::policy::PolicyDecision::Ask => "asks first",
@@ -5119,7 +5261,11 @@ async fn run_mcp_registry_command(action: &McpSubcommand) -> Result<()> {
             let mut connection = match connected {
                 Ok(Ok(connection)) => connection,
                 Ok(Err(error)) => {
-                    println!("{:<10} could not connect: {error:#}", "connection");
+                    println!(
+                        "{:<10} could not connect: {}",
+                        "connection",
+                        terminal_text::sanitize_single_line(&format!("{error:#}"))
+                    );
                     return Ok(());
                 }
                 Err(_) => {
@@ -5129,12 +5275,7 @@ async fn run_mcp_registry_command(action: &McpSubcommand) -> Result<()> {
             };
             let negotiated = connection.negotiated().clone();
             if let Some(info) = negotiated.server_info.as_ref() {
-                println!(
-                    "{:<10} {} {}",
-                    "server",
-                    terminal_text::sanitize_terminal_text(&info.name),
-                    terminal_text::sanitize_terminal_text(&info.version)
-                );
+                println!("{}", mcp_server_identity_line(&info.name, &info.version));
             }
             if let Some(instructions) = negotiated
                 .instructions
@@ -5145,7 +5286,7 @@ async fn run_mcp_registry_command(action: &McpSubcommand) -> Result<()> {
                 println!(
                     "{:<10} {}",
                     "about",
-                    terminal_text::sanitize_terminal_text(
+                    terminal_text::sanitize_single_line(
                         instructions.lines().next().unwrap_or(instructions)
                     )
                 );
@@ -5155,16 +5296,13 @@ async fn run_mcp_registry_command(action: &McpSubcommand) -> Result<()> {
                 Ok(tools) => {
                     println!("\nTools ({}):", tools.len());
                     for tool in tools {
-                        println!(
-                            "  {}  {}",
-                            terminal_text::sanitize_terminal_text(&tool.original_name),
-                            terminal_text::sanitize_terminal_text(
-                                tool.description.lines().next().unwrap_or_default()
-                            )
-                        );
+                        println!("{}", mcp_tool_line(&tool.original_name, &tool.description));
                     }
                 }
-                Err(error) => println!("\nIts tools could not be listed: {error:#}"),
+                Err(error) => println!(
+                    "\nIts tools could not be listed: {}",
+                    terminal_text::sanitize_single_line(&format!("{error:#}"))
+                ),
             }
             let _ = connection.shutdown().await;
             Ok(())
@@ -5237,7 +5375,7 @@ async fn run_mcp_registry_command(action: &McpSubcommand) -> Result<()> {
                 ),
                 Some(crate::mcp::McpRevocation::Failed(reason)) => println!(
                     "Removed the stored OAuth token for '{shown}', but the provider did not confirm revocation ({}). Remove the app's access in the provider's own settings to end the grant there too.",
-                    terminal_text::sanitize_terminal_text(&reason)
+                    terminal_text::sanitize_single_line(&reason)
                 ),
             }
             Ok(())
@@ -5253,7 +5391,7 @@ async fn run_mcp_registry_command(action: &McpSubcommand) -> Result<()> {
                 } else {
                     "--url"
                 },
-                terminal_text::sanitize_terminal_text(&removed.target)
+                terminal_text::sanitize_single_line(&removed.target)
             );
             Ok(())
         }
@@ -5379,7 +5517,7 @@ fn handle_approvals_command(action: &ApprovalsSubcommand) -> Result<()> {
                     .unwrap_or_default();
                 println!(
                     "{}",
-                    terminal_text::sanitize_terminal_text(&format!(
+                    terminal_text::sanitize_single_line(&format!(
                         "{}  {decision}{reason}  {}  {}",
                         entry.timestamp, entry.tool_name, entry.target
                     ))
@@ -5527,7 +5665,7 @@ async fn handle_session_action(action: SessionAction) -> Result<()> {
                     "  [{:>3}] {:<10}  {}",
                     i,
                     msg.role,
-                    terminal_text::sanitize_terminal_text(&preview)
+                    terminal_text::sanitize_single_line(&preview)
                 );
             }
             Ok(())
@@ -6552,12 +6690,26 @@ async fn run_cli(mut cli: Cli) -> Result<()> {
                             "WebSocket app-server requires AGI_APP_SERVER_TOKEN; auth tokens are never printed"
                         )
                     })?;
+                let read_only_token = if *allow_query_token {
+                    let read_only_token = std::env::var("AGI_APP_SERVER_READ_ONLY_TOKEN")
+                        .ok()
+                        .map(|token| token.trim().to_string())
+                        .filter(|token| !token.is_empty())
+                        .ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "--allow-query-token requires AGI_APP_SERVER_READ_ONLY_TOKEN, a credential separate from AGI_APP_SERVER_TOKEN that only opens read-only connections"
+                            )
+                        })?;
+                    Some(read_only_token)
+                } else {
+                    None
+                };
                 app_server::run_developer_session_websocket(
                     addr,
                     app_server::WebSocketSecurity {
                         auth_token: Some(token),
+                        read_only_token,
                         allowed_origins: allowed_origin.clone(),
-                        allow_query_token: *allow_query_token,
                         allow_public_listen: *allow_public_listen,
                     },
                     host,
@@ -6600,12 +6752,14 @@ async fn run_cli(mut cli: Cli) -> Result<()> {
                                 None => "[no-manifest]".to_string(),
                             };
                             println!(
-                                "  {} {} [{}] [{}] {}",
-                                p.config_name,
-                                fmt_tag,
-                                st,
-                                terminal_text::sanitize_terminal_text(&signature_tag),
-                                p.root.display()
+                                "{}",
+                                plugin_list_row(
+                                    &p.config_name,
+                                    &fmt_tag,
+                                    st,
+                                    &signature_tag,
+                                    &p.root
+                                )
                             );
                         }
                         Ok(())
@@ -6680,13 +6834,13 @@ async fn run_cli(mut cli: Cli) -> Result<()> {
                                     "Installed to {}{}, {}",
                                     path.display(),
                                     fmt_tag,
-                                    terminal_text::sanitize_terminal_text(&signature.label())
+                                    terminal_text::sanitize_single_line(&signature.label())
                                 );
                                 if let Some((manifest, _)) = plugins::load_manifest_for(&path) {
                                     for (label, value) in plugins::plugin_contents(&manifest) {
                                         println!(
                                             "  {label:<10} {}",
-                                            terminal_text::sanitize_terminal_text(&value)
+                                            terminal_text::sanitize_single_line(&value)
                                         );
                                     }
                                 }
@@ -6770,16 +6924,14 @@ async fn run_cli(mut cli: Cli) -> Result<()> {
                         }
                         let mut failed = 0usize;
                         for (server, config) in &remote {
-                            let server_shown = terminal_text::sanitize_terminal_text(server);
+                            let server_shown = terminal_text::sanitize_single_line(server);
                             match crate::mcp::login_to_remote_server(server, config).await {
                                 Ok(()) => println!("Signed in to '{server_shown}'."),
                                 Err(error) => {
                                     failed += 1;
                                     eprintln!(
                                         "Could not sign in to '{server_shown}': {}",
-                                        terminal_text::sanitize_terminal_text(&format!(
-                                            "{error:#}"
-                                        ))
+                                        terminal_text::sanitize_single_line(&format!("{error:#}"))
                                     );
                                 }
                             }
@@ -6928,13 +7080,7 @@ async fn run_cli(mut cli: Cli) -> Result<()> {
                             report.path.display()
                         );
                         for s in &servers {
-                            let transport = if s.url.is_some() { "HTTP/SSE" } else { "stdio" };
-                            println!(
-                                "  {} ({}) [{}]",
-                                terminal_text::sanitize_terminal_text(&s.name),
-                                terminal_text::sanitize_terminal_text(&s.source),
-                                transport
-                            );
+                            println!("{}", imported_mcp_server_row(s));
                         }
                         if !report.skipped_existing.is_empty() {
                             println!(
@@ -6968,16 +7114,7 @@ async fn run_cli(mut cli: Cli) -> Result<()> {
                     if !servers.is_empty() {
                         println!("\nImportable MCP servers:");
                         for s in &servers {
-                            let cmd_display = s
-                                .command
-                                .as_deref()
-                                .or(s.url.as_deref())
-                                .unwrap_or("(unknown)");
-                            println!(
-                                "  {}, {}",
-                                terminal_text::sanitize_terminal_text(&s.name),
-                                terminal_text::sanitize_terminal_text(cmd_display)
-                            );
+                            println!("{}", importable_mcp_server_row(s));
                         }
                     }
                     Ok(())
@@ -7245,7 +7382,7 @@ async fn run_cli(mut cli: Cli) -> Result<()> {
                     }
                     Some(archive) if archive.status == "preparing" => println!(
                         "Your export requested at {} is still being prepared. Run `agi export-data` again later to download it.",
-                        terminal_text::sanitize_terminal_text(&archive.requested_at)
+                        terminal_text::sanitize_single_line(&archive.requested_at)
                     ),
                     _ => {
                         let requested = cloud::data_export::request(&client)
@@ -7424,14 +7561,12 @@ async fn run_cli(mut cli: Cli) -> Result<()> {
                             .await
                             .map_err(|error| anyhow::anyhow!("{error}"))?;
                         println!(
-                            "Installed {} {} on your account from {}, as the web marketplace does; it is listed with your plugins on the web and desktop apps.",
-                            terminal_text::sanitize_terminal_text(&entry.name),
-                            installation
-                                .installed_version
-                                .as_deref()
-                                .map(terminal_text::sanitize_terminal_text)
-                                .unwrap_or_default(),
-                            terminal_text::sanitize_terminal_text(&source.name)
+                            "{}",
+                            marketplace_install_receipt(
+                                &entry.name,
+                                installation.installed_version.as_deref(),
+                                &source.name
+                            )
                         );
                         Ok(())
                     }
@@ -8634,10 +8769,14 @@ pub fn run_to_exit_code() -> std::process::ExitCode {
             std::process::ExitCode::from(broken_pipe::BROKEN_PIPE_EXIT_CODE)
         }
         Err(error) => {
-            eprintln!("Error: {error:?}");
+            eprintln!("{}", fatal_error_text(&error));
             std::process::ExitCode::from(u8::try_from(exit_code_for(&error)).unwrap_or(1))
         }
     }
+}
+
+fn fatal_error_text(error: &anyhow::Error) -> String {
+    terminal_text::sanitize_terminal_text(&format!("Error: {error:?}")).into_owned()
 }
 
 fn exit_code_for(error: &anyhow::Error) -> i32 {
@@ -8848,7 +8987,7 @@ fn session_mcp_configs(
 fn mcp_config_problem_notice(problem: &str) -> String {
     format!(
         "MCP: servers in this file were not loaded: {}",
-        terminal_text::sanitize_terminal_text(problem)
+        terminal_text::sanitize_single_line(problem)
     )
 }
 
@@ -9385,6 +9524,178 @@ mod tests {
         assert!(!line.contains('\u{1b}'), "{line:?}");
         assert!(!line.contains('\u{07}'), "{line:?}");
         assert!(line.contains("Fix login"));
+    }
+
+    fn assert_no_control(text: &str) {
+        assert!(
+            !text.chars().any(|c| c.is_control() && c != '\n'),
+            "control character survived: {text:?}"
+        );
+        assert!(text.contains("pwned"), "{text:?}");
+    }
+
+    #[test]
+    fn the_fatal_error_line_carries_no_terminal_escape() {
+        let error = anyhow::anyhow!("server said \u{1b}]52;c;cm0gLXJmIC8=\u{7}\u{1b}[2Jpwned")
+            .context("request failed \u{1b}[31m");
+        let shown = fatal_error_text(&error);
+        assert_no_control(&shown);
+        assert!(shown.starts_with("Error: "), "{shown}");
+    }
+
+    #[test]
+    fn account_listings_carries_no_terminal_escape_from_the_server() {
+        let hostile = "\u{1b}]52;c;cm0gLXJmIC8=\u{7}\u{1b}[2Jpwned";
+        let conversation = cloud::chat::HostedConversation {
+            id: format!("id{hostile}"),
+            title: hostile.to_string(),
+            model: None,
+            project_id: None,
+            updated_at: "2026-11-18".to_string(),
+            archived: false,
+            server_version: "1".to_string(),
+            messages: Vec::new(),
+        };
+        assert_no_control(&hosted_conversation_row(&conversation));
+        assert_no_control(&project_conversations_empty(hostile));
+        assert_no_control(&project_conversations_heading(hostile));
+
+        let project = cloud::projects::CachedProject {
+            id: "p1".to_string(),
+            name: hostile.to_string(),
+            description: Some(hostile.to_string()),
+            instructions: None,
+            is_archived: false,
+            updated_at: "2026-11-18".to_string(),
+        };
+        assert_no_control(&project_list_entry(&project));
+
+        let model: cloud::image::ImageModelAdmission = serde_json::from_value(serde_json::json!({
+            "model_id": hostile,
+            "name": hostile,
+            "kind": "image",
+            "provider": hostile,
+            "state": hostile,
+            "aspect_ratios": [hostile],
+        }))
+        .expect("image model");
+        assert_no_control(&image_model_entry(&model));
+    }
+
+    #[test]
+    fn account_names_and_ids_stay_on_their_own_line() {
+        let forged = "Docs\u{1b}]52;c;Y3VybCBldmlsfHNo\u{7}\u{1b}[2J\n  p2  Payroll\u{202E}pwned";
+        let one_line = |text: &str| {
+            assert!(
+                !text
+                    .chars()
+                    .any(|c| c.is_control() || ('\u{202A}'..='\u{202E}').contains(&c)),
+                "{text:?}"
+            );
+            assert!(text.contains("pwned"), "{text:?}");
+        };
+        let project = cloud::projects::CachedProject {
+            id: format!("p1{forged}"),
+            name: forged.to_string(),
+            description: Some(forged.to_string()),
+            instructions: None,
+            is_archived: false,
+            updated_at: "2026-11-18".to_string(),
+        };
+
+        let (shown_id, shown_name) = project_reference(&project);
+        one_line(&shown_id);
+        one_line(&shown_name);
+        assert_eq!(shown_name, "Docs   p2  Payrollpwned");
+        let linked = linked_project_line(std::path::Path::new("/work/repo\nforged"), &project);
+        one_line(&linked);
+        assert!(
+            linked.starts_with("/work/repo forged is linked"),
+            "{linked:?}"
+        );
+
+        let entry = project_list_entry(&project);
+        assert_eq!(entry.lines().count(), 2, "{entry:?}");
+        entry.lines().for_each(one_line);
+
+        one_line(&project_conversations_heading(forged));
+        one_line(&project_conversations_empty(forged));
+        let conversation = cloud::chat::HostedConversation {
+            id: "c1".to_string(),
+            title: forged.to_string(),
+            model: None,
+            project_id: None,
+            updated_at: "2026-11-18".to_string(),
+            archived: false,
+            server_version: "1".to_string(),
+            messages: Vec::new(),
+        };
+        one_line(&hosted_conversation_row(&conversation));
+
+        let model: cloud::image::ImageModelAdmission = serde_json::from_value(serde_json::json!({
+            "model_id": "m1",
+            "name": forged,
+            "kind": "image",
+            "provider": "p",
+            "state": "live",
+            "aspect_ratios": [forged],
+        }))
+        .expect("image model");
+        let entry = image_model_entry(&model);
+        assert_eq!(entry.lines().count(), 2, "{entry:?}");
+        entry.lines().for_each(one_line);
+    }
+
+    #[test]
+    fn repository_and_remote_names_cannot_print_a_line_of_their_own() {
+        let forged = "x\u{1b}[2J\r\n  2. Payroll fix  main\u{202E}pwned";
+        let one_line = |text: &str| {
+            assert_eq!(text.lines().count(), 1, "{text:?}");
+            assert!(
+                !text
+                    .chars()
+                    .any(|c| c.is_control() || ('\u{202A}'..='\u{202E}').contains(&c)),
+                "{text:?}"
+            );
+            assert!(text.contains("pwned"), "{text:?}");
+        };
+
+        let session: cloud::code_sessions::CodeSession =
+            serde_json::from_value(serde_json::json!({
+                "id": "s1",
+                "title": forged,
+                "workingBranch": forged,
+            }))
+            .expect("session");
+        one_line(&code_session_choice(0, &session));
+
+        one_line(&mcp_config_problem_notice(&format!(
+            "/repo/.mcp.json: server '{forged}' was skipped"
+        )));
+
+        let root = std::path::PathBuf::from(format!("/home/u/.agiworkforce/plugins/{forged}"));
+        one_line(&plugin_list_row(forged, "[agi]", "enabled", forged, &root));
+
+        one_line(&marketplace_install_receipt(forged, Some(forged), forged));
+
+        let server: ecosystem::ImportedMcpServer = serde_json::from_value(serde_json::json!({
+            "name": forged,
+            "source": forged,
+            "original_name": forged,
+            "command": forged,
+            "args": [],
+            "env": {},
+            "url": null,
+        }))
+        .expect("imported server");
+        one_line(&imported_mcp_server_row(&server));
+        one_line(&importable_mcp_server_row(&server));
+
+        one_line(&mcp_server_identity_line(forged, forged));
+        one_line(&mcp_tool_line(
+            forged,
+            "Searches\tthe docs\u{202E}pwned\nsecond line",
+        ));
     }
 
     #[tokio::test]

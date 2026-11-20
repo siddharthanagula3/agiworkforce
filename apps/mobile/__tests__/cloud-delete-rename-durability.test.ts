@@ -628,6 +628,28 @@ describe('cloud history request and leaf ownership', () => {
     expect(convTitle('c1')).toBe('List title');
   });
 
+  it('keeps following an answer still being written when the history names its question', async () => {
+    seedCloud('c1');
+    useChatCloudMessageStore.getState().setCloudMessages('c1', [
+      { id: 'u1', conversationId: 'c1', role: 'user', content: 'Q', createdAt: T, parentId: null },
+      {
+        id: 'a2',
+        conversationId: 'c1',
+        role: 'assistant',
+        content: '',
+        createdAt: T,
+        parentId: 'u1',
+        isStreaming: true,
+      },
+    ]);
+    useChatCloudMessageStore.getState().patchCloudConversation('c1', { activeLeafMessageId: 'a2' });
+    const pending = pendingRead();
+    const loading = useChatMessageStore.getState().loadMessages('c1');
+    pending.resolve(detail('c1', 'u1'));
+    await loading;
+    expect(leaf()).toBe('a2');
+  });
+
   it('does not revive a removed and restored incarnation', async () => {
     seedCloud('c1');
     const original = useChatCloudMessageStore.getState().conversations[0]!;

@@ -8,6 +8,7 @@ import {
   serializeConnectorAuthorizationRequired,
   type ConnectorAuthorizationReason,
 } from '@/lib/connectors/connect-required';
+import { replaceMarkupTags } from '@/lib/markup-tags';
 import {
   connectorUnreachableMessage,
   resolveConnectorAccessToken,
@@ -45,7 +46,7 @@ const PDF_MIME_TYPE = 'application/pdf';
 const DRIVE_ITEM_SELECT = 'select=id,name,size,file,folder,webUrl,@microsoft.graph.downloadUrl';
 const EMAIL_RE = /^[^\s@<>,;"]+@[^\s@<>,;"]+\.[^\s@<>,;"]+$/;
 const LOCAL_DATE_TIME_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?$/;
-const HTML_TAG_RE = /<[^>]*>/g;
+const HTML_TAG_OPENING_RE = /</g;
 const HTML_SPACE_RE = /&nbsp;/g;
 const WHITESPACE_RUN_RE = /\s+/g;
 const UNTRUSTED_TAG = 'untrusted_microsoft_365_content';
@@ -139,8 +140,7 @@ function odataString(value: string): string {
 }
 
 function plainText(html: string): string {
-  return html
-    .replace(HTML_TAG_RE, ' ')
+  return replaceMarkupTags(html, HTML_TAG_OPENING_RE, ' ')
     .replace(HTML_SPACE_RE, ' ')
     .replace(WHITESPACE_RUN_RE, ' ')
     .trim();

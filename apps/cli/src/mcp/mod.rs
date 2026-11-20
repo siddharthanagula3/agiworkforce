@@ -1293,6 +1293,14 @@ fn needs_sign_in(error: &anyhow::Error) -> bool {
     })
 }
 
+fn step_up_record_failure(url: &str, store_error: &anyhow::Error) -> String {
+    format!(
+        "  could not record the scope {} asked for: {}",
+        crate::terminal_text::sanitize_single_line(url),
+        crate::terminal_text::sanitize_single_line(&format!("{store_error:#}"))
+    )
+}
+
 fn remember_step_up(error: &anyhow::Error) -> Option<String> {
     let (url, scope) = error.chain().find_map(|cause| {
         cause
@@ -1302,7 +1310,7 @@ fn remember_step_up(error: &anyhow::Error) -> Option<String> {
     if let Err(store_error) =
         McpServerOAuthStore::new().and_then(|store| store.save_step_up_scope(url, scope))
     {
-        eprintln!("  could not record the scope {url} asked for: {store_error:#}");
+        eprintln!("{}", step_up_record_failure(url, &store_error));
     }
     Some(scope.to_string())
 }
@@ -1583,7 +1591,11 @@ impl McpConnection {
             .filter_map(|tool| match listed_tool(&self.server_name, tool) {
                 Ok(tool) => Some(tool),
                 Err(error) => {
-                    tracing::warn!(server = %self.server_name, "MCP: skipped a tool: {error:#}");
+                    tracing::warn!(
+                        server = %crate::terminal_text::sanitize_single_line(&self.server_name),
+                        "{}",
+                        skipped_tool_warning(&error)
+                    );
                     None
                 }
             })
@@ -1596,7 +1608,11 @@ impl McpConnection {
     async fn list_tools_keeping_other_offers(&mut self) -> Result<Vec<McpTool>> {
         match self.list_tools().await {
             Err(error) if offers_beyond_tools(&self.negotiated().capabilities) => {
-                tracing::warn!(server = %self.server_name, "MCP: tools unavailable, prompts and resources kept: {error:#}");
+                tracing::warn!(
+                    server = %crate::terminal_text::sanitize_single_line(&self.server_name),
+                    "{}",
+                    tools_unavailable_warning(&error)
+                );
                 Ok(Vec::new())
             }
             listed => listed,
@@ -1855,6 +1871,14 @@ fn parse_mcp_config_contents(
     parse_mcp_config_contents_reporting(contents, path, strict, &mut Vec::new())
 }
 
+fn skipped_server_line(path: &std::path::Path, error: &anyhow::Error) -> String {
+    format!(
+        "MCP: skipped a server in {}: {}",
+        crate::terminal_text::sanitize_single_line(&path.display().to_string()),
+        crate::terminal_text::sanitize_single_line(&error.to_string())
+    )
+}
+
 fn parse_mcp_config_contents_reporting(
     contents: &str,
     path: &std::path::Path,
@@ -1907,7 +1931,7 @@ fn parse_mcp_config_contents_reporting(
                         format!("Invalid MCP server in explicit config {}", path.display())
                     });
                 }
-                eprintln!("MCP: skipped a server in {}: {error}", path.display());
+                eprintln!("{}", skipped_server_line(path, &error));
                 skipped.push(format!("{}: server skipped: {error}", path.display()));
                 continue;
             }
@@ -1957,7 +1981,7 @@ fn parse_mcp_config_contents_reporting(
                                 format!("Invalid MCP server in explicit config {}", path.display())
                             });
                         }
-                        eprintln!("MCP: skipped a server in {}: {error}", path.display());
+                        eprintln!("{}", skipped_server_line(path, &error));
                         skipped.push(format!("{}: server skipped: {error}", path.display()));
                         continue;
                     }
@@ -2071,6 +2095,35 @@ fn load_explicit_mcp_configs(
         load_mcp_config_file_into_result(path, configs, true, true)?;
     }
     Ok(())
+}
+
+fn skipped_tool_warning(error: &anyhow::Error) -> String {
+    format!(
+        "MCP: skipped a tool: {}",
+        crate::terminal_text::sanitize_single_line(&format!("{error:#}"))
+    )
+}
+
+fn tools_unavailable_warning(error: &anyhow::Error) -> String {
+    format!(
+        "MCP: tools unavailable, prompts and resources kept: {}",
+        crate::terminal_text::sanitize_single_line(&format!("{error:#}"))
+    )
+}
+
+fn prompts_discovered_line(name: &str, count: usize) -> String {
+    format!(
+        "  MCP server '{}': {count} prompts discovered",
+        crate::terminal_text::sanitize_single_line(name)
+    )
+}
+
+fn prompts_unavailable_line(name: &str, error: &impl std::fmt::Display) -> String {
+    format!(
+        "  MCP server '{}': prompts unavailable: {}",
+        crate::terminal_text::sanitize_single_line(name),
+        crate::terminal_text::sanitize_single_line(&error.to_string())
+    )
 }
 
 /// Why a server did not connect, on stderr, or while the full-screen TUI owns
@@ -2227,7 +2280,7 @@ impl McpManager {
                     quiet,
                     format!(
                         "MCP server '{}': blocked in Local privacy mode; use an explicit BYOK or Managed continuation before connecting a remote MCP server",
-                        crate::terminal_text::sanitize_terminal_text(name)
+                        crate::terminal_text::sanitize_single_line(name)
                     ),
                 );
                 continue;
@@ -2247,27 +2300,20 @@ impl McpManager {
                         match conn.list_prompts().await {
                             Ok(prompts) => {
                                 if !prompts.is_empty() && !quiet {
-                                    eprintln!(
-                                        "  MCP server '{}': {} prompts discovered",
-                                        name,
-                                        prompts.len()
-                                    );
+                                    eprintln!("{}", prompts_discovered_line(name, prompts.len()));
                                 }
                                 self.prompts.extend(prompts);
                             }
                             Err(e) => {
                                 if !quiet {
-                                    eprintln!(
-                                        "  MCP server '{}': prompts unavailable: {}",
-                                        name, e
-                                    );
+                                    eprintln!("{}", prompts_unavailable_line(name, &e));
                                 }
                             }
                         }
                         if !quiet {
                             eprintln!(
                                 "  MCP server '{}': {} tools discovered",
-                                crate::terminal_text::sanitize_terminal_text(name),
+                                crate::terminal_text::sanitize_single_line(name),
                                 count
                             );
                         }
@@ -2278,15 +2324,15 @@ impl McpManager {
                             quiet,
                             format!(
                                 "MCP server '{}': failed to list tools: {}",
-                                crate::terminal_text::sanitize_terminal_text(name),
-                                crate::terminal_text::sanitize_terminal_text(&e.to_string())
+                                crate::terminal_text::sanitize_single_line(name),
+                                crate::terminal_text::sanitize_single_line(&e.to_string())
                             ),
                         );
                         let _ = conn.shutdown().await;
                     }
                 },
                 Err(e) => {
-                    let name = crate::terminal_text::sanitize_terminal_text(name);
+                    let name = crate::terminal_text::sanitize_single_line(name);
                     report_server_problem(
                         quiet,
                         if needs_sign_in(&e) {
@@ -2297,7 +2343,7 @@ impl McpManager {
                             format!(
                                 "MCP server '{}': failed to connect: {}",
                                 name,
-                                crate::terminal_text::sanitize_terminal_text(&format!("{e:#}"))
+                                crate::terminal_text::sanitize_single_line(&format!("{e:#}"))
                             )
                         },
                     );
@@ -2626,8 +2672,8 @@ impl McpManager {
             if let Err(e) = conn.shutdown().await {
                 eprintln!(
                     "Warning: failed to shut down MCP server '{}': {}",
-                    crate::terminal_text::sanitize_terminal_text(&name),
-                    crate::terminal_text::sanitize_terminal_text(&e.to_string())
+                    crate::terminal_text::sanitize_single_line(&name),
+                    crate::terminal_text::sanitize_single_line(&e.to_string())
                 );
             }
         }
@@ -2918,6 +2964,76 @@ fn normalize_mcp_prompt_part(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn server_chosen_text_in_progress_lines_carries_no_terminal_escape() {
+        let hostile = "\u{1b}]52;c;cm0gLXJmIC8=\u{7}\u{1b}[2Jpwned";
+        let failure = anyhow::anyhow!("{hostile}");
+        for line in [
+            super::step_up_record_failure(hostile, &failure),
+            super::prompts_discovered_line(hostile, 2),
+            super::prompts_unavailable_line(hostile, &failure),
+        ] {
+            assert!(
+                !line.chars().any(char::is_control),
+                "control character survived: {line:?}"
+            );
+            assert!(line.contains("pwned"), "{line:?}");
+        }
+    }
+
+    #[test]
+    fn a_repository_chosen_server_name_cannot_write_escapes_or_forge_lines() {
+        let name = "x__\u{1b}]52;c;Y3VybCBldmlsfHNo\u{7}\u{1b}[2J\nMCP: forged \u{202E}pwned";
+        let error = super::registry::ensure_no_rule_separator(name)
+            .expect_err("the name carries the rule separator");
+        let line = super::skipped_server_line(std::path::Path::new("/repo/.mcp.json"), &error);
+        assert!(
+            !line
+                .chars()
+                .any(|ch| ch.is_control() || ('\u{202A}'..='\u{202E}').contains(&ch)),
+            "{line:?}"
+        );
+        assert!(line.starts_with("MCP: skipped a server in /repo/.mcp.json: "));
+        assert!(line.contains("x__ MCP: forged pwned"), "{line:?}");
+
+        for line in [
+            super::prompts_discovered_line(name, 1),
+            super::prompts_unavailable_line(name, &error),
+            super::step_up_record_failure(name, &error),
+        ] {
+            assert!(!line.contains('\n'), "{line:?}");
+            assert!(!line.contains('\u{202E}'), "{line:?}");
+        }
+    }
+
+    #[test]
+    fn a_peer_chosen_tool_name_or_rpc_message_cannot_forge_or_reorder_a_warning_line() {
+        let hostile = "x\r\n[WARN] fake line \u{202E}evil";
+        let skipped = super::listed_tool("srv", &serde_json::json!({ "name": hostile }))
+            .expect_err("the tool has no inputSchema");
+        let unavailable = anyhow::Error::new(agiworkforce_mcp::RpcError::new(-32603, hostile))
+            .context("tools/list failed");
+        for (line, prefix) in [
+            (
+                super::skipped_tool_warning(&skipped),
+                "MCP: skipped a tool: [srv] MCP tool 'x ",
+            ),
+            (
+                super::tools_unavailable_warning(&unavailable),
+                "MCP: tools unavailable, prompts and resources kept: tools/list failed: ",
+            ),
+        ] {
+            assert!(
+                !line
+                    .chars()
+                    .any(|ch| matches!(ch, '\r' | '\n') || ('\u{202A}'..='\u{202E}').contains(&ch)),
+                "{line:?}"
+            );
+            assert!(line.starts_with(prefix), "{line:?}");
+            assert!(line.contains("x [WARN] fake line evil"), "{line:?}");
+        }
+    }
+
     #[test]
     fn logout_revocation_needs_no_parsable_registry_entry() {
         let fallback = super::revocation_oauth_config(None);

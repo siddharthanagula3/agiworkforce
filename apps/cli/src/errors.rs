@@ -299,6 +299,13 @@ pub const USAGE_EXIT_CODE: i32 = 2;
 // Display, user-facing messages
 // ---------------------------------------------------------------------------
 
+/// Text a provider or gateway chose, made safe to print: its message reaches
+/// the terminal through every error path, so the strip happens where the
+/// message is written out rather than at each caller.
+fn remote_text(text: &str) -> std::borrow::Cow<'_, str> {
+    crate::terminal_text::sanitize_terminal_text(text)
+}
+
 impl fmt::Display for CliError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -306,12 +313,28 @@ impl fmt::Display for CliError {
                 provider,
                 status,
                 message,
-            } => write!(f, "[{}] API error (HTTP {}): {}", provider, status, message),
+            } => write!(
+                f,
+                "[{}] API error (HTTP {}): {}",
+                provider,
+                status,
+                remote_text(message)
+            ),
             CliError::Auth { provider, message } => {
-                write!(f, "[{}] Authentication failed: {}", provider, message)
+                write!(
+                    f,
+                    "[{}] Authentication failed: {}",
+                    provider,
+                    remote_text(message)
+                )
             }
             CliError::AuthMissing { provider, message } => {
-                write!(f, "[{}] Authentication failed: {}", provider, message)
+                write!(
+                    f,
+                    "[{}] Authentication failed: {}",
+                    provider,
+                    remote_text(message)
+                )
             }
             CliError::Config { message } => write!(f, "Configuration error: {}", message),
             CliError::IncompleteTurn { provider, cause } => {
@@ -328,7 +351,7 @@ impl fmt::Display for CliError {
                     None => f.write_str(" and the deployment no longer answers it.")?,
                 }
                 match message {
-                    Some(message) => write!(f, " {message}"),
+                    Some(message) => write!(f, " {}", remote_text(message)),
                     None => Ok(()),
                 }
             }
@@ -336,7 +359,12 @@ impl fmt::Display for CliError {
                 write!(f, "Tool '{}' failed: {}", tool_name, message)
             }
             CliError::Network { url, message } => {
-                write!(f, "Network error ({}): {}", url, message)
+                write!(
+                    f,
+                    "Network error ({}): {}",
+                    remote_text(url),
+                    remote_text(message)
+                )
             }
             CliError::ContextOverflow {
                 model,
@@ -361,7 +389,7 @@ impl fmt::Display for CliError {
             CliError::StreamError {
                 provider, message, ..
             } => {
-                write!(f, "[{}] Stream error: {}", provider, message)
+                write!(f, "[{}] Stream error: {}", provider, remote_text(message))
             }
             CliError::AccountSignedOut { model } => {
                 write!(f, "No AGI session, and no provider key for '{}'.", model)
@@ -384,13 +412,13 @@ impl fmt::Display for CliError {
                 write!(
                     f,
                     "Cloud chat requires {} plan. Reason: {}\nPlans and availability: https://agiworkforce.com/pricing?from=cli-paywall&tier={}&feature={}",
-                    required_tier,
-                    reason,
+                    remote_text(required_tier),
+                    remote_text(reason),
                     urlencoding::encode(required_tier),
                     urlencoding::encode(feature),
                 )
             }
-            CliError::UsageLimit { message, .. } => f.write_str(message),
+            CliError::UsageLimit { message, .. } => f.write_str(&remote_text(message)),
         }
     }
 }
@@ -419,7 +447,7 @@ impl std::error::Error for CliError {}
 /// The error and its remedy for a terminal; other surfaces take the remedy
 /// from the failure's action instead.
 pub fn terminal_text(error: &anyhow::Error) -> String {
-    let text = format!("{error:#}");
+    let text = remote_text(&format!("{error:#}")).into_owned();
     match cli_cause(error) {
         Some(cli) => format!("{text}\n{}", cli.hint()),
         None => text,
@@ -1123,6 +1151,58 @@ impl CliError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_provider_or_server_message_carries_no_terminal_escape() {
+        let hostile = "\u{1b}]52;c;cm0gLXJmIC8=\u{7}\u{1b}[2Jpwned";
+        let errors = [
+            CliError::api("openai", 500, hostile),
+            CliError::auth("openai", hostile),
+            CliError::stream_error("openai", hostile, false),
+            CliError::Network {
+                url: "https://example.test".to_string(),
+                message: hostile.to_string(),
+            },
+            CliError::Paywall {
+                feature: "chat".to_string(),
+                required_tier: "pro".to_string(),
+                reason: hostile.to_string(),
+            },
+            CliError::ClientUpdateRequired {
+                message: Some(hostile.to_string()),
+                minimum_api_version: None,
+            },
+            CliError::UsageLimit {
+                code: "limit".to_string(),
+                message: hostile.to_string(),
+                recovery_href: None,
+                retry_after: None,
+                resets_in: None,
+                resets_at: None,
+                alternative_model: None,
+            },
+        ];
+        for error in errors {
+            let shown = error.to_string();
+            assert!(
+                !shown.chars().any(|c| c.is_control() && c != '\n'),
+                "control character survived: {shown:?}"
+            );
+            assert!(shown.contains("pwned"), "{shown}");
+        }
+    }
+
+    #[test]
+    fn the_terminal_error_text_carries_no_terminal_escape() {
+        let error = anyhow::Error::new(std::io::Error::other("\u{1b}[2Jpwned"))
+            .context("request failed \u{1b}]0;title\u{7}");
+        let shown = terminal_text(&error);
+        assert!(
+            !shown.chars().any(|c| c.is_control() && c != '\n'),
+            "control character survived: {shown:?}"
+        );
+        assert!(shown.contains("pwned"), "{shown}");
+    }
 
     // -- Display --
 

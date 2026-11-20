@@ -114,6 +114,32 @@ mod tests {
     }
 
     #[test]
+    fn a_long_multi_line_peer_error_reaches_the_display_whole() {
+        let report = (1..=60)
+            .map(|line| format!("arguments.items[{line}].quantity: expected a positive integer"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(report.chars().count() > 3_000);
+        let frame = json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "error": {"code": -32602, "message": report}
+        });
+        let expected = format!("[srv] MCP error -32602: {report}");
+
+        let err = into_result(frame.clone(), "srv").unwrap_err();
+        assert_eq!(format!("{err:#}"), expected);
+        assert_eq!(
+            peer_error(&err).map(|e| e.message.as_str()),
+            Some(report.as_str())
+        );
+
+        let body = serde_json::to_vec(&frame).unwrap();
+        let peer = error_body(&body, "srv").expect("a JSON-RPC error body");
+        assert_eq!(format!("{peer}"), expected);
+    }
+
+    #[test]
     fn extract_matches_from_array() {
         let frame = json!([
             {"jsonrpc": "2.0", "id": 1, "result": {"a": 1}},

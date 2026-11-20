@@ -550,7 +550,7 @@ pub fn api_error_message(body: &str) -> String {
     ] {
         if let Some(text) = candidate.and_then(serde_json::Value::as_str) {
             if !text.trim().is_empty() {
-                return text.trim().to_string();
+                return crate::terminal_text::sanitize_terminal_text(text.trim()).into_owned();
             }
         }
     }
@@ -765,6 +765,19 @@ mod tests {
     fn schedule_paths_encode_the_identifier() {
         assert_eq!(schedule_path("abc"), "/api/schedules/abc");
         assert_eq!(runs_path("a b"), "/api/schedules/a%20b/runs");
+    }
+
+    #[test]
+    fn an_api_error_message_carries_no_terminal_escape() {
+        let message = api_error_message(
+            r#"{"error":{"message":"denied\u001b]52;c;cm0gLXJmIC8=\u0007\u001b[2J done"}}"#,
+        );
+        assert!(
+            !message.chars().any(char::is_control),
+            "control character survived: {message:?}"
+        );
+        assert!(message.contains("denied"));
+        assert!(message.contains("done"));
     }
 
     #[test]

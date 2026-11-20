@@ -48,26 +48,53 @@ use crate::git::{
 };
 use crate::runner::CommandRunner;
 
-/// The keys whose value is a program git may run, a remote git may be sent
-/// to, or a file whose settings git then reads, matched against git's
-/// canonical key: section and name in lower case, a subsection as written.
-/// A filter the user installed globally runs what the repository names too:
-/// git-lfs its extensions and custom transfer agents, git-annex its
-/// `*-command` and `*-hook` settings and per-remote programs.
-pub const CODE_RUNNING_KEYS: &str = "^(filter\\..*\\.(clean|smudge|process)\
+/// The pattern of [`CODE_RUNNING_KEYS`], a macro so that
+/// [`REPOSITORY_CONFIG_QUERY`] can join it to the promisor settings.
+macro_rules! code_running_keys {
+    () => {
+        "^(filter\\..*\\.(clean|smudge|process)\
 |core\\.(sshcommand|askpass|gitproxy|alternaterefscommand)\
 |diff\\..*\\.(textconv|command)|diff\\.external\
 |merge\\..*\\.driver|merge\\.verifysignatures\
 |credential\\.(.*\\.)?helper\
 |hook\\..*\\.(command|event)\
 |gpg\\..*|commit\\.gpgsign|tag\\.gpgsign|push\\.gpgsign|log\\.showsignature\
-|remote\\..*\\.(uploadpack|receivepack)\
+|remote\\..*\\.(uploadpack|receivepack|vcs|proxy|proxyauthmethod)\
+|http\\.(.*\\.)?(sslverify|sslcainfo|sslcapath|sslcert|sslkey|sslcertpasswordprotected\
+|sslcerttype|sslkeytype|sslversion|sslcipherlist|sslbackend\
+|schannelcheckrevoke|schannelusesslcainfo|pinnedpubkey\
+|proxy|proxyauthmethod|proxysslcert|proxysslkey|proxysslcertpasswordprotected|proxysslcainfo\
+|emptyauth|proactiveauth|delegation|cookiefile|savecookies\
+|curloptresolve|followredirects)\
 |protocol\\..*|url\\..*\\.(insteadof|pushinsteadof)\
 |submodule\\..*\\.update\
 |lfs\\.extension\\..*\\.(clean|smudge)|lfs\\.customtransfer\\..*\\.(path|args)\
 |lfs\\.(.*\\.)?standalonetransferagent\
 |annex\\..*-(command|hook)|remote\\..*\\.annex-(shell|rsync-transport|.*-command)\
-|include(if\\..*)?\\.path)$";
+|include(if\\..*)?\\.path)$"
+    };
+}
+
+/// The settings that make a repository a partial or promisor clone, which
+/// [`fetches_on_demand`] reads.
+macro_rules! promisor_keys {
+    () => {
+        "^(extensions\\.partialclone|remote\\..*\\.promisor)$"
+    };
+}
+
+/// The keys whose value is a program git may run, a remote git may be sent
+/// to, a file whose settings git then reads, or how an authenticated request
+/// is routed and its TLS checked (`http.*`, plain or scoped to a URL, and
+/// `remote.<name>.proxy`, as listed in git-config(1)), matched against git's
+/// canonical key: section and name in lower case, a subsection as written.
+/// `http.extraheader` is left out: CI checkouts write it, and it only adds
+/// outbound headers. How those transport values are kept is
+/// [`ConfigEntry::value`].
+/// A filter the user installed globally runs what the repository names too:
+/// git-lfs its extensions and custom transfer agents, git-annex its
+/// `*-command` and `*-hook` settings and per-remote programs.
+pub const CODE_RUNNING_KEYS: &str = code_running_keys!();
 
 /// What an operation makes git do, and so which code-running settings it
 /// would obey. Each family adds its own keys; see [`ConfigUse::obeys`].
@@ -83,7 +110,9 @@ pub struct ConfigUse {
     pub merges: bool,
     /// Talks to a remote: SSH command, proxy, credential helper, askpass,
     /// remote programs, URL rewrites and transports. Fetch, pull, push,
-    /// clone, submodule update.
+    /// clone, submodule update, and every operation in a partial or promisor
+    /// clone, which fetches a missing object whenever it needs one
+    /// ([`untrusted_settings`] adds that, with [`Self::refs`]).
     pub network: bool,
     /// Writes a ref or the index, which runs the hooks configuration
     /// defines (`hook.<name>.command`) whatever `core.hooksPath` says.
@@ -169,7 +198,7 @@ impl ConfigUse {
             ("merge", _) => self.merges,
             ("lfs" | "annex", _) => self.content || self.network,
             ("remote", name) if name.starts_with("annex-") => self.content || self.network,
-            ("core" | "credential" | "remote" | "protocol" | "url", _) => self.network,
+            ("core" | "credential" | "remote" | "protocol" | "url" | "http", _) => self.network,
             ("hook", _) => self.refs,
             ("gpg", _) | ("commit" | "tag" | "push", "gpgsign") | ("log", "showsignature") => {
                 self.signatures
@@ -179,7 +208,8 @@ impl ConfigUse {
     }
 }
 
-/// The arguments, after `git`, that list every [`CODE_RUNNING_KEYS`] setting
+/// The arguments, after `git`, that list every [`CODE_RUNNING_KEYS`] setting,
+/// and every setting that makes the repository a partial or promisor clone,
 /// with its scope and origin as NUL-separated records.
 pub const REPOSITORY_CONFIG_QUERY: [&str; 6] = [
     "config",
@@ -187,7 +217,7 @@ pub const REPOSITORY_CONFIG_QUERY: [&str; 6] = [
     "--show-origin",
     "-z",
     "--get-regexp",
-    CODE_RUNNING_KEYS,
+    concat!(code_running_keys!(), "|", promisor_keys!()),
 ];
 
 /// The arguments, after `git`, that print the top of the work tree and the
@@ -202,8 +232,15 @@ const REPOSITORY_LOCATION_QUERY: [&str; 4] = [
 /// One code-running setting from a repository, as recorded and compared.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct ConfigEntry {
-    /// git's canonical key, such as `filter.lfs.clean`.
+    /// git's canonical key, such as `filter.lfs.clean`. A URL in it, as in
+    /// `http.<url>.sslVerify`, has its user name and password replaced with
+    /// `(hidden)`, followed by the SHA-256 of the whole key, so the key is
+    /// recorded, listed and sent to a page without them.
     pub key: String,
+    /// The setting's value, or `(no value, read as true)` for a key written
+    /// with none. For a transport key (`http.*`, a remote's proxy) it is the
+    /// value, a proxy's without its user name and password, or `(empty)`,
+    /// followed by the SHA-256 of that, or of no value.
     pub value: String,
     /// The file that sets it, absolute, or git's own name for an origin that
     /// is not a file.
@@ -267,6 +304,8 @@ impl std::error::Error for UntrustedRepositoryConfig {}
 
 /// One record of [`REPOSITORY_CONFIG_QUERY`] output, judged.
 struct Setting {
+    /// git's canonical key, as git obeys it.
+    key: String,
     entry: ConfigEntry,
     /// Set by the repository: its own or a worktree's configuration, a file
     /// inside the work tree, or an include naming one there.
@@ -289,22 +328,18 @@ fn settings(stdout: &[u8], top: &Path, roots: &[PathBuf]) -> Vec<Setting> {
         .map(normalize)
         .collect();
     let inside = |path: &Path| roots.iter().any(|root| path.starts_with(root));
-    let mut fields = stdout.split(|byte| *byte == 0);
     let mut found = Vec::new();
-    while let (Some(scope), Some(origin), Some(entry)) =
-        (fields.next(), fields.next(), fields.next())
+    for Record {
+        scope,
+        origin,
+        key,
+        value,
+    } in records(stdout)
     {
-        let scope = String::from_utf8_lossy(scope);
-        let origin = String::from_utf8_lossy(origin).into_owned();
-        let entry = String::from_utf8_lossy(entry);
-        let (key, value) = match entry.split_once('\n') {
-            Some((key, value)) => (key.to_string(), Some(value.to_string())),
-            None => (entry.to_string(), None),
-        };
-        if key.is_empty() || switches_signing_off(&key, value.as_deref()) {
+        if key.is_empty() || is_promisor_key(&key) || switches_signing_off(&key, value.as_deref()) {
             continue;
         }
-        let local = matches!(scope.as_ref(), "local" | "worktree");
+        let local = matches!(scope.as_str(), "local" | "worktree");
         let origin_file = origin
             .strip_prefix("file:")
             .map(|file| normalize(&top.join(file)));
@@ -319,14 +354,20 @@ fn settings(stdout: &[u8], top: &Path, roots: &[PathBuf]) -> Vec<Setting> {
             let in_tree = origin_file.as_deref().is_some_and(inside);
             (local || in_tree, in_tree)
         };
+        let stated = if is_transport_key(&key) {
+            shown_transport_value(&key, value.as_deref())
+        } else {
+            value.unwrap_or_else(|| NO_VALUE.to_string())
+        };
         found.push(Setting {
             entry: ConfigEntry {
-                key,
-                value: value.unwrap_or_default(),
+                key: shown_key(&key),
+                value: stated,
                 origin: origin_file
                     .map(|file| file.to_string_lossy().into_owned())
                     .unwrap_or(origin),
             },
+            key,
             from_repository,
             in_work_tree,
             local,
@@ -335,11 +376,77 @@ fn settings(stdout: &[u8], top: &Path, roots: &[PathBuf]) -> Vec<Setting> {
     found
 }
 
+/// One record of [`REPOSITORY_CONFIG_QUERY`] output as git wrote it. `value`
+/// is `None` for a key written with no value, which git reads as true; an
+/// empty value is read as false.
+struct Record {
+    scope: String,
+    origin: String,
+    key: String,
+    value: Option<String>,
+}
+
+fn records(stdout: &[u8]) -> Vec<Record> {
+    let mut fields = stdout.split(|byte| *byte == 0);
+    let mut found = Vec::new();
+    while let (Some(scope), Some(origin), Some(entry)) =
+        (fields.next(), fields.next(), fields.next())
+    {
+        let entry = String::from_utf8_lossy(entry);
+        let (key, value) = match entry.split_once('\n') {
+            Some((key, value)) => (key.to_string(), Some(value.to_string())),
+            None => (entry.to_string(), None),
+        };
+        found.push(Record {
+            scope: String::from_utf8_lossy(scope).into_owned(),
+            origin: String::from_utf8_lossy(origin).into_owned(),
+            key,
+            value,
+        });
+    }
+    found
+}
+
+fn is_promisor_key(key: &str) -> bool {
+    key == "extensions.partialclone" || (key.starts_with("remote.") && key.ends_with(".promisor"))
+}
+
+/// Whether git fetches a missing object on demand in the repository whose
+/// [`REPOSITORY_CONFIG_QUERY`] output is `stdout`: it is a partial clone, or
+/// names a promisor remote. A diff, checkout or object read there then talks
+/// to that remote with every setting a fetch obeys.
+fn fetches_on_demand(stdout: &[u8]) -> bool {
+    records(stdout).iter().any(|record| {
+        record.key == "extensions.partialclone"
+            || (is_promisor_key(&record.key) && !git_reads_as_false(record.value.as_deref()))
+    })
+}
+
+/// Whether git reads `value` as false: empty, `false`, `no`, `off` or a
+/// zero. A key with no value is true.
+fn git_reads_as_false(value: Option<&str>) -> bool {
+    value.is_some_and(|value| {
+        let value = value.trim().to_ascii_lowercase();
+        matches!(value.as_str(), "" | "false" | "no" | "off")
+            || value.parse::<i64>().is_ok_and(|number| number == 0)
+    })
+}
+
+/// What a key written with no value is listed as. git reads it as true, and
+/// an empty value as false, so the two are told apart.
+const NO_VALUE: &str = "(no value, read as true)";
+
+const EMPTY_VALUE: &str = "(empty)";
+
+const HIDDEN_PART: &str = "(hidden)";
+
 /// The settings in `stdout` that an operation of kind `uses` would obey and
 /// must not: any from the repository that `baseline` does not hold exactly,
 /// and, unless the folder is `trusted`, any in the work tree or in the
-/// repository's own configuration even when it does. See [`settings`] for
-/// `top` and `roots`.
+/// repository's own configuration even when it does. In a repository that
+/// [`fetches_on_demand`], every operation obeys what a fetch does: its
+/// network settings, and the configured hooks its automatic maintenance
+/// runs. See [`settings`] for `top` and `roots`.
 pub fn untrusted_settings(
     stdout: &[u8],
     top: &Path,
@@ -348,9 +455,18 @@ pub fn untrusted_settings(
     baseline: &BTreeSet<ConfigEntry>,
     trusted: bool,
 ) -> Vec<UntrustedSetting> {
+    let uses = if fetches_on_demand(stdout) {
+        ConfigUse {
+            network: true,
+            refs: true,
+            ..uses
+        }
+    } else {
+        uses
+    };
     settings(stdout, top, roots)
         .into_iter()
-        .filter(|setting| setting.from_repository && uses.obeys(&setting.entry.key))
+        .filter(|setting| setting.from_repository && uses.obeys(&setting.key))
         .filter_map(|setting| {
             let recorded = baseline.contains(&setting.entry);
             if recorded && (trusted || !(setting.in_work_tree || setting.local)) {
@@ -363,6 +479,108 @@ pub fn untrusted_settings(
             })
         })
         .collect()
+}
+
+/// A key that decides where an authenticated request goes or how its TLS is
+/// checked, whose value is kept as [`shown_transport_value`].
+fn is_transport_key(key: &str) -> bool {
+    let (section, rest) = key.split_once('.').unwrap_or((key, ""));
+    let name = rest.rsplit('.').next().unwrap_or_default();
+    match section {
+        "http" => true,
+        "remote" => matches!(name, "proxy" | "proxyauthmethod"),
+        _ => false,
+    }
+}
+
+/// Push `authority_onwards`, a URL from just after its `://`, up to the end
+/// of its authority, the first `/`, `?` or `#`, onto `out` with the user name
+/// and password, what precedes the last `@` of the authority, replaced with
+/// `hidden` (the `@` too when `hidden` is empty). That is how git's transport
+/// reads a URL, so the host kept is the host git connects to. Returns the
+/// length of the authority.
+fn push_authority(out: &mut String, authority_onwards: &str, hidden: &str) -> usize {
+    let end = authority_onwards
+        .find(['/', '?', '#'])
+        .unwrap_or(authority_onwards.len());
+    let authority = &authority_onwards[..end];
+    match authority.rfind('@') {
+        Some(at) if hidden.is_empty() => out.push_str(&authority[at + 1..]),
+        Some(at) => {
+            out.push_str(hidden);
+            out.push_str(&authority[at..]);
+        }
+        None => out.push_str(authority),
+    }
+    end
+}
+
+/// `text` with the user name and password of every URL in it replaced with
+/// `hidden`; see [`push_authority`].
+fn without_credentials(text: &str, hidden: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(scheme_end) = rest.find("://").map(|at| at + 3) {
+        out.push_str(&rest[..scheme_end]);
+        rest = &rest[scheme_end..];
+        rest = &rest[push_authority(&mut out, rest, hidden)..];
+    }
+    out.push_str(rest);
+    out
+}
+
+/// A proxy URL without its user name and password. git reads a proxy written
+/// without a scheme as starting with its authority.
+fn proxy_without_credentials(value: &str) -> String {
+    if value.contains("://") {
+        return without_credentials(value, "");
+    }
+    let mut out = String::with_capacity(value.len());
+    let end = push_authority(&mut out, value, "");
+    out.push_str(&value[end..]);
+    out
+}
+
+/// A key as it is recorded, compared and listed: unchanged unless a URL in
+/// it, such as the one `http.<url>.sslVerify` is scoped to, holds a user name
+/// or password. Those are hidden, and the SHA-256 of the whole key follows,
+/// so two keys that differ only in them are still different settings.
+fn shown_key(key: &str) -> String {
+    let shown = without_credentials(key, HIDDEN_PART);
+    if shown == key {
+        return shown;
+    }
+    format!(
+        "{shown} (sha256:{})",
+        crate::git::hex(&Sha256::digest(key.as_bytes()))
+    )
+}
+
+/// The value of a transport key as it is recorded, compared and listed: the
+/// value, a proxy's without its user name and password, then the SHA-256 of
+/// that. A key with no value, which git reads as true, is digested as a NUL,
+/// which no value can hold, so it never matches an empty value.
+fn shown_transport_value(key: &str, value: Option<&str>) -> String {
+    let Some(value) = value else {
+        return format!(
+            "{NO_VALUE} (sha256:{})",
+            crate::git::hex(&Sha256::digest(b"\0"))
+        );
+    };
+    let kept = if key.rsplit('.').next() == Some("proxy") {
+        proxy_without_credentials(value)
+    } else {
+        value.to_string()
+    };
+    let shown = if kept.is_empty() {
+        EMPTY_VALUE
+    } else {
+        kept.as_str()
+    };
+    format!(
+        "{shown} (sha256:{})",
+        crate::git::hex(&Sha256::digest(kept.as_bytes()))
+    )
 }
 
 /// A setting that only turns signing off, which runs nothing: test
@@ -605,14 +823,31 @@ fn judge(
 /// Where the repository `runner`'s git works in at `dir` lives, and its
 /// code-running settings, the user's own configuration included.
 async fn read_repository(runner: &dyn CommandRunner, dir: &Path) -> Result<(Location, Output)> {
+    let location = locate(runner, dir).await?;
+    Ok((location, read_config(runner, dir).await?))
+}
+
+async fn locate(runner: &dyn CommandRunner, dir: &Path) -> Result<Location> {
     let located = Git::at(runner, dir)
         .run(REPOSITORY_LOCATION_QUERY, None)
         .await?;
-    let config = Git::at(runner, dir)
+    Ok(Location::read(&located, dir))
+}
+
+async fn read_config(runner: &dyn CommandRunner, dir: &Path) -> Result<Output> {
+    Git::at(runner, dir)
         .with_user_config()
         .run(REPOSITORY_CONFIG_QUERY, None)
-        .await?;
-    Ok((Location::read(&located, dir), config))
+        .await
+}
+
+/// Whether an operation of kind `uses` obeys nothing in the repository whose
+/// [`REPOSITORY_CONFIG_QUERY`] output is `config`: it runs nothing
+/// configuration names, and the repository fetches nothing on demand. Such
+/// an operation needs neither the repository's location nor its baseline,
+/// so it also runs in a bare repository, which has no work tree to find.
+fn obeys_nothing(uses: ConfigUse, config: &Output) -> bool {
+    !uses.any() && matches!(config.status.code(), Some(0 | 1)) && !fetches_on_demand(&config.stdout)
 }
 
 /// Host git's answer to `command` within [`GIT_TIMEOUT`]. Running out of
@@ -631,33 +866,43 @@ fn run_blocking(command: std::process::Command, what: &str) -> Result<Output> {
 
 /// [`read_repository`] for a synchronous caller.
 fn read_repository_blocking(dir: &Path) -> Result<(Location, Output)> {
+    let location = locate_blocking(dir)?;
+    Ok((location, read_config_blocking(dir)?))
+}
+
+fn locate_blocking(dir: &Path) -> Result<Location> {
     crate::git::prepare_user_config_blocking();
     let mut located = configured_git_command_blocking(dir)?;
     located.args(REPOSITORY_LOCATION_QUERY);
     let located = run_blocking(located, "find the repository")?;
+    Ok(Location::read(&located, dir))
+}
+
+fn read_config_blocking(dir: &Path) -> Result<Output> {
+    crate::git::prepare_user_config_blocking();
     let mut config = configured_git_command_blocking(dir)?;
     read_user_config(&mut config);
     config.args(REPOSITORY_CONFIG_QUERY);
-    let config = run_blocking(config, "read the repository's settings")?;
-    Ok((Location::read(&located, dir), config))
+    run_blocking(config, "read the repository's settings")
 }
 
 /// Refuse when the repository `runner`'s git works in at `dir` sets anything
 /// [`untrusted_settings`] names for `uses`, a recorded setting in the work
 /// tree included unless the runner trusts the folder. `work_tree` is the
-/// checkout a sandboxed command can write.
+/// checkout a sandboxed command can write. An object read, which obeys none
+/// of them, is checked too: in a partial clone it may fetch.
 pub(crate) async fn verify_repository_config(
     runner: &dyn CommandRunner,
     dir: &Path,
     work_tree: &Path,
     uses: ConfigUse,
 ) -> Result<()> {
-    if !uses.any() {
+    let config = read_config(runner, dir).await?;
+    if obeys_nothing(uses, &config) {
         return Ok(());
     }
-    let (location, config) = read_repository(runner, dir).await?;
     judge(
-        &location,
+        &locate(runner, dir).await?,
         &config,
         &[dir, work_tree],
         uses,
@@ -690,11 +935,11 @@ pub async fn check_repository_config_at(
 /// this crate, such as a discard or a status read. `trusted` is the host's
 /// trust in the folder, as [`CommandRunner::trusts_repository_config`].
 pub fn check_repository_config_blocking(dir: &Path, uses: ConfigUse, trusted: bool) -> Result<()> {
-    if !uses.any() {
+    let config = read_config_blocking(dir)?;
+    if obeys_nothing(uses, &config) {
         return Ok(());
     }
-    let (location, config) = read_repository_blocking(dir)?;
-    judge(&location, &config, &[dir], uses, trusted)
+    judge(&locate_blocking(dir)?, &config, &[dir], uses, trusted)
 }
 
 /// Record the code-running settings of `workspace`'s repository as they are
@@ -1200,6 +1445,763 @@ worktree\0file:.git/config.worktree\0include.path\n../x.cfg\0";
         for key in ["core.editor", "core.pager", "core.fsmonitor"] {
             assert!(!CODE_RUNNING_KEYS.contains(key.trim_start_matches("core.")));
         }
+    }
+
+    const TRANSPORT_NAMES: [&str; 27] = [
+        "sslverify",
+        "sslcainfo",
+        "sslcapath",
+        "sslcert",
+        "sslkey",
+        "sslcertpasswordprotected",
+        "sslcerttype",
+        "sslkeytype",
+        "sslversion",
+        "sslcipherlist",
+        "sslbackend",
+        "schannelcheckrevoke",
+        "schannelusesslcainfo",
+        "pinnedpubkey",
+        "proxy",
+        "proxyauthmethod",
+        "proxysslcert",
+        "proxysslkey",
+        "proxysslcertpasswordprotected",
+        "proxysslcainfo",
+        "emptyauth",
+        "proactiveauth",
+        "delegation",
+        "cookiefile",
+        "savecookies",
+        "curloptresolve",
+        "followredirects",
+    ];
+
+    fn transport_keys() -> Vec<String> {
+        let mut keys = Vec::new();
+        for name in TRANSPORT_NAMES {
+            keys.push(format!("http.{name}"));
+            keys.push(format!("http.https://example.com/.{name}"));
+        }
+        keys.push("remote.origin.proxy".to_string());
+        keys.push("remote.origin.proxyauthmethod".to_string());
+        keys
+    }
+
+    #[test]
+    fn transport_security_and_routing_settings_in_the_repository_are_judged_for_network_use() {
+        let from =
+            |scope: &str, file: &str, key: &str| format!("{scope}\0file:{file}\0{key}\nvalue\0");
+        let keys = transport_keys();
+        let local: String = keys
+            .iter()
+            .map(|key| from("local", ".git/config", key))
+            .collect();
+        let top = Path::new("/nowhere/repo");
+        let judged = |output: &str, uses| -> Vec<String> {
+            untrusted_settings(output.as_bytes(), top, &[], uses, &none(), false)
+                .into_iter()
+                .map(|setting| setting.key)
+                .collect()
+        };
+        for uses in [ConfigUse::NETWORK, ConfigUse::PUSH, ConfigUse::PULL] {
+            assert_eq!(judged(&local, uses), keys);
+        }
+        for uses in [
+            ConfigUse::NONE,
+            ConfigUse::REFS,
+            ConfigUse::CONTENT,
+            ConfigUse::DIFF,
+            ConfigUse::COMMIT,
+            ConfigUse::MERGE,
+            ConfigUse::LOG,
+        ] {
+            assert!(
+                judged(&local, uses).is_empty(),
+                "a local operation in a full clone never talks to a remote"
+            );
+        }
+        let global: String = keys
+            .iter()
+            .map(|key| from("global", "/home/u/.gitconfig", key))
+            .chain(keys.iter().map(|key| from("system", "/etc/gitconfig", key)))
+            .collect();
+        assert!(
+            judged(&global, ConfigUse::PUSH).is_empty(),
+            "the user's own configuration keeps working"
+        );
+        let in_tree: String = keys
+            .iter()
+            .map(|key| from("global", "tracked.cfg", key))
+            .collect();
+        assert_eq!(judged(&in_tree, ConfigUse::NETWORK), keys);
+    }
+
+    #[test]
+    fn a_header_a_ci_checkout_writes_is_not_judged() {
+        let repo = tempfile::tempdir().unwrap();
+        init_repo(repo.path());
+        git(
+            repo.path(),
+            &[
+                "config",
+                "http.https://github.com/.extraheader",
+                "AUTHORIZATION: basic c2VjcmV0",
+            ],
+        );
+        git(repo.path(), &["config", "http.extraHeader", "X-A: b"]);
+        let mut query = configured_git_command_blocking(repo.path()).unwrap();
+        query
+            .args(&REPOSITORY_CONFIG_QUERY[..1])
+            .arg("--local")
+            .args(&REPOSITORY_CONFIG_QUERY[1..]);
+        let listed = String::from_utf8_lossy(&query.output().unwrap().stdout).into_owned();
+        assert!(!listed.contains("extraheader"), "{listed}");
+    }
+
+    fn entry_from(record: &str) -> ConfigEntry {
+        settings(record.as_bytes(), Path::new("/nowhere/repo"), &[])
+            .into_iter()
+            .next()
+            .unwrap()
+            .entry
+    }
+
+    fn local_entry(key: &str, value: &str) -> ConfigEntry {
+        entry_from(&format!("local\0file:.git/config\0{key}\n{value}\0"))
+    }
+
+    fn digest_of(entry: &ConfigEntry) -> String {
+        entry
+            .value
+            .rsplit_once("(sha256:")
+            .expect("a digest")
+            .1
+            .trim_end_matches(')')
+            .to_string()
+    }
+
+    #[test]
+    fn a_proxy_is_listed_without_its_user_name_and_password() {
+        let proxy = local_entry(
+            "http.proxy",
+            "http://user:p%40ss%2Fw0rd@proxy.corp:3128/x?t=1",
+        );
+        assert!(
+            proxy
+                .value
+                .starts_with("http://proxy.corp:3128/x?t=1 (sha256:"),
+            "{}",
+            proxy.value
+        );
+        for secret in ["user", "p%40ss", "w0rd"] {
+            assert!(!proxy.value.contains(secret), "{}", proxy.value);
+        }
+        assert_eq!(digest_of(&proxy).len(), 64);
+        assert_eq!(
+            proxy,
+            local_entry("http.proxy", "http://other:pw@proxy.corp:3128/x?t=1"),
+            "a rotated password is the same setting"
+        );
+        for moved in [
+            "http://user:pw@attacker.example:3128/x?t=1",
+            "socks5://user:pw@proxy.corp:3128/x?t=1",
+            "http://user:pw@proxy.corp:3128/y?t=1",
+        ] {
+            assert_ne!(
+                digest_of(&proxy),
+                digest_of(&local_entry("http.proxy", moved)),
+                "{moved}"
+            );
+        }
+        assert!(
+            local_entry("remote.origin.proxy", "user:pw@proxy.corp:8080")
+                .value
+                .starts_with("proxy.corp:8080 (sha256:")
+        );
+        assert!(local_entry("http.proxy", "")
+            .value
+            .starts_with("(empty) (sha256:"));
+    }
+
+    #[test]
+    fn a_proxy_host_is_read_as_git_reads_it_and_never_shares_a_digest_with_another() {
+        let trusted = local_entry("http.proxy", "http://proxy.corp:3128");
+        let planted = local_entry(
+            "http.proxy",
+            "http://attacker.example:3128/@proxy.corp:3128",
+        );
+        assert!(
+            planted
+                .value
+                .starts_with("http://attacker.example:3128/@proxy.corp:3128 (sha256:"),
+            "the host shown is the one git connects to: {}",
+            planted.value
+        );
+        assert_ne!(trusted, planted);
+        assert_ne!(digest_of(&trusted), digest_of(&planted));
+        assert!(local_entry("http.proxy", "http://u:p@ss/x@h")
+            .value
+            .starts_with("http://ss/x@h (sha256:"));
+        assert_ne!(
+            local_entry("http.proxy", "socks5://proxy.corp:1080"),
+            local_entry("http.proxy", "socks5://localhost/tmp/x@proxy.corp:1080"),
+        );
+    }
+
+    #[test]
+    fn a_transport_value_without_credentials_is_shown_as_it_is() {
+        for (key, value) in [
+            ("http.sslverify", "false"),
+            ("http.https://forge.example/.sslcainfo", "/etc/ssl/corp.pem"),
+            ("http.curloptresolve", "forge.example:443:203.0.113.9"),
+            ("http.sslversion", "tlsv1"),
+            ("remote.origin.proxyauthmethod", "basic"),
+        ] {
+            let entry = local_entry(key, value);
+            assert!(
+                entry.value.starts_with(&format!("{value} (sha256:")),
+                "{key}: {}",
+                entry.value
+            );
+        }
+        assert_ne!(
+            local_entry("http.sslverify", "false"),
+            local_entry("http.sslverify", "true")
+        );
+        assert_ne!(
+            digest_of(&local_entry("http.sslcainfo", "/etc/ssl/corp.pem")),
+            digest_of(&local_entry("http.sslcainfo", "/tmp/evil.pem"))
+        );
+        assert_eq!(
+            local_entry("core.sshcommand", "ssh -i /k").value,
+            "ssh -i /k",
+            "code-running values are kept whole"
+        );
+    }
+
+    #[test]
+    fn a_key_with_no_value_and_one_with_an_empty_value_are_different_settings() {
+        let implicit = "local\0file:.git/config\0http.sslverify\0";
+        let empty = "local\0file:.git/config\0http.sslverify\n\0";
+        let (implicit_entry, empty_entry) = (entry_from(implicit), entry_from(empty));
+        assert!(
+            implicit_entry
+                .value
+                .starts_with("(no value, read as true) (sha256:"),
+            "{}",
+            implicit_entry.value
+        );
+        assert!(empty_entry.value.starts_with("(empty) (sha256:"));
+        assert_ne!(digest_of(&implicit_entry), digest_of(&empty_entry));
+
+        let top = Path::new("/nowhere/repo");
+        let trusted_true: BTreeSet<ConfigEntry> = [implicit_entry].into();
+        assert!(untrusted_settings(
+            implicit.as_bytes(),
+            top,
+            &[],
+            ConfigUse::NETWORK,
+            &trusted_true,
+            true
+        )
+        .is_empty());
+        let rewritten = untrusted_settings(
+            empty.as_bytes(),
+            top,
+            &[],
+            ConfigUse::NETWORK,
+            &trusted_true,
+            true,
+        );
+        assert_eq!(rewritten.len(), 1, "TLS checking turned off is refused");
+        assert!(!rewritten[0].recorded);
+
+        let signs = entry_from("local\0file:.git/config\0commit.gpgsign\0");
+        let does_not = entry_from("local\0file:.git/config\0commit.gpgsign\n\0");
+        assert_eq!(signs.value, "(no value, read as true)");
+        assert_eq!(does_not.value, "");
+        assert_ne!(signs, does_not);
+    }
+
+    #[test]
+    fn a_credential_in_a_key_never_reaches_the_refusal_or_the_listing() {
+        let key = "http.https://alice:ghp_token@forge.example/.sslverify";
+        let output = format!("local\0file:.git/config\0{key}\nfalse\0");
+        let entry = entry_from(&output);
+        assert!(
+            entry
+                .key
+                .starts_with("http.https://(hidden)@forge.example/.sslverify (sha256:"),
+            "{}",
+            entry.key
+        );
+        let other = entry_from(
+            "local\0file:.git/config\0http.https://alice:other@forge.example/.sslverify\nfalse\0",
+        );
+        assert_ne!(entry.key, other.key, "the digest covers the whole key");
+        assert_eq!(
+            entry_from("local\0file:.git/config\0http.https://forge.example/.sslverify\nfalse\0")
+                .key,
+            "http.https://forge.example/.sslverify",
+            "a key with no credentials is kept as it is"
+        );
+        assert_eq!(
+            entry_from("local\0file:.git/config\0url.https://bob:pw@forge.example/.insteadof\nhttps://forge.example/\0")
+                .key
+                .split(" (sha256:")
+                .next(),
+            Some("url.https://(hidden)@forge.example/.insteadof")
+        );
+
+        let refused = untrusted_settings(
+            output.as_bytes(),
+            Path::new("/nowhere/repo"),
+            &[],
+            ConfigUse::NETWORK,
+            &none(),
+            false,
+        );
+        assert_eq!(refused.len(), 1, "the setting is still judged");
+        let message = UntrustedRepositoryConfig { settings: refused }.to_string();
+        for secret in ["alice", "ghp_token"] {
+            assert!(!entry.key.contains(secret));
+            assert!(!message.contains(secret), "{message}");
+        }
+    }
+
+    #[tokio::test]
+    async fn a_credential_in_a_key_never_reaches_the_baseline_or_a_refusal() {
+        let repo = tempfile::tempdir().unwrap();
+        init_repo(repo.path());
+        git(
+            repo.path(),
+            &[
+                "config",
+                "http.https://alice:hunter2@forge.example/.sslVerify",
+                "false",
+            ],
+        );
+        let pinned = workspace(repo.path()).await;
+        let refused = check_repository_config(&TokioCommandRunner, &pinned, ConfigUse::PUSH)
+            .await
+            .expect_err("an untrusted setting");
+        assert!(
+            refused.to_string().contains("(hidden)@forge.example"),
+            "{refused}"
+        );
+        let recorded = trust_repository_config(&TokioCommandRunner, &pinned)
+            .await
+            .unwrap();
+        check_repository_config(&TokioCommandRunner, &pinned, ConfigUse::PUSH)
+            .await
+            .expect("the setting as the user trusted it");
+        let location = Location::read(
+            &Git::at(&TokioCommandRunner, repo.path())
+                .run(REPOSITORY_LOCATION_QUERY, None)
+                .await
+                .unwrap(),
+            repo.path(),
+        );
+        let (dir, name) = baseline_file(location.common_dir.as_deref().unwrap()).unwrap();
+        let file = std::fs::read_to_string(dir.join(name)).unwrap();
+        for secret in ["alice", "hunter2"] {
+            assert!(!refused.to_string().contains(secret), "{refused}");
+            assert!(!file.contains(secret), "{file}");
+            assert!(recorded.iter().all(|entry| !entry.key.contains(secret)));
+        }
+    }
+
+    #[test]
+    fn a_partial_clone_judges_what_a_fetch_obeys_for_every_operation() {
+        let local = |key: &str, value: Option<&str>| match value {
+            Some(value) => format!("local\0file:.git/config\0{key}\n{value}\0"),
+            None => format!("local\0file:.git/config\0{key}\0"),
+        };
+        let planted = [
+            local("core.sshcommand", Some("./planted.sh")),
+            local("http.proxy", Some("http://attacker.example:3128")),
+        ]
+        .concat();
+        let top = Path::new("/nowhere/repo");
+        let keys = |output: &str, uses| -> Vec<String> {
+            untrusted_settings(output.as_bytes(), top, &[], uses, &none(), false)
+                .into_iter()
+                .map(|setting| setting.key)
+                .collect()
+        };
+        let every = [
+            ConfigUse::NONE,
+            ConfigUse::REFS,
+            ConfigUse::CONTENT,
+            ConfigUse::DIFF,
+            ConfigUse::COMMIT,
+            ConfigUse::SHOW,
+            ConfigUse::LOG,
+            ConfigUse::MERGE,
+        ];
+        for uses in every {
+            assert!(
+                keys(&planted, uses).is_empty(),
+                "a full clone fetches nothing for {uses:?}"
+            );
+        }
+        for marker in [
+            local("remote.origin.promisor", Some("true")),
+            local("remote.origin.promisor", None),
+            local("extensions.partialclone", Some("origin")),
+        ] {
+            let partial = format!("{planted}{marker}");
+            for uses in every {
+                assert_eq!(
+                    keys(&partial, uses),
+                    ["core.sshcommand", "http.proxy"],
+                    "{marker:?} {uses:?}"
+                );
+            }
+            assert!(
+                settings(partial.as_bytes(), top, &[])
+                    .iter()
+                    .all(|setting| !is_promisor_key(&setting.key)),
+                "the marker itself is neither recorded nor refused"
+            );
+        }
+        for off in ["false", "no", "0", ""] {
+            let not_partial = format!("{planted}{}", local("remote.origin.promisor", Some(off)));
+            assert!(keys(&not_partial, ConfigUse::DIFF).is_empty(), "{off:?}");
+        }
+        let hook = local("hook.x.command", Some("./planted.sh"));
+        for uses in [ConfigUse::NONE, ConfigUse::LOG] {
+            assert!(
+                keys(&hook, uses).is_empty(),
+                "a full clone runs no hook for {uses:?}"
+            );
+            let partial = format!("{hook}{}", local("remote.origin.promisor", Some("true")));
+            assert_eq!(
+                keys(&partial, uses),
+                ["hook.x.command"],
+                "a lazy fetch runs automatic maintenance and its hooks for {uses:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_partial_clone_refuses_an_object_read_with_a_hook_its_maintenance_runs() {
+        let repo = tempfile::tempdir().unwrap();
+        init_repo(repo.path());
+        git(repo.path(), &["config", "hook.x.event", "pre-auto-gc"]);
+        git(repo.path(), &["config", "hook.x.command", "./planted.sh"]);
+        for uses in [ConfigUse::NONE, ConfigUse::LOG] {
+            check_repository_config_blocking(repo.path(), uses, false)
+                .expect("a full clone runs no hook to read an object");
+        }
+        git(repo.path(), &["config", "remote.origin.promisor", "true"]);
+        for uses in [ConfigUse::NONE, ConfigUse::LOG] {
+            let refused = check_repository_config_blocking(repo.path(), uses, false)
+                .expect_err("a lazy fetch starts automatic maintenance");
+            assert!(refused.to_string().contains("hook.x.command"), "{refused}");
+        }
+    }
+
+    #[tokio::test]
+    async fn an_operation_that_obeys_nothing_runs_in_a_bare_repository() {
+        let folder = tempfile::tempdir().unwrap();
+        git(folder.path(), &["init", "-q", "--bare", "bare.git"]);
+        let bare = folder.path().join("bare.git");
+        git(&bare, &["config", "core.sshCommand", "./planted.sh"]);
+        let container = folder.path().join("container");
+        std::fs::create_dir(&container).unwrap();
+        git(&container, &["init", "-q", "--bare", ".bare"]);
+        std::fs::write(container.join(".git"), "gitdir: ./.bare\n").unwrap();
+        for dir in [&bare, &container] {
+            check_repository_config_blocking(dir, ConfigUse::NONE, false)
+                .expect("a ref read in a bare repository that fetches nothing obeys nothing");
+            check_repository_config_at(&TokioCommandRunner, dir, ConfigUse::NONE)
+                .await
+                .expect("a ref read in a bare repository that fetches nothing obeys nothing");
+            assert!(
+                check_repository_config_blocking(dir, ConfigUse::CONTENT, false).is_err(),
+                "an operation that obeys settings still needs a work tree to judge them"
+            );
+        }
+        git(&bare, &["config", "remote.origin.promisor", "true"]);
+        check_repository_config_blocking(&bare, ConfigUse::NONE, false)
+            .expect_err("a bare partial clone may fetch with the ssh command it names");
+        check_repository_config_at(&TokioCommandRunner, &bare, ConfigUse::NONE)
+            .await
+            .expect_err("a bare partial clone may fetch with the ssh command it names");
+    }
+
+    #[test]
+    fn a_partial_clone_refuses_a_diff_and_an_object_read_with_a_planted_ssh_command() {
+        let repo = tempfile::tempdir().unwrap();
+        init_repo(repo.path());
+        git(repo.path(), &["config", "core.sshCommand", "./planted.sh"]);
+        for uses in [ConfigUse::NONE, ConfigUse::DIFF, ConfigUse::CONTENT] {
+            check_repository_config_blocking(repo.path(), uses, false)
+                .expect("a full clone fetches nothing for a local operation");
+        }
+        git(repo.path(), &["config", "remote.origin.promisor", "true"]);
+        for uses in [ConfigUse::NONE, ConfigUse::DIFF, ConfigUse::CONTENT] {
+            let refused = check_repository_config_blocking(repo.path(), uses, false)
+                .expect_err("a partial clone fetches what it lacks");
+            assert!(refused.to_string().contains("core.sshcommand"), "{refused}");
+        }
+    }
+
+    #[test]
+    fn every_program_that_signs_is_judged_for_a_push() {
+        let signing = [
+            "gpg.program",
+            "gpg.openpgp.program",
+            "gpg.x509.program",
+            "gpg.ssh.program",
+            "gpg.ssh.defaultkeycommand",
+        ];
+        let output: String = signing
+            .iter()
+            .map(|key| format!("local\0file:.git/config\0{key}\n./planted.sh\0"))
+            .collect();
+        let refused: Vec<String> = untrusted_settings(
+            output.as_bytes(),
+            Path::new("/nowhere/repo"),
+            &[],
+            ConfigUse::PUSH,
+            &none(),
+            false,
+        )
+        .into_iter()
+        .map(|setting| setting.key)
+        .collect();
+        assert_eq!(refused, signing);
+
+        let repo = tempfile::tempdir().unwrap();
+        git(repo.path(), &["init", "-q"]);
+        for key in [
+            "gpg.program",
+            "gpg.openpgp.program",
+            "gpg.x509.program",
+            "gpg.ssh.program",
+            "gpg.ssh.defaultKeyCommand",
+        ] {
+            git(repo.path(), &["config", "--local", key, "./planted.sh"]);
+        }
+        let matched = git(
+            repo.path(),
+            &[
+                "config",
+                "--local",
+                "--name-only",
+                "--get-regexp",
+                REPOSITORY_CONFIG_QUERY[5],
+            ],
+        );
+        assert_eq!(matched.lines().collect::<Vec<_>>(), signing);
+    }
+
+    #[tokio::test]
+    async fn a_baseline_and_the_trust_list_never_hold_a_proxys_password() {
+        let repo = tempfile::tempdir().unwrap();
+        init_repo(repo.path());
+        git(
+            repo.path(),
+            &[
+                "config",
+                "http.proxy",
+                "http://alice:hunter2@proxy.corp:3128",
+            ],
+        );
+        git(repo.path(), &["config", "credential.helper", "store"]);
+        let pinned = workspace(repo.path()).await;
+
+        let listed = repository_config_to_trust(&TokioCommandRunner, &pinned)
+            .await
+            .unwrap();
+        let recorded = trust_repository_config(&TokioCommandRunner, &pinned)
+            .await
+            .unwrap();
+        assert_eq!(listed, recorded);
+        let proxy = recorded
+            .iter()
+            .find(|entry| entry.key == "http.proxy")
+            .expect("the proxy is listed");
+        assert!(proxy.value.starts_with("http://proxy.corp:3128 (sha256:"));
+        assert!(recorded
+            .iter()
+            .any(|entry| entry.key == "credential.helper" && entry.value == "store"));
+
+        let location = Location::read(
+            &Git::at(&TokioCommandRunner, repo.path())
+                .run(REPOSITORY_LOCATION_QUERY, None)
+                .await
+                .unwrap(),
+            repo.path(),
+        );
+        let (dir, name) = baseline_file(location.common_dir.as_deref().unwrap()).unwrap();
+        let file = std::fs::read_to_string(dir.join(name)).unwrap();
+        assert!(file.contains("proxy.corp:3128"), "{file}");
+        for secret in ["alice", "hunter2"] {
+            assert!(!file.contains(secret), "{file}");
+        }
+    }
+
+    #[tokio::test]
+    async fn a_proxy_and_ca_the_user_trusted_pass_for_every_network_operation() {
+        let repo = tempfile::tempdir().unwrap();
+        init_repo(repo.path());
+        git(
+            repo.path(),
+            &[
+                "config",
+                "http.proxy",
+                "http://alice:hunter2@proxy.corp:3128",
+            ],
+        );
+        git(
+            repo.path(),
+            &["config", "http.sslCAInfo", "/etc/ssl/corp.pem"],
+        );
+        let pinned = workspace(repo.path()).await;
+        let network = [ConfigUse::NETWORK, ConfigUse::PULL, ConfigUse::PUSH];
+
+        for uses in network {
+            let refused = check_repository_config(&TokioCommandRunner, &pinned, uses)
+                .await
+                .expect_err("a setting nobody trusted is refused");
+            assert!(refused.to_string().contains("http.proxy"), "{refused}");
+        }
+        check_repository_config(&TokioCommandRunner, &pinned, ConfigUse::CONTENT)
+            .await
+            .expect("a local operation in a full clone never reaches the proxy");
+
+        trust_repository_config(&TokioCommandRunner, &pinned)
+            .await
+            .unwrap();
+        for uses in network {
+            check_repository_config(&TokioCommandRunner, &pinned, uses)
+                .await
+                .expect("the settings as the user trusted them run");
+        }
+
+        git(
+            repo.path(),
+            &[
+                "config",
+                "http.proxy",
+                "http://alice:hunter2@attacker.example:3128",
+            ],
+        );
+        let moved = check_repository_config(&TokioCommandRunner, &pinned, ConfigUse::PUSH)
+            .await
+            .expect_err("a proxy moved after the trust is refused");
+        assert!(moved.to_string().contains("http.proxy"), "{moved}");
+        assert!(!moved.to_string().contains("hunter2"), "{moved}");
+
+        git(
+            repo.path(),
+            &["config", "http.proxy", "http://bob:other@proxy.corp:3128"],
+        );
+        check_repository_config(&TokioCommandRunner, &pinned, ConfigUse::PUSH)
+            .await
+            .expect("a rotated password is not a different setting");
+    }
+
+    #[test]
+    fn a_remote_helper_the_repository_names_is_judged_for_network_use() {
+        let output = "local\0file:.git/config\0remote.origin.vcs\nplanted\0";
+        let top = Path::new("/nowhere/repo");
+        let keys = |uses| -> Vec<String> {
+            untrusted_settings(output.as_bytes(), top, &[], uses, &none(), false)
+                .into_iter()
+                .map(|setting| setting.key)
+                .collect()
+        };
+        assert_eq!(keys(ConfigUse::NETWORK), ["remote.origin.vcs"]);
+        assert_eq!(keys(ConfigUse::PULL), ["remote.origin.vcs"]);
+        assert!(keys(ConfigUse::CONTENT).is_empty());
+
+        let repo = tempfile::tempdir().unwrap();
+        init_repo(repo.path());
+        git(repo.path(), &["config", "Remote.origin.VCS", "planted"]);
+        let mut query = configured_git_command_blocking(repo.path()).unwrap();
+        query
+            .args(&REPOSITORY_CONFIG_QUERY[..1])
+            .arg("--local")
+            .args(&REPOSITORY_CONFIG_QUERY[1..]);
+        let listed = String::from_utf8_lossy(&query.output().unwrap().stdout).into_owned();
+        assert!(listed.contains("remote.origin.vcs\nplanted"), "{listed}");
+    }
+
+    #[test]
+    fn settings_git_does_not_route_or_verify_with_stay_out_of_the_query() {
+        let repo = tempfile::tempdir().unwrap();
+        init_repo(repo.path());
+        for (key, value) in [
+            ("http.postBuffer", "524288000"),
+            ("http.userAgent", "x"),
+            ("http.lowSpeedLimit", "1"),
+            ("remote.origin.url", "https://example.com/r.git"),
+            ("remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*"),
+            ("credential.username", "u"),
+        ] {
+            git(repo.path(), &["config", key, value]);
+        }
+        let mut query = configured_git_command_blocking(repo.path()).unwrap();
+        query
+            .args(&REPOSITORY_CONFIG_QUERY[..1])
+            .arg("--local")
+            .args(&REPOSITORY_CONFIG_QUERY[1..]);
+        let output = query.output().unwrap();
+        let listed = String::from_utf8_lossy(&output.stdout);
+        for section in ["http.", "remote.", "credential."] {
+            assert!(!listed.contains(section), "{section} was queried: {listed}");
+        }
+    }
+
+    #[tokio::test]
+    async fn a_proxy_or_disabled_tls_check_a_repository_sets_refuses_network_git() {
+        let repo = tempfile::tempdir().unwrap();
+        init_repo(repo.path());
+        let config = repo.path().join(".git/config");
+        let planted = "[remote \"origin\"]\n\turl = https://forge.example/r.git\n\
+             \tProxy = http://attacker.example:3128\n\
+             [HTTP]\n\tSSLVerify = false\n\tProxy = http://attacker.example:3128\n\
+             \tSslCaInfo = /tmp/ca.pem\n\tCurlOptResolve = forge.example:443:203.0.113.9\n\
+             \tSslVersion = tlsv1\n\
+             [http \"https://Forge.Example/\"]\n\tSSLVERIFY = false\n\tSslCAPath = /tmp/ca\n\
+             \tProxySSLCert = /tmp/c\n";
+        std::fs::write(&config, std::fs::read_to_string(&config).unwrap() + planted).unwrap();
+        let pinned = workspace(repo.path()).await;
+
+        let refused = check_repository_config(&TokioCommandRunner, &pinned, ConfigUse::PUSH)
+            .await
+            .unwrap_err();
+        let refusal = refused
+            .downcast_ref::<UntrustedRepositoryConfig>()
+            .expect("an untrusted-configuration refusal");
+        let mut keys: Vec<&str> = refusal
+            .settings
+            .iter()
+            .map(|setting| setting.key.as_str())
+            .collect();
+        keys.sort_unstable();
+        assert_eq!(
+            keys,
+            [
+                "http.curloptresolve",
+                "http.https://Forge.Example/.proxysslcert",
+                "http.https://Forge.Example/.sslcapath",
+                "http.https://Forge.Example/.sslverify",
+                "http.proxy",
+                "http.sslcainfo",
+                "http.sslverify",
+                "http.sslversion",
+                "remote.origin.proxy",
+            ]
+        );
+        check_repository_config(&TokioCommandRunner, &pinned, ConfigUse::CONTENT)
+            .await
+            .expect("a local operation in a full clone never talks to a remote");
     }
 
     #[test]

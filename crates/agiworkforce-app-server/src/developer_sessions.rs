@@ -1147,8 +1147,9 @@ fn unsupported(method: &str) -> DeveloperSessionHostError {
 /// Whether a connection proved it may mint account credentials.
 ///
 /// Stdio is the process owner's own pipe. A WebSocket connection qualifies
-/// only once the upgrade carried the loopback app-server token, which the
-/// transport checks before any frame is read.
+/// only once the upgrade carried the owner app-server token in a header,
+/// which the transport checks before any frame is read; the separate
+/// read-only token never qualifies, wherever it is presented.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DeveloperConnectionTrust {
     LoopbackOwner,
@@ -1797,8 +1798,9 @@ impl DeveloperSessionProcessor {
     /// Build a processor for a connection whose authentication is known.
     ///
     /// Mutations and owner-only reads require process stdio or a WebSocket
-    /// upgrade carrying the token in a header. Query-token connections remain
-    /// restricted to methods classified as read-only.
+    /// upgrade carrying the owner token in a header. Connections that proved
+    /// only the read-only token remain restricted to methods classified as
+    /// read-only.
     pub fn new_with_trust(
         host: Arc<dyn DeveloperSessionHost>,
         capabilities: AppServerCapabilities,

@@ -913,11 +913,7 @@ pub async fn run_onboarding() -> Result<bool> {
         }
         AuthChoice::Provider(provider) => {
             if let Err(e) = crate::auth::interactive_login_for_provider(Some(provider)).await {
-                eprintln!(
-                    "\n  {} Authentication failed: {}",
-                    ts::warning_header("⚠"),
-                    e
-                );
+                eprintln!("{}", setup_failure_line("Authentication failed", &e));
                 eprintln!(
                     "  {}",
                     ts::muted("You can try again later with /login or `agi login`.")
@@ -926,11 +922,7 @@ pub async fn run_onboarding() -> Result<bool> {
         }
         AuthChoice::ApiKeyProvider(provider) => {
             if let Err(e) = crate::auth::interactive_api_key_login_for_provider(provider).await {
-                eprintln!(
-                    "\n  {} API key setup failed: {}",
-                    ts::warning_header("⚠"),
-                    e
-                );
+                eprintln!("{}", setup_failure_line("API key setup failed", &e));
                 eprintln!(
                     "  {}",
                     ts::muted("You can try again later with /login or `agi login`.")
@@ -945,11 +937,7 @@ pub async fn run_onboarding() -> Result<bool> {
                 );
             }
             Err(e) => {
-                eprintln!(
-                    "\n  {} API key setup failed: {}",
-                    ts::warning_header("⚠"),
-                    e
-                );
+                eprintln!("{}", setup_failure_line("API key setup failed", &e));
                 eprintln!(
                     "  {}",
                     ts::muted("You can try again later with /login or `agi login`.")
@@ -1192,9 +1180,27 @@ mod local_first_run_tests {
     }
 }
 
+fn setup_failure_line(what: &str, error: &anyhow::Error) -> String {
+    format!(
+        "\n  {} {what}: {}",
+        ts::warning_header("⚠"),
+        crate::terminal_text::sanitize_terminal_text(&format!("{error:#}"))
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_sign_in_failure_carries_no_terminal_escape() {
+        let failure = anyhow::anyhow!("server said \u{1b}]52;c;cm0gLXJmIC8=\u{7}\u{1b}[2Jpwned");
+        let line = setup_failure_line("Authentication failed", &failure);
+        assert!(!line.contains('\u{7}'), "{line:?}");
+        assert!(!line.contains("\u{1b}]"), "{line:?}");
+        assert!(!line.contains("\u{1b}[2J"), "{line:?}");
+        assert!(line.contains("pwned"), "{line:?}");
+    }
 
     #[test]
     fn a_key_for_a_catalog_provider_offers_that_providers_models() {

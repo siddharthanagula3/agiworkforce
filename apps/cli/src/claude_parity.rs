@@ -2234,35 +2234,87 @@ pub mod connectors {
         !value.is_empty() && list.iter().any(|entry| normalize(entry) == value)
     }
 
-    pub fn mcp_host_matches(pattern: &str, hostname: &str) -> bool {
-        let rule = normalize(pattern);
-        let host = hostname.trim().to_lowercase();
-        let host = host.strip_suffix('.').unwrap_or(&host);
-        if rule.is_empty() || host.is_empty() {
-            return false;
+    /// A host name in the ASCII form a URL parser connects by, or `None` when
+    /// `name` is more than a name, such as a user or a path before a host.
+    fn ascii_host(name: &str) -> Option<String> {
+        if name.is_ascii() {
+            return Some(name.to_string());
         }
-        if rule.starts_with("*.") {
-            let suffix = &rule[1..];
-            return host.ends_with(suffix) && host.len() > suffix.len();
+        let parsed = reqwest::Url::parse(&format!("https://{name}/")).ok()?;
+        let only_a_name = parsed.username().is_empty()
+            && parsed.password().is_none()
+            && parsed.port().is_none()
+            && parsed.path() == "/"
+            && parsed.query().is_none()
+            && parsed.fragment().is_none();
+        if !only_a_name {
+            return None;
         }
-        host == rule
+        parsed.host_str().map(str::to_string)
     }
 
+    /// `text` as a host and the port it names: `name`, `name:port`, `[v6]`,
+    /// `[v6]:port` or a bare IPv6 address. `None` when the port is not one.
+    fn host_and_port(text: &str) -> Option<(&str, Option<u16>)> {
+        if let Some(rest) = text.strip_prefix('[') {
+            let (address, after) = rest.split_once(']')?;
+            return match after.strip_prefix(':') {
+                Some(port) => Some((address, Some(port.parse().ok()?))),
+                None => after.is_empty().then_some((address, None)),
+            };
+        }
+        match text.split_once(':') {
+            Some((name, port)) if !port.contains(':') => Some((name, Some(port.parse().ok()?))),
+            _ => Some((text, None)),
+        }
+    }
+
+    /// Whether the allow-list entry `pattern` admits `hostname`, a host with
+    /// the port the client connects to. An entry with no port admits its
+    /// host on any port; one with a port admits that port only.
+    pub fn mcp_host_matches(pattern: &str, hostname: &str) -> bool {
+        let rule = normalize(pattern);
+        let (wildcard, rule) = match rule.strip_prefix("*.") {
+            Some(name) => (true, name),
+            None => (false, rule.as_str()),
+        };
+        let host = hostname.trim().to_lowercase();
+        let (Some((rule_name, rule_port)), Some((host_name, host_port))) =
+            (host_and_port(rule), host_and_port(&host))
+        else {
+            return false;
+        };
+        if rule_port.is_some() && rule_port != host_port {
+            return false;
+        }
+        let Some(rule_name) = ascii_host(rule_name) else {
+            return false;
+        };
+        let host_name = host_name.strip_suffix('.').unwrap_or(host_name);
+        if rule_name.is_empty() || host_name.is_empty() {
+            return false;
+        }
+        if wildcard {
+            let suffix = format!(".{rule_name}");
+            return host_name.ends_with(&suffix) && host_name.len() > suffix.len();
+        }
+        host_name == rule_name
+    }
+
+    /// The host a client connects to for `url` and its port when one is
+    /// known, as `name:port` or `[v6]:port`; an IPv6 address stays in
+    /// brackets without a port too.
     fn hostname_of(url: &str) -> String {
-        let without_scheme = match url.split_once("://") {
-            Some((scheme, rest)) if !scheme.is_empty() && !rest.is_empty() => rest,
-            _ => return String::new(),
+        let Ok(parsed) = reqwest::Url::parse(url.trim()) else {
+            return String::new();
         };
-        let authority = without_scheme
-            .split(['/', '?', '#'])
-            .next()
-            .unwrap_or_default();
-        let authority = authority.rsplit('@').next().unwrap_or_default();
-        let host = match authority.strip_prefix('[') {
-            Some(rest) => rest.split(']').next().unwrap_or_default(),
-            None => authority.split(':').next().unwrap_or_default(),
+        let Some(host) = parsed.host_str().map(str::to_lowercase) else {
+            return String::new();
         };
-        host.to_lowercase()
+        match parsed.port_or_known_default() {
+            Some(port) => format!("{host}:{port}"),
+            None => host,
+        }
     }
 
     pub fn evaluate_mcp_host_access(
@@ -2275,25 +2327,25 @@ pub mod connectors {
         if policy.allowed_mcp_hosts.is_empty() {
             return allowed();
         }
-        let hostname = hostname_of(url);
-        if !hostname.is_empty()
+        let host_with_port = hostname_of(url);
+        if !host_with_port.is_empty()
             && policy
                 .allowed_mcp_hosts
                 .iter()
-                .any(|pattern| mcp_host_matches(pattern, &hostname))
+                .any(|pattern| mcp_host_matches(pattern, &host_with_port))
         {
             return allowed();
         }
         AccessDecision {
             allowed: false,
             code: AccessCode::McpHostNotAllowed,
-            reason: if hostname.is_empty() {
+            reason: if host_with_port.is_empty() {
                 "Your workspace administrator only allows MCP servers on approved hosts."
                     .to_string()
             } else {
                 format!(
                     "Your workspace administrator only allows MCP servers on approved hosts, and \
-                     \"{hostname}\" is not one of them."
+                     \"{host_with_port}\" is not one of them."
                 )
             },
         }
@@ -4285,6 +4337,149 @@ mod connector_contract_tests {
         assert_eq!(refused.code, AccessCode::McpHostNotAllowed);
         assert!(refused.reason.contains("elsewhere.example"));
         assert!(!evaluate_mcp_host_access(Some(&policy), "not a url").allowed);
+    }
+
+    #[test]
+    fn a_refusal_names_the_host_and_port_it_judged() {
+        let policy = policy();
+        for (url, named) in [
+            ("https://elsewhere.example/sse", "\"elsewhere.example:443\""),
+            (
+                "http://elsewhere.example:8080/sse",
+                "\"elsewhere.example:8080\"",
+            ),
+            ("https://[2001:db8::1]:8443/sse", "\"[2001:db8::1]:8443\""),
+            ("https://[2001:DB8::1]/sse", "\"[2001:db8::1]:443\""),
+            ("mcp+unix://[2001:db8::1]/sse", "\"[2001:db8::1]\""),
+        ] {
+            let refused = evaluate_mcp_host_access(Some(&policy), url);
+            assert_eq!(refused.code, AccessCode::McpHostNotAllowed, "{url}");
+            assert!(
+                refused
+                    .reason
+                    .ends_with(&format!("{named} is not one of them.")),
+                "{url}: {}",
+                refused.reason
+            );
+        }
+    }
+
+    #[test]
+    fn a_unicode_allow_list_entry_matches_the_host_the_client_connects_to() {
+        let policy = ConnectorAccessPolicy {
+            allowed_mcp_hosts: vec![
+                "Bücher.example".to_string(),
+                "*.münchen.example".to_string(),
+            ],
+            ..policy()
+        };
+        for url in [
+            "https://bücher.example/sse",
+            "https://xn--bcher-kva.example/sse",
+            "https://api.münchen.example/sse",
+            "https://api.xn--mnchen-3ya.example/sse",
+        ] {
+            assert!(
+                evaluate_mcp_host_access(Some(&policy), url).allowed,
+                "{url}"
+            );
+        }
+        for url in [
+            "https://xn--bcher-kva.example.evil.example/sse",
+            "https://münchen.example/sse",
+            "https://bucher.example/sse",
+        ] {
+            assert!(
+                !evaluate_mcp_host_access(Some(&policy), url).allowed,
+                "{url}"
+            );
+        }
+    }
+
+    #[test]
+    fn an_allow_list_entry_with_a_port_admits_that_port_only() {
+        let ported = ConnectorAccessPolicy {
+            allowed_mcp_hosts: vec![
+                "bücher.example:8443".to_string(),
+                "xn--mnchen-3ya.example:8443".to_string(),
+                "*.corp.example:9443".to_string(),
+                "mcp.example.com:443".to_string(),
+                "ü@evil.example".to_string(),
+                "bücher.example/sse".to_string(),
+            ],
+            ..policy()
+        };
+        for url in [
+            "https://bücher.example:8443/sse",
+            "https://xn--bcher-kva.example:8443/sse",
+            "https://münchen.example:8443/sse",
+            "https://xn--mnchen-3ya.example:8443/sse",
+            "https://a.corp.example:9443/sse",
+            "https://mcp.example.com/sse",
+            "https://mcp.example.com:443/sse",
+        ] {
+            assert!(
+                evaluate_mcp_host_access(Some(&ported), url).allowed,
+                "{url}"
+            );
+        }
+        for url in [
+            "https://bücher.example:9999/sse",
+            "https://bücher.example/sse",
+            "https://münchen.example/sse",
+            "https://a.corp.example/sse",
+            "https://a.corp.example:8443/sse",
+            "http://mcp.example.com/sse",
+            "https://mcp.example.com:8443/sse",
+            "https://evil.example/sse",
+        ] {
+            assert!(
+                !evaluate_mcp_host_access(Some(&ported), url).allowed,
+                "{url}"
+            );
+        }
+        let any_port = policy();
+        for url in [
+            "https://mcp.example.com:8443/sse",
+            "http://mcp.example.com/sse",
+            "https://a.internal.example:9000/sse",
+        ] {
+            assert!(
+                evaluate_mcp_host_access(Some(&any_port), url).allowed,
+                "an entry with no port admits {url}"
+            );
+        }
+        assert!(!mcp_host_matches(
+            "mcp.example.com:port",
+            "mcp.example.com:443"
+        ));
+    }
+
+    #[test]
+    fn the_mcp_allow_list_judges_the_host_the_client_connects_to() {
+        let policy = policy();
+        for url in [
+            "https://evil.example\\@mcp.example.com/sse",
+            "http://evil.example\\@mcp.example.com/sse",
+            "wss://evil.example\\@mcp.example.com/sse",
+            "ws://evil.example\\@mcp.example.com/sse",
+            "https://mcp.example.com.evil.example/sse",
+            "https://mcp.example.com@evil.example/sse",
+        ] {
+            let refused = evaluate_mcp_host_access(Some(&policy), url);
+            assert_eq!(refused.code, AccessCode::McpHostNotAllowed, "{url}");
+            assert!(refused.reason.contains("evil.example"), "{url}");
+        }
+        for url in [
+            "https://user:pass@mcp.example.com:8443/sse?a=b",
+            "https://a.internal.example/sse",
+            "https://MCP.example.com./sse",
+        ] {
+            assert!(
+                evaluate_mcp_host_access(Some(&policy), url).allowed,
+                "{url}"
+            );
+        }
     }
 
     #[test]

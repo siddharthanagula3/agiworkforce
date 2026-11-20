@@ -247,6 +247,18 @@ function betweenTags(content: string, openTag: string, closeTag: string): string
   return end === -1 ? undefined : content.slice(start, end);
 }
 
+function stripTags(text: string): string {
+  let out = '';
+  let cursor = 0;
+  for (let open = text.indexOf('<'); open !== -1; open = text.indexOf('<', cursor)) {
+    const close = text.indexOf('>', open + 1);
+    if (close === -1) break;
+    out += text.slice(cursor, open);
+    cursor = close + 1;
+  }
+  return out + text.slice(cursor);
+}
+
 const TITLE_FENCE_LINE = /^(?:`{3,}|~{3,})/;
 const MARKDOWN_HEADING_LINE = /^#{1,6}\s+\S/;
 
@@ -284,7 +296,7 @@ function explicitArtifactTitle(content: string, language?: string): string | und
     let prev: string;
     do {
       prev = text;
-      text = text.replace(/<[^>]*>/g, '');
+      text = stripTags(text);
     } while (text !== prev);
     const trimmed = text.trim();
     if (trimmed) return trimmed;

@@ -13,7 +13,7 @@ import type { Request, Response, NextFunction } from 'express';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { createServer, type Server } from 'http';
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
-import { WebSocketServer, WebSocket } from 'ws';
+import { WebSocketServer, WebSocket, type RawData } from 'ws';
 import { z } from 'zod';
 import {
   authorizePairTokenClaim,
@@ -104,6 +104,7 @@ import {
   PAIRING_CODE_PATTERN,
   MAX_METADATA_SIZE_BYTES,
   MAX_METADATA_KEYS,
+  MAX_JSON_NESTING_DEPTH,
   SESSION_LONG_TTL_MS,
   STALE_SESSION_HEARTBEAT_THRESHOLD_MS,
   MAX_PENDING_APPROVALS_PER_SESSION,
@@ -121,6 +122,7 @@ import {
   EXPIRED_PAIRING_PRUNE_GRACE_MS,
   EXPIRED_PAIRING_PRUNE_INTERVAL_MS,
 } from './constants.js';
+import { exceedsJsonDepth, withinJsonBounds } from './bounded-json.js';
 import { controlPayloadSchema } from './control-payload.js';
 import { envPositiveInteger, envText } from './env.js';
 import { createDatabaseCheck, registerProbeRoutes } from './probes.js';
@@ -520,7 +522,7 @@ const metadataSchema = z
   .refine((obj) => Object.keys(obj).length <= MAX_METADATA_KEYS, {
     message: `Metadata cannot have more than ${MAX_METADATA_KEYS} keys`,
   })
-  .refine((obj) => JSON.stringify(obj).length <= MAX_METADATA_SIZE_BYTES, {
+  .refine((obj) => withinJsonBounds(obj, MAX_METADATA_SIZE_BYTES, MAX_JSON_NESTING_DEPTH), {
     message: `Metadata size exceeds ${MAX_METADATA_SIZE_BYTES} bytes`,
   })
   .optional();
@@ -1173,7 +1175,7 @@ wss.on('connection', (socket, request) => {
     );
   };
 
-  socket.on('message', (raw) => {
+  const handleFrame = (raw: RawData): void => {
     connectionManager.updateActivity(socket);
     if (socket.readyState !== WebSocket.OPEN) return;
 
@@ -1240,6 +1242,11 @@ wss.on('connection', (socket, request) => {
       return;
     }
 
+    if (exceedsJsonDepth(data, MAX_JSON_NESTING_DEPTH)) {
+      rejectInvalidMessage(socket, correlationId);
+      return;
+    }
+
     if (!clients.has(socket)) {
       if (registeringClients.has(socket)) {
         socket.send(JSON.stringify({ type: 'error', error: 'registration_in_progress' }));
@@ -1286,11 +1293,23 @@ wss.on('connection', (socket, request) => {
     }
 
     if (endPairingMessageSchema.safeParse(data).success) {
-      void handleEndPairing(socket, correlationId);
+      void handleEndPairing(socket, correlationId).catch((error: unknown) => {
+        logger.error({ correlationId, error }, 'Ending the pairing failed');
+        metrics.recordError('end_pairing_failed');
+      });
       return;
     }
 
     socket.send(JSON.stringify({ type: 'error', error: 'unsupported_message' }));
+  };
+
+  socket.on('message', (raw) => {
+    try {
+      handleFrame(raw);
+    } catch (error) {
+      logger.error({ correlationId, error }, 'Unexpected failure handling a WebSocket message');
+      rejectInvalidMessage(socket, correlationId);
+    }
   });
 
   socket.on('close', (code, reasonBuffer) => {
@@ -1975,6 +1994,18 @@ async function loadSession(
   };
   activeSessions.set(code, session);
   return { kind: 'session', session };
+}
+
+function rejectInvalidMessage(socket: WebSocket, correlationId: string): void {
+  metrics.recordError('invalid_message');
+  if (socket.readyState !== WebSocket.OPEN) return;
+  try {
+    socket.send(JSON.stringify({ type: 'error', error: 'invalid_message' }));
+    socket.close(1008, 'invalid_message');
+  } catch (error) {
+    logger.warn({ correlationId, error }, 'Failed to close a socket after an invalid message');
+    socket.terminate();
+  }
 }
 
 function refuseRetryably(socket: WebSocket): void {

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MAX_JSON_NESTING_DEPTH, withinJsonBounds } from './bounded-json';
 import { MAX_HOSTED_TOOL_CALLS_PER_STEP, TOOL_CALL_ID_MAX_LENGTH } from './tool-call-limits';
 import {
   ManagedCloudAgentRunReferenceSchema,
@@ -55,7 +56,8 @@ export const ToolInputResponseSchema = z.object({
   input_responses: z
     .record(z.string(), z.unknown())
     .refine(
-      (value) => JSON.stringify(value).length <= MAX_TOOL_INPUT_RESPONSES_SERIALIZED_LENGTH,
+      (value) =>
+        withinJsonBounds(value, MAX_TOOL_INPUT_RESPONSES_SERIALIZED_LENGTH, MAX_JSON_NESTING_DEPTH),
       'input_responses exceed the size limit',
     ),
 });

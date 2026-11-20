@@ -222,3 +222,62 @@ describe('AgentEventEnvelopeSchema / parseAgentEventDelta', () => {
     ).toBe(false);
   });
 });
+
+describe('untrusted JSON nested past what the schema can walk', () => {
+  const deepArrays = (depth: number) =>
+    JSON.parse(`${'['.repeat(depth)}${']'.repeat(depth)}`) as unknown;
+
+  const toolEnd = (output: unknown) => ({
+    ...BASE_ENVELOPE,
+    event: {
+      type: 'tool-execution-end',
+      toolCallId: 'call-1',
+      name: 'read',
+      output,
+      isError: false,
+    },
+  });
+
+  it('refuses a 32,000-deep tool output instead of throwing', () => {
+    expect(() => AgentEventEnvelopeSchema.safeParse(toolEnd(deepArrays(32_000)))).not.toThrow();
+    expect(parseAgentEventDelta(toolEnd(deepArrays(32_000)))).toBeNull();
+  });
+
+  it('still accepts a tool output nested well past what a person would write', () => {
+    expect(parseAgentEventDelta(toolEnd(deepArrays(100)))).not.toBeNull();
+    expect(parseAgentEventDelta(toolEnd({ rows: [{ cells: ['a', { n: 1 }] }] }))).not.toBeNull();
+  });
+
+  it('refuses nested input requests and device step input instead of throwing', () => {
+    const inputRequested = (inputRequests: unknown) => ({
+      ...BASE_ENVELOPE,
+      event: {
+        type: 'input-requested',
+        toolCallId: 'call-1',
+        connectorId: 'connector-1',
+        toolName: 'ask',
+        inputRequests,
+        round: 0,
+      },
+    });
+    const deviceStep = (input: unknown) => ({
+      ...BASE_ENVELOPE,
+      event: {
+        type: 'device-step-requested',
+        toolCallId: 'call-1',
+        toolName: 'read_file',
+        deviceId: 'device-1',
+        deviceName: 'Laptop',
+        summary: 'Read a file',
+        input,
+        expiresAtMs: 1_752_000_060_000,
+      },
+    });
+    expect(parseAgentEventDelta(inputRequested({ a: { b: { c: 'x' } } }))).not.toBeNull();
+    expect(parseAgentEventDelta(deviceStep({ path: 'a.txt', nested: { ok: [1] } }))).not.toBeNull();
+    for (const depth of [33, 32_000]) {
+      expect(parseAgentEventDelta(inputRequested({ a: deepArrays(depth) }))).toBeNull();
+      expect(parseAgentEventDelta(deviceStep({ a: deepArrays(depth) }))).toBeNull();
+    }
+  });
+});

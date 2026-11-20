@@ -3,6 +3,7 @@ import 'server-only';
 import { discoverOAuthServerInfo } from '@modelcontextprotocol/client';
 
 import { assertResolvedPublicHostname } from '@/lib/egress-policy';
+import { mcpOAuthFetch } from '@/lib/connectors/mcp-oauth-fetch';
 import { NeonMcpResponseCacheStore } from '@/lib/connectors/mcp-runtime-cache';
 import { connectableFromAuthMode } from '@/lib/connectors/directory/connectable';
 import { networkRemoteUrl } from '@/lib/connectors/directory/snapshot-view';
@@ -24,7 +25,7 @@ const PROBE_TIMED_OUT = Symbol('auth-probe-timeout');
 
 async function resolveAndDiscover(url: string): Promise<AuthProbeOutcome> {
   await assertResolvedPublicHostname(url);
-  const info = await discoverOAuthServerInfo(url);
+  const info = await discoverOAuthServerInfo(url, { fetchFn: mcpOAuthFetch });
   return (info.resourceMetadata ?? info.authorizationServerMetadata) ? 'oauth-required' : 'open';
 }
 

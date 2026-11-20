@@ -18,6 +18,7 @@ use crate::protocol::{
 };
 
 const MAX_DIAGNOSTIC_BODY_BYTES: usize = 64 * 1024;
+const MAX_DIAGNOSTIC_BODY_CHARS: usize = 1000;
 const MAX_REDIRECT_HOPS: usize = 5;
 const LISTEN_MAX_FAILURES: u32 = 5;
 const LISTEN_MAX_BACKOFF: Duration = Duration::from_secs(60);
@@ -226,8 +227,9 @@ impl HttpConn {
             }
             Err(e) => {
                 eprintln!(
-                    "[{}] [mcp oauth] the server rejected the stored refresh token ({e})",
-                    self.server_name
+                    "[{}] [mcp oauth] the server rejected the stored refresh token ({})",
+                    self.server_name,
+                    diagnostic_error(&e)
                 );
                 None
             }
@@ -381,7 +383,7 @@ impl HttpConn {
                 server,
                 status: status.as_u16(),
                 method: method.to_string(),
-                body: String::from_utf8_lossy(&body).into_owned(),
+                body: diagnostic_text(&body),
             }
             .into());
         }
@@ -455,8 +457,9 @@ impl HttpConn {
         };
         if !legacy {
             tracing::warn!(
-                "[{}] ignoring server-initiated '{method}' on a stateless response stream",
-                self.server_name
+                "[{}] ignoring server-initiated '{}' on a stateless response stream",
+                self.server_name,
+                crate::security::printable(&method, 80)
             );
             return;
         }
@@ -465,8 +468,10 @@ impl HttpConn {
         let request = self.post(&reply, &[], true, self.cached_bearer().as_deref());
         if let Err(e) = request.send().await {
             eprintln!(
-                "[{}] reply to server request '{method}' failed: {e}",
-                self.server_name
+                "[{}] reply to server request '{}' failed: {}",
+                self.server_name,
+                crate::security::printable(&method, 80),
+                crate::security::printable(&e.to_string(), MAX_DIAGNOSTIC_BODY_CHARS)
             );
         }
     }
@@ -504,16 +509,18 @@ impl Listener {
                     failures += 1;
                     if failures >= LISTEN_MAX_FAILURES {
                         tracing::warn!(
-                            "[{}] giving up on change notifications after {failures} attempts: {error:#}",
-                            self.server_name
+                            "[{}] giving up on change notifications after {failures} attempts: {}",
+                            self.server_name,
+                            diagnostic_error(&error)
                         );
                         return;
                     }
                 }
                 ListenEnd::Fatal(error) => {
                     tracing::warn!(
-                        "[{}] change notifications unavailable: {error:#}",
-                        self.server_name
+                        "[{}] change notifications unavailable: {}",
+                        self.server_name,
+                        diagnostic_error(&error)
                     );
                     return;
                 }
@@ -656,7 +663,22 @@ async fn read_capped_bytes(mut resp: reqwest::Response) -> Vec<u8> {
 }
 
 pub(crate) async fn read_text_capped(resp: reqwest::Response) -> String {
-    String::from_utf8_lossy(&read_capped_bytes(resp).await).into_owned()
+    diagnostic_text(&read_capped_bytes(resp).await)
+}
+
+fn diagnostic_error(error: &anyhow::Error) -> String {
+    crate::security::printable(&format!("{error:#}"), MAX_DIAGNOSTIC_BODY_CHARS)
+}
+
+fn refresh_failure_notice(url: &str, error: &anyhow::Error) -> String {
+    format!(
+        "[mcp oauth] refresh for {url} failed ({}); will re-auth on 401",
+        diagnostic_error(error)
+    )
+}
+
+fn diagnostic_text(body: &[u8]) -> String {
+    crate::security::printable(&String::from_utf8_lossy(body), MAX_DIAGNOSTIC_BODY_CHARS)
 }
 
 async fn prepare_bearer(url: &str, cfg: &OAuthConfig, hooks: &ClientHooks) -> Option<String> {
@@ -682,7 +704,7 @@ async fn prepare_bearer(url: &str, cfg: &OAuthConfig, hooks: &ClientHooks) -> Op
             Some(access)
         }
         Err(e) => {
-            eprintln!("[mcp oauth] refresh for {url} failed ({e}); will re-auth on 401");
+            eprintln!("{}", refresh_failure_notice(url, &e));
             None
         }
     }
@@ -864,6 +886,108 @@ mod tests {
             .await
             .expect("a same-origin redirect must still be followed");
         assert!(matches!(outcome, Outcome::Done(Some(_))));
+    }
+
+    fn hostile_body() -> String {
+        let mut body = String::from("\u{1b}]52;c;cHduZWQ=\u{07}\u{1b}[2J\u{1b}[H\r\nApprove? [y] ");
+        body.push_str(&"\u{9b}31mA".repeat(20_000));
+        body
+    }
+
+    fn scripted_response(status: &str, body: &str) -> String {
+        format!(
+            "HTTP/1.1 {status}\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{body}",
+            body.len()
+        )
+    }
+
+    #[test]
+    fn a_refresh_failure_naming_a_hostile_token_endpoint_prints_no_controls() {
+        let token_endpoint = "https://as.example.com/tok\u{1b}]52;c;cHduZWQ=\u{07}en\nApprove? [y]";
+        let error = anyhow!("token refresh at {token_endpoint} returned 400 Bad Request");
+        let notice = refresh_failure_notice("https://mcp.example.com/mcp", &error);
+        assert!(!notice.chars().any(char::is_control), "{notice:?}");
+        assert!(
+            notice.contains("]52;c;cHduZWQ= en Approve? [y]"),
+            "{notice}"
+        );
+    }
+
+    #[test]
+    fn a_peer_rpc_error_in_a_logged_chain_is_printed_without_controls() {
+        let hostile = format!(
+            "\u{1b}]52;c;cHduZWQ=\u{07}\u{1b}[2J\nApprove? [y]\u{202E}{}",
+            "A".repeat(20_000)
+        );
+        let peer = error_body(
+            json!({"jsonrpc": "2.0", "id": 1, "error": {"code": -32603, "message": hostile}})
+                .to_string()
+                .as_bytes(),
+            "srv",
+        )
+        .expect("a JSON-RPC error body");
+        let error = anyhow::Error::new(peer).context("subscriptions/listen failed");
+        assert!(format!("{error:#}").contains(&hostile));
+
+        let shown = diagnostic_error(&error);
+        assert_printable(&shown, 0);
+        assert!(!shown.contains('\u{202E}'), "{shown:?}");
+        assert!(
+            shown.starts_with(
+                "subscriptions/listen failed: [srv] MCP error -32603:  ]52;c;cHduZWQ= [2J Approve? [y]AAA"
+            ),
+            "{}",
+            shown.chars().take(100).collect::<String>()
+        );
+        let notice = refresh_failure_notice("https://mcp.example.com/mcp", &error);
+        assert!(
+            !notice.chars().any(|c| c.is_control() || c == '\u{202E}'),
+            "{notice:?}"
+        );
+    }
+
+    fn assert_printable(shown: &str, framing: usize) {
+        assert!(
+            !shown.chars().any(char::is_control),
+            "control characters survived: {:?}",
+            shown.chars().take(80).collect::<String>()
+        );
+        assert!(
+            shown.chars().count() <= MAX_DIAGNOSTIC_BODY_CHARS + 1 + framing,
+            "diagnostic body was not capped: {} chars",
+            shown.chars().count()
+        );
+    }
+
+    #[tokio::test]
+    async fn an_escape_laden_error_body_reaches_the_error_only_sanitised_and_capped() {
+        let server = raw_http::spawn_scripted(vec![scripted_response(
+            "500 Internal Server Error",
+            &hostile_body(),
+        )])
+        .await;
+        let mut conn = http_conn(&format!("http://{server}/"), &HashMap::new());
+
+        let err = post_once(&mut conn)
+            .await
+            .err()
+            .expect("a 500 must surface as an error");
+        let shown = format!("{err:#}");
+        assert!(shown.contains("500"), "{shown}");
+        assert_printable(&shown, 200);
+    }
+
+    #[tokio::test]
+    async fn an_escape_laden_challenge_body_is_sanitised_and_capped() {
+        let server =
+            raw_http::spawn_scripted(vec![scripted_response("401 Unauthorized", &hostile_body())])
+                .await;
+        let mut conn = http_conn(&format!("http://{server}/"), &HashMap::new());
+
+        match post_once(&mut conn).await.expect("a 401 is a challenge") {
+            Outcome::Challenge { body, .. } => assert_printable(&body, 0),
+            _ => panic!("a 401 must be a challenge"),
+        }
     }
 
     #[test]

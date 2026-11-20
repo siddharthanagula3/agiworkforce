@@ -7,6 +7,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { withIsoTimestamps } from '@/lib/server/iso-timestamps';
+import { withClientMessageRole } from '@/lib/server/client-message-role';
 import { withObjectMessageMetadata } from '@/lib/server/message-metadata-repair';
 import { withoutStoredCitationMarkup } from '@/lib/server/stored-assistant-text';
 import { UpdateConversationSchema } from '@/lib/validations/chat';
@@ -154,7 +155,7 @@ async function handleGetConversation(request: NextRequest, context: RouteContext
             withObjectMessageMetadata(message, { userId, conversationId: id }),
           ),
         ),
-      ).map((message) => ManagedCloudMessageWireSchema.parse(message)),
+      ).map((message) => ManagedCloudMessageWireSchema.parse(withClientMessageRole(message))),
       total,
       hasMore,
     });

@@ -476,11 +476,7 @@ impl<H: DeveloperSessionHost> Relay<H> {
                     return Ok((Vec::new(), None));
                 };
                 self.dispatch = Some(DispatchSession::new(key));
-                let phone = metadata
-                    .get("deviceName")
-                    .and_then(Value::as_str)
-                    .unwrap_or("your phone")
-                    .to_string();
+                let phone = phone_label(&metadata);
                 (self.status)(RemoteControlStatus::Connected {
                     phone: phone.clone(),
                 });
@@ -694,13 +690,24 @@ pub(crate) fn render_qr(text: &str, colour: bool) -> Option<String> {
     )
 }
 
+fn phone_label(metadata: &Value) -> String {
+    let name = metadata
+        .get("deviceName")
+        .and_then(Value::as_str)
+        .unwrap_or("your phone");
+    crate::terminal_text::sanitize_single_line(name).into_owned()
+}
+
 fn print_status(status: RemoteControlStatus) {
     match status {
         RemoteControlStatus::Waiting {
             folder,
             pairing_line,
         } => {
-            println!("Remote Control is on for {folder}.");
+            println!(
+                "Remote Control is on for {}.",
+                crate::terminal_text::sanitize_single_line(&folder)
+            );
             match pairing_qr(&pairing_line) {
                 Some(qr) => {
                     println!("On your phone, open AGI Mobile, go to Remote, tap Scan and point it at this code:");
@@ -860,6 +867,28 @@ mod tests {
     use super::*;
 
     const PROMPT: Duration = Duration::from_millis(500);
+
+    #[test]
+    fn a_paired_phones_name_carries_no_terminal_escape() {
+        let metadata = json!({ "deviceName": "Pixel \u{1b}]52;c;cm0gLXJmIC8=\u{7}\u{1b}[2Jpwned" });
+        let label = phone_label(&metadata);
+        assert!(!label.chars().any(char::is_control), "{label:?}");
+        assert!(label.contains("pwned"), "{label:?}");
+        assert_eq!(phone_label(&Value::Null), "your phone");
+    }
+
+    #[test]
+    fn a_paired_phones_name_cannot_print_a_status_line_of_its_own() {
+        let metadata = json!({
+            "deviceName": "Pixel.\nRemote Control: the phone disconnected. Waiting for it to come back."
+        });
+        assert_eq!(
+            phone_label(&metadata),
+            "Pixel. Remote Control: the phone disconnected. Waiting for it to come back."
+        );
+        let reversed = json!({ "deviceName": "\u{202E}enohp ruoy\u{2066}" });
+        assert_eq!(phone_label(&reversed), "enohp ruoy");
+    }
 
     #[test]
     fn a_nested_pairing_refusal_shows_the_server_sentence() {

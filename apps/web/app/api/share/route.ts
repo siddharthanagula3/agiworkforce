@@ -25,6 +25,8 @@ import { inspectOutboundContent } from '@/lib/security/outbound-content-inspecti
 import { resolveSecretHandlingPolicy } from '@/lib/services/organization-policy-gate';
 import { TEMPORARY_CHAT_SHARE_REFUSAL } from '@/lib/temporary-chat-policy';
 import { SITE_URL } from '@/lib/seo/site';
+import { withoutSystemMessages } from '@features/chat/lib/shared-conversation-snapshot';
+import { clientMessageRole } from '@/lib/server/client-message-role';
 import { withoutStoredCitationMarkup } from '@/lib/server/stored-assistant-text';
 import {
   redactSecretsFromValue,
@@ -214,6 +216,7 @@ interface VerifiedSnapshot {
   title: string;
   modelId: string | null;
   provider: string | null;
+  messages: Array<Record<string, unknown>>;
 }
 
 function transcriptKey(role: unknown, content: unknown): string | null {
@@ -260,22 +263,36 @@ function snapshotArtifactContents(messages: Array<Record<string, unknown>>): str
   });
 }
 
-function messagesMatchStored(
+function takeOne(counts: Map<string, number>, key: string): boolean {
+  const remaining = counts.get(key) ?? 0;
+  if (remaining === 0) return false;
+  counts.set(key, remaining - 1);
+  return true;
+}
+
+// Clients receive a stored system row as an assistant turn. A submitted turn that
+// matches one is accepted but never published, like a submitted system message.
+function publishableStoredMessages(
   messages: Array<Record<string, unknown>>,
   stored: readonly StoredTranscriptRow[],
-): boolean {
-  const available = new Map<string, number>();
+): Array<Record<string, unknown>> | null {
+  const storedTurns = new Map<string, number>();
+  const storedSystemRows = new Map<string, number>();
   for (const row of stored) {
-    const key = transcriptKey(row.role, row.content ?? '');
-    if (key !== null) available.set(key, (available.get(key) ?? 0) + 1);
+    if (typeof row.role !== 'string') continue;
+    const key = transcriptKey(clientMessageRole(row.role), row.content ?? '');
+    if (key === null) continue;
+    const counts = row.role === 'system' ? storedSystemRows : storedTurns;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
   }
+  const publishable: Array<Record<string, unknown>> = [];
   for (const message of messages) {
     const key = transcriptKey(message['role'], message['content']);
-    const remaining = key === null ? 0 : (available.get(key) ?? 0);
-    if (key === null || remaining === 0) return false;
-    available.set(key, remaining - 1);
+    if (key === null) return null;
+    if (takeOne(storedTurns, key)) publishable.push(message);
+    else if (!takeOne(storedSystemRows, key)) return null;
   }
-  return true;
+  return publishable;
 }
 
 async function artifactsMatchStored(
@@ -327,14 +344,15 @@ async function verifySnapshotAgainstStored(
       order by message.created_at asc, message.id asc`,
     [conversationId, userId, conversation.organizationId],
   );
+  const publishable = publishableStoredMessages(messages, stored);
   if (
-    !messagesMatchStored(messages, stored) ||
+    !publishable ||
     !(await artifactsMatchStored(
       db,
       userId,
       conversationId,
       conversation.organizationId,
-      messages,
+      publishable,
       stored,
     ))
   ) {
@@ -352,6 +370,7 @@ async function verifySnapshotAgainstStored(
     title: title || DEFAULT_SHARE_TITLE,
     modelId: answeredBy?.model ?? conversation.model,
     provider: answeredBy?.provider ?? null,
+    messages: publishable,
   };
 }
 
@@ -550,7 +569,8 @@ async function handleCreateShare(request: NextRequest) {
   if (!parsed.success) {
     throw createError.validation('Invalid request body', parsed.error);
   }
-  const { conversation_id: conversationId, messages, expires_in_days: expiresInDays } = parsed.data;
+  const { conversation_id: conversationId, expires_in_days: expiresInDays } = parsed.data;
+  const messages = withoutSystemMessages(parsed.data.messages);
   if (!conversationId) throw createError.validation(UNSAVED_CHAT_SHARE_REFUSAL);
 
   const conversation = await requireShareableConversation(db, request, conversationId, userId);
@@ -567,7 +587,7 @@ async function handleCreateShare(request: NextRequest) {
     conversation,
     messages,
   );
-  const sanitized = await inspectSnapshot(db, userId, conversationId, messages);
+  const sanitized = await inspectSnapshot(db, userId, conversationId, snapshot.messages);
   const organizationId = await resolveActiveOrganizationId(db, userId, request);
 
   const [data] = await db.query<SharedSessionRow>(
@@ -641,7 +661,8 @@ async function handleRefreshConversationShares(request: NextRequest) {
   if (!parsed.success) {
     throw createError.validation('Invalid request body', parsed.error);
   }
-  const { tokens, messages } = parsed.data;
+  const { tokens } = parsed.data;
+  const messages = withoutSystemMessages(parsed.data.messages);
 
   const db = getNeonDb();
 
@@ -663,7 +684,10 @@ async function handleRefreshConversationShares(request: NextRequest) {
     conversation,
     messages,
   );
-  const sanitized = await inspectSnapshot(db, userId, conversationId, messages);
+  if (snapshot.messages.length === 0) {
+    throw createError.validation('A link cannot be updated to an empty chat.');
+  }
+  const sanitized = await inspectSnapshot(db, userId, conversationId, snapshot.messages);
   const organizationId = await resolveActiveOrganizationId(db, userId, request);
 
   const refreshed = await db.query<{ id: string; token: string }>(

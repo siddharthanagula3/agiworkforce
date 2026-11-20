@@ -62,7 +62,8 @@ describe('workspace file semantics', () => {
     expect(compileGlob(`${'*a'.repeat(40)}*b`)(nearMiss)).toBe(false);
     expect(compileGlob(`${'*a'.repeat(40)}*`)(nearMiss)).toBe(true);
     expect(compileGlob(`${'**a'.repeat(40)}**b`)(`${nearMiss}/${nearMiss}`)).toBe(false);
-    expect(compileGlob(`${'*'.repeat(5000)}b`)(nearMiss)).toBe(false);
+    expect(compileGlob(`${'*'.repeat(1000)}b`)(nearMiss)).toBe(false);
+    expect(() => compileGlob(`${'*'.repeat(5000)}b`)).toThrow(RangeError);
   });
 
   it('calls a file binary on a NUL byte in its opening bytes', () => {

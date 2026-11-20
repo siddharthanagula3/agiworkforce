@@ -683,7 +683,7 @@ export const useChatMessageStore = create<ChatMessageState>()(
                 }
                 const enhancedMessages: EnhancedMessage[] = cloudMessages.map((m) => ({
                   id: m.id,
-                  role: m.role as 'user' | 'assistant' | 'system',
+                  role: m.role === 'system' ? 'assistant' : (m.role as 'user' | 'assistant'),
                   content: m.content,
                   timestamp: new Date(m.created_at),
                   metadata: {

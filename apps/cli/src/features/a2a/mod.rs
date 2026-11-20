@@ -49,7 +49,7 @@ pub fn generate_agent_id() -> String {
 // ---------------------------------------------------------------------------
 
 async fn prompt_peer_token(endpoint: &str) -> Result<String> {
-    let prompt = format!("  Bearer token for {endpoint}");
+    let prompt = token_prompt(endpoint);
     let token = tokio::task::spawn_blocking(move || {
         dialoguer::Password::new().with_prompt(prompt).interact()
     })
@@ -116,12 +116,7 @@ pub async fn handle_a2a_command(
                 priority: TaskPriority::Normal,
             };
 
-            eprintln!(
-                "  {} Delegating task to {} ({})",
-                ts::accent_header("[a2a]"),
-                target.name.bold(),
-                target.endpoint.dimmed()
-            );
+            eprintln!("{}", delegation_notice(&target));
 
             let response = delegate_task(&target, request, None).await?;
 
@@ -212,7 +207,8 @@ pub async fn handle_a2a_command(
             let token = prompt_peer_token(&endpoint).await?;
             remember_peer_token(&endpoint, &token)?;
             Ok(format!(
-                "Bearer token remembered for {endpoint} until this session ends."
+                "Bearer token remembered for {} until this session ends.",
+                crate::terminal_text::sanitize_single_line(&endpoint)
             ))
         }
         "register" => {
@@ -226,10 +222,7 @@ pub async fn handle_a2a_command(
             registry.push(card.clone());
             save_local_registry(&registry)?;
 
-            Ok(format!(
-                "Registered agent '{}' ({}) at {}",
-                card.name, card.agent_id, card.endpoint
-            ))
+            Ok(registered_notice(&card))
         }
         "card" => {
             let card = AgentCard {
@@ -266,9 +259,82 @@ pub async fn handle_a2a_command(
 // Tests
 // ---------------------------------------------------------------------------
 
+fn token_prompt(endpoint: &str) -> String {
+    format!(
+        "  Bearer token for {}",
+        crate::terminal_text::sanitize_single_line(endpoint)
+    )
+}
+
+fn registered_notice(card: &AgentCard) -> String {
+    format!(
+        "Registered agent '{}' ({}) at {}",
+        crate::terminal_text::sanitize_single_line(&card.name),
+        crate::terminal_text::sanitize_single_line(&card.agent_id),
+        crate::terminal_text::sanitize_single_line(&card.endpoint)
+    )
+}
+
+fn delegation_notice(target: &AgentCard) -> String {
+    format!(
+        "  {} Delegating task to {} ({})",
+        ts::accent_header("[a2a]"),
+        crate::terminal_text::sanitize_single_line(&target.name).bold(),
+        crate::terminal_text::sanitize_single_line(&target.endpoint).dimmed()
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_delegation_notice_carries_no_terminal_escape_from_the_peers_card() {
+        let hostile = "\u{1b}]52;c;cm0gLXJmIC8=\u{7}\u{1b}[2Jpwned";
+        let card = AgentCard {
+            agent_id: "agent-1".to_string(),
+            name: hostile.to_string(),
+            version: "0.1.0".to_string(),
+            capabilities: Vec::new(),
+            supported_models: Vec::new(),
+            endpoint: format!("http://peer.example/{hostile}"),
+            auth_required: false,
+            metadata: HashMap::new(),
+        };
+        let notice = delegation_notice(&card);
+        assert!(!notice.contains('\u{7}'), "{notice:?}");
+        assert!(!notice.contains("\u{1b}]"), "{notice:?}");
+        assert!(!notice.contains("\u{1b}[2J"), "{notice:?}");
+        assert!(notice.contains("pwned"), "{notice:?}");
+    }
+
+    #[test]
+    fn a_peers_card_cannot_forge_lines_or_reorder_text() {
+        let forged = "peer\n  [a2a] Delegating task to trusted (http://127.0.0.1)\u{202E}pwned";
+        let card = AgentCard {
+            agent_id: format!("agent-1{forged}"),
+            name: forged.to_string(),
+            version: "0.1.0".to_string(),
+            capabilities: Vec::new(),
+            supported_models: Vec::new(),
+            endpoint: format!("http://peer.example/{forged}"),
+            auth_required: false,
+            metadata: HashMap::new(),
+        };
+        for shown in [
+            delegation_notice(&card),
+            registered_notice(&card),
+            token_prompt(&card.endpoint),
+        ] {
+            assert!(!shown.contains('\n'), "{shown:?}");
+            assert!(!shown.contains('\u{202E}'), "{shown:?}");
+            assert!(shown.contains("pwned"), "{shown:?}");
+        }
+        assert_eq!(
+            token_prompt(&card.endpoint),
+            "  Bearer token for http://peer.example/peer   [a2a] Delegating task to trusted (http://127.0.0.1)pwned"
+        );
+    }
 
     #[test]
     fn test_agent_card_serialization_roundtrip() {

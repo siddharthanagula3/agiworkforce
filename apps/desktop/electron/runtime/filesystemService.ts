@@ -894,7 +894,7 @@ export async function globFiles(
   options: SearchOptions = {},
 ): Promise<FileEntry[]> {
   const resolved = await resolveWithinRoot(root, relativePath);
-  const matches = compileGlob(pattern, options);
+  const matches = compileGlob(pattern, { ignoreCase: options.ignoreCase === true });
   const results: FileEntry[] = [];
 
   for await (const found of walk(resolved.absolute, resolved.relative, 0)) {

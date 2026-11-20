@@ -639,33 +639,21 @@ impl CachedTier {
 /// Returns `None` (skip fetch, log warning) if the URL fails the allowlist.
 /// Pass `raw` as the raw env-var value (or `DEFAULT_API_BASE` as the default).
 pub fn resolve_agi_api_base(raw: &str) -> Option<String> {
-    let after_scheme = if let Some(rest) = raw.strip_prefix("https://") {
-        rest
-    } else if let Some(rest) = raw.strip_prefix("http://") {
-        let host = host_of(rest);
-        if !is_loopback_host(host) {
-            tracing::warn!(
-                "[tier_cache] API base '{}' is not HTTPS and not a loopback host, skipping tier fetch",
-                raw
-            );
-            return None;
-        }
-        return Some(raw.trim_end_matches('/').to_string());
-    } else {
-        tracing::warn!(
-            "[tier_cache] API base '{}' is not HTTPS, skipping tier fetch",
-            raw
-        );
+    let Ok(parsed) = reqwest::Url::parse(raw) else {
+        tracing::warn!("[tier_cache] API base '{raw}' is not a URL, skipping tier fetch");
         return None;
     };
+    let host = parsed.host_str().unwrap_or_default();
+    let loopback = is_loopback_host(host);
 
-    let host = host_of(after_scheme);
-    let host_ok =
-        host == "agiworkforce.com" || host.ends_with(".agiworkforce.com") || is_loopback_host(host);
-
-    if !host_ok {
+    let allowed = match parsed.scheme() {
+        "https" => host == "agiworkforce.com" || host.ends_with(".agiworkforce.com") || loopback,
+        "http" => loopback,
+        _ => false,
+    };
+    if !allowed {
         tracing::warn!(
-            "[tier_cache] AGIWORKFORCE_API_BASE host '{}' is not an agiworkforce.com domain, skipping tier fetch to prevent token exfiltration",
+            "[tier_cache] API base host '{}' is not an agiworkforce.com domain over HTTPS or a loopback host, skipping tier fetch to prevent token exfiltration",
             host
         );
         return None;
@@ -674,19 +662,8 @@ pub fn resolve_agi_api_base(raw: &str) -> Option<String> {
     Some(raw.trim_end_matches('/').to_string())
 }
 
-fn host_of(after_scheme: &str) -> &str {
-    after_scheme.split('/').next().unwrap_or("")
-}
-
 fn is_loopback_host(host: &str) -> bool {
-    let bare = host.rsplit_once(':').map_or(host, |(head, port)| {
-        if port.chars().all(|c| c.is_ascii_digit()) && !port.is_empty() {
-            head
-        } else {
-            host
-        }
-    });
-    matches!(bare, "localhost" | "127.0.0.1" | "[::1]")
+    matches!(host, "localhost" | "127.0.0.1" | "[::1]")
 }
 
 // ---------------------------------------------------------------------------
@@ -1674,6 +1651,30 @@ mod tests {
             "http://10.0.0.5:3100",
         ] {
             assert_eq!(resolve_agi_api_base(base), None, "{base} must be refused");
+        }
+    }
+
+    #[test]
+    fn resolve_agi_api_base_judges_the_host_the_client_connects_to() {
+        for base in [
+            "https://evil.example?.agiworkforce.com",
+            "https://evil.example#.agiworkforce.com",
+            "https://evil.example\\.agiworkforce.com",
+            "https://evil.example\\@agiworkforce.com",
+            "https://agiworkforce.com@evil.example",
+            "http://evil.example\\@localhost",
+            "http://localhost@evil.example",
+            "http://evil.example?@localhost",
+            "ftp://agiworkforce.com",
+            "agiworkforce.com",
+        ] {
+            assert_eq!(resolve_agi_api_base(base), None, "{base} must be refused");
+        }
+        for base in [
+            "https://user@api.agiworkforce.com",
+            "https://API.agiworkforce.com:8443/v1",
+        ] {
+            assert_eq!(resolve_agi_api_base(base), Some(base.to_string()), "{base}");
         }
     }
 

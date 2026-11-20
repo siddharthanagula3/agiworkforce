@@ -134,6 +134,8 @@ export const MAX_METADATA_SIZE_BYTES = 4096;
 
 export const MAX_METADATA_KEYS = 20;
 
+export const MAX_JSON_NESTING_DEPTH = 32;
+
 export const SESSION_LONG_TTL_MS = 24 * 60 * 60 * 1000;
 
 export const STALE_SESSION_HEARTBEAT_THRESHOLD_MS = 5 * 60 * 1000;

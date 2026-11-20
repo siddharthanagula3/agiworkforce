@@ -27,6 +27,7 @@ import { buildExternalSharingGateResponse } from '@/lib/managed-compute-gate';
 
 import { shareRef } from '@/lib/share-ref';
 import { SITE_URL } from '@/lib/seo/site';
+import { withoutSystemMessages } from '@features/chat/lib/shared-conversation-snapshot';
 import {
   getOrgReadableSessionByToken,
   getPublicSharedSessionByToken,
@@ -80,14 +81,15 @@ async function handleGetShare(request: NextRequest, context: RouteContext) {
     );
   }
 
+  const messages = Array.isArray(data.messages) ? withoutSystemMessages(data.messages) : [];
   const shared: SharedConversation = {
     id: data.id,
     token: data.token,
     title: data.title,
     model_id: data.modelId,
     provider: data.provider,
-    messages: Array.isArray(data.messages) ? data.messages : [],
-    total_messages: data.messageCount,
+    messages,
+    total_messages: messages.length,
     visibility: data.visibility,
     expires_at: data.expiresAt,
     created_at: data.createdAt,

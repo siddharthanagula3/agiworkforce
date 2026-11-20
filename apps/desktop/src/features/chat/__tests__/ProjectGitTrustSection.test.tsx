@@ -37,9 +37,11 @@ describe('ProjectGitTrustSection', () => {
 
     expect(screen.getByText('~/code/app')).toBeTruthy();
     expect(
-      screen.getByText(/filters, diff drivers and config hooks, unless they were there/),
+      screen.getByText(
+        /run programs or decide where git connects, such as filters, diff drivers, config hooks and proxies, unless they were there/,
+      ),
     ).toBeTruthy();
-    expect(screen.getByText(/Trusted settings run outside the sandbox\./)).toBeTruthy();
+    expect(screen.getByText(/Trusted settings apply outside the sandbox\./)).toBeTruthy();
     expect(screen.getByText(/a system dialog lists each setting and asks you/)).toBeTruthy();
   });
 
@@ -96,13 +98,13 @@ describe('ProjectGitTrustSection', () => {
     ]);
   });
 
-  it('says so when the repository has no settings that run programs', async () => {
+  it('says so when the repository has no settings that run programs or route connections', async () => {
     host.invoke.mockResolvedValue([]);
     askToTrust();
 
     await waitFor(() =>
       expect(host.toastSuccess).toHaveBeenCalledWith(
-        'No git settings in this repository run programs',
+        'No git settings in this repository run programs or route connections',
       ),
     );
   });

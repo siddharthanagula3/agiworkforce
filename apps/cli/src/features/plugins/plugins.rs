@@ -3,6 +3,15 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::{Component, Path, PathBuf};
 
+macro_rules! plugin_diagnostic {
+    ($($arg:tt)*) => {
+        eprintln!(
+            "{}",
+            crate::terminal_text::sanitize_single_line(&format!($($arg)*))
+        )
+    };
+}
+
 // ---------------------------------------------------------------------------
 // Manifest discovery, Sprint B6
 // ---------------------------------------------------------------------------
@@ -280,7 +289,7 @@ impl PluginSignaturePolicy {
             ManagedPluginPolicyState::Invalid(error) => {
                 eprintln!(
                     "warning: managed plugin policy is invalid ({}); signed plugins are required",
-                    crate::terminal_text::sanitize_terminal_text(error)
+                    crate::terminal_text::sanitize_single_line(error)
                 );
                 (true, true)
             }
@@ -452,7 +461,7 @@ pub fn describe_plugin(plugin: &LoadedPlugin, policy: &PluginSignaturePolicy) ->
         .map(|(label, value)| {
             format!(
                 "  {label:<10} {}",
-                crate::terminal_text::sanitize_terminal_text(&value)
+                crate::terminal_text::sanitize_single_line(&value)
             )
         })
         .collect::<Vec<_>>()
@@ -537,13 +546,15 @@ pub fn evaluate_plugin_signature(
     };
     let policy_refusal = |detail: String| -> Result<(), String> {
         if !policy.require_signed {
-            eprintln!(
+            plugin_diagnostic!(
                 "WARNING: {detail}; the publisher is unverified. Set plugins.require_signed = true to refuse unsigned plugins."
             );
             return Ok(());
         }
         if policy.unsafe_allow_unsigned && !policy.override_forbidden {
-            eprintln!("WARNING: {detail}; installing anyway because of --unsafe-allow-unsigned.");
+            plugin_diagnostic!(
+                "WARNING: {detail}; installing anyway because of --unsafe-allow-unsigned."
+            );
             return Ok(());
         }
         if policy.override_forbidden {
@@ -769,10 +780,11 @@ impl PluginsManager {
                 }
                 let has_metachar = cfg.command.contains(&['|', ';', '&', '$', '`', '\0'][..]);
                 if has_metachar {
-                    eprintln!(
+                    plugin_diagnostic!(
                         "[plugins] Rejected MCP server '{}' in plugin '{}': \
                          command contains shell metacharacters",
-                        sname, name
+                        sname,
+                        name
                     );
                 }
                 !has_metachar
@@ -785,7 +797,7 @@ impl PluginsManager {
             if let Some(m) = &manifest {
                 if !m.extra.is_empty() {
                     let keys: Vec<&str> = m.extra.keys().map(|k| k.as_str()).collect();
-                    eprintln!(
+                    plugin_diagnostic!(
                         "[plugins debug] plugin '{}' manifest has unknown fields: {}",
                         name,
                         keys.join(", ")
@@ -821,7 +833,7 @@ impl PluginsManager {
                     })
                 });
             if let Some(error) = &refusal {
-                eprintln!("[plugins] plugin '{}' is disabled: {}", name, error);
+                plugin_diagnostic!("[plugins] plugin '{}' is disabled: {}", name, error);
             }
             let enabled = !disabled.contains(&name) && refusal.is_none();
             self.plugins.push(LoadedPlugin {
@@ -908,7 +920,7 @@ impl PluginsManager {
         for p in self.enabled_plugins().filter(|plugin| keep(plugin)) {
             for (name, cfg) in &p.mcp_servers {
                 if let Err(error) = crate::mcp::registry::ensure_no_rule_separator(name) {
-                    eprintln!("[plugins] {error}, skipping");
+                    plugin_diagnostic!("[plugins] {error}, skipping");
                     continue;
                 }
                 let transport_kind = cfg
@@ -922,7 +934,7 @@ impl PluginsManager {
                         let url = match cfg.extra.get("url").and_then(|v| v.as_str()) {
                             Some(u) => u.to_string(),
                             None => {
-                                eprintln!(
+                                plugin_diagnostic!(
                                     "[plugins] MCP server '{}' declares transport=sse but has no `url`, skipping",
                                     name
                                 );
@@ -936,7 +948,7 @@ impl PluginsManager {
                         let url = match cfg.extra.get("url").and_then(|v| v.as_str()) {
                             Some(u) => u.to_string(),
                             None => {
-                                eprintln!(
+                                plugin_diagnostic!(
                                     "[plugins] MCP server '{}' declares transport=http but has no `url`, skipping",
                                     name
                                 );
@@ -951,10 +963,11 @@ impl PluginsManager {
                         let auth = cfg.extra.get("auth").and_then(|v| {
                             serde_json::from_value::<crate::mcp::McpOAuthConfig>(v.clone())
                                 .map_err(|e| {
-                                    eprintln!(
+                                    plugin_diagnostic!(
                                         "[plugins] MCP server '{}' has invalid `auth` \
                                          block ({}); ignoring",
-                                        name, e
+                                        name,
+                                        e
                                     );
                                     e
                                 })
@@ -996,9 +1009,10 @@ impl PluginsManager {
                         );
                     }
                     Some(other) => {
-                        eprintln!(
+                        plugin_diagnostic!(
                             "[plugins] MCP server '{}' uses unsupported transport '{}', skipping",
-                            name, other
+                            name,
+                            other
                         );
                     }
                 }
@@ -1550,7 +1564,7 @@ fn sanitize_manifest_paths(
         .filter_map(|rel| match safe_manifest_relative_path(plugin_root, rel) {
             Ok(path) => Some(path),
             Err(error) => {
-                eprintln!(
+                plugin_diagnostic!(
                     "[plugins] Rejected {} path '{}' in plugin '{}': {}",
                     field,
                     rel.display(),
@@ -1593,7 +1607,7 @@ fn safe_manifest_relative_path(
 fn manifest_path_entry(plugin: &LoadedPlugin, rel: &Path) -> Option<PluginManifestPath> {
     let path = plugin.root.join(rel);
     if path.exists() && !plugin_path_stays_within_root(&plugin.root, &path) {
-        eprintln!(
+        plugin_diagnostic!(
             "[plugins] Rejected manifest path '{}' in plugin '{}': resolved path escapes the plugin root",
             rel.display(),
             plugin.config_name
@@ -1666,7 +1680,7 @@ fn resolve_server_settings(manifest: &mut PluginManifest, root: &Path, plugin: &
         .retain(|server, cfg| match substitute_server(cfg, root, &values) {
             Ok(()) => true,
             Err(key) => {
-                eprintln!(
+                plugin_diagnostic!(
                     "[plugins] MCP server '{server}' in plugin '{plugin}' needs the setting \
                      '{key}': run `agi plugin configure {plugin}`"
                 );
@@ -1714,8 +1728,8 @@ fn warn_unreadable_project_plugins(dir: &Path, error: &anyhow::Error) {
     if first {
         eprintln!(
             "[plugins] warning: {} could not be read ({}), so this project's plugins were not loaded; your own plugins still are",
-            crate::terminal_text::sanitize_terminal_text(&dir.display().to_string()),
-            crate::terminal_text::sanitize_terminal_text(&error.to_string())
+            crate::terminal_text::sanitize_single_line(&dir.display().to_string()),
+            crate::terminal_text::sanitize_single_line(&error.to_string())
         );
     }
 }
@@ -1748,7 +1762,7 @@ pub fn load_manifest_for(plugin_root: &Path) -> Option<(PluginManifest, Manifest
                         format,
                         ManifestFormat::LegacyApp | ManifestFormat::LegacyMcp
                     ) {
-                        eprintln!(
+                        plugin_diagnostic!(
                             "[plugins] notice: plugin '{}' uses legacy {} manifest; \
                              consider migrating to .agiworkforce-plugin/plugin.json",
                             plugin_root.display(),
@@ -1758,11 +1772,11 @@ pub fn load_manifest_for(plugin_root: &Path) -> Option<(PluginManifest, Manifest
                     return Some((manifest, *format));
                 }
                 Err(e) => {
-                    eprintln!("[plugins] failed to parse {}: {}", path.display(), e);
+                    plugin_diagnostic!("[plugins] failed to parse {}: {}", path.display(), e);
                 }
             },
             Err(e) => {
-                eprintln!("[plugins] failed to read {}: {}", path.display(), e);
+                plugin_diagnostic!("[plugins] failed to read {}: {}", path.display(), e);
             }
         }
     }
@@ -1798,7 +1812,7 @@ fn copy_link(link: &Path, copy: &Path) -> Result<()> {
 
 #[cfg(not(unix))]
 fn copy_link(link: &Path, _copy: &Path) -> Result<()> {
-    eprintln!(
+    plugin_diagnostic!(
         "[plugins] skipping link during plugin copy: {}",
         link.display()
     );

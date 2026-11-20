@@ -17,6 +17,7 @@ use crate::error::TransportFault;
 use crate::hooks::ClientHooks;
 use crate::jsonrpc::matching_response;
 use crate::peer_requests;
+use crate::security::printable;
 
 const ENDPOINT_HINT_WAIT: Duration = Duration::from_millis(500);
 
@@ -130,7 +131,9 @@ impl SseConn {
                     .await;
                     if let Err(e) = self.post(&reply, &request_method).await {
                         eprintln!(
-                            "[{server}] reply to server request '{request_method}' failed: {e:#}"
+                            "[{server}] reply to server request '{}' failed: {}",
+                            printable(&request_method, 80),
+                            printable(&format!("{e:#}"), MAX_PRINTED_ERROR_CHARS)
                         );
                     }
                 }
@@ -289,19 +292,14 @@ async fn drain_stream(
                     Ok(endpoint) => {
                         let _ = endpoint_tx.try_send(endpoint);
                     }
-                    Err(e) => eprintln!(
-                        "[{server_name}] SSE: ignoring endpoint hint: {e:#}; POSTing to {base_url}"
-                    ),
+                    Err(e) => eprintln!("{}", endpoint_hint_notice(&server_name, &e, &base_url)),
                 }
                 continue;
             }
             let value = match serde_json::from_str::<Value>(&event.data) {
                 Ok(value) => value,
                 Err(e) => {
-                    eprintln!(
-                        "[{server_name}] SSE: invalid JSON in data frame: {e} (payload: {})",
-                        event.data
-                    );
+                    eprintln!("{}", invalid_json_notice(&server_name, &e, &event.data));
                     return;
                 }
             };
@@ -314,6 +312,23 @@ async fn drain_stream(
             }
         }
     }
+}
+
+const MAX_PRINTED_FRAME_CHARS: usize = 200;
+const MAX_PRINTED_ERROR_CHARS: usize = 1000;
+
+fn endpoint_hint_notice(server_name: &str, error: &anyhow::Error, base_url: &str) -> String {
+    format!(
+        "[{server_name}] SSE: ignoring endpoint hint: {}; POSTing to {base_url}",
+        printable(&format!("{error:#}"), MAX_PRINTED_ERROR_CHARS)
+    )
+}
+
+fn invalid_json_notice(server_name: &str, error: &serde_json::Error, payload: &str) -> String {
+    format!(
+        "[{server_name}] SSE: invalid JSON in data frame: {error} (payload: {})",
+        printable(payload, MAX_PRINTED_FRAME_CHARS)
+    )
 }
 
 fn resolve_endpoint(base_url: &str, hint: &str) -> Result<String> {
@@ -331,6 +346,34 @@ mod tests {
     use super::*;
 
     const BASE: &str = "https://legit-mcp.example.com/sse";
+
+    #[test]
+    fn an_escape_laden_data_frame_is_reported_only_sanitised_and_capped() {
+        let payload = format!(
+            "\u{1b}]52;c;cHduZWQ=\u{07}\u{1b}[2J\nApprove? [y]{}",
+            "\u{9b}31m".repeat(10_000)
+        );
+        let error = serde_json::from_str::<Value>(&payload).unwrap_err();
+        let notice = invalid_json_notice("srv", &error, &payload);
+        assert!(
+            !notice.chars().any(char::is_control),
+            "control characters reached stderr: {notice:?}"
+        );
+        assert!(
+            notice.chars().count() < 500,
+            "{} chars",
+            notice.chars().count()
+        );
+    }
+
+    #[test]
+    fn an_escape_laden_endpoint_hint_is_reported_only_sanitised() {
+        let err = resolve_endpoint(BASE, "https://a\u{1b}]52;c;x\u{07}b/messages")
+            .expect_err("an unparseable endpoint hint must be refused");
+        assert!(format!("{err:#}").contains('\u{1b}'), "{err:#}");
+        let notice = endpoint_hint_notice("srv", &err, BASE);
+        assert!(!notice.chars().any(char::is_control), "{notice:?}");
+    }
 
     #[test]
     fn relative_hint_resolves_against_the_configured_url() {

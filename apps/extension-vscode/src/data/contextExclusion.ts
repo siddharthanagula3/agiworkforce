@@ -4,6 +4,7 @@ import { existsSync, rmSync } from 'node:fs';
 import { mkdtemp } from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { compileGlob } from '@agiworkforce/ide-runtime';
 import { isCredentialPath } from '@agiworkforce/local-runtime-contract';
 import { Config } from '../platform/config';
 import { safeResolveWorkspacePath, type SafeResolveResult } from '../utils/pathSafety';
@@ -18,52 +19,12 @@ const GIT_CHECK_TIMEOUT_MS = 3000;
 const GIT_PATHS_PER_CHECK = 200;
 const IGNORE_CASE = process.platform !== 'linux';
 
-function charClass(body: string): string {
-  const negated = body.startsWith('!') || body.startsWith('^');
-  const members = (negated ? body.slice(1) : body).replace(/\\/gu, '\\\\');
-  return `[${negated ? '^' : ''}${members}]`;
-}
-
-export function globToRegExp(glob: string): RegExp | undefined {
-  let source = '';
-  let groupDepth = 0;
-  for (let index = 0; index < glob.length; index += 1) {
-    const char = glob[index] ?? '';
-    if (char === '*') {
-      const double = glob[index + 1] === '*';
-      const next = index + (double ? 2 : 1);
-      const startsSegment = index === 0 || glob[index - 1] === '/';
-      const endsSegment = next === glob.length || glob[next] === '/';
-      if (double && startsSegment && endsSegment) {
-        source += next === glob.length ? '.*' : '(?:[^/]*/)*';
-        index = next === glob.length ? next - 1 : next;
-        continue;
-      }
-      source += '[^/]*';
-      index = next - 1;
-    } else if (char === '?') {
-      source += '[^/]';
-    } else if (char === '{') {
-      groupDepth += 1;
-      source += '(?:';
-    } else if (char === '}' && groupDepth > 0) {
-      groupDepth -= 1;
-      source += ')';
-    } else if (char === ',' && groupDepth > 0) {
-      source += '|';
-    } else if (char === '[' && glob.indexOf(']', index + 2) !== -1) {
-      const close = glob.indexOf(']', index + 2);
-      source += charClass(glob.slice(index + 1, close));
-      index = close;
-    } else {
-      source += char.replace(/[.+^$()|\\{}[\]]/gu, '\\$&');
-    }
-  }
-  if (groupDepth !== 0) return undefined;
+export function compileExcludeGlob(glob: string): (value: string) => boolean {
   try {
-    return new RegExp(`^${source}$`, IGNORE_CASE ? 'iu' : 'u');
-  } catch {
-    return undefined;
+    return compileGlob(glob, { extended: true, ignoreCase: IGNORE_CASE });
+  } catch (error) {
+    if (error instanceof RangeError || error instanceof SyntaxError) return () => true;
+    throw error;
   }
 }
 
@@ -94,18 +55,15 @@ function matchesExcludeSetting(uri: vscode.Uri, folder: vscode.WorkspaceFolder):
     for (const [pattern, value] of Object.entries(setting ?? {})) {
       const conditional = typeof value === 'object' && value !== null && 'when' in value;
       if (value !== true && !conditional) continue;
-      const matcher = globToRegExp(toPosix(pattern));
-      if (matcher === undefined) continue;
+      const matcher = compileExcludeGlob(toPosix(pattern));
       if (conditional) {
-        const matches = matcher.test(relativePath) || matcher.test(absolute);
+        const matches = matcher(relativePath) || matcher(absolute);
         if (matches && whenSiblingExists((value as { when: unknown }).when, uri.fsPath)) {
           return true;
         }
         continue;
       }
-      if (
-        path.isAbsolute(pattern) ? matcher.test(absolute) : candidates.some((c) => matcher.test(c))
-      ) {
+      if (path.isAbsolute(pattern) ? matcher(absolute) : candidates.some((c) => matcher(c))) {
         return true;
       }
     }

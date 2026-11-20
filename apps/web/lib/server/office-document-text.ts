@@ -10,7 +10,18 @@ import {
   displayCellNumber,
   type NumberFormat,
 } from '@agiworkforce/unified-chat/workbook-number-formats';
+import { replaceMarkupTags } from '@/lib/markup-tags';
 import { truncateExtractedText } from '@/lib/server/extraction-truncation';
+import {
+  asciiLowercase,
+  attributeValue,
+  endsTagName as endsMarkupTagName,
+  firstMarkupElement,
+  firstOpenTag,
+  forwardFinder,
+  markupElements,
+  openTags,
+} from '@/lib/server/ooxml-markup';
 
 import {
   DecompressionLimitError,
@@ -134,42 +145,107 @@ export function decodeXmlEntities(value: string): string {
     .replace(/&amp;/g, '&');
 }
 
+const ANY_TAG_OPENING = /<[^>]/g;
+
+function stripTags(html: string): string {
+  return replaceMarkupTags(html, ANY_TAG_OPENING, ' ');
+}
+
+function tableCellTexts(rowHtml: string): string[] {
+  const lower = asciiLowercase(rowHtml);
+  const find = forwardFinder(lower);
+  const cells: string[] = [];
+  let cursor = 0;
+  while (cursor < rowHtml.length) {
+    const start = find('<t', cursor);
+    if (start === -1) break;
+    const kind = lower[start + 2];
+    if ((kind !== 'd' && kind !== 'h') || !endsMarkupTagName(lower, start + 3)) {
+      cursor = start + 2;
+      continue;
+    }
+    const tagEnd = find('>', start + 3);
+    if (tagEnd === -1) break;
+    const dataEnd = find('</td>', tagEnd + 1);
+    const headerEnd = find('</th>', tagEnd + 1);
+    const closeStart =
+      dataEnd === -1 ? headerEnd : headerEnd === -1 ? dataEnd : Math.min(dataEnd, headerEnd);
+    if (closeStart === -1) break;
+    cells.push(decodeXmlEntities(stripTags(rowHtml.slice(tagEnd + 1, closeStart))).trim());
+    cursor = closeStart + 5;
+  }
+  return cells;
+}
+
+const BLOCK_TAG_NAME = /(h[1-6]|p|li|tr)(?![A-Za-z0-9_])/iy;
+const TABLE_TAG_NAME = /table(?![A-Za-z0-9_])/iy;
+const LINE_BREAK = /br\s*\/?>/iy;
+
 function htmlToText(html: string): string {
   const lines: string[] = [];
+  const lower = asciiLowercase(html);
+  const find = forwardFinder(lower);
+  let matched = false;
   let cursor = 0;
-  const blockPattern =
-    /<(h[1-6]|p|li|tr)\b[^>]*>([\s\S]*?)<\/\1>|<table\b[^>]*>|<\/table>|<br\s*\/?>/gi;
 
-  const cellText = (row: string): string =>
-    [...row.matchAll(/<t[dh]\b[^>]*>([\s\S]*?)<\/t[dh]>/gi)]
-      .map((cell) => decodeXmlEntities((cell[1] ?? '').replace(/<[^>]+>/g, ' ')).trim())
-      .join(' | ');
+  while (cursor < html.length) {
+    const open = find('<', cursor);
+    if (open === -1) break;
+    cursor = open + 1;
 
-  let match: RegExpExecArray | null;
-  while ((match = blockPattern.exec(html)) !== null) {
-    cursor = blockPattern.lastIndex;
-    const tag = match[1]?.toLowerCase();
-    const inner = match[2] ?? '';
-    if (!tag) continue;
-    if (tag === 'tr') {
-      const row = cellText(match[0]);
-      if (row) lines.push(`| ${row} |`);
+    BLOCK_TAG_NAME.lastIndex = open + 1;
+    const block = BLOCK_TAG_NAME.exec(lower);
+    if (block) {
+      const tag = block[1] ?? '';
+      const tagEnd = find('>', open + 1 + tag.length);
+      if (tagEnd === -1) break;
+      const closeStart = find(`</${tag}>`, tagEnd + 1);
+      if (closeStart !== -1) {
+        const end = closeStart + tag.length + 3;
+        matched = true;
+        cursor = end;
+        if (tag === 'tr') {
+          const row = tableCellTexts(html.slice(open, end)).join(' | ');
+          if (row) lines.push(`| ${row} |`);
+          continue;
+        }
+        const text = decodeXmlEntities(stripTags(html.slice(tagEnd + 1, closeStart)))
+          .replace(/\s+/g, ' ')
+          .trim();
+        if (!text) continue;
+        if (tag.startsWith('h')) {
+          lines.push(`${'#'.repeat(Number(tag.slice(1)))} ${text}`);
+          continue;
+        }
+        lines.push(tag === 'li' ? `- ${text}` : text);
+        continue;
+      }
+    }
+
+    TABLE_TAG_NAME.lastIndex = open + 1;
+    if (TABLE_TAG_NAME.test(lower)) {
+      const tagEnd = find('>', open + 6);
+      if (tagEnd === -1) break;
+      matched = true;
+      cursor = tagEnd + 1;
       continue;
     }
-    const text = decodeXmlEntities(inner.replace(/<[^>]+>/g, ' '))
-      .replace(/\s+/g, ' ')
-      .trim();
-    if (!text) continue;
-    if (tag.startsWith('h')) {
-      lines.push(`${'#'.repeat(Number(tag.slice(1)))} ${text}`);
+
+    if (lower.startsWith('/table>', open + 1)) {
+      matched = true;
+      cursor = open + 8;
       continue;
     }
-    lines.push(tag === 'li' ? `- ${text}` : text);
+
+    LINE_BREAK.lastIndex = open + 1;
+    if (LINE_BREAK.test(lower)) {
+      matched = true;
+      cursor = LINE_BREAK.lastIndex;
+    }
   }
-  if (cursor === 0) {
-    const text = decodeXmlEntities(html.replace(/<[^>]+>/g, ' '))
-      .replace(/\s+/g, ' ')
-      .trim();
+
+  if (!matched) {
+    const text = decodeXmlEntities(stripTags(html)).replace(/\s+/g, ' ').trim();
     if (text) lines.push(text);
   }
   return lines.join('\n');
@@ -486,6 +562,12 @@ interface Sheet {
   omitted: boolean;
 }
 
+function markupTextRuns(xml: string, tag: string): string {
+  let text = '';
+  for (const run of markupElements(xml, tag)) text += decodeXmlEntities(run.body);
+  return text;
+}
+
 async function readXlsxSheets(
   data: Buffer,
   filename: string,
@@ -499,34 +581,33 @@ async function readXlsxSheets(
   const relationships = (await officeArchiveEntryText(bounded, 'xl/_rels/workbook.xml.rels')) ?? '';
   const targetByRelationshipId = new Map<string, string>();
   let stylesTarget: string | undefined;
-  for (const { attributes } of xmlStartTags(relationships, 'Relationship')) {
-    const id = /Id="([^"]+)"/.exec(attributes)?.[1];
-    const target = /Target="([^"]+)"/.exec(attributes)?.[1]?.replace(/^\/?xl\//, '');
+  for (const tag of openTags(relationships, 'Relationship')) {
+    const id = attributeValue(tag, 'Id', '<Relationship'.length);
+    const target = attributeValue(tag, 'Target', '<Relationship'.length)?.replace(/^\/?xl\//, '');
     if (id && target) targetByRelationshipId.set(id, target);
-    if (target && /Type="([^"]*)"/.exec(attributes)?.[1]?.endsWith('/styles')) {
+    if (target && attributeValue(tag, 'Type', '<Relationship'.length)?.endsWith('/styles')) {
       stylesTarget ??= target;
     }
   }
-  const workbookProperties = xmlStartTags(workbook, 'workbookPr').next();
-  const date1904Attribute = workbookProperties.done
-    ? undefined
-    : /date1904="([^"]*)"/.exec(workbookProperties.value.attributes)?.[1]?.trim();
+  const workbookProperties = firstOpenTag(workbook, 'workbookPr');
+  const date1904Attribute =
+    workbookProperties === undefined
+      ? undefined
+      : attributeValue(workbookProperties, 'date1904', '<workbookPr'.length)?.trim();
   const date1904 = date1904Attribute === '1' || date1904Attribute === 'true';
 
   const sharedStringsXml = (await officeArchiveEntryText(bounded, 'xl/sharedStrings.xml')) ?? '';
-  const sharedStrings = [...xmlElements(sharedStringsXml, 'si')].map((element) =>
-    xmlTextRuns(element.body, 't'),
+  const sharedStrings = [...markupElements(sharedStringsXml, 'si')].map((element) =>
+    markupTextRuns(element.body, 't'),
   );
 
   const sheets: Sheet[] = [];
   let styles: CellStyles | undefined;
   let sheetIndex = 0;
-  for (const { attributes: sheetAttributes } of xmlStartTags(workbook, 'sheet')) {
+  for (const sheetTag of openTags(workbook, 'sheet')) {
     sheetIndex += 1;
-    const name = decodeXmlEntities(
-      /name="([^"]*)"/.exec(sheetAttributes)?.[1] ?? `Sheet${sheetIndex}`,
-    );
-    const relationshipId = /r:id="([^"]+)"/.exec(sheetAttributes)?.[1];
+    const name = attributeValue(sheetTag, 'name', '<sheet'.length) ?? `Sheet${sheetIndex}`;
+    const relationshipId = attributeValue(sheetTag, 'r:id', '<sheet'.length);
     const target = relationshipId ? targetByRelationshipId.get(relationshipId) : undefined;
     const sheetXml =
       (target ? await officeArchiveEntryText(bounded, `xl/${target}`) : null) ??
@@ -541,33 +622,31 @@ async function readXlsxSheets(
     const rows: SheetRow[] = [];
     let omitted = false;
     let lastRow = 0;
-    for (const row of xmlElements(sheetXml, 'row')) {
+    for (const row of markupElements(sheetXml, 'row')) {
       if (rows.length >= maxSheetRows) {
         omitted = true;
         break;
       }
-      const declaredRow = /\sr="(\d+)"/.exec(row.attributes)?.[1];
+      const declaredRow = /^\d+$/.exec(attributeValue(row.attributes, 'r') ?? '')?.[0];
       lastRow = declaredRow === undefined ? lastRow + 1 : Number(declaredRow);
       const cells: SheetCell[] = [];
       let lastColumn = 0;
-      for (const { attributes, body } of xmlElements(row.body, 'c')) {
-        const declaredColumn = /\sr="([A-Z]+)\d+"/.exec(attributes)?.[1];
+      for (const { attributes, body } of markupElements(row.body, 'c')) {
+        const declaredColumn = /^([A-Z]+)\d+$/.exec(attributeValue(attributes, 'r') ?? '')?.[1];
         lastColumn = declaredColumn === undefined ? lastColumn + 1 : columnIndex(declaredColumn);
-        const type = /t="([^"]+)"/.exec(attributes)?.[1] ?? 'n';
-        const formulaElement = xmlElements(body, 'f').next();
-        const formula = formulaElement.done ? undefined : formulaElement.value.body;
-        const valueStart = body.indexOf('<v>');
-        const valueEnd = valueStart === -1 ? -1 : body.indexOf('</v>', valueStart + 3);
-        const rawValue = valueEnd === -1 ? '' : body.slice(valueStart + 3, valueEnd);
+        const type = attributeValue(attributes, 't') || 'n';
+        const formulaElement = firstMarkupElement(body, 'f');
+        const formula = formulaElement?.body;
+        const rawValue = firstMarkupElement(body, 'v')?.body ?? '';
         let value: string;
         if (type === 's') {
           value = rawValue === '' ? '' : (sharedStrings[Number(rawValue)] ?? '');
         } else if (type === 'inlineStr') {
-          value = xmlTextRuns(body, 't');
+          value = markupTextRuns(body, 't');
         } else {
           value = decodeXmlEntities(rawValue);
           if (type === 'n' && value) {
-            const style = styleIndex(/\ss="([^"]*)"/.exec(attributes)?.[1] ?? '0');
+            const style = styleIndex(attributeValue(attributes, 's') ?? '0');
             value = displayCellNumber(
               value,
               sheetStyles.formats[style] ?? null,
@@ -575,7 +654,7 @@ async function readXlsxSheets(
             );
           }
         }
-        if (!formulaElement.done && !formula && !value && type !== 'str') {
+        if (formulaElement !== undefined && !formula && !value && type !== 'str') {
           value = XLSX_NOT_CALCULATED;
         }
         if (formula || value) {

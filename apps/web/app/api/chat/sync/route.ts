@@ -23,6 +23,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { withIsoTimestamps } from '@/lib/server/iso-timestamps';
+import { withClientMessageRole } from '@/lib/server/client-message-role';
 import {
   withoutStoredCitationMarkup,
   withoutStoredCitationMarkupRow,
@@ -195,7 +196,7 @@ async function handlePull(request: NextRequest) {
           withoutStoredCitationMarkup(
             messages.map((message) => withObjectMetadata(message, userId)),
           ),
-        ),
+        ).map(withClientMessageRole),
         artifacts: withIsoTimestamps(artifacts.map(withoutStoredCitationMarkupArtifact)),
         cursor,
         hasMore,
@@ -710,7 +711,9 @@ async function handlePush(request: NextRequest) {
         conflict.current
           ? {
               ...conflict,
-              current: withoutStoredCitationMarkupRow(withObjectMetadata(conflict.current, userId)),
+              current: withClientMessageRole(
+                withoutStoredCitationMarkupRow(withObjectMetadata(conflict.current, userId)),
+              ),
             }
           : conflict,
       );

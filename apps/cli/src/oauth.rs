@@ -86,7 +86,7 @@ pub async fn start_device_code_login(api_base: &str, surface: &str) -> Result<De
     if !resp.status().is_success() {
         let status = resp.status();
         let body = resp.text().await.unwrap_or_default();
-        anyhow::bail!("Device code request failed ({}): {}", status, body);
+        anyhow::bail!("{}", device_code_failure(status, &body));
     }
 
     let device: DeviceCodeResponse = resp
@@ -147,31 +147,7 @@ pub async fn poll_device_code(api_base: &str, device_code: &str) -> Result<Devic
     let status = response.status();
     if !status.is_success() {
         let body: serde_json::Value = response.json().await.unwrap_or_default();
-        let error = body
-            .get("error")
-            .and_then(|value| value.as_str())
-            .unwrap_or("");
-        return Ok(match (status, error) {
-            (_, "slow_down") | (reqwest::StatusCode::TOO_MANY_REQUESTS, _) => {
-                DeviceCodePoll::SlowDown
-            }
-            (_, "terms_acceptance_required") => DeviceCodePoll::TermsRequired(
-                body.get("acceptance_url")
-                    .and_then(|value| value.as_str())
-                    .unwrap_or_default()
-                    .to_string(),
-            ),
-            (_, "account_unavailable") => DeviceCodePoll::AccountUnavailable(
-                body.get("error_description")
-                    .and_then(|value| value.as_str())
-                    .filter(|value| !value.trim().is_empty())
-                    .unwrap_or("This AGI account cannot sign in right now.")
-                    .to_string(),
-            ),
-            (_, "access_denied") => DeviceCodePoll::Denied,
-            (_, "expired_token") | (_, "invalid_grant") => DeviceCodePoll::Expired,
-            _ => DeviceCodePoll::Pending,
-        });
+        return Ok(refused_poll(status, &body));
     }
 
     let tokens: DeviceTokenResponse = response
@@ -190,6 +166,41 @@ pub async fn poll_device_code(api_base: &str, device_code: &str) -> Result<Devic
             expires,
         },
     )))
+}
+
+fn device_code_failure(status: reqwest::StatusCode, body: &str) -> String {
+    format!(
+        "Device code request failed ({}): {}",
+        status,
+        crate::terminal_text::sanitize_terminal_text(body)
+    )
+}
+
+fn server_sentence(body: &serde_json::Value, key: &str) -> Option<String> {
+    body.get(key)
+        .and_then(|value| value.as_str())
+        .map(|text| crate::terminal_text::sanitize_terminal_text(text).into_owned())
+}
+
+fn refused_poll(status: reqwest::StatusCode, body: &serde_json::Value) -> DeviceCodePoll {
+    let error = body
+        .get("error")
+        .and_then(|value| value.as_str())
+        .unwrap_or("");
+    match (status, error) {
+        (_, "slow_down") | (reqwest::StatusCode::TOO_MANY_REQUESTS, _) => DeviceCodePoll::SlowDown,
+        (_, "terms_acceptance_required") => DeviceCodePoll::TermsRequired(
+            server_sentence(body, "acceptance_url").unwrap_or_default(),
+        ),
+        (_, "account_unavailable") => DeviceCodePoll::AccountUnavailable(
+            server_sentence(body, "error_description")
+                .filter(|value| !value.trim().is_empty())
+                .unwrap_or_else(|| "This AGI account cannot sign in right now.".to_string()),
+        ),
+        (_, "access_denied") => DeviceCodePoll::Denied,
+        (_, "expired_token") | (_, "invalid_grant") => DeviceCodePoll::Expired,
+        _ => DeviceCodePoll::Pending,
+    }
 }
 
 pub enum DeviceSessionRenewal {
@@ -256,11 +267,7 @@ fn renewal_refusal(status: reqwest::StatusCode, body: &serde_json::Value) -> Dev
     {
         return DeviceSessionRenewal::Revoked;
     }
-    DeviceSessionRenewal::Refused(
-        body.get("error_description")
-            .and_then(|value| value.as_str())
-            .map(str::to_string),
-    )
+    DeviceSessionRenewal::Refused(server_sentence(body, "error_description"))
 }
 
 #[cfg(test)]
@@ -345,6 +352,54 @@ mod renewal_refusal_tests {
         assert!(matches!(
             refused,
             DeviceSessionRenewal::Refused(Some(reason)) if reason.contains("Terms of Service")
+        ));
+    }
+
+    const HOSTILE: &str = "\u{1b}]52;c;cm0gLXJmIC8=\u{7}\u{1b}[2Jpwned";
+
+    fn assert_clean(text: &str) {
+        assert!(
+            !text.chars().any(char::is_control),
+            "control character survived: {text:?}"
+        );
+        assert!(text.contains("pwned"), "{text}");
+    }
+
+    #[test]
+    fn a_refusal_sentence_carries_no_terminal_escape() {
+        let refused = renewal_refusal(
+            StatusCode::FORBIDDEN,
+            &serde_json::json!({ "error": "account_unavailable", "error_description": HOSTILE }),
+        );
+        match refused {
+            DeviceSessionRenewal::Refused(Some(reason)) => assert_clean(&reason),
+            _ => panic!("expected a refusal sentence"),
+        }
+    }
+
+    #[test]
+    fn a_device_poll_refusal_carries_no_terminal_escape() {
+        match super::refused_poll(
+            StatusCode::FORBIDDEN,
+            &serde_json::json!({ "error": "account_unavailable", "error_description": HOSTILE }),
+        ) {
+            super::DeviceCodePoll::AccountUnavailable(reason) => assert_clean(&reason),
+            _ => panic!("expected the account refusal"),
+        }
+        match super::refused_poll(
+            StatusCode::FORBIDDEN,
+            &serde_json::json!({ "error": "terms_acceptance_required", "acceptance_url": HOSTILE }),
+        ) {
+            super::DeviceCodePoll::TermsRequired(url) => assert_clean(&url),
+            _ => panic!("expected the terms refusal"),
+        }
+    }
+
+    #[test]
+    fn a_failed_device_code_request_carries_no_terminal_escape() {
+        assert_clean(&super::device_code_failure(
+            StatusCode::BAD_GATEWAY,
+            HOSTILE,
         ));
     }
 }

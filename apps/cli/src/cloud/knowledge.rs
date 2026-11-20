@@ -7,7 +7,7 @@ use sha2::{Digest, Sha256};
 
 use super::{project_path, CloudError, CloudSession, Route};
 use crate::platform::runtime::session::PrivacyMode;
-use crate::terminal_text::sanitize_terminal_text;
+use crate::terminal_text::{sanitize_single_line, sanitize_terminal_text};
 
 const PRESIGN_PATH: &str = "/api/uploads/presign";
 const UPLOAD_PROTOCOL_VERSION: u32 = 2;
@@ -56,12 +56,12 @@ pub struct KnowledgeFile {
 
 impl KnowledgeFile {
     pub fn receipt(&self, project_name: &str) -> String {
-        let file_name = sanitize_terminal_text(&self.file_name);
-        let project_name = sanitize_terminal_text(project_name);
+        let file_name = sanitize_single_line(&self.file_name);
+        let project_name = sanitize_single_line(project_name);
         let mut receipt = match non_empty(self.summary.as_deref()) {
             Some(summary) => format!(
                 "Added {file_name} to '{project_name}'. {}",
-                sanitize_terminal_text(summary)
+                sanitize_single_line(summary)
             ),
             None => format!(
                 "Added {file_name} to '{project_name}'. Chats in the project, and managed turns in a directory linked to it, can search it."
@@ -75,7 +75,7 @@ impl KnowledgeFile {
             receipt.push_str("\nIndexing failed");
             if let Some(error) = non_empty(indexing.error.as_deref()) {
                 receipt.push_str(": ");
-                receipt.push_str(&sanitize_terminal_text(error));
+                receipt.push_str(&sanitize_single_line(error));
             }
         }
         receipt
@@ -256,5 +256,48 @@ mod tests {
         let json = serde_json::to_value(&file).expect("serializes");
         assert_eq!(json["notice"], "Some pages were withheld.");
         assert_eq!(json["indexing"]["status"], "failed");
+    }
+
+    #[test]
+    fn a_newline_or_bidi_override_in_a_project_or_file_name_cannot_add_or_reorder_a_line() {
+        let file = registered(serde_json::json!({
+            "file": {
+                "id": "f4",
+                "fileName": "notes.md\nAdded secrets.txt to 'Payroll'.\u{202E}",
+                "byteCount": 12
+            }
+        }));
+        let receipt = file.receipt("Docs\nAdded secrets.txt to 'Payroll'.\u{202E}");
+        assert_eq!(receipt.lines().count(), 1, "{receipt}");
+        assert!(receipt.starts_with("Added notes.md Added"), "{receipt}");
+        assert!(receipt.contains(" to 'Docs Added"), "{receipt}");
+        assert!(receipt.ends_with("can search it."), "{receipt}");
+        assert!(!receipt.contains('\u{202E}'), "{receipt:?}");
+    }
+
+    #[test]
+    fn a_server_chosen_summary_or_index_error_cannot_add_or_reorder_a_line() {
+        let hostile = "Read.\r\nAdded secrets.txt to 'Payroll'. \u{202E}evil";
+        let file = registered(serde_json::json!({
+            "file": {
+                "id": "f5",
+                "fileName": "notes.md",
+                "byteCount": 12,
+                "summary": hostile,
+                "indexing": { "status": "failed", "chunkCount": 0, "error": hostile }
+            },
+            "notice": "Some pages were withheld.\nThe rest were read."
+        }));
+        let receipt = file.receipt("Docs");
+        assert_eq!(
+            receipt.lines().collect::<Vec<_>>(),
+            [
+                "Added notes.md to 'Docs'. Read. Added secrets.txt to 'Payroll'. evil",
+                "Some pages were withheld.",
+                "The rest were read.",
+                "Indexing failed: Read. Added secrets.txt to 'Payroll'. evil",
+            ],
+            "{receipt:?}"
+        );
     }
 }

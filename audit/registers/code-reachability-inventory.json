@@ -3087,7 +3087,7 @@
     "item": "remote-session-runtime",
     "surface": "packages/sessions",
     "status": "built",
-    "evidence": "crates/agiworkforce-app-server/src/lib.rs:60-67 AppServerTransport::WebSocket{addr} plus WebSocketSecurity (auth_token, allowed_origins, allow_query_token) implement an authenticated remote-capable session server. Wired to a real CLI entry point: apps/cli/src/lib.rs:1717-1766 (Command::AppServer) constructs CliDeveloperSessionHost, defaults to loopback but explicitly supports non-loopback listening behind --allow-public-listen + mandatory --auth-token/AGI_APP_SERVER_TOKEN (lib.rs:1743-1749), then calls app_server::run_developer_session_websocket (lib.rs:1763). End-to-end websocket transport (including typed approval round-trips) is exercised in crates/agiworkforce-app-server/tests/developer_sessions.rs:474-500."
+    "evidence": "crates/agiworkforce-app-server/src/lib.rs:60-67 AppServerTransport::WebSocket{addr} plus WebSocketSecurity (auth_token, read_only_token, allowed_origins) implement an authenticated remote-capable session server. Wired to a real CLI entry point: apps/cli/src/lib.rs:1717-1766 (Command::AppServer) constructs CliDeveloperSessionHost, defaults to loopback but explicitly supports non-loopback listening behind --allow-public-listen + mandatory --auth-token/AGI_APP_SERVER_TOKEN (lib.rs:1743-1749), then calls app_server::run_developer_session_websocket (lib.rs:1763). End-to-end websocket transport (including typed approval round-trips) is exercised in crates/agiworkforce-app-server/tests/developer_sessions.rs:474-500."
   },
   {
     "item": "session-persistence-across-devices",

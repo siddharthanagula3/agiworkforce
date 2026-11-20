@@ -58,15 +58,24 @@ impl std::fmt::Display for CloudError {
                  server, got '{base}'"
             ),
             CloudError::Transport(message) => {
-                write!(f, "could not reach your AGI account: {message}")
+                write!(
+                    f,
+                    "could not reach your AGI account: {}",
+                    crate::terminal_text::sanitize_terminal_text(message)
+                )
             }
-            CloudError::Api { status, message } => write!(f, "{message} (HTTP {status})"),
+            CloudError::Api { status, message } => write!(
+                f,
+                "{} (HTTP {status})",
+                crate::terminal_text::sanitize_terminal_text(message)
+            ),
             CloudError::UpgradeRequired(error) => error.fmt(f),
             CloudError::LocalFile(message) => f.write_str(message),
             CloudError::Decode(message) => {
                 write!(
                     f,
-                    "your AGI account returned an unreadable response: {message}"
+                    "your AGI account returned an unreadable response: {}",
+                    crate::terminal_text::sanitize_terminal_text(message)
                 )
             }
         }
@@ -1174,6 +1183,26 @@ pub async fn connectivity_line(privacy: PrivacyMode) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_cloud_error_carries_no_terminal_escape_from_the_server() {
+        let hostile = "\u{1b}]52;c;cm0gLXJmIC8=\u{7}\u{1b}[2Jpwned";
+        for error in [
+            CloudError::Api {
+                status: 400,
+                message: hostile.to_string(),
+            },
+            CloudError::Transport(hostile.to_string()),
+            CloudError::Decode(hostile.to_string()),
+        ] {
+            let shown = error.to_string();
+            assert!(
+                !shown.chars().any(char::is_control),
+                "control character survived: {shown:?}"
+            );
+            assert!(shown.contains("pwned"), "{shown}");
+        }
+    }
 
     #[tokio::test]
     async fn bounded_history_reads_refuse_declared_and_streamed_oversize_bodies() {

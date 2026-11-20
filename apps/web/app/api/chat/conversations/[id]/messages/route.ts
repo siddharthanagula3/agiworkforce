@@ -6,6 +6,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { withIsoTimestamps } from '@/lib/server/iso-timestamps';
+import { withClientMessageRole } from '@/lib/server/client-message-role';
 import { withoutStoredCitationMarkup } from '@/lib/server/stored-assistant-text';
 import { withObjectMessageMetadata } from '@/lib/server/message-metadata-repair';
 import type { ChatMessageRow } from '@/lib/server/neon-chat';
@@ -84,7 +85,7 @@ async function handleListMessages(request: NextRequest, context: RouteContext) {
 
     return NextResponse.json({
       messages: withIsoTimestamps(withoutStoredCitationMarkup(messages)).map((message) =>
-        ManagedCloudMessageWireSchema.parse(message),
+        ManagedCloudMessageWireSchema.parse(withClientMessageRole(message)),
       ),
       hasMore: page.hasMore,
       nextCursor: page.nextCursor,

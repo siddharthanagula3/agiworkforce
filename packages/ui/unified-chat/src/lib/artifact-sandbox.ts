@@ -13,13 +13,46 @@ const BASE_STYLES =
   `body { margin: 0; padding: 16px; font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; line-height: 1.5; color: CanvasText; background: Canvas; } ` +
   `</style>`;
 
-const META_TAG_PATTERN = /<meta\b[^>]*>/gi;
+export interface OpeningTag {
+  start: number;
+  end: number;
+}
+
+export function findOpeningTags(html: string, name: string, firstOnly = false): OpeningTag[] {
+  const opening = new RegExp(`<${name}\\b`, 'gi');
+  const tags: OpeningTag[] = [];
+  let cursor = 0;
+  for (let match = opening.exec(html); match; match = opening.exec(html)) {
+    const close = html.indexOf('>', match.index + match[0].length);
+    if (close === -1) break;
+    tags.push({ start: match.index, end: close + 1 });
+    if (firstOnly) break;
+    cursor = close + 1;
+    opening.lastIndex = cursor;
+  }
+  return tags;
+}
 
 function stripCspMetaTags(content: string): string {
-  return content.replace(META_TAG_PATTERN, (tag) => {
+  let out = '';
+  let cursor = 0;
+  for (const { start, end } of findOpeningTags(content, 'meta')) {
+    const tag = content.slice(start, end);
     const lower = tag.toLowerCase();
-    return lower.includes('http-equiv') && lower.includes('content-security-policy') ? '' : tag;
-  });
+    const isCsp = lower.includes('http-equiv') && lower.includes('content-security-policy');
+    out += content.slice(cursor, isCsp ? start : end);
+    cursor = end;
+  }
+  return out + content.slice(cursor);
+}
+
+export function insertAfterOpeningTag(
+  html: string,
+  name: string,
+  insertion: string,
+): string | null {
+  const [tag] = findOpeningTags(html, name, true);
+  return tag ? `${html.slice(0, tag.end)}${insertion}${html.slice(tag.end)}` : null;
 }
 
 // The policy opens the document rather than following the first `<head>`-shaped

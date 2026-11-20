@@ -327,10 +327,7 @@ impl Router {
 
     fn answer(&self, method: String, id: Value, params: Option<Value>) {
         if !self.answers_server_requests.load(Ordering::SeqCst) {
-            tracing::warn!(
-                "[{}] ignoring server-initiated '{method}' outside a legacy session",
-                self.server_name
-            );
+            tracing::warn!("{}", ignored_request_line(&self.server_name, &method));
             return;
         }
         let writer = Arc::clone(&self.writer);
@@ -339,10 +336,26 @@ impl Router {
         tokio::spawn(async move {
             let reply = peer_requests::answer(&server, &hooks, &method, id, params).await;
             if let Err(error) = write_frame(&writer, &reply, &server).await {
-                tracing::warn!("[{server}] could not answer '{method}': {error:#}");
+                tracing::warn!("{}", unanswered_request_line(&server, &method, &error));
             }
         });
     }
+}
+
+const MAX_PRINTED_METHOD_CHARS: usize = 80;
+
+fn ignored_request_line(server: &str, method: &str) -> String {
+    format!(
+        "[{server}] ignoring server-initiated '{}' outside a legacy session",
+        crate::security::printable(method, MAX_PRINTED_METHOD_CHARS)
+    )
+}
+
+fn unanswered_request_line(server: &str, method: &str, error: &anyhow::Error) -> String {
+    format!(
+        "[{server}] could not answer '{}': {error:#}",
+        crate::security::printable(method, MAX_PRINTED_METHOD_CHARS)
+    )
 }
 
 fn append_stdout_frame(frame: &mut Vec<u8>, bytes: &[u8], max_frame: usize) -> Result<()> {
@@ -1020,6 +1033,49 @@ mod stderr_tests {
         )
         .await;
         assert_eq!(buf.drain(), vec!["partial", STDERR_READ_FAILED]);
+    }
+}
+
+#[cfg(test)]
+mod peer_request_log_tests {
+    use super::*;
+
+    const HOSTILE_METHOD: &str = "x\r\n[WARN] forged \u{202E}evil\u{2066}\u{1b}]52;c;y\u{07}";
+
+    fn assert_single_safe_line(line: &str) {
+        assert!(
+            !line.chars().any(|c| c.is_control()
+                || matches!(
+                    c,
+                    '\u{061C}' | '\u{200E}' | '\u{200F}' | '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}'
+                )),
+            "{line:?}"
+        );
+    }
+
+    #[test]
+    fn a_server_chosen_method_cannot_forge_or_reorder_a_log_line() {
+        let error = anyhow!("pipe closed");
+        let ignored = ignored_request_line("unit", HOSTILE_METHOD);
+        let unanswered = unanswered_request_line("unit", HOSTILE_METHOD, &error);
+        for line in [&ignored, &unanswered] {
+            assert_single_safe_line(line);
+            assert!(line.contains("'x [WARN] forged evil ]52;c;y '"), "{line:?}");
+        }
+        let long = unanswered_request_line("unit", &"m".repeat(500), &error);
+        assert!(long.len() < 200, "{long:?}");
+    }
+
+    #[test]
+    fn an_ordinary_method_is_logged_unchanged() {
+        assert_eq!(
+            ignored_request_line("unit", "sampling/createMessage"),
+            "[unit] ignoring server-initiated 'sampling/createMessage' outside a legacy session"
+        );
+        assert_eq!(
+            unanswered_request_line("unit", "roots/list", &anyhow!("pipe closed")),
+            "[unit] could not answer 'roots/list': pipe closed"
+        );
     }
 }
 

@@ -1181,9 +1181,11 @@ static GIT_TRUST_DECISIONS: crate::sys::native_confirm::ConfirmGate =
 
 const TRUST_GIT_SETTINGS_LABEL: &str = "Trust Settings";
 
-/// The question asked before a repository's code-running git settings are
-/// trusted. Each one is shown with its value and the file that sets it, so
-/// the answer is to what will run and not to a count. A list the dialog
+/// The question asked before a repository's code-running and connection git
+/// settings are trusted. Each one is shown with its value and the file that
+/// sets it, so the answer is to what will run and not to a count; only the
+/// user name and password of a proxy, or of a URL a key is scoped to, are
+/// hidden. A list the dialog
 /// could not show whole is refused rather than shortened.
 fn git_trust_question(
     top: &Path,
@@ -1204,12 +1206,12 @@ fn git_trust_question(
         .collect::<Vec<_>>()
         .join("\n");
     let body = format!(
-        "In {}:\n\n{settings}\n\nEach of these names a program that git runs outside the sandbox whenever the app uses git in this folder. Anyone who can change these files can change what runs.",
+        "In {}:\n\n{settings}\n\nEach of these names a program that git runs, or decides where git connects and how it checks the connection, outside the sandbox whenever the app uses git in this folder. Anyone who can change these files can change what runs and where your git credentials go.",
         shown_value(&top.to_string_lossy())
     );
     if crate::sys::native_confirm::check_it_fits(&body).is_err() {
         return Err(
-            "This repository's git settings that run programs are too many or too long to show in one dialog, so none was trusted. Remove the ones you do not need and try again."
+            "This repository's git settings that run programs or route connections are too many or too long to show in one dialog, so none was trusted. Remove the ones you do not need and try again."
                 .to_string(),
         );
     }

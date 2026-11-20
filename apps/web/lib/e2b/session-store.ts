@@ -5,6 +5,7 @@ import type {
   SandboxComputeReservationRecord,
 } from '@/lib/e2b/compute-metering';
 import { logger } from '@/lib/logger';
+import { secureToken } from '@/lib/secure-random';
 import { getKeyValueStore } from '@/lib/server/key-value';
 import type { StagedStorageRecord } from '@/lib/e2b/types';
 import type { CloudCodeNetworkAccess } from '@agiworkforce/types';
@@ -236,7 +237,7 @@ export async function withUserSandboxLock<T>(
   if (!store) return { locked: true, result: await critical() };
 
   const key = sandboxLockKey(scope.tenantId, scope.userId);
-  const token = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const token = `${Date.now()}-${secureToken()}`;
   const deadline = Date.now() + SANDBOX_LOCK_WAIT_MS;
 
   let held = false;

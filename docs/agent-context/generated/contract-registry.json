@@ -173,6 +173,7 @@
     "artifacts-shared-with-me",
     "assistant-content-edit",
     "bank-accounts",
+    "bounded-json",
     "caller-tool-handoff",
     "capability-handshake",
     "chat-attachment-truncation",

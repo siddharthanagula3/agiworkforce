@@ -474,6 +474,14 @@ impl Marketplace {
                     continue;
                 }
             }
+            if let Err(reason) = check_checkout_config_for_pull(&install_path) {
+                eprintln!(
+                    "  {}, not updated: {}",
+                    crate::terminal_text::sanitize_terminal_text(name),
+                    crate::terminal_text::sanitize_terminal_text(&reason)
+                );
+                continue;
+            }
             let approved_commit = if undecided {
                 std::fs::read_to_string(&marker)
                     .ok()
@@ -646,6 +654,14 @@ pub fn is_git_checkout(install_path: &Path) -> bool {
     install_path.join(".git").exists()
 }
 
+fn check_checkout_config_for_pull(install_path: &Path) -> std::result::Result<(), String> {
+    crate::platform::runtime::git::check_repository_config_blocking(
+        install_path,
+        agiworkforce_worktree::config_guard::ConfigUse::PULL,
+    )
+    .map_err(|error| error.to_string())
+}
+
 pub fn update_plugin_checkout(
     install_path: &Path,
     marker: &Path,
@@ -662,6 +678,7 @@ pub fn update_plugin_checkout(
                 .to_string(),
         );
     }
+    check_checkout_config_for_pull(install_path)?;
     let before = head_commit(install_path)
         .ok_or_else(|| "its current commit could not be read".to_string())?;
     std::fs::write(marker, &before)
@@ -755,15 +772,16 @@ pub struct PluginUpdateReview {
 }
 
 pub fn describe_plugin_review(review: &PluginUpdateReview) -> String {
+    use crate::terminal_text::sanitize_single_line;
+    let name = sanitize_single_line(&review.name);
+    let version = sanitize_single_line(&review.version);
+    let signature = sanitize_single_line(&review.signature);
     let mut out = if review.previous_version == review.version {
-        format!(
-            "{}, update pulled (still v{}, {})",
-            review.name, review.version, review.signature
-        )
+        format!("{name}, update pulled (still v{version}, {signature})")
     } else {
         format!(
-            "{}, update pulled v{} -> v{} ({})",
-            review.name, review.previous_version, review.version, review.signature
+            "{name}, update pulled v{} -> v{version} ({signature})",
+            sanitize_single_line(&review.previous_version)
         )
     };
     if !review.changed_files.is_empty() {
@@ -773,7 +791,7 @@ pub fn describe_plugin_review(review: &PluginUpdateReview) -> String {
         ));
         for change in &review.changed_files {
             out.push_str("\n        ");
-            out.push_str(change);
+            out.push_str(&sanitize_single_line(change));
         }
     }
     if review.unapproved.is_empty() {
@@ -782,14 +800,27 @@ pub fn describe_plugin_review(review: &PluginUpdateReview) -> String {
         out.push_str("\n      Not agreed to yet, and not in use unless this update is kept:");
         for capability in &review.unapproved {
             out.push_str("\n        ");
-            out.push_str(capability);
+            out.push_str(&sanitize_single_line(capability));
         }
     }
-    out.push_str(&format!("\n      content sha256:{}", review.sha256));
+    out.push_str(&format!(
+        "\n      content sha256:{}",
+        sanitize_single_line(&review.sha256)
+    ));
     if let Some(approved) = &review.approved_sha256 {
-        out.push_str(&format!(" (last agreed to: sha256:{approved})"));
+        out.push_str(&format!(
+            " (last agreed to: sha256:{})",
+            sanitize_single_line(approved)
+        ));
     }
     out
+}
+
+fn keep_update_question(review: &PluginUpdateReview) -> String {
+    format!(
+        "Keep this update to {}?",
+        crate::terminal_text::sanitize_single_line(&review.name)
+    )
 }
 
 fn ask_to_keep_update(review: &PluginUpdateReview) -> bool {
@@ -804,13 +835,7 @@ fn ask_to_keep_update(review: &PluginUpdateReview) -> bool {
         );
         return false;
     }
-    crate::output::confirm(
-        format!(
-            "Keep this update to {}?",
-            crate::terminal_text::sanitize_terminal_text(&review.name)
-        ),
-        false,
-    )
+    crate::output::confirm(keep_update_question(review), false)
 }
 
 /// Put a plugin back on the commit the person last agreed to and let it
@@ -933,10 +958,16 @@ pub fn describe_plugin_update(
     current_version: &str,
     changed_files: &[String],
 ) -> String {
+    use crate::terminal_text::sanitize_single_line;
+    let name = sanitize_single_line(name);
+    let current = sanitize_single_line(current_version);
     let version = if previous_version == current_version {
-        format!("{name}, updated (still v{current_version})")
+        format!("{name}, updated (still v{current})")
     } else {
-        format!("{name}, updated v{previous_version} -> v{current_version}")
+        format!(
+            "{name}, updated v{} -> v{current}",
+            sanitize_single_line(previous_version)
+        )
     };
     if changed_files.is_empty() {
         return version;
@@ -944,7 +975,7 @@ pub fn describe_plugin_update(
     let mut out = format!("{version}, {} file(s) changed:", changed_files.len());
     for change in changed_files {
         out.push_str("\n      ");
-        out.push_str(change);
+        out.push_str(&sanitize_single_line(change));
     }
     out
 }
@@ -1066,10 +1097,7 @@ fn copy_dir(src: &Path, dst: &Path) -> Result<()> {
         let meta = std::fs::symlink_metadata(&path)
             .with_context(|| format!("failed to stat {}", path.display()))?;
         if meta.file_type().is_symlink() {
-            eprintln!(
-                "[marketplace] skipping symlink during plugin copy: {}",
-                path.display()
-            );
+            eprintln!("{}", skipped_symlink_notice(&path));
             continue;
         }
         let d = dst.join(e.file_name());
@@ -1086,9 +1114,27 @@ fn copy_dir(src: &Path, dst: &Path) -> Result<()> {
 // Tests
 // ---------------------------------------------------------------------------
 
+fn skipped_symlink_notice(path: &Path) -> String {
+    format!(
+        "[marketplace] skipping symlink during plugin copy: {}",
+        crate::terminal_text::sanitize_terminal_text(&path.display().to_string())
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_skipped_symlink_notice_carries_no_terminal_escape_from_the_plugin_repository() {
+        let path = Path::new("plugin/evil\u{1b}]52;c;cm0gLXJmIC8=\u{7}\u{1b}[2Jpwned");
+        let notice = skipped_symlink_notice(path);
+        assert!(
+            !notice.chars().any(char::is_control),
+            "control character survived: {notice:?}"
+        );
+        assert!(notice.contains("pwned"), "{notice:?}");
+    }
 
     #[test]
     fn test_derive_plugin_name_git_url() {
@@ -1307,6 +1353,26 @@ mod tests {
                 &["M commands/run.md".to_string(), "A hooks.json".to_string()]
             ),
             "acme, updated (still v1.0.0), 2 file(s) changed:\n      M commands/run.md\n      A hooks.json"
+        );
+    }
+
+    #[test]
+    fn a_repository_chosen_version_or_changed_file_cannot_forge_or_reorder_an_update_line() {
+        let hostile = "2.0.0\r\nacme, update kept \u{202E}evil";
+        let receipt = describe_plugin_update(
+            "acme\nforged",
+            "1.0.0",
+            hostile,
+            &[format!("M {hostile}"), "A hooks.json".to_string()],
+        );
+        assert_eq!(
+            receipt,
+            "acme forged, updated v1.0.0 -> v2.0.0 acme, update kept evil, 2 file(s) changed:\
+             \n      M 2.0.0 acme, update kept evil\n      A hooks.json"
+        );
+        assert_eq!(
+            describe_plugin_update("acme", hostile, hostile, &[]),
+            "acme, updated (still v2.0.0 acme, update kept evil)"
         );
     }
 
@@ -1556,6 +1622,49 @@ mod tests {
     }
 
     #[test]
+    fn a_checkout_that_sets_a_transport_or_ssh_command_is_refused_before_any_pull() {
+        let mp = Marketplace;
+        let policy = crate::plugins::PluginSignaturePolicy::default();
+        for (key, value) in [
+            ("http.proxy", "http://planted.invalid:9"),
+            ("core.sshCommand", "planted-ssh"),
+        ] {
+            let (_origin, home, install_path) = cloned_plugin_with_pending_update();
+            let marker =
+                crate::plugins::pending_update_marker(&home.path().join("plugins"), "tracked");
+            let before = head_commit(&install_path);
+            git(&install_path, &["config", key, value]);
+
+            let error = match update_plugin_checkout(&install_path, &marker, &policy) {
+                Err(error) => error,
+                Ok(_) => panic!("{key} in the checkout must refuse the update"),
+            };
+            assert!(
+                error.to_lowercase().contains(&key.to_lowercase()),
+                "{key}: {error}"
+            );
+            assert_eq!(head_commit(&install_path), before, "{key} was pulled");
+            assert_eq!(read_manifest_version(&install_path), "1.0.0");
+            assert!(!marker.exists(), "{key}: nothing was held off");
+
+            let mut asked = 0;
+            mp.update_all_with(home.path(), &policy, &mut |_| {
+                asked += 1;
+                true
+            })
+            .unwrap();
+            assert_eq!(asked, 0, "{key}");
+            assert_eq!(head_commit(&install_path), before, "{key} was pulled");
+            assert!(!marker.exists(), "{key}: nothing was held off");
+
+            git(&install_path, &["config", "--unset", key]);
+            assert_eq!(check_checkout_config_for_pull(&install_path), Ok(()));
+            assert!(update_plugin_checkout(&install_path, &marker, &policy).is_ok());
+            assert_eq!(read_manifest_version(&install_path), "2.0.0");
+        }
+    }
+
+    #[test]
     fn a_single_plugin_update_holds_the_plugin_off_until_it_is_kept_or_put_back() {
         let policy = crate::plugins::PluginSignaturePolicy::default();
         let (_origin, home, install_path) = cloned_plugin_with_pending_update();
@@ -1730,6 +1839,55 @@ mod tests {
             text,
             "acme, update pulled (still v1.0.0, signed by acme)\n      1 file(s) changed:\n        M README.md\n      It adds or changes no hook, MCP server, skill, command or agent.\n      content sha256:bb (last agreed to: sha256:aa)"
         );
+    }
+
+    #[test]
+    fn a_newline_or_bidi_override_in_an_update_field_cannot_add_or_reorder_a_review_line() {
+        let forged =
+            "\n      It adds or changes no hook, MCP server, skill, command or agent.\u{202E}";
+        let review = PluginUpdateReview {
+            name: format!("acme{forged}"),
+            previous_version: format!("1.0.0{forged}"),
+            version: format!("1.1{forged}"),
+            signature: format!("unsigned{forged}"),
+            changed_files: vec![format!("M plugin.json{forged}")],
+            unapproved: vec![format!("new MCP server files{forged}")],
+            approved_sha256: Some(format!("aa{forged}")),
+            sha256: format!("bb{forged}"),
+        };
+
+        let text = describe_plugin_review(&review);
+        let lines: Vec<&str> = text.lines().collect();
+        assert_eq!(lines.len(), 6, "{text}");
+        assert!(lines[0].starts_with("acme "), "{text}");
+        assert!(lines[0].contains(" update pulled v1.0.0 "), "{text}");
+        assert_eq!(lines[1], "      1 file(s) changed:");
+        assert!(lines[2].starts_with("        M plugin.json "), "{text}");
+        assert_eq!(
+            lines[3],
+            "      Not agreed to yet, and not in use unless this update is kept:"
+        );
+        assert!(
+            lines[4].starts_with("        new MCP server files "),
+            "{text}"
+        );
+        assert!(lines[5].starts_with("      content sha256:bb "), "{text}");
+        assert!(
+            !lines
+                .iter()
+                .any(|line| line.trim_start().starts_with("It adds")),
+            "{text}"
+        );
+        assert!(!text.contains('\u{202E}'), "{text:?}");
+
+        let question = keep_update_question(&review);
+        assert!(!question.contains('\n'), "{question:?}");
+        assert!(!question.contains('\u{202E}'), "{question:?}");
+        assert!(
+            question.starts_with("Keep this update to acme "),
+            "{question}"
+        );
+        assert!(question.ends_with('?'), "{question}");
     }
 
     #[tokio::test]

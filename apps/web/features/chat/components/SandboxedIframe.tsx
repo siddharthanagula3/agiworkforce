@@ -11,6 +11,11 @@ import React, {
 } from 'react';
 
 import {
+  findOpeningTags,
+  insertAfterOpeningTag,
+} from '@agiworkforce/unified-chat/artifact-sandbox';
+
+import {
   getSandboxOrigin,
   isFromSandbox,
   parseArtifactRuntimeRequest,
@@ -78,7 +83,18 @@ const FALLBACK_ERROR_REPORTER = `<script>
 })();
 </script>`;
 
-const INLINE_SCRIPT = /<script\b(?![^>]*\bsrc\s*=)[^>]*>[\s\S]*?<\/script>/i;
+const SCRIPT_OPEN_LENGTH = '<script'.length;
+const SCRIPT_SRC_ATTRIBUTE = /\bsrc\s*=/;
+const SCRIPT_CLOSE = /<\/script>/gi;
+
+function hasInlineScript(srcDoc: string): boolean {
+  for (const { start, end } of findOpeningTags(srcDoc, 'script')) {
+    if (SCRIPT_SRC_ATTRIBUTE.test(srcDoc.slice(start + SCRIPT_OPEN_LENGTH, end - 1))) continue;
+    SCRIPT_CLOSE.lastIndex = end;
+    return SCRIPT_CLOSE.test(srcDoc);
+  }
+  return false;
+}
 
 /**
  * A srcdoc document inherits the embedding page's Content Security Policy, and
@@ -91,7 +107,7 @@ const INLINE_SCRIPT = /<script\b(?![^>]*\bsrc\s*=)[^>]*>[\s\S]*?<\/script>/i;
  * because a document loaded by src carries its own CSP.
  */
 export function fallbackWillRunScripts(srcDoc: string): boolean {
-  return !INLINE_SCRIPT.test(srcDoc);
+  return !hasInlineScript(srcDoc);
 }
 
 /**
@@ -101,16 +117,11 @@ export function fallbackWillRunScripts(srcDoc: string): boolean {
  */
 export function withFallbackErrorReporter(srcDoc: string): string {
   if (!srcDoc) return srcDoc;
-  if (/<head\b[^>]*>/i.test(srcDoc)) {
-    return srcDoc.replace(/<head\b[^>]*>/i, (match) => `${match}${FALLBACK_ERROR_REPORTER}`);
-  }
-  if (/<html\b[^>]*>/i.test(srcDoc)) {
-    return srcDoc.replace(
-      /<html\b[^>]*>/i,
-      (match) => `${match}<head>${FALLBACK_ERROR_REPORTER}</head>`,
-    );
-  }
-  return `${FALLBACK_ERROR_REPORTER}${srcDoc}`;
+  return (
+    insertAfterOpeningTag(srcDoc, 'head', FALLBACK_ERROR_REPORTER) ??
+    insertAfterOpeningTag(srcDoc, 'html', `<head>${FALLBACK_ERROR_REPORTER}</head>`) ??
+    `${FALLBACK_ERROR_REPORTER}${srcDoc}`
+  );
 }
 
 export interface SandboxedIframePicker {

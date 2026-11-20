@@ -1,5 +1,22 @@
 const FENCE_RE = /```([^\n`]*)\r?\n([\s\S]*?)```/g;
-const SVG_ELEMENT_RE = /<svg\b[\s\S]*?<\/svg>/gi;
+const SVG_OPEN_RE = /<svg\b/gi;
+const SVG_CLOSE_RE = /<\/svg>/gi;
+
+function findSvgElements(body: string): string[] {
+  const elements: string[] = [];
+  let cursor = 0;
+  for (;;) {
+    SVG_OPEN_RE.lastIndex = cursor;
+    const open = SVG_OPEN_RE.exec(body);
+    if (!open) break;
+    SVG_CLOSE_RE.lastIndex = open.index + open[0].length;
+    const close = SVG_CLOSE_RE.exec(body);
+    if (!close) break;
+    cursor = close.index + close[0].length;
+    elements.push(body.slice(open.index, cursor));
+  }
+  return elements;
+}
 
 function fenceLanguage(info: string): string {
   return info.trim().split(/\s+/)[0]?.toLowerCase() ?? '';
@@ -16,7 +33,7 @@ export function extractSvgSlides(markdown: string): { slides: string[]; markdown
     const svgLanguage = language === 'svg' || language === 'xml' || language === '';
     if (!svgLanguage) return full;
     if (language === '' && !body.trim().startsWith('<svg')) return full;
-    const found = body.match(SVG_ELEMENT_RE) ?? [];
+    const found = findSvgElements(body);
     if (found.length === 0) return full;
     slides.push(...found);
     return '';

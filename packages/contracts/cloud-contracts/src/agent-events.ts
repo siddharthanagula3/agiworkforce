@@ -1,6 +1,7 @@
 import type { AgentEvent, AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import { AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
 import { z } from 'zod';
+import { MAX_JSON_NESTING_DEPTH, withinJsonBounds } from './bounded-json';
 import { HostedCallerToolBatchSchema } from './caller-tool-handoff';
 
 // Re-exported, not redeclared: a second copy of this number silently accepted
@@ -10,7 +11,18 @@ export { AGENT_EVENT_SCHEMA_VERSION };
 
 const NonEmptyStringSchema = z.string().min(1);
 const OptionalNonNegativeIntegerSchema = z.number().int().nonnegative().optional();
-const JsonValueSchema = z.json();
+const JSON_VALUE_MAX_DEPTH = 128;
+const JsonValueSchema = z
+  .unknown()
+  .superRefine((value, ctx) => {
+    if (!withinJsonBounds(value, Number.POSITIVE_INFINITY, JSON_VALUE_MAX_DEPTH)) {
+      ctx.addIssue({
+        code: 'custom',
+        message: `value must be JSON nested at most ${JSON_VALUE_MAX_DEPTH} levels deep`,
+      });
+    }
+  })
+  .pipe(z.json());
 
 export const AgentEventToolCategorySchema = z.enum([
   'web-search',
@@ -184,7 +196,7 @@ const BoundedInputRequestsSchema = JsonValueSchema.superRefine((value, ctx) => {
       message: `inputRequests must define between 1 and ${MAX_INPUT_REQUEST_ENTRIES} fields`,
     });
   }
-  if (JSON.stringify(value).length > MAX_INPUT_REQUESTS_SERIALIZED_BYTES) {
+  if (!withinJsonBounds(value, MAX_INPUT_REQUESTS_SERIALIZED_BYTES, MAX_JSON_NESTING_DEPTH)) {
     ctx.addIssue({ code: 'custom', message: 'inputRequests exceed the size limit' });
   }
 });
@@ -215,7 +227,7 @@ const BoundedDeviceStepInputSchema = JsonValueSchema.superRefine((value, ctx) =>
     ctx.addIssue({ code: 'custom', message: 'input must be a JSON object' });
     return;
   }
-  if (JSON.stringify(value).length > MAX_DEVICE_STEP_INPUT_SERIALIZED_BYTES) {
+  if (!withinJsonBounds(value, MAX_DEVICE_STEP_INPUT_SERIALIZED_BYTES, MAX_JSON_NESTING_DEPTH)) {
     ctx.addIssue({ code: 'custom', message: 'input exceeds the size limit' });
   }
 });
