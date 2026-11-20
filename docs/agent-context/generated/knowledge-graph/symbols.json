@@ -64046,6 +64046,9 @@
     "host": [
       "apps/desktop/src-tauri/src/integrations/native_messaging/mod.rs"
     ],
+    "host_absolute": [
+      "apps/desktop/gpui/tests/support/host_path.rs"
+    ],
     "HOST_AGENT_NOTIFICATION_KINDS": [
       "packages/contracts/local-runtime/src/host-bridge.ts",
       "packages/contracts/local-runtime/src/index.ts"
