@@ -825,15 +825,45 @@ export type JsonSchemaSettlement =
       message: string;
     };
 
-function extractReply(rawContent: string): ReturnType<typeof extractJsonObject> {
-  try {
-    return extractJsonObject(rawContent);
-  } catch (error) {
-    if (error instanceof RangeError) {
-      return { ok: false, reason: 'The model returned JSON nested too deeply to read.' };
+const OPEN_BRACE = 0x7b;
+const OPEN_BRACKET = 0x5b;
+const CLOSE_BRACE = 0x7d;
+const CLOSE_BRACKET = 0x5d;
+const QUOTE = 0x22;
+const BACKSLASH = 0x5c;
+
+// Measured on the raw text so the verdict never depends on how much stack the
+// runtime has left for parsing and re-serializing a hostile reply.
+function textNestsDeeperThan(text: string, limit: number): boolean {
+  let open = 0;
+  let inString = false;
+  let escaped = false;
+  for (let index = 0; index < text.length; index += 1) {
+    const code = text.charCodeAt(index);
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (code === BACKSLASH) escaped = true;
+      else if (code === QUOTE) inString = false;
+    } else if (code === QUOTE) {
+      inString = true;
+    } else if (code === OPEN_BRACE || code === OPEN_BRACKET) {
+      open += 1;
+      if (open > limit) return true;
+    } else if ((code === CLOSE_BRACE || code === CLOSE_BRACKET) && open > 0) {
+      open -= 1;
     }
-    throw error;
   }
+  return false;
+}
+
+function schemaMismatch(problem: string): JsonSchemaSettlement {
+  return {
+    ok: false,
+    status: 502,
+    type: 'invalid_response_error',
+    code: 'json_schema_not_satisfied',
+    message: `The model's reply did not match the schema: ${problem}. Retry the request.`,
+  };
 }
 
 export function settleJsonSchemaCompletion(
@@ -850,7 +880,10 @@ export function settleJsonSchemaCompletion(
       message: 'The model declined this request, so there is no object to return.',
     };
   }
-  const extraction = extractReply(rawContent);
+  if (!isMaxOutputFinishReason(finishReason) && textNestsDeeperThan(rawContent, MAX_REPLY_DEPTH)) {
+    return schemaMismatch(`the reply nests deeper than ${MAX_REPLY_DEPTH} levels`);
+  }
+  const extraction = extractJsonObject(rawContent);
   if (!extraction.ok || extraction.content === undefined) {
     return isMaxOutputFinishReason(finishReason)
       ? {
@@ -874,14 +907,6 @@ export function settleJsonSchemaCompletion(
     admission.problem === null
       ? replyProblem(JSON.parse(extraction.content) as unknown, format.schema, admission.patterns)
       : admission.problem;
-  if (problem) {
-    return {
-      ok: false,
-      status: 502,
-      type: 'invalid_response_error',
-      code: 'json_schema_not_satisfied',
-      message: `The model's reply did not match the schema: ${problem}. Retry the request.`,
-    };
-  }
+  if (problem) return schemaMismatch(problem);
   return { ok: true, content: extraction.content };
 }

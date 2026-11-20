@@ -49,7 +49,14 @@ export function extractJsonObject(rawContent: string): JsonObjectExtraction {
     };
   }
 
-  return { ok: true, content: JSON.stringify(parsed) };
+  try {
+    return { ok: true, content: JSON.stringify(parsed) };
+  } catch (error) {
+    if (error instanceof RangeError) {
+      return { ok: false, reason: 'The model returned JSON nested too deeply to read.' };
+    }
+    throw error;
+  }
 }
 
 export function wantsJsonObject(responseFormat: { type?: string } | undefined): boolean {

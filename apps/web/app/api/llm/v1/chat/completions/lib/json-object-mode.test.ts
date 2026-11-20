@@ -86,6 +86,15 @@ describe('extractJsonObject, rejects', () => {
   it('two objects concatenated', () => {
     expect(extractJsonObject('{"a":1}\n{"b":2}').ok).toBe(false);
   });
+
+  it('an object nested too deeply to write back, without throwing', () => {
+    const deep = `${'{"a":'.repeat(200_000)}1${'}'.repeat(200_000)}`;
+
+    expect(extractJsonObject(deep)).toEqual({
+      ok: false,
+      reason: 'The model returned JSON nested too deeply to read.',
+    });
+  });
 });
 
 describe('settleJsonObjectCompletion', () => {

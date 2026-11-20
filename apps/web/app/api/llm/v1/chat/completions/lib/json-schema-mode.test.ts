@@ -1297,13 +1297,22 @@ describe('buffered JSON schema settlement', () => {
       },
     );
 
-    it('fails closed when the reply nests too deeply even to be read back', () => {
+    it('refuses a reply nested too deeply to read back before parsing it', () => {
       const format = formatFor(chain(9));
       expect(settleJsonSchemaCompletion(nested(200_000), 'stop', format)).toMatchObject({
         ok: false,
         status: 502,
         code: 'json_schema_not_satisfied',
-        message: expect.stringContaining('nested too deeply to read'),
+        message: expect.stringContaining('the reply nests deeper than 60 levels'),
+      });
+    });
+
+    it('measures depth outside strings only', () => {
+      const format = formatFor({ type: 'object' });
+      const content = JSON.stringify({ text: '['.repeat(500), nested: [[[]]] });
+      expect(settleJsonSchemaCompletion(content, 'stop', format)).toEqual({
+        ok: true,
+        content,
       });
     });
 
