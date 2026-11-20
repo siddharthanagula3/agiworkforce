@@ -77,6 +77,7 @@
   },
   "nav": {
     "general": "General",
+    "appearance": "Appearance",
     "account": "Account",
     "team": "Workspace",
     "privacy": "Privacy",

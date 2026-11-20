@@ -48,7 +48,7 @@ describe('the Motion preference actually reaches the document', () => {
 
   it('offers no way to force motion on someone whose OS asked for less', () => {
     const source = readFileSync(
-      join(process.cwd(), 'features/settings/sections/GeneralSection.tsx'),
+      join(process.cwd(), 'features/settings/sections/AppearanceSection.tsx'),
       'utf8',
     );
     const row = source.slice(source.indexOf('function MotionRow'));

@@ -19,12 +19,12 @@ async function openSettings(page: Page, path: string): Promise<OpenSettings> {
   return { dialog, pane: dialog.locator('#settings-pane') };
 }
 
-async function searchFor(dialog: Locator, query: string): Promise<Locator> {
+async function searchFor(dialog: Locator, query: string, section: string): Promise<Locator> {
   await dialog.getByRole('searchbox', { name: 'Search settings' }).fill(query);
   const results = dialog
     .getByRole('navigation', { name: 'Settings navigation' })
     .locator('button[aria-controls="settings-pane"]');
-  await expect(results).toHaveText(['General']);
+  await expect(results).toHaveText([section]);
   return results.first();
 }
 
@@ -50,31 +50,31 @@ test.describe('settings search', () => {
     await signIn(page);
   });
 
-  test('"font" finds General and a click lands on the Chat font control', async ({ page }) => {
+  test('"font" finds Appearance and a click lands on the Chat font control', async ({ page }) => {
     test.setTimeout(120_000);
 
     const { dialog, pane } = await openSettings(page, PRIVACY_PATH);
-    const general = await searchFor(dialog, 'font');
+    const appearance = await searchFor(dialog, 'font', 'Appearance');
 
-    await general.click();
+    await appearance.click();
 
-    await expect(general).toHaveAttribute('aria-current', 'page');
+    await expect(appearance).toHaveAttribute('aria-current', 'page');
     await expectRevealed(pane.getByRole('combobox', { name: 'Chat font', exact: true }));
   });
 
-  test('"text size" finds General and the keyboard lands on the Chat text size control', async ({
+  test('"text size" finds Appearance and the keyboard lands on the Chat text size control', async ({
     page,
   }) => {
     test.setTimeout(120_000);
 
     const { dialog, pane } = await openSettings(page, PRIVACY_PATH);
-    const general = await searchFor(dialog, 'text size');
+    const appearance = await searchFor(dialog, 'text size', 'Appearance');
 
     await page.keyboard.press('Tab');
-    await expect(general).toBeFocused();
+    await expect(appearance).toBeFocused();
     await page.keyboard.press('Enter');
 
-    await expect(general).toHaveAttribute('aria-current', 'page');
+    await expect(appearance).toHaveAttribute('aria-current', 'page');
     await expectRevealed(pane.getByRole('combobox', { name: 'Chat text size', exact: true }));
   });
 
@@ -84,12 +84,14 @@ test.describe('settings search', () => {
     test.setTimeout(120_000);
 
     const { dialog, pane } = await openSettings(page, PRIVACY_PATH);
-    const general = await searchFor(dialog, 'custom instructions');
+    const general = await searchFor(dialog, 'profile', 'General');
 
     await general.click();
 
     await expect(general).toHaveAttribute('aria-current', 'page');
-    await expect(pane.getByRole('combobox', { name: 'Chat font', exact: true })).toBeAttached();
+    await expect(
+      pane.getByRole('combobox', { name: 'Reasoning effort', exact: true }),
+    ).toBeAttached();
     await expect(general).toBeFocused();
   });
 
@@ -106,11 +108,11 @@ test.describe('settings search', () => {
     await quietHours.click();
     await expect(quietHours).toBeChecked({ checked: !stored });
 
-    const general = await searchFor(dialog, 'font');
+    const appearance = await searchFor(dialog, 'font', 'Appearance');
     const prompt = page.getByRole('alertdialog');
     const chatFont = pane.getByRole('combobox', { name: 'Chat font', exact: true });
 
-    await general.click();
+    await appearance.click();
     await expect(prompt).toBeVisible();
     await prompt.getByRole('button', { name: 'Keep editing' }).click();
     await expect(prompt).toBeHidden();
@@ -118,15 +120,15 @@ test.describe('settings search', () => {
 
     await expect(quietHours).toBeChecked({ checked: !stored });
     await expect(chatFont).toHaveCount(0);
-    await expect(general).toBeFocused();
+    await expect(appearance).toBeFocused();
 
-    await general.click();
+    await appearance.click();
     await expect(prompt).toBeVisible();
     await prompt.getByRole('button', { name: 'Discard' }).click();
     await expect(prompt).toBeHidden();
     await afterPromptHandsFocusBack(page);
 
-    await expect(general).toHaveAttribute('aria-current', 'page');
+    await expect(appearance).toHaveAttribute('aria-current', 'page');
     await expectRevealed(chatFont);
 
     await dialog.getByRole('searchbox', { name: 'Search settings' }).fill('');

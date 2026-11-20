@@ -1,4 +1,4 @@
-import { Keyboard, Mic, UserRoundPen } from 'lucide-react';
+import { Keyboard, Mic, Palette, UserRoundPen } from 'lucide-react';
 import {
   SETTINGS_NAV_GROUPS_WEB,
   SETTINGS_NAV_GROUP_CUSTOMIZE,
@@ -7,6 +7,13 @@ import {
 import type { SettingsNavGroupResolved, SettingsNavItem, SettingsNavKey } from '@agiworkforce/ui';
 import { featureDefinition, featureMaturityLabel } from '@agiworkforce/types';
 import { canonicalWebSettingsSection, isWebSettingsSection } from '../lib/web-settings-sections';
+
+const APPEARANCE_NAV_ITEM: SettingsNavItem = {
+  key: 'appearance',
+  label: 'Appearance',
+  icon: Palette,
+  keywords: [],
+};
 
 const PERSONALIZATION_NAV_ITEM: SettingsNavItem = {
   key: 'personalization',
@@ -46,19 +53,21 @@ type SettingsNavFields = NonNullable<SettingsNavItem['fields']>;
 
 export const WEB_SETTINGS_NAV_FIELDS: Partial<Record<SettingsNavKey, SettingsNavFields>> = {
   general: [
-    { label: 'Theme', keywords: ['dark mode', 'light mode'] },
-    { label: 'Accent colour', keywords: ['accent color'] },
-    { label: 'Contrast', keywords: ['high contrast'] },
-    { label: 'Motion', keywords: ['reduce motion', 'animation'] },
     { label: 'Reasoning effort', keywords: ['thinking'] },
-    { label: 'Chat font', keywords: ['typeface', 'sans serif', 'dyslexic', 'dyslexia'] },
-    { label: 'Chat text size', keywords: ['font size'] },
-    { label: 'Wrap long code lines', keywords: ['code block', 'word wrap'] },
-    { label: 'Code theme', keywords: ['syntax highlighting'] },
     { label: 'New chats start in' },
     { label: 'Send with Enter', keywords: ['enter key', 'new line'] },
     { label: 'Show follow-up suggestions in chats', keywords: ['suggested replies'] },
     { label: 'Follow-up behavior' },
+  ],
+  appearance: [
+    { label: 'Theme', keywords: ['dark mode', 'light mode'] },
+    { label: 'Accent colour', keywords: ['accent color'] },
+    { label: 'Contrast', keywords: ['high contrast'] },
+    { label: 'Motion', keywords: ['reduce motion', 'animation'] },
+    { label: 'Chat font', keywords: ['typeface', 'sans serif', 'dyslexic', 'dyslexia'] },
+    { label: 'Chat text size', keywords: ['font size'] },
+    { label: 'Wrap long code lines', keywords: ['code block', 'word wrap'] },
+    { label: 'Code theme', keywords: ['syntax highlighting'] },
   ],
   notifications: [
     { label: 'Reply ready' },
@@ -153,10 +162,22 @@ interface WebSettingsNavPlacement {
 }
 
 export const WEB_SETTINGS_NAV_PLACEMENTS: readonly WebSettingsNavPlacement[] = [
+  { item: APPEARANCE_NAV_ITEM, after: 'general' },
   { item: PERSONALIZATION_NAV_ITEM, after: 'notifications' },
   { item: VOICE_NAV_ITEM, after: 'personalization' },
   { item: KEYBOARD_NAV_ITEM, after: 'voice' },
 ];
+
+export const WEB_SETTINGS_NAV_KEYWORDS: Partial<Record<SettingsNavKey, string[]>> = {
+  general: ['profile', 'name', 'photo'],
+};
+
+function withWebKeywords(items: SettingsNavItem[]): SettingsNavItem[] {
+  return items.map((item) => {
+    const keywords = WEB_SETTINGS_NAV_KEYWORDS[item.key];
+    return keywords ? { ...item, keywords } : item;
+  });
+}
 
 function placeWebItems(items: SettingsNavItem[]): SettingsNavItem[] {
   return WEB_SETTINGS_NAV_PLACEMENTS.reduce((placed, { item, after }) => {
@@ -169,7 +190,9 @@ function placeWebItems(items: SettingsNavItem[]): SettingsNavItem[] {
 export const WEB_SETTINGS_NAV_GROUPS: SettingsNavGroupResolved[] = SETTINGS_NAV_GROUPS_WEB.map(
   (group) => ({
     ...group,
-    items: withMaturityLabels(withFields(placeWebItems(group.items), WEB_SETTINGS_NAV_FIELDS)),
+    items: withMaturityLabels(
+      withFields(placeWebItems(withWebKeywords(group.items)), WEB_SETTINGS_NAV_FIELDS),
+    ),
   }),
 );
 

@@ -24,12 +24,6 @@ nothing is left.
 - Wave: 4
 - Build on: desktop, cli, chrome
 
-## S64.11: Back/forward/reload.
-
-- Done when: The assistant can go back, go forward or reload the page it is working on.
-- Wave: 4
-- Build on: web, desktop, mobile, cli, vscode, chrome
-
 ## S64.12: Create or close tab.
 
 - Done when: The assistant can open a new tab or close one as part of a task.
@@ -60,12 +54,6 @@ nothing is left.
 - Wave: 4
 - Build on: web, mobile
 - Needs a founder decision: true
-
-## S64.30: Clear website data.
-
-- Done when: The user can clear the cookies and site data the assistant's browser holds.
-- Wave: 4
-- Build on: web, desktop, mobile, chrome
 
 ## S64.31: Isolated agent browser versus user browser choice.
 

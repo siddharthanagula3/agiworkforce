@@ -2,11 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Check, Monitor, Sun, Moon } from 'lucide-react';
 import { toast } from 'sonner';
 import { SegmentedControl, Switch, type SegmentedControlOption } from '@agiworkforce/ui';
 import { planCapabilityEntitlementHint } from '@/features/billing/lib/plan-capability-release';
-import { useAppTheme as useTheme } from '@shared/hooks/useAppTheme';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { useCurrentUser } from '@/lib/identity/client';
 import { LanguageSelector } from '@/features/settings/components/LanguageSelector';
@@ -31,20 +29,14 @@ import {
   isModelAllowedForTier,
   splitEffortsByEntitlement,
 } from '@shared/config/llm';
-import {
-  ACCENT_COLORS,
-  useSettingsStore,
-  type ChatTextSize,
-  type FollowUpBehavior,
-} from '@shared/stores/web-settings-store';
+import { useSettingsStore, type FollowUpBehavior } from '@shared/stores/web-settings-store';
 import { CustomCommandsSettings } from '@/features/settings/components/CustomCommandsSettings';
-import { useCloudSettingsSyncStatus } from '@/features/settings/lib/cloud-settings-sync-status';
-import { COMPOSER_FOLLOW_UP_INVERT_SHORTCUT, formatShortcutKeys } from '@agiworkforce/unified-chat';
 import {
-  CODE_THEMES,
-  isCodeThemeId,
-  type CodeThemeId,
-} from '@agiworkforce/unified-chat/shiki-highlighter';
+  PreferenceSyncNotice,
+  SETTINGS_SELECT_CLASS,
+  SettingsPreferenceRow,
+} from '@/features/settings/components/SettingsPreferenceRow';
+import { COMPOSER_FOLLOW_UP_INVERT_SHORTCUT, formatShortcutKeys } from '@agiworkforce/unified-chat';
 import { useDesktopHost } from '@/features/desktop-host';
 import { safePlatform } from '@shared/utils/browser-utils';
 import { refreshProfileConsumers, saveDisplayName } from '@/app/settings/_lib/preferences-client';
@@ -60,22 +52,14 @@ import {
 } from '@agiworkforce/types';
 import { toUserMessage } from '@/lib/user-error-message';
 
-const THEME_OPTIONS = [
-  { value: 'system' as const, icon: Monitor, label: 'System' },
-  { value: 'light' as const, icon: Sun, label: 'Light' },
-  { value: 'dark' as const, icon: Moon, label: 'Dark' },
-];
-
 const AVATAR_MAX_MB = MAX_AVATAR_BYTES / (1024 * 1024);
 const AVATAR_ACCEPT = IMAGE_ATTACHMENT_MIME_TYPES.join(',');
 
 export function GeneralSection() {
-  const { theme: nextTheme, setTheme: setNextTheme } = useTheme();
   const user = useBillingStore((s) => s.user);
   const billingInitialized = useBillingStore((s) => s.initialized);
   const { user: identityUser, isLoaded: identityLoaded } = useCurrentUser();
 
-  const [mounted, setMounted] = useState(false);
   const [profileReady, setProfileReady] = useState(false);
 
   const serverProfile = user?.profile;
@@ -90,10 +74,6 @@ export function GeneralSection() {
   const [avatarError, setAvatarError] = useState<string | null>(null);
 
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   useEffect(() => {
     if (profileReady || !identityLoaded || !billingInitialized) return;
@@ -114,8 +94,6 @@ export function GeneralSection() {
     serverProfile?.display_name,
     user?.name,
   ]);
-
-  const theme = !mounted || !nextTheme ? 'dark' : (nextTheme as 'dark' | 'light' | 'system');
 
   const avatarInitials = (() => {
     const name = displayName || accountEmail || 'A';
@@ -316,42 +294,6 @@ export function GeneralSection() {
 
         <div className="flex flex-col gap-5">
           <PreferenceSyncNotice />
-          {/* Appearance */}
-          <Row label="Appearance">
-            <div className="flex gap-3" role="group" aria-label="Theme">
-              {THEME_OPTIONS.map((opt) => {
-                const Icon = opt.icon;
-                const isActive = theme === opt.value;
-                return (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => setNextTheme(opt.value)}
-                    className="group flex flex-col items-center gap-1.5 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                    aria-label={`${opt.label} theme`}
-                    aria-pressed={isActive}
-                  >
-                    <span
-                      aria-hidden="true"
-                      className={`flex h-10 w-16 items-center justify-center rounded-lg border bg-muted transition-colors ${isActive ? 'border-foreground text-foreground ring-1 ring-inset ring-foreground' : 'border-border text-muted-foreground group-hover:text-foreground'}`}
-                    >
-                      <Icon className="h-4 w-4" />
-                    </span>
-                    <span
-                      className={`text-sm ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
-                    >
-                      {opt.label}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </Row>
-
-          <AccentColorRow />
-
-          <ContrastRow />
-          <MotionRow />
           <SidebarItemsRow />
 
           <DisplayLanguageRow />
@@ -362,13 +304,6 @@ export function GeneralSection() {
           {/* Reasoning effort */}
           <ReasoningEffortRow />
 
-          {/* Chat text size */}
-          <ChatFontRow />
-          <ChatTextSizeRow />
-
-          {/* Code block wrapping */}
-          <CodeBlockWrapRow />
-          <CodeThemeRow />
           <DefaultWorkModeRow />
           <FollowUpSuggestionsRow />
 
@@ -404,29 +339,6 @@ export function GeneralSection() {
 
       <OpenSourceLicensesRow />
     </div>
-  );
-}
-
-const SELECT_CLASS =
-  'h-8 rounded-md border border-border bg-background px-2 text-sm text-foreground';
-
-function PreferenceSyncNotice() {
-  const { error, retry } = useCloudSettingsSyncStatus();
-  if (!error) return null;
-
-  return (
-    <p role="alert" className="flex items-center gap-2 text-xs text-danger">
-      {error} This device keeps your choice.
-      {retry && (
-        <button
-          type="button"
-          onClick={retry}
-          className="rounded-md border border-border px-2 py-1 font-medium text-foreground hover:bg-muted"
-        >
-          Retry
-        </button>
-      )}
-    </p>
   );
 }
 
@@ -470,7 +382,7 @@ function DefaultModelRow() {
     preference.status === 'ready' && preference.modelId !== null && tier !== null && !savedDefault;
 
   return (
-    <Row
+    <SettingsPreferenceRow
       label="Default model"
       hint={
         savedDefaultOffPlan
@@ -496,7 +408,7 @@ function DefaultModelRow() {
               );
           }}
           aria-label="Default model"
-          className={`${SELECT_CLASS} max-w-[220px]`}
+          className={`${SETTINGS_SELECT_CLASS} max-w-[220px]`}
         >
           <option value={LAST_USED_MODEL_VALUE}>Last used</option>
           {choices.map(({ model, plan }) => (
@@ -529,7 +441,7 @@ function DefaultModelRow() {
           </p>
         )}
       </div>
-    </Row>
+    </SettingsPreferenceRow>
   );
 }
 
@@ -565,7 +477,7 @@ function ReasoningEffortRow() {
   const freePlan = isFreeBillingPlanTier(tier);
 
   return (
-    <Row
+    <SettingsPreferenceRow
       label="Reasoning effort"
       hint={
         // ANTHROPIC_THINKING_BUDGET runs 4096 at low to 65536 at max, so the
@@ -590,7 +502,7 @@ function ReasoningEffortRow() {
             else if (!gatedEfforts.has(next)) setEffort(next as EffortLevel);
           }}
           aria-label="Reasoning effort"
-          className={SELECT_CLASS}
+          className={SETTINGS_SELECT_CLASS}
         >
           <option value="off">Off</option>
           {EFFORT_LEVELS.map((level) => {
@@ -605,36 +517,7 @@ function ReasoningEffortRow() {
         <p className="text-xs text-muted-foreground">Each chat can change this in the composer.</p>
         <HelpArticleLink docId="models-and-reasoning" label="Choosing a model and effort" />
       </div>
-    </Row>
-  );
-}
-
-function AccentColorRow() {
-  const accentColor = useSettingsStore((state) => state.accentColor);
-  const setAccentColor = useSettingsStore((state) => state.setAccentColor);
-
-  return (
-    <Row label="Accent colour">
-      <div className="flex gap-1.5 pointer-coarse:gap-4" role="group" aria-label="Accent colour">
-        {ACCENT_COLORS.map((accent) => {
-          const isActive = accentColor === accent.value;
-          return (
-            <button
-              key={accent.value}
-              type="button"
-              onClick={() => setAccentColor(accent.value)}
-              data-accent-swatch={accent.value}
-              title={accent.label}
-              aria-label={`${accent.label} accent`}
-              aria-pressed={isActive}
-              className={`relative flex h-7 min-h-0 w-7 items-center justify-center rounded-full ring-offset-2 ring-offset-background transition-shadow pointer-coarse:after:absolute pointer-coarse:after:-inset-2 pointer-coarse:after:content-[''] ${isActive ? 'ring-2 ring-foreground' : 'ring-0'}`}
-            >
-              {isActive && <Check className="h-3.5 w-3.5 text-white" aria-hidden="true" />}
-            </button>
-          );
-        })}
-      </div>
-    </Row>
+    </SettingsPreferenceRow>
   );
 }
 
@@ -644,9 +527,13 @@ function DisplayLanguageRow() {
   const { t } = useTranslation('settings');
 
   return (
-    <Row label="Display Language" hint={t('translationScope')} hintId={DISPLAY_LANGUAGE_SCOPE_ID}>
+    <SettingsPreferenceRow
+      label="Display Language"
+      hint={t('translationScope')}
+      hintId={DISPLAY_LANGUAGE_SCOPE_ID}
+    >
       <LanguageSelector describedBy={DISPLAY_LANGUAGE_SCOPE_ID} />
-    </Row>
+    </SettingsPreferenceRow>
   );
 }
 
@@ -663,7 +550,10 @@ function SidebarItemsRow() {
   const { t } = useTranslation('common');
 
   return (
-    <Row label="Sidebar items" hint="Hide anything you do not use from the left rail.">
+    <SettingsPreferenceRow
+      label="Sidebar items"
+      hint="Hide anything you do not use from the left rail."
+    >
       <div className="flex flex-wrap justify-end gap-1.5" role="group" aria-label="Sidebar items">
         {hideable.map((destination) => {
           const visible = !hiddenNavIds.includes(destination.id);
@@ -686,160 +576,7 @@ function SidebarItemsRow() {
           );
         })}
       </div>
-    </Row>
-  );
-}
-
-function MotionRow() {
-  const motion = useSettingsStore((state) => state.motion);
-  const setMotion = useSettingsStore((state) => state.setMotion);
-
-  const options = [
-    { value: 'system' as const, label: 'System' },
-    { value: 'reduced' as const, label: 'Reduced' },
-  ];
-
-  return (
-    <Row
-      label="Motion"
-      hint="Less animation in replies and the interface. System follows your device."
-    >
-      <div className="flex gap-1" role="group" aria-label="Motion">
-        {options.map((option) => (
-          <button
-            key={option.value}
-            type="button"
-            aria-pressed={motion === option.value}
-            aria-label={`${option.label} motion`}
-            onClick={() => setMotion(option.value)}
-            className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
-              motion === option.value
-                ? 'bg-accent text-accent-foreground ring-1 ring-inset ring-primary'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
-    </Row>
-  );
-}
-
-const CONTRAST_SYSTEM = 'system';
-const CONTRAST_HIGH = 'high';
-
-function ContrastRow() {
-  const highContrast = useSettingsStore((state) => state.highContrast);
-  const setHighContrast = useSettingsStore((state) => state.setHighContrast);
-
-  return (
-    <Row label="Contrast" hint="System follows your device setting.">
-      <select
-        value={highContrast ? CONTRAST_HIGH : CONTRAST_SYSTEM}
-        onChange={(event) => setHighContrast(event.target.value === CONTRAST_HIGH)}
-        aria-label="Contrast"
-        className={SELECT_CLASS}
-      >
-        <option value={CONTRAST_SYSTEM}>System</option>
-        <option value={CONTRAST_HIGH}>High</option>
-      </select>
-    </Row>
-  );
-}
-
-function ChatFontRow() {
-  const chatFont = useSettingsStore((state) => state.chatFont) ?? 'default';
-  const setChatFont = useSettingsStore((state) => state.setChatFont);
-
-  // Only families layout.tsx and globals.css actually load. 'dyslexic' is
-  // self-hosted under public/fonts/opendyslexic/, the control this replaces
-  // pointed at a CDN font the CSP blocked, so it fell back silently and
-  // looked broken.
-  const options = [
-    { value: 'default' as const, label: 'Default' },
-    { value: 'sans' as const, label: 'Sans' },
-    { value: 'serif' as const, label: 'Serif' },
-    { value: 'dyslexic' as const, label: 'Dyslexic friendly' },
-  ];
-
-  return (
-    <Row label="Chat font" hint="Applies to message text. Code always stays monospace.">
-      <select
-        value={chatFont}
-        onChange={(event) => setChatFont(event.target.value as typeof chatFont)}
-        aria-label="Chat font"
-        className={SELECT_CLASS}
-      >
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-    </Row>
-  );
-}
-
-function ChatTextSizeRow() {
-  const chatTextSize = useSettingsStore((state) => state.chatTextSize);
-  const setChatTextSize = useSettingsStore((state) => state.setChatTextSize);
-
-  return (
-    <Row label="Chat text size">
-      <select
-        value={chatTextSize}
-        onChange={(event) => setChatTextSize(event.target.value as ChatTextSize)}
-        aria-label="Chat text size"
-        className={SELECT_CLASS}
-      >
-        <option value="small">Small</option>
-        <option value="default">Default</option>
-        <option value="large">Large</option>
-      </select>
-    </Row>
-  );
-}
-
-function CodeBlockWrapRow() {
-  const codeBlockWrap = useSettingsStore((state) => state.codeBlockWrap);
-  const setCodeBlockWrap = useSettingsStore((state) => state.setCodeBlockWrap);
-
-  return (
-    <Row label="Wrap long code lines">
-      <Switch
-        checked={codeBlockWrap}
-        aria-label="Wrap long code lines"
-        onCheckedChange={setCodeBlockWrap}
-      />
-    </Row>
-  );
-}
-
-function CodeThemeRow() {
-  const codeTheme = useSettingsStore((state) => state.codeTheme);
-  const setCodeTheme = useSettingsStore((state) => state.setCodeTheme);
-
-  return (
-    <Row
-      label="Code theme"
-      hint="Colours code blocks in dark mode. Light mode keeps high contrast."
-    >
-      <select
-        value={codeTheme}
-        onChange={(event) => {
-          if (isCodeThemeId(event.target.value)) setCodeTheme(event.target.value);
-        }}
-        aria-label="Code theme"
-        className={SELECT_CLASS}
-      >
-        {(Object.keys(CODE_THEMES) as CodeThemeId[]).map((id) => (
-          <option key={id} value={id}>
-            {CODE_THEMES[id].label}
-          </option>
-        ))}
-      </select>
-    </Row>
+    </SettingsPreferenceRow>
   );
 }
 
@@ -848,19 +585,22 @@ function DefaultWorkModeRow() {
   const setDefaultWorkMode = useSettingsStore((state) => state.setDefaultWorkMode);
 
   return (
-    <Row label="New chats start in" hint={planCapabilityEntitlementHint('agi_work')}>
+    <SettingsPreferenceRow
+      label="New chats start in"
+      hint={planCapabilityEntitlementHint('agi_work')}
+    >
       <select
         value={defaultWorkMode}
         onChange={(event) => {
           if (isCloudWorkMode(event.target.value)) setDefaultWorkMode(event.target.value);
         }}
         aria-label="New chats start in"
-        className={SELECT_CLASS}
+        className={SETTINGS_SELECT_CLASS}
       >
         <option value="chat">Chat</option>
         <option value="agiwork">Work</option>
       </select>
-    </Row>
+    </SettingsPreferenceRow>
   );
 }
 
@@ -870,13 +610,16 @@ function SendWithEnterRow() {
   const sendKeys = safePlatform.isMac() ? 'Cmd + Enter' : 'Ctrl + Enter';
 
   return (
-    <Row label="Send with Enter" hint={`Off: Enter starts a new line and ${sendKeys} sends.`}>
+    <SettingsPreferenceRow
+      label="Send with Enter"
+      hint={`Off: Enter starts a new line and ${sendKeys} sends.`}
+    >
       <Switch
         checked={sendWithEnter}
         aria-label="Send with Enter"
         onCheckedChange={setSendWithEnter}
       />
-    </Row>
+    </SettingsPreferenceRow>
   );
 }
 
@@ -885,13 +628,13 @@ function FollowUpSuggestionsRow() {
   const setEnabled = useSettingsStore((state) => state.setFollowUpSuggestionsEnabled);
 
   return (
-    <Row label="Show follow-up suggestions in chats">
+    <SettingsPreferenceRow label="Show follow-up suggestions in chats">
       <Switch
         checked={enabled}
         aria-label="Show follow-up suggestions in chats"
         onCheckedChange={setEnabled}
       />
-    </Row>
+    </SettingsPreferenceRow>
   );
 }
 
@@ -909,7 +652,7 @@ function FollowUpBehaviorRow() {
   const setFollowUpBehavior = useSettingsStore((state) => state.setFollowUpBehavior);
 
   return (
-    <Row
+    <SettingsPreferenceRow
       label="Follow-up behavior"
       hint={`Queue or steer while AGI replies. ${followUpInvertKeys()} does the opposite once.`}
     >
@@ -920,7 +663,7 @@ function FollowUpBehaviorRow() {
         aria-label="Follow-up behavior"
         className="shrink-0"
       />
-    </Row>
+    </SettingsPreferenceRow>
   );
 }
 
@@ -934,7 +677,7 @@ function CodeFollowUpModeRow() {
   const invertKeys = followUpInvertKeys();
 
   return (
-    <Row
+    <SettingsPreferenceRow
       label={CODE_FOLLOW_UP_LABEL}
       hint={`Steer joins the running turn; Queue waits for it to end. ${invertKeys} swaps once.`}
     >
@@ -944,12 +687,12 @@ function CodeFollowUpModeRow() {
           setCodeFollowUpQueueMode(event.target.value === 'steer' ? 'steer' : 'queue')
         }
         aria-label={CODE_FOLLOW_UP_LABEL}
-        className={SELECT_CLASS}
+        className={SETTINGS_SELECT_CLASS}
       >
         <option value="steer">Steer</option>
         <option value="queue">Queue</option>
       </select>
-    </Row>
+    </SettingsPreferenceRow>
   );
 }
 
@@ -957,7 +700,10 @@ const OPEN_SOURCE_NOTICES_HREF = '/legal/open-source';
 
 function OpenSourceLicensesRow() {
   return (
-    <Row label="Open source licenses" hint="Third-party notices for bundled dependencies.">
+    <SettingsPreferenceRow
+      label="Open source licenses"
+      hint="Third-party notices for bundled dependencies."
+    >
       <SettingsPageLink
         href={OPEN_SOURCE_NOTICES_HREF}
         target="_blank"
@@ -967,20 +713,20 @@ function OpenSourceLicensesRow() {
       >
         View
       </SettingsPageLink>
-    </Row>
+    </SettingsPreferenceRow>
   );
 }
 
 function KeyboardShortcutsRow() {
   return (
-    <Row label="Keyboard shortcuts">
+    <SettingsPreferenceRow label="Keyboard shortcuts">
       <SettingsSectionLink
         section="keyboard"
         className="text-sm font-medium text-foreground underline"
       >
         View shortcuts
       </SettingsSectionLink>
-    </Row>
+    </SettingsPreferenceRow>
   );
 }
 
@@ -998,7 +744,7 @@ function VoiceSpeedRow() {
   ];
 
   return (
-    <Row label="Read-aloud speed">
+    <SettingsPreferenceRow label="Read-aloud speed">
       <div className="flex gap-1" role="group" aria-label="Read-aloud speed">
         {options.map((option) => (
           <button
@@ -1017,7 +763,7 @@ function VoiceSpeedRow() {
           </button>
         ))}
       </div>
-    </Row>
+    </SettingsPreferenceRow>
   );
 }
 
@@ -1036,7 +782,7 @@ function LiveVoicePaceRow() {
   ];
 
   return (
-    <Row label="Voice conversation pace">
+    <SettingsPreferenceRow label="Voice conversation pace">
       <div className="flex gap-1" role="group" aria-label="Voice conversation pace">
         {options.map((option) => (
           <button
@@ -1055,7 +801,7 @@ function LiveVoicePaceRow() {
           </button>
         ))}
       </div>
-    </Row>
+    </SettingsPreferenceRow>
   );
 }
 
@@ -1064,17 +810,17 @@ function ReadAloudVoiceRow() {
 
   if (!isSupported || voices.length === 0) {
     return (
-      <Row label="Backup read-aloud voice">
+      <SettingsPreferenceRow label="Backup read-aloud voice">
         <span className="text-xs text-muted-foreground sm:text-end">
           This browser has no voices, so read-aloud has no backup.
         </span>
-      </Row>
+      </SettingsPreferenceRow>
     );
   }
 
   return (
     <>
-      <Row label="Backup read-aloud voice">
+      <SettingsPreferenceRow label="Backup read-aloud voice">
         <div className="flex min-w-0 items-center gap-2">
           <select
             value={voiceUri ?? ''}
@@ -1103,38 +849,12 @@ function ReadAloudVoiceRow() {
             {isSpeaking ? 'Stop' : 'Preview'}
           </button>
         </div>
-      </Row>
+      </SettingsPreferenceRow>
       <p className="-mt-3 text-xs leading-relaxed text-muted-foreground">
         The AGI voice uses a few credits per reply. Audio plays on your system default output
         device.
       </p>
     </>
-  );
-}
-
-function Row({
-  label,
-  hint,
-  hintId,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  hintId?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex min-h-9 flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-      <span className={`flex min-w-0 flex-col gap-0.5 ${hint ? '' : 'sm:shrink-0'}`}>
-        <span className="text-sm text-foreground">{label}</span>
-        {hint && (
-          <span id={hintId} className="text-xs text-muted-foreground">
-            {hint}
-          </span>
-        )}
-      </span>
-      {children}
-    </div>
   );
 }
 

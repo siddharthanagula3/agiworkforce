@@ -269,6 +269,11 @@ describe('PP-24, the custom-command editor is reachable', () => {
     'utf8',
   );
 
+  const appearanceSection = readFileSync(
+    resolve(ROOT, 'features/settings/sections/AppearanceSection.tsx'),
+    'utf8',
+  );
+
   it('GeneralSection mounts CustomCommandsSettings', () => {
     expect(generalSection).toMatch(/import\s*\{\s*CustomCommandsSettings\s*\}/);
     expect(generalSection).toContain('<CustomCommandsSettings />');
@@ -280,6 +285,14 @@ describe('PP-24, the custom-command editor is reachable', () => {
       'utf8',
     );
     expect(modal).toContain('<GeneralSection />');
+  });
+
+  it('AppearanceSection is rendered by the settings modal', () => {
+    const modal = readFileSync(
+      resolve(ROOT, 'features/settings/components/WebSettingsModal.tsx'),
+      'utf8',
+    );
+    expect(modal).toContain('<AppearanceSection />');
   });
 
   it('the composer still consumes the commands that editor writes', () => {
@@ -316,7 +329,7 @@ describe('PP-24, the custom-command editor is reachable', () => {
     // asserts the whole chain instead of the absence: a control, an attribute
     // stamped on the document, and a stylesheet rule that answers it. Any link
     // removed and this fails, which is what the absence check was reaching for.
-    expect(generalSection).toContain('chatFont');
+    expect(appearanceSection).toContain('chatFont');
 
     const appearance = readFileSync(
       resolve(ROOT, 'shared/components/AppearancePreferences.tsx'),

@@ -10,4 +10,3 @@ nothing is left.
 | --- | --- | --- |
 | S85.02: Custom instructions. | chrome | live-web |
 | S85.03: Communication style. | chrome | live-web |
-| S85.20: Data export. | desktop | live-web |
