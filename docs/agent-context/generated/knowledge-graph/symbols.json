@@ -48288,9 +48288,6 @@
     "escape_xml": [
       "apps/desktop/src-tauri/src/sys/commands/chat/prompt_context.rs"
     ],
-    "escapeForInlineScript": [
-      "packages/ui/unified-chat/src/lib/react-preview-document.ts"
-    ],
     "escapeHtml": [
       "apps/desktop/electron/shellPage.ts",
       "apps/extension-vscode/src/features/sidebar-webview/index.ts",
@@ -130076,6 +130073,9 @@
     ],
     "serializeFlashcards": [
       "packages/ui/unified-chat/src/lib/study-set.ts"
+    ],
+    "serializeForInlineScript": [
+      "packages/ui/unified-chat/src/lib/react-preview-document.ts"
     ],
     "serializeHoldPlacement": [
       "apps/web/lib/services/legal-hold-placement.ts"
