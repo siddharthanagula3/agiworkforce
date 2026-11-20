@@ -25,7 +25,7 @@ permissions:
 
 env:
   NODE_VERSION: '24'
-  EAS_CLI_VERSION: '21.4.0'
+  EAS_CLI_VERSION: '25.1.1'
   EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
   EXPO_PUBLIC_AGI_AUTH_PROVIDERS: ${{ vars.EXPO_PUBLIC_AGI_AUTH_PROVIDERS }}
   # Validation only evaluates the production configuration and bundles the
