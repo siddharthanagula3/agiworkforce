@@ -21,12 +21,10 @@ nothing is left.
 
 - Done when: From a finished task or chat turn, one action turns that work into a saved routine.
 - Wave: 3
-- Already works on: cli
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
@@ -53,6 +51,19 @@ nothing is left.
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
+| chrome | missing | Not built on this surface. |  |
+
+## S63.09: Agent selection.
+
+- Done when: The user picks which agent (custom agent/persona) runs the routine.
+- Wave: 3
+- Already works on: web, desktop
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+| mobile | missing | Not built on this surface. |  |
+| cli | missing | Not built on this surface. |  |
+| vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
 ## S63.11: One-time schedule.

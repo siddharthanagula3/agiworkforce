@@ -30,12 +30,6 @@ nothing is left.
 - Wave: 5
 - Build on: desktop
 
-## S70.29: Local cache/storage management.
-
-- Done when: The user can see and clear the desktop app's local cache and stored data.
-- Wave: 5
-- Build on: desktop
-
 ## S70.32: Sleep/wake and lock-state behavior.
 
 - Done when: The app reacts to sleep, wake and screen lock (pauses or resumes work, keeps the machine awake for long tasks).

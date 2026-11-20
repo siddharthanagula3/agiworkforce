@@ -29,6 +29,22 @@ nothing is left.
 | web | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
 
+## S64.11: Back/forward/reload.
+
+- Done when: The assistant can go back, go forward or reload the page it is working on.
+- Wave: 3
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+| web | missing | Not built on this surface. |  |
+| desktop | partial | The assistant can go back and forward in a paired browser tab, and the built-in pane has back, forward and reload controls; the assistant has no reload command for the page it is working on. | handler |
+| mobile | missing | Not built on this surface. |  |
+| cli | missing | Not built on this surface. |  |
+| vscode | missing | Not built on this surface. |  |
+| chrome | missing | Not built on this surface. |  |
+
+Code: `apps/desktop/electron/browser/commandGate.ts:265-278`, `apps/desktop/electron/browserPane.ts:351-375`
+
 ## S64.14: Website search.
 
 - Done when: The assistant runs a search on a website and reads the results back.
@@ -174,6 +190,18 @@ nothing is left.
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
+
+## S64.30: Clear website data.
+
+- Done when: The user can clear the cookies and site data the assistant's browser holds.
+- Wave: 3
+- Already works on: desktop
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+| web | missing | Not built on this surface. |  |
+| mobile | missing | Not built on this surface. |  |
+| chrome | missing | Not built on this surface. |  |
 
 ## S64.32: Browser-task result summary.
 

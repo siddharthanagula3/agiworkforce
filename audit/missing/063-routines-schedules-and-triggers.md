@@ -12,12 +12,6 @@ nothing is left.
 - Wave: 4
 - Build on: web, desktop, mobile, cli, vscode, chrome
 
-## S63.09: Agent selection.
-
-- Done when: The user picks which agent (custom agent/persona) runs the routine.
-- Wave: 4
-- Build on: web, desktop, mobile, cli, vscode, chrome
-
 ## S63.10: Model/effort selection.
 
 - Done when: Per routine, the user picks the model and the reasoning effort the run uses.

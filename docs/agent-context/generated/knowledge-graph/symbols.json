@@ -6327,7 +6327,8 @@
       "apps/mobile/src/features/settings/appearance/index.tsx"
     ],
     "AppearanceSection": [
-      "apps/extension/src/features/options/appearance-section.ts"
+      "apps/extension/src/features/options/appearance-section.ts",
+      "apps/web/features/settings/sections/AppearanceSection.tsx"
     ],
     "AppearanceSettings": [
       "apps/web/features/settings/lib/appearance-namespace.ts"
@@ -103782,6 +103783,9 @@
     "PreferenceStorage": [
       "apps/extension/src/features/options/preference-rows.ts"
     ],
+    "PreferenceSyncNotice": [
+      "apps/web/features/settings/components/SettingsPreferenceRow.tsx"
+    ],
     "PreferenceVersionConflictError": [
       "apps/web/app/settings/_lib/preferences-client.ts"
     ],
@@ -131785,6 +131789,9 @@
       "apps/extension-vscode/src/features/settings/settingsProtocol.ts",
       "packages/contracts/types/src/design-system/settings-ia.ts"
     ],
+    "SETTINGS_SELECT_CLASS": [
+      "apps/web/features/settings/components/SettingsPreferenceRow.tsx"
+    ],
     "SETTINGS_STORE_PATH": [
       "scripts/check-ui-typography.mjs"
     ],
@@ -131949,6 +131956,9 @@
       "packages/ui/ui/src/index.ts",
       "packages/ui/ui/src/settings-modal/index.ts",
       "packages/ui/ui/src/settings-modal/types.ts"
+    ],
+    "SettingsPreferenceRow": [
+      "apps/web/features/settings/components/SettingsPreferenceRow.tsx"
     ],
     "SettingsReadResponse": [
       "crates/agiworkforce-protocol/bindings/SettingsReadResponse.ts",
@@ -156907,6 +156917,9 @@
       "apps/web/features/settings/components/web-settings-navigation.ts"
     ],
     "WEB_SETTINGS_NAV_GROUPS": [
+      "apps/web/features/settings/components/web-settings-navigation.ts"
+    ],
+    "WEB_SETTINGS_NAV_KEYWORDS": [
       "apps/web/features/settings/components/web-settings-navigation.ts"
     ],
     "WEB_SETTINGS_NAV_PLACEMENTS": [

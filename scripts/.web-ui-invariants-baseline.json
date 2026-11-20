@@ -4109,8 +4109,8 @@
       "literal": "bg-white"
     },
     {
-      "file": "apps/web/features/settings/sections/GeneralSection.tsx",
-      "line": 486,
+      "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+      "line": 107,
       "rule": "raw-bw",
       "literal": "text-white"
     },

@@ -77,6 +77,7 @@
   },
   "nav": {
     "general": "일반",
+    "appearance": "외관",
     "account": "계정",
     "team": "워크스페이스",
     "privacy": "개인정보",

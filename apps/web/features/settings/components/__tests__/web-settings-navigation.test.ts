@@ -118,6 +118,7 @@ describe('web settings rail order', () => {
   it('lists the Settings group in the reference order', () => {
     expect(groupKeys(WEB_SETTINGS_NAV_GROUPS, 'Settings')).toEqual([
       'general',
+      'appearance',
       'notifications',
       'personalization',
       'voice',

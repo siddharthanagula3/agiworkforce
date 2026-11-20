@@ -34,6 +34,7 @@ import { BrowserPaneSettings } from '@/features/desktop-host/components/BrowserP
 import { LocalMcpSettings } from '@/features/desktop-host/components/LocalMcpSettings';
 
 import { GeneralSection } from '../sections/GeneralSection';
+import { AppearanceSection } from '../sections/AppearanceSection';
 import { AccountSection } from '../sections/AccountSection';
 import { TeamSection } from '../sections/TeamSection';
 import { WorkspaceConsolePointer } from '../sections/WorkspaceConsolePointer';
@@ -259,6 +260,7 @@ export function WebSettingsModal({
       ? { plugins: <CapabilityDeniedNotice reason={pluginsDecision.reason} /> }
       : {}),
     general: <GeneralSection />,
+    appearance: <AppearanceSection />,
     account: (
       <AccountSection
         emailEditorActive={open && activeSection === 'account'}

@@ -2,7 +2,7 @@
 
 Status: Current standing guidance and dated research seed
 Owner: Founder + product/architecture leads
-Last updated: 2026-11-11
+Last updated: 2026-11-19
 
 **Repository location:** `docs/product/competitive-guidance.md`
 **Research baseline:** announcements dated on or before **September 21, 2026**.
@@ -546,6 +546,24 @@ docs/product/surface-feature-matrix.{json,md}       # generated reachability inv
 audit/prior-audits/parity-implementation-matrix.md                  # current implementation evidence
 docs/decisions/README.md                            # governing product decisions
 ```
+
+One evidence source lives outside this repository: the owner's clean-room
+research workspace at `/Users/siddhartha/Desktop/reverse-engineer` (dated
+desktop captures of the leaders, build notes and earlier audits). It exists on
+the owner's machine only; where it is absent, work from this repository alone.
+
+- Enter through the README at its root, then one guide in its topics folder.
+  Desktop parity starts at
+  `/Users/siddhartha/Desktop/reverse-engineer/docs/topics/build.md`, Track A.
+  Read one row and the one capture folder it names; never load the corpus, its
+  indexes or its unpacked vendor bundles.
+- Build only from what it marks **Proposed**. **Observed** and **Public
+  documentation** are dated leads to reopen against the current official page,
+  and **NOT_RUN** is unfinished evidence.
+- This repository's rules outrank its text: product names, model IDs, endpoints
+  and design values come from their owners here. Vendor source, pseudocode,
+  session stores and credentials never enter this repository, and results close
+  in this repository's trackers, not there.
 
 Add a source/claim registry only when a real consumer or guard will keep it
 current. Do not create empty bureaucracy.

@@ -1542,6 +1542,7 @@ jobs:
             release-notes.spec.ts \
             rich-blocks-sticky.spec.ts \
             seo-content.spec.ts \
+            seo-discovery.spec.ts \
             shared-link-pages.spec.ts \
             status-first-screen.spec.ts \
             support-only.spec.ts \

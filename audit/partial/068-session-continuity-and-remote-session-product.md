@@ -175,6 +175,21 @@ Code: `apps/web/app/api/pair/claim/route.ts:70-70`
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 
+## S68.24: Start a session in an allowed remote folder.
+
+- Done when: From another client, the user starts a new session on a remote machine inside a folder that machine allows.
+- Wave: 3
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+| web | missing | Not built on this surface. |  |
+| desktop | partial | The computer accepts a start-session request for a folder it has approved; the screen on the other client that sends it is not verified, and Remote Control is hidden in the first mobile release. | ui, live-check |
+| mobile | missing | Not built on this surface. |  |
+| cli | missing | Not built on this surface. |  |
+| vscode | missing | Not built on this surface. |  |
+
+Code: `apps/desktop/electron/remote/remoteControlService.ts:257-262`, `apps/desktop/electron/remote/remoteControlService.ts:73-76`
+
 ## S68.25: Device-offline explanation.
 
 - Done when: When the remote machine is offline, the client says so and explains what that means.

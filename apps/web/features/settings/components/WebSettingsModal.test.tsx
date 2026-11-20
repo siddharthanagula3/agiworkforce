@@ -33,6 +33,7 @@ vi.mock('@clerk/nextjs', async (original) => ({
 }));
 
 vi.mock('../sections/GeneralSection', () => ({ GeneralSection: () => null }));
+vi.mock('../sections/AppearanceSection', () => ({ AppearanceSection: () => null }));
 const emailAdmission = vi.hoisted(() => vi.fn());
 const cancellationAdmission = vi.hoisted(() => vi.fn());
 vi.mock('../sections/AccountSection', () => ({
