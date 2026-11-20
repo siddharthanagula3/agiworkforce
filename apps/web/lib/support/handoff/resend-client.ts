@@ -2,6 +2,7 @@ import 'server-only';
 
 import { logger } from '@/lib/logger';
 import { recordNotificationDelivery } from '@/lib/observability/metrics';
+import { secureRandomInt } from '@/lib/secure-random';
 import { recordEmailSend } from '@/lib/services/infrastructure-cost';
 import { getHandoffConfig, isValidEmail } from './config';
 
@@ -162,7 +163,7 @@ async function postTransactionalEmail(input: TransactionalEmailInput): Promise<S
 
   let last = await postOnce(apiKey, payload, idempotencyKey);
   if (!last.ok && last.retryable) {
-    await new Promise((resolve) => setTimeout(resolve, 250 + Math.floor(Math.random() * 500)));
+    await new Promise((resolve) => setTimeout(resolve, 250 + secureRandomInt(500)));
     last = await postOnce(apiKey, payload, idempotencyKey);
   }
 
