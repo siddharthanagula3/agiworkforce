@@ -76,6 +76,22 @@ export interface RedispatchableIntake {
   state: ChatFileIntakeState;
 }
 
+interface RedispatchableIntakeRecord {
+  id: string;
+  user_id: string;
+  organization_id: string | null;
+  state: string;
+}
+
+function redispatchableIntake(row: RedispatchableIntakeRecord): RedispatchableIntake {
+  return {
+    id: String(row.id),
+    userId: String(row.user_id),
+    organizationId: nullableString(row.organization_id),
+    state: String(row.state) as ChatFileIntakeState,
+  };
+}
+
 function intakeColumns(alias: string): string {
   return [
     'id',
@@ -658,12 +674,7 @@ export async function listRedispatchableIntakes(
   db: IntakeDb,
   input: { nowMs: number; limit: number },
 ): Promise<RedispatchableIntake[]> {
-  const rows = await db.query<{
-    id: string;
-    user_id: string;
-    organization_id: string | null;
-    state: string;
-  }>(
+  const rows = await db.query<RedispatchableIntakeRecord>(
     `select i.id, i.user_id, i.organization_id, i.state
        from public.chat_file_intakes i
       where i.state = any($3::text[])
@@ -681,12 +692,44 @@ export async function listRedispatchableIntakes(
       MEMBERSHIP_STATUSES_THAT_MAY_ACT,
     ],
   );
-  return rows.map((row) => ({
-    id: String(row.id),
-    userId: String(row.user_id),
-    organizationId: nullableString(row.organization_id),
-    state: String(row.state) as ChatFileIntakeState,
-  }));
+  return rows.map(redispatchableIntake);
+}
+
+/**
+ * A sealed row holds no lease, so a run that stopped while preparing it is
+ * found through its preparation instead: one idle for longer than a step can
+ * run, and not yet old enough for the preparation stall rule to end it.
+ */
+export async function listSealedIntakesWithIdlePreparation(
+  db: IntakeDb,
+  input: { idleBeforeMs: number; stalledBeforeMs: number; limit: number },
+): Promise<RedispatchableIntake[]> {
+  const rows = await db.query<RedispatchableIntakeRecord>(
+    `select i.id, i.user_id, i.organization_id, i.state
+       from public.chat_file_intakes i
+      where i.state = 'sealed'
+        and exists (
+              select 1
+                from public.chat_file_preparations p
+               where p.media_asset_id = i.media_asset_id
+                 and p.user_id = i.user_id
+                 and p.state = 'preparing'
+                 and p.updated_at < $1::timestamptz
+                 and p.updated_at >= $2::timestamptz
+            )
+        and ${ownerMayRunUnattendedSql('i.user_id', 4)}
+        and ${ownerIsActiveWorkspaceMemberSql('i.user_id', 'i.organization_id', 5)}
+      order by i.state_changed_at
+      limit $3`,
+    [
+      iso(input.idleBeforeMs),
+      iso(input.stalledBeforeMs),
+      input.limit,
+      UNATTENDED_RUN_DENIED_STATUSES,
+      MEMBERSHIP_STATUSES_THAT_MAY_ACT,
+    ],
+  );
+  return rows.map(redispatchableIntake);
 }
 
 export async function listIdleAwaitingPartsIntakes(

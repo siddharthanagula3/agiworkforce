@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   getKeyValueStore: vi.fn(),
   dispatch: vi.fn(),
   listRedispatchable: vi.fn(),
+  listIdlePreparations: vi.fn(),
   listIdle: vi.fn(),
   listStalled: vi.fn(),
   listUnpurged: vi.fn(),
@@ -55,6 +56,7 @@ vi.mock('@/lib/workflows/start-chat-file-intake-workflow', async (importOriginal
 vi.mock('@/lib/server/chat-file-intake/store', async (importOriginal) => ({
   ...(await importOriginal<StoreModule>()),
   listRedispatchableIntakes: mocks.listRedispatchable,
+  listSealedIntakesWithIdlePreparation: mocks.listIdlePreparations,
   listIdleAwaitingPartsIntakes: mocks.listIdle,
   listStalledIntakes: mocks.listStalled,
   listUnpurgedTerminalIntakes: mocks.listUnpurged,
@@ -142,6 +144,7 @@ beforeEach(() => {
   mocks.dispatch.mockResolvedValue({ started: 0, failed: 0 });
   for (const list of [
     mocks.listRedispatchable,
+    mocks.listIdlePreparations,
     mocks.listIdle,
     mocks.listStalled,
     mocks.listUnpurged,
@@ -179,6 +182,7 @@ describe('GET /api/cron/sweep-chat-file-intakes', () => {
       await expect(response.json()).resolves.toEqual({
         redispatched: 0,
         redispatchFailed: 0,
+        idlePreparations: 0,
         idleCancelled: 0,
         stalled: 0,
         purged: 0,
@@ -188,6 +192,7 @@ describe('GET /api/cron/sweep-chat-file-intakes', () => {
       });
       for (const pass of [
         mocks.listRedispatchable,
+        mocks.listIdlePreparations,
         mocks.listIdle,
         mocks.listStalled,
         mocks.listUnpurged,
@@ -230,6 +235,24 @@ describe('GET /api/cron/sweep-chat-file-intakes', () => {
       { intakeId: 'intake-2', userId: 'user-2', organizationId: 'org-2' },
     ]);
     expect(body).toMatchObject({ redispatched: 1, redispatchFailed: 1 });
+  });
+
+  it('starts a sealed intake again whose preparation went idle, until the stall rule ends it', async () => {
+    mocks.listIdlePreparations.mockResolvedValue([
+      { id: 'intake-3', userId: 'user-3', organizationId: 'org-3', state: 'sealed' },
+    ]);
+    mocks.dispatch.mockResolvedValue({ started: 1, failed: 0 });
+    const body = await (await GET(cronRequest())).json();
+
+    expect(mocks.listIdlePreparations).toHaveBeenCalledWith(expect.anything(), {
+      idleBeforeMs: START_MS - preparation.redispatchAfterMs,
+      stalledBeforeMs: START_MS - preparation.stallMs,
+      limit: 50,
+    });
+    expect(mocks.dispatch).toHaveBeenCalledWith([
+      { intakeId: 'intake-3', userId: 'user-3', organizationId: 'org-3' },
+    ]);
+    expect(body).toMatchObject({ redispatched: 1, redispatchFailed: 0, idlePreparations: 1 });
   });
 
   it('cancels an idle upload and gives back the bytes its parts never stored', async () => {

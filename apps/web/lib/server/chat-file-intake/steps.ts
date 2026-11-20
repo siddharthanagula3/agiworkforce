@@ -22,7 +22,7 @@ import {
   type UploadScanFinding,
   type UploadScanResult,
 } from '@/lib/security/upload-scan';
-import { prepareChatFileStep } from '@/lib/server/chat-file-preparation';
+import { prepareChatFileStep, preparationInProgress } from '@/lib/server/chat-file-preparation';
 import {
   defaultPreparationStorage,
   type PreparationStorage,
@@ -133,6 +133,7 @@ export interface ChatFileIntakeDeps extends IntakeTransitionDeps {
   preparationStorage(): PreparationStorage;
   seal: SealDeps;
   prepare(assetId: string): Promise<{ done: boolean }>;
+  preparing(assetId: string): Promise<boolean>;
   reindex(row: ChatFileIntakeRow, assetId: string): Promise<void>;
 }
 
@@ -220,6 +221,11 @@ async function startStep(ctx: StepContext): Promise<ChatFileIntakeDirective> {
       return { next: 'poll', resume: true, pollIndex: 0, scanningSinceMs: null, deadlineMs: null };
     case 'sealing':
       return { next: 'seal' };
+    case 'sealed':
+      if (row.mediaAssetId && (await ctx.deps.preparing(row.mediaAssetId))) {
+        return { next: 'prepare', assetId: row.mediaAssetId };
+      }
+      return endDirective('already_sealed');
     default:
       return endDirective(row ? `already_${row.state}` : 'missing');
   }
@@ -884,6 +890,7 @@ export function createChatFileIntakeDeps(input: ChatFileIntakeWorkflowInput): Ch
     preparationStorage: defaultPreparationStorage,
     seal: defaultSealDeps(db),
     prepare: (assetId) => prepareChatFileStep(assetId, { db }),
+    preparing: (assetId) => preparationInProgress(db, { assetId, userId: input.userId }),
     async reindex(row, assetId) {
       await requestMediaAssetReindex(db, { assetId, ownerUserId: row.userId });
     },

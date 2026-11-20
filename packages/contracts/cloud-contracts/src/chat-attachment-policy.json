@@ -103,6 +103,7 @@
     "maxIndexedCharsPerUser": 200000000,
     "embedChatFiles": false,
     "preparerVersion": 1,
+    "redispatchAfterMs": 900000,
     "stallMs": 7200000
   },
   "turnBudget": {

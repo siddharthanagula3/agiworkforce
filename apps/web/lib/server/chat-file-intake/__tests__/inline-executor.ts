@@ -200,6 +200,7 @@ export function createIntakeHarness(input: {
     preparationStorage: defaultPreparationStorage,
     seal,
     prepare: async () => ({ done: true }),
+    preparing: async () => false,
     async reindex(_row, assetId) {
       reindexed.push(assetId);
     },

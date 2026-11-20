@@ -328,6 +328,23 @@ export async function failStalledPreparations(
   return rows.map((row) => String(row.id));
 }
 
+export async function preparationInProgress(
+  db: PreparationDb,
+  input: { assetId: string; userId: string },
+): Promise<boolean> {
+  const rows = await db.query<{ preparing: boolean }>(
+    `select exists (
+       select 1
+         from public.chat_file_preparations
+        where media_asset_id = $1::uuid
+          and user_id = $2
+          and state = 'preparing'
+     ) as preparing`,
+    [input.assetId, input.userId],
+  );
+  return rows[0]?.preparing === true;
+}
+
 export interface OrphanedPreparation {
   id: string;
   userId: string;
