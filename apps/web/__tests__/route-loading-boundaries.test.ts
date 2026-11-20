@@ -23,10 +23,19 @@ function suspendsOnNavigation(pagePath: string): boolean {
   );
 }
 
+/**
+ * A loading boundary commits a 200 before notFound() runs in any route beneath
+ * it, so an unknown slug would answer 200 to a crawler. These segments hold
+ * dynamic routes that must return a real 404, and their pages render quickly
+ * enough to go without a boundary.
+ */
+const REAL_404_SEGMENTS: ReadonlySet<string> = new Set(['help']);
+
 function topLevelSegments(): string[] {
   return readdirSync(APP_DIR, { withFileTypes: true })
     .filter((entry) => entry.isDirectory() && !entry.name.startsWith('_') && entry.name !== 'api')
-    .map((entry) => entry.name);
+    .map((entry) => entry.name)
+    .filter((segment) => !REAL_404_SEGMENTS.has(segment));
 }
 
 describe('route loading boundaries', () => {
@@ -39,6 +48,14 @@ describe('route loading boundaries', () => {
     });
 
     expect(missing).toEqual([]);
+  });
+
+  it('keeps the segments that must return a real 404 free of loading boundaries', () => {
+    const withBoundary = [...REAL_404_SEGMENTS].filter((segment) =>
+      existsSync(path.join(APP_DIR, segment, 'loading.tsx')),
+    );
+
+    expect(withBoundary).toEqual([]);
   });
 
   it('routes the shared boundary through the Spinner primitive, not a bare spinning div', () => {
