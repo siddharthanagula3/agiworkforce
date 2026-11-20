@@ -70,7 +70,7 @@ describe('buildSandboxedArtifactHtml', () => {
       );
       expect(html).toContain('function App(){return null}');
       expect(html).not.toContain('</script><img');
-      expect(html).toContain('<\\/script><img');
+      expect(html).toContain('\\u003c/script\\u003e\\u003cimg');
     });
   });
 

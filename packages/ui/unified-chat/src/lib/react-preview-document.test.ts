@@ -5,9 +5,9 @@ import * as ReactDOMClient from 'react-dom/client';
 import { describe, expect, it } from 'vitest';
 import {
   buildReactPreviewDocument,
-  escapeForInlineScript,
   REACT_PREVIEW_SCRIPTS,
   REACT_PREVIEW_TRANSFORM,
+  serializeForInlineScript,
 } from './react-preview-document';
 
 const requireFromHere = createRequire(import.meta.url);
@@ -94,7 +94,7 @@ describe('buildReactPreviewDocument', () => {
 
   it('mounts App or Component from the source', () => {
     const doc = buildReactPreviewDocument('function App() { return <p>Hi</p>; }', CSP_META);
-    expect(doc).toContain('function App() { return <p>Hi</p>; }');
+    expect(doc).toContain('function App() { return \\u003cp\\u003eHi\\u003c/p\\u003e; }');
     expect(doc).toContain("typeof App !== 'undefined' && App");
     expect(doc).toContain("typeof Component !== 'undefined' && Component");
     expect(doc).toContain('module.exports.default');
@@ -116,8 +116,8 @@ describe('buildReactPreviewDocument', () => {
   it('keeps the source from closing its script or opening a comment', () => {
     const doc = buildReactPreviewDocument('const s = "</script><img src=x>"; <!-- x', CSP_META);
     expect(doc).not.toContain('</script><img');
-    expect(doc).toContain('<\\/script><img src=x>');
-    expect(doc).toContain('<\\!-- x');
+    expect(doc).toContain('\\u003c/script\\u003e\\u003cimg src=x\\u003e');
+    expect(doc).toContain('\\u003c!-- x');
   });
 });
 
@@ -241,8 +241,11 @@ describe('running the React preview document with a Babel 7 stand-in for the pin
   });
 });
 
-describe('escapeForInlineScript', () => {
-  it('escapes every closing script tag, in any case', () => {
-    expect(escapeForInlineScript('a</SCRIPT>b</script>')).toBe('a<\\/SCRIPT>b<\\/script>');
+describe('serializeForInlineScript', () => {
+  it('escapes markup and line-terminator characters and round-trips through JSON', () => {
+    const value = { text: 'a</SCRIPT><!-- & \u2028\u2029 "q"' };
+    const out = serializeForInlineScript(value);
+    expect(out).not.toMatch(/[<>&\u2028\u2029]/);
+    expect(JSON.parse(out)).toEqual(value);
   });
 });

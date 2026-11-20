@@ -32,6 +32,22 @@ describe('buildSandboxedHtml on hostile markup', () => {
   });
 });
 
+describe('buildSandboxedHtml on repeated doctype openers', () => {
+  it.each([
+    ['unclosed', '<!doctype'.repeat(50_000)],
+    ['followed by a non-matching tail', `${'<!doctype'.repeat(50_000)}${' '.repeat(50_000)}`],
+    ['after comments', `${'<!-- c -->'.repeat(20_000)}${'<!doctype'.repeat(50_000)}`],
+  ])('wraps %s in linear time', (_name, html) => {
+    const { value, ms } = timed(() => buildSandboxedHtml(html));
+    expect(ms).toBeLessThan(HOSTILE_BUDGET_MS);
+    expect(value).toContain(CSP_META);
+  });
+
+  it('leaves an unclosed doctype untouched behind the policy', () => {
+    expect(buildSandboxedHtml('<!DocType html')).toBe(`${CSP_META}<!DocType html`);
+  });
+});
+
 describe('buildSandboxedHtml on real-shaped markup', () => {
   it('drops only the artifact-supplied policy and puts ours straight after the doctype', () => {
     const html =

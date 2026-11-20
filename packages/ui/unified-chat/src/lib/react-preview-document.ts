@@ -25,8 +25,11 @@ export const REACT_PREVIEW_TRANSFORM = {
   plugins: ['transform-modules-commonjs'],
 } as const;
 
-export function escapeForInlineScript(source: string): string {
-  return source.replace(/<\/(script)/gi, '<\\/$1').replace(/\x3c!--/g, '<\\!--');
+export function serializeForInlineScript(value: unknown): string {
+  return JSON.stringify(value).replace(
+    /[<>&\u2028\u2029]/g,
+    (character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`,
+  );
 }
 
 function pinnedScriptTag(script: PinnedPreviewScript): string {
@@ -104,8 +107,8 @@ export function buildReactPreviewDocument(source: string, cspMeta: string): stri
   const scripts = REACT_PREVIEW_SCRIPTS.map(pinnedScriptTag).join('\n    ');
   const runner = [
     '(function () {',
-    `  var source = ${JSON.stringify(source)};`,
-    `  var transform = ${JSON.stringify(REACT_PREVIEW_TRANSFORM)};`,
+    `  var source = ${serializeForInlineScript(source)};`,
+    `  var transform = ${serializeForInlineScript(REACT_PREVIEW_TRANSFORM)};`,
     PREVIEW_RUNNER_BODY,
   ].join('\n');
   return `<!DOCTYPE html>
@@ -119,7 +122,7 @@ export function buildReactPreviewDocument(source: string, cspMeta: string): stri
   <body>
     <div id="root"></div>
     <script>
-${escapeForInlineScript(runner)}
+${runner}
     </script>
   </body>
 </html>`;

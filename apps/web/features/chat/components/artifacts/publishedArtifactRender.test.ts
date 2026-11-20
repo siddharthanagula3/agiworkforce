@@ -89,7 +89,8 @@ describe('buildPublishedFallbackSrcDoc', () => {
 
   it('neutralises a </script> sequence in React source', () => {
     const doc = buildPublishedFallbackSrcDoc('react', 'const s = "</script><img src=x>";');
-    expect(doc).toContain('<\\/script>');
+    expect(doc).toContain('\\u003c/script\\u003e\\u003cimg src=x\\u003e');
+    expect(doc).not.toContain('</script><img');
   });
 });
 
