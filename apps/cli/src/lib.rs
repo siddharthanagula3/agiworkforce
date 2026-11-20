@@ -3643,7 +3643,7 @@ async fn handle_projects_command(
             }
             println!("Recent project folders");
             for (index, (path, entry)) in recent.iter().take(*limit).enumerate() {
-                let account = entry
+                let linked_suffix = entry
                     .cloud_project_id
                     .as_deref()
                     .and_then(|id| linked.find(id))
@@ -3655,7 +3655,7 @@ async fn handle_projects_command(
                     })
                     .unwrap_or_default();
                 println!(
-                    "  {}. {}  last used {}{account}",
+                    "  {}. {}  last used {}{linked_suffix}",
                     index + 1,
                     terminal_text::sanitize_single_line(path),
                     terminal_text::sanitize_single_line(

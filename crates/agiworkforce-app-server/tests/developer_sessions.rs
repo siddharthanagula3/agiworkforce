@@ -2859,8 +2859,8 @@ async fn a_token_leaked_from_a_url_never_replays_as_the_owner() {
             .expect("client request"),
     )
     .await;
-    assert!(from_url.get("result").is_none(), "{from_url}");
-    assert!(from_url.get("error").is_some(), "{from_url}");
+    assert!(from_url.get("result").is_none());
+    assert!(from_url.get("error").is_some());
 
     for header in ["x-agi-app-server-token", "authorization"] {
         let value = if header == "authorization" {
@@ -2875,8 +2875,8 @@ async fn a_token_leaked_from_a_url_never_replays_as_the_owner() {
             .headers_mut()
             .insert(header, HeaderValue::from_static(value));
         let response = account_token_over(replayed).await;
-        assert!(response.get("result").is_none(), "{header}: {response}");
-        assert!(response.get("error").is_some(), "{header}: {response}");
+        assert!(response.get("result").is_none());
+        assert!(response.get("error").is_some());
     }
 
     let mut owner = format!("ws://{addr}/ws")

@@ -358,11 +358,8 @@ mod renewal_refusal_tests {
     const HOSTILE: &str = "\u{1b}]52;c;cm0gLXJmIC8=\u{7}\u{1b}[2Jpwned";
 
     fn assert_clean(text: &str) {
-        assert!(
-            !text.chars().any(char::is_control),
-            "control character survived: {text:?}"
-        );
-        assert!(text.contains("pwned"), "{text}");
+        assert!(!text.chars().any(char::is_control));
+        assert!(text.contains("pwned"));
     }
 
     #[test]
