@@ -65,7 +65,9 @@ describe('a React artifact', () => {
     render(<SafeArtifactPreview content={source} kind="react" />);
 
     expect(latest?.source.html).toContain('react.production.min.js');
-    expect(latest?.source.html).toContain('function App(){return <p>Hi</p>}');
+    expect(latest?.source.html).toContain(
+      'function App(){return \\u003cp\\u003eHi\\u003c/p\\u003e}',
+    );
     expect(latest?.javaScriptEnabled).toBe(true);
     expect(latest?.accessibilityLabel).toBe('REACT artifact preview');
   });
