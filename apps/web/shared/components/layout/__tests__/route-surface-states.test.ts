@@ -121,6 +121,11 @@ const ROUTES_WITHOUT_A_LOADING_BOUNDARY: Record<string, string> = {
   'shared-artifact/[token]': 'fetches the published artifact with nothing shown while it resolves',
   'features/plugins':
     'force-dynamic and fetches the directory with nothing shown while it resolves',
+  help: 'renders the in-memory help index and awaits only its own searchParams',
+  'help/[slug]':
+    'answers an unknown article with a real 404, which a streamed loading boundary turns into a 200',
+  'help/collections/[id]':
+    'answers an unknown collection with a real 404, which a streamed loading boundary turns into a 200',
   'r/welcome': 'awaits only its own request cookies, so there is no request to wait on',
   'trial/cancel':
     'reads the signed link and one subscription row with nothing shown while it resolves',
