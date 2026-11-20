@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
@@ -11,6 +10,7 @@ import {
   resolvesLayers,
   sourceFiles,
 } from './lib/prompt-layer-assembly.mjs';
+import { makeTempDir } from './lib/test-temp-dir.mjs';
 
 const RESOLVED = `
 import { orderInstructionBlocks } from '@/lib/prompts/instruction-precedence';
@@ -41,7 +41,7 @@ export interface Message {
 `;
 
 function tree(files) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'prompt-layer-assembly-'));
+  const root = makeTempDir('prompt-layer-assembly-');
   for (const [rel, source] of Object.entries(files)) {
     const full = path.join(root, rel);
     fs.mkdirSync(path.dirname(full), { recursive: true });

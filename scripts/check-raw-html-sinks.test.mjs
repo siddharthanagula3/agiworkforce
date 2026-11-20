@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 
 import { INVENTORY_PATH, checkRawHtmlSinks } from './check-raw-html-sinks.mjs';
 import { classifySinks, findSinks, isStaticMarkup, outermostCall } from './lib/raw-html-sinks.mjs';
+import { makeTempDir } from './lib/test-temp-dir.mjs';
 
 const PURIFYING_MODULE = `
 import DOMPurify from 'dompurify';
@@ -21,7 +21,7 @@ export function cleanHtml(dirty) {
 `;
 
 function fixture(files) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'raw-html-sinks-'));
+  const root = makeTempDir('raw-html-sinks-');
   for (const [relative, source] of Object.entries(files)) {
     const full = path.join(root, relative);
     fs.mkdirSync(path.dirname(full), { recursive: true });

@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -11,6 +10,7 @@ import {
   findCreatedFrames,
   findEmbeddedFrames,
 } from './lib/embedded-frames.mjs';
+import { makeTempDir } from './lib/test-temp-dir.mjs';
 
 const script = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -39,7 +39,7 @@ export function ArtifactPreview({ pdfSrc }) {
 `;
 
 function fixture(files) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'frames-'));
+  const root = makeTempDir('frames-');
   for (const [relative, source] of Object.entries(files)) {
     const full = path.join(root, relative);
     fs.mkdirSync(path.dirname(full), { recursive: true });

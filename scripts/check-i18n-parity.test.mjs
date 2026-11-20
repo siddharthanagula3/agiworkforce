@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
 import { compareLocales, flattenKeys } from './check-i18n-parity.mjs';
+import { makeTempDir } from './lib/test-temp-dir.mjs';
 
 function fixture(files) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'i18n-parity-'));
+  const dir = makeTempDir('i18n-parity-');
   for (const [file, value] of Object.entries(files)) {
     const target = path.join(dir, file);
     fs.mkdirSync(path.dirname(target), { recursive: true });

@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { INDEX, digestOf, ledgerRows, runTrustClaimsCheck } from './check-trust-claims.mjs';
+import { makeTempDir } from './lib/test-temp-dir.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PAGE = 'apps/web/app/fixture/page.tsx';
@@ -76,7 +76,7 @@ function baseIndex() {
 }
 
 function fixture({ page = pageSource(), index = baseIndex() } = {}) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'trust-claims-'));
+  const root = makeTempDir('trust-claims-');
   const write = (relative, contents) => {
     fs.mkdirSync(path.dirname(path.join(root, relative)), { recursive: true });
     fs.writeFileSync(path.join(root, relative), contents);

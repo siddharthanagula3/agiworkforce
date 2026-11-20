@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { importsSharedContract, isClientCalled } from './lib/route-shared-contracts.mjs';
+import { makeTempDir } from './lib/test-temp-dir.mjs';
 
 const script = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -24,7 +24,7 @@ export async function GET() { return Response.json({ ok: true } satisfies Local)
 `;
 
 function fixture(tree) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'route-contracts-'));
+  const root = makeTempDir('route-contracts-');
   for (const [relative, source] of Object.entries(tree)) {
     const full = path.join(root, relative);
     fs.mkdirSync(path.dirname(full), { recursive: true });

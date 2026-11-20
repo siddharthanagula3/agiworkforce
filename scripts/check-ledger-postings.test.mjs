@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 
@@ -13,9 +12,10 @@ import {
   ledgerWriters,
   uniqueIndexes,
 } from './check-ledger-postings.mjs';
+import { makeTempDir } from './lib/test-temp-dir.mjs';
 
 function fixture(files) {
-  const root = mkdtempSync(path.join(tmpdir(), 'ledger-postings-'));
+  const root = makeTempDir('ledger-postings-');
   const dir = path.join(root, MIGRATIONS_DIR);
   mkdirSync(dir, { recursive: true });
   for (const [name, sql] of Object.entries(files)) writeFileSync(path.join(dir, name), sql);

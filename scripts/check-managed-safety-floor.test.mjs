@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -17,6 +16,7 @@ import {
   read,
   ruleCategories,
 } from './lib/managed-safety-floor.mjs';
+import { makeTempDir } from './lib/test-temp-dir.mjs';
 
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
 
@@ -53,7 +53,7 @@ const SCREENED_DELIVERY = [
 ].join('\n');
 
 function tree(files) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'managed-safety-floor-'));
+  const root = makeTempDir('managed-safety-floor-');
   for (const [relative, contents] of Object.entries(files)) {
     const absolute = path.join(root, relative);
     fs.mkdirSync(path.dirname(absolute), { recursive: true });

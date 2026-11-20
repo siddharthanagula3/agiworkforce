@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
@@ -9,6 +8,7 @@ import {
   runSecurityClaimsCheck,
   UNPROVEN_CEILING,
 } from './check-security-claims.mjs';
+import { makeTempDir } from './lib/test-temp-dir.mjs';
 
 const DOCUMENT = `# Security
 
@@ -84,7 +84,7 @@ function baseIndex() {
 }
 
 function makeRoot(mutate = () => {}) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'security-claims-'));
+  const root = makeTempDir('security-claims-');
   const write = (relative, contents) => {
     fs.mkdirSync(path.join(root, path.dirname(relative)), { recursive: true });
     fs.writeFileSync(path.join(root, relative), contents);

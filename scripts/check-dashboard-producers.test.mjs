@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
@@ -11,6 +10,7 @@ import {
   readRecorders,
   runDashboardProducerCheck,
 } from './check-dashboard-producers.mjs';
+import { makeTempDir } from './lib/test-temp-dir.mjs';
 
 const METRICS = `
 export const METRIC_NAME = {
@@ -66,7 +66,7 @@ export async function serveTurn(): Promise<void> {
 `;
 
 function fixture(overrides = {}) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dashboard-producers-'));
+  const root = makeTempDir('dashboard-producers-');
   const observability = path.join(root, OBSERVABILITY_DIR);
   fs.mkdirSync(observability, { recursive: true });
   fs.mkdirSync(path.join(root, 'apps/web/lib/server'), { recursive: true });

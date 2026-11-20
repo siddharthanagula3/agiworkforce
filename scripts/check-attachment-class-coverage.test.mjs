@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
@@ -13,6 +12,7 @@ import {
   declaredAdmission,
   read,
 } from './check-attachment-class-coverage.mjs';
+import { makeTempDir } from './lib/test-temp-dir.mjs';
 
 const CLASSES_SOURCE = `
 export const DOCUMENT_CLASSES: readonly DocumentClass[] = [
@@ -41,7 +41,7 @@ const ADMISSION_SOURCE = JSON.stringify({
 });
 
 function scratch(admission, classes) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'attachment-classes-'));
+  const root = makeTempDir('attachment-classes-');
   for (const [relative, content] of [
     [ADMISSION_FILE, admission],
     [CLASSES_FILE, classes],

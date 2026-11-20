@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -11,6 +10,7 @@ import {
   MACHINE_PRINCIPALS,
   USER_PRINCIPALS,
 } from './check-route-account-gate.mjs';
+import { makeTempDir } from './lib/test-temp-dir.mjs';
 
 const script = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -97,7 +97,7 @@ export async function POST(request) {
 const CONTRACT = 'packages/contracts/types/src/route-authentication.json';
 
 function fixture(files) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'route-account-gate-'));
+  const root = makeTempDir('route-account-gate-');
   for (const [relative, contents] of Object.entries(files)) {
     const target = path.join(root, relative);
     fs.mkdirSync(path.dirname(target), { recursive: true });

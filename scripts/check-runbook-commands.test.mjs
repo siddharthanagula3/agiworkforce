@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
@@ -10,6 +9,7 @@ import {
   resolveCommandTarget,
   runRunbookCommandsCheck,
 } from './check-runbook-commands.mjs';
+import { makeTempDir } from './lib/test-temp-dir.mjs';
 
 const RUNBOOK = `# Restore drill
 
@@ -30,7 +30,7 @@ The workflow lives at \`.github/workflows/db-restore-drill.yml\`.
 `;
 
 function makeRoot(mutate = () => {}) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'runbook-commands-'));
+  const root = makeTempDir('runbook-commands-');
   const write = (relative, contents) => {
     fs.mkdirSync(path.join(root, path.dirname(relative)), { recursive: true });
     fs.writeFileSync(path.join(root, relative), contents);

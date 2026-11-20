@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 
 import { execFileSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { prepareProtocolTypesTarget } from './lib/protocol-types-target.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const outDir = path.join(
@@ -21,6 +22,11 @@ const [mode = '--write', ...extraArgs] = process.argv.slice(2);
 if (!['--check', '--write'].includes(mode) || extraArgs.length > 0) {
   throw new Error('Usage: node scripts/generate-protocol-types.mjs [--check|--write]');
 }
+const cargoTargetDir = prepareProtocolTypesTarget({
+  repoRoot,
+  env: process.env,
+  tmpdir: os.tmpdir(),
+});
 const stagingRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'agi-protocol-types-'));
 const stagingDir = path.join(stagingRoot, 'protocol');
 fs.mkdirSync(stagingDir, { recursive: true });
@@ -31,10 +37,7 @@ try {
     stdio: 'inherit',
     env: {
       ...process.env,
-      CARGO_TARGET_DIR: path.join(
-        os.tmpdir(),
-        `agi-protocol-types-target-${createHash('sha256').update(repoRoot).digest('hex').slice(0, 12)}`,
-      ),
+      CARGO_TARGET_DIR: cargoTargetDir,
       TS_RS_EXPORT_DIR: stagingDir,
     },
   });

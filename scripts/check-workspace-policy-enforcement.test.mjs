@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
@@ -18,6 +17,7 @@ import {
   isEnforcementFile,
   servedFamilies,
 } from './lib/workspace-policy-enforcement.mjs';
+import { makeTempDir } from './lib/test-temp-dir.mjs';
 
 const CONTRACT = `
 export const WORKSPACE_FEATURES = ['browser', 'projects'] as const;
@@ -73,7 +73,7 @@ test('follows real shared control predicates without crediting imports, strings 
 });
 
 function tree(files) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'policy-enforcement-'));
+  const root = makeTempDir('policy-enforcement-');
   for (const [rel, source] of Object.entries(files)) {
     const full = path.join(root, rel);
     fs.mkdirSync(path.dirname(full), { recursive: true });

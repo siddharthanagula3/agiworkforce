@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
@@ -12,6 +11,7 @@ import {
   toolNameList,
   UNDECLARED_BASELINE,
 } from './check-tool-registry.mjs';
+import { makeTempDir } from './lib/test-temp-dir.mjs';
 
 const METADATA = 'apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts';
 
@@ -32,7 +32,7 @@ function metadataSource(entries) {
 }
 
 function fixture(files) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tool-registry-'));
+  const root = makeTempDir('tool-registry-');
   for (const [relative, contents] of Object.entries(files)) {
     const target = path.join(root, relative);
     fs.mkdirSync(path.dirname(target), { recursive: true });

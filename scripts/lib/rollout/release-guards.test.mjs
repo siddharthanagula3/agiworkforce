@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { createPublicKey } from 'node:crypto';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 
@@ -25,11 +24,12 @@ import {
   storeListingFailures,
 } from './store-listing.mjs';
 import { collectFiles, scanArtifact } from '../../release/scan-release-artifact.mjs';
+import { makeTempDir } from '../test-temp-dir.mjs';
 
 const REPO_ROOT = new URL('../../../', import.meta.url).pathname;
 
 function fixtureDir() {
-  return mkdtempSync(path.join(tmpdir(), 'release-guard-'));
+  return makeTempDir('release-guard-');
 }
 
 test('an embedded provider secret fails the scan and is never printed in full', () => {

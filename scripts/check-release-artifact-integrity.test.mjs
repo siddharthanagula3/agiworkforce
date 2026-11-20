@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
 
@@ -12,9 +11,10 @@ import {
   staleReleaseWaivers,
   unverifiedReleaseArtifacts,
 } from './check-release-artifact-integrity.mjs';
+import { makeTempDir } from './lib/test-temp-dir.mjs';
 
 function repoWith(files) {
-  const root = mkdtempSync(join(tmpdir(), 'release-integrity-'));
+  const root = makeTempDir('release-integrity-');
   mkdirSync(join(root, '.github', 'workflows'), { recursive: true });
   for (const [name, source] of Object.entries(files)) {
     writeFileSync(join(root, '.github', 'workflows', name), source, 'utf8');

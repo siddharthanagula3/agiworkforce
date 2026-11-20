@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { declaredColumns, declaredPurposes } from './check-connector-secret-reseal.mjs';
+import { makeTempDir } from './lib/test-temp-dir.mjs';
 
 const script = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -77,7 +77,7 @@ const BASELINE = {
 };
 
 function fixture(declaration, extra = {}) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'connector-reseal-'));
+  const root = makeTempDir('connector-reseal-');
   const files = { [MODULE]: moduleSource(declaration), [MIGRATION]: SCHEMA, ...extra };
   for (const [relative, contents] of Object.entries(files)) {
     const target = path.join(root, relative);
