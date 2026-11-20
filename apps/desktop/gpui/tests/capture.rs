@@ -90,6 +90,8 @@ fn stale_sweep_removes_only_old_capture_folders() {
 fn screenshot_command_is_interactive_silent_and_absolute() {
     let output = PathBuf::from("/private/capture/Screenshot.png");
     let (program, arguments) = screenshot_command(&output);
+    assert_eq!(program, PathBuf::from("/usr/sbin/screencapture"));
+    #[cfg(unix)]
     assert!(program.is_absolute());
     assert_eq!(
         arguments,

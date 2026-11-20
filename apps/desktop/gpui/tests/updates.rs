@@ -5,6 +5,10 @@ use std::path::{Path, PathBuf};
 use agiworkforce_desktop_gpui::updates::*;
 use url::Url;
 
+#[path = "support/host_path.rs"]
+mod host_path;
+use host_path::host_absolute;
+
 fn repository() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..")
 }
@@ -356,9 +360,10 @@ fn tool_output_and_names_are_parsed_strictly() {
     assert_eq!(MacArchitecture::for_target("windows", "aarch64"), None);
     assert!(downloads_directory(None).is_err());
     assert!(downloads_directory(Some("relative".into())).is_err());
+    let home = host_absolute("/Users/someone");
     assert_eq!(
-        downloads_directory(Some("/Users/someone".into())).unwrap(),
-        Path::new("/Users/someone/Downloads")
+        downloads_directory(Some(home.clone().into())).unwrap(),
+        Path::new(&home).join("Downloads")
     );
 }
 

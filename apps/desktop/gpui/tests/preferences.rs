@@ -6,6 +6,10 @@ use agiworkforce_desktop_gpui::preferences::{
     data_directory, normalize_accelerator, Appearance, Platform, Preferences, FILE_NAME,
 };
 
+#[path = "support/host_path.rs"]
+mod host_path;
+use host_path::host_absolute;
+
 fn env<'a>(pairs: &'a [(&'a str, &'a str)]) -> impl Fn(&str) -> Option<OsString> + 'a {
     move |name| {
         pairs
@@ -170,9 +174,13 @@ fn accelerators_are_normalized_and_validated() {
 
 #[test]
 fn data_directory_follows_each_platform_convention() {
+    let home = host_absolute("/Users/a");
     assert_eq!(
-        data_directory(Platform::MacOs, "Desk", env(&[("HOME", "/Users/a")])).unwrap(),
-        PathBuf::from("/Users/a/Library/Application Support/Desk")
+        data_directory(Platform::MacOs, "Desk", env(&[("HOME", &home)])).unwrap(),
+        PathBuf::from(&home)
+            .join("Library")
+            .join("Application Support")
+            .join("Desk")
     );
     let appdata = if cfg!(windows) {
         "C:\\Users\\a\\AppData\\Roaming"
@@ -183,18 +191,20 @@ fn data_directory_follows_each_platform_convention() {
         data_directory(Platform::Windows, "Desk", env(&[("APPDATA", appdata)])).unwrap(),
         PathBuf::from(appdata).join("Desk")
     );
+    let xdg = host_absolute("/xdg");
+    let linux_home = host_absolute("/home/a");
     assert_eq!(
         data_directory(
             Platform::Linux,
             "Desk",
-            env(&[("XDG_CONFIG_HOME", "/xdg"), ("HOME", "/home/a")])
+            env(&[("XDG_CONFIG_HOME", &xdg), ("HOME", &linux_home)])
         )
         .unwrap(),
-        PathBuf::from("/xdg/Desk")
+        PathBuf::from(&xdg).join("Desk")
     );
     assert_eq!(
-        data_directory(Platform::Linux, "Desk", env(&[("HOME", "/home/a")])).unwrap(),
-        PathBuf::from("/home/a/.config/Desk")
+        data_directory(Platform::Linux, "Desk", env(&[("HOME", &linux_home)])).unwrap(),
+        PathBuf::from(&linux_home).join(".config").join("Desk")
     );
 }
 
@@ -208,9 +218,10 @@ fn data_directory_rejects_missing_relative_and_unsafe_inputs() {
         env(&[("XDG_CONFIG_HOME", "relative"), ("HOME", "also/relative")])
     )
     .is_err());
+    let home = host_absolute("/Users/a");
     for name in ["", "  ", "..", "a/b", "a\\b"] {
         assert!(
-            data_directory(Platform::MacOs, name, env(&[("HOME", "/Users/a")])).is_err(),
+            data_directory(Platform::MacOs, name, env(&[("HOME", &home)])).is_err(),
             "{name:?} should be rejected"
         );
     }

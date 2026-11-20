@@ -8,6 +8,10 @@ use agiworkforce_desktop_gpui::integration::{
     DEEP_LINK_QUEUE_LIMIT, DEEP_LINK_QUEUE_TTL,
 };
 
+#[path = "support/host_path.rs"]
+mod host_path;
+use host_path::host_absolute;
+
 fn contract() -> &'static DeepLinkContract {
     DeepLinkContract::load().expect("the deep-link contract loads from its TypeScript owner")
 }
@@ -97,13 +101,18 @@ fn allowed_routes_parse_into_typed_destinations() {
         contract.parse(&link("code/home")),
         Ok(DeepLinkRoute::CodeHome)
     );
+    let folder = host_absolute("/Users/me/My Project");
+    let encoded_folder = folder
+        .replace(':', "%3A")
+        .replace('/', "%2F")
+        .replace(' ', "%20");
     assert_eq!(
-        contract.parse(&link(
-            "code/local/3f1d2c4e-5a6b-4c7d-8e9f-0a1b2c3d4e5f?folder=%2FUsers%2Fme%2FMy%20Project"
-        )),
+        contract.parse(&link(&format!(
+            "code/local/3f1d2c4e-5a6b-4c7d-8e9f-0a1b2c3d4e5f?folder={encoded_folder}"
+        ))),
         Ok(DeepLinkRoute::LocalSession {
             thread_id: "3f1d2c4e-5a6b-4c7d-8e9f-0a1b2c3d4e5f".into(),
-            folder: PathBuf::from("/Users/me/My Project"),
+            folder: PathBuf::from(folder),
         })
     );
     assert_eq!(
