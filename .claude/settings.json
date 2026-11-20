@@ -86,7 +86,7 @@
   "enabledPlugins": {
     "typescript-lsp@claude-plugins-official": true,
     "rust-analyzer-lsp@claude-plugins-official": true,
-    "claude-security@claude-plugins-official": false,
+    "claude-security@claude-plugins-official": true,
     "vercel@claude-plugins-official": true
   }
 }
