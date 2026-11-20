@@ -12505,15 +12505,6 @@
     },
     {
       "surface": "web",
-      "kind": "loading",
-      "url": "/help",
-      "file": "apps/web/app/help/loading.tsx",
-      "segments": [
-        "help"
-      ]
-    },
-    {
-      "surface": "web",
       "kind": "page",
       "url": "/help",
       "file": "apps/web/app/help/page.tsx",

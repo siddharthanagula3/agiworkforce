@@ -37426,7 +37426,6 @@
       "apps/web/app/help/[slug]/page.tsx",
       "apps/web/app/help/collections/[id]/page.tsx",
       "apps/web/app/help/layout.tsx",
-      "apps/web/app/help/loading.tsx",
       "apps/web/app/help/page.tsx",
       "apps/web/app/i18n/index.ts",
       "apps/web/app/integrations/page.tsx",
@@ -63414,9 +63413,6 @@
     ],
     "HelpLayout": [
       "apps/web/app/help/layout.tsx"
-    ],
-    "HelpLoading": [
-      "apps/web/app/help/loading.tsx"
     ],
     "HelpPage": [
       "apps/web/app/help/page.tsx"
