@@ -38,7 +38,7 @@ function FormulaDisplay({
       <div
         className={cn('formula-katex overflow-x-auto', displayMode && 'py-2 text-center')}
         // llm-guardrail-allow: KaTeX emits markup, sanitized below before it reaches the DOM.
-
+        // eslint-disable-next-line no-restricted-syntax -- WEB-37: KaTeX markup passes DOMPurify first
         dangerouslySetInnerHTML={{
           __html: DOMPurify.sanitize(rendered, { USE_PROFILES: { html: true } }),
         }}

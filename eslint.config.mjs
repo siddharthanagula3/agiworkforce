@@ -51,6 +51,32 @@ const PREVENTION_LAYER_RESTRICTED_SYNTAX = [
   },
 ];
 
+const PREVENTION_LAYER_IGNORES = [
+  'packages/contracts/types/src/models.json',
+  'packages/contracts/types/src/model-catalog.ts',
+  'packages/platform/local-llm/src/catalog.ts',
+  '**/*.test.ts',
+  '**/*.test.tsx',
+  '**/*.spec.ts',
+  '**/*.spec.tsx',
+  '**/__tests__/**',
+  '**/__mocks__/**',
+  '**/marketing/**',
+  '**/*Marketing.ts',
+  '**/*Marketing.tsx',
+  '**/*.d.ts',
+];
+
+// Mirrors apps/web/eslint.config.mjs (WEB-37). Without it lint-staged's root
+// `eslint --fix` deletes each reviewed per-line disable as unused.
+const WEB_INNER_HTML_RESTRICTION = {
+  // llm-guardrail-allow: rule selector/message naming the banned sink
+  selector: "JSXAttribute[name.name='dangerouslySetInnerHTML']",
+  message:
+    // llm-guardrail-allow: rule message naming the banned sink
+    'dangerouslySetInnerHTML can introduce XSS. Sanitize via DOMPurify (@shared/utils/html-sanitizer) and add a per-line eslint-disable with WEB-37 justification, or render via JSX.',
+};
+
 const MOBILE_TYPE_SCALE_RULE = {
   selector: "Property[key.name='fontSize'] > Literal",
   message:
@@ -388,23 +414,21 @@ export default [
   // override (below) tagged with `// FIXME: P1-XX` so `main` stays green
   {
     files: ['**/*.ts', '**/*.tsx'],
-    ignores: [
-      'packages/contracts/types/src/models.json',
-      'packages/contracts/types/src/model-catalog.ts',
-      'packages/platform/local-llm/src/catalog.ts',
-      '**/*.test.ts',
-      '**/*.test.tsx',
-      '**/*.spec.ts',
-      '**/*.spec.tsx',
-      '**/__tests__/**',
-      '**/__mocks__/**',
-      '**/marketing/**',
-      '**/*Marketing.ts',
-      '**/*Marketing.tsx',
-      '**/*.d.ts',
-    ],
+    ignores: PREVENTION_LAYER_IGNORES,
     rules: {
       'no-restricted-syntax': ['error', ...PREVENTION_LAYER_RESTRICTED_SYNTAX],
+    },
+  },
+
+  {
+    files: ['apps/web/features/**/*.{ts,tsx}', 'apps/web/components/**/*.{ts,tsx}'],
+    ignores: PREVENTION_LAYER_IGNORES,
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        ...PREVENTION_LAYER_RESTRICTED_SYNTAX,
+        WEB_INNER_HTML_RESTRICTION,
+      ],
     },
   },
 
