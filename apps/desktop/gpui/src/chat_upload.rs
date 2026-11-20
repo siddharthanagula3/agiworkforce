@@ -8,10 +8,20 @@ pub struct AttachmentLimits {
     pub max_message_bytes: u64,
     pub max_count: usize,
 }
+
+// This client never receives the server's announced limits, so it keeps to the
+// ones every server it can meet accepts.
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CompiledPolicy {
+    without_handshake: AttachmentLimits,
+}
+
 pub fn limits() -> Result<AttachmentLimits> {
-    serde_json::from_str(include_str!(
+    serde_json::from_str::<CompiledPolicy>(include_str!(
         "../../../../packages/contracts/cloud-contracts/src/chat-attachment-policy.json"
     ))
+    .map(|policy| policy.without_handshake)
     .context("The compiled chat attachment limits are invalid")
 }
 
