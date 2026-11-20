@@ -58,6 +58,16 @@ describe('attaching a real-shaped web page', () => {
     );
   });
 
+  it.each([
+    ['&amp;lt;script&amp;gt;', '&lt;script&gt;'],
+    ['&amp;amp;', '&amp;'],
+    ['&amp;quot; &amp;#39; &amp;nbsp;', '&quot; &#39; &nbsp;'],
+    ['a&nbsp;b &quot;q&quot; it&#39;s &lt;i&gt; &amp; &unknown;', 'a b "q" it\'s <i> & &unknown;'],
+  ])('decodes each entity once in %j', async (html, expected) => {
+    const { text } = await attachPage(`<p>${html}</p>`);
+    expect(text).toBe(`Content of https://example.com/page:\n${expected}`);
+  });
+
   it('keeps text after an unclosed script and still drops a closed style', async () => {
     const { text } = await attachPage('<script>never closed <style>x</style> tail');
     expect(text).toBe('Content of https://example.com/page:\nnever closed tail');

@@ -220,14 +220,19 @@ function tagsToSpaces(html: string): string {
   return out + html.slice(cursor);
 }
 
+const HTML_ENTITY_TEXT: Readonly<Record<string, string>> = {
+  '&nbsp;': ' ',
+  '&amp;': '&',
+  '&lt;': '<',
+  '&gt;': '>',
+  '&quot;': '"',
+  '&#39;': "'",
+};
+const HTML_ENTITY = /&(?:nbsp|amp|lt|gt|quot|#39);/gu;
+
 function pageText(html: string): string {
   return tagsToSpaces(dropElements(html).replace(HTML_BLOCK_TAGS, '\n'))
-    .replace(/&nbsp;/gu, ' ')
-    .replace(/&amp;/gu, '&')
-    .replace(/&lt;/gu, '<')
-    .replace(/&gt;/gu, '>')
-    .replace(/&quot;/gu, '"')
-    .replace(/&#39;/gu, "'")
+    .replace(HTML_ENTITY, (entity) => HTML_ENTITY_TEXT[entity] ?? entity)
     .replace(/[ \t]+/gu, ' ')
     .replace(/\s*\n\s*/gu, '\n')
     .trim();
