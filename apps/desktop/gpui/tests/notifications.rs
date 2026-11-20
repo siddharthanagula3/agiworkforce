@@ -1,6 +1,6 @@
-use agiworkforce_desktop_gpui::notifications::{
-    hold_plan, HoldPlan, KeepAwake, Kind, Platform, Policy, Tracker,
-};
+use agiworkforce_desktop_gpui::notifications::{hold_plan, Kind, Platform, Policy, Tracker};
+#[cfg(unix)]
+use agiworkforce_desktop_gpui::notifications::{HoldPlan, KeepAwake};
 use agiworkforce_desktop_gpui::preferences::Preferences;
 use agiworkforce_protocol::developer_session::{method, AppServerNotification};
 use agiworkforce_protocol::task_state::AgentTaskState;

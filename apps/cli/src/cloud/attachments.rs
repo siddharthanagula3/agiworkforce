@@ -13,15 +13,24 @@ const COMPLETE_PATH: &str = "/api/uploads/chat-attachment/complete";
 const UPLOAD_TIMEOUT: Duration = Duration::from_secs(300);
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct AttachmentPolicy {
+struct UploadLimits {
     max_bytes: u64,
+    max_message_bytes: u64,
     max_count: usize,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AttachmentPolicy {
+    max_count: usize,
+    // The CLI never receives the server's announced limits, so its uploads keep
+    // to the ones every server it can meet accepts.
+    without_handshake: UploadLimits,
     file_name_max_length: usize,
     mime_type_max_length: usize,
     mime_types: Vec<String>,
     extensions: Vec<String>,
     image_mime_types: Vec<String>,
-    max_message_bytes: u64,
     file_path_prefix: String,
 }
 static POLICY: LazyLock<AttachmentPolicy> = LazyLock::new(|| {
@@ -32,7 +41,7 @@ static POLICY: LazyLock<AttachmentPolicy> = LazyLock::new(|| {
 });
 
 pub fn max_attachment_bytes() -> u64 {
-    POLICY.max_bytes
+    POLICY.without_handshake.max_bytes
 }
 
 pub(crate) fn snapshot(
@@ -42,7 +51,7 @@ pub(crate) fn snapshot(
     super::uploads::snapshot(
         path,
         selected_at_ms,
-        POLICY.max_bytes,
+        POLICY.without_handshake.max_bytes,
         POLICY.file_name_max_length,
         |name, mime| {
             if !managed_accepts(name, mime)
@@ -127,7 +136,7 @@ pub(crate) fn submitted(files: &[CloudHistoryAttachment]) -> Result<(), CloudErr
     for file in files {
         let size = file
             .size
-            .filter(|size| *size <= POLICY.max_bytes)
+            .filter(|size| *size <= POLICY.without_handshake.max_bytes)
             .ok_or_else(|| {
                 CloudError::Decode("The attachment has no admitted byte count".into())
             })?;
@@ -149,7 +158,7 @@ pub(crate) fn submitted(files: &[CloudHistoryAttachment]) -> Result<(), CloudErr
             .checked_add(size)
             .ok_or_else(|| CloudError::Decode("The attachment byte budget is exhausted".into()))?;
     }
-    if total > POLICY.max_message_bytes {
+    if total > POLICY.without_handshake.max_message_bytes {
         return Err(CloudError::Decode(
             "The selected attachments exceed the message byte budget".into(),
         ));
@@ -162,7 +171,8 @@ pub(crate) fn admit_additional(
     byte_count: u64,
 ) -> Result<(), CloudError> {
     submitted(files)?;
-    if files.len() >= POLICY.max_count || byte_count == 0 || byte_count > POLICY.max_bytes {
+    let limits = &POLICY.without_handshake;
+    if files.len() >= limits.max_count || byte_count == 0 || byte_count > limits.max_bytes {
         return Err(CloudError::LocalFile(
             "Send or discard recovered attachments before selecting another file".into(),
         ));
@@ -174,7 +184,7 @@ pub(crate) fn admit_additional(
             })?)
             .ok_or_else(|| CloudError::Decode("The attachment byte count overflowed".into()))
     })?;
-    if total > POLICY.max_message_bytes {
+    if total > limits.max_message_bytes {
         return Err(CloudError::LocalFile(
             "Send or discard recovered attachments before adding more bytes to this message".into(),
         ));

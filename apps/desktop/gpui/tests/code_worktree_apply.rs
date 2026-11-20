@@ -3,16 +3,20 @@ use agiworkforce_desktop_gpui::{
 };
 use agiworkforce_protocol::{developer_session::*, worktree_apply::*};
 
+#[path = "support/host_path.rs"]
+mod host_path;
+use host_path::host_absolute;
+
 fn state() -> CodeWorktrees {
     let mut state = CodeWorktrees::default();
     let root = DeveloperWorkspaceIdentity {
-        cwd: "/repo".into(),
+        cwd: host_absolute("/repo"),
         root_key: "root".into(),
     };
     let tree = ManagedWorktreeSummary {
         id: "abcd1234".into(),
-        path: "/host/tree/checkout".into(),
-        repository_root: "/repo".into(),
+        path: host_absolute("/host/tree/checkout"),
+        repository_root: host_absolute("/repo"),
         label: None,
         start: WorktreeStartPoint::WorkingTree,
         base_commit: "base".into(),

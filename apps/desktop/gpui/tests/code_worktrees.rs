@@ -1,17 +1,21 @@
 use agiworkforce_desktop_gpui::code_worktrees::{validate_archive, CodeWorktrees};
 use agiworkforce_protocol::developer_session::*;
 
+#[path = "support/host_path.rs"]
+mod host_path;
+use host_path::host_absolute;
+
 fn root() -> DeveloperWorkspaceIdentity {
     DeveloperWorkspaceIdentity {
-        cwd: "/repo".into(),
+        cwd: host_absolute("/repo"),
         root_key: "root".into(),
     }
 }
 fn tree() -> ManagedWorktreeSummary {
     ManagedWorktreeSummary {
         id: "abc123ef".into(),
-        path: "/host/worktrees/one/checkout".into(),
-        repository_root: "/repo".into(),
+        path: host_absolute("/host/worktrees/one/checkout"),
+        repository_root: host_absolute("/repo"),
         label: None,
         start: WorktreeStartPoint::WorkingTree,
         base_commit: "base".into(),
@@ -53,7 +57,7 @@ fn worktree_lists_stay_bound_to_the_original_or_managed_coding_folder() {
     assert!(state
         .accept_list(
             DeveloperWorkspaceIdentity {
-                cwd: "/foreign".into(),
+                cwd: host_absolute("/foreign"),
                 root_key: "other".into()
             },
             list(vec![tree()])
@@ -70,7 +74,7 @@ fn malformed_or_repeated_lists_do_not_erase_the_confirmed_worktrees() {
     assert!(CodeWorktrees::default()
         .accept_list(
             DeveloperWorkspaceIdentity {
-                cwd: "/repo".into(),
+                cwd: host_absolute("/repo"),
                 root_key: String::new()
             },
             list(vec![])
@@ -83,7 +87,7 @@ fn malformed_or_repeated_lists_do_not_erase_the_confirmed_worktrees() {
         let mut bad = tree();
         match field {
             "path" => bad.path = "relative".into(),
-            "repository" => bad.repository_root = "/foreign".into(),
+            "repository" => bad.repository_root = host_absolute("/foreign"),
             "identity" => bad.id.clear(),
             _ => {
                 bad.active = true;
@@ -150,7 +154,7 @@ fn pin_acknowledgements_cannot_replace_another_checkout() {
     let mut pinned = tree();
     pinned.pinned = true;
     let mut foreign = pinned.clone();
-    foreign.path = "/another-checkout".into();
+    foreign.path = host_absolute("/another-checkout");
     assert!(state.accept_pin(&tree(), true, foreign).is_err());
     assert!(!state.selected(&tree().id).unwrap().pinned);
     state.accept_pin(&tree(), true, pinned).unwrap();

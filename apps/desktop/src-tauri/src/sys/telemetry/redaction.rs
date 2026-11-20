@@ -108,10 +108,10 @@ mod tests {
                 "anthropic key",
                 ["sk-", "ant-", "api03-", FILLER_24].concat(),
             ),
-            ("google key", ["AIza", "x", &FILLER_40[..34]].concat()),
+            ("google key", ["AIza", "x", &FILLER_40[..34]].concat()), // utf8-safe: ASCII filler
             (
                 "groq key",
-                ["gsk", "_", FILLER_40, &FILLER_40[..16]].concat(),
+                ["gsk", "_", FILLER_40, &FILLER_40[..16]].concat(), // utf8-safe: ASCII filler
             ),
             (
                 "stripe live key",
@@ -136,11 +136,11 @@ mod tests {
             ),
             (
                 "github classic token",
-                ["gh", "p_", &FILLER_40[..36]].concat(),
+                ["gh", "p_", &FILLER_40[..36]].concat(), // utf8-safe: ASCII filler
             ),
             (
                 "github oauth token",
-                ["gh", "o_", &FILLER_40[..36]].concat(),
+                ["gh", "o_", &FILLER_40[..36]].concat(), // utf8-safe: ASCII filler
             ),
             (
                 "github fine-grained token",
