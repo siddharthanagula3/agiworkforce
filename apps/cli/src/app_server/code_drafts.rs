@@ -91,8 +91,26 @@ pub(super) fn write(
 mod tests {
     use super::*;
     use crate::path_security::WorkspaceFileAuthority;
+    #[cfg(unix)]
     use agiworkforce_protocol::code_drafts::CodeDraftChange;
 
+    #[cfg(not(unix))]
+    #[test]
+    fn drafts_are_refused_where_private_recovery_storage_is_unavailable() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let store = tempfile::tempdir().expect("store");
+        let authority = WorkspaceFileAuthority::new(workspace.path()).expect("authority");
+        let target = CodeDraftParams {
+            root_key: authority.identity().expect("identity"),
+            thread_id: "thread-1".into(),
+        };
+        let refused = read(store.path(), &authority, target).expect_err("refused");
+        assert!(refused
+            .message()
+            .contains("Private recovery storage is unavailable"));
+    }
+
+    #[cfg(unix)]
     #[test]
     fn a_second_owner_restores_the_unsent_draft_and_a_newer_write_wins() {
         let workspace = tempfile::tempdir().expect("workspace");
