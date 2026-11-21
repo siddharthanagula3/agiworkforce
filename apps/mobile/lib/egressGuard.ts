@@ -1,5 +1,7 @@
 import NetInfo from '@react-native-community/netinfo';
 import {
+  ADULT_ELIGIBILITY_PATH,
+  AdultEligibilityRequestSchema,
   AgentTaskStateSchema,
   MANAGED_CLOUD_ACCOUNT_DELETION_CANCEL_SCHEDULE_PATH,
   MANAGED_CLOUD_ACCOUNT_DELETION_PATH,
@@ -201,12 +203,28 @@ function isConsentedReportRequest(input: RequestInfo | URL, init?: RequestInit):
 type BodyRule = (init?: RequestInit) => boolean;
 const ANY_BODY: BodyRule = () => true;
 
+function carriesOnlyAgeEvidence(init?: RequestInit): boolean {
+  if (typeof init?.body !== 'string') return false;
+  try {
+    return AdultEligibilityRequestSchema.safeParse(JSON.parse(init.body)).success;
+  } catch {
+    return false;
+  }
+}
+
 const SIGNED_IN_ACCOUNT_CONTROLS: ReadonlyMap<string, ReadonlyMap<string, BodyRule>> = new Map([
   [
     TERMS_ACCEPTANCE_PATH,
     new Map([
       ['GET', ANY_BODY],
       ['POST', ANY_BODY],
+    ]),
+  ],
+  [
+    ADULT_ELIGIBILITY_PATH,
+    new Map<string, BodyRule>([
+      ['GET', hasNoBody],
+      ['POST', carriesOnlyAgeEvidence],
     ]),
   ],
   [
@@ -297,10 +315,11 @@ function isWithdrawalControlRequest(input: RequestInfo | URL, init?: RequestInit
  *     POST to {@link CONTENT_REPORT_PATH} only) → allowed, except while a
  *     withdrawal is in progress.
  *   - Local mode + a signed-in account control (`authControl`: Terms acceptance,
- *     account deletion status, scheduling and cancellation, the identity check
- *     for deletion only, and the data export) → allowed. None carries chat
- *     content to a provider, and these rights must not depend on sharing with
- *     AI providers.
+ *     the age check that opens Cloud, account deletion status, scheduling and
+ *     cancellation, the identity check for deletion only, and the data export)
+ *     → allowed. None carries chat content to a provider, and these rights must
+ *     not depend on sharing with AI providers. The age check has to pass
+ *     before Cloud opens, so refusing it here would keep Cloud shut for good.
  *   - Local mode + a withdrawal control (`withdrawalControl`: list schedules,
  *     set one inactive, list unfinished runs, pause a run, revoke the Ask from
  *     Siri token) → allowed. Each only stops work; none sends content.

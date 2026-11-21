@@ -22,6 +22,7 @@ jest.mock('@/lib/mmkv', () => ({
 }));
 
 import {
+  ADULT_ELIGIBILITY_PATH,
   MANAGED_CLOUD_ACCOUNT_DELETION_CANCEL_SCHEDULE_PATH,
   MANAGED_CLOUD_ACCOUNT_DELETION_PATH,
   MANAGED_CLOUD_AGENT_RUNS_BASE_PATH,
@@ -354,6 +355,91 @@ describe('account deletion does not depend on sharing with AI providers', () => 
       expect(mockSecureFetch).not.toHaveBeenCalled();
     },
   );
+});
+
+describe('the age check that opens Cloud does not depend on sharing with AI providers', () => {
+  const eligibilityUrl = new URL(ADULT_ELIGIBILITY_PATH, API_URL).toString();
+  const signedIn = { Authorization: 'Bearer session-token' };
+  const evidence = JSON.stringify({
+    surface: 'mobile-auth',
+    evidence: { kind: 'declared_age', age: 30 },
+  });
+
+  beforeEach(() => {
+    mockStored.clear();
+    mockSecureFetch.mockReset().mockResolvedValue(new Response('ok'));
+    __resetCloudAccountSessionForTests();
+  });
+
+  afterEach(() => {
+    useChatAppModeStore.setState({ appMode: 'local' });
+  });
+
+  it.each(['local', 'cloud'] as const)(
+    'lets the signed-in read and the evidence report through in %s mode without the permission',
+    async (mode) => {
+      useChatAppModeStore.setState({ appMode: mode });
+
+      await guardedFetch(
+        eligibilityUrl,
+        { method: 'GET', headers: signedIn },
+        { authControl: true },
+      );
+      await guardedFetch(
+        eligibilityUrl,
+        { method: 'POST', headers: signedIn, body: evidence },
+        { authControl: true },
+      );
+      expect(mockSecureFetch).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it.each([
+    ['a read the API client did not mark as an account control', 'GET', signedIn, undefined, false],
+    ['a read with no signed-in session', 'GET', {}, undefined, true],
+    ['a read that carries a body', 'GET', signedIn, evidence, true],
+    ['another method', 'DELETE', signedIn, undefined, true],
+    ['a report with no evidence', 'POST', signedIn, undefined, true],
+    [
+      'a report that carries anything beside the evidence',
+      'POST',
+      signedIn,
+      JSON.stringify({ ...JSON.parse(evidence), note: 'a message' }),
+      true,
+    ],
+    [
+      'a report whose evidence carries free text',
+      'POST',
+      signedIn,
+      JSON.stringify({
+        surface: 'mobile-auth',
+        evidence: { kind: 'declared_age', age: 30, reason: 'a message' },
+      }),
+      true,
+    ],
+    ['a report that is not the evidence at all', 'POST', signedIn, 'a message', true],
+  ] as const)(
+    'CRITICAL: still refuses %s in Local Mode, before any network I/O',
+    async (_case, method, headers, body, authControl) => {
+      useChatAppModeStore.setState({ appMode: 'local' });
+
+      await expect(
+        guardedFetch(eligibilityUrl, { method, headers: { ...headers }, body }, { authControl }),
+      ).rejects.toBeInstanceOf(EgressBlockedError);
+      expect(mockSecureFetch).not.toHaveBeenCalled();
+    },
+  );
+
+  it('CRITICAL: still refuses a query string on the age route in Local Mode', async () => {
+    await expect(
+      guardedFetch(
+        `${eligibilityUrl}?note=a-message`,
+        { method: 'GET', headers: signedIn },
+        { authControl: true },
+      ),
+    ).rejects.toBeInstanceOf(EgressBlockedError);
+    expect(mockSecureFetch).not.toHaveBeenCalled();
+  });
 });
 
 describe('a withdrawal the app did not live to finish', () => {
