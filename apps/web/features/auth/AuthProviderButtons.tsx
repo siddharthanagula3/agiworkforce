@@ -19,6 +19,7 @@ export function AuthProviderButtons({
   lastUsed = null,
   lastUsedLabel,
   onStart,
+  describedBy,
 }: {
   providers: readonly AuthProvider[];
   pending: AuthProviderId | null;
@@ -26,6 +27,7 @@ export function AuthProviderButtons({
   lastUsed?: AuthProviderId | null;
   lastUsedLabel?: string;
   onStart: (provider: AuthProviderId) => void;
+  describedBy?: string;
 }) {
   const copy = useAuthCopy();
   if (providers.length === 0) return null;
@@ -39,6 +41,7 @@ export function AuthProviderButtons({
           className={AUTH_PROVIDER_BUTTON_CLASS}
           disabled={disabled || pending !== null}
           aria-busy={pending === provider.id || undefined}
+          aria-describedby={describedBy}
           onClick={() => onStart(provider.id)}
         >
           {pending === provider.id ? (

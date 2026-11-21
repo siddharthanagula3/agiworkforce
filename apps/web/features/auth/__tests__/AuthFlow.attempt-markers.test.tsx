@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-import { ACCOUNT_AGE_FIELD_LABEL, ACCOUNT_MINIMUM_AGE } from '@agiworkforce/types';
+const signUpStarted = vi.hoisted(() => ({ report: undefined as (() => void) | undefined }));
 
 const client = vi.hoisted(() => ({
   isReady: true,
@@ -18,11 +18,15 @@ const client = vi.hoisted(() => ({
   startProvider: vi.fn(),
   signInWithPasskey: vi.fn(),
   restart: vi.fn(),
+  readProviderReturn: () => null,
 }));
 
 vi.mock('../IdentityAuthAdapter', async (importOriginal) => ({
   ...(await importOriginal()),
-  useIdentityAuthClient: () => client,
+  useIdentityAuthClient: (_redirects: unknown, options: { onSignUpStarted?: () => void }) => {
+    signUpStarted.report = options.onSignUpStarted;
+    return client;
+  },
   IdentityBotProtection: () => null,
 }));
 
@@ -33,19 +37,17 @@ import {
   TERMS_GATE_STORAGE_KEY,
   writeSignupAttemptMarkers,
 } from '@/app/signup/signupAttemptMarkers';
-import { MARKETING_EMAIL_CONSENT_PURPOSE } from '@/lib/consent-purposes';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 import { AuthFlow } from '../AuthFlow';
-import type { AuthMode, AuthProvider, AuthResult, AuthStep } from '../authContract';
+import type { AuthProvider, AuthResult, AuthStep } from '../authContract';
 
 const PROVIDERS: readonly AuthProvider[] = [{ id: 'google', label: 'Google' }];
 const EMAIL = 'person@example.com';
 const REDIRECTS = {
-  completeUrl: '/signup/complete',
-  switchUrl: '/login',
+  signInCompleteUrl: '/login/complete',
+  signUpCompleteUrl: '/signup/complete',
   ssoCallbackUrl: '/auth/sso-callback',
 };
-const TYPED_AGE = '57';
 const NOTHING_CARRIED = {
   terms: null,
   ageCheckedAgainst: null,
@@ -64,35 +66,27 @@ function markers() {
   };
 }
 
-function ageField(): HTMLElement {
-  return screen.getByLabelText(ACCOUNT_AGE_FIELD_LABEL);
+function leaveEarlierAttemptKeys(): void {
+  window.localStorage.setItem(MARKETING_EMAIL_CHOICE_STORAGE_KEY, POLICY_LAST_UPDATED.privacy);
+  window.localStorage.setItem(MARKETING_EMAIL_ATTEMPT_STORAGE_KEY, 'earlier-attempt');
+  window.sessionStorage.setItem(MARKETING_EMAIL_ATTEMPT_STORAGE_KEY, 'earlier-attempt');
+  window.localStorage.setItem(AGE_CHECK_STORAGE_KEY, '18');
 }
 
-function everythingStored(): Record<string, string> {
-  return { ...window.localStorage, ...window.sessionStorage };
+function renderFlow(passkeySignIn = false) {
+  render(<AuthFlow providers={PROVIDERS} redirects={REDIRECTS} passkeySignIn={passkeySignIn} />);
 }
 
-function renderFlow(mode: AuthMode, passkeySignIn = false) {
-  render(
-    <AuthFlow
-      mode={mode}
-      providers={PROVIDERS}
-      redirects={REDIRECTS}
-      passkeySignIn={passkeySignIn}
-    />,
-  );
-}
-
-async function admitTickedSignupThatReaches(step: AuthStep) {
-  client.startWithEmail.mockResolvedValue({ status: 'next', step } satisfies AuthResult);
-  renderFlow('signup');
-  await userEvent.type(ageField(), TYPED_AGE);
-  await userEvent.click(
-    screen.getByRole('checkbox', { name: MARKETING_EMAIL_CONSENT_PURPOSE.label }),
-  );
+async function continueToStep(step: AuthStep) {
+  client.startWithEmail.mockImplementation(async () => {
+    if (step.kind !== 'password' && 'purpose' in step && step.purpose === 'sign_up') {
+      signUpStarted.report?.();
+    }
+    return { status: 'next', step } satisfies AuthResult;
+  });
+  renderFlow();
   await userEvent.type(screen.getByLabelText('Email address'), EMAIL);
   await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
-  await waitFor(() => expect(markers().choice).toBe(POLICY_LAST_UPDATED.privacy));
 }
 
 beforeEach(() => {
@@ -111,47 +105,28 @@ beforeEach(() => {
   window.sessionStorage.clear();
 });
 
-describe('a sign-up attempt admitted with the marketing email box ticked', () => {
-  it('keeps the terms marker, the choice and one attempt id held by this tab', async () => {
-    await admitTickedSignupThatReaches({
-      kind: 'code',
-      email: EMAIL,
-      purpose: 'sign_up',
-      methods: [],
-    });
+describe('the marker an email attempt carries', () => {
+  it.each<[string, AuthStep]>([
+    ['the code step', { kind: 'code', email: EMAIL, purpose: 'sign_up', methods: [] }],
+    ['the new password step', { kind: 'new_password', email: EMAIL, purpose: 'sign_up' }],
+  ])('is the terms marker alone once a sign-up reaches %s', async (_step, step) => {
+    leaveEarlierAttemptKeys();
+    await continueToStep(step);
 
-    const carried = markers();
-    expect(carried.terms).toBe(POLICY_LAST_UPDATED.terms);
-    expect(carried.ageCheckedAgainst).toBe(String(ACCOUNT_MINIMUM_AGE));
-    expect(carried.choice).toBe(POLICY_LAST_UPDATED.privacy);
-    expect(carried.attempt).toBeTruthy();
-    expect(carried.attemptInThisTab).toBe(carried.attempt);
+    await waitFor(() => expect(markers().terms).toBe(POLICY_LAST_UPDATED.terms));
+    expect(markers()).toEqual({ ...NOTHING_CARRIED, terms: POLICY_LAST_UPDATED.terms });
   });
 
-  it('stores the markers and the minimum age checked against, and nothing about the age it was admitted on', async () => {
-    await admitTickedSignupThatReaches({
-      kind: 'code',
-      email: EMAIL,
-      purpose: 'sign_up',
-      methods: [],
-    });
+  it.each<[string, AuthStep]>([
+    ['the password step', { kind: 'password', email: EMAIL, methods: ['password'] }],
+    ['a sign-in code', { kind: 'code', email: EMAIL, purpose: 'sign_in', methods: [] }],
+  ])('is nothing at all when the address reaches %s of a sign-in', async (_step, step) => {
+    writeSignupAttemptMarkers();
+    leaveEarlierAttemptKeys();
+    await continueToStep(step);
 
-    const stored = everythingStored();
-    expect(Object.keys(stored).sort()).toEqual(
-      [
-        AGE_CHECK_STORAGE_KEY,
-        MARKETING_EMAIL_ATTEMPT_STORAGE_KEY,
-        MARKETING_EMAIL_CHOICE_STORAGE_KEY,
-        TERMS_GATE_STORAGE_KEY,
-      ].sort(),
-    );
-    expect(stored[AGE_CHECK_STORAGE_KEY]).toBe(String(ACCOUNT_MINIMUM_AGE));
-    expect(Object.values(stored)).not.toContain(TYPED_AGE);
-    expect(stored[TERMS_GATE_STORAGE_KEY]).toBe(POLICY_LAST_UPDATED.terms);
-    expect(stored[MARKETING_EMAIL_CHOICE_STORAGE_KEY]).toBe(POLICY_LAST_UPDATED.privacy);
-    expect(client.startWithEmail.mock.calls.flat()).not.toContain(TYPED_AGE);
-    expect(JSON.stringify(client.startWithEmail.mock.calls)).not.toMatch(/age/i);
-    expect(window.location.href).not.toContain(TYPED_AGE);
+    await screen.findByRole('button', { name: 'Edit' });
+    expect(markers()).toEqual(NOTHING_CARRIED);
   });
 });
 
@@ -159,50 +134,27 @@ describe('Edit email', () => {
   it.each<[string, AuthStep]>([
     ['the code step', { kind: 'code', email: EMAIL, purpose: 'sign_up', methods: [] }],
     ['the new password step', { kind: 'new_password', email: EMAIL, purpose: 'sign_up' }],
-  ])('drops every marker of the attempt when pressed on %s of a sign-up', async (_step, step) => {
-    await admitTickedSignupThatReaches(step);
+  ])('drops the marker of the attempt when pressed on %s of a sign-up', async (_step, step) => {
+    await continueToStep(step);
+    await waitFor(() => expect(markers().terms).toBe(POLICY_LAST_UPDATED.terms));
 
     await userEvent.click(await screen.findByRole('button', { name: 'Edit' }));
 
     expect(markers()).toEqual(NOTHING_CARRIED);
     expect(client.restart).toHaveBeenCalledTimes(1);
-    expect(ageField()).toHaveValue('');
-    expect(
-      screen.getByRole('checkbox', { name: MARKETING_EMAIL_CONSENT_PURPOSE.label }),
-    ).not.toBeChecked();
-  });
-
-  it('carries only what the next attempt chose after the email was edited', async () => {
-    await admitTickedSignupThatReaches({
-      kind: 'code',
-      email: EMAIL,
-      purpose: 'sign_up',
-      methods: [],
-    });
-    await userEvent.click(await screen.findByRole('button', { name: 'Edit' }));
-
-    await userEvent.type(ageField(), TYPED_AGE);
-    await userEvent.type(screen.getByLabelText('Email address'), 'second@example.com');
-    await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
-
-    await waitFor(() => expect(markers().terms).toBe(POLICY_LAST_UPDATED.terms));
-    expect(markers()).toEqual({
-      ...NOTHING_CARRIED,
-      terms: POLICY_LAST_UPDATED.terms,
-      ageCheckedAgainst: String(ACCOUNT_MINIMUM_AGE),
-    });
+    expect(screen.getByLabelText('Email address')).toHaveValue('');
   });
 
   it('drops markers written since the sign-in started when pressed during a sign-in', async () => {
     client.startWithEmail.mockImplementation(async () => {
-      writeSignupAttemptMarkers({ marketingEmail: true, ageCheckedAgainst: ACCOUNT_MINIMUM_AGE });
+      writeSignupAttemptMarkers();
       return { status: 'next', step: { kind: 'password', email: EMAIL, methods: ['password'] } };
     });
-    renderFlow('login');
+    renderFlow();
     await userEvent.type(screen.getByLabelText('Email address'), EMAIL);
     await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
     await screen.findByRole('button', { name: 'Edit' });
-    expect(markers().choice).toBe(POLICY_LAST_UPDATED.privacy);
+    expect(markers().terms).toBe(POLICY_LAST_UPDATED.terms);
 
     await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
 
@@ -212,13 +164,14 @@ describe('Edit email', () => {
 
 describe('a passkey sign-in', () => {
   it('drops every marker an abandoned sign-up left before the passkey is asked for', async () => {
-    writeSignupAttemptMarkers({ marketingEmail: true, ageCheckedAgainst: ACCOUNT_MINIMUM_AGE });
+    writeSignupAttemptMarkers();
+    leaveEarlierAttemptKeys();
     const carriedWhenAsked: ReturnType<typeof markers>[] = [];
     client.signInWithPasskey.mockImplementation(async () => {
       carriedWhenAsked.push(markers());
       return { status: 'complete' };
     });
-    renderFlow('login', true);
+    renderFlow(true);
 
     await userEvent.click(
       await screen.findByRole('button', { name: /Sign in with a passkey or security key/ }),

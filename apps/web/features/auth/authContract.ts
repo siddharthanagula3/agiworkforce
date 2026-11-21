@@ -4,8 +4,6 @@ import type { AuthErrorKind, AuthNoticeKind } from '@/lib/auth/error-taxonomy';
 
 export type { AuthProvider, AuthProviderId };
 
-export type AuthMode = 'login' | 'signup';
-
 export type AuthFieldName = 'email' | 'password' | 'code';
 
 export type AuthCodePurpose = 'sign_in' | 'sign_up' | 'reset' | 'device';
@@ -44,7 +42,6 @@ export type AuthStep =
       email: string;
       purpose: AuthCodePurpose;
       methods: readonly AuthMethodId[];
-      passwordless?: boolean;
     }
   | {
       kind: 'second_factor';
@@ -59,7 +56,6 @@ export interface AuthFailure {
   kind: AuthErrorKind;
   message: string;
   field?: AuthFieldName;
-  switchMode?: boolean;
   retryAfterSeconds?: number;
 }
 
@@ -74,15 +70,14 @@ export type AuthResult =
   | AuthFailure;
 
 export interface AuthRedirects {
-  completeUrl: string;
-  switchUrl: string;
+  signInCompleteUrl: string;
+  signUpCompleteUrl: string;
   ssoCallbackUrl: string;
 }
 
 export interface AuthClient {
   isReady: boolean;
   startWithEmail: (email: string) => Promise<AuthResult>;
-  signInWithPassword: (email: string, password: string) => Promise<AuthResult>;
   submitPassword: (password: string) => Promise<AuthResult>;
   submitCode: (code: string, purpose: AuthCodePurpose) => Promise<AuthResult>;
   resendCode: (purpose: AuthCodePurpose) => Promise<AuthResult>;
@@ -90,10 +85,10 @@ export interface AuthClient {
   switchSecondFactor: (factor: AuthSecondFactor) => Promise<AuthResult>;
   submitNewPassword: (password: string, purpose: AuthPasswordPurpose) => Promise<AuthResult>;
   startPasswordReset: () => Promise<AuthResult>;
-  startPasswordResetFor: (email: string) => Promise<AuthResult>;
   startMethod: (method: AuthMethodId) => Promise<AuthResult>;
   startProvider: (provider: AuthProviderId) => Promise<AuthResult>;
   signInWithPasskey: () => Promise<AuthResult>;
+  readProviderReturn: () => AuthResult | null;
   restart: () => Promise<void>;
 }
 

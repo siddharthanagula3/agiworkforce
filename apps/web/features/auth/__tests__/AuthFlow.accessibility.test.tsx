@@ -16,6 +16,7 @@ const client = vi.hoisted(() => ({
   startProvider: vi.fn(),
   signInWithPasskey: vi.fn(),
   restart: vi.fn(),
+  readProviderReturn: () => null,
 }));
 
 vi.mock('../IdentityAuthAdapter', () => ({
@@ -29,20 +30,13 @@ import type { AuthProvider, AuthResult } from '../authContract';
 const PROVIDERS: readonly AuthProvider[] = [{ id: 'google', label: 'Google' }];
 const EMAIL = 'person@example.com';
 const REDIRECTS = {
-  completeUrl: '/login/complete',
-  switchUrl: '/signup',
+  signInCompleteUrl: '/login/complete',
+  signUpCompleteUrl: '/signup/complete',
   ssoCallbackUrl: '/auth/sso-callback',
 };
 
 function renderFlow(passkeySignIn = false) {
-  render(
-    <AuthFlow
-      mode="login"
-      providers={PROVIDERS}
-      redirects={REDIRECTS}
-      passkeySignIn={passkeySignIn}
-    />,
-  );
+  render(<AuthFlow providers={PROVIDERS} redirects={REDIRECTS} passkeySignIn={passkeySignIn} />);
 }
 
 async function submitEmail() {
@@ -65,7 +59,7 @@ describe('auth accessibility', () => {
   it('names the step region with the heading the step renders', () => {
     renderFlow();
 
-    const heading = screen.getByRole('heading', { name: 'Welcome back' });
+    const heading = screen.getByRole('heading', { name: 'Log in or sign up' });
     const region = document.querySelector('section[aria-labelledby]');
     expect(region?.getAttribute('aria-labelledby')).toBe(heading.id);
   });

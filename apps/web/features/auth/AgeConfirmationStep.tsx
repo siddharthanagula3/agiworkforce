@@ -6,6 +6,7 @@ import {
   ADULT_ELIGIBILITY_ERROR_CODES,
   ADULT_ELIGIBILITY_PATH,
   type AdultEligibilityRequest,
+  type AdultEligibilitySurface,
 } from '@agiworkforce/cloud-contracts';
 import { ACCOUNT_AGE_REQUIREMENT_NOTICE } from '@agiworkforce/types';
 import { PageLink } from '@shared/components/layout/EmbeddedPage';
@@ -39,10 +40,16 @@ async function serverRefusedForAge(response: Response): Promise<boolean> {
  * number and keeps only its decision; this screen re-renders from that
  * decision, so it never moves an account on by itself.
  */
-export function AgeConfirmationStep({ footer }: { footer?: ReactNode }) {
+export function AgeConfirmationStep({
+  surface = 'web-login',
+  footer,
+}: {
+  surface?: Extract<AdultEligibilitySurface, 'web-login' | 'web-signup'>;
+  footer?: ReactNode;
+}) {
   const copy = useAuthCopy();
   const router = useRouter();
-  const gate = useSignupAgeGate(true);
+  const gate = useSignupAgeGate();
   const [sending, setSending] = useState(false);
   const [failed, setFailed] = useState(false);
 
@@ -50,7 +57,7 @@ export function AgeConfirmationStep({ footer }: { footer?: ReactNode }) {
     setSending(true);
     setFailed(false);
     const payload: AdultEligibilityRequest = {
-      surface: 'web-login',
+      surface,
       evidence: { kind: 'declared_age', age: Number(gate.age) },
     };
     try {

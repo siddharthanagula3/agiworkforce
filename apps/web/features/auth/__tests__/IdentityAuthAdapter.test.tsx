@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { hostBridgeStub } from '@/test/host-bridge-stub';
-import { act, renderHook } from '@testing-library/react';
+import { act, render, renderHook } from '@testing-library/react';
 
 const signInState = vi.hoisted(() => ({
   status: 'needs_first_factor' as string,
@@ -23,6 +23,11 @@ const signInState = vi.hoisted(() => ({
   passkey: vi.fn(),
   finalize: vi.fn(),
   reset: vi.fn(),
+  firstFactorVerification: {
+    status: null as string | null,
+    strategy: null as string | null,
+    error: null as unknown,
+  },
 }));
 
 const signUpState = vi.hoisted(() => ({
@@ -35,6 +40,11 @@ const signUpState = vi.hoisted(() => ({
   password: vi.fn(),
   verifications: {
     emailAddress: { status: null as string | null },
+    externalAccount: {
+      status: null as string | null,
+      strategy: null as string | null,
+      error: null as unknown,
+    },
     sendEmailCode: vi.fn(),
     verifyEmailCode: vi.fn(),
   },
@@ -52,8 +62,13 @@ const clerkState = vi.hoisted(() => ({
   client: { sessions: [] as { id: string; remove: () => Promise<unknown> }[] },
 }));
 
+const redirectCallback = vi.hoisted(() => vi.fn());
+
 vi.mock('@clerk/nextjs', () => ({
-  AuthenticateWithRedirectCallback: () => null,
+  AuthenticateWithRedirectCallback: (props: Record<string, unknown>) => {
+    redirectCallback(props);
+    return null;
+  },
   useClerk: () => clerkState,
   useSignIn: () => ({ signIn: signInState, errors: null, fetchStatus: 'idle' }),
   useSignUp: () => ({ signUp: signUpState, errors: null, fetchStatus: 'idle' }),
@@ -67,22 +82,32 @@ vi.mock('@/features/desktop-host/lib/browser-sign-in', async (importOriginal) =>
   cancelBrowserSignIn: browserSignIn.cancel,
 }));
 
-import { useIdentityAuthClient } from '../IdentityAuthAdapter';
-import type { AuthMode } from '../authContract';
+import { IdentitySsoCallback, useIdentityAuthClient } from '../IdentityAuthAdapter';
 import { AUTH_ERROR_SOURCE_COPY } from '@/lib/auth/error-taxonomy.copy';
 import { PRODUCT_NAMES } from '@agiworkforce/types';
 
 const REDIRECTS = {
-  completeUrl: '/login/complete?redirectTo=%2Fchat',
-  switchUrl: '/signup',
+  signInCompleteUrl: '/login/complete?redirectTo=%2Fchat',
+  signUpCompleteUrl: '/signup/complete?redirectTo=%2Fchat',
   ssoCallbackUrl: '/auth/sso-callback?redirectTo=%2Fchat',
 };
+
+const NO_ACCOUNT = {
+  error: {
+    code: 'api_response_error',
+    errors: [{ code: 'form_identifier_not_found', meta: { paramName: 'identifier' } }],
+  },
+};
+
+function noAccountUsesTheAddress(): void {
+  signInState.create.mockResolvedValueOnce(NO_ACCOUNT);
+}
 
 const EMAIL = 'person@example.com';
 const NAVIGABLE_HASH = '#complete';
 
-function client(mode: AuthMode) {
-  return renderHook(() => useIdentityAuthClient(mode, REDIRECTS)).result;
+function client() {
+  return renderHook(() => useIdentityAuthClient(REDIRECTS)).result;
 }
 
 const ok = { error: null };
@@ -113,6 +138,8 @@ beforeEach(() => {
   signUpState.unverifiedFields = ['email_address'];
   signUpState.createdSessionId = null;
   signUpState.verifications.emailAddress.status = null;
+  signInState.firstFactorVerification = { status: null, strategy: null, error: null };
+  signUpState.verifications.externalAccount = { status: null, strategy: null, error: null };
   for (const fn of [
     signInState.create,
     signInState.password,
@@ -147,7 +174,7 @@ beforeEach(() => {
 describe('identity auth adapter contract', () => {
   it('observes readiness changes without a provider context rerender', () => {
     clerkState.loaded = false;
-    const { result, unmount } = renderHook(() => useIdentityAuthClient('login', REDIRECTS));
+    const { result, unmount } = renderHook(() => useIdentityAuthClient(REDIRECTS));
     expect(result.current.isReady).toBe(false);
     act(() => {
       clerkState.loaded = true;
@@ -170,14 +197,14 @@ describe('identity auth adapter contract', () => {
       clerkState.loaded = true;
       clerkState.listeners.add(listener);
     });
-    const result = client('login');
+    const result = client();
     expect(result.current.isReady).toBe(true);
   });
 
   it('sends an account with a password to the password step', async () => {
     signInState.supportedFirstFactors = [{ strategy: 'password' }, { strategy: 'email_code' }];
 
-    const result = await client('login').current.startWithEmail(EMAIL);
+    const result = await client().current.startWithEmail(EMAIL);
 
     expect(signInState.create).toHaveBeenCalledWith({ identifier: EMAIL });
     expect(result).toEqual({
@@ -189,7 +216,7 @@ describe('identity auth adapter contract', () => {
   it('emails a code when the account has no password', async () => {
     signInState.supportedFirstFactors = [{ strategy: 'email_code' }];
 
-    const result = await client('login').current.startWithEmail(EMAIL);
+    const result = await client().current.startWithEmail(EMAIL);
 
     expect(signInState.emailCode.sendCode).toHaveBeenCalled();
     expect(result).toEqual({
@@ -198,59 +225,11 @@ describe('identity auth adapter contract', () => {
     });
   });
 
-  it('offers sign-up when no account uses the email', async () => {
-    signInState.create.mockResolvedValue({
-      error: {
-        code: 'api_response_error',
-        errors: [{ code: 'form_identifier_not_found', meta: { paramName: 'identifier' } }],
-      },
-    });
-
-    const result = await client('login').current.startWithEmail(EMAIL);
-
-    expect(result).toEqual({
-      status: 'failed',
-      kind: 'identifier_not_found',
-      message: AUTH_ERROR_SOURCE_COPY.identifier_not_found.message,
-      field: 'email',
-      switchMode: true,
-    });
-  });
-
-  it('offers log in when the email already has an account', async () => {
-    signUpState.create.mockResolvedValue({
-      error: {
-        code: 'api_response_error',
-        errors: [{ code: 'form_identifier_exists', meta: { paramName: 'emailAddress' } }],
-      },
-    });
-
-    const result = await client('signup').current.startWithEmail(EMAIL);
-
-    expect(result).toEqual({
-      status: 'failed',
-      kind: 'identifier_exists',
-      message: AUTH_ERROR_SOURCE_COPY.identifier_exists.message,
-      field: 'email',
-      switchMode: true,
-    });
-  });
-
-  it('records terms acceptance on the account it creates', async () => {
-    await client('signup').current.startWithEmail(EMAIL);
-
-    expect(signUpState.create).toHaveBeenCalledWith({
-      emailAddress: EMAIL,
-      legalAccepted: true,
-    });
-    expect(signUpState.verifications.sendEmailCode).toHaveBeenCalled();
-  });
-
   it('finalises a completed sign-in to the redirect the page chose', async () => {
     signInState.supportedFirstFactors = [{ strategy: 'password' }];
     signInState.status = 'complete';
 
-    const result = await client('login').current.submitPassword('secret');
+    const result = await client().current.submitPassword('secret');
 
     expect(signInState.finalize).toHaveBeenCalled();
     expect(result).toEqual({ status: 'complete' });
@@ -265,7 +244,7 @@ describe('identity auth adapter contract', () => {
         return NAVIGABLE_HASH;
       },
     });
-    expect(decorated).toEqual([REDIRECTS.completeUrl]);
+    expect(decorated).toEqual([REDIRECTS.signInCompleteUrl]);
   });
 
   it('signs in with a discoverable passkey and finalises the session', async () => {
@@ -274,52 +253,11 @@ describe('identity auth adapter contract', () => {
       return ok;
     });
 
-    const result = await client('login').current.signInWithPasskey();
+    const result = await client().current.signInWithPasskey();
 
     expect(signInState.passkey).toHaveBeenCalledWith({ flow: 'discoverable' });
     expect(signInState.finalize).toHaveBeenCalled();
     expect(result).toEqual({ status: 'complete' });
-  });
-
-  it('hands a browser that is already signed in to the completion route instead of failing', async () => {
-    const assign = vi.fn();
-    vi.stubGlobal('location', { ...window.location, assign });
-    signInState.create.mockResolvedValue({
-      error: {
-        status: 400,
-        errors: [{ code: 'session_exists', message: 'Session already exists' }],
-      },
-    });
-
-    try {
-      const result = await client('login').current.startPasswordResetFor(EMAIL);
-
-      expect(result).toEqual({ status: 'redirecting' });
-      expect(assign).toHaveBeenCalledWith(REDIRECTS.completeUrl);
-      expect(signInState.resetPasswordEmailCode.sendCode).not.toHaveBeenCalled();
-    } finally {
-      vi.unstubAllGlobals();
-    }
-  });
-
-  it('hands an already signed-in browser on from the sign-up screen as well', async () => {
-    const assign = vi.fn();
-    vi.stubGlobal('location', { ...window.location, assign });
-    signUpState.create.mockResolvedValue({
-      error: {
-        status: 400,
-        errors: [{ code: 'session_exists', message: 'Session already exists' }],
-      },
-    });
-
-    try {
-      const result = await client('signup').current.startWithEmail(EMAIL);
-
-      expect(result).toEqual({ status: 'redirecting' });
-      expect(assign).toHaveBeenCalledWith(REDIRECTS.completeUrl);
-    } finally {
-      vi.unstubAllGlobals();
-    }
   });
 
   it('says nothing when the person dismisses the passkey prompt', async () => {
@@ -327,7 +265,7 @@ describe('identity auth adapter contract', () => {
       error: { code: 'passkey_retrieval_cancelled', message: 'cancelled' },
     });
 
-    const result = await client('login').current.signInWithPasskey();
+    const result = await client().current.signInWithPasskey();
 
     expect(result).toEqual({
       status: 'failed',
@@ -342,7 +280,7 @@ describe('identity auth adapter contract', () => {
     signInState.status = 'needs_second_factor';
     signInState.supportedSecondFactors = [{ strategy: 'totp' }];
 
-    const result = await client('login').current.submitPassword('secret');
+    const result = await client().current.submitPassword('secret');
 
     expect(result).toEqual({
       status: 'next',
@@ -359,13 +297,13 @@ describe('identity auth adapter contract', () => {
     signInState.status = 'needs_second_factor';
     signInState.supportedSecondFactors = [{ strategy: 'phone_code', safeIdentifier: '+1 555' }];
 
-    await client('login').current.submitPassword('secret');
+    await client().current.submitPassword('secret');
 
     expect(signInState.mfa.sendPhoneCode).toHaveBeenCalled();
   });
 
   it('turns a forgotten password into a reset code step', async () => {
-    const result = await client('login').current.startPasswordReset();
+    const result = await client().current.startPasswordReset();
 
     expect(signInState.resetPasswordEmailCode.sendCode).toHaveBeenCalled();
     expect(result).toEqual({
@@ -375,7 +313,7 @@ describe('identity auth adapter contract', () => {
   });
 
   it('verifies a reset code and then asks for a new password', async () => {
-    const result = await client('login').current.submitCode('123456', 'reset');
+    const result = await client().current.submitCode('123456', 'reset');
 
     expect(signInState.resetPasswordEmailCode.verifyCode).toHaveBeenCalledWith({ code: '123456' });
     expect(result).toEqual({
@@ -391,42 +329,11 @@ describe('identity auth adapter contract', () => {
       return ok;
     });
 
-    const result = await client('signup').current.submitCode('123456', 'sign_up');
+    const result = await client().current.submitCode('123456', 'sign_up');
 
     expect(signUpState.verifications.verifyEmailCode).toHaveBeenCalledWith({ code: '123456' });
     expect(signUpState.finalize).toHaveBeenCalled();
     expect(result).toEqual({ status: 'complete' });
-  });
-
-  it('hands a provider sign-in to the callback route the page chose', async () => {
-    const result = await client('login').current.startProvider('google');
-
-    expect(signInState.sso).toHaveBeenCalledWith({
-      strategy: 'oauth_google',
-      redirectUrl: REDIRECTS.completeUrl,
-      redirectCallbackUrl: REDIRECTS.ssoCallbackUrl,
-    });
-    expect(result).toEqual({ status: 'redirecting' });
-  });
-
-  it('records the agreement on a provider sign-up, since signing up is the agreement', async () => {
-    const result = await client('signup').current.startProvider('github');
-
-    expect(signUpState.sso).toHaveBeenCalledWith(
-      expect.objectContaining({ strategy: 'oauth_github', legalAccepted: true }),
-    );
-    expect(result).toEqual({ status: 'redirecting' });
-  });
-
-  it('carries terms acceptance into a provider sign-up', async () => {
-    await client('signup').current.startProvider('github');
-
-    expect(signUpState.sso).toHaveBeenCalledWith({
-      strategy: 'oauth_github',
-      redirectUrl: REDIRECTS.completeUrl,
-      redirectCallbackUrl: REDIRECTS.ssoCallbackUrl,
-      legalAccepted: true,
-    });
   });
 
   it('answers a wrong password with our own copy rather than the vendor sentence', async () => {
@@ -443,7 +350,7 @@ describe('identity auth adapter contract', () => {
       },
     });
 
-    const result = await client('login').current.submitPassword('wrong');
+    const result = await client().current.submitPassword('wrong');
 
     expect(result).toEqual({
       status: 'failed',
@@ -467,7 +374,7 @@ describe('identity auth adapter contract', () => {
       },
     });
 
-    const result = await client('login').current.submitNewPassword('hunter2', 'reset');
+    const result = await client().current.submitNewPassword('hunter2', 'reset');
 
     expect(result).toEqual({
       status: 'failed',
@@ -482,7 +389,7 @@ describe('identity auth adapter contract', () => {
       error: { status: 429, code: 'too_many_requests', retryAfter: 42 },
     });
 
-    const result = await client('login').current.startWithEmail(EMAIL);
+    const result = await client().current.startWithEmail(EMAIL);
 
     expect(result).toEqual({
       status: 'next',
@@ -495,7 +402,7 @@ describe('identity auth adapter contract', () => {
       error: { status: 429, code: 'too_many_requests', retryAfter: 20 },
     });
 
-    const result = await client('login').current.resendCode('sign_in');
+    const result = await client().current.resendCode('sign_in');
 
     expect(result).toEqual({
       status: 'failed',
@@ -510,7 +417,7 @@ describe('identity auth adapter contract', () => {
     signInState.status = 'needs_second_factor';
     signInState.supportedSecondFactors = [{ strategy: 'email_code' }, { strategy: 'totp' }];
 
-    const guarded = await client('login').current.submitPassword('secret');
+    const guarded = await client().current.submitPassword('secret');
     expect(guarded).toEqual({
       status: 'next',
       step: {
@@ -521,7 +428,7 @@ describe('identity auth adapter contract', () => {
     });
 
     const permitted = renderHook(() =>
-      useIdentityAuthClient('login', REDIRECTS, { mfaEmailFallback: true }),
+      useIdentityAuthClient(REDIRECTS, { mfaEmailFallback: true }),
     ).result;
     const opened = await permitted.current.submitPassword('secret');
     expect(opened).toEqual({
@@ -539,7 +446,7 @@ describe('identity auth adapter contract', () => {
     signInState.supportedSecondFactors = [{ strategy: 'email_code' }];
 
     const permitted = renderHook(() =>
-      useIdentityAuthClient('login', REDIRECTS, { mfaEmailFallback: true }),
+      useIdentityAuthClient(REDIRECTS, { mfaEmailFallback: true }),
     ).result;
     const result = await permitted.current.switchSecondFactor(factor);
 
@@ -551,15 +458,356 @@ describe('identity auth adapter contract', () => {
   });
 });
 
+describe('one address field for logging in and signing up', () => {
+  function sessionExists() {
+    return {
+      error: {
+        status: 400,
+        errors: [{ code: 'session_exists', message: 'Session already exists' }],
+      },
+    };
+  }
+
+  function navigatedTo(finalize: typeof signInState.finalize): string[] {
+    const navigate = finalize.mock.calls[0]?.[0]?.navigate as (params: {
+      decorateUrl: (url: string) => string;
+    }) => void;
+    const decorated: string[] = [];
+    navigate({
+      decorateUrl: (url) => {
+        decorated.push(url);
+        return NAVIGABLE_HASH;
+      },
+    });
+    return decorated;
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('tries sign-in first and starts no sign-up for an address an account uses', async () => {
+    signInState.supportedFirstFactors = [{ strategy: 'password' }, { strategy: 'email_code' }];
+
+    const result = await client().current.startWithEmail(EMAIL);
+
+    expect(signInState.create).toHaveBeenCalledWith({ identifier: EMAIL });
+    expect(signUpState.create).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      status: 'next',
+      step: { kind: 'password' },
+    });
+  });
+
+  it('starts a sign-up with the same address, and says nothing, when no account uses it', async () => {
+    noAccountUsesTheAddress();
+
+    const result = await client().current.startWithEmail(EMAIL);
+
+    expect(signInState.create.mock.invocationCallOrder[0]).toBeLessThan(
+      signUpState.create.mock.invocationCallOrder[0]!,
+    );
+    expect(signUpState.create).toHaveBeenCalledWith({
+      emailAddress: EMAIL,
+      legalAccepted: true,
+    });
+    expect(signUpState.verifications.sendEmailCode).toHaveBeenCalled();
+    expect(result).toEqual({
+      status: 'next',
+      step: { kind: 'code', email: EMAIL, purpose: 'sign_up', methods: [] },
+    });
+  });
+
+  it('asks the new account for a password once its code proves the address', async () => {
+    noAccountUsesTheAddress();
+    signUpState.missingFields = ['password'];
+    const auth = client();
+    await auth.current.startWithEmail(EMAIL);
+    signUpState.verifications.verifyEmailCode.mockImplementation(async () => {
+      signUpState.verifications.emailAddress.status = 'verified';
+      return ok;
+    });
+
+    const result = await auth.current.submitCode('424242', 'sign_up');
+
+    expect(result).toEqual({
+      status: 'next',
+      step: { kind: 'new_password', email: EMAIL, purpose: 'sign_up' },
+    });
+  });
+
+  it('opens a new account on the sign-up completion page and an existing one on the sign-in page', async () => {
+    noAccountUsesTheAddress();
+    const signingUp = client();
+    await signingUp.current.startWithEmail(EMAIL);
+    signUpState.verifications.verifyEmailCode.mockImplementation(async () => {
+      signUpState.verifications.emailAddress.status = 'verified';
+      signUpState.status = 'complete';
+      return ok;
+    });
+    await signingUp.current.submitCode('424242', 'sign_up');
+
+    expect(navigatedTo(signUpState.finalize)).toEqual([REDIRECTS.signUpCompleteUrl]);
+
+    signInState.supportedFirstFactors = [{ strategy: 'password' }];
+    const signingIn = client();
+    await signingIn.current.startWithEmail(EMAIL);
+    signInState.status = 'complete';
+    await signingIn.current.submitPassword('secret');
+
+    expect(navigatedTo(signInState.finalize)).toEqual([REDIRECTS.signInCompleteUrl]);
+  });
+
+  it('signs in once more, and goes on from there, when the sign-up finds an account already there', async () => {
+    noAccountUsesTheAddress();
+    signInState.supportedFirstFactors = [{ strategy: 'password' }];
+    signUpState.create.mockResolvedValue({
+      error: {
+        code: 'api_response_error',
+        errors: [{ code: 'form_identifier_exists', meta: { paramName: 'emailAddress' } }],
+      },
+    });
+
+    const result = await client().current.startWithEmail(EMAIL);
+
+    expect(signInState.create).toHaveBeenCalledTimes(2);
+    expect(signUpState.create).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({
+      status: 'next',
+      step: { kind: 'password', email: EMAIL, methods: ['password'] },
+    });
+  });
+
+  it('retries that sign-in only once, and shows its refusal rather than looping', async () => {
+    signInState.create
+      .mockResolvedValueOnce(NO_ACCOUNT)
+      .mockResolvedValueOnce(NO_ACCOUNT)
+      .mockResolvedValue(NO_ACCOUNT);
+    signUpState.create.mockResolvedValue({
+      error: {
+        errors: [{ code: 'form_identifier_exists', meta: { paramName: 'emailAddress' } }],
+      },
+    });
+
+    const result = await client().current.startWithEmail(EMAIL);
+
+    expect(signInState.create).toHaveBeenCalledTimes(2);
+    expect(signUpState.create).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+      status: 'failed',
+      kind: 'identifier_not_found',
+    });
+  });
+
+  it.each([
+    [
+      'a missing identifier',
+      { errors: [{ code: 'form_param_nil', meta: { paramName: 'identifier' } }] },
+    ],
+    ['an unrelated refusal', { errors: [{ code: 'form_param_format_invalid' }] }],
+  ])('starts no sign-up for %s', async (_case, error) => {
+    signInState.create.mockResolvedValue({ error });
+
+    const result = await client().current.startWithEmail(EMAIL);
+
+    expect(signUpState.create).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ status: 'failed' });
+  });
+
+  it('starts no sign-up for an empty address, whatever sign-in answers', async () => {
+    signInState.create.mockResolvedValue(NO_ACCOUNT);
+
+    const result = await client().current.startWithEmail('  ');
+
+    expect(signUpState.create).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ status: 'failed' });
+  });
+
+  it('reports a started sign-up as soon as the account is created, before any code or password', async () => {
+    noAccountUsesTheAddress();
+    const onSignUpStarted = vi.fn();
+    signUpState.verifications.sendEmailCode.mockImplementation(async () => {
+      expect(onSignUpStarted).toHaveBeenCalledTimes(1);
+      return ok;
+    });
+
+    await renderHook(() =>
+      useIdentityAuthClient(REDIRECTS, { onSignUpStarted }),
+    ).result.current.startWithEmail(EMAIL);
+
+    expect(onSignUpStarted).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports no started sign-up when the account is not created, or when the address signs in', async () => {
+    const onSignUpStarted = vi.fn();
+    const auth = renderHook(() => useIdentityAuthClient(REDIRECTS, { onSignUpStarted })).result;
+    noAccountUsesTheAddress();
+    signUpState.create.mockResolvedValueOnce({
+      error: { errors: [{ code: 'form_param_format_invalid' }] },
+    });
+    await auth.current.startWithEmail(EMAIL);
+    signInState.supportedFirstFactors = [{ strategy: 'password' }];
+    await auth.current.startWithEmail(EMAIL);
+
+    expect(onSignUpStarted).not.toHaveBeenCalled();
+  });
+  it('hands a browser that is already signed in to the sign-in completion page instead of failing', async () => {
+    const assign = vi.fn();
+    vi.stubGlobal('location', { ...window.location, assign });
+    signInState.create.mockResolvedValue(sessionExists());
+
+    const result = await client().current.startWithEmail(EMAIL);
+
+    expect(result).toEqual({ status: 'redirecting' });
+    expect(assign).toHaveBeenCalledWith(REDIRECTS.signInCompleteUrl);
+    expect(signUpState.create).not.toHaveBeenCalled();
+  });
+
+  it('hands a browser that is already signed in during a sign-up to the sign-up completion page', async () => {
+    const assign = vi.fn();
+    vi.stubGlobal('location', { ...window.location, assign });
+    noAccountUsesTheAddress();
+    signUpState.create.mockResolvedValue(sessionExists());
+
+    const result = await client().current.startWithEmail(EMAIL);
+
+    expect(result).toEqual({ status: 'redirecting' });
+    expect(assign).toHaveBeenCalledWith(REDIRECTS.signUpCompleteUrl);
+  });
+
+  it('starts every provider as a sign-in, which finishes on the sign-in completion page', async () => {
+    const result = await client().current.startProvider('github');
+
+    expect(signInState.sso).toHaveBeenCalledWith({
+      strategy: 'oauth_github',
+      redirectUrl: REDIRECTS.signInCompleteUrl,
+      redirectCallbackUrl: REDIRECTS.ssoCallbackUrl,
+    });
+    expect(signUpState.sso).not.toHaveBeenCalled();
+    expect(result).toEqual({ status: 'redirecting' });
+  });
+  it('leaves the callback to hand an existing account to sign-in, finishing each on its own page', async () => {
+    render(
+      <IdentitySsoCallback
+        loginUrl="/login"
+        signupUrl="/signup"
+        loginCompleteUrl={REDIRECTS.signInCompleteUrl}
+        signUpCompleteUrl={REDIRECTS.signUpCompleteUrl}
+      />,
+    );
+
+    expect(redirectCallback.mock.calls[0]?.[0]).toMatchObject({
+      signInForceRedirectUrl: REDIRECTS.signInCompleteUrl,
+      signUpForceRedirectUrl: REDIRECTS.signUpCompleteUrl,
+    });
+  });
+
+  it('forgets both attempts on Edit email, so the next address starts from sign-in again', async () => {
+    const assign = vi.fn();
+    vi.stubGlobal('location', { ...window.location, assign });
+    noAccountUsesTheAddress();
+    const auth = client();
+    await auth.current.startWithEmail(EMAIL);
+
+    await auth.current.restart();
+    signInState.create.mockResolvedValue(sessionExists());
+    await auth.current.startWithEmail(EMAIL);
+
+    expect(signInState.reset).toHaveBeenCalledOnce();
+    expect(signUpState.reset).toHaveBeenCalledOnce();
+    expect(assign).toHaveBeenCalledWith(REDIRECTS.signInCompleteUrl);
+  });
+  it('finishes a passkey sign-in on the sign-in page after a sign-up attempt that failed', async () => {
+    noAccountUsesTheAddress();
+    signUpState.create.mockResolvedValue({
+      error: { errors: [{ code: 'form_param_format_invalid' }] },
+    });
+    signInState.passkey.mockImplementation(async () => {
+      signInState.status = 'complete';
+      return ok;
+    });
+    const auth = client();
+    await auth.current.startWithEmail(EMAIL);
+
+    await auth.current.signInWithPasskey();
+
+    expect(navigatedTo(signInState.finalize)).toEqual([REDIRECTS.signInCompleteUrl]);
+  });
+
+  it('says why a provider return failed, from the sign-in or the sign-up it came back to', () => {
+    const refused = {
+      errors: [
+        {
+          code: 'external_account_not_found',
+          message: 'No account for that provider',
+        },
+      ],
+    };
+    signInState.firstFactorVerification = {
+      status: 'failed',
+      strategy: 'oauth_google',
+      error: refused,
+    };
+    expect(client().current.readProviderReturn()).toMatchObject({
+      status: 'failed',
+    });
+
+    signInState.firstFactorVerification = {
+      status: null,
+      strategy: null,
+      error: null,
+    };
+    signUpState.verifications.externalAccount = {
+      status: 'failed',
+      strategy: 'oauth_github',
+      error: refused,
+    };
+    expect(client().current.readProviderReturn()).toMatchObject({
+      status: 'failed',
+    });
+  });
+
+  it('says nothing for a provider return the callback is still transferring, or for no provider at all', () => {
+    signInState.firstFactorVerification = {
+      status: 'transferable',
+      strategy: 'oauth_google',
+      error: { errors: [{ code: 'external_account_not_found' }] },
+    };
+    expect(client().current.readProviderReturn()).toBeNull();
+
+    signInState.firstFactorVerification = {
+      status: 'failed',
+      strategy: 'email_code',
+      error: { errors: [{ code: 'form_code_incorrect' }] },
+    };
+    expect(client().current.readProviderReturn()).toBeNull();
+  });
+
+  it('asks for a new password when the provider requires one after the right password', async () => {
+    signInState.password.mockImplementation(async () => {
+      signInState.status = 'needs_new_password';
+      return ok;
+    });
+
+    const result = await client().current.submitPassword('the old password');
+
+    expect(result).toEqual({
+      status: 'next',
+      step: { kind: 'new_password', email: EMAIL, purpose: 'reset' },
+    });
+    expect(signInState.finalize).not.toHaveBeenCalled();
+  });
+});
 describe('sign-up when the identity provider requires a password', () => {
   const PASSWORD = 'a long passphrase';
 
   beforeEach(() => {
+    noAccountUsesTheAddress();
     signUpState.missingFields = ['password'];
   });
 
   it('emails the code before it asks for a password', async () => {
-    const result = await client('signup').current.startWithEmail(EMAIL);
+    const result = await client().current.startWithEmail(EMAIL);
 
     expect(signUpState.verifications.sendEmailCode).toHaveBeenCalled();
     expect(signUpState.password).not.toHaveBeenCalled();
@@ -576,7 +824,7 @@ describe('sign-up when the identity provider requires a password', () => {
       return ok;
     });
 
-    const result = await client('signup').current.submitCode('424242', 'sign_up');
+    const result = await client().current.submitCode('424242', 'sign_up');
 
     expect(signUpState.verifications.verifyEmailCode).toHaveBeenCalledWith({ code: '424242' });
     expect(signUpState.password).not.toHaveBeenCalled();
@@ -595,7 +843,7 @@ describe('sign-up when the identity provider requires a password', () => {
       return ok;
     });
 
-    const result = await client('signup').current.submitNewPassword(PASSWORD, 'sign_up');
+    const result = await client().current.submitNewPassword(PASSWORD, 'sign_up');
 
     expect(signUpState.password).toHaveBeenCalledWith({ password: PASSWORD });
     expect(signInState.resetPasswordEmailCode.submitPassword).not.toHaveBeenCalled();
@@ -604,7 +852,7 @@ describe('sign-up when the identity provider requires a password', () => {
   });
 
   it('will not set a password on a sign-up whose address is still unproven', async () => {
-    const result = await client('signup').current.submitNewPassword(PASSWORD, 'sign_up');
+    const result = await client().current.submitNewPassword(PASSWORD, 'sign_up');
 
     expect(signUpState.password).not.toHaveBeenCalled();
     expect(signUpState.finalize).not.toHaveBeenCalled();
@@ -630,7 +878,7 @@ describe('sign-up when the identity provider requires a password', () => {
       },
     });
 
-    const result = await client('signup').current.submitNewPassword('short', 'sign_up');
+    const result = await client().current.submitNewPassword('short', 'sign_up');
 
     expect(result).toEqual({
       status: 'failed',
@@ -664,7 +912,7 @@ describe('sign-up when the identity provider requires a password', () => {
       },
     });
 
-    const result = await client('signup').current.submitNewPassword('password1', 'sign_up');
+    const result = await client().current.submitNewPassword('password1', 'sign_up');
 
     expect(result).toEqual({
       status: 'failed',
@@ -681,6 +929,7 @@ describe('sign-up on an identity instance that does not require a verified email
   const PASSWORD = 'a long passphrase';
 
   beforeEach(() => {
+    noAccountUsesTheAddress();
     signUpState.missingFields = ['password'];
     signUpState.unverifiedFields = [];
     signUpState.password.mockImplementation(async () => {
@@ -695,19 +944,19 @@ describe('sign-up on an identity instance that does not require a verified email
   });
 
   it('proves the address with the emailed code before the password can complete the account', async () => {
-    const started = await client('signup').current.startWithEmail(EMAIL);
+    const started = await client().current.startWithEmail(EMAIL);
     expect(started).toEqual({
       status: 'next',
       step: { kind: 'code', email: EMAIL, purpose: 'sign_up', methods: [] },
     });
 
-    const proven = await client('signup').current.submitCode('424242', 'sign_up');
+    const proven = await client().current.submitCode('424242', 'sign_up');
     expect(proven).toEqual({
       status: 'next',
       step: { kind: 'new_password', email: EMAIL, purpose: 'sign_up' },
     });
 
-    const finished = await client('signup').current.submitNewPassword(PASSWORD, 'sign_up');
+    const finished = await client().current.submitNewPassword(PASSWORD, 'sign_up');
     expect(finished).toEqual({ status: 'complete' });
 
     const verified = signUpState.verifications.verifyEmailCode.mock.invocationCallOrder[0];
@@ -717,8 +966,12 @@ describe('sign-up on an identity instance that does not require a verified email
 });
 
 describe('sign-up when the identity provider needs no password', () => {
+  beforeEach(() => {
+    noAccountUsesTheAddress();
+  });
+
   it('emails the code after the address and opens the session after the code', async () => {
-    const started = await client('signup').current.startWithEmail(EMAIL);
+    const started = await client().current.startWithEmail(EMAIL);
     expect(started).toEqual({
       status: 'next',
       step: { kind: 'code', email: EMAIL, purpose: 'sign_up', methods: [] },
@@ -730,7 +983,7 @@ describe('sign-up when the identity provider needs no password', () => {
       signUpState.status = 'complete';
       return ok;
     });
-    const finished = await client('signup').current.submitCode('424242', 'sign_up');
+    const finished = await client().current.submitCode('424242', 'sign_up');
 
     expect(finished).toEqual({ status: 'complete' });
     expect(signUpState.finalize).toHaveBeenCalled();
@@ -740,7 +993,7 @@ describe('sign-up when the identity provider needs no password', () => {
   it('names a requirement this page cannot collect instead of a generic failure', async () => {
     signUpState.missingFields = ['first_name'];
 
-    const result = await client('signup').current.startWithEmail(EMAIL);
+    const result = await client().current.startWithEmail(EMAIL);
 
     expect(result).toMatchObject({ status: 'failed', kind: 'unexpected' });
     expect(result.status === 'failed' ? result.message : '').toContain('first name');
@@ -757,6 +1010,7 @@ describe('sign-up when the identity provider needs no password and does not veri
   const removeSession = vi.fn();
 
   beforeEach(() => {
+    noAccountUsesTheAddress();
     removeSession.mockReset().mockResolvedValue({});
     clerkState.client.sessions = [{ id: UNPROVEN_SESSION, remove: removeSession }];
     signUpState.create.mockImplementation(async () => {
@@ -771,14 +1025,14 @@ describe('sign-up when the identity provider needs no password and does not veri
   });
 
   it('withholds the session the sign-up opened and emails a code to the address instead', async () => {
-    const result = await client('signup').current.startWithEmail(EMAIL);
+    const result = await client().current.startWithEmail(EMAIL);
 
     expect(signUpState.finalize).not.toHaveBeenCalled();
     expect(signInState.finalize).not.toHaveBeenCalled();
     expect(removeSession).toHaveBeenCalledTimes(1);
     expect(signInState.create).toHaveBeenCalledWith({ identifier: EMAIL });
     expect(removeSession.mock.invocationCallOrder[0]).toBeLessThan(
-      signInState.create.mock.invocationCallOrder[0]!,
+      signInState.create.mock.invocationCallOrder[1]!,
     );
     expect(signInState.emailCode.sendCode).toHaveBeenCalled();
     expect(result).toEqual({
@@ -788,14 +1042,14 @@ describe('sign-up when the identity provider needs no password and does not veri
   });
 
   it('opens a session only after the emailed code proves the address', async () => {
-    const started = await client('signup').current.startWithEmail(EMAIL);
+    const started = await client().current.startWithEmail(EMAIL);
     expect(started).toMatchObject({ status: 'next', step: { kind: 'code', purpose: 'sign_in' } });
 
     signInState.emailCode.verifyCode.mockImplementation(async () => {
       signInState.status = 'complete';
       return ok;
     });
-    const finished = await client('signup').current.submitCode('424242', 'sign_in');
+    const finished = await client().current.submitCode('424242', 'sign_in');
 
     expect(finished).toEqual({ status: 'complete' });
     expect(signUpState.finalize).not.toHaveBeenCalled();
@@ -813,13 +1067,12 @@ describe('sign-up when the identity provider needs no password and does not veri
       },
     });
 
-    const result = await client('signup').current.startWithEmail(EMAIL);
+    const result = await client().current.startWithEmail(EMAIL);
 
     expect(result).toMatchObject({ status: 'failed' });
     const message = result.status === 'failed' ? result.message : '';
     expect(message).toContain(EMAIL);
     expect(message).not.toBe(AUTH_ERROR_SOURCE_COPY.identifier_not_found.message);
-    expect(result).not.toHaveProperty('switchMode');
     expect(signUpState.finalize).not.toHaveBeenCalled();
     expect(signInState.finalize).not.toHaveBeenCalled();
   });
@@ -829,7 +1082,7 @@ describe('sign-up when the identity provider needs no password and does not veri
       error: { code: 'api_response_error', errors: [{ code: 'unexpected_error' }] },
     });
 
-    const result = await client('signup').current.startWithEmail(EMAIL);
+    const result = await client().current.startWithEmail(EMAIL);
 
     expect(result).toMatchObject({ status: 'failed', message: UNCONFIRMED });
     expect(removeSession).toHaveBeenCalledTimes(1);
@@ -841,13 +1094,13 @@ describe('sign-up when the identity provider needs no password and does not veri
   it('signs the client out on this page when the session the sign-up opened cannot be removed', async () => {
     removeSession.mockRejectedValueOnce(new Error('session removal failed'));
 
-    const result = await client('signup').current.startWithEmail(EMAIL);
+    const result = await client().current.startWithEmail(EMAIL);
 
     expect(clerkState.signOut).toHaveBeenCalledTimes(1);
     expect(clerkState.signOut).toHaveBeenCalledWith(expect.any(Function));
     expect(clerkState.client.sessions).toEqual([]);
     expect(result).toMatchObject({ status: 'failed', message: UNCONFIRMED });
-    expect(signInState.create).not.toHaveBeenCalled();
+    expect(signInState.create).toHaveBeenCalledTimes(1);
     expect(signUpState.finalize).not.toHaveBeenCalled();
     expect(signInState.finalize).not.toHaveBeenCalled();
   });
@@ -856,14 +1109,14 @@ describe('sign-up when the identity provider needs no password and does not veri
     const removeOther = vi.fn().mockResolvedValue({});
     clerkState.client.sessions = [{ id: 'sess_someone_else', remove: removeOther }];
 
-    const result = await client('signup').current.startWithEmail(EMAIL);
+    const result = await client().current.startWithEmail(EMAIL);
 
     expect(removeOther).not.toHaveBeenCalled();
     expect(clerkState.signOut).toHaveBeenCalledTimes(1);
     expect(clerkState.signOut).toHaveBeenCalledWith(expect.any(Function));
     expect(clerkState.client.sessions).toEqual([]);
     expect(clerkState.signOut.mock.invocationCallOrder[0]).toBeLessThan(
-      signInState.create.mock.invocationCallOrder[0]!,
+      signInState.create.mock.invocationCallOrder[1]!,
     );
     expect(result).toMatchObject({ status: 'next', step: { kind: 'code', purpose: 'sign_in' } });
     expect(signUpState.finalize).not.toHaveBeenCalled();
@@ -874,11 +1127,11 @@ describe('sign-up when the identity provider needs no password and does not veri
     clerkState.client.sessions = [];
     clerkState.signOut.mockRejectedValueOnce(new Error('sign-out failed'));
 
-    const result = await client('signup').current.startWithEmail(EMAIL);
+    const result = await client().current.startWithEmail(EMAIL);
 
     expect(clerkState.signOut).toHaveBeenCalledTimes(1);
     expect(result).toMatchObject({ status: 'failed', message: UNCONFIRMED });
-    expect(signInState.create).not.toHaveBeenCalled();
+    expect(signInState.create).toHaveBeenCalledTimes(1);
     expect(signUpState.finalize).not.toHaveBeenCalled();
     expect(signInState.finalize).not.toHaveBeenCalled();
   });
@@ -888,7 +1141,7 @@ describe('sign-up when the identity provider needs no password and does not veri
       error: { code: 'api_response_error', errors: [{ code: 'unexpected_error' }] },
     });
 
-    const result = await client('signup').current.startWithEmail(EMAIL);
+    const result = await client().current.startWithEmail(EMAIL);
 
     expect(signInState.emailCode.sendCode).toHaveBeenCalledTimes(1);
     expect(result).toMatchObject({
@@ -901,355 +1154,6 @@ describe('sign-up when the identity provider needs no password and does not veri
   });
 });
 
-describe('sign-in with the address and the password in one action', () => {
-  const PASSWORD = 'correct horse battery';
-  const WRONG_PASSWORD = {
-    error: {
-      code: 'api_response_error',
-      errors: [
-        {
-          code: 'form_password_incorrect',
-          longMessage: 'Password is incorrect. Try again, or use another method.',
-          meta: { paramName: 'password' },
-        },
-      ],
-    },
-  };
-
-  function everyProviderCall(): unknown[][] {
-    return [
-      signInState.create,
-      signInState.password,
-      signInState.emailCode.sendCode,
-      signInState.emailCode.verifyCode,
-      signInState.resetPasswordEmailCode.sendCode,
-      signInState.resetPasswordEmailCode.verifyCode,
-      signInState.resetPasswordEmailCode.submitPassword,
-      signInState.mfa.sendPhoneCode,
-      signInState.mfa.sendEmailCode,
-      signInState.sso,
-      signInState.passkey,
-      signInState.finalize,
-      signUpState.create,
-      signUpState.password,
-      signUpState.sso,
-    ].flatMap((fn) => fn.mock.calls);
-  }
-
-  function expectPasswordSentNowhere() {
-    expect(signInState.password).not.toHaveBeenCalled();
-    expect(JSON.stringify(everyProviderCall())).not.toContain(PASSWORD);
-  }
-
-  beforeEach(() => {
-    signInState.supportedFirstFactors = [{ strategy: 'password' }, { strategy: 'email_code' }];
-  });
-
-  it('starts the sign-in for the address, sends the password and opens the session', async () => {
-    signInState.password.mockImplementation(async () => {
-      signInState.status = 'complete';
-      return ok;
-    });
-
-    const result = await client('login').current.signInWithPassword(EMAIL, PASSWORD);
-
-    expect(signInState.create).toHaveBeenCalledTimes(1);
-    expect(signInState.create).toHaveBeenCalledWith({ identifier: EMAIL });
-    expect(signInState.password).toHaveBeenCalledTimes(1);
-    expect(signInState.password).toHaveBeenCalledWith({ password: PASSWORD });
-    expect(signInState.create.mock.invocationCallOrder[0]).toBeLessThan(
-      signInState.password.mock.invocationCallOrder[0]!,
-    );
-    expect(signInState.password.mock.invocationCallOrder[0]).toBeLessThan(
-      signInState.finalize.mock.invocationCallOrder[0]!,
-    );
-    expect(signInState.emailCode.sendCode).not.toHaveBeenCalled();
-    expect(result).toEqual({ status: 'complete' });
-  });
-
-  it('answers a wrong password against the password field and opens nothing', async () => {
-    signInState.password.mockResolvedValue(WRONG_PASSWORD);
-
-    const result = await client('login').current.signInWithPassword(EMAIL, 'not the password');
-
-    expect(result).toEqual({
-      status: 'failed',
-      kind: 'credentials_invalid',
-      message: AUTH_ERROR_SOURCE_COPY.credentials_invalid.message,
-      field: 'password',
-    });
-    expect(signInState.finalize).not.toHaveBeenCalled();
-    expect(signInState.emailCode.sendCode).not.toHaveBeenCalled();
-  });
-
-  it('discards the password for an account that signs in with an emailed code, and says so', async () => {
-    signInState.supportedFirstFactors = [{ strategy: 'email_code' }];
-
-    const result = await client('login').current.signInWithPassword(EMAIL, PASSWORD);
-
-    expectPasswordSentNowhere();
-    expect(signInState.emailCode.sendCode).toHaveBeenCalledTimes(1);
-    expect(result).toEqual({
-      status: 'next',
-      step: {
-        kind: 'code',
-        email: EMAIL,
-        purpose: 'sign_in',
-        methods: ['email_code'],
-        passwordless: true,
-      },
-    });
-  });
-
-  it('discards the password for an account that signs in with a provider or a passkey', async () => {
-    signInState.supportedFirstFactors = [
-      { strategy: 'oauth_google' },
-      { strategy: 'passkey' },
-      { strategy: 'email_code' },
-    ];
-
-    const result = await client('login').current.signInWithPassword(EMAIL, PASSWORD);
-
-    expectPasswordSentNowhere();
-    expect(result).toMatchObject({
-      status: 'next',
-      step: { kind: 'code', purpose: 'sign_in', passwordless: true },
-    });
-  });
-
-  it('discards the password for an address its organization signs in', async () => {
-    signInState.supportedFirstFactors = [
-      { strategy: 'enterprise_sso' },
-      { strategy: 'password' },
-      { strategy: 'email_code' },
-    ];
-
-    const result = await client('login').current.signInWithPassword(EMAIL, PASSWORD);
-
-    expectPasswordSentNowhere();
-    expect(signInState.sso).toHaveBeenCalledWith({
-      identifier: EMAIL,
-      strategy: 'enterprise_sso',
-      redirectUrl: REDIRECTS.completeUrl,
-      redirectCallbackUrl: REDIRECTS.ssoCallbackUrl,
-    });
-    expect(result).toEqual({ status: 'redirecting', phase: 'enterprise_redirecting' });
-  });
-
-  it('does not call a device code a missing password when the sign-in is already past its first factor', async () => {
-    signInState.status = 'needs_client_trust';
-    signInState.supportedSecondFactors = [{ strategy: 'email_code' }];
-
-    const result = await client('login').current.signInWithPassword(EMAIL, PASSWORD);
-
-    expectPasswordSentNowhere();
-    expect(result).toEqual({
-      status: 'next',
-      step: { kind: 'code', email: EMAIL, purpose: 'device', methods: [] },
-    });
-    expect(result).not.toHaveProperty('step.passwordless');
-  });
-
-  it('discards the password when no account uses the address, and says no more than before', async () => {
-    const unknown = {
-      error: {
-        code: 'api_response_error',
-        errors: [{ code: 'form_identifier_not_found', meta: { paramName: 'identifier' } }],
-      },
-    };
-    signInState.create.mockResolvedValue(unknown);
-    const emailFirst = await client('login').current.startWithEmail(EMAIL);
-
-    const result = await client('login').current.signInWithPassword(EMAIL, PASSWORD);
-
-    expectPasswordSentNowhere();
-    expect(result).toEqual(emailFirst);
-    expect(result).toEqual({
-      status: 'failed',
-      kind: 'identifier_not_found',
-      message: AUTH_ERROR_SOURCE_COPY.identifier_not_found.message,
-      field: 'email',
-      switchMode: true,
-    });
-  });
-
-  it('asks for the second factor after a right password', async () => {
-    signInState.password.mockImplementation(async () => {
-      signInState.status = 'needs_second_factor';
-      signInState.supportedSecondFactors = [{ strategy: 'totp' }, { strategy: 'backup_code' }];
-      return ok;
-    });
-
-    const result = await client('login').current.signInWithPassword(EMAIL, PASSWORD);
-
-    expect(signInState.finalize).not.toHaveBeenCalled();
-    expect(result).toEqual({
-      status: 'next',
-      step: {
-        kind: 'second_factor',
-        factor: { kind: 'authenticator', label: 'Authenticator code', hint: null },
-        alternatives: [{ kind: 'backup_code', label: 'Backup code', hint: null }],
-      },
-    });
-  });
-
-  it('verifies a new device with an emailed code after a right password', async () => {
-    signInState.password.mockImplementation(async () => {
-      signInState.status = 'needs_client_trust';
-      signInState.supportedSecondFactors = [{ strategy: 'email_code' }];
-      return ok;
-    });
-
-    const result = await client('login').current.signInWithPassword(EMAIL, PASSWORD);
-
-    expect(signInState.mfa.sendEmailCode).toHaveBeenCalledTimes(1);
-    expect(signInState.emailCode.sendCode).not.toHaveBeenCalled();
-    expect(signInState.finalize).not.toHaveBeenCalled();
-    expect(result).toEqual({
-      status: 'next',
-      step: { kind: 'code', email: EMAIL, purpose: 'device', methods: [] },
-    });
-  });
-
-  it('asks for a new password when the provider requires one after a right password', async () => {
-    signInState.password.mockImplementation(async () => {
-      signInState.status = 'needs_new_password';
-      return ok;
-    });
-
-    const result = await client('login').current.signInWithPassword(EMAIL, PASSWORD);
-
-    expect(result).toEqual({
-      status: 'next',
-      step: { kind: 'new_password', email: EMAIL, purpose: 'reset' },
-    });
-  });
-
-  it('gives a locked account its notice rather than a field message', async () => {
-    signInState.password.mockResolvedValue({
-      error: { code: 'api_response_error', errors: [{ code: 'user_locked' }] },
-    });
-
-    const result = await client('login').current.signInWithPassword(EMAIL, PASSWORD);
-
-    expect(result).toEqual({
-      status: 'next',
-      step: { kind: 'notice', notice: 'account_locked', retryAfterSeconds: null },
-    });
-  });
-
-  it('never starts a sign-up, whichever page it is called from', async () => {
-    signInState.password.mockImplementation(async () => {
-      signInState.status = 'complete';
-      return ok;
-    });
-
-    const result = await client('signup').current.signInWithPassword(EMAIL, PASSWORD);
-
-    expect(signUpState.create).not.toHaveBeenCalled();
-    expect(signUpState.finalize).not.toHaveBeenCalled();
-    expect(result).toEqual({ status: 'complete' });
-  });
-
-  it('leaves the email-first start as it was: no password call and no passwordless mark', async () => {
-    const withPassword = await client('login').current.startWithEmail(EMAIL);
-    signInState.supportedFirstFactors = [{ strategy: 'email_code' }];
-    const withoutPassword = await client('login').current.startWithEmail(EMAIL);
-
-    expect(signInState.password).not.toHaveBeenCalled();
-    expect(withPassword).toEqual({
-      status: 'next',
-      step: { kind: 'password', email: EMAIL, methods: ['password', 'email_code'] },
-    });
-    expect(withoutPassword).toEqual({
-      status: 'next',
-      step: { kind: 'code', email: EMAIL, purpose: 'sign_in', methods: ['email_code'] },
-    });
-    expect(withoutPassword).not.toHaveProperty('step.passwordless');
-  });
-});
-
-describe('password recovery for the address typed on the sign-in screen', () => {
-  beforeEach(() => {
-    signInState.supportedFirstFactors = [{ strategy: 'password' }, { strategy: 'email_code' }];
-  });
-
-  it('starts the sign-in for the address and emails the reset code', async () => {
-    const result = await client('login').current.startPasswordResetFor(EMAIL);
-
-    expect(signInState.create).toHaveBeenCalledWith({ identifier: EMAIL });
-    expect(signInState.resetPasswordEmailCode.sendCode).toHaveBeenCalledTimes(1);
-    expect(signInState.create.mock.invocationCallOrder[0]).toBeLessThan(
-      signInState.resetPasswordEmailCode.sendCode.mock.invocationCallOrder[0]!,
-    );
-    expect(signInState.emailCode.sendCode).not.toHaveBeenCalled();
-    expect(signInState.password).not.toHaveBeenCalled();
-    expect(result).toEqual({
-      status: 'next',
-      step: { kind: 'code', email: EMAIL, purpose: 'reset', methods: ['password', 'email_code'] },
-    });
-  });
-
-  it('answers as the existing recovery does once the address is known', async () => {
-    const typed = await client('login').current.startPasswordResetFor(EMAIL);
-    const fromThePasswordStep = await client('login').current.startPasswordReset();
-
-    expect(typed).toEqual(fromThePasswordStep);
-  });
-
-  it('signs an account with no password in by code instead of resetting one, and says so', async () => {
-    signInState.supportedFirstFactors = [{ strategy: 'email_code' }];
-
-    const result = await client('login').current.startPasswordResetFor(EMAIL);
-
-    expect(signInState.resetPasswordEmailCode.sendCode).not.toHaveBeenCalled();
-    expect(signInState.emailCode.sendCode).toHaveBeenCalledTimes(1);
-    expect(result).toEqual({
-      status: 'next',
-      step: {
-        kind: 'code',
-        email: EMAIL,
-        purpose: 'sign_in',
-        methods: ['email_code'],
-        passwordless: true,
-      },
-    });
-  });
-
-  it('sends no code to an address no account uses', async () => {
-    signInState.create.mockResolvedValue({
-      error: {
-        code: 'api_response_error',
-        errors: [{ code: 'form_identifier_not_found', meta: { paramName: 'identifier' } }],
-      },
-    });
-
-    const result = await client('login').current.startPasswordResetFor(EMAIL);
-
-    expect(signInState.resetPasswordEmailCode.sendCode).not.toHaveBeenCalled();
-    expect(signInState.emailCode.sendCode).not.toHaveBeenCalled();
-    expect(result).toMatchObject({
-      status: 'failed',
-      kind: 'identifier_not_found',
-      field: 'email',
-      switchMode: true,
-    });
-  });
-
-  it('turns a rate-limited reset request into its own screen, as the existing recovery does', async () => {
-    signInState.resetPasswordEmailCode.sendCode.mockResolvedValue({
-      error: { status: 429, code: 'too_many_requests', retryAfter: 12 },
-    });
-
-    const result = await client('login').current.startPasswordResetFor(EMAIL);
-
-    expect(result).toEqual({
-      status: 'next',
-      step: { kind: 'notice', notice: 'rate_limited', retryAfterSeconds: 12 },
-    });
-  });
-});
-
 describe('password sign-in from a device the account has not used', () => {
   beforeEach(() => {
     signInState.supportedFirstFactors = [{ strategy: 'password' }, { strategy: 'email_code' }];
@@ -1259,7 +1163,7 @@ describe('password sign-in from a device the account has not used', () => {
     signInState.status = 'needs_second_factor';
     signInState.supportedSecondFactors = [{ strategy: 'email_code' }];
 
-    const result = await client('login').current.submitPassword('secret');
+    const result = await client().current.submitPassword('secret');
 
     expect(signInState.mfa.sendEmailCode).toHaveBeenCalled();
     expect(result).toEqual({
@@ -1275,7 +1179,7 @@ describe('password sign-in from a device the account has not used', () => {
       { strategy: 'email_code', safeIdentifier: 'p*****@example.com' },
     ];
 
-    const result = await client('login').current.submitPassword('secret');
+    const result = await client().current.submitPassword('secret');
 
     expect(signInState.mfa.sendEmailCode).toHaveBeenCalled();
     expect(result).toEqual({
@@ -1288,7 +1192,7 @@ describe('password sign-in from a device the account has not used', () => {
     signInState.status = 'needs_client_trust';
     signInState.supportedSecondFactors = [{ strategy: 'email_code' }];
 
-    const result = await client('login').current.submitPassword('secret');
+    const result = await client().current.submitPassword('secret');
 
     expect(signInState.mfa.sendEmailCode).toHaveBeenCalled();
     expect(result).toEqual({
@@ -1301,7 +1205,7 @@ describe('password sign-in from a device the account has not used', () => {
     signInState.status = 'needs_second_factor';
     signInState.supportedSecondFactors = [{ strategy: 'email_code' }, { strategy: 'totp' }];
 
-    const result = await client('login').current.submitPassword('secret');
+    const result = await client().current.submitPassword('secret');
 
     expect(signInState.mfa.sendEmailCode).not.toHaveBeenCalled();
     expect(result).toEqual({
@@ -1318,7 +1222,7 @@ describe('password sign-in from a device the account has not used', () => {
     signInState.status = 'needs_client_trust';
     signInState.supportedSecondFactors = [{ strategy: 'email_code' }, { strategy: 'totp' }];
 
-    const result = await client('login').current.submitPassword('secret');
+    const result = await client().current.submitPassword('secret');
 
     expect(signInState.mfa.sendEmailCode).not.toHaveBeenCalled();
     expect(result).toEqual({
@@ -1337,7 +1241,7 @@ describe('password sign-in from a device the account has not used', () => {
       return ok;
     });
 
-    const result = await client('login').current.submitCode('424242', 'device');
+    const result = await client().current.submitCode('424242', 'device');
 
     expect(signInState.mfa.verifyEmailCode).toHaveBeenCalledWith({ code: '424242' });
     expect(signInState.emailCode.verifyCode).not.toHaveBeenCalled();
@@ -1346,7 +1250,7 @@ describe('password sign-in from a device the account has not used', () => {
   });
 
   it('sends a fresh device code through the second factor', async () => {
-    const result = await client('login').current.resendCode('device');
+    const result = await client().current.resendCode('device');
 
     expect(signInState.mfa.sendEmailCode).toHaveBeenCalled();
     expect(signInState.emailCode.sendCode).not.toHaveBeenCalled();
@@ -1356,9 +1260,7 @@ describe('password sign-in from a device the account has not used', () => {
   it.each(['sign_in', 'sign_up', 'reset', 'device'] as const)(
     'answers a %s resend as sent, never as a finished sign-in',
     async (purpose) => {
-      const result = await client(purpose === 'sign_up' ? 'signup' : 'login').current.resendCode(
-        purpose,
-      );
+      const result = await client().current.resendCode(purpose);
 
       expect(result).toEqual({ status: 'sent' });
       expect(signInState.finalize).not.toHaveBeenCalled();
@@ -1389,10 +1291,10 @@ describe('a retry after the code was accepted but the session did not open', () 
       .mockResolvedValue(SPENT);
     signUpState.finalize.mockResolvedValueOnce(OFFLINE);
 
-    const first = await client('signup').current.submitCode('424242', 'sign_up');
+    const first = await client().current.submitCode('424242', 'sign_up');
     expect(first).toMatchObject({ status: 'failed', kind: 'network_unreachable' });
 
-    const retried = await client('signup').current.submitCode('424242', 'sign_up');
+    const retried = await client().current.submitCode('424242', 'sign_up');
 
     expect(retried).toEqual({ status: 'complete' });
     expect(signUpState.verifications.verifyEmailCode).toHaveBeenCalledTimes(1);
@@ -1408,10 +1310,10 @@ describe('a retry after the code was accepted but the session did not open', () 
       .mockResolvedValue(SPENT);
     signInState.finalize.mockResolvedValueOnce(OFFLINE);
 
-    const first = await client('login').current.submitCode('424242', 'sign_in');
+    const first = await client().current.submitCode('424242', 'sign_in');
     expect(first).toMatchObject({ status: 'failed', kind: 'network_unreachable' });
 
-    const retried = await client('login').current.submitCode('424242', 'sign_in');
+    const retried = await client().current.submitCode('424242', 'sign_in');
 
     expect(retried).toEqual({ status: 'complete' });
     expect(signInState.emailCode.verifyCode).toHaveBeenCalledTimes(1);
@@ -1428,10 +1330,10 @@ describe('a retry after the code was accepted but the session did not open', () 
       .mockResolvedValue(SPENT);
     signInState.finalize.mockResolvedValueOnce(OFFLINE);
 
-    const first = await client('login').current.submitCode('424242', 'device');
+    const first = await client().current.submitCode('424242', 'device');
     expect(first).toMatchObject({ status: 'failed', kind: 'network_unreachable' });
 
-    const retried = await client('login').current.submitCode('424242', 'device');
+    const retried = await client().current.submitCode('424242', 'device');
 
     expect(retried).toEqual({ status: 'complete' });
     expect(signInState.mfa.verifyEmailCode).toHaveBeenCalledTimes(1);
@@ -1447,8 +1349,8 @@ describe('a retry after the code was accepted but the session did not open', () 
       })
       .mockResolvedValue(SPENT);
 
-    const first = await client('login').current.submitCode('424242', 'sign_in');
-    const again = await client('login').current.submitCode('424242', 'sign_in');
+    const first = await client().current.submitCode('424242', 'sign_in');
+    const again = await client().current.submitCode('424242', 'sign_in');
 
     expect(first).toEqual(again);
     expect(again).toEqual({
@@ -1470,8 +1372,8 @@ describe('a retry after the code was accepted but the session did not open', () 
         return ok;
       });
 
-    const refused = await client('login').current.submitCode('111111', 'sign_in');
-    const accepted = await client('login').current.submitCode('424242', 'sign_in');
+    const refused = await client().current.submitCode('111111', 'sign_in');
+    const accepted = await client().current.submitCode('424242', 'sign_in');
 
     expect(refused).toMatchObject({ status: 'failed', kind: 'code_incorrect', field: 'code' });
     expect(accepted).toEqual({ status: 'complete' });
@@ -1488,7 +1390,7 @@ describe('desktop identity handoff', () => {
     'opens %s sign-in through the native browser broker',
     async (provider) => {
       window.agiHost = hostBridgeStub();
-      expect(await client('login').current.startProvider(provider)).toEqual({
+      expect(await client().current.startProvider(provider)).toEqual({
         status: 'redirecting',
         phase: 'browser',
       });
@@ -1500,7 +1402,7 @@ describe('desktop identity handoff', () => {
 
   it('keeps desktop sign-up in the same first-party browser handoff', async () => {
     window.agiHost = hostBridgeStub();
-    expect(await client('signup').current.startProvider('google')).toEqual({
+    expect(await client().current.startProvider('google')).toEqual({
       status: 'redirecting',
       phase: 'browser',
     });
@@ -1510,7 +1412,7 @@ describe('desktop identity handoff', () => {
   it('does not navigate inside the window after a failed browser launch', async () => {
     window.agiHost = hostBridgeStub();
     browserSignIn.begin.mockResolvedValue(false);
-    expect(await client('login').current.startProvider('google')).toMatchObject({
+    expect(await client().current.startProvider('google')).toMatchObject({
       status: 'failed',
     });
     expect(signInState.sso).not.toHaveBeenCalled();
@@ -1518,7 +1420,7 @@ describe('desktop identity handoff', () => {
 
   it('invalidates pending native sign-in before resetting the local form', async () => {
     window.agiHost = hostBridgeStub();
-    await client('login').current.restart();
+    await client().current.restart();
     expect(browserSignIn.cancel).toHaveBeenCalledOnce();
     expect(signInState.reset).toHaveBeenCalledOnce();
     expect(browserSignIn.cancel.mock.invocationCallOrder[0]).toBeLessThan(
@@ -1529,20 +1431,20 @@ describe('desktop identity handoff', () => {
   it('does not reset the form while cancellation is unconfirmed', async () => {
     window.agiHost = hostBridgeStub();
     browserSignIn.cancel.mockResolvedValue(false);
-    await client('login').current.restart();
+    await client().current.restart();
     expect(signInState.reset).not.toHaveBeenCalled();
   });
 });
 
 it('offers an update instead of starting uncancellable browser sign-in on an older Desktop', async () => {
   window.agiHost = hostBridgeStub({ browserSignIn: undefined });
-  expect(await client('login').current.startProvider('google')).toMatchObject({
+  expect(await client().current.startProvider('google')).toMatchObject({
     status: 'failed',
     message: expect.stringContaining(`Update ${PRODUCT_NAMES.desktop}`),
   });
   expect(browserSignIn.begin).not.toHaveBeenCalled();
   expect(signInState.sso).not.toHaveBeenCalled();
-  await client('login').current.restart();
+  await client().current.restart();
   expect(browserSignIn.cancel).not.toHaveBeenCalled();
   expect(signInState.reset).toHaveBeenCalledOnce();
 });

@@ -65,7 +65,7 @@ function faceTransform(id: string): string {
   );
 }
 
-function passwordStep() {
+function passwordStep(overrides: Partial<Parameters<typeof AuthPasswordStep>[0]> = {}) {
   return (
     <AuthPasswordStep
       email={EMAIL}
@@ -76,6 +76,7 @@ function passwordStep() {
       onEditEmail={() => undefined}
       onForgotPassword={() => undefined}
       onChooseMethod={() => undefined}
+      {...overrides}
     />
   );
 }
@@ -83,14 +84,11 @@ function passwordStep() {
 function emailStep() {
   return (
     <AuthEmailStep
-      mode="login"
       providers={[]}
-      switchUrl="/signup"
       ready
       phase="idle"
       error={null}
       fieldError={null}
-      switchOffered={false}
       providerPending={null}
       onSubmit={() => undefined}
       onStartProvider={() => undefined}
@@ -98,25 +96,8 @@ function emailStep() {
   );
 }
 
-function signInScreen(overrides: Partial<Parameters<typeof AuthEmailStep>[0]> = {}) {
-  return (
-    <AuthEmailStep
-      mode="login"
-      providers={[]}
-      switchUrl="/signup"
-      ready
-      phase="idle"
-      error={null}
-      fieldError={null}
-      switchOffered={false}
-      providerPending={null}
-      onSubmit={() => undefined}
-      onSubmitPassword={() => undefined}
-      onForgotPassword={() => undefined}
-      onStartProvider={() => undefined}
-      {...overrides}
-    />
-  );
+function leaveTheField() {
+  act(() => (document.activeElement as HTMLElement | null)?.blur());
 }
 
 function withStore(store: SceneStore, children: ReactNode) {
@@ -328,8 +309,10 @@ describe('the characters watch a hidden password and look away from a readable o
 
   it('turns attention to a non-sensitive field without looking away', async () => {
     render(<AuthLayout scene>{emailStep()}</AuthLayout>);
+    expect(screen.getByLabelText('Email address')).not.toHaveFocus();
 
-    expect(screen.getByLabelText('Email address')).toHaveFocus();
+    await userEvent.click(screen.getByLabelText('Email address'));
+
     expect(scene()).toHaveAttribute('data-focus', 'field');
     expect(scene()).toHaveAttribute('data-privacy', 'false');
     expectEveryCharacter('attend');
@@ -344,7 +327,7 @@ describe('the characters watch a hidden password and look away from a readable o
 
     rerender(<AuthLayout scene>{emailStep()}</AuthLayout>);
 
-    expect(scene()).toHaveAttribute('data-focus', 'field');
+    expect(scene()).toHaveAttribute('data-focus', 'free');
     expect(scene()).toHaveAttribute('data-privacy', 'false');
   });
 });
@@ -493,6 +476,7 @@ describe('a field the page focused before the person did anything', () => {
     installUserActivation(false);
     render(<AuthLayout scene>{emailStep()}</AuthLayout>);
     const email = screen.getByLabelText('Email address');
+    act(() => email.focus());
 
     expect(email).toHaveFocus();
     expect(scene()).toHaveAttribute('data-focus', 'free');
@@ -551,7 +535,8 @@ describe('the lean-in', () => {
 
   it('starts when the person clicks into the hidden password field', async () => {
     const store = createSceneStore();
-    render(withStore(store, signInScreen()));
+    render(withStore(store, passwordStep()));
+    leaveTheField();
     expect(store.readLeaningIn()).toBe(false);
 
     await userEvent.click(screen.getByLabelText('Password'));
@@ -563,7 +548,8 @@ describe('the lean-in', () => {
   it('starts when the person tabs into it, and ends by itself while they keep typing', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const store = createSceneStore();
-    render(withStore(store, signInScreen()));
+    render(withStore(store, passwordStep()));
+    act(() => screen.getByRole('button', { name: 'Edit' }).focus());
 
     await userEvent.tab();
     expect(screen.getByLabelText('Password')).toHaveFocus();
@@ -579,7 +565,7 @@ describe('the lean-in', () => {
 
   it('does not start again when a shown password is hidden', async () => {
     const store = createSceneStore();
-    render(withStore(store, signInScreen()));
+    render(withStore(store, passwordStep()));
     const field = screen.getByLabelText('Password');
     const toggle = screen.getByRole('button', { name: 'Show password' });
     await userEvent.type(field, SECRET);
@@ -600,17 +586,18 @@ describe('the lean-in', () => {
 
   it('does not start when a refused password takes the focus back', async () => {
     const store = createSceneStore();
-    const { rerender } = render(withStore(store, signInScreen()));
-    await userEvent.type(screen.getByLabelText('Email address'), EMAIL);
+    const { rerender } = render(withStore(store, passwordStep()));
     await userEvent.type(screen.getByLabelText('Password'), SECRET);
     act(() => screen.getByRole('button', { name: 'Continue' }).focus());
     expect(store.getSnapshot().attention).toBe('free');
 
-    rerender(withStore(store, signInScreen({ phase: 'checking_account' })));
+    rerender(withStore(store, passwordStep({ phase: 'verifying' })));
     rerender(
       withStore(
         store,
-        signInScreen({ passwordError: 'The email and password do not match an account.' }),
+        passwordStep({
+          fieldError: 'The email and password do not match an account.',
+        }),
       ),
     );
 
@@ -624,12 +611,14 @@ describe('the lean-in', () => {
     render(
       withStore(
         store,
-        signInScreen({ passwordError: 'The email and password do not match an account.' }),
+        passwordStep({
+          fieldError: 'The email and password do not match an account.',
+        }),
       ),
     );
     store.setMood('error');
 
-    await userEvent.click(screen.getByLabelText('Email address'));
+    act(() => screen.getByRole('button', { name: 'Continue' }).focus());
     await userEvent.click(screen.getByLabelText('Password'));
 
     expect(store.getSnapshot().attention).toBe('masked');
@@ -638,15 +627,14 @@ describe('the lean-in', () => {
 
   it('does not start for a press on the reveal button that brings focus into the field', async () => {
     const store = createSceneStore();
-    render(withStore(store, signInScreen()));
-    await userEvent.type(screen.getByLabelText('Email address'), EMAIL);
+    render(withStore(store, passwordStep()));
+    leaveTheField();
 
     await userEvent.click(screen.getByRole('button', { name: 'Show password' }));
 
     expect(store.readLeaningIn()).toBe(false);
   });
 });
-
 describe('the plain shell', () => {
   it('draws no scene and keeps the single centred column', () => {
     render(<AuthLayout>{emailStep()}</AuthLayout>);

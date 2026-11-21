@@ -9,10 +9,12 @@ export function AuthSubmitButton({
   label,
   busy = false,
   disabled = false,
+  describedBy,
 }: {
   label: string;
   busy?: boolean;
   disabled?: boolean;
+  describedBy?: string;
 }) {
   const copy = useAuthCopy();
   return (
@@ -21,6 +23,7 @@ export function AuthSubmitButton({
       className={AUTH_PRIMARY_BUTTON_CLASS}
       disabled={busy || disabled}
       aria-busy={busy || undefined}
+      aria-describedby={describedBy}
     >
       {busy ? <Spinner size="sm" aria-label={copy.text('flow.working', 'Working')} /> : label}
     </button>

@@ -20,6 +20,7 @@ export interface MockAuthProviderCalls {
   signInCreate: number;
   signUpCreate: number;
   signUpSso: number;
+  signInSso: number;
 }
 
 export interface MockAuthProviderProgress {
@@ -46,7 +47,13 @@ declare global {
 /** How many times the page reached the stubbed provider, by entry point. */
 export async function mockAuthProviderCalls(page: Page): Promise<MockAuthProviderCalls> {
   return page.evaluate(
-    () => window.__agiMockAuthProviderCalls ?? { signInCreate: 0, signUpCreate: 0, signUpSso: 0 },
+    () =>
+      window.__agiMockAuthProviderCalls ?? {
+        signInCreate: 0,
+        signUpCreate: 0,
+        signUpSso: 0,
+        signInSso: 0,
+      },
   );
 }
 
@@ -136,7 +143,7 @@ export async function mockAuthProvider(
         }
       })();
       let signUpNetworkFailuresLeft = signUpNetworkFailures;
-      const calls = { signInCreate: 0, signUpCreate: 0, signUpSso: 0 };
+      const calls = { signInCreate: 0, signUpCreate: 0, signUpSso: 0, signInSso: 0 };
       window.__agiMockAuthProviderCalls = calls;
       const progress = {
         signInCodeChecks: 0,
@@ -212,6 +219,10 @@ export async function mockAuthProvider(
           }
           passwordSignIn.sessionsOpened += 1;
           return { error: null };
+        },
+        async sso() {
+          calls.signInSso += 1;
+          return { error: { code: 'oauth_access_denied' } };
         },
         async reset() {
           signIn.status = 'needs_first_factor';

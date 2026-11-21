@@ -19,9 +19,6 @@ async function openAuth(page: Page, route: string): Promise<void> {
   await expect(page.getByRole('button', { name: 'Continue', exact: true })).toBeEnabled();
   await expect(page.getByTestId('auth-layout')).toHaveCount(1);
   await expect(page.getByTestId('auth-layout')).toBeVisible();
-  if (route === '/signup') {
-    await expect(page.getByTestId('auth-age-field').getByRole('textbox')).toHaveValue('');
-  }
 }
 
 // A link inside a running sentence (a label, the sign-up agreement, an error
@@ -199,25 +196,8 @@ test.describe('auth accessibility', () => {
     test(`${route} ties every field error to the field it is about`, async ({ page }) => {
       await openAuth(page, route);
 
-      // On /signup the first thing that can fail is the age field, and an
-      // attempt without an eligible age must never reach the provider, so that
-      // is the field this screen proves. The email field's wiring is the same
-      // component as on /login, which proves it here against a real response.
-      if (route === '/signup') {
-        await page.getByLabel('Email address').fill(`no-age-${Date.now()}@example.invalid`);
-        await page.getByRole('button', { name: 'Continue', exact: true }).click();
-        const age = page.getByTestId('auth-age-field').getByRole('textbox');
-        await expect(page.getByTestId('auth-age-field').getByRole('alert')).toBeVisible();
-        await expect(age).toHaveAttribute('aria-invalid', 'true');
-        const describedBy = await age.getAttribute('aria-describedby');
-        expect(describedBy, 'the field points at its own message').toBeTruthy();
-        for (const id of describedBy!.split(' ')) {
-          await expect(page.locator(`[id="${id}"]`)).toHaveCount(1);
-        }
-        await expectSeriousViolations(page, `${route} accessibility after a refused attempt`);
-        return;
-      }
-
+      // The scripted provider refuses the sign-up of an address it does not
+      // list with an error about the address, which is what this proves.
       await page.getByLabel('Email address').fill(`unknown-${Date.now()}@example.invalid`);
       await page.getByRole('button', { name: 'Continue', exact: true }).click();
       await expect(page.getByTestId('auth-layout').getByRole('alert')).toBeVisible();
@@ -286,12 +266,7 @@ test.describe('auth accessibility', () => {
 
   test('the password reveal control reports its own pressed state', async ({ page }) => {
     await openAuth(page, '/login');
-
-    const firstScreenToggle = page.getByRole('button', { name: 'Show password' });
-    await expect(firstScreenToggle).toHaveAttribute('aria-pressed', 'false');
-    await firstScreenToggle.click();
-    await expect(firstScreenToggle).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.getByLabel('Password', { exact: true })).toHaveAttribute('type', 'text');
+    await expect(page.getByRole('button', { name: 'Show password' })).toHaveCount(0);
 
     await page.getByLabel('Email address').fill(MOCK_PASSWORD_ACCOUNT);
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
@@ -301,5 +276,6 @@ test.describe('auth accessibility', () => {
     await expect(toggle).toHaveAttribute('aria-pressed', 'false');
     await toggle.click();
     await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByLabel('Password', { exact: true })).toHaveAttribute('type', 'text');
   });
 });

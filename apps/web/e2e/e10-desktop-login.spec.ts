@@ -109,7 +109,7 @@ test('shared Web login stays usable through Desktop handoff, reload, cancellatio
     });
   });
   await page.goto(`${origin}/login?redirectTo=%2Fchat&surface=desktop`);
-  await expect(page.getByRole('heading', { name: 'Welcome back', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Log in or sign up', exact: true })).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Continue in your browser', exact: true }),
   ).toBeVisible();
@@ -171,7 +171,7 @@ test('shared Web login stays usable through Desktop handoff, reload, cancellatio
 test('the ordinary website still offers cookie preferences', async ({ page, baseURL }) => {
   const origin = acceptanceOrigin(baseURL);
   await page.goto(`${origin}/login?redirectTo=%2Fchat`);
-  await expect(page.getByRole('heading', { name: 'Welcome back', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Log in or sign up', exact: true })).toBeVisible();
   await expect(page.getByLabel('Cookie consent', { exact: true })).toBeVisible();
 });
 
@@ -203,7 +203,7 @@ test('an older Desktop gets a clear update message and usable local sign-in', as
     });
   });
   await page.goto(`${origin}/login?redirectTo=%2Fchat&surface=desktop`);
-  await expect(page.getByRole('heading', { name: 'Welcome back', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Log in or sign up', exact: true })).toBeVisible();
   await expect(page.locator('form button[type="submit"]')).toBeEnabled();
   await expect(
     page.getByRole('button', { name: 'Continue in your browser', exact: true }),

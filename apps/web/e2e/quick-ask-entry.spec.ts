@@ -56,7 +56,7 @@ test.describe('Quick Ask entry routes', () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/quick-ask');
 
-    await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Log in or sign up' })).toBeVisible();
     await expect(page.getByRole('textbox', { name: 'Email address' })).toBeInViewport();
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),

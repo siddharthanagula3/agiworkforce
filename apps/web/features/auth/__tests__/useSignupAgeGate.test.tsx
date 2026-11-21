@@ -9,14 +9,14 @@ const YOUNGEST = String(ACCOUNT_MINIMUM_AGE);
 const TOO_YOUNG = String(ACCOUNT_MINIMUM_AGE - 1);
 
 function mountedGate() {
-  const hook = renderHook(() => useSignupAgeGate(true));
+  const hook = renderHook(() => useSignupAgeGate());
   const field = document.createElement('input');
   document.body.append(field);
   hook.result.current.fieldRef.current = field;
   return { ...hook, field };
 }
 
-describe('the sign-up age gate', () => {
+describe('the age gate', () => {
   it('admits from 18 and no younger', () => {
     expect(ACCOUNT_MINIMUM_AGE).toBe(18);
     expect(TOO_YOUNG).toBe('17');
@@ -108,46 +108,18 @@ describe('the sign-up age gate', () => {
     field.remove();
   });
 
-  it('is open when the screen does not ask for an age', () => {
-    const { result } = renderHook(() => useSignupAgeGate(false));
-    const attempt = vi.fn();
-
-    let admitted = false;
-    act(() => {
-      admitted = result.current.admit(attempt);
-    });
-
-    expect(admitted).toBe(true);
-    expect(attempt).toHaveBeenCalledTimes(1);
-    expect(result.current.refusedAs).toBeNull();
-  });
-
-  it('forgets the entry and its refusal on request', () => {
-    const { result, field } = mountedGate();
-    act(() => result.current.enter(TOO_YOUNG));
-    act(() => {
-      result.current.admit(vi.fn());
-    });
-
-    act(() => result.current.forget());
-
-    expect(result.current.age).toBe('');
-    expect(result.current.refusedAs).toBeNull();
-    field.remove();
-  });
-
   it('starts empty on every mount and leaves nothing behind in the browser', () => {
     window.localStorage.clear();
     window.sessionStorage.clear();
     const cookiesBefore = document.cookie;
-    const first = renderHook(() => useSignupAgeGate(true));
+    const first = renderHook(() => useSignupAgeGate());
     act(() => first.result.current.enter('41'));
     act(() => {
       first.result.current.admit(vi.fn());
     });
     first.unmount();
 
-    const second = renderHook(() => useSignupAgeGate(true));
+    const second = renderHook(() => useSignupAgeGate());
 
     expect(second.result.current.age).toBe('');
     expect(second.result.current.verdict).toBe('missing');

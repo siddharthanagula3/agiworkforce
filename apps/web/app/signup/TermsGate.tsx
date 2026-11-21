@@ -57,7 +57,7 @@ export function TermsGate({
 
   const onToggle = (next: boolean) => {
     setAccepted(next);
-    if (next) writeSignupAttemptMarkers({ marketingEmail: false, ageCheckedAgainst: null });
+    if (next) writeSignupAttemptMarkers();
     else clearSignupAttemptMarkers();
   };
 

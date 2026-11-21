@@ -6,7 +6,6 @@ const flowProps = vi.hoisted(() => vi.fn());
 const mocks = vi.hoisted(() => ({
   identity: vi.fn(async (): Promise<{ subject: string | null }> => ({ subject: null })),
   redirect: vi.fn(),
-  headers: vi.fn(async () => new Headers()),
 }));
 
 vi.mock('@/lib/server/identity', () => ({ getRequestIdentity: () => mocks.identity() }));
@@ -15,10 +14,6 @@ vi.mock('next/navigation', () => ({
     mocks.redirect(url);
     throw new Error(`redirect:${url}`);
   },
-}));
-vi.mock('next/headers', async (importOriginal) => ({
-  ...(await importOriginal()),
-  headers: () => mocks.headers(),
 }));
 
 vi.mock('@/features/auth/AuthFlow', () => ({
@@ -36,12 +31,15 @@ vi.mock('@/features/auth/AuthLayout', () => ({
   ),
 }));
 
-import { GLOBAL_PRIVACY_CONTROL_HEADER } from '@/lib/consent-signals';
+import LoginPage from '../login/page';
 import SignupPage from './page';
 
+function lastFlowProps(): Record<string, unknown> {
+  return flowProps.mock.lastCall?.[0] as Record<string, unknown>;
+}
+
 function lastRedirects(): Record<string, string> {
-  const props = flowProps.mock.lastCall?.[0] as Record<string, unknown>;
-  return props['redirects'] as Record<string, string>;
+  return lastFlowProps()['redirects'] as Record<string, string>;
 }
 
 describe('/signup', () => {
@@ -49,24 +47,19 @@ describe('/signup', () => {
     flowProps.mockClear();
     mocks.redirect.mockClear();
     mocks.identity.mockResolvedValue({ subject: null });
-    mocks.headers.mockResolvedValue(new Headers());
   });
 
-  it.each([
-    ['sends', '1', true],
-    ['does not send', null, false],
-  ])(
-    'tells the flow that the request %s Global Privacy Control',
-    async (_case, value, optedOutBySignal) => {
-      mocks.headers.mockResolvedValue(
-        new Headers(value === null ? {} : { [GLOBAL_PRIVACY_CONTROL_HEADER]: value }),
-      );
+  it('shows the same screen as /login, with the same ways in', async () => {
+    const searchParams = Promise.resolve({ redirectTo: '/chat' });
+    render(await LoginPage({ searchParams }));
+    const { redirects: _loginRedirects, hostWayIn: _loginHost, ...fromLogin } = lastFlowProps();
+    render(await SignupPage({ searchParams }));
+    const { redirects: _signupRedirects, hostWayIn: _signupHost, ...fromSignup } = lastFlowProps();
 
-      render(await SignupPage({ searchParams: Promise.resolve({ redirectTo: '/chat' }) }));
-
-      expect(flowProps).toHaveBeenCalledWith(expect.objectContaining({ optedOutBySignal }));
-    },
-  );
+    expect(fromSignup).toEqual(fromLogin);
+    expect(lastFlowProps()).not.toHaveProperty('mode');
+    expect(lastFlowProps()).not.toHaveProperty('optedOutBySignal');
+  });
 
   it('sends an already-signed-in visitor through the existing terms-aware login gate', async () => {
     mocks.identity.mockResolvedValue({ subject: 'user_1' });
@@ -87,26 +80,27 @@ describe('/signup', () => {
     expect(mocks.redirect).not.toHaveBeenCalled();
   });
 
-  it('mounts the sign-up flow, which records the accepted terms version', async () => {
+  it('finishes a new account at sign-up completion and an existing one at login completion', async () => {
     render(await SignupPage({ searchParams: Promise.resolve({ redirectTo: '/chat' }) }));
 
-    expect(screen.getByTestId('auth-flow')).toBeInTheDocument();
-    expect(flowProps).toHaveBeenCalledWith(expect.objectContaining({ mode: 'signup' }));
-    expect(lastRedirects()['completeUrl']).toBe('/signup/complete?redirectTo=%2Fchat');
+    expect(lastRedirects()).toEqual({
+      signInCompleteUrl: '/login/complete?redirectTo=%2Fchat',
+      signUpCompleteUrl: '/signup/complete?redirectTo=%2Fchat',
+      ssoCallbackUrl: '/auth/sso-callback?redirectTo=%2Fchat',
+    });
   });
 
   it('offers at least one provider, sourced from the shared catalogue', async () => {
     render(await SignupPage({ searchParams: Promise.resolve({ redirectTo: '/chat' }) }));
 
-    const props = flowProps.mock.lastCall?.[0] as Record<string, unknown>;
-    const providers = props['providers'] as { id: string; label: string }[];
+    const providers = lastFlowProps()['providers'] as { id: string; label: string }[];
     expect(providers.length).toBeGreaterThan(0);
     for (const provider of providers) {
       expect(provider.label.length).toBeGreaterThan(0);
     }
   });
 
-  it('keeps account creation and the return to sign-in inside the embedded Desktop flow', async () => {
+  it('keeps account creation inside the embedded Desktop flow', async () => {
     const redirectTo = '/auth/device?user_code=ABCD-1234&surface=desktop';
     render(
       await SignupPage({
@@ -116,10 +110,10 @@ describe('/signup', () => {
 
     expect(screen.getByTestId('auth-layout')).toHaveAttribute('data-embedded', 'true');
     expect(lastRedirects()).toEqual({
-      completeUrl:
+      signInCompleteUrl:
+        '/login/complete?redirectTo=%2Fauth%2Fdevice%3Fuser_code%3DABCD-1234%26surface%3Ddesktop&surface=desktop',
+      signUpCompleteUrl:
         '/signup/complete?redirectTo=%2Fauth%2Fdevice%3Fuser_code%3DABCD-1234%26surface%3Ddesktop',
-      switchUrl:
-        '/login?surface=desktop&redirectTo=%2Fauth%2Fdevice%3Fuser_code%3DABCD-1234%26surface%3Ddesktop',
       ssoCallbackUrl:
         '/auth/sso-callback?redirectTo=%2Fauth%2Fdevice%3Fuser_code%3DABCD-1234%26surface%3Ddesktop&surface=desktop',
     });
@@ -128,6 +122,6 @@ describe('/signup', () => {
   it('falls back to the chat destination when no target is given', async () => {
     render(await SignupPage({ searchParams: Promise.resolve({}) }));
 
-    expect(lastRedirects()['completeUrl']).toBe('/signup/complete?redirectTo=%2Fchat');
+    expect(lastRedirects()['signUpCompleteUrl']).toBe('/signup/complete?redirectTo=%2Fchat');
   });
 });

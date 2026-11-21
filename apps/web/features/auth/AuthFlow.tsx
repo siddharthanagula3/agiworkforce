@@ -12,7 +12,6 @@ import {
 import {
   clearSignupAttemptMarkers,
   writeSignupAttemptMarkers,
-  type SignupAttemptChoices,
 } from '@/app/signup/signupAttemptMarkers';
 import {
   classifyAuthError,
@@ -29,9 +28,7 @@ import { IdentityBotProtection, useIdentityAuthClient } from './IdentityAuthAdap
 import { useAuthCopy } from './authCopy';
 import { rememberAuthMethod } from './lastUsedMethod';
 import type {
-  AuthFieldName,
   AuthMethodId,
-  AuthMode,
   AuthPhase,
   AuthProvider,
   AuthProviderId,
@@ -44,41 +41,23 @@ import type {
 const INITIAL_STEP: AuthStep = { kind: 'email' };
 const RESTING_PHASE = 'idle' satisfies Extract<LifecycleStatus, 'idle'> & AuthPhase;
 
-function providerCheckedThePassword(result: AuthResult): boolean {
-  if (result.status === 'complete') return true;
-  if (result.status === 'failed') return result.field === 'password';
-  if (result.status !== 'next') return false;
-  const { step } = result;
-  return (
-    step.kind === 'second_factor' ||
-    step.kind === 'new_password' ||
-    (step.kind === 'code' && step.purpose === 'device')
-  );
-}
-
-const NO_OPTIONAL_CHOICES: SignupAttemptChoices = {
-  marketingEmail: false,
-  ageCheckedAgainst: null,
-};
-
 export function AuthFlow({
-  mode,
   providers,
   passkeySignIn = false,
   mfaEmailFallback = false,
-  optedOutBySignal = false,
   redirects,
   hostWayIn,
 }: {
-  mode: AuthMode;
   providers: readonly AuthProvider[];
   passkeySignIn?: boolean;
   mfaEmailFallback?: boolean;
-  optedOutBySignal?: boolean;
   redirects: AuthRedirects;
   hostWayIn?: ReactNode;
 }) {
-  const client = useIdentityAuthClient(mode, redirects, { mfaEmailFallback });
+  const client = useIdentityAuthClient(redirects, {
+    mfaEmailFallback,
+    onSignUpStarted: writeSignupAttemptMarkers,
+  });
   const copy = useAuthCopy();
   const scene = useAuthSceneBridge();
 
@@ -88,14 +67,11 @@ export function AuthFlow({
   const [error, setError] = useState<string | null>(null);
   const [errorKind, setErrorKind] = useState<AuthErrorKind | null>(null);
   const [fieldError, setFieldError] = useState<string | null>(null);
-  const [erroredField, setErroredField] = useState<AuthFieldName | null>(null);
-  const [switchOffered, setSwitchOffered] = useState(false);
   const [retryAfterSeconds, setRetryAfterSeconds] = useState<number | null>(null);
   const lastAction = useRef<{ action: () => Promise<AuthResult>; phase: AuthPhase } | null>(null);
   const inFlight = useRef(false);
   const attempt = useRef(0);
   const browserWasPending = useRef(false);
-  const admittedChoices = useRef(NO_OPTIONAL_CHOICES);
 
   const browserSignIn = useBrowserSignInState();
   const browserPending = browserSignInIsPending(browserSignIn);
@@ -127,8 +103,6 @@ export function AuthFlow({
     setError(null);
     setErrorKind(null);
     setFieldError(null);
-    setErroredField(null);
-    setSwitchOffered(false);
     setRetryAfterSeconds(null);
   }, []);
 
@@ -141,12 +115,21 @@ export function AuthFlow({
     if (result.status === 'failed') {
       setErrorKind(result.kind);
       setRetryAfterSeconds(result.retryAfterSeconds ?? null);
-      setErroredField(result.field ?? null);
       if (result.field) setFieldError(result.message);
       else setError(result.message);
-      setSwitchOffered(result.switchMode === true);
     }
   }, []);
+
+  const providerReturnRead = useRef(false);
+  useEffect(() => {
+    if (!client.isReady || providerReturnRead.current) return;
+    providerReturnRead.current = true;
+    const returned = client.readProviderReturn();
+    if (returned) {
+      clearSignupAttemptMarkers();
+      apply(returned);
+    }
+  }, [apply, client]);
 
   const run = useCallback(
     async (action: () => Promise<AuthResult>, nextPhase: AuthPhase) => {
@@ -205,8 +188,7 @@ export function AuthFlow({
       clearMessages();
       setProviderPending(provider);
       setPhase('redirecting');
-      if (mode === 'signup') writeSignupAttemptMarkers(admittedChoices.current);
-      else clearSignupAttemptMarkers();
+      writeSignupAttemptMarkers();
       let handingOff = false;
       try {
         const result = await client.startProvider(provider);
@@ -225,14 +207,14 @@ export function AuthFlow({
         apply({ status: 'failed', kind, message: copy.errorCopy(kind).message });
       } finally {
         if (!handingOff && running === attempt.current) {
-          if (mode === 'signup') clearSignupAttemptMarkers();
+          clearSignupAttemptMarkers();
           inFlight.current = false;
           setProviderPending(null);
           setPhase(RESTING_PHASE);
         }
       }
     },
-    [apply, busy, clearMessages, client, copy, mode, providerPending],
+    [apply, busy, clearMessages, client, copy, providerPending],
   );
 
   const onStartPasskey = useCallback(() => {
@@ -263,34 +245,7 @@ export function AuthFlow({
     [client, run],
   );
 
-  const onSubmitPassword = useCallback(
-    (email: string, password: string) => {
-      void run(async () => {
-        clearSignupAttemptMarkers();
-        const result = await client.signInWithPassword(email, password);
-        if (providerCheckedThePassword(result)) {
-          rememberAuthMethod({ kind: 'method', method: 'password' });
-        }
-        return result;
-      }, 'checking_account');
-    },
-    [client, run],
-  );
-
-  const onRecoverPassword = useCallback(
-    (email: string) => {
-      void run(() => {
-        clearSignupAttemptMarkers();
-        return client.startPasswordResetFor(email);
-      }, 'sending_code');
-    },
-    [client, run],
-  );
-
   const retryOffered = errorKind !== null && isRetryableAuthError(errorKind);
-  const passwordRefused = erroredField === 'password';
-  const passwordFieldShown = mode === 'login';
-  const botProtection = mode === 'signup' ? <IdentityBotProtection /> : null;
 
   if (step.kind === 'notice') {
     return (
@@ -327,7 +282,7 @@ export function AuthFlow({
     return (
       <AuthCodeStep
         email={step.email}
-        purpose={step.passwordless ? 'passwordless' : step.purpose}
+        purpose={step.purpose}
         phase={visiblePhase}
         error={error}
         fieldError={fieldError}
@@ -372,7 +327,7 @@ export function AuthFlow({
             void run(() => client.submitNewPassword(password, step.purpose), 'verifying')
           }
         />
-        {botProtection}
+        <IdentityBotProtection />
       </>
     );
   }
@@ -380,40 +335,26 @@ export function AuthFlow({
   return (
     <>
       <AuthEmailStep
-        mode={mode}
         providers={providers}
         hostWayIn={hostWayIn}
-        switchUrl={redirects.switchUrl}
         ready={client.isReady}
         phase={visiblePhase}
-        error={passwordRefused && !passwordFieldShown ? fieldError : error}
-        fieldError={passwordRefused ? null : fieldError}
-        passwordError={passwordRefused && passwordFieldShown ? fieldError : null}
-        switchOffered={switchOffered}
+        error={error}
+        fieldError={fieldError}
         retryOffered={retryOffered}
         providerPending={providerPending}
         onRetry={onRetry}
         onSubmit={(email) => {
           void run(async () => {
             clearSignupAttemptMarkers();
-            const result = await client.startWithEmail(email);
-            if (mode === 'signup' && result.status === 'next' && result.step.kind !== 'notice') {
-              writeSignupAttemptMarkers(admittedChoices.current);
-            }
-            return result;
+            return client.startWithEmail(email);
           }, 'checking_account');
         }}
-        onSubmitPassword={onSubmitPassword}
-        onForgotPassword={onRecoverPassword}
         onStartProvider={(provider) => void onStartProvider(provider)}
-        passkeySignIn={mode === 'login' && passkeySignIn}
+        passkeySignIn={passkeySignIn}
         onStartPasskey={onStartPasskey}
-        optedOutBySignal={optedOutBySignal}
-        onSignupAdmitted={(choices) => {
-          admittedChoices.current = choices;
-        }}
       />
-      {botProtection}
+      <IdentityBotProtection />
     </>
   );
 }

@@ -20,7 +20,6 @@ import type {
   AuthClient,
   AuthCodePurpose,
   AuthMethodId,
-  AuthMode,
   AuthPasswordPurpose,
   AuthProviderId,
   AuthRedirects,
@@ -81,28 +80,42 @@ const SESSION_EXISTS_CODE = 'session_exists';
 
 const STAY_ON_PAGE = (): void => undefined;
 
+const NO_ACCOUNT_CODE = 'form_identifier_not_found';
+const ACCOUNT_EXISTS_CODE = 'form_identifier_exists';
+const TRANSFERABLE_STATUS = 'transferable';
+const PROVIDER_STRATEGY_PREFIX = 'oauth_';
+
+type IdentityAttempt = 'sign_in' | 'sign_up';
+
 interface VendorFactor {
   strategy: string;
   safeIdentifier?: string;
 }
 
-function asksForPassword(result: AuthResult): boolean {
-  return result.status === 'next' && result.step.kind === 'password';
-}
-
-function markPasswordless(result: AuthResult): AuthResult {
-  if (result.status !== 'next') return result;
-  const { step } = result;
-  if (step.kind !== 'code' || step.purpose !== 'sign_in') return result;
-  return { status: 'next', step: { ...step, passwordless: true } };
+interface VendorVerification {
+  status?: string | null;
+  strategy?: string | null;
+  error?: unknown;
 }
 
 export interface IdentityAuthOptions {
   mfaEmailFallback?: boolean;
+  onSignUpStarted?: () => void;
+}
+
+function vendorCode(error: unknown): string | undefined {
+  return readVendorAuthError(error)?.code;
+}
+
+// A provider return that failed leaves its error on the verification it ran;
+// a transferable one is the callback's to finish, not a failure.
+function unresolvedError(verification: VendorVerification | null | undefined): unknown {
+  if (!verification?.strategy?.startsWith(PROVIDER_STRATEGY_PREFIX)) return null;
+  if (!verification.error || verification.status === TRANSFERABLE_STATUS) return null;
+  return verification.error;
 }
 
 export function useIdentityAuthClient(
-  mode: AuthMode,
   redirects: AuthRedirects,
   options: IdentityAuthOptions = {},
 ): AuthClient {
@@ -122,6 +135,17 @@ export function useIdentityAuthClient(
   policyRef.current = mfaEmailFallback;
   const copyRef = useRef(copy);
   copyRef.current = copy;
+  const onSignUpStartedRef = useRef(options.onSignUpStarted);
+  onSignUpStartedRef.current = options.onSignUpStarted;
+  const attemptRef = useRef<IdentityAttempt>('sign_in');
+
+  const completeUrl = useCallback(
+    (): string =>
+      attemptRef.current === 'sign_up'
+        ? redirectsRef.current.signUpCompleteUrl
+        : redirectsRef.current.signInCompleteUrl,
+    [],
+  );
 
   const subscribeToStatus = useCallback(
     (onChange: () => void) => {
@@ -166,12 +190,9 @@ export function useIdentityAuthClient(
   );
 
   const fail = useCallback(
-    (
-      error: unknown,
-      overrides: { inline?: boolean; message?: string; switchMode?: boolean } = {},
-    ): AuthResult => {
+    (error: unknown, overrides: { inline?: boolean; message?: string } = {}): AuthResult => {
       if (readVendorAuthError(error)?.code === SESSION_EXISTS_CODE) {
-        window.location.assign(redirectsRef.current.completeUrl);
+        window.location.assign(completeUrl());
         return { status: 'redirecting' };
       }
       const descriptor = classifyAuthError(error);
@@ -196,10 +217,9 @@ export function useIdentityAuthClient(
         ...(descriptor.retryAfterSeconds
           ? { retryAfterSeconds: descriptor.retryAfterSeconds }
           : {}),
-        ...(overrides.switchMode ? { switchMode: true } : {}),
       };
     },
-    [],
+    [completeUrl],
   );
 
   const unexpected = useCallback(
@@ -273,11 +293,11 @@ export function useIdentityAuthClient(
           ? { status: 'redirecting', phase: 'enterprise_browser' }
           : unexpected('unexpected');
       }
-      const { completeUrl, ssoCallbackUrl } = redirectsRef.current;
+      const { signInCompleteUrl, ssoCallbackUrl } = redirectsRef.current;
       const { error } = await signInRef.current.sso({
         identifier: email,
         strategy: ENTERPRISE_SSO_STRATEGY,
-        redirectUrl: completeUrl,
+        redirectUrl: signInCompleteUrl,
         redirectCallbackUrl: ssoCallbackUrl,
       });
       return error ? fail(error) : { status: 'redirecting', phase: 'enterprise_redirecting' };
@@ -288,20 +308,20 @@ export function useIdentityAuthClient(
   const finalizeSignIn = useCallback(async (): Promise<AuthResult> => {
     const { error } = await signInRef.current.finalize({
       navigate: ({ decorateUrl }) => {
-        window.location.assign(decorateUrl(redirectsRef.current.completeUrl));
+        window.location.assign(decorateUrl(completeUrl()));
       },
     });
     return error ? fail(error) : { status: 'complete' };
-  }, [fail]);
+  }, [completeUrl, fail]);
 
   const finalizeSignUp = useCallback(async (): Promise<AuthResult> => {
     const { error } = await signUpRef.current.finalize({
       navigate: ({ decorateUrl }) => {
-        window.location.assign(decorateUrl(redirectsRef.current.completeUrl));
+        window.location.assign(decorateUrl(completeUrl()));
       },
     });
     return error ? fail(error) : { status: 'complete' };
-  }, [fail]);
+  }, [completeUrl, fail]);
 
   const sendSignInEmailCode = useCallback(
     async (
@@ -443,37 +463,35 @@ export function useIdentityAuthClient(
     [fail, finalizeSignUp, missingRequirement, proveAddressBySignIn, unexpected],
   );
 
-  const startSignIn = useCallback(
-    async (email: string): Promise<AuthResult> => {
-      const { error } = await signInRef.current.create({ identifier: email });
-      if (error) {
-        const kind = classifyAuthError(error).kind;
-        if (kind === 'identifier_not_found') return fail(error, { switchMode: true });
-        return fail(error);
-      }
-      return resolveSignInState(email);
-    },
-    [fail, resolveSignInState],
-  );
+  const beginSignIn = useCallback(async (email: string): Promise<{ error: unknown }> => {
+    attemptRef.current = 'sign_in';
+    return signInRef.current.create({ identifier: email });
+  }, []);
 
   const startWithEmail = useCallback(
     async (email: string): Promise<AuthResult> => {
-      if (mode === 'signup') {
-        const { error } = await signUpRef.current.create({
-          emailAddress: email,
-          legalAccepted: true,
-        });
-        if (error) {
-          const kind = classifyAuthError(error).kind;
-          if (kind === 'identifier_exists') return fail(error, { switchMode: true });
-          return fail(error);
-        }
-        return resolveSignUpState(email);
+      const signingIn = await beginSignIn(email);
+      if (!signingIn.error) return resolveSignInState(email);
+      if (email.trim().length === 0 || vendorCode(signingIn.error) !== NO_ACCOUNT_CODE) {
+        return fail(signingIn.error);
       }
 
-      return startSignIn(email);
+      attemptRef.current = 'sign_up';
+      const { error } = await signUpRef.current.create({
+        emailAddress: email,
+        legalAccepted: true,
+      });
+      if (!error) {
+        onSignUpStartedRef.current?.();
+        return resolveSignUpState(email);
+      }
+      if (vendorCode(error) !== ACCOUNT_EXISTS_CODE) return fail(error);
+
+      // An account created between the two calls is signed in, once.
+      const retried = await beginSignIn(email);
+      return retried.error ? fail(retried.error) : resolveSignInState(email);
     },
-    [fail, mode, resolveSignUpState, startSignIn],
+    [beginSignIn, fail, resolveSignInState, resolveSignUpState],
   );
 
   const submitPassword = useCallback(
@@ -483,15 +501,6 @@ export function useIdentityAuthClient(
       return resolveSignInState(signInRef.current.identifier ?? '');
     },
     [fail, resolveSignInState],
-  );
-
-  const signInWithPassword = useCallback(
-    async (email: string, password: string): Promise<AuthResult> => {
-      const started = await startSignIn(email);
-      if (asksForPassword(started)) return submitPassword(password);
-      return markPasswordless(started);
-    },
-    [startSignIn, submitPassword],
   );
 
   const submitCode = useCallback(
@@ -608,16 +617,8 @@ export function useIdentityAuthClient(
     };
   }, [availableMethods, fail]);
 
-  const startPasswordResetFor = useCallback(
-    async (email: string): Promise<AuthResult> => {
-      const started = await startSignIn(email);
-      if (asksForPassword(started)) return startPasswordReset();
-      return markPasswordless(started);
-    },
-    [startPasswordReset, startSignIn],
-  );
-
   const signInWithPasskey = useCallback(async (): Promise<AuthResult> => {
+    attemptRef.current = 'sign_in';
     const { error } = await signInRef.current.passkey({ flow: 'discoverable' });
     if (error) return fail(error);
     if (signInRef.current.status === 'complete') return finalizeSignIn();
@@ -644,39 +645,37 @@ export function useIdentityAuthClient(
           ? { status: 'redirecting', phase: 'browser' }
           : unexpected('unexpected');
       }
-      const strategy = PROVIDER_STRATEGIES[provider];
-      const { completeUrl, ssoCallbackUrl } = redirectsRef.current;
-
-      if (mode === 'signup') {
-        const { error } = await signUpRef.current.sso({
-          strategy,
-          redirectUrl: completeUrl,
-          redirectCallbackUrl: ssoCallbackUrl,
-          legalAccepted: true,
-        });
-        return error ? fail(error) : { status: 'redirecting' };
-      }
-
+      attemptRef.current = 'sign_in';
+      const { signInCompleteUrl, ssoCallbackUrl } = redirectsRef.current;
+      // The callback turns a provider account nobody has signed up with into a
+      // sign-up, which finishes on the sign-up completion page.
       const { error } = await signInRef.current.sso({
-        strategy,
-        redirectUrl: completeUrl,
+        strategy: PROVIDER_STRATEGIES[provider],
+        redirectUrl: signInCompleteUrl,
         redirectCallbackUrl: ssoCallbackUrl,
       });
       return error ? fail(error) : { status: 'redirecting' };
     },
-    [fail, mode, unexpected],
+    [fail, unexpected],
   );
+
+  const readProviderReturn = useCallback((): AuthResult | null => {
+    const error =
+      unresolvedError(signInRef.current.firstFactorVerification) ??
+      unresolvedError(signUpRef.current.verifications.externalAccount);
+    return error ? fail(error, { inline: true }) : null;
+  }, [fail]);
 
   const restart = useCallback(async (): Promise<void> => {
     if (hostSupportsBrowserSignIn(getHostBridge()) && !(await cancelBrowserSignIn())) return;
-    await (mode === 'signup' ? signUpRef.current.reset() : signInRef.current.reset());
-  }, [mode]);
+    attemptRef.current = 'sign_in';
+    await Promise.all([signInRef.current.reset(), signUpRef.current.reset()]);
+  }, []);
 
   return useMemo(
     () => ({
       isReady,
       startWithEmail,
-      signInWithPassword,
       submitPassword,
       submitCode,
       resendCode,
@@ -684,21 +683,20 @@ export function useIdentityAuthClient(
       switchSecondFactor,
       submitNewPassword,
       startPasswordReset,
-      startPasswordResetFor,
       startMethod,
       startProvider,
       signInWithPasskey,
+      readProviderReturn,
       restart,
     }),
     [
       isReady,
+      readProviderReturn,
       resendCode,
       restart,
       signInWithPasskey,
-      signInWithPassword,
       startMethod,
       startPasswordReset,
-      startPasswordResetFor,
       startProvider,
       startWithEmail,
       submitCode,

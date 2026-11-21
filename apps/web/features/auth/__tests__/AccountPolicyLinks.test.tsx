@@ -19,14 +19,11 @@ const TRAINING_COPY = /train/i;
 function renderSignupScreen() {
   render(
     <AuthEmailStep
-      mode="signup"
       providers={[{ id: 'google', label: 'Google' }]}
-      switchUrl="/login"
       ready
       phase="idle"
       error={null}
       fieldError={null}
-      switchOffered={false}
       providerPending={null}
       onSubmit={() => undefined}
       onStartProvider={() => undefined}
@@ -35,7 +32,7 @@ function renderSignupScreen() {
 }
 
 describe('account policy disclosure', () => {
-  it('keeps the sign-up screen to its agreement line, with no training notice or expander', () => {
+  it('keeps the log-in or sign-up screen to its agreement line, with no training notice or expander', () => {
     renderSignupScreen();
 
     expect(screen.getByTestId('auth-signup-agreement')).toBeInTheDocument();

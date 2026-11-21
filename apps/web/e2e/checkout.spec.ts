@@ -23,16 +23,8 @@ test.describe('signup gates the purchase', () => {
     // rendered sign-up page itself, same as public-auth-clean.spec.ts checks.
     await expect(page).toHaveURL(/\/signup\?redirectTo=%2Fpricing/);
     await page.waitForLoadState('networkidle');
-    await expect(page.getByRole('heading', { name: 'Create your account' })).toBeVisible();
-
-    const logIn = page.getByRole('link', { name: 'Log in', exact: true });
-    await expect(logIn).toHaveAttribute('href', '/login?redirectTo=%2Fpricing');
-
-    await logIn.click();
-
-    await expect(page).toHaveURL(/\/login\?redirectTo=%2Fpricing/);
-    await page.waitForLoadState('networkidle');
-    await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Log in or sign up' })).toBeVisible();
+    await expect(page.getByRole('textbox', { name: 'Email address' })).toBeVisible();
   });
 
   test('an anonymous caller cannot create a checkout session', async ({ page }) => {

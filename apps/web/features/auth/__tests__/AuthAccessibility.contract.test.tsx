@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { ACCOUNT_AGE_FIELD_LABEL, ACCOUNT_MINIMUM_AGE } from '@agiworkforce/types';
 
 const client = vi.hoisted(() => ({
   isReady: true,
@@ -17,6 +16,7 @@ const client = vi.hoisted(() => ({
   startProvider: vi.fn(),
   signInWithPasskey: vi.fn(),
   restart: vi.fn(),
+  readProviderReturn: () => null,
 }));
 
 vi.mock('../IdentityAuthAdapter', () => ({
@@ -29,7 +29,6 @@ import { AuthFlow } from '../AuthFlow';
 import { AUTH_CODE_LENGTH, AUTH_RESEND_COOLDOWN_SECONDS } from '../authContract';
 import type {
   AuthCodePurpose,
-  AuthMode,
   AuthPasswordPurpose,
   AuthProvider,
   AuthResult,
@@ -39,8 +38,8 @@ import type {
 const PROVIDERS: readonly AuthProvider[] = [{ id: 'google', label: 'Google' }];
 const EMAIL = 'person@example.com';
 const REDIRECTS = {
-  completeUrl: '/login/complete',
-  switchUrl: '/signup',
+  signInCompleteUrl: '/login/complete',
+  signUpCompleteUrl: '/signup/complete',
   ssoCallbackUrl: '/auth/sso-callback',
 };
 
@@ -56,7 +55,6 @@ const STEPS: Readonly<
   Record<
     StepVariant,
     {
-      mode: AuthMode;
       step: AuthStep;
       heading: string;
       field: string | null;
@@ -65,49 +63,42 @@ const STEPS: Readonly<
   >
 > = {
   email: {
-    mode: 'login',
     step: { kind: 'email' },
-    heading: 'Welcome back',
+    heading: 'Log in or sign up',
     field: 'Email address',
     back: null,
   },
   password: {
-    mode: 'login',
     step: { kind: 'password', email: EMAIL, methods: ['email_code'] },
     heading: 'Enter your password',
     field: 'Password',
     back: 'Edit',
   },
   'code:sign_in': {
-    mode: 'login',
     step: { kind: 'code', email: EMAIL, purpose: 'sign_in', methods: ['password'] },
     heading: 'Check your inbox',
     field: 'Code',
     back: 'Edit',
   },
   'code:sign_up': {
-    mode: 'signup',
     step: { kind: 'code', email: EMAIL, purpose: 'sign_up', methods: [] },
     heading: 'Check your inbox',
     field: 'Code',
     back: 'Edit',
   },
   'code:reset': {
-    mode: 'login',
     step: { kind: 'code', email: EMAIL, purpose: 'reset', methods: ['password'] },
     heading: 'Check your inbox',
     field: 'Code',
     back: 'Edit',
   },
   'code:device': {
-    mode: 'login',
     step: { kind: 'code', email: EMAIL, purpose: 'device', methods: [] },
     heading: 'Verify this device',
     field: 'Code',
     back: 'Edit',
   },
   second_factor: {
-    mode: 'login',
     step: {
       kind: 'second_factor',
       factor: { kind: 'authenticator', label: 'Authenticator app', hint: null },
@@ -118,21 +109,18 @@ const STEPS: Readonly<
     back: 'Use a different email',
   },
   'new_password:reset': {
-    mode: 'login',
     step: { kind: 'new_password', email: EMAIL, purpose: 'reset' },
     heading: 'Set a new password',
     field: 'New password',
     back: null,
   },
   'new_password:sign_up': {
-    mode: 'signup',
     step: { kind: 'new_password', email: EMAIL, purpose: 'sign_up' },
     heading: 'Create a password',
     field: 'Password',
     back: 'Edit',
   },
   notice: {
-    mode: 'login',
     step: { kind: 'notice', notice: 'link_expired', retryAfterSeconds: null },
     heading: 'This link expired',
     field: null,
@@ -146,10 +134,8 @@ const VARIANTS_WITH_A_FIELD: readonly StepVariant[] = VARIANTS.filter(
   (variant) => STEPS[variant].field !== null,
 );
 
-function renderFlow(mode: AuthMode = 'login') {
-  return render(
-    <AuthFlow mode={mode} providers={PROVIDERS} redirects={REDIRECTS} passkeySignIn={false} />,
-  );
+function renderFlow() {
+  return render(<AuthFlow providers={PROVIDERS} redirects={REDIRECTS} passkeySignIn={false} />);
 }
 
 async function submitEmail() {
@@ -158,16 +144,10 @@ async function submitEmail() {
 }
 
 async function openStep(variant: StepVariant) {
-  const { mode, step } = STEPS[variant];
-  const container = renderFlow(mode);
+  const { step } = STEPS[variant];
+  const container = renderFlow();
   if (step.kind === 'email') return container;
 
-  if (mode === 'signup') {
-    await userEvent.type(
-      screen.getByLabelText(ACCOUNT_AGE_FIELD_LABEL),
-      String(ACCOUNT_MINIMUM_AGE),
-    );
-  }
   client.startWithEmail.mockResolvedValue({ status: 'next', step } as AuthResult);
   await submitEmail();
   await waitFor(() => expect(client.startWithEmail).toHaveBeenCalled());
@@ -400,8 +380,8 @@ describe('the code step', () => {
 });
 
 describe('signup bot protection', () => {
-  it('leaves the email field first in the tab order and takes no focus of its own', async () => {
-    const { container } = renderFlow('signup');
+  it('leaves the first way in first in the tab order and takes no focus of its own', async () => {
+    const { container } = renderFlow();
 
     expect(screen.getByTestId('bot-protection')).toBeInTheDocument();
     expect(

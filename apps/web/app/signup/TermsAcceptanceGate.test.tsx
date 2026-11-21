@@ -2,20 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-import {
-  ACCOUNT_AGE_FIELD_LABEL,
-  ACCOUNT_AGE_INELIGIBLE_MESSAGE,
-  ACCOUNT_AGE_REQUIRED_MESSAGE,
-  ACCOUNT_MINIMUM_AGE,
-} from '@agiworkforce/types';
-
-import { MARKETING_EMAIL_CONSENT_PURPOSE } from '@/lib/consent-purposes';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 import {
   AGE_CHECK_STORAGE_KEY,
   MARKETING_EMAIL_ATTEMPT_STORAGE_KEY,
   MARKETING_EMAIL_CHOICE_STORAGE_KEY,
-  writeSignupAttemptMarkers,
 } from './signupAttemptMarkers';
 import { TERMS_GATE_STORAGE_KEY } from './TermsGate';
 
@@ -38,7 +29,7 @@ const signUpState = vi.hoisted(() => ({
 const signInState = vi.hoisted(() => ({
   status: 'needs_identifier',
   identifier: null,
-  supportedFirstFactors: [],
+  supportedFirstFactors: [] as { strategy: string }[],
   supportedSecondFactors: [],
   create: vi.fn(),
   password: vi.fn(),
@@ -51,6 +42,7 @@ const signInState = vi.hoisted(() => ({
     verifyBackupCode: vi.fn(),
   },
   sso: vi.fn(),
+  passkey: vi.fn(),
   finalize: vi.fn(),
   reset: vi.fn(),
 }));
@@ -73,464 +65,182 @@ vi.mock('@clerk/nextjs', () => ({
 import { AuthFlow } from '@/features/auth/AuthFlow';
 
 const REDIRECTS = {
-  completeUrl: '/signup/complete?redirectTo=%2Fchat',
-  switchUrl: '/login',
+  signInCompleteUrl: '/login/complete?redirectTo=%2Fchat',
+  signUpCompleteUrl: '/signup/complete?redirectTo=%2Fchat',
   ssoCallbackUrl: '/auth/sso-callback?redirectTo=%2Fchat',
 };
 
 const PROVIDERS = [{ id: 'google' as const, label: 'Google' }];
+const EMAIL = 'person@example.com';
+const UNREACHABLE = 'We could not reach the server. Check your connection and try again.';
+const NO_ACCOUNT = {
+  error: { errors: [{ code: 'form_identifier_not_found', meta: { paramName: 'identifier' } }] },
+};
 
-const TYPED_AGE = '57';
-const TOO_YOUNG = String(ACCOUNT_MINIMUM_AGE - 1);
-
-function renderSignup() {
-  render(<AuthFlow mode="signup" providers={PROVIDERS} redirects={REDIRECTS} />);
+function renderEntry() {
+  render(<AuthFlow providers={PROVIDERS} redirects={REDIRECTS} />);
 }
 
-function ageField(): HTMLInputElement {
-  return screen.getByLabelText(ACCOUNT_AGE_FIELD_LABEL) as HTMLInputElement;
+async function continueWith(email = EMAIL) {
+  await userEvent.type(screen.getByLabelText('Email address'), email);
+  await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
 }
 
-async function enterAge(age: string): Promise<void> {
-  await userEvent.clear(ageField());
-  await userEvent.type(ageField(), age);
+function termsMarker(): string | null {
+  return window.localStorage.getItem(TERMS_GATE_STORAGE_KEY);
 }
 
-async function renderSignupWithAnEligibleAge() {
-  renderSignup();
-  await enterAge(TYPED_AGE);
+function leaveEarlierAttemptKeys(): void {
+  window.localStorage.setItem(MARKETING_EMAIL_CHOICE_STORAGE_KEY, POLICY_LAST_UPDATED.privacy);
+  window.localStorage.setItem(MARKETING_EMAIL_ATTEMPT_STORAGE_KEY, 'earlier-attempt');
+  window.sessionStorage.setItem(MARKETING_EMAIL_ATTEMPT_STORAGE_KEY, 'earlier-attempt');
+  window.localStorage.setItem(AGE_CHECK_STORAGE_KEY, '18');
 }
 
-function sentToTheIdentityProvider(): string {
-  return JSON.stringify([signUpState.create.mock.calls, signUpState.sso.mock.calls]);
+function nothingLeftFromEarlierAttempts(): void {
+  expect(window.localStorage.getItem(MARKETING_EMAIL_CHOICE_STORAGE_KEY)).toBeNull();
+  expect(window.localStorage.getItem(MARKETING_EMAIL_ATTEMPT_STORAGE_KEY)).toBeNull();
+  expect(window.sessionStorage.getItem(MARKETING_EMAIL_ATTEMPT_STORAGE_KEY)).toBeNull();
+  expect(window.localStorage.getItem(AGE_CHECK_STORAGE_KEY)).toBeNull();
 }
 
-function marketingEmailBox(): HTMLElement {
-  return screen.getByRole('checkbox', { name: MARKETING_EMAIL_CONSENT_PURPOSE.label });
-}
-
-const NO_CHOICE = { choice: null, attempt: null, attemptInThisTab: null };
-
-function carriedChoice(): string | null {
-  return window.localStorage.getItem(MARKETING_EMAIL_CHOICE_STORAGE_KEY);
-}
-
-function carried() {
-  return {
-    choice: carriedChoice(),
-    attempt: window.localStorage.getItem(MARKETING_EMAIL_ATTEMPT_STORAGE_KEY),
-    attemptInThisTab: window.sessionStorage.getItem(MARKETING_EMAIL_ATTEMPT_STORAGE_KEY),
-  };
-}
-
-function leaveChoiceFromAnEarlierAttempt(): void {
-  writeSignupAttemptMarkers({ marketingEmail: true, ageCheckedAgainst: null });
-}
+beforeEach(() => {
+  window.localStorage.clear();
+  window.sessionStorage.clear();
+  signInState.supportedFirstFactors = [];
+  signInState.create.mockReset().mockResolvedValue({ error: null });
+  signInState.emailCode.sendCode.mockReset().mockResolvedValue({ error: null });
+  signInState.sso.mockReset().mockResolvedValue({ error: null });
+  signInState.reset.mockReset().mockResolvedValue({ error: null });
+  signUpState.create.mockReset().mockResolvedValue({ error: null });
+  signUpState.verifications.sendEmailCode.mockReset().mockResolvedValue({ error: null });
+  signUpState.sso.mockReset().mockResolvedValue({ error: null });
+  signUpState.reset.mockReset().mockResolvedValue({ error: null });
+});
 
 /**
- * Founder decision 2026-10-07, replacing the 2026-10-04 required box: the
- * agreement is a statement beside the action, the age is typed as a number,
- * and no sign-up method starts until that age is eligible. The age is used
- * for that one decision and goes nowhere. The durable record of the agreement
- * is still written server-side by /signup/complete against the policy version.
+ * Owner decision 2026-11-20: one screen logs in and signs up. The agreement is
+ * one line under Continue, shown before anything can create an account; the
+ * age is asked after the account exists, on /signup/complete.
  */
-describe('/signup agreement', () => {
-  beforeEach(() => {
-    window.localStorage.clear();
-    signUpState.create.mockReset().mockResolvedValue({ error: null });
-    signUpState.verifications.sendEmailCode.mockReset().mockResolvedValue({ error: null });
-    signUpState.sso.mockReset().mockResolvedValue({ error: null });
-  });
-
-  it('states the agreement once beside the action, asks the age as a number, and keeps one optional box', () => {
-    renderSignup();
+describe('the agreement on the one screen', () => {
+  it('is stated once, under the action, before any way in can create an account', () => {
+    renderEntry();
 
     const agreement = screen.getByTestId('auth-signup-agreement');
     expect(agreement).toHaveTextContent(
-      'By creating an account, you agree to the Terms of Use and acknowledge the Privacy Policy.',
+      'By continuing, you agree to the Terms of Use and acknowledge the Privacy Policy.',
     );
     expect(within(agreement).queryByRole('checkbox')).toBeNull();
-    expect(screen.getAllByText(/By creating an account/)).toHaveLength(1);
-    expect(screen.getAllByRole('checkbox')).toEqual([marketingEmailBox()]);
-    expect(marketingEmailBox()).not.toBeChecked();
-    expect(ageField()).toHaveValue('');
+    expect(screen.queryByRole('checkbox')).toBeNull();
+    expect(screen.getAllByText(/By continuing/)).toHaveLength(1);
   });
 
-  it('writes no marker and calls no provider while no age is entered', async () => {
-    renderSignup();
+  it('creates an account for an address no account uses, with the agreement recorded', async () => {
+    signInState.create.mockResolvedValue(NO_ACCOUNT);
+    leaveEarlierAttemptKeys();
+    renderEntry();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
-    await userEvent.type(screen.getByLabelText('Email address'), 'person@example.com{Enter}');
-
-    expect(screen.getByRole('alert')).toHaveTextContent(ACCOUNT_AGE_REQUIRED_MESSAGE);
-    expect(signUpState.sso).not.toHaveBeenCalled();
-    expect(signUpState.create).not.toHaveBeenCalled();
-    expect(window.localStorage.getItem(TERMS_GATE_STORAGE_KEY)).toBeNull();
-    expect(window.localStorage.getItem(AGE_CHECK_STORAGE_KEY)).toBeNull();
-  });
-
-  it(`writes no marker and calls no provider for a ${TOO_YOUNG} year old`, async () => {
-    renderSignup();
-    await enterAge(TOO_YOUNG);
-
-    await userEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
-    await userEvent.type(screen.getByLabelText('Email address'), 'person@example.com{Enter}');
-
-    expect(screen.getByRole('alert')).toHaveTextContent(ACCOUNT_AGE_INELIGIBLE_MESSAGE);
-    expect(signUpState.sso).not.toHaveBeenCalled();
-    expect(signUpState.create).not.toHaveBeenCalled();
-    expect(window.localStorage.getItem(TERMS_GATE_STORAGE_KEY)).toBeNull();
-    expect(window.localStorage.length).toBe(0);
-    expect(window.sessionStorage.length).toBe(0);
-  });
-
-  it('creates the account with the agreement recorded when the email is submitted', async () => {
-    await renderSignupWithAnEligibleAge();
-
-    await userEvent.type(screen.getByLabelText('Email address'), 'person@example.com');
-    await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    await continueWith();
 
     await waitFor(() =>
-      expect(signUpState.create).toHaveBeenCalledWith({
-        emailAddress: 'person@example.com',
-        legalAccepted: true,
-      }),
+      expect(signUpState.create).toHaveBeenCalledWith({ emailAddress: EMAIL, legalAccepted: true }),
     );
-    expect(window.localStorage.getItem(TERMS_GATE_STORAGE_KEY)).toBe(POLICY_LAST_UPDATED.terms);
-    expect(window.localStorage.getItem(AGE_CHECK_STORAGE_KEY)).toBe(String(ACCOUNT_MINIMUM_AGE));
-    expect(Object.values({ ...window.localStorage })).not.toContain(TYPED_AGE);
-    expect(sentToTheIdentityProvider()).not.toContain(TYPED_AGE);
+    await waitFor(() => expect(termsMarker()).toBe(POLICY_LAST_UPDATED.terms));
+    nothingLeftFromEarlierAttempts();
   });
 
-  it('hands a provider sign-up over with the agreement recorded', async () => {
-    await renderSignupWithAnEligibleAge();
+  it('writes no marker for an address an account uses, and drops one an earlier attempt left', async () => {
+    signInState.supportedFirstFactors = [{ strategy: 'email_code' }];
+    window.localStorage.setItem(TERMS_GATE_STORAGE_KEY, POLICY_LAST_UPDATED.terms);
+    renderEntry();
+
+    await continueWith();
+
+    expect(await screen.findByRole('heading', { name: 'Check your inbox' })).toBeInTheDocument();
+    expect(signUpState.create).not.toHaveBeenCalled();
+    expect(termsMarker()).toBeNull();
+  });
+
+  it('hands every provider over as a sign-in and writes the marker, since the line was on screen', async () => {
+    leaveEarlierAttemptKeys();
+    renderEntry();
 
     await userEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
 
     await waitFor(() =>
-      expect(signUpState.sso).toHaveBeenCalledWith(
-        expect.objectContaining({ legalAccepted: true }),
+      expect(signInState.sso).toHaveBeenCalledWith(
+        expect.objectContaining({ strategy: 'oauth_google' }),
       ),
     );
-    expect(window.localStorage.getItem(TERMS_GATE_STORAGE_KEY)).toBe(POLICY_LAST_UPDATED.terms);
-    expect(window.localStorage.getItem(AGE_CHECK_STORAGE_KEY)).toBe(String(ACCOUNT_MINIMUM_AGE));
-    expect(Object.values({ ...window.localStorage })).not.toContain(TYPED_AGE);
-    expect(sentToTheIdentityProvider()).not.toContain(TYPED_AGE);
-    expect(sentToTheIdentityProvider()).not.toMatch(/"age|birth/i);
+    expect(signUpState.sso).not.toHaveBeenCalled();
+    expect(termsMarker()).toBe(POLICY_LAST_UPDATED.terms);
+    nothingLeftFromEarlierAttempts();
   });
 
-  it('does not leave an acceptance marker behind after signup initiation fails', async () => {
-    window.localStorage.setItem(TERMS_GATE_STORAGE_KEY, POLICY_LAST_UPDATED.terms);
+  it('does not leave a marker behind after the sign-up is refused', async () => {
+    signInState.create.mockResolvedValue(NO_ACCOUNT);
     signUpState.create.mockResolvedValue({
       error: { errors: [{ code: 'form_identifier_exists' }] },
     });
-    await renderSignupWithAnEligibleAge();
+    renderEntry();
 
-    await userEvent.type(screen.getByLabelText('Email address'), 'existing@example.com');
-    await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    await continueWith();
 
     await waitFor(() => expect(signUpState.create).toHaveBeenCalled());
-    expect(window.localStorage.getItem(TERMS_GATE_STORAGE_KEY)).toBeNull();
+    expect(termsMarker()).toBeNull();
   });
 
-  it('recovers from a rejected email signup request without claiming agreement was recorded', async () => {
+  it('recovers from a rejected sign-up request without claiming the agreement was recorded', async () => {
+    signInState.create.mockResolvedValue(NO_ACCOUNT);
     signUpState.create.mockRejectedValue(new TypeError('Failed to fetch'));
-    await renderSignupWithAnEligibleAge();
+    renderEntry();
 
-    await userEvent.type(screen.getByLabelText('Email address'), 'person@example.com');
-    await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    await continueWith();
 
-    expect(
-      await screen.findByText(
-        'We could not reach the server. Check your connection and try again.',
-      ),
-    ).toBeInTheDocument();
-    expect(window.localStorage.getItem(TERMS_GATE_STORAGE_KEY)).toBeNull();
+    expect(await screen.findByText(UNREACHABLE)).toBeInTheDocument();
+    expect(termsMarker()).toBeNull();
     expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled();
-  });
-
-  it('starts nothing from Try again once the age is no longer eligible, and retries once it is corrected', async () => {
-    signUpState.create.mockRejectedValue(new TypeError('Failed to fetch'));
-    await renderSignupWithAnEligibleAge();
-
-    await userEvent.type(screen.getByLabelText('Email address'), 'person@example.com');
-    await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
-    const retry = await screen.findByRole('button', { name: 'Try again' });
-    expect(signUpState.create).toHaveBeenCalledTimes(1);
 
     signUpState.create.mockResolvedValue({ error: null });
-    await enterAge(TOO_YOUNG);
-    await userEvent.click(retry);
-
-    expect(signUpState.create).toHaveBeenCalledTimes(1);
-    expect(window.localStorage.getItem(TERMS_GATE_STORAGE_KEY)).toBeNull();
-    expect(within(screen.getByTestId('auth-age-field')).getByRole('alert')).toHaveTextContent(
-      ACCOUNT_AGE_INELIGIBLE_MESSAGE,
-    );
-    expect(ageField()).toHaveAttribute('aria-invalid', 'true');
-    expect(ageField()).toHaveFocus();
-
-    await enterAge(TYPED_AGE);
-    await userEvent.click(retry);
+    await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
 
     await waitFor(() => expect(signUpState.create).toHaveBeenCalledTimes(2));
-    expect(signUpState.create).toHaveBeenLastCalledWith({
-      emailAddress: 'person@example.com',
-      legalAccepted: true,
-    });
-    await waitFor(() =>
-      expect(window.localStorage.getItem(TERMS_GATE_STORAGE_KEY)).toBe(POLICY_LAST_UPDATED.terms),
-    );
+    await waitFor(() => expect(termsMarker()).toBe(POLICY_LAST_UPDATED.terms));
   });
 
-  it('clears the signup marker when a provider handoff is refused', async () => {
-    signUpState.sso.mockResolvedValue({
+  it('clears the marker when a provider handoff is refused', async () => {
+    signInState.sso.mockResolvedValue({
       error: { errors: [{ code: 'oauth_access_denied' }] },
     });
-    await renderSignupWithAnEligibleAge();
-
-    await userEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
-
-    await waitFor(() => expect(signUpState.sso).toHaveBeenCalled());
-    await waitFor(() => expect(window.localStorage.getItem(TERMS_GATE_STORAGE_KEY)).toBeNull());
-  });
-
-  it('clears the signup marker and offers a retry when the provider handoff throws', async () => {
-    signUpState.sso.mockRejectedValue(new TypeError('Failed to fetch'));
-    await renderSignupWithAnEligibleAge();
-
-    await userEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
-
-    await waitFor(() => expect(window.localStorage.getItem(TERMS_GATE_STORAGE_KEY)).toBeNull());
-    expect(
-      screen.getByText('We could not reach the server. Check your connection and try again.'),
-    ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Continue with Google' })).toBeEnabled();
-  });
-});
-
-/**
- * Founder request 2026-10-04: marketing email is agreed at sign-up, in a
- * separate optional box. The choice is carried beside the terms marker, with
- * the privacy notice version that was on screen and the id of the attempt it
- * was made in, and written by /signup/complete in the request that records
- * the terms.
- */
-describe('/signup marketing email choice', () => {
-  beforeEach(() => {
-    window.localStorage.clear();
-    window.sessionStorage.clear();
-    signUpState.create.mockReset().mockResolvedValue({ error: null });
-    signUpState.verifications.sendEmailCode.mockReset().mockResolvedValue({ error: null });
-    signUpState.sso.mockReset().mockResolvedValue({ error: null });
-  });
-
-  it('is unticked on arrival even when an earlier visit left a choice in the browser', () => {
-    leaveChoiceFromAnEarlierAttempt();
-    renderSignup();
-
-    expect(marketingEmailBox()).not.toBeChecked();
-  });
-
-  it('writes nothing when the optional box is ticked but no attempt is admitted', async () => {
-    renderSignup();
-
-    await userEvent.click(marketingEmailBox());
-    await userEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
-    await userEvent.type(screen.getByLabelText('Email address'), 'person@example.com{Enter}');
-
-    expect(signUpState.sso).not.toHaveBeenCalled();
-    expect(signUpState.create).not.toHaveBeenCalled();
-    expect(carried()).toEqual(NO_CHOICE);
-    expect(window.localStorage.getItem(TERMS_GATE_STORAGE_KEY)).toBeNull();
-  });
-
-  it('carries a ticked choice past the email step with the notice version on screen', async () => {
-    await renderSignupWithAnEligibleAge();
-    await userEvent.click(marketingEmailBox());
-
-    await userEvent.type(screen.getByLabelText('Email address'), 'person@example.com');
-    await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
-
-    await waitFor(() => expect(carriedChoice()).toBe(POLICY_LAST_UPDATED.privacy));
-    expect(window.localStorage.getItem(TERMS_GATE_STORAGE_KEY)).toBe(POLICY_LAST_UPDATED.terms);
-    expect(carried().attempt).toBeTruthy();
-    expect(carried().attemptInThisTab).toBe(carried().attempt);
-    expect(signUpState.create).toHaveBeenCalledWith({
-      emailAddress: 'person@example.com',
-      legalAccepted: true,
-    });
-  });
-
-  it('carries a ticked choice into a provider round trip', async () => {
-    await renderSignupWithAnEligibleAge();
-    await userEvent.click(marketingEmailBox());
-
-    await userEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
-
-    await waitFor(() => expect(signUpState.sso).toHaveBeenCalled());
-    expect(carriedChoice()).toBe(POLICY_LAST_UPDATED.privacy);
-    expect(window.localStorage.getItem(TERMS_GATE_STORAGE_KEY)).toBe(POLICY_LAST_UPDATED.terms);
-    expect(carried().attempt).toBeTruthy();
-    expect(carried().attemptInThisTab).toBe(carried().attempt);
-  });
-
-  it('never hands a later attempt the id of the one before it', async () => {
-    leaveChoiceFromAnEarlierAttempt();
-    const earlier = carried().attempt;
-    await renderSignupWithAnEligibleAge();
-    await userEvent.click(marketingEmailBox());
-
-    await userEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
-
-    await waitFor(() => expect(signUpState.sso).toHaveBeenCalled());
-    expect(carried().attempt).toBeTruthy();
-    expect(carried().attempt).not.toBe(earlier);
-    expect(carried().attemptInThisTab).toBe(carried().attempt);
-  });
-
-  it('admits an email sign-up with the box unticked and removes a choice an earlier attempt left', async () => {
-    leaveChoiceFromAnEarlierAttempt();
-    await renderSignupWithAnEligibleAge();
-
-    await userEvent.type(screen.getByLabelText('Email address'), 'second@example.com');
-    await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
-
-    await waitFor(() =>
-      expect(window.localStorage.getItem(TERMS_GATE_STORAGE_KEY)).toBe(POLICY_LAST_UPDATED.terms),
-    );
-    expect(signUpState.create).toHaveBeenCalledTimes(1);
-    expect(carried()).toEqual(NO_CHOICE);
-  });
-
-  it('admits a provider sign-up with the box unticked and removes a choice an earlier attempt left', async () => {
-    leaveChoiceFromAnEarlierAttempt();
-    await renderSignupWithAnEligibleAge();
-
-    await userEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
-
-    await waitFor(() => expect(signUpState.sso).toHaveBeenCalled());
-    expect(window.localStorage.getItem(TERMS_GATE_STORAGE_KEY)).toBe(POLICY_LAST_UPDATED.terms);
-    expect(carried()).toEqual(NO_CHOICE);
-  });
-
-  it('drops a ticked choice with the terms marker when the email sign-up is refused', async () => {
-    signUpState.create.mockResolvedValue({
-      error: { errors: [{ code: 'form_identifier_exists' }] },
-    });
-    await renderSignupWithAnEligibleAge();
-    await userEvent.click(marketingEmailBox());
-
-    await userEvent.type(screen.getByLabelText('Email address'), 'existing@example.com');
-    await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
-
-    await waitFor(() => expect(signUpState.create).toHaveBeenCalled());
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled());
-    expect(carried()).toEqual(NO_CHOICE);
-    expect(window.localStorage.getItem(TERMS_GATE_STORAGE_KEY)).toBeNull();
-  });
-
-  it('drops a ticked choice with the terms marker when the provider handoff is refused', async () => {
-    signUpState.sso.mockResolvedValue({
-      error: { errors: [{ code: 'oauth_access_denied' }] },
-    });
-    await renderSignupWithAnEligibleAge();
-    await userEvent.click(marketingEmailBox());
-
-    await userEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
-
-    await waitFor(() => expect(signUpState.sso).toHaveBeenCalled());
-    await waitFor(() => expect(window.localStorage.getItem(TERMS_GATE_STORAGE_KEY)).toBeNull());
-    expect(carried()).toEqual(NO_CHOICE);
-  });
-
-  it('carries the choice as it stands when Try again is pressed, not as it stood at the failed attempt', async () => {
-    signUpState.create.mockRejectedValue(new TypeError('Failed to fetch'));
-    await renderSignupWithAnEligibleAge();
-    await userEvent.click(marketingEmailBox());
-
-    await userEvent.type(screen.getByLabelText('Email address'), 'person@example.com');
-    await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
-    const retry = await screen.findByRole('button', { name: 'Try again' });
-    expect(carried()).toEqual(NO_CHOICE);
-
-    signUpState.create.mockResolvedValue({ error: null });
-    await userEvent.click(marketingEmailBox());
-    expect(marketingEmailBox()).not.toBeChecked();
-    await userEvent.click(retry);
-
-    await waitFor(() =>
-      expect(window.localStorage.getItem(TERMS_GATE_STORAGE_KEY)).toBe(POLICY_LAST_UPDATED.terms),
-    );
-    expect(signUpState.create).toHaveBeenCalledTimes(2);
-    expect(carried()).toEqual(NO_CHOICE);
-  });
-});
-
-describe('/login and a marker the sign-up page left behind', () => {
-  function renderLogin() {
-    render(
-      <AuthFlow
-        mode="login"
-        providers={PROVIDERS}
-        redirects={{ ...REDIRECTS, completeUrl: '/login/complete?redirectTo=%2Fchat' }}
-      />,
-    );
-  }
-
-  beforeEach(() => {
-    window.localStorage.clear();
-    window.sessionStorage.clear();
-    window.localStorage.setItem(TERMS_GATE_STORAGE_KEY, POLICY_LAST_UPDATED.terms);
-    signInState.create.mockReset().mockResolvedValue({ error: null });
-    signInState.emailCode.sendCode.mockReset().mockResolvedValue({ error: null });
-    signInState.sso.mockReset().mockResolvedValue({ error: null });
-  });
-
-  it('drops it when a provider sign-in starts, so an account that sign-in creates is asked its age', async () => {
-    renderLogin();
+    renderEntry();
 
     await userEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
 
     await waitFor(() => expect(signInState.sso).toHaveBeenCalled());
-    expect(window.localStorage.getItem(TERMS_GATE_STORAGE_KEY)).toBeNull();
+    await waitFor(() => expect(termsMarker()).toBeNull());
   });
 
-  it('drops it when an email sign-in starts, which an organization connection can turn into an account', async () => {
-    renderLogin();
+  it('clears the marker and offers a retry when the provider handoff throws', async () => {
+    signInState.sso.mockRejectedValue(new TypeError('Failed to fetch'));
+    renderEntry();
 
-    await userEvent.type(screen.getByLabelText('Email address'), 'person@example.com');
-    await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
 
-    await waitFor(() => expect(signInState.create).toHaveBeenCalled());
-    expect(window.localStorage.getItem(TERMS_GATE_STORAGE_KEY)).toBeNull();
+    await waitFor(() => expect(termsMarker()).toBeNull());
+    expect(screen.getByText(UNREACHABLE)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Continue with Google' })).toBeEnabled();
   });
 
-  it.each([
-    [
-      'a provider sign-in',
-      async () => userEvent.click(screen.getByRole('button', { name: 'Continue with Google' })),
-      () => signInState.sso,
-    ],
-    [
-      'an email sign-in',
-      async () => {
-        await userEvent.type(screen.getByLabelText('Email address'), 'person@example.com');
-        await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
-      },
-      () => signInState.create,
-    ],
-  ])(
-    'drops a marketing email choice an abandoned sign-up left, so %s never inherits it',
-    async (_case, start, reached) => {
-      leaveChoiceFromAnEarlierAttempt();
-      renderLogin();
+  it('drops the marker when the address is edited, so the next attempt starts clean', async () => {
+    signInState.create.mockResolvedValue(NO_ACCOUNT);
+    renderEntry();
+    await continueWith();
+    await waitFor(() => expect(termsMarker()).toBe(POLICY_LAST_UPDATED.terms));
 
-      await start();
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit' }));
 
-      await waitFor(() => expect(reached()).toHaveBeenCalled());
-      expect(carried()).toEqual(NO_CHOICE);
-      expect(window.localStorage.getItem(TERMS_GATE_STORAGE_KEY)).toBeNull();
-    },
-  );
+    expect(await screen.findByLabelText('Email address')).toBeInTheDocument();
+    expect(termsMarker()).toBeNull();
+  });
 });

@@ -1,61 +1,30 @@
 'use client';
 
-import Link from 'next/link';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { ACCOUNT_MINIMUM_AGE, evaluateAccountAge } from '@agiworkforce/types';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Spinner } from '@agiworkforce/ui';
 
-import { useAuthSceneBridge } from '@agiworkforce/ui/auth-scene';
-
-import type { SignupAttemptChoices } from '@/app/signup/signupAttemptMarkers';
 import { browserSupportsPasskeys } from '@/lib/identity/passkey-support';
-import { useEmbeddedAccountPage } from '@shared/components/layout/EmbeddedPage';
 
-import { AuthAgeField } from './AuthAgeField';
 import { useAuthCopy } from './authCopy';
 import { AuthDivider } from './AuthDivider';
 import { AuthField } from './AuthField';
 import { AuthLegalFooter } from './AuthLegalFooter';
-import { AuthPasswordField } from './AuthPasswordField';
 import { AuthPhaseStatus } from './AuthPhaseStatus';
-import { AuthMarketingEmailConsent } from './AuthMarketingEmailConsent';
 import { AuthProviderButtons } from './AuthProviderButtons';
 import { AuthSignupAgreement } from './AuthSignupAgreement';
 import { AuthStepFrame } from './AuthStepFrame';
 import { AuthSubmitButton } from './AuthSubmitButton';
-import { AuthSwitchLine, SWITCH_INSTEAD_COPY } from './AuthSwitchLine';
 import { readLastUsedAuthMethod, type AuthLastUsed } from './lastUsedMethod';
 import {
   AUTH_BADGE_CLASS,
-  AUTH_BESIDE_TEXT_BUTTON_CLASS,
   AUTH_ERROR_CLASS,
-  AUTH_FIELD_AID_CLASS,
-  AUTH_FIELD_STACK_CLASS,
-  AUTH_LINK_CLASS,
-  AUTH_OPTIONAL_CONSENT_CLASS,
   AUTH_PROVIDER_BUTTON_CLASS,
   AUTH_PROVIDER_LABEL_CLASS,
   AUTH_PROVIDER_STACK_CLASS,
-  AUTH_PROVIDERS_AFTER_ACTION_CLASS,
   AUTH_QUIET_BUTTON_CLASS,
   AUTH_STEP_LINKS_CLASS,
 } from './authStyles';
-import { useMarketingEmailChoice } from './marketingEmailChoice';
-import { useSignupAgeGate } from './useSignupAgeGate';
-import type { AuthMode, AuthPhase, AuthProvider, AuthProviderId } from './authContract';
-
-const HEADING_DEFAULTS: Readonly<Record<AuthMode, { key: string; label: string }>> = {
-  login: { key: 'flow.heading.login', label: 'Welcome back' },
-  signup: { key: 'flow.heading.signup', label: 'Create your account' },
-};
-
-const DETAIL_DEFAULTS: Readonly<Record<AuthMode, { key: string; label: string }>> = {
-  login: { key: 'flow.detail.login', label: 'Log in to AGI.' },
-  signup: {
-    key: 'flow.detail.signup',
-    label: 'Get started with AGI and put AI to work for you.',
-  },
-};
+import type { AuthPhase, AuthProvider, AuthProviderId } from './authContract';
 
 function typedInto(form: HTMLFormElement | null, name: string): string {
   const field = form?.elements.namedItem(name);
@@ -63,140 +32,68 @@ function typedInto(form: HTMLFormElement | null, name: string): string {
 }
 
 export function AuthEmailStep({
-  mode,
   providers,
   hostWayIn,
-  switchUrl,
   ready,
   phase,
   error,
   fieldError,
-  passwordError = null,
-  switchOffered,
   retryOffered = false,
   providerPending,
   onSubmit,
-  onSubmitPassword,
-  onForgotPassword,
   onStartProvider,
   onRetry,
   passkeySignIn = false,
   onStartPasskey,
-  optedOutBySignal = false,
-  onSignupAdmitted,
 }: {
-  mode: AuthMode;
   providers: readonly AuthProvider[];
   hostWayIn?: ReactNode;
-  switchUrl: string;
   ready: boolean;
   phase: AuthPhase;
   error: string | null;
   fieldError: string | null;
-  passwordError?: string | null;
-  switchOffered: boolean;
   retryOffered?: boolean;
   providerPending: AuthProviderId | null;
   onSubmit: (email: string) => void;
-  onSubmitPassword?: (email: string, password: string) => void;
-  onForgotPassword?: (email: string) => void;
   onStartProvider: (provider: AuthProviderId) => void;
   onRetry?: () => void;
   passkeySignIn?: boolean;
   onStartPasskey?: () => void;
-  optedOutBySignal?: boolean;
-  onSignupAdmitted?: (choices: SignupAttemptChoices) => void;
 }) {
   const copy = useAuthCopy();
-  const scene = useAuthSceneBridge();
-  const embeddedAccountPage = useEmbeddedAccountPage();
+  const agreementId = useId();
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [passwordMode, setPasswordMode] = useState(mode);
-  const [attempted, setAttempted] = useState({ email: '', password: '' });
+  const [attemptedEmail, setAttemptedEmail] = useState('');
   const formRef = useRef<HTMLFormElement>(null);
   const [passkeysSupported, setPasskeysSupported] = useState(false);
   const [lastUsed, setLastUsed] = useState<AuthLastUsed | null>(null);
-  const isSignup = mode === 'signup';
-  const ageGate = useSignupAgeGate(isSignup);
-  const marketingEmail = useMarketingEmailChoice(optedOutBySignal);
-  if (passwordMode !== mode) {
-    setPasswordMode(mode);
-    setPassword('');
-    ageGate.forget();
-    marketingEmail.choose(false);
-  }
   useEffect(() => {
     setPasskeysSupported(browserSupportsPasskeys());
     setLastUsed(readLastUsedAuthMethod());
   }, []);
-  // A browser can fill a saved sign-in before this screen hydrates, when no
-  // handler is attached to hear it, and the next render would empty the fields.
+  // A browser can fill a saved address before this screen hydrates, when no
+  // handler is attached to hear it, and the next render would empty the field.
   useEffect(() => {
     const filledAddress = typedInto(formRef.current, 'email');
-    const filledPassword = typedInto(formRef.current, 'password');
     if (filledAddress) setEmail(filledAddress);
-    if (filledPassword) setPassword(filledPassword);
   }, []);
   const busy = phase !== 'idle';
   const waitingInBrowser = phase === 'browser' || phase === 'enterprise_browser';
-  const submitPassword = isSignup ? undefined : onSubmitPassword;
-  const recoverPassword = submitPassword ? onForgotPassword : undefined;
-  const offerPasskey = passkeySignIn && passkeysSupported && onStartPasskey !== undefined;
+  const startPasskey = passkeySignIn && passkeysSupported ? onStartPasskey : undefined;
   const passkeyLastUsed = lastUsed?.kind === 'method' && lastUsed.method === 'passkey';
   const lastUsedLabel = copy.text('flow.lastUsed', 'Last used');
-  const fieldMessage =
-    fieldError && switchOffered && !embeddedAccountPage ? (
-      <>
-        {fieldError}{' '}
-        <Link href={switchUrl} className={AUTH_LINK_CLASS}>
-          {copy.text(SWITCH_INSTEAD_COPY[mode].key, SWITCH_INSTEAD_COPY[mode].label)}
-        </Link>
-      </>
-    ) : (
-      fieldError
-    );
+  const otherWaysOffered = providers.length > 0 || startPasskey !== undefined;
 
   const attempt = (action: () => void) => {
-    const admitted = ageGate.admit(() => {
-      setAttempted({ email, password });
-      if (isSignup) {
-        onSignupAdmitted?.({
-          marketingEmail: marketingEmail.wanted,
-          ageCheckedAgainst: ACCOUNT_MINIMUM_AGE,
-        });
-      }
-      action();
-    });
-    if (!admitted) scene.setMood('error');
-  };
-  const retryStillMatchesTheFields = email === attempted.email && password === attempted.password;
-
-  const submit = () => {
-    const address = email.trim();
-    if (submitPassword && password.length > 0) submitPassword(address, password);
-    else onSubmit(address);
+    setAttemptedEmail(email);
+    action();
   };
 
-  const requireAddress = (): string | null => {
-    const field = formRef.current?.elements.namedItem('email');
-    if (field instanceof HTMLInputElement && !field.checkValidity()) {
-      field.reportValidity();
-      field.focus();
-      return null;
-    }
-    return email.trim();
-  };
-
-  const onAgeChange = (next: string) => {
-    if (ageGate.refusedAs !== null && evaluateAccountAge(next) === 'eligible') {
-      scene.setMood(error || fieldError ? 'error' : 'neutral');
-    }
-    ageGate.enter(next);
-  };
-
-  const otherWaysIn = (
-    <>
+  return (
+    <AuthStepFrame
+      heading={copy.text('flow.heading.entry', 'Log in or sign up')}
+      footer={<AuthLegalFooter />}
+    >
       {hostWayIn}
       <AuthProviderButtons
         providers={providers}
@@ -205,9 +102,10 @@ export function AuthEmailStep({
         lastUsed={lastUsed?.kind === 'provider' ? lastUsed.provider : null}
         lastUsedLabel={lastUsedLabel}
         onStart={(provider) => attempt(() => onStartProvider(provider))}
+        describedBy={agreementId}
       />
 
-      {offerPasskey ? (
+      {startPasskey ? (
         <div
           className={
             providers.length > 0 ? `${AUTH_PROVIDER_STACK_CLASS} mt-3` : AUTH_PROVIDER_STACK_CLASS
@@ -218,7 +116,8 @@ export function AuthEmailStep({
             className={AUTH_PROVIDER_BUTTON_CLASS}
             disabled={busy || !ready || providerPending !== null}
             aria-busy={phase === 'passkey_requested' || undefined}
-            onClick={() => attempt(onStartPasskey)}
+            aria-describedby={agreementId}
+            onClick={() => attempt(startPasskey)}
           >
             {phase === 'passkey_requested' ? <Spinner size="sm" /> : null}
             <span className={AUTH_PROVIDER_LABEL_CLASS}>
@@ -228,34 +127,15 @@ export function AuthEmailStep({
           </button>
         </div>
       ) : null}
-    </>
-  );
 
-  return (
-    <AuthStepFrame
-      heading={copy.text(HEADING_DEFAULTS[mode].key, HEADING_DEFAULTS[mode].label)}
-      detail={<p>{copy.text(DETAIL_DEFAULTS[mode].key, DETAIL_DEFAULTS[mode].label)}</p>}
-      footer={
-        <>
-          <AuthSwitchLine mode={mode} href={switchUrl} />
-          <AuthLegalFooter />
-        </>
-      }
-    >
-      {isSignup ? (
-        <>
-          {otherWaysIn}
-          <AuthDivider aboveField />
-        </>
-      ) : null}
+      {otherWaysOffered ? <AuthDivider aboveField /> : null}
 
-      {/* A submission no script handled must never write the password into the address bar. */}
       <form
         ref={formRef}
         method="post"
         onSubmit={(event) => {
           event.preventDefault();
-          attempt(submit);
+          attempt(() => onSubmit(email.trim()));
         }}
       >
         <AuthField
@@ -264,51 +144,13 @@ export function AuthEmailStep({
           name="email"
           inputMode="email"
           autoComplete={passkeysSupported ? 'email webauthn' : 'email'}
-          autoFocus={!isSignup}
           required
           placeholder={copy.text('flow.email.placeholder', 'you@example.com')}
           value={email}
-          error={fieldMessage}
+          error={fieldError}
           disabled={busy}
           onChange={(event) => setEmail(event.target.value)}
         />
-
-        {submitPassword ? (
-          <div className={AUTH_FIELD_STACK_CLASS}>
-            <AuthPasswordField
-              label={copy.text('flow.password.label', 'Password')}
-              value={password}
-              error={passwordError}
-              disabled={busy}
-              autoComplete="current-password"
-              autoFocus={false}
-              required={false}
-              onChange={setPassword}
-            />
-          </div>
-        ) : null}
-
-        {recoverPassword ? (
-          <div className={AUTH_FIELD_AID_CLASS}>
-            <button
-              type="button"
-              className={AUTH_BESIDE_TEXT_BUTTON_CLASS}
-              disabled={busy || !ready}
-              onClick={() => {
-                const address = requireAddress();
-                if (address !== null) attempt(() => recoverPassword(address));
-              }}
-            >
-              {copy.text('flow.password.forgot', 'Forgot password?')}
-            </button>
-          </div>
-        ) : null}
-
-        {isSignup ? (
-          <div className={AUTH_FIELD_STACK_CLASS}>
-            <AuthAgeField gate={{ ...ageGate, enter: onAgeChange }} disabled={busy} />
-          </div>
-        ) : null}
 
         {error ? (
           <p role="alert" className={AUTH_ERROR_CLASS}>
@@ -320,25 +162,15 @@ export function AuthEmailStep({
           label={copy.text('flow.continue', 'Continue')}
           busy={busy && !waitingInBrowser}
           disabled={!ready || waitingInBrowser}
+          describedBy={agreementId}
         />
       </form>
 
+      <AuthSignupAgreement id={agreementId} />
+
       <AuthPhaseStatus phase={phase} />
 
-      {isSignup ? null : <div className={AUTH_PROVIDERS_AFTER_ACTION_CLASS}>{otherWaysIn}</div>}
-
-      {isSignup ? (
-        <>
-          <AuthSignupAgreement />
-          <AuthMarketingEmailConsent
-            choice={marketingEmail}
-            disabled={busy}
-            className={AUTH_OPTIONAL_CONSENT_CLASS}
-          />
-        </>
-      ) : null}
-
-      {retryOffered && onRetry && retryStillMatchesTheFields ? (
+      {retryOffered && onRetry && email === attemptedEmail ? (
         <div className={AUTH_STEP_LINKS_CLASS}>
           <button
             type="button"

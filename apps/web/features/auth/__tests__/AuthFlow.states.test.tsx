@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
+const providerReturn = vi.hoisted(() => ({ value: null as unknown }));
+
 const client = vi.hoisted(() => ({
   isReady: true,
   startWithEmail: vi.fn(),
@@ -16,6 +18,7 @@ const client = vi.hoisted(() => ({
   startProvider: vi.fn(),
   signInWithPasskey: vi.fn(),
   restart: vi.fn(),
+  readProviderReturn: () => providerReturn.value,
 }));
 
 vi.mock('../IdentityAuthAdapter', () => ({
@@ -31,15 +34,14 @@ import type { AuthProvider, AuthResult } from '../authContract';
 const PROVIDERS: readonly AuthProvider[] = [{ id: 'google', label: 'Google' }];
 const EMAIL = 'person@example.com';
 const REDIRECTS = {
-  completeUrl: '/login/complete',
-  switchUrl: '/signup',
+  signInCompleteUrl: '/login/complete',
+  signUpCompleteUrl: '/signup/complete',
   ssoCallbackUrl: '/auth/sso-callback',
 };
 
 function renderFlow(overrides: { passkeySignIn?: boolean } = {}) {
   render(
     <AuthFlow
-      mode="login"
       providers={PROVIDERS}
       redirects={REDIRECTS}
       passkeySignIn={overrides.passkeySignIn ?? false}
@@ -77,6 +79,32 @@ beforeEach(() => {
     value: function PublicKeyCredential() {},
   });
   window.localStorage.clear();
+  providerReturn.value = null;
+});
+
+describe('coming back from a provider', () => {
+  it('says why the provider sign-in did not finish, on the first screen', async () => {
+    window.localStorage.setItem('agi.terms-accepted-version', 'left by the hand-off');
+    providerReturn.value = {
+      status: 'failed',
+      kind: 'provider_outage',
+      message: AUTH_ERROR_SOURCE_COPY.provider_outage.message,
+    } satisfies AuthResult;
+
+    renderFlow();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      AUTH_ERROR_SOURCE_COPY.provider_outage.message,
+    );
+    expect(screen.getByRole('heading', { name: 'Log in or sign up' })).toBeInTheDocument();
+    expect(window.localStorage.getItem('agi.terms-accepted-version')).toBeNull();
+  });
+
+  it('says nothing when there was no failed provider return', () => {
+    renderFlow();
+
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
 });
 
 describe('AuthFlow named states', () => {
@@ -169,7 +197,7 @@ describe('AuthFlow named states', () => {
       expect(window.localStorage.getItem('agiworkforce-auth-last-method')).toBe('provider:google'),
     );
 
-    render(<AuthFlow mode="login" providers={PROVIDERS} redirects={REDIRECTS} />);
+    render(<AuthFlow providers={PROVIDERS} redirects={REDIRECTS} />);
     const buttons = await screen.findAllByRole('button', { name: /Continue with Google/ });
     expect(buttons[buttons.length - 1]).toHaveTextContent('Last used');
   });

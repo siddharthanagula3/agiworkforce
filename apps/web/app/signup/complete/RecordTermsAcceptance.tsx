@@ -14,13 +14,7 @@ import { AuthStepFrame } from '@/features/auth/AuthStepFrame';
 import { buildLoginCompleteUrl } from '@/features/auth/authRoutes';
 import { AUTH_MUTED_LINE_CLASS, AUTH_PRIMARY_BUTTON_CLASS } from '@/features/auth/authStyles';
 import { useMarketingEmailGrant } from '@/features/auth/marketingEmailChoice';
-import {
-  carriedChoiceMustBeAskedAgain,
-  clearSignupAttemptMarkers,
-  hasCurrentTermsGateMarker,
-  readCarriedAgeCheck,
-  readCarriedMarketingEmailChoice,
-} from '../signupAttemptMarkers';
+import { clearSignupAttemptMarkers, hasCurrentTermsGateMarker } from '../signupAttemptMarkers';
 
 const RECORD_TIMEOUT_MS = 20_000;
 const AGE_REFUSED_STATUS = 403;
@@ -63,13 +57,10 @@ export function RecordTermsAcceptance({
   const [failure, setFailure] = useState<'none' | 'retryable' | 'outdated'>('none');
   const attempted = useRef(false);
   const grantedOnThisScreen = useMarketingEmailGrant();
-  const carriedGrant = useRef<string | null>(null);
-  const carriedAgeCheck = useRef<number | null>(null);
 
   const record = useCallback(async () => {
     setFailure('none');
-    const marketingEmailNoticeVersion =
-      surface === 'web-signup' ? carriedGrant.current : grantedOnThisScreen;
+    const marketingEmailNoticeVersion = surface === 'web-login' ? grantedOnThisScreen : null;
     try {
       const response = await fetch('/api/terms/accept', {
         method: 'POST',
@@ -80,14 +71,6 @@ export function RecordTermsAcceptance({
           surface,
           version: POLICY_LAST_UPDATED.terms,
           ...(marketingEmailNoticeVersion ? { marketingEmailNoticeVersion } : {}),
-          ...(surface === 'web-signup' && carriedAgeCheck.current !== null
-            ? {
-                eligibility: {
-                  kind: 'age_checked_on_device',
-                  minimumAge: carriedAgeCheck.current,
-                },
-              }
-            : {}),
         }),
       });
       if (response.status === 409) {
@@ -123,17 +106,12 @@ export function RecordTermsAcceptance({
       router.replace(redirectTo);
       return;
     }
-    if (surface === 'web-signup') {
-      const carried = readCarriedMarketingEmailChoice();
-      if (!hasCurrentTermsGateMarker() || carriedChoiceMustBeAskedAgain(carried)) {
-        clearSignupAttemptMarkers();
-        router.replace(
-          buildLoginCompleteUrl({ redirectTo, desktopSurface: false, authRetry: false }),
-        );
-        return;
-      }
-      carriedGrant.current = carried.kind === 'current' ? carried.noticeVersion : null;
-      carriedAgeCheck.current = readCarriedAgeCheck();
+    if (surface === 'web-signup' && !hasCurrentTermsGateMarker()) {
+      clearSignupAttemptMarkers();
+      router.replace(
+        buildLoginCompleteUrl({ redirectTo, desktopSurface: false, authRetry: false }),
+      );
+      return;
     }
     void record();
   }, [isLoaded, isSignedIn, record, redirectTo, router, surface]);

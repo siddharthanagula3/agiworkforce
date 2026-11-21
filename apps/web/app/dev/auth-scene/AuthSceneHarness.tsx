@@ -12,12 +12,9 @@ import { AuthNewPasswordStep } from '@/features/auth/AuthNewPasswordStep';
 import { AuthPasswordStep } from '@/features/auth/AuthPasswordStep';
 import { AuthPhaseStatus } from '@/features/auth/AuthPhaseStatus';
 import { AuthStepFrame } from '@/features/auth/AuthStepFrame';
-import type {
-  AuthCodeScreen,
-  AuthMode,
-  AuthPhase,
-  AuthProvider,
-} from '@/features/auth/authContract';
+import type { AuthCodeScreen, AuthPhase, AuthProvider } from '@/features/auth/authContract';
+
+type AuthMode = 'login' | 'signup';
 
 export type HarnessStep = 'email' | 'password' | 'code' | 'new_password' | 'terms';
 export type HarnessState = 'idle' | 'pending' | 'error' | 'success';
@@ -123,19 +120,13 @@ export function AuthSceneHarness({
   }
   return (
     <AuthEmailStep
-      mode={mode}
       providers={providers}
-      switchUrl={mode === 'login' ? '/signup' : '/login'}
       ready
       phase={state === 'pending' ? 'checking_account' : 'idle'}
       error={null}
-      fieldError={emailRefused ? 'No account uses this email.' : null}
-      passwordError={emailRefused ? null : fieldError}
-      switchOffered={emailRefused}
+      fieldError={emailRefused ? PROBE_ERROR : null}
       providerPending={null}
       onSubmit={none}
-      onSubmitPassword={none}
-      onForgotPassword={none}
       onStartProvider={none}
       passkeySignIn={passkey}
       onStartPasskey={none}

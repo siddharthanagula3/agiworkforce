@@ -64,23 +64,24 @@ describe('/login', () => {
     expect(mocks.redirect).not.toHaveBeenCalled();
   });
 
-  it('mounts the log-in flow without a clickwrap, because terms belong to signup', async () => {
-    // Founder decision 2026-08-17. A returning user has already accepted; asking
-    // again at sign-in re-prompted on every browser session and blocked people
-    // out of accounts they had paid for. Acceptance is still enforced where it
-    // can actually be attributed: on /signup before an account can be created,
-    // and at /login/complete against the version recorded on the account.
+  it('mounts the one log-in or sign-up flow, with no clickwrap', async () => {
     render(await LoginPage({ searchParams: Promise.resolve({ redirectTo: '/chat' }) }));
 
     expect(screen.getByTestId('auth-flow')).toBeInTheDocument();
-    expect(flowProps).toHaveBeenCalledWith(expect.objectContaining({ mode: 'login' }));
+    expect(flowProps).toHaveBeenCalledWith(
+      expect.not.objectContaining({ mode: expect.anything() }),
+    );
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
   });
 
-  it('forces successful sign-in through durable acceptance verification', async () => {
+  it('finishes a sign-in at login completion and a new account at sign-up completion', async () => {
     render(await LoginPage({ searchParams: Promise.resolve({ redirectTo: '/chat' }) }));
 
-    expect(lastRedirects()['completeUrl']).toBe('/login/complete?redirectTo=%2Fchat');
+    expect(lastRedirects()).toEqual({
+      signInCompleteUrl: '/login/complete?redirectTo=%2Fchat',
+      signUpCompleteUrl: '/signup/complete?redirectTo=%2Fchat',
+      ssoCallbackUrl: '/auth/sso-callback?redirectTo=%2Fchat',
+    });
   });
 
   it('keeps device approval and account creation inside the embedded Desktop flow', async () => {
@@ -93,10 +94,10 @@ describe('/login', () => {
 
     expect(screen.getByTestId('auth-layout')).toHaveAttribute('data-embedded', 'true');
     expect(lastRedirects()).toEqual({
-      completeUrl:
+      signInCompleteUrl:
         '/login/complete?redirectTo=%2Fauth%2Fdevice%3Fuser_code%3DABCD-1234%26surface%3Ddesktop&surface=desktop',
-      switchUrl:
-        '/signup?surface=desktop&redirectTo=%2Fauth%2Fdevice%3Fuser_code%3DABCD-1234%26surface%3Ddesktop',
+      signUpCompleteUrl:
+        '/signup/complete?redirectTo=%2Fauth%2Fdevice%3Fuser_code%3DABCD-1234%26surface%3Ddesktop',
       ssoCallbackUrl:
         '/auth/sso-callback?redirectTo=%2Fauth%2Fdevice%3Fuser_code%3DABCD-1234%26surface%3Ddesktop&surface=desktop',
     });
@@ -118,7 +119,9 @@ describe('/login', () => {
       await LoginPage({ searchParams: Promise.resolve({ redirectTo: '/chat', authRetry: '1' }) }),
     );
 
-    expect(lastRedirects()['completeUrl']).toBe('/login/complete?redirectTo=%2Fchat&authRetry=1');
+    expect(lastRedirects()['signInCompleteUrl']).toBe(
+      '/login/complete?redirectTo=%2Fchat&authRetry=1',
+    );
   });
 
   it('sends an unsafe redirect target to the default destination', async () => {
@@ -126,6 +129,6 @@ describe('/login', () => {
       await LoginPage({ searchParams: Promise.resolve({ redirectTo: 'https://evil.example' }) }),
     );
 
-    expect(lastRedirects()['completeUrl']).toBe('/login/complete?redirectTo=%2F');
+    expect(lastRedirects()['signInCompleteUrl']).toBe('/login/complete?redirectTo=%2F');
   });
 });

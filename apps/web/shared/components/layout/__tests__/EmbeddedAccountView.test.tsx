@@ -49,7 +49,6 @@ import LoginError from '@/app/login/error';
 import { SettingsRuntimeProviders } from '@/app/settings/SettingsRuntimeProviders';
 import { AuthBrand } from '@/features/auth/AuthBrand';
 import { AuthLegalFooter } from '@/features/auth/AuthLegalFooter';
-import { AuthSwitchLine } from '@/features/auth/AuthSwitchLine';
 import { SettingsSectionLink } from '@/features/settings/components/SettingsSectionLink';
 import { HelpArticleLink } from '@/features/support/components/HelpArticleLink';
 import { embeddedPageHref, embeddedSignInPath, isEmbeddedPageView } from '@/lib/embedded-page';
@@ -177,19 +176,14 @@ describe('the sign-in page an account link lands on', () => {
   const authChrome = (
     <>
       <AuthBrand />
-      <AuthSwitchLine
-        mode="login"
-        href={`/signup?redirectTo=${encodeURIComponent(MARKED_ACCOUNT)}`}
-      />
       <AuthLegalFooter />
     </>
   );
 
-  it('offers no home page, sign-up or contact link when it returns to a marked account page', () => {
+  it('offers no home page or contact link when it returns to a marked account page', () => {
     const { container } = renderAt(MARKED_SIGN_IN, authChrome);
 
     expect(screen.getByText('AGI').closest('a')).toBeNull();
-    expect(screen.queryByText('Sign up')).toBeNull();
     expect(screen.queryByText('Contact')).toBeNull();
     expect(hrefs(container)).toEqual([`/help?${MARKER}`, `/privacy?${MARKER}`, `/terms?${MARKER}`]);
   });
@@ -197,14 +191,7 @@ describe('the sign-in page an account link lands on', () => {
   it('keeps every link for an ordinary sign-in', () => {
     const { container } = renderAt('/login', authChrome);
 
-    expect(hrefs(container)).toEqual([
-      '/',
-      `/signup?redirectTo=${encodeURIComponent(MARKED_ACCOUNT)}`,
-      '/help',
-      '/privacy',
-      '/terms',
-      '/contact',
-    ]);
+    expect(hrefs(container)).toEqual(['/', '/help', '/privacy', '/terms', '/contact']);
     expect(container.innerHTML).not.toContain(`/help?${MARKER}`);
   });
 });

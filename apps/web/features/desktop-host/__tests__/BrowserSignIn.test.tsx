@@ -12,7 +12,6 @@ import { DesktopBrowserSignIn } from '../components/DesktopBrowserSignIn';
 import { beginBrowserSignIn, cancelBrowserSignIn } from '../lib/browser-sign-in';
 import { PRODUCT_NAMES } from '@agiworkforce/types';
 
-const localPassword = vi.hoisted(() => vi.fn());
 type IdentityAuthModule = typeof import('@/features/auth/IdentityAuthAdapter');
 vi.mock('@/features/auth/IdentityAuthAdapter', async (importOriginal) => ({
   ...(await importOriginal<IdentityAuthModule>()),
@@ -22,7 +21,7 @@ vi.mock('@/features/auth/IdentityAuthAdapter', async (importOriginal) => ({
       (await beginBrowserSignIn())
         ? { status: 'redirecting', phase: 'browser' }
         : { status: 'failed', kind: 'unexpected', message: 'Could not start sign-in' },
-    signInWithPassword: localPassword,
+    readProviderReturn: () => null,
   }),
   IdentityBotProtection: () => null,
 }));
@@ -30,26 +29,21 @@ vi.mock('@/features/auth/IdentityAuthAdapter', async (importOriginal) => ({
 let native: PendingBrowserSignIn;
 const invoke = vi.fn();
 const redirects = {
-  completeUrl: '/login/complete',
-  switchUrl: '/signup',
+  signInCompleteUrl: '/login/complete',
+  signUpCompleteUrl: '/signup/complete',
   ssoCallbackUrl: '/auth/sso-callback',
 };
 
 function renderSignIn() {
   return render(
     <>
-      <AuthFlow
-        mode="login"
-        providers={[{ id: 'google', label: 'Google' }]}
-        redirects={redirects}
-      />
+      <AuthFlow providers={[{ id: 'google', label: 'Google' }]} redirects={redirects} />
       <DesktopBrowserSignIn />
     </>,
   );
 }
 
 beforeEach(() => {
-  localPassword.mockReset();
   native = { kind: 'idle' };
   invoke.mockReset().mockImplementation(async (command: string) => {
     if (command === BROWSER_SIGN_IN_STATE) return { ok: true, value: native };
