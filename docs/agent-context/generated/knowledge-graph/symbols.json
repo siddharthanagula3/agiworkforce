@@ -2854,6 +2854,7 @@
       "packages/contracts/types/src/account-eligibility.ts"
     ],
     "ADULT_ELIGIBILITY_PATH": [
+      "packages/contracts/cloud-contracts/src/account-gate-paths.ts",
       "packages/contracts/cloud-contracts/src/adult-eligibility.ts"
     ],
     "ADULT_ELIGIBILITY_REVIEW_PATH": [
@@ -143576,6 +143577,7 @@
       "apps/extension-vscode/src/integrations/localRuntimeClient.ts"
     ],
     "TERMS_ACCEPTANCE_PATH": [
+      "packages/contracts/cloud-contracts/src/account-gate-paths.ts",
       "packages/contracts/cloud-contracts/src/terms-acceptance.ts"
     ],
     "TERMS_ACCEPTANCE_SURFACES": [

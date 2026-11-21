@@ -159,6 +159,7 @@
   ],
   "cloudContractsModules": [
     "account-deletion",
+    "account-gate-paths",
     "account-security",
     "adult-eligibility",
     "agent-catalog",
