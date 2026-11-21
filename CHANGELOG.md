@@ -10,6 +10,8 @@ All notable changes to AGI Workforce. The format follows [Keep a Changelog](http
 
 ### Fixed
 
+- Headless coding runs distinguish unavailable shell approval from a user denial and request tests separately after editing, even when an earlier combined check could not run.
+
 - During a coding turn, tools found by CLI tool search are offered to the model on its next call so it can use them immediately.
 - An explicit CLI bypass launch takes precedence over a saved Plan default when starting or resuming a coding task. Explicit Plan mode and managed permission limits still apply.
 
