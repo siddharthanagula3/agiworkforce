@@ -10,6 +10,8 @@ All notable changes to AGI Workforce. The format follows [Keep a Changelog](http
 
 ### Fixed
 
+- An explicit CLI bypass launch takes precedence over a saved Plan default when starting or resuming a coding task. Explicit Plan mode and managed permission limits still apply.
+
 - Quiet-hours release times follow the actual timezone transition, including
   daylight saving gaps and repeated hours, without delaying the boundary by
   the current seconds or milliseconds.

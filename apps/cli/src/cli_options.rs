@@ -201,6 +201,7 @@ impl CliOptions {
     ) -> EffectivePermissions {
         let mode = mode_flag
             .or(self.permission_mode)
+            .or(explicit_skip.then_some(PermissionMode::BypassPermissions))
             .or_else(|| persisted_mode.and_then(persisted_permission_mode))
             .unwrap_or(PermissionMode::Default);
         // Every mode-derived flag reads the one winning mode, so a losing
@@ -452,6 +453,19 @@ mod tests {
                 .mode,
             PermissionMode::Default
         );
+    }
+
+    #[test]
+    fn explicit_skip_selects_bypass_over_a_saved_default_but_preserves_explicit_plan_and_policy() {
+        let options = options_without_flags();
+        let launch = options.effective_permissions(None, true, false, Some("plan"));
+        assert_eq!(launch.mode, PermissionMode::BypassPermissions);
+        assert!(launch.skip_permissions);
+        let restricted = launch.held_to(Some(PermissionMode::Plan));
+        assert_eq!(restricted.mode, PermissionMode::Plan);
+        assert!(!restricted.skip_permissions);
+        let plan = options.effective_permissions(Some(PermissionMode::Plan), true, false, None);
+        assert_eq!(plan.mode, PermissionMode::Plan);
     }
 
     #[test]
