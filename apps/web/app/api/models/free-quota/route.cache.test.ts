@@ -8,6 +8,7 @@ import {
   writeQuotaAttestation,
 } from '@/lib/free-quota-authorization';
 import { RENDER_CACHE_SECONDS } from '@/lib/server/render-cache';
+import freePools from '@/config/free-pools.json';
 import type { FreeQuotaCatalogue } from '@/features/models/lib/free-quota-types';
 type ScanModule0 = typeof import('@/lib/api-auth');
 type ScanModule1 = typeof import('@/lib/rate-limit');
@@ -137,8 +138,10 @@ function passLiveWindow() {
   vi.setSystemTime(Date.now() + LIVE_WINDOW_MS + 1);
 }
 
+const INVENTORY_OBSERVED_AT = new Date(`${freePools.inventory.observedOn}T12:00:00Z`);
+
 beforeEach(() => {
-  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.useFakeTimers({ toFake: ['Date'], now: INVENTORY_OBSERVED_AT });
   vi.stubEnv('NODE_ENV', 'production');
   vi.stubEnv('QWEN_API_KEY', API_KEY);
   mocks.store = createMemoryKeyValueStore();
