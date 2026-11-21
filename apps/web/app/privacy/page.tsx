@@ -134,14 +134,19 @@ const MODE_LEDGER: readonly LedgerRow[] = [
         <strong>Where your prompts go:</strong> from your client straight to the provider you
         targeted, on your own API key. We are not in that request path.{' '}
         <strong>
-          BYOK is part of the CLI. The VS Code extension is coming soon. Web and Desktop chat have
-          no user-key path, so that work is Cloud; a Desktop local coding session runs the CLI and
-          can use a provider key you set up there.
+          The CLI handles BYOK, including sessions started by the VS Code extension. Web and Desktop
+          chat have no user-key path, so that work is Cloud; a Desktop local coding session runs the
+          CLI and can use a provider key you set up there.
         </strong>
         <br />
         <strong>What we hold:</strong> not the provider key or prompt traffic. The CLI stores the
         key in the operating system credential store, or in owner-only files on Linux or when the
-        keyring is turned off, and calls the provider directly.
+        keyring is turned off, and calls the provider directly. In VS Code, chat history stays
+        scoped to the workspace. Managed Cloud sends requests to AGI. The extension keeps its
+        browser sign-in credentials in VS Code SecretStorage. If you use account memory or send
+        feedback, that data goes to AGI. Usage events are off by default. Managed Cloud events
+        require the extension setting, VS Code telemetry settings and account analytics consent to
+        allow them.
       </>
     ),
   },
@@ -969,9 +974,9 @@ const CONTROLS_LEDGER: readonly LedgerRow[] = [
         <PageLink href="/download" className="agi-ds-link">
           download page
         </PageLink>{' '}
-        shows which CLI releases are published. VS Code BYOK is coming soon. Web and Desktop chat
-        use Cloud; Desktop local coding sessions run the CLI and can use a local model or your own
-        provider key.
+        shows which CLI releases are published. The VS Code extension uses the local CLI for Local
+        and BYOK sessions. Web and Desktop chat use Cloud; Desktop local coding sessions run the CLI
+        and can use a local model or your own provider key.
       </>
     ),
   },
@@ -1046,8 +1051,8 @@ export default function PrivacyPage() {
                 sell your data. Website users can use Cloud. On the Free plan, AGI chooses the
                 default model and you may pick another model the plan includes, within a usage
                 allowance. Paid plans are opening in stages, so an upgrade needs an access code or a
-                place on the upgrade waitlist. The CLI supports Local and BYOK; VS Code BYOK is
-                coming soon. Managed cloud is open by default, not invite-only.
+                place on the upgrade waitlist. The CLI supports Local and BYOK, including sessions
+                started in VS Code. Managed cloud is open by default, not invite-only.
               </strong>{' '}
               Last updated: {POLICY_LAST_UPDATED.privacy}. Cloud is in public alpha.{' '}
               <PolicyVersionsLink policy="privacy" />

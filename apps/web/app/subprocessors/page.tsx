@@ -346,7 +346,7 @@ export default function SubprocessorsPage() {
             </Prose>
             <Prose>
               <strong>Which surface that applies to, precisely.</strong> BYOK is a capability of the
-              CLI. The VS Code extension is coming soon.{' '}
+              CLI, including developer sessions the VS Code extension starts through that CLI.{' '}
               <strong>
                 The web app at agiworkforce.com and Desktop chat have no user-supplied-key path; a
                 Desktop local coding session runs the CLI and can use a key you set up there.

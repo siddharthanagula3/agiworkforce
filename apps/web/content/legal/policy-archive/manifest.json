@@ -71,7 +71,7 @@
       "versions": [
         {
           "date": "2026-11-21",
-          "summary": "AGI is now for adults: you must be at least 18. Section 09 sets out how your age is asked on the web, in chat without an account, for accounts with no decision on record and on a phone; that on the web the age is asked once a new account exists, or at the next sign-in for an account with no decision, that an age under 18 is refused on the screen and not sent, and that an age of 18 or over is sent once and not kept; and that the account keeps only the decision, never an age, an age range or a birth date, and erases it with the account. The marketing email choice is asked only when you first accept the terms after signing in, not on the sign-up screen. The earlier policy said accounts were open from 13 with a parent or guardian's permission and that the age never reached our servers.",
+          "summary": "AGI is now for adults: you must be at least 18. Section 09 sets out how your age is asked on the web, in chat without an account, for accounts with no decision on record and on a phone; that on the web the age is asked once a new account exists, or at the next sign-in for an account with no decision, that an age under 18 is refused on the screen and not sent, and that an age of 18 or over is sent once and not kept; and that the account keeps only the decision, never an age, an age range or a birth date, and erases it with the account. The marketing email choice is asked only when you first accept the terms after signing in, not on the sign-up screen. The earlier policy said accounts were open from 13 with a parent or guardian's permission and that the age never reached our servers. We also describe how VS Code sessions, credentials and optional account features handle data.",
           "status": "current",
           "published": null
         },
@@ -251,13 +251,19 @@
     "subprocessors": {
       "route": "/subprocessors",
       "slug": "subprocessors",
-      "current": "2026-11-13",
+      "current": "2026-11-21",
       "versions": [
+        {
+          "date": "2026-11-21",
+          "summary": "We clarify that the VS Code extension uses the local CLI for sessions on your provider key.",
+          "status": "current",
+          "published": null
+        },
         {
           "date": "2026-11-13",
           "summary": "The hosted mode is now called Cloud. The Model providers row is headed Model providers (Cloud), every row that mentions the mode says Cloud where it said Managed Cloud, and the E2B row says Sandbox runtime. No recipient was added or removed. The BYOK section also corrects which surfaces have a user-supplied-key path: the web app and Desktop chat have none, and a Desktop local coding session runs the CLI and can use a key you set up there.",
-          "status": "current",
-          "published": null
+          "status": "archived",
+          "published": true
         },
         {
           "date": "2026-11-10",
