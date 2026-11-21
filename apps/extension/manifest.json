@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "AGI Extension",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "An AI side panel that reads the page you are on and, on sites you approve, clicks and types for you.",
   "author": "agiworkforce",
   "default_locale": "en",

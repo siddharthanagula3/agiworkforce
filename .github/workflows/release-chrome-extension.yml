@@ -43,12 +43,6 @@ jobs:
       CHROME_EXTENSION_PUBLIC_KEY: ${{ vars.CHROME_EXTENSION_PUBLIC_KEY }}
       CWS_EXTENSION_ID: ${{ vars.CWS_EXTENSION_ID }}
       VITE_SENTRY_DSN: ${{ secrets.SENTRY_DSN_CHROME_EXTENSION }}
-      # Web API origin for code redemption and product-update opt-in. The client
-      # (apps/extension/src/lib/waitlistService.ts) defaults to the canonical
-      # production origin, so this is an explicit override rather than a
-      # requirement; it is set here so a release package is never silently
-      # pointed somewhere other than the origin the release is cut for.
-      VITE_AGI_WEB_API_BASE_URL: ${{ vars.AGI_WEB_API_BASE_URL || 'https://agiworkforce.com' }}
     steps:
       - name: Checkout the selected release tag
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -131,6 +125,7 @@ jobs:
       - name: Build and verify the store ZIP
         id: store-zip
         env:
+          VITE_AGI_WEB_API_BASE_URL: ${{ vars.AGI_WEB_API_BASE_URL || 'https://agiworkforce.com' }}
           ARCHIVE_NAME: ${{ steps.metadata.outputs.archive }}
         run: |
           set -euo pipefail
