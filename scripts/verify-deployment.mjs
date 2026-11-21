@@ -34,6 +34,16 @@ const PROBES = [
     expectedStatus: 401,
     assertBody: assertUnauthorizedEnvelope,
   },
+  {
+    path: '/api/llm/v1/chat/completions',
+    method: 'POST',
+    expectedStatus: 401,
+    assertBody(body) {
+      if (body?.error?.code !== 'invalid_api_key') {
+        throw new Error('did not reach the chat authentication gate');
+      }
+    },
+  },
 ];
 
 const API_HOST_PROBES = [
@@ -75,6 +85,7 @@ function delay(milliseconds) {
 
 async function runProbe(baseUrl, probe, fetchImpl) {
   const response = await fetchImpl(new URL(probe.path, baseUrl), {
+    method: probe.method ?? 'GET',
     headers: { accept: 'application/json', 'x-request-id': `deploy-${randomUUID()}` },
     redirect: 'manual',
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),

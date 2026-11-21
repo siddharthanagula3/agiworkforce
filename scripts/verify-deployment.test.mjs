@@ -31,9 +31,15 @@ const UNAUTHORIZED_BODY = {
   requestId: 'test-request',
 };
 
+const CHAT_PATH = '/api/llm/v1/chat/completions';
+const CHAT_UNAUTHENTICATED = { error: { code: 'invalid_api_key' } };
+
 async function startDeployment(t, routes) {
   const server = createServer((request, response) => {
-    const [status, body] = routes[request.url ?? ''] ?? [401, UNAUTHORIZED_BODY];
+    const [status, body] = routes[request.url ?? ''] ?? [
+      401,
+      request.url === CHAT_PATH ? CHAT_UNAUTHENTICATED : UNAUTHORIZED_BODY,
+    ];
     response.statusCode = status;
     response.setHeader('content-type', typeof body === 'string' ? 'text/html' : 'application/json');
     response.end(typeof body === 'string' ? body : JSON.stringify(body));
@@ -52,7 +58,7 @@ test('a deployment whose health and authenticated routes both answer passes', as
 
   const result = await verifyDeployment(baseUrl, { attempts: 1 });
 
-  assert.deepEqual(result.probes, ['/api/health', '/api/me', '/api/usage']);
+  assert.deepEqual(result.probes, ['/api/health', '/api/me', '/api/usage', CHAT_PATH]);
 });
 
 test('healthy /api/health does not excuse a 500 from an authenticated route', async (t) => {
@@ -122,7 +128,9 @@ test('a transient failure is retried before the gate gives up', async (t) => {
       return;
     }
     response.statusCode = 401;
-    response.end(JSON.stringify(UNAUTHORIZED_BODY));
+    response.end(
+      JSON.stringify(request.url === CHAT_PATH ? CHAT_UNAUTHENTICATED : UNAUTHORIZED_BODY),
+    );
   });
   t.after(() => new Promise((resolve) => server.close(resolve)));
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -135,7 +143,7 @@ test('a transient failure is retried before the gate gives up', async (t) => {
   });
 
   assert.equal(healthHits, 2);
-  assert.equal(result.probes.length, 3);
+  assert.equal(result.probes.length, 4);
 });
 
 test('a production origin serving main HEAD passes the drift check', async (t) => {
@@ -516,6 +524,10 @@ function previewFetch(calls, mutate = () => {}) {
     }
     if (url.pathname === '/api/health') return Response.json(HEALTHY_BODY);
     if (url.pathname === '/api/version') return Response.json({ commit: HEAD_SHA });
+    if (url.pathname === CHAT_PATH) {
+      assert.equal(options.method, 'POST');
+      return Response.json(CHAT_UNAUTHENTICATED, { status: 401 });
+    }
     return Response.json(UNAUTHORIZED_BODY, { status: 401 });
   };
 }
@@ -533,6 +545,7 @@ globalThis.fetch = async (input, options) => {
   }
   if (url.pathname === '/api/health') return Response.json(${JSON.stringify(HEALTHY_BODY)});
   if (url.pathname === '/api/version') return Response.json({commit: ${JSON.stringify(HEAD_SHA)}});
+  if (url.pathname === ${JSON.stringify(CHAT_PATH)}) return Response.json(${JSON.stringify(CHAT_UNAUTHENTICATED)}, {status:401});
   return Response.json(${JSON.stringify(UNAUTHORIZED_BODY)}, {status:401});
 };`;
   return spawnSync(
@@ -590,6 +603,7 @@ test('protected preview probes authenticate ownership before all serving and ful
       '/api/health',
       '/api/me',
       '/api/usage',
+      CHAT_PATH,
       '/api/version',
     ],
   );
@@ -744,6 +758,8 @@ test('a protected preview still rejects old commits, bad health and anonymous au
   for (const [path, body, status, expected] of [
     ['/api/version', { commit: OLDER_SHA }, 200, /serving commit/],
     ['/api/health', { ok: true }, 200, /not this app/],
+    [CHAT_PATH, {}, 500, /expected 401/],
+    [CHAT_PATH, UNAUTHORIZED_BODY, 401, /chat authentication gate/],
     ['/api/usage', { percentUsed: 0 }, 200, /expected 401/],
     ['/api/me', { error: { code: 'WRONG' } }, 401, /UNAUTHORIZED envelope/],
   ]) {
@@ -769,6 +785,10 @@ test('public production probes do not acquire an implicit bypass from options or
     calls.push(options);
     if (url.pathname === '/api/health') return Response.json(HEALTHY_BODY);
     if (url.pathname === '/api/version') return Response.json({ commit: HEAD_SHA });
+    if (url.pathname === CHAT_PATH) {
+      assert.equal(options.method, 'POST');
+      return Response.json(CHAT_UNAUTHENTICATED, { status: 401 });
+    }
     return Response.json(UNAUTHORIZED_BODY, { status: 401 });
   };
   await verifyDeployment('https://production.fixture.invalid', {
