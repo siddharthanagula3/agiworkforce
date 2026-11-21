@@ -10680,6 +10680,12 @@
     "AuthEntry": [
       "apps/cli/src/auth.rs"
     ],
+    "AuthEntryParams": [
+      "apps/web/app/login/AuthEntryScreen.tsx"
+    ],
+    "AuthEntryScreen": [
+      "apps/web/app/login/AuthEntryScreen.tsx"
+    ],
     "AuthError": [
       "apps/desktop/src/services/cloudAccountAuth.ts",
       "apps/web/app/auth/error.tsx"
@@ -10771,9 +10777,6 @@
     ],
     "AuthMethodPicker": [
       "apps/web/features/auth/AuthMethodPicker.tsx"
-    ],
-    "AuthMode": [
-      "apps/web/features/auth/authContract.ts"
     ],
     "authModeFromProbe": [
       "apps/web/lib/connectors/directory/auth-probe.ts"
@@ -11063,9 +11066,6 @@
     "AuthSubmitButton": [
       "apps/desktop/src/features/auth/AuthSubmitButton.tsx",
       "apps/web/features/auth/AuthSubmitButton.tsx"
-    ],
-    "AuthSwitchLine": [
-      "apps/web/features/auth/AuthSwitchLine.tsx"
     ],
     "AuthType": [
       "apps/desktop/src-tauri/src/sys/api/client.rs",
@@ -17192,12 +17192,6 @@
     ],
     "CarouselSurface": [
       "apps/mobile/src/features/chat/components/AnswerMediaSurfaces.tsx"
-    ],
-    "carriedChoiceMustBeAskedAgain": [
-      "apps/web/app/signup/signupAttemptMarkers.ts"
-    ],
-    "CarriedMarketingEmailChoice": [
-      "apps/web/app/signup/signupAttemptMarkers.ts"
     ],
     "carriedOperation": [
       "apps/web/lib/identity/operation-identity.ts"
@@ -110043,12 +110037,6 @@
     "readCapabilityRow": [
       "scripts/check-capability-advertisement.mjs"
     ],
-    "readCarriedAgeCheck": [
-      "apps/web/app/signup/signupAttemptMarkers.ts"
-    ],
-    "readCarriedMarketingEmailChoice": [
-      "apps/web/app/signup/signupAttemptMarkers.ts"
-    ],
     "readCatalog": [
       "scripts/check-domain-event-emitters.mjs"
     ],
@@ -125176,6 +125164,9 @@
     "sameManagedCloudOwner": [
       "apps/extension/src/features/cloud-bridge/managedCloudAuthority.ts"
     ],
+    "sameOriginReturnPath": [
+      "apps/web/app/session-expired/sameOriginReturnPath.ts"
+    ],
     "sameProfileScope": [
       "packages/contracts/types/src/browser-permission-profile.ts",
       "packages/contracts/types/src/index.ts"
@@ -130698,6 +130689,18 @@
     "session_picker": [
       "apps/cli/src/tui/widgets/mod.rs"
     ],
+    "SESSION_RECOVERY_BUDGET": [
+      "apps/web/app/session-expired/SessionRecovery.tsx"
+    ],
+    "SESSION_RECOVERY_BUDGET_WINDOW_MS": [
+      "apps/web/app/session-expired/SessionRecovery.tsx"
+    ],
+    "SESSION_RECOVERY_STORAGE_KEY": [
+      "apps/web/app/session-expired/SessionRecovery.tsx"
+    ],
+    "SESSION_RECOVERY_WINDOW_MS": [
+      "apps/web/app/session-expired/SessionRecovery.tsx"
+    ],
     "SESSION_SAVE_LOCK_FILE": [
       "apps/cli/src/platform/runtime/session.rs"
     ],
@@ -130956,6 +130959,9 @@
     ],
     "SessionReceipt": [
       "apps/extension-vscode/src/features/sidebar-webview/sessionReceipt.ts"
+    ],
+    "SessionRecovery": [
+      "apps/web/app/session-expired/SessionRecovery.tsx"
     ],
     "SessionRenewal": [
       "apps/desktop/src-tauri/src/sys/account/mod.rs"
@@ -134298,9 +134304,6 @@
     ],
     "SignupAgeGate": [
       "apps/web/features/auth/useSignupAgeGate.ts"
-    ],
-    "SignupAttemptChoices": [
-      "apps/web/app/signup/signupAttemptMarkers.ts"
     ],
     "SignupCompletePage": [
       "apps/web/app/signup/complete/page.tsx"
@@ -141628,9 +141631,6 @@
       "packages/ui/ui/src/index.ts",
       "packages/ui/ui/src/primitives/index.ts",
       "packages/ui/ui/src/primitives/Switch.tsx"
-    ],
-    "SWITCH_INSTEAD_COPY": [
-      "apps/web/features/auth/AuthSwitchLine.tsx"
     ],
     "switch_managed_model": [
       "apps/cli/src/agent/mod.rs"
