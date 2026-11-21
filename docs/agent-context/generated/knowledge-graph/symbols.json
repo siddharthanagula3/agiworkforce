@@ -38092,6 +38092,9 @@
     "DEFAULT_MAX_RESPONSE_BYTES": [
       "crates/agiworkforce-mcp/src/config.rs"
     ],
+    "DEFAULT_MAX_RESULTS": [
+      "apps/cli/src/tool_search.rs"
+    ],
     "DEFAULT_MAX_RETRIES": [
       "apps/desktop/src/constants/timeouts.ts",
       "packages/ai/provider-runtime/src/index.ts",
@@ -82687,6 +82690,9 @@
     ],
     "matching_response": [
       "crates/agiworkforce-mcp/src/jsonrpc.rs"
+    ],
+    "matching_tool_definitions": [
+      "apps/cli/src/tool_search.rs"
     ],
     "matchingFooterMaterial": [
       "apps/web/e2e/lib/public-footer-capture.ts"
