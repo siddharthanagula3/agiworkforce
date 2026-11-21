@@ -707,6 +707,17 @@
     {
       "surface": "mobile",
       "kind": "page",
+      "url": "/settings/age",
+      "file": "apps/mobile/app/(app)/settings/age.tsx",
+      "segments": [
+        "(app)",
+        "settings",
+        "age"
+      ]
+    },
+    {
+      "surface": "mobile",
+      "kind": "page",
       "url": "/settings/app-language",
       "file": "apps/mobile/app/(app)/settings/app-language.tsx",
       "segments": [
@@ -989,17 +1000,6 @@
         "(app)",
         "settings",
         "notifications"
-      ]
-    },
-    {
-      "surface": "mobile",
-      "kind": "page",
-      "url": "/settings/parental-controls",
-      "file": "apps/mobile/app/(app)/settings/parental-controls.tsx",
-      "segments": [
-        "(app)",
-        "settings",
-        "parental-controls"
       ]
     },
     {
@@ -5587,6 +5587,20 @@
       ],
       "methods": [
         "GET"
+      ]
+    },
+    {
+      "surface": "web",
+      "kind": "endpoint",
+      "url": "/api/eligibility",
+      "file": "apps/web/app/api/eligibility/route.ts",
+      "segments": [
+        "api",
+        "eligibility"
+      ],
+      "methods": [
+        "GET",
+        "POST"
       ]
     },
     {

@@ -160,6 +160,7 @@
   "cloudContractsModules": [
     "account-deletion",
     "account-security",
+    "adult-eligibility",
     "agent-catalog",
     "agent-drafts",
     "agent-events",

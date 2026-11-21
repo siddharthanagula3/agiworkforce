@@ -879,6 +879,9 @@
     "ACCOUNT_COMPROMISE_SUPPORT_PATH": [
       "apps/web/lib/services/identity-events/index.ts"
     ],
+    "ACCOUNT_DATA_RIGHTS_PATH": [
+      "apps/mobile/src/features/auth/components/AgeRefused.tsx"
+    ],
     "ACCOUNT_DELETION_RENEWAL_METADATA_KEY": [
       "apps/web/lib/server/payments/stripe-provider.ts"
     ],
@@ -1167,6 +1170,9 @@
     "AccountAccessNotice": [
       "apps/web/features/auth/AccountAccessNotice.tsx"
     ],
+    "AccountAgeCheck": [
+      "apps/mobile/src/features/auth/components/AccountAgeCheck.tsx"
+    ],
     "AccountAgeRefusal": [
       "packages/contracts/types/src/account-eligibility.ts"
     ],
@@ -1206,9 +1212,6 @@
     ],
     "AccountConsentRowProps": [
       "apps/web/features/settings/components/AccountConsentRow.tsx"
-    ],
-    "AccountDataDisclosure": [
-      "apps/web/features/auth/AccountDataDisclosure.tsx"
     ],
     "accountDecisionCoversCookieNotice": [
       "apps/web/shared/lib/cookie-consent.ts"
@@ -1397,7 +1400,7 @@
       "apps/web/lib/server/user-identity.ts"
     ],
     "AccountPolicyLinks": [
-      "apps/web/features/auth/AccountDataDisclosure.tsx"
+      "apps/web/features/auth/AccountPolicyLinks.tsx"
     ],
     "AccountProductAnalyticsOptions": [
       "packages/contracts/types/src/product-analytics.ts"
@@ -2841,6 +2844,93 @@
     "AdoptedChatTurn": [
       "apps/extension/src/types.ts"
     ],
+    "ADULT_ELIGIBILITY_CHECK_FAILED_MESSAGE": [
+      "apps/mobile/src/features/auth/store/adultEligibilityStore.ts"
+    ],
+    "ADULT_ELIGIBILITY_ERROR_CODES": [
+      "packages/contracts/cloud-contracts/src/adult-eligibility.ts"
+    ],
+    "ADULT_ELIGIBILITY_METHODS": [
+      "packages/contracts/types/src/account-eligibility.ts"
+    ],
+    "ADULT_ELIGIBILITY_PATH": [
+      "packages/contracts/cloud-contracts/src/adult-eligibility.ts"
+    ],
+    "ADULT_ELIGIBILITY_REVIEW_PATH": [
+      "packages/contracts/cloud-contracts/src/adult-eligibility.ts"
+    ],
+    "ADULT_ELIGIBILITY_STATES": [
+      "packages/contracts/cloud-contracts/src/adult-eligibility.ts"
+    ],
+    "ADULT_ELIGIBILITY_SURFACES": [
+      "packages/contracts/cloud-contracts/src/adult-eligibility.ts"
+    ],
+    "ADULT_ELIGIBILITY_UNAVAILABLE_CODE": [
+      "apps/web/lib/server/adult-eligibility-gate.ts"
+    ],
+    "ADULT_ELIGIBILITY_UNAVAILABLE_MESSAGE": [
+      "apps/web/lib/server/adult-eligibility-gate.ts"
+    ],
+    "AdultEligibilityCheckStatus": [
+      "apps/mobile/src/features/auth/store/adultEligibilityStore.ts"
+    ],
+    "AdultEligibilityDecision": [
+      "packages/contracts/types/src/account-eligibility.ts"
+    ],
+    "AdultEligibilityEvidence": [
+      "packages/contracts/types/src/account-eligibility.ts"
+    ],
+    "AdultEligibilityEvidenceSchema": [
+      "packages/contracts/cloud-contracts/src/adult-eligibility.ts"
+    ],
+    "adultEligibilityForGate": [
+      "apps/web/lib/server/adult-eligibility-gate.ts"
+    ],
+    "adultEligibilityIsCurrent": [
+      "packages/contracts/types/src/account-eligibility.ts"
+    ],
+    "AdultEligibilityMethod": [
+      "packages/contracts/types/src/account-eligibility.ts"
+    ],
+    "adultEligibilityMethodOf": [
+      "packages/contracts/types/src/account-eligibility.ts"
+    ],
+    "adultEligibilityNeedsAnswer": [
+      "apps/mobile/src/features/auth/store/adultEligibilityStore.ts"
+    ],
+    "AdultEligibilityRefusal": [
+      "apps/web/lib/server/adult-eligibility-gate.ts"
+    ],
+    "adultEligibilityRefusalResponse": [
+      "apps/web/lib/server/adult-eligibility-gate.ts"
+    ],
+    "AdultEligibilityRequest": [
+      "packages/contracts/cloud-contracts/src/adult-eligibility.ts"
+    ],
+    "AdultEligibilityRequestSchema": [
+      "packages/contracts/cloud-contracts/src/adult-eligibility.ts"
+    ],
+    "adultEligibilityReviewUrl": [
+      "apps/web/lib/server/adult-eligibility-gate.ts"
+    ],
+    "AdultEligibilityState": [
+      "packages/contracts/cloud-contracts/src/adult-eligibility.ts"
+    ],
+    "adultEligibilityStateOf": [
+      "apps/web/lib/server/adult-eligibility.ts"
+    ],
+    "AdultEligibilityStatus": [
+      "packages/contracts/cloud-contracts/src/adult-eligibility.ts"
+    ],
+    "AdultEligibilityStatusSchema": [
+      "packages/contracts/cloud-contracts/src/adult-eligibility.ts"
+    ],
+    "AdultEligibilitySurface": [
+      "packages/contracts/cloud-contracts/src/adult-eligibility.ts"
+    ],
+    "AdultEligibilityVerdict": [
+      "packages/contracts/types/src/account-eligibility.ts"
+    ],
     "advance": [
       "apps/cli/src/cloud/state.rs",
       "apps/desktop/src-tauri/src/features/speech/dictation/coordinator.rs"
@@ -2918,23 +3008,44 @@
     "age": [
       "apps/desktop/src-tauri/src/automation/computer_use/control.rs"
     ],
-    "AGE_ENTRY_PARAMS": [
-      "apps/mobile/src/features/settings/parental-controls/entry.ts"
+    "AGE_CHECK_STORAGE_KEY": [
+      "apps/web/app/signup/signupAttemptMarkers.ts"
+    ],
+    "AGE_GATE_PATH": [
+      "apps/mobile/src/features/auth/services/rootRouting.ts"
     ],
     "AGE_SETTING_LABEL": [
       "apps/mobile/src/features/settings/ageSettingValue.ts"
     ],
+    "AGE_SETTING_ROUTE": [
+      "apps/mobile/src/features/settings/ageSettingValue.ts"
+    ],
     "AgeAssuranceOutcome": [
-      "apps/mobile/src/features/age-assurance/ageAssurance.ts"
+      "apps/mobile/src/features/age-assurance/ageAssuranceRecord.ts"
     ],
     "AgeAssuranceRecord": [
-      "apps/mobile/src/features/age-assurance/ageAssurance.ts"
+      "apps/mobile/src/features/age-assurance/ageAssuranceRecord.ts"
+    ],
+    "AgeConfirmationStep": [
+      "apps/web/features/auth/AgeConfirmationStep.tsx"
+    ],
+    "AgeDataAccessLinks": [
+      "apps/web/features/auth/AgeDataAccessLinks.tsx"
     ],
     "AgeGateRecord": [
       "apps/mobile/src/features/auth/services/ageGate.ts"
     ],
     "AgeGateScreen": [
       "apps/mobile/app/(public)/age-gate.tsx"
+    ],
+    "ageGateStatus": [
+      "apps/mobile/src/features/auth/services/ageGate.ts"
+    ],
+    "AgeGateStatus": [
+      "apps/mobile/src/features/auth/services/ageGate.ts"
+    ],
+    "AgeIneligibleNotice": [
+      "apps/web/features/auth/AgeIneligibleNotice.tsx"
     ],
     "agent": [
       "apps/cli/src/lib.rs",
@@ -4173,6 +4284,12 @@
     ],
     "ageRangeRequest": [
       "apps/mobile/src/features/age-assurance/ageAssurance.ts"
+    ],
+    "AgeRefused": [
+      "apps/mobile/src/features/auth/components/AgeRefused.tsx"
+    ],
+    "AgeSettingsScreen": [
+      "apps/mobile/src/features/settings/age/index.tsx"
     ],
     "ageSettingValue": [
       "apps/mobile/src/features/settings/ageSettingValue.ts"
@@ -10201,12 +10318,6 @@
       "crates/agiworkforce-llm/src/lib.rs",
       "crates/agiworkforce-llm/src/spec.rs"
     ],
-    "AUTH_ACTION_ICON_SIZE": [
-      "apps/web/features/auth/authStyles.ts"
-    ],
-    "AUTH_AGE_CONFIRMATION_CLASS": [
-      "apps/web/features/auth/authStyles.ts"
-    ],
     "AUTH_AGREEMENT_CLASS": [
       "apps/web/features/auth/authStyles.ts"
     ],
@@ -10260,12 +10371,6 @@
     ],
     "AUTH_DETAIL_ROW_CLASS": [
       "apps/desktop/src/features/auth/authStyles.ts",
-      "apps/web/features/auth/authStyles.ts"
-    ],
-    "AUTH_DISCLOSURE_CLASS": [
-      "apps/web/features/auth/authStyles.ts"
-    ],
-    "AUTH_DISCLOSURE_TITLE_CLASS": [
       "apps/web/features/auth/authStyles.ts"
     ],
     "AUTH_DIVIDER_ABOVE_FIELD_CLASS": [
@@ -10345,9 +10450,6 @@
     "AUTH_HINT_CLASS": [
       "apps/web/features/auth/authStyles.ts"
     ],
-    "AUTH_INLINE_ICON_SIZE": [
-      "apps/web/features/auth/authStyles.ts"
-    ],
     "AUTH_INPUT_CLASS": [
       "apps/desktop/src/features/auth/authStyles.ts",
       "apps/web/features/auth/authStyles.ts"
@@ -10382,19 +10484,10 @@
       "apps/desktop/src/features/auth/authStyles.ts",
       "apps/web/features/auth/authStyles.ts"
     ],
-    "AUTH_NOTICE_CLASS": [
-      "apps/web/features/auth/authStyles.ts"
-    ],
-    "AUTH_NOTICE_DETAIL_LINK_CLASS": [
-      "apps/web/features/auth/authStyles.ts"
-    ],
     "AUTH_NOTICE_KINDS": [
       "apps/web/lib/auth/error-taxonomy.ts",
       "packages/client/client-runtime/src/authErrorTaxonomy.ts",
       "packages/client/client-runtime/src/index.ts"
-    ],
-    "AUTH_NOTICE_LINK_CLASS": [
-      "apps/web/features/auth/authStyles.ts"
     ],
     "AUTH_OPTIONAL_CHECK_NOTE_CLASS": [
       "apps/web/features/auth/authStyles.ts"
@@ -10518,9 +10611,6 @@
     "auth_url": [
       "apps/desktop/src-tauri/src/sys/commands/mcp_oauth.rs"
     ],
-    "AuthAgeConfirmation": [
-      "apps/web/features/auth/AuthAgeConfirmation.tsx"
-    ],
     "AuthAgeField": [
       "apps/web/features/auth/AuthAgeField.tsx"
     ],
@@ -10549,9 +10639,6 @@
     ],
     "AuthCopyLocale": [
       "apps/web/lib/auth/error-taxonomy.copy.ts"
-    ],
-    "AuthDataUseNotice": [
-      "apps/web/features/auth/AuthDataUseNotice.tsx"
     ],
     "AuthDevicePage": [
       "apps/web/app/auth/device/page.tsx"
@@ -14100,6 +14187,9 @@
     ],
     "buildAdapterStreamResponse": [
       "apps/web/app/api/llm/v1/chat/completions/lib/stream-transform.ts"
+    ],
+    "buildAdultEligibilityGateResponse": [
+      "apps/web/lib/server/adult-eligibility-gate.ts"
     ],
     "buildAgentActivitySummary": [
       "apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx",
@@ -21138,7 +21228,7 @@
       "apps/extension-vscode/src/features/projects/index.ts"
     ],
     "clearAgeAssurance": [
-      "apps/mobile/src/features/age-assurance/ageAssurance.ts"
+      "apps/mobile/src/features/age-assurance/ageAssuranceRecord.ts"
     ],
     "clearAgeGate": [
       "apps/mobile/src/features/auth/services/ageGate.ts"
@@ -21375,6 +21465,9 @@
     ],
     "clearStoppedImageGenerations": [
       "apps/mobile/src/features/image/services/imageGenerationStops.ts"
+    ],
+    "clearStoredAgeCheck": [
+      "apps/web/features/chat/guest/guest-age-check.ts"
     ],
     "clearToolApprovalGuidanceDraft": [
       "apps/mobile/src/features/chat/utils/toolApprovalGuidanceDrafts.ts"
@@ -36393,6 +36486,9 @@
     "decide_upgrade": [
       "apps/desktop/src-tauri/src/upgrade/mod.rs"
     ],
+    "decideAdultEligibility": [
+      "packages/contracts/types/src/account-eligibility.ts"
+    ],
     "decideCloudCodeAgentApproval": [
       "apps/web/lib/services/cloud-code-agent-approval-service.ts"
     ],
@@ -37142,6 +37238,7 @@
       "apps/mobile/app/(app)/settings/_layout.tsx",
       "apps/mobile/app/(app)/settings/accent-color.tsx",
       "apps/mobile/app/(app)/settings/account-security.tsx",
+      "apps/mobile/app/(app)/settings/age.tsx",
       "apps/mobile/app/(app)/settings/app-language.tsx",
       "apps/mobile/app/(app)/settings/appearance.tsx",
       "apps/mobile/app/(app)/settings/archived-chats.tsx",
@@ -37169,7 +37266,6 @@
       "apps/mobile/app/(app)/settings/memory.tsx",
       "apps/mobile/app/(app)/settings/notifications.tsx",
       "apps/mobile/app/(app)/settings/notifications/[category].tsx",
-      "apps/mobile/app/(app)/settings/parental-controls.tsx",
       "apps/mobile/app/(app)/settings/performance.tsx",
       "apps/mobile/app/(app)/settings/permissions/[permission].tsx",
       "apps/mobile/app/(app)/settings/permissions/index.tsx",
@@ -37229,6 +37325,7 @@
       "apps/mobile/src/features/reminders/index.tsx",
       "apps/mobile/src/features/settings/accent-color/index.tsx",
       "apps/mobile/src/features/settings/account-security/index.tsx",
+      "apps/mobile/src/features/settings/age/index.tsx",
       "apps/mobile/src/features/settings/appearance/index.tsx",
       "apps/mobile/src/features/settings/capabilities/index.tsx",
       "apps/mobile/src/features/settings/cloud-account/index.tsx",
@@ -37249,7 +37346,6 @@
       "apps/mobile/src/features/settings/notifications/index.tsx",
       "apps/mobile/src/features/settings/notifications/NotificationCategoryDetailScreen.tsx",
       "apps/mobile/src/features/settings/notifications/TimeFocusScreen.tsx",
-      "apps/mobile/src/features/settings/parental-controls/index.tsx",
       "apps/mobile/src/features/settings/permissions/Detail.tsx",
       "apps/mobile/src/features/settings/permissions/index.tsx",
       "apps/mobile/src/features/settings/personalization/index.tsx",
@@ -41977,6 +42073,9 @@
     "DEVICE_REGISTRY_SOURCE": [
       "scripts/check-capability-advertisement.mjs"
     ],
+    "DEVICE_REVIEW_REASONS": [
+      "packages/contracts/cloud-contracts/src/device-authorization.ts"
+    ],
     "DEVICE_REVIEWED_STEP_TOOLS": [
       "packages/contracts/local-runtime/src/device-steps.ts",
       "packages/contracts/local-runtime/src/index.ts"
@@ -42066,6 +42165,15 @@
     ],
     "DeviceAccountsClerk": [
       "apps/mobile/src/features/accounts/deviceAccounts.ts"
+    ],
+    "deviceAdultEligibilityRefusal": [
+      "apps/web/app/api/auth/device/adult-eligibility-refusal.ts"
+    ],
+    "deviceAdultEligibilityResponse": [
+      "apps/web/app/api/auth/device/adult-eligibility-refusal.ts"
+    ],
+    "deviceAdultEvidence": [
+      "apps/mobile/src/features/auth/services/ageGate.ts"
     ],
     "DeviceApproveResponse": [
       "packages/contracts/cloud-contracts/src/device-authorization.ts"
@@ -54304,6 +54412,9 @@
     "forget_unchanged": [
       "apps/cli/src/agent/checkpoints.rs"
     ],
+    "forgetAdultEligibilityState": [
+      "apps/web/lib/server/adult-eligibility.ts"
+    ],
     "forgetAskFromSiriOnDevice": [
       "apps/mobile/src/features/siri/askIntentToken.ts"
     ],
@@ -55423,31 +55534,14 @@
       "packages/contracts/compliance/src/index.ts"
     ],
     "FREE_PLAN_TRAINING_SIGNUP_NOTICE": [
-      "apps/web/lib/compliance/free-plan-training-disclosure.ts",
       "packages/contracts/compliance/src/free-plan-training-disclosure.ts",
       "packages/contracts/compliance/src/index.ts"
     ],
     "FREE_PLAN_TRAINING_SIGNUP_NOTICE_LINK_LABEL": [
-      "apps/web/lib/compliance/free-plan-training-disclosure.ts",
       "packages/contracts/compliance/src/free-plan-training-disclosure.ts",
       "packages/contracts/compliance/src/index.ts"
     ],
     "FREE_PLAN_TRAINING_SIGNUP_STATEMENT": [
-      "apps/web/lib/compliance/free-plan-training-disclosure.ts",
-      "packages/contracts/compliance/src/free-plan-training-disclosure.ts",
-      "packages/contracts/compliance/src/index.ts"
-    ],
-    "FREE_PLAN_TRAINING_TERMS_CARD_BODY": [
-      "apps/web/lib/compliance/free-plan-training-disclosure.ts",
-      "packages/contracts/compliance/src/free-plan-training-disclosure.ts",
-      "packages/contracts/compliance/src/index.ts"
-    ],
-    "FREE_PLAN_TRAINING_TERMS_CARD_LINK_LABEL": [
-      "apps/web/lib/compliance/free-plan-training-disclosure.ts",
-      "packages/contracts/compliance/src/free-plan-training-disclosure.ts",
-      "packages/contracts/compliance/src/index.ts"
-    ],
-    "FREE_PLAN_TRAINING_TERMS_CARD_TITLE": [
       "apps/web/lib/compliance/free-plan-training-disclosure.ts",
       "packages/contracts/compliance/src/free-plan-training-disclosure.ts",
       "packages/contracts/compliance/src/index.ts"
@@ -57652,6 +57746,7 @@
       "apps/web/app/api/download-beta/route.ts",
       "apps/web/app/api/download/checksums/route.ts",
       "apps/web/app/api/download/route.ts",
+      "apps/web/app/api/eligibility/route.ts",
       "apps/web/app/api/email/unsubscribe/route.ts",
       "apps/web/app/api/files/[id]/route.ts",
       "apps/web/app/api/files/[id]/text/route.ts",
@@ -61815,6 +61910,9 @@
     "guardsLeftOff": [
       "apps/desktop/src/features/settings/HooksSettings.tsx"
     ],
+    "GUEST_AGE_CHECK_STORAGE_KEY": [
+      "apps/web/features/chat/guest/guest-age-check.ts"
+    ],
     "GUEST_BLOCKING_CODES": [
       "apps/web/features/chat/guest/guest-chat-stream.ts"
     ],
@@ -61844,6 +61942,12 @@
     ],
     "GUEST_SEND_FAILED": [
       "apps/web/features/chat/guest/guest-chat-stream.ts"
+    ],
+    "GuestAgeStep": [
+      "apps/web/features/chat/guest/GuestAgeStep.tsx"
+    ],
+    "GuestAgeStepProps": [
+      "apps/web/features/chat/guest/GuestAgeStep.tsx"
     ],
     "guestChat": [
       "scripts/research/unit-economics-2026-09-05.mjs"
@@ -68721,6 +68825,12 @@
     "isAdministeredScope": [
       "packages/contracts/types/src/settings-scopes.ts"
     ],
+    "isAdultEligibilityAnswerPending": [
+      "apps/mobile/src/features/auth/store/adultEligibilityStore.ts"
+    ],
+    "isAdultEligibilityConfirmed": [
+      "apps/mobile/src/features/auth/store/adultEligibilityStore.ts"
+    ],
     "isAgeGateConfirmed": [
       "apps/mobile/src/features/auth/services/ageGate.ts"
     ],
@@ -70502,6 +70612,9 @@
     ],
     "isNeverRotateCategory": [
       "apps/web/app/api/llm/v1/chat/completions/lib/managed-failover.ts"
+    ],
+    "isNewAccount": [
+      "apps/web/lib/auth/new-account.ts"
     ],
     "isNewConnectorRecord": [
       "apps/web/features/directory/services/connectors-directory.ts"
@@ -90669,6 +90782,9 @@
       "crates/agiworkforce-utils-image/src/cache.rs",
       "crates/agiworkforce-worktree/src/runner.rs"
     ],
+    "NEW_ACCOUNT_WINDOW_MS": [
+      "apps/web/lib/auth/new-account.ts"
+    ],
     "NEW_AGENT_DRAFT": [
       "apps/web/features/agents/lib/agent-draft.ts",
       "packages/contracts/cloud-contracts/src/agent-drafts.ts"
@@ -93442,6 +93558,9 @@
     ],
     "ONBOARDING_DISCLOSURES_KEY": [
       "apps/extension/src/features/side-panel/onboarding.ts"
+    ],
+    "ONBOARDING_PATH": [
+      "apps/mobile/src/features/auth/services/rootRouting.ts"
     ],
     "ONBOARDING_SEEN_KEY": [
       "apps/extension-vscode/src/features/onboarding/onboardingState.ts"
@@ -96648,21 +96767,6 @@
     "parent_repository_root": [
       "apps/cli/src/repo/layout.rs",
       "apps/cli/src/repo/mod.rs"
-    ],
-    "PARENTAL_CONTROLS_ROUTE": [
-      "apps/mobile/src/features/settings/parental-controls/entry.ts"
-    ],
-    "PARENTAL_CONTROLS_TITLE": [
-      "apps/mobile/src/features/settings/parental-controls/entry.ts"
-    ],
-    "PARENTAL_PERMISSION_BELOW_AGE": [
-      "packages/contracts/types/src/account-eligibility.ts"
-    ],
-    "ParentalControlsScreen": [
-      "apps/mobile/src/features/settings/parental-controls/index.tsx"
-    ],
-    "parentalControlsTitle": [
-      "apps/mobile/src/features/settings/parental-controls/entry.ts"
     ],
     "ParityCommandResult": [
       "apps/cli/src/claude_parity.rs"
@@ -103393,6 +103497,7 @@
       "apps/web/app/api/developers/webhooks/[endpointId]/test/route.ts",
       "apps/web/app/api/developers/webhooks/route.ts",
       "apps/web/app/api/devices/heartbeat/route.ts",
+      "apps/web/app/api/eligibility/route.ts",
       "apps/web/app/api/email/unsubscribe/route.ts",
       "apps/web/app/api/feedback/route.ts",
       "apps/web/app/api/files/uploads/[uploadId]/parts/route.ts",
@@ -104446,6 +104551,9 @@
       "crates/agiworkforce-protocol/src/code_domain.rs"
     ],
     "PrimaryEmailState": [
+      "apps/web/lib/auth/email-confirmation.ts"
+    ],
+    "primaryEmailStateOf": [
       "apps/web/lib/auth/email-confirmation.ts"
     ],
     "primaryModifierLabel": [
@@ -109660,6 +109768,9 @@
     "readAccountFavourites": [
       "apps/mobile/src/features/model-picker/useFavouritesSync.ts"
     ],
+    "readAccountForEmailCheck": [
+      "apps/web/lib/auth/email-confirmation.ts"
+    ],
     "readAccountInstructionBlocks": [
       "apps/web/lib/server/user-identity.ts"
     ],
@@ -109693,11 +109804,14 @@
     "readAdminSitePolicy": [
       "apps/extension/src/features/site-policy/store.ts"
     ],
+    "readAdultEligibilityState": [
+      "apps/web/lib/server/adult-eligibility.ts"
+    ],
     "readAdvertisedFields": [
       "scripts/check-capability-advertisement.mjs"
     ],
     "readAgeAssurance": [
-      "apps/mobile/src/features/age-assurance/ageAssurance.ts"
+      "apps/mobile/src/features/age-assurance/ageAssuranceRecord.ts"
     ],
     "readAgeGateRecord": [
       "apps/mobile/src/features/auth/services/ageGate.ts"
@@ -109927,6 +110041,9 @@
     ],
     "readCapabilityRow": [
       "scripts/check-capability-advertisement.mjs"
+    ],
+    "readCarriedAgeCheck": [
+      "apps/web/app/signup/signupAttemptMarkers.ts"
     ],
     "readCarriedMarketingEmailChoice": [
       "apps/web/app/signup/signupAttemptMarkers.ts"
@@ -111610,6 +111727,9 @@
     ],
     "readStoredActiveProject": [
       "apps/extension/src/features/side-panel/activeProject.ts"
+    ],
+    "readStoredAgeCheck": [
+      "apps/web/features/chat/guest/guest-age-check.ts"
     ],
     "readStoredLanguagePreference": [
       "apps/mobile/src/i18n/index.ts"
@@ -114069,6 +114189,9 @@
     ],
     "refuseUnsupportedFreeQuotaPrompt": [
       "apps/web/lib/server/free-quota-turn.ts"
+    ],
+    "refuseWithoutAdultEligibility": [
+      "apps/web/lib/server/adult-eligibility-gate.ts"
     ],
     "refusingResponder": [
       "tools/evals/__tests__/fixtures/harness.ts"
@@ -117469,6 +117592,9 @@
     "requireAccountSecurityVerification": [
       "apps/web/lib/server/account-security/page-gate.ts"
     ],
+    "requireAdultEligibility": [
+      "apps/web/lib/server/require-adult-eligibility.ts"
+    ],
     "requireAuthenticatorEnrollment": [
       "apps/web/lib/authenticator-enrollment.ts"
     ],
@@ -120148,9 +120274,6 @@
     ],
     "resolveRetryTarget": [
       "apps/extension-vscode/src/features/chat/retry.ts"
-    ],
-    "resolveReturnEntry": [
-      "apps/mobile/app/(public)/age-gate.tsx"
     ],
     "resolveReturnPath": [
       "apps/mobile/app/(public)/age-gate.tsx"
@@ -133931,6 +134054,9 @@
     "sign_to_string_with_inputs": [
       "apps/desktop/src-tauri/src/sys/security/dispatch_hmac.rs"
     ],
+    "SIGN_UP_AGREEMENT_NOT_APPLICABLE_STATUS": [
+      "apps/web/lib/auth/new-account.ts"
+    ],
     "sign_with_secret": [
       "apps/desktop/src-tauri/src/integrations/native_messaging/mod.rs"
     ],
@@ -134069,7 +134195,7 @@
       "apps/web/lib/services/signed-email-link.ts"
     ],
     "SignificantChangeStatus": [
-      "apps/mobile/src/features/age-assurance/ageAssurance.ts"
+      "apps/mobile/src/features/age-assurance/ageAssuranceRecord.ts"
     ],
     "SignificantUpdateResult": [
       "apps/mobile/src/features/age-assurance/ageAssurance.ts"
@@ -138787,6 +138913,9 @@
     "STORE_TOP_UP_NOT_SOLD_IN_COUNTRY": [
       "apps/web/lib/services/mobile-iap-ledger-service.ts"
     ],
+    "storeAgeCheck": [
+      "apps/web/features/chat/guest/guest-age-check.ts"
+    ],
     "StoreApproval": [
       "apps/web/lib/feature-flags/rollout-rings.ts"
     ],
@@ -138906,6 +139035,9 @@
     ],
     "storedOfficeArchive": [
       "apps/web/features/chat/lib/office-archive.ts"
+    ],
+    "storedOsAgeRange": [
+      "apps/mobile/src/features/age-assurance/ageAssuranceRecord.ts"
     ],
     "StoredOwnedPlugin": [
       "apps/web/lib/services/plugin-owned-source-service.ts"
@@ -139930,6 +140062,9 @@
     ],
     "submitAccountRecoveryRequest": [
       "apps/web/lib/support/tickets/recovery.ts"
+    ],
+    "submitAdultEligibilityEvidence": [
+      "apps/web/lib/server/adult-eligibility.ts"
     ],
     "submitAnswerRating": [
       "apps/extension-vscode/src/features/feedback/submitFeedback.ts"
@@ -151389,6 +151524,9 @@
     "useAdjacentChat": [
       "apps/web/features/desktop-host/hooks/use-adjacent-chat.ts"
     ],
+    "useAdultEligibilityStore": [
+      "apps/mobile/src/features/auth/store/adultEligibilityStore.ts"
+    ],
     "useAgentActivityPushSync": [
       "apps/mobile/src/features/settings/notifications/useAgentActivityPushSync.ts"
     ],
@@ -151844,9 +151982,6 @@
     "useCompareAnswers": [
       "apps/web/features/models/lib/use-compare-answers.ts"
     ],
-    "useCompletedSignUpForCurrentSession": [
-      "apps/web/lib/identity/client.ts"
-    ],
     "useComposerAttachmentHandoff": [
       "apps/mobile/src/features/chat/useComposerAttachmentHandoff.ts"
     ],
@@ -152151,6 +152286,9 @@
     ],
     "useEnterpriseContract": [
       "apps/web/features/workspace-console/hooks/use-enterprise-contract.ts"
+    ],
+    "useEraseDeviceData": [
+      "apps/mobile/src/features/settings/data-controls/useEraseDeviceData.ts"
     ],
     "UseErrorRecoveryOptions": [
       "packages/contracts/types/src/web-hooks.ts"
@@ -160377,6 +160515,9 @@
     ],
     "write_without_following": [
       "apps/desktop/src-tauri/src/sys/utils.rs"
+    ],
+    "writeAgeAssurance": [
+      "apps/mobile/src/features/age-assurance/ageAssuranceRecord.ts"
     ],
     "writeAnswerDraft": [
       "apps/mobile/src/features/chat/components/answerDraftStore.ts"
