@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import { AdultEligibilityEvidenceSchema } from './adult-eligibility';
 
-export const TERMS_ACCEPTANCE_PATH = '/api/terms/accept';
+export { TERMS_ACCEPTANCE_PATH } from './account-gate-paths';
 
 export const TERMS_ACCEPTANCE_SURFACES = ['web-signup', 'web-login', 'mobile-auth'] as const;
 

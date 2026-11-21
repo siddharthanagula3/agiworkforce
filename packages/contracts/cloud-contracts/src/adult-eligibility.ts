@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const ADULT_ELIGIBILITY_PATH = '/api/eligibility';
+export { ADULT_ELIGIBILITY_PATH } from './account-gate-paths';
 
 export const ADULT_ELIGIBILITY_SURFACES = ['web-signup', 'web-login', 'mobile-auth'] as const;
 

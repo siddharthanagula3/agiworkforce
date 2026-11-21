@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { TERMS_ACCEPTANCE_PATH } from '../../../../packages/contracts/cloud-contracts/src/terms-acceptance.ts';
+import {
+  ADULT_ELIGIBILITY_PATH,
+  TERMS_ACCEPTANCE_PATH,
+} from '../../../../packages/contracts/cloud-contracts/src/account-gate-paths.ts';
 import { FREE_QUOTA_CATALOGUE_PATH } from '../../../../packages/contracts/cloud-contracts/src/free-quota-paths.ts';
 import { checkCloudApi } from './check-cloud-api.mjs';
 
@@ -18,8 +21,12 @@ test('required Cloud routes answer with an authentication challenge', async () =
       );
     },
   });
-  assert.deepEqual(paths, [TERMS_ACCEPTANCE_PATH, FREE_QUOTA_CATALOGUE_PATH]);
-  assert.equal(outcomes.length, 2);
+  assert.deepEqual(paths, [
+    TERMS_ACCEPTANCE_PATH,
+    ADULT_ELIGIBILITY_PATH,
+    FREE_QUOTA_CATALOGUE_PATH,
+  ]);
+  assert.equal(outcomes.length, 3);
 });
 
 test('missing deployed routes fail the release check', async () => {
@@ -28,7 +35,7 @@ test('missing deployed routes fail the release check', async () => {
       baseUrl: 'https://cloud.example.test',
       fetchImpl: async (url) => ({ status: url.pathname === TERMS_ACCEPTANCE_PATH ? 405 : 404 }),
     }),
-    /Terms status returned HTTP 405[\s\S]*provider-funded Free catalogue returned HTTP 404/u,
+    /Terms status returned HTTP 405[\s\S]*Age eligibility status returned HTTP 404[\s\S]*provider-funded Free catalogue returned HTTP 404/u,
   );
 });
 

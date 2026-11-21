@@ -2,11 +2,15 @@
 
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { TERMS_ACCEPTANCE_PATH } from '../../../../packages/contracts/cloud-contracts/src/terms-acceptance.ts';
+import {
+  ADULT_ELIGIBILITY_PATH,
+  TERMS_ACCEPTANCE_PATH,
+} from '../../../../packages/contracts/cloud-contracts/src/account-gate-paths.ts';
 import { FREE_QUOTA_CATALOGUE_PATH } from '../../../../packages/contracts/cloud-contracts/src/free-quota-paths.ts';
 
 const REQUIRED_ROUTES = [
   { label: 'Terms status', path: TERMS_ACCEPTANCE_PATH },
+  { label: 'Age eligibility status', path: ADULT_ELIGIBILITY_PATH },
   { label: 'provider-funded Free catalogue', path: FREE_QUOTA_CATALOGUE_PATH },
 ];
 
