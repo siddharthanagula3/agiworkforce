@@ -37592,6 +37592,7 @@
       "apps/web/app/release-notes/page.tsx",
       "apps/web/app/robots.ts",
       "apps/web/app/security/page.tsx",
+      "apps/web/app/session-expired/loading.tsx",
       "apps/web/app/session-expired/page.tsx",
       "apps/web/app/settings/[section]/page.tsx",
       "apps/web/app/settings/account/page.tsx",
@@ -130818,6 +130819,9 @@
     ],
     "SessionExpiredActions": [
       "apps/web/app/session-expired/SessionExpiredActions.tsx"
+    ],
+    "SessionExpiredLoading": [
+      "apps/web/app/session-expired/loading.tsx"
     ],
     "SessionExpiredPage": [
       "apps/web/app/session-expired/page.tsx"

@@ -13154,6 +13154,15 @@
     },
     {
       "surface": "web",
+      "kind": "loading",
+      "url": "/session-expired",
+      "file": "apps/web/app/session-expired/loading.tsx",
+      "segments": [
+        "session-expired"
+      ]
+    },
+    {
+      "surface": "web",
       "kind": "page",
       "url": "/session-expired",
       "file": "apps/web/app/session-expired/page.tsx",
