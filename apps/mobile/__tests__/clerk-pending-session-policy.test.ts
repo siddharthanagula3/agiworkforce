@@ -55,7 +55,7 @@ describe('Clerk native pending-session policy', () => {
     );
   });
 
-  it('does not report a signed-in session as loaded and signed out while its Terms answer is in flight', () => {
+  it('does not report a signed-in session as loaded and signed out while its Terms or age answer is in flight', () => {
     const source = fs.readFileSync(path.join(__dirname, '..', 'app', '_layout.tsx'), 'utf8');
     const bridge = source.slice(
       source.indexOf('function ClerkTokenBridge()'),
@@ -67,7 +67,7 @@ describe('Clerk native pending-session policy', () => {
     );
 
     expect(notAccepted).toMatch(
-      /setClerkSignedIn\(false\);\s+if \(!isTermsAnswerPending\(\{ userId: termsUserId, status: termsStatus \}, userId\)\) \{\s+setClerkLoaded\(true\);\s+\}\s+return;/,
+      /setClerkSignedIn\(false\);\s+if \(\s+!isTermsAnswerPending\(\{ userId: termsUserId, status: termsStatus \}, userId\) &&\s+!isAdultEligibilityAnswerPending\(eligibility, userId\)\s+\) \{\s+setClerkLoaded\(true\);\s+\}\s+return;/,
     );
     expect(notAccepted.match(/setClerkLoaded\(true\)/g)).toHaveLength(1);
     expect(bridge).toMatch(

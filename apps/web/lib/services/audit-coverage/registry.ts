@@ -48,6 +48,7 @@ export const UNAUDITED_MUTATING_ROUTES: readonly UnauditedRoute[] = [
   { route: 'chat/conversations/route.ts', reason: 'own_content' },
   { route: 'code/local-sessions/activity/route.ts', reason: 'no_governed_state' },
   { route: 'consent/route.ts', reason: 'dedicated_record' },
+  { route: 'eligibility/route.ts', reason: 'dedicated_record' },
   { route: 'email/unsubscribe/route.ts', reason: 'dedicated_record' },
   { route: 'devices/heartbeat/route.ts', reason: 'no_governed_state' },
   { route: 'feedback/route.ts', reason: 'own_content' },
