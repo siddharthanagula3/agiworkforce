@@ -103,6 +103,24 @@ pub fn search_tool_schemas(
     catalog: &[ToolDefinition],
     max_results: usize,
 ) -> Vec<ToolSchemaResult> {
+    matching_tool_definitions(query, catalog, max_results)
+        .into_iter()
+        .map(|tool| ToolSchemaResult {
+            name: tool.name.clone(),
+            description: tool.description.clone(),
+            input_schema: tool.input_schema.clone(),
+            was_deferred: tool.should_defer,
+        })
+        .collect()
+}
+
+pub(crate) const DEFAULT_MAX_RESULTS: usize = 10;
+
+pub(crate) fn matching_tool_definitions<'a>(
+    query: &str,
+    catalog: &'a [ToolDefinition],
+    max_results: usize,
+) -> Vec<&'a ToolDefinition> {
     let trimmed = query.trim();
 
     if let Some(names_str) = trimmed.strip_prefix("select:") {
@@ -116,12 +134,6 @@ pub fn search_tool_schemas(
         catalog
             .iter()
             .filter(|t| names.contains(&t.name.as_str()))
-            .map(|t| ToolSchemaResult {
-                name: t.name.clone(),
-                description: t.description.clone(),
-                input_schema: t.input_schema.clone(),
-                was_deferred: t.should_defer,
-            })
             .collect()
     } else {
         // Keyword fuzzy search over name + description.
@@ -165,12 +177,7 @@ pub fn search_tool_schemas(
         scored
             .into_iter()
             .take(max_results)
-            .map(|(_, t)| ToolSchemaResult {
-                name: t.name.clone(),
-                description: t.description.clone(),
-                input_schema: t.input_schema.clone(),
-                was_deferred: t.should_defer,
-            })
+            .map(|(_, t)| t)
             .collect()
     }
 }

@@ -664,7 +664,7 @@ pub(super) async fn execute_tool_search(
     let max: usize = args
         .get("max_results")
         .and_then(|s| s.parse().ok())
-        .unwrap_or(10);
+        .unwrap_or(crate::tool_search::DEFAULT_MAX_RESULTS);
 
     let built_ins;
     let catalog = match callable {

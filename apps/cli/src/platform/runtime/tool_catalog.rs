@@ -732,7 +732,7 @@ fn core_tool_definitions() -> Vec<ToolDefinition> {
         // initial schema list.
         def(
             "update_plan",
-            "Write or revise the execution plan. REQUIRED in plan mode before any mutating tool call (bash, edit_file, write_file, apply_patch, MCP tools). Each step is one discrete action. After calling, await user approval -- do NOT call mutating tools yet. The user reviews the plan and types `/plan accept`.",
+            "Write or revise the execution plan. REQUIRED in plan mode before any mutating tool call (bash, edit_file, write_file, apply_patch, MCP tools). Each step is one discrete action. In plan mode, wait for /plan accept before making changes. In execution modes, continue with the next step.",
             serde_json::json!({
                 "type": "object",
                 "properties": {
