@@ -386,7 +386,7 @@ export default function TrustPage() {
                     caption="Change record"
                     rows={[
                       {
-                        label: '2026-11-20',
+                        label: '2026-11-21',
                         value: `One row corrected, with no review of the rest of the page. DPDP verifiable parental consent described the earlier age rule: accounts from 13, with a parent or guardian's permission for anyone younger than an adult, a web age that was never sent to the server, and a phone minor-safe mode the child could clear. AGI is now for adults only. Sign-up and the check every existing account meets at its next sign-in refuse an age under ${ACCOUNT_MINIMUM_AGE}, the server keeps only the decision, and the row says the remaining gap is that the age is self-declared and not verified.`,
                       },
                       {

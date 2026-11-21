@@ -17,10 +17,10 @@
     "terms": {
       "route": "/terms",
       "slug": "terms",
-      "current": "2026-11-20",
+      "current": "2026-11-21",
       "versions": [
         {
-          "date": "2026-11-20",
+          "date": "2026-11-21",
           "summary": "AGI is now for adults. You must be at least 18, or older where the law where you live sets a higher age, to create an account or use AGI, and no one can accept these terms for someone younger. The earlier rule allowed accounts from 13 with a parent or guardian's permission. Every account without a decision on record, including accounts created before this version, is asked its age at its next sign-in and cannot use AGI until it gives an age of 18 or over; settings and billing stay open so it can export its data, delete the account or cancel. The age is not verified, and an account found to be under 18 cannot use AGI. Chat without an account, where offered, asks your age first.",
           "status": "current",
           "published": null
@@ -66,10 +66,10 @@
     "privacy": {
       "route": "/privacy",
       "slug": "privacy",
-      "current": "2026-11-20",
+      "current": "2026-11-21",
       "versions": [
         {
-          "date": "2026-11-20",
+          "date": "2026-11-21",
           "summary": "AGI is now for adults: you must be at least 18. Section 09 sets out how your age is asked on the web, in chat without an account, for accounts with no decision on record and on a phone; that the age you type at sign-up is not stored or sent, while an age you confirm at sign-in is sent once and not kept; and that the account keeps only the decision, never an age, an age range or a birth date, and erases it with the account. The earlier policy said accounts were open from 13 with a parent or guardian's permission and that the age never reached our servers.",
           "status": "current",
           "published": null
@@ -182,10 +182,10 @@
     "dpa": {
       "route": "/dpa",
       "slug": "dpa",
-      "current": "2026-11-20",
+      "current": "2026-11-21",
       "versions": [
         {
-          "date": "2026-11-20",
+          "date": "2026-11-21",
           "summary": "The DPDP Children row now says AGI is not offered to anyone under 18, so it does not seek parental consent for anyone; that sign-up and the check at an existing account's next sign-in refuse an age under 18; that the age is self-declared apart from a phone's age range; and that only the decision is kept. It used to describe the earlier rule, accounts from 13 with a parent or guardian's permission.",
           "status": "current",
           "published": null
@@ -219,10 +219,10 @@
     "cookies": {
       "route": "/cookies",
       "slug": "cookies",
-      "current": "2026-11-20",
+      "current": "2026-11-21",
       "versions": [
         {
-          "date": "2026-11-20",
+          "date": "2026-11-21",
           "summary": "Adds two entries to what we put on your device: the minimum age the sign-up screen checked your typed age against, kept for the length of a sign-up and sent once with your acceptance of the terms, and, where chat without an account is offered, the minimum age the chat screen checked against, kept until you clear site data and sent with each message. Neither holds your age.",
           "status": "current",
           "published": null
@@ -305,10 +305,10 @@
     "security": {
       "route": "/security",
       "slug": "security",
-      "current": "2026-11-20",
+      "current": "2026-11-21",
       "versions": [
         {
-          "date": "2026-11-20",
+          "date": "2026-11-21",
           "summary": "The India row now names the age gap correctly. AGI is not offered to anyone under 18, so the gap is that the age is self-declared and not verified, rather than missing parental consent for accounts held from 13.",
           "status": "current",
           "published": null
@@ -386,10 +386,10 @@
     "referralTerms": {
       "route": "/referral-terms",
       "slug": "referral-terms",
-      "current": "2026-11-20",
+      "current": "2026-11-21",
       "versions": [
         {
-          "date": "2026-11-20",
+          "date": "2026-11-21",
           "summary": "To take part in the referral program you must now be at least 18, the account minimum in section 02 of the terms of service. The parent or guardian permission route for younger members is gone.",
           "status": "current",
           "published": null
@@ -436,10 +436,10 @@
     "trust": {
       "route": "/trust",
       "slug": "trust",
-      "current": "2026-11-20",
+      "current": "2026-11-21",
       "versions": [
         {
-          "date": "2026-11-20",
+          "date": "2026-11-21",
           "summary": "Corrects the DPDP parental consent row, with no review of the rest of the page. AGI is now for adults only, so parental consent is not sought; the row says how the age is checked, that the server keeps only the decision, and that the remaining gap is that the age is self-declared and not verified.",
           "status": "current",
           "published": null
@@ -504,10 +504,10 @@
     "mobile": {
       "route": "/mobile/legal",
       "slug": "mobile-legal",
-      "current": "2026-11-20",
+      "current": "2026-11-21",
       "versions": [
         {
-          "date": "2026-11-20",
+          "date": "2026-11-21",
           "summary": "Mobile is now for adults: you must be at least 18. The app checks before anything else, Local mode included, using the phone's age range where the operating system offers one and a typed age otherwise, keeps only the outcome and the operating system's answer, never a typed age, and refuses a phone found to be used by someone under 18 except for sign-out, export and erasure. The earlier page allowed accounts from 13 with a parent or guardian's permission.",
           "status": "current",
           "published": null
@@ -585,10 +585,10 @@
     "indiaPrivacy": {
       "route": "/privacy/india",
       "slug": "privacy-india",
-      "current": "2026-11-20",
+      "current": "2026-11-21",
       "versions": [
         {
-          "date": "2026-11-20",
+          "date": "2026-11-21",
           "summary": "AGI is not offered to anyone under 18, so no parent or guardian is asked to consent for anyone. The notice now says how the age is checked, that only the outcome is kept, and that the age is self-declared and not verified, which remains an open item under the Act. The earlier notice said accounts could be held from 13 with a parent or guardian's permission.",
           "status": "current",
           "published": null

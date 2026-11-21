@@ -186,7 +186,7 @@ describe('/legal/archive', () => {
       unmount();
     }
     expect(policyHistoryForKey('referralTerms')?.versions.map((version) => version.date)).toEqual([
-      '2026-11-20',
+      '2026-11-21',
       '2026-10-08',
       '2026-09-27',
     ]);
