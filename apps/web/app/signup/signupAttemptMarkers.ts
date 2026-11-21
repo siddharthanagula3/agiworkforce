@@ -8,9 +8,15 @@ import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 export const TERMS_GATE_STORAGE_KEY = 'agi.terms-accepted-version';
 export const MARKETING_EMAIL_CHOICE_STORAGE_KEY = 'agi.marketing-email-notice-version';
 export const MARKETING_EMAIL_ATTEMPT_STORAGE_KEY = 'agi.marketing-email-attempt-id';
+export const AGE_CHECK_STORAGE_KEY = 'agi.age-checked-minimum';
 
+/**
+ * `ageCheckedAgainst` is the minimum age the screen judged the typed age
+ * against, or null where no age was asked. The age itself is never carried.
+ */
 export interface SignupAttemptChoices {
   marketingEmail: boolean;
+  ageCheckedAgainst: number | null;
 }
 
 export type CarriedMarketingEmailChoice =
@@ -39,6 +45,8 @@ export function writeSignupAttemptMarkers(choices: SignupAttemptChoices): void {
   clearMarketingEmailChoice();
   try {
     window.localStorage.setItem(TERMS_GATE_STORAGE_KEY, POLICY_LAST_UPDATED.terms);
+    if (choices.ageCheckedAgainst === null) window.localStorage.removeItem(AGE_CHECK_STORAGE_KEY);
+    else window.localStorage.setItem(AGE_CHECK_STORAGE_KEY, String(choices.ageCheckedAgainst));
     if (!choices.marketingEmail) return;
     window.localStorage.setItem(MARKETING_EMAIL_CHOICE_STORAGE_KEY, POLICY_LAST_UPDATED.privacy);
     const attemptId = crypto.randomUUID();
@@ -52,6 +60,17 @@ export function writeSignupAttemptMarkers(choices: SignupAttemptChoices): void {
 export function clearSignupAttemptMarkers(): void {
   clearMarketingEmailChoice();
   forget(() => window.localStorage, TERMS_GATE_STORAGE_KEY);
+  forget(() => window.localStorage, AGE_CHECK_STORAGE_KEY);
+}
+
+export function readCarriedAgeCheck(): number | null {
+  try {
+    const carried = window.localStorage.getItem(AGE_CHECK_STORAGE_KEY);
+    if (carried === null || !/^\d{1,3}$/.test(carried)) return null;
+    return Number(carried);
+  } catch {
+    return null;
+  }
 }
 
 export function hasCurrentTermsGateMarker(): boolean {

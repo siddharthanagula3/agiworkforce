@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
+vi.mock('@/lib/server/adult-eligibility', async (importOriginal) => ({
+  ...(await importOriginal()),
+  readAdultEligibilityState: vi.fn(async () => 'confirmed'),
+}));
 vi.mock('server-only', () => ({}));
 
 const mocks = vi.hoisted(() => ({

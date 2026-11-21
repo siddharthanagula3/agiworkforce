@@ -72,7 +72,6 @@ export function AuthSceneHarness({
         <TermsGate
           restorePreAuthMarker={false}
           confirmationLabel={TERMS_CONFIRMATION}
-          confirmAge={mode === 'signup'}
           offerMarketingEmail={mode === 'signup'}
         >
           <AuthPhaseStatus phase="signing_in" />

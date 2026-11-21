@@ -5,6 +5,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { MEDIA_DIAGNOSTIC_HEADER, withMediaJobSpan } from '@/lib/observability/media-telemetry';
 import { getClerkAuthUser } from '@/lib/api-auth';
+import { buildAdultEligibilityGateResponse } from '@/lib/server/adult-eligibility-gate';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import {
@@ -39,6 +40,13 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
   if (rateLimitResponse) return rateLimitResponse;
 
   const { userId } = await getClerkAuthUser(request);
+  const ageGateResponse = await buildAdultEligibilityGateResponse({
+    userId,
+    request,
+    gate: 'media-image',
+    headers: { ...getCorsHeaders(request), ...getSecurityHeaders() },
+  });
+  if (ageGateResponse) return ageGateResponse;
 
   // Resolved exactly once: the workspace admitted at the start of the turn is
   // the workspace the row is written to, so a switch mid-request cannot move it.

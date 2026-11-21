@@ -31,6 +31,7 @@ import {
   type TermsStanding,
 } from '@/lib/server/terms';
 import { recordFailure } from '@/lib/observability/metrics';
+import { buildAdultEligibilityGateResponse } from '@/lib/server/adult-eligibility-gate';
 
 async function resolveEnterpriseCollectionAccessState(
   userId: string,
@@ -278,6 +279,12 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
     const terms = await checkTermsStanding(request, userId);
     if ('refusal' in terms) return { ok: false, response: terms.refusal };
     if (terms.notice) credential.termsNotice = terms.notice;
+    const ageGateResponse = await buildAdultEligibilityGateResponse({
+      userId,
+      request,
+      gate: 'chat-completions',
+    });
+    if (ageGateResponse) return { ok: false, response: ageGateResponse };
   }
 
   if (apiKeyId) {

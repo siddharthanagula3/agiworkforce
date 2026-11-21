@@ -2,6 +2,7 @@ import 'server-only';
 
 import { NextResponse, type NextRequest } from 'next/server';
 
+import { ACCOUNT_AGE_REQUIREMENT_NOTICE, decideAdultEligibility } from '@agiworkforce/types';
 import { AUTH_LOGIN_PATH, AUTH_SIGNUP_PATH } from '@/features/auth/authRoutes';
 import { getOrCreateAnonSession, requireCsrfToken } from '@/lib/csrf';
 import { SSE_RESPONSE_HEADERS } from '@/app/api/llm/v1/chat/completions/lib/sse-heartbeat';
@@ -109,6 +110,20 @@ async function handleGuestTurn(request: NextRequest) {
       400,
       GUEST_CHAT_ERROR_CODES.textOnly,
       `Chat without an account takes text only: up to ${GUEST_CHAT_CONFIG.maxMessages} messages of ${GUEST_CHAT_CONFIG.maxMessageChars} characters. Sign in to attach files or use tools.`,
+      { signInPath: AUTH_LOGIN_PATH },
+    );
+  }
+
+  const { ageCheckedAgainst } = parsed.data;
+  if (
+    ageCheckedAgainst === undefined ||
+    decideAdultEligibility({ kind: 'age_checked_on_device', minimumAge: ageCheckedAgainst }) !==
+      'eligible'
+  ) {
+    return refusal(
+      403,
+      GUEST_CHAT_ERROR_CODES.ageConfirmationRequired,
+      ACCOUNT_AGE_REQUIREMENT_NOTICE,
       { signInPath: AUTH_LOGIN_PATH },
     );
   }

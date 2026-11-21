@@ -165,7 +165,7 @@ describe('Settings page', () => {
     expect(getByText('Safety & Security')).toBeTruthy();
     expect(getByText('Data Controls')).toBeTruthy();
     expect(getByText('Age')).toBeTruthy();
-    expect(getByText('Parental Controls')).toBeTruthy();
+    expect(queryByText('Parental Controls')).toBeNull();
     expect(getByText('Shared Links')).toBeTruthy();
     expect(getByText('Security and login')).toBeTruthy();
     expect(queryByText('Account Security')).toBeNull();

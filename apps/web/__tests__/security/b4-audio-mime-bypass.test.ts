@@ -13,6 +13,10 @@ const TRANSCRIPTION_MODEL = (() => {
   return model.id;
 })();
 
+vi.mock('@/lib/server/adult-eligibility', async (importOriginal) => ({
+  ...(await importOriginal()),
+  readAdultEligibilityState: vi.fn(async () => 'confirmed'),
+}));
 vi.mock('server-only', () => ({}));
 
 vi.mock('@/lib/api-auth', async () => ({

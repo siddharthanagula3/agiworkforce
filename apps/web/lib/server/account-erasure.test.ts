@@ -1725,6 +1725,8 @@ describe('POST /api/auth/device/refresh', () => {
             owner_deletion_scheduled_for: owner.deletionScheduledFor,
             owner_terms_version: CURRENT_TERMS_VERSION,
             owner_terms_accepted_at: new Date().toISOString(),
+            owner_adult_eligibility_outcome: 'eligible',
+            owner_adult_eligibility_minimum_age: 18,
           },
         ];
       }

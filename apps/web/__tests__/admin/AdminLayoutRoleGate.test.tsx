@@ -1,14 +1,21 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
 
-const { mockGetUser, mockAuth, mockRedirect, mockAssertAccountActive, mockRequireCurrentTerms } =
-  vi.hoisted(() => ({
-    mockGetUser: vi.fn(),
-    mockAuth: vi.fn(),
-    mockRedirect: vi.fn(),
-    mockAssertAccountActive: vi.fn(),
-    mockRequireCurrentTerms: vi.fn(),
-  }));
+const {
+  mockGetUser,
+  mockAuth,
+  mockRedirect,
+  mockAssertAccountActive,
+  mockRequireCurrentTerms,
+  mockAdultEligibility,
+} = vi.hoisted(() => ({
+  mockGetUser: vi.fn(),
+  mockAuth: vi.fn(),
+  mockRedirect: vi.fn(),
+  mockAssertAccountActive: vi.fn(),
+  mockRequireCurrentTerms: vi.fn(),
+  mockAdultEligibility: vi.fn(),
+}));
 
 vi.mock('@clerk/nextjs/server', () => ({
   auth: () => mockAuth(),
@@ -32,6 +39,10 @@ vi.mock('@/lib/api-auth', () => ({
 vi.mock('@/lib/server/require-current-terms', () => ({
   requireCurrentTermsAcceptance: (...args: unknown[]) => mockRequireCurrentTerms(...args),
 }));
+vi.mock('@/lib/server/adult-eligibility', async (importOriginal) => ({
+  ...(await importOriginal()),
+  readAdultEligibilityState: (...args: unknown[]) => mockAdultEligibility(...args),
+}));
 
 const { default: AdminLayout } = await import('@/app/admin/layout');
 
@@ -53,6 +64,7 @@ describe('AdminLayout, role gate', () => {
     mockRedirect.mockImplementation(throwingRedirect);
     mockAssertAccountActive.mockResolvedValue(undefined);
     mockRequireCurrentTerms.mockResolvedValue(undefined);
+    mockAdultEligibility.mockResolvedValue('confirmed');
   });
 
   it('sends an unauthenticated request to the session recovery page', async () => {
@@ -62,6 +74,18 @@ describe('AdminLayout, role gate', () => {
     expect(mockRedirect).toHaveBeenCalledWith('/session-expired?redirectTo=%2Fadmin');
     expect(mockGetUser).not.toHaveBeenCalled();
   });
+
+  it.each(['unconfirmed', 'ineligible'])(
+    'sends an admin whose age decision is %s to the review screen before reading the role',
+    async (state) => {
+      mockAdultEligibility.mockResolvedValue(state);
+
+      await expect(callLayout()).rejects.toThrow();
+      expect(mockRedirect).toHaveBeenCalledWith('/login/complete?redirectTo=%2Fadmin');
+      expect(mockAdultEligibility).toHaveBeenCalledWith('user-123');
+      expect(mockGetUser).not.toHaveBeenCalled();
+    },
+  );
 
   it('redirects to / when an authenticated user has no role in publicMetadata', async () => {
     mockGetUser.mockResolvedValue({ id: 'user-123', publicMetadata: {} });

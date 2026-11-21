@@ -929,20 +929,55 @@ describe('App Store age rating questionnaire', () => {
     expect(listingIos.age_rating.rating).toBe(`${Math.max(calculated, lowestAdmittedAge)}+`);
   });
 
-  it('compares the rating with the Terms minimum age, not a stricter regional gate', () => {
-    const note = (listingIos.age_rating as unknown as { note: string }).note;
-    const rating = Number.parseInt(listingIos.age_rating.rating, 10);
-    expect(ACCOUNT_MINIMUM_AGE).toBeLessThan(rating);
-    expect(note).toContain(`the Terms set the account minimum at ${ACCOUNT_MINIMUM_AGE}`);
-    const belowClaim = /requirements"; ([\s\S]*?)below (\d+)\+, so no override is needed/.exec(
-      note,
+  it('keeps the calculated content rating apart from the Terms minimum, overriding only upward', () => {
+    const ageRating = listingIos.age_rating as unknown as {
+      rating: string;
+      calculated_rating: string;
+      note: string;
+      eligibility: { minimum_age: number; statement: string };
+      rating_override?: { from: string; to: string };
+    };
+    const APPLE_TIERS = ['4+', '9+', '13+', '16+', '18+'];
+    const calculated = Number.parseInt(ageRating.calculated_rating, 10);
+    const shown = Number.parseInt(ageRating.rating, 10);
+
+    expect(APPLE_TIERS).toContain(ageRating.rating);
+    expect(APPLE_TIERS).toContain(ageRating.calculated_rating);
+    expect(shown).toBeGreaterThanOrEqual(calculated);
+    expect(shown).toBe(Math.max(calculated, ACCOUNT_MINIMUM_AGE));
+
+    expect(ageRating.eligibility.minimum_age).toBe(ACCOUNT_MINIMUM_AGE);
+    expect(ageRating.eligibility.statement).toContain(`for people ${ACCOUNT_MINIMUM_AGE} and over`);
+    expect(ageRating.note).toContain(`the Terms set the account minimum at ${ACCOUNT_MINIMUM_AGE}`);
+    expect(ageRating.note).not.toMatch(/account minimum at 1[36]\b/);
+
+    if (ACCOUNT_MINIMUM_AGE > calculated) {
+      expect(ageRating.rating_override).toEqual(
+        expect.objectContaining({
+          from: ageRating.calculated_rating,
+          to: ageRating.rating,
+        }),
+      );
+      expect(ageRating.note).toMatch(/by that override, not by any content answer/);
+    } else {
+      expect(ageRating.rating_override).toBeUndefined();
+      expect(ageRating.rating).toBe(ageRating.calculated_rating);
+    }
+  });
+
+  it('answers Parental Controls from whether the app still has a parental controls screen', () => {
+    const hasScreen =
+      existsSync(join(mobileRoot, 'app/(app)/settings/parental-controls.tsx')) ||
+      existsSync(join(mobileRoot, 'src/features/settings/parental-controls'));
+    expect(questionnaire['In-App Controls']!['Parental Controls']!.answer).toBe(
+      hasScreen ? 'Yes' : 'No',
     );
-    expect(belowClaim).not.toBeNull();
-    expect(Number(belowClaim![2])).toBe(rating);
-    const agesClaimedBelow = [...belowClaim![1]!.matchAll(/\b(\d+)\b/g)].map(([, age]) =>
-      Number(age),
-    );
-    expect(agesClaimedBelow).toEqual([ACCOUNT_MINIMUM_AGE]);
+    expect(questionnaire['In-App Controls']!['Age Assurance']!.answer).toBe('Yes');
+    for (const answer of Object.values(questionnaire).flatMap((section) =>
+      Object.values(section),
+    )) {
+      expect(answer.reason).not.toMatch(/minor-safe mode/i);
+    }
   });
 
   it('answers web access from how the app opens a link in an answer', () => {
@@ -982,26 +1017,42 @@ describe('listing fields Apple checks', () => {
 });
 
 describe('Play data safety declarations, continued', () => {
-  it('rates both stores no lower than the lowest age the shipped age gate admits', () => {
+  it('declares in both stores exactly the minimum age the shipped age gate admits', () => {
     const ageGate = readFileSync(join(mobileRoot, 'src/features/auth/services/ageGate.ts'), 'utf8');
-    const fallback = /DEFAULT_RULE:\s*RegionAgeRule\s*=\s*\{[^}]*threshold:\s*(\d+)/.exec(ageGate);
+    expect(ageGate).toMatch(
+      /DEFAULT_RULE:\s*RegionAgeRule\s*=\s*\{[^}]*threshold:\s*ACCOUNT_MINIMUM_AGE\s*\}/,
+    );
     const regionalAges = [...ageGate.matchAll(/threshold:\s*(\d+)/g)].map(([, age]) => Number(age));
-    expect(fallback).not.toBeNull();
-    expect(Number(fallback![1])).toBe(Math.min(...regionalAges));
+    for (const age of regionalAges) expect(age).toBeGreaterThanOrEqual(ACCOUNT_MINIMUM_AGE);
 
     const resolvedOptions = jest
       .spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions')
       .mockReturnValue({ timeZone: 'Etc/UTC' } as Intl.ResolvedDateTimeFormatOptions);
     const lowestAdmittedAge = getAgeThreshold();
     resolvedOptions.mockRestore();
+    expect(lowestAdmittedAge).toBe(ACCOUNT_MINIMUM_AGE);
 
     expect(Number.parseInt(listingIos.age_rating.rating, 10)).toBeGreaterThanOrEqual(
       lowestAdmittedAge,
     );
-    expect(listingAndroid.target_audience.age_group).toBe(`${lowestAdmittedAge}+`);
-    expect(Number.parseInt(listingAndroid.target_audience.play_age_bands[0] ?? '', 10)).toBe(
-      lowestAdmittedAge,
-    );
+    const audience = listingAndroid.target_audience as typeof listingAndroid.target_audience & {
+      appeal_to_children: boolean;
+      restrict_minor_access: boolean;
+    };
+    expect(audience.age_group).toBe(`${lowestAdmittedAge}+`);
+    expect(audience.play_age_bands).toEqual([`${lowestAdmittedAge} and over`]);
+    expect(audience.appeal_to_children).toBe(false);
+    expect(audience.restrict_minor_access).toBe(true);
+  });
+
+  it('keeps the IARC content rating apart from the Play age eligibility', () => {
+    const contentRating = listingAndroid.content_rating as typeof listingAndroid.content_rating & {
+      iarc_rating: string;
+      note: string;
+    };
+    expect(contentRating.iarc_rating.trim().length).toBeGreaterThan(0);
+    expect(contentRating.iarc_rating).not.toContain(listingAndroid.target_audience.age_group);
+    expect(contentRating.note).toMatch(/not the eligibility rule/);
   });
 
   it('carries no HealthKit claims in the privacy manifest', () => {

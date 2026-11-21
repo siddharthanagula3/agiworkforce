@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder
-Last updated: 2026-11-17
+Last updated: 2026-11-20
 
 This is the whole submission of AGI Mobile version 0.0.1 to the Apple App Store
 and to Google Play, written for the owner, who follows it himself. Work through
@@ -87,12 +87,24 @@ weight:
 | The web changes the review builds rely on are not deployed. Nothing on the pull request is deployed, and its migrations 0422, 0423 and 0424 are applied nowhere; all three must be applied to production with the deploy                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Both    | Owner's deploy     | 4.2        |
 | The built-in Apple model in Local, Help and Support against production, and the Reduce sensitive content switch have not been checked on a real iPhone. The built-in model shows ready on the simulator but cannot generate there                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | iOS     | Owner              | 11.2       |
 | The build supports iPad, so a 13-inch iPad screenshot is required and App Review can test on iPad. A code audit and a layout pass for iPad were done on 2026-11-17, and the first-run screen was seen on an iPad Pro 13-inch simulator. No other screen has been used on an iPad and no iPad screenshot exists, because the simulator control needs your access grant for that device (`MOBILE-IPAD-NOT-EXERCISED-01`)                                                                                                                                                                                                                                                                                                       | iOS     | Owner              | D2, 8.8    |
-| Counsel has not confirmed 13 as the minimum age on `/privacy` and `/terms`; the Parental Controls answer is yours                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Both    | Owner, counsel     | D14, D13   |
+| Counsel has not confirmed 18 and over as the minimum age on `/privacy` and `/terms`, replacing the recorded 13 (D14); the age-rating override and the Parental Controls answer are yours (D13)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Both    | Owner, counsel     | D14, D13   |
+| The 18 and over change is not deployed: migration 0425 is applied nowhere, the web build that reads it is not live, and no Android build contains both pull request 612 and this change. The order in 4.2a must hold, or Cloud is refused for everyone or build 6 reaches production                                                                                                                                                                                                                                                                                                                                                                                                                                         | Both    | Owner's deploy     | 4.2a, 11.5 |
 | Nobody has confirmed that checkout is closed in production, that no access code was given out and that no Stripe subscription is live                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Both    | Owner              | 4.5        |
 | The review account does not exist, and its plan must be granted by hand                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Both    | Owner              | 10         |
 | Export compliance is open with counsel                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | iOS     | Owner, counsel     | D9, 8.6    |
 | Four iPhone frames for the required slot were captured on 2026-11-17 (8.8). No iPad frame, no Play phone frames, no Play feature graphic, no 512 px Play icon                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Both    | Owner and Claude   | 8.8, 7.7   |
 | The Android app has never been built or run, and no workflow builds it before the Play upload                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Android | Owner, then Claude | D20, 9, 11 |
+
+The move to 18 and over (2026-11-20) closes, in the code and these records:
+the age step before every path, Local Mode included; the server-held 18 and
+over decision and the Cloud refusal without it; the removal of Parental
+Controls and minor-safe mode; and the listing, reviewer notes and age-rating
+records (D13's Parental Controls answer now follows the code). It leaves open,
+each for a person: counsel's confirmation of 18 (D14); the 18+ override and
+the Parental Controls answer in App Store Connect (D13, 8.5); applying 0425
+and deploying the web app (4.2a); the Android bundle cut with pull request 612
+(4.2a); the upgrade test on a phone (11.5); and checking that Play's Target
+audience still shows 18 and over only (7.4).
 
 ## 3. The order of everything
 
@@ -108,7 +120,7 @@ https://support.google.com/googleplay/android-developer/answer/9859348).
 | 1   | Make the owner decisions in 4.1                                                            | Owner              | This file, section 4.1                               | 1 to 2 hours             | Nothing                                            |
 | 2   | The engineering work left in section 4.3, then merge pull request 602 once its checks pass | Claude, then owner | The repository, GitHub                               | 1 to 2 days              | Decisions D11, D12, D20, D21, D22                  |
 | 3   | Founder-actions items in 4.4 and the sales check in 4.5                                    | Owner, counsel     | Vercel, Clerk, the operator dashboard, counsel       | Varies                   | Nothing                                            |
-| 4   | Deploy the web changes the phone depends on (4.2)                                          | Owner's go-ahead   | Vercel production                                    | 30 minutes               | Step 2 merged                                      |
+| 4   | Migration 0425, then the web changes the phone depends on (4.2, 4.2a)                      | Owner's go-ahead   | Vercel production                                    | 30 minutes               | Step 2 merged                                      |
 | 5   | Apple and Google accounts and agreements (5)                                               | Owner              | developer.apple.com, App Store Connect, Play Console | 1 hour                   | Nothing                                            |
 | 6   | Create the Play app and give the upload account access (7.1, 7.2)                          | Owner              | Play Console                                         | 20 minutes               | Step 5                                             |
 | 7   | First iOS credentials, interactively (6.2)                                                 | Owner              | Terminal, `eas credentials`                          | 30 minutes               | Steps 2, 5                                         |
@@ -122,7 +134,7 @@ https://support.google.com/googleplay/android-developer/answer/9859348).
 | 15  | Tagged release: iOS to TestFlight, Android to Internal testing (9.4)                       | Owner              | GitHub, Play Console                                 | 30 minutes plus builds   | Steps 2, 7, 9                                      |
 | 16  | Emulator and real-device checks (11)                                                       | Owner              | Emulator, TestFlight, Play Internal testing          | Half a day               | Step 15                                            |
 | 17  | Submit to App Review (8.10)                                                                | Owner              | App Store Connect                                    | 15 minutes               | Steps 3, 14, 16                                    |
-| 18  | Release to Production and send for review (7.10)                                           | Owner              | Play Console                                         | 15 minutes               | Steps 3, 12, 16, and step 13's 14 days if personal |
+| 18  | Upgrade test from build 6 (11.5), then Release to Production and review (7.10)             | Owner              | Play Console                                         | 15 minutes               | Steps 3, 12, 16, and step 13's 14 days if personal |
 | 19  | After approval (14)                                                                        | Owner, then Claude | Both consoles, the repository                        | 30 minutes               | Approval                                           |
 
 ## 4. Before anything
@@ -267,18 +279,33 @@ leaving a decision alone keeps it.
 - **D13. Age-rating judgement calls (Apple).** True now, in
   `age_rating.questionnaire` of `apps/mobile/store-listing/LISTING-METADATA-IOS.json`:
   Unrestricted Web Access Yes (a link in an answer opens any page in the in-app
-  Safari sheet), which makes the calculated rating 16+; Parental Controls Yes.
-  Parental Controls is your call: the Settings screen shows the status that
-  follows from the stored device age, says parent accounts can't be linked, and
-  has one control, Review Device Age Settings; Yes rests on an adult being able
-  to set a minor age that turns the content filter on. Content Rights: the app
-  shows web search results and provider output, and Apple's question covers
-  apps that "contain, show, or access third-party content". Alternative:
-  Parental Controls No. Needed before section 8.5.
-- **D14. Minimum age (counsel).** audit/decisions/founder-actions.md
-  ("Minimum-age policy") marks this RELEASE-BLOCKING for the mobile stores: the
-  decision is 13, and counsel must confirm 13 on `/privacy` and `/terms`.
-  Needed before either submission.
+  Safari sheet), which makes the calculated rating 16+; Parental Controls No;
+  Age Assurance Yes. The calculated 16+ is the content rating and only the
+  questionnaire sets it. Since 2026-11-20 the Terms admit only people 18 and
+  over, and Apple's age-rating page says an app whose EULA minimum exceeds the
+  calculated rating "must override to a rating that adheres to the
+  requirements"; the listing therefore records the shown rating as 18+ by
+  override (`age_rating.rating_override`), with every content answer
+  unchanged. Setting that override is yours. Parental Controls is No because
+  the screen and its Settings row were removed with the move to 18; the answer
+  in App Store Connect is still yours. Content Rights: the app shows web search
+  results and provider output, and Apple's question covers apps that "contain,
+  show, or access third-party content". Alternative: leave the override off,
+  so the App Store shows 16+ while the app still admits only 18 and over.
+  Needed before section 8.5.
+- **D14. Minimum age (counsel).** On 2026-11-20 you decided the product is 18
+  and over on every consumer surface, superseding the 13 and over rule (with
+  parental permission under 18) and decision 30, "Keep 13". The app and the
+  server enforce 18 (`ACCOUNT_MINIMUM_AGE` in
+  `packages/contracts/types/src/account-eligibility.ts`). What counsel now
+  confirms: 18 as the minimum on `/privacy` and `/terms`; that a self-declared
+  age, taken from the operating system's age range where available and typed
+  otherwise, is an acceptable way to apply it; that keeping only the 18 and
+  over decision on the server, never the age, is enough record; and that
+  nothing in the published pages still promises parental permission for
+  people under 18. The founder-actions item "Minimum-age policy" still reads
+  "Keep 13" until its owner updates it. Still RELEASE-BLOCKING for both
+  stores: needed before either submission.
 - **D15. Public listing wording.** True now: the Android `full_description` and
   the iOS `description` both say "Free plan" twice and "India DPDP notice and
   open items", and both release notes (Android `release_notes_v0_0_1`, iOS
@@ -488,6 +515,55 @@ string or anchor. Repeat it for `privacy`, `help`, `help/delete-your-account`,
 window, open `https://agiworkforce.com/settings/account?from=mobile`: it must
 show the sign-in page with no site header, pricing link or footer.
 
+### 4.2a Deployment order for the 18 and over change
+
+The move to 18 and over (decided 2026-11-20) spans the database, the web app
+and the phone. Every Cloud gate on the server reads a stored decision, and a
+decision it cannot read is refused, never assumed
+(`adultEligibilityForGate` in `apps/web/lib/server/adult-eligibility-gate.ts`).
+So the order is fixed. Deploying is yours to authorise; each step waits for the
+one before it.
+
+1. **Apply migration `0425_adult_eligibility.sql` to production** before any
+   web build that reads it serves traffic:
+   `pnpm db:migrate -- apply --target production --confirm-production`, then
+   `pnpm db:migrate -- status` must list 0425 as applied. It adds five
+   nullable columns to `public.profiles` that hold the decision, never an age.
+   On 2026-11-20 its header says it is a draft applied nowhere.
+   _If the web build goes first:_ the server cannot read any decision, so
+   every Cloud chat, image, video, speech, live voice, transcription and
+   embeddings request answers 503 ("Your account could not be checked just
+   now"), no phone can obtain a device sign-in token, `POST /api/eligibility`
+   cannot record anyone, and the web chat, workspace and code pages fail to
+   load, for every account, until the migration runs.
+2. **Deploy the web app** carrying the eligibility routes, the gates and the
+   web review screen `/login/complete`. Then sign in on the web with an
+   account that has no decision: `/chat` must send you to `/login/complete`,
+   and after an age of 18 or more, back to the chat.
+   _If this step is skipped while a new phone build is out:_ the phone's
+   `POST /api/eligibility` finds no route, never gets "confirmed", and keeps
+   Cloud closed for everyone on that build. Build 6 keeps working against the
+   old server with its 13 and over gate.
+3. **Cut the Android build from a commit that contains both** release pull
+   request 612 (`codex/mobile-store-build-dependencies`, commit `fc9da2ac5a`,
+   the Expo dependency alignment used for build 6, which changes only
+   `apps/mobile/package.json` and `pnpm-lock.yaml`) **and** this change. On
+   2026-11-20 the branch carrying this change does not contain `fc9da2ac5a`.
+   Check before building:
+   `git merge-base --is-ancestor fc9da2ac5a HEAD && echo ok`, and
+   `rg -n "threshold: ACCOUNT_MINIMUM_AGE" apps/mobile/src/features/auth/services/ageGate.ts`
+   must print one line.
+   _If the build lacks 612:_ it is not built on the dependency set build 6 was
+   proved with, and the store build may fail or differ from what was tested.
+   _If it lacks this change:_ it ships the 13 and over gate, Parental Controls
+   and minor-safe mode, which contradicts the Play target audience (18 and
+   over only) and the listing, and every Cloud account on it is refused by the
+   server until it confirms its age on the web.
+4. **Only then attach the bundle to the Play production draft** (7.10), after
+   the upgrade test in 11.5 passes on that exact build. On 2026-11-20 the owner
+   reports that the production draft has release notes and no bundle; build 6
+   must never be attached to it, since it carries the 13 and over gate.
+
 ### 4.3 Engineering work before the review builds
 
 These are Claude's, not yours. Each is listed so you know what the build waits
@@ -559,8 +635,12 @@ From audit/decisions/founder-actions.md, read 2026-11-15:
    `mobile-store-release` environment still lacks the secret `EXPO_TOKEN` and the
    variable `ANDROID_APP_LINKS_SHA256_CERT_FINGERPRINTS`. Sections 9.1 and 6.3.
 2. **"[Trust & Safety] Minimum-age policy".** RELEASE-BLOCKING for the mobile
-   stores: counsel confirms 13 as the minimum age on `/privacy` and `/terms`
-   (D14).
+   stores: counsel confirms 18 and over as the minimum age on `/privacy` and
+   `/terms`, and the other points in D14. The item itself still records
+   "Keep 13" (decision 30), superseded by your decision of 2026-11-20; its
+   owner updates it. This change closes the engineering side (the gate, the
+   server decision and the removal of Parental Controls); counsel's
+   confirmation stays open.
 3. **"[Production env] Error reporting, tracing, email, push and sign-in
    providers".** Before review: confirm that mail to `contact@agiworkforce.com`
    arrives and name who reads it, because the deletion refusal message and the
@@ -910,21 +990,21 @@ do not upload it again.
 Policy and programs, App content. Answer every card. Each answer below has its
 reason.
 
-| Card                              | Answer for AGI Mobile                                                                                                                             | Why                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Privacy policy                    | `https://agiworkforce.com/privacy`                                                                                                                | `contact_details.privacy_policy_url` in the Android listing JSON                                                                                                                                                                                                                                                                                                                                                                         |
-| App access                        | "All or some functionality is restricted", then the review account (section 10) and the short text below                                          | Cloud needs sign-in. Google wants credentials that always work, are reusable, work from any location, are in English and bypass two-step and one-time codes. Source, read 2026-11-15: https://support.google.com/googleplay/android-developer/answer/15748846                                                                                                                                                                            |
-| Ads                               | No, my app does not contain ads                                                                                                                   | No ad SDK in `apps/mobile/package.json`                                                                                                                                                                                                                                                                                                                                                                                                  |
-| Advertising ID                    | No                                                                                                                                                | `usesAdvertisingId: false` in `apps/mobile/store-listing/android/data-safety.json`. Confirm `com.google.android.gms.permission.AD_ID` is absent from the merged manifest first (section 11.3); unverified until a build exists                                                                                                                                                                                                           |
-| Content rating                    | Start the questionnaire, category "All other app types", answers under `content_rating.questionnaire` in the Android listing JSON. Expected: Teen | Source, read 2026-11-15: https://support.google.com/googleplay/android-developer/answer/9898843. The JSON answers "unrestricted internet access" true: a link in an answer opens any page in an in-app Custom Tab, and Cloud chats run web search. Google's pages do not show the live wording, so the JSON's answers are descriptive; read each live question before answering. Expected: Teen with Diverse Content: Discretion Advised |
-| Target audience                   | 13 to 15, 16 to 17, 18 and over; not appealing to children                                                                                        | The app admits 13 and over (`apps/mobile/src/features/auth/services/ageGate.ts`). Under-13 bands would bring the Families policy. Source, read 2026-11-15: https://support.google.com/googleplay/android-developer/answer/9867159                                                                                                                                                                                                        |
-| Data safety                       | Section 7.5                                                                                                                                       |                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| Financial features                | "My app doesn't provide any financial features"                                                                                                   | `bankLinking` is `false`; the bank connector is filtered out. Source, read 2026-11-15: https://support.google.com/googleplay/android-developer/answer/13849271                                                                                                                                                                                                                                                                           |
-| Health apps                       | None, after D11 hides the health-record connectors. Otherwise "Healthcare services and management"                                                | Source, read 2026-11-15: https://support.google.com/googleplay/android-developer/answer/14738291                                                                                                                                                                                                                                                                                                                                         |
-| Government apps, News, COVID-19   | No, if the card appears                                                                                                                           | The app is a Productivity app. Google's pages for these cards were found only by search on 2026-11-15, not read: unverified                                                                                                                                                                                                                                                                                                              |
-| Generative AI (if the card shows) | Declare that the app generates content and that reporting is inside the app                                                                       | Report… on every answer (`apps/mobile/src/features/chat/components/MessageBubble.tsx`). Library items and artifacts have Report on Android through the app's own menu sheet (4.3). Source, read 2026-11-15: https://support.google.com/googleplay/android-developer/answer/13985936                                                                                                                                                      |
-| Foreground service (if shown)     | None used                                                                                                                                         | WebRTC's screen-capture service is removed (`apps/mobile/native/android/withoutWebRTCScreenCapture.cjs`). Confirm on the merged manifest                                                                                                                                                                                                                                                                                                 |
-| Photo and video permissions       | Do not file a declaration                                                                                                                         | No `android.permission.READ_MEDIA_IMAGES` or `android.permission.READ_MEDIA_VIDEO` (`granularPermissions: []` for expo-media-library in `apps/mobile/app.config.js`); attachments use the system picker. Source, read 2026-11-15: https://support.google.com/googleplay/android-developer/answer/14115180                                                                                                                                |
+| Card                              | Answer for AGI Mobile                                                                                                                             | Why                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Privacy policy                    | `https://agiworkforce.com/privacy`                                                                                                                | `contact_details.privacy_policy_url` in the Android listing JSON                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| App access                        | "All or some functionality is restricted", then the review account (section 10) and the short text below                                          | Cloud needs sign-in. Google wants credentials that always work, are reusable, work from any location, are in English and bypass two-step and one-time codes. Source, read 2026-11-15: https://support.google.com/googleplay/android-developer/answer/15748846                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| Ads                               | No, my app does not contain ads                                                                                                                   | No ad SDK in `apps/mobile/package.json`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Advertising ID                    | No                                                                                                                                                | `usesAdvertisingId: false` in `apps/mobile/store-listing/android/data-safety.json`. Confirm `com.google.android.gms.permission.AD_ID` is absent from the merged manifest first (section 11.3); unverified until a build exists                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Content rating                    | Start the questionnaire, category "All other app types", answers under `content_rating.questionnaire` in the Android listing JSON. Expected: Teen | Source, read 2026-11-15: https://support.google.com/googleplay/android-developer/answer/9898843. The JSON answers "unrestricted internet access" true: a link in an answer opens any page in an in-app Custom Tab, and Cloud chats run web search. Google's pages do not show the live wording, so the JSON's answers are descriptive; read each live question before answering. Expected: Teen with Diverse Content: Discretion Advised                                                                                                                                                                                                                                                                          |
+| Target audience                   | 18 and over only; Restrict Minor Access on; not appealing to children                                                                             | Since 2026-11-20 the app admits only 18 and over: the age step comes first on every path, Local Mode included, with the default threshold from `ACCOUNT_MINIMUM_AGE` (`apps/mobile/src/features/auth/services/ageGate.ts`). The owner reports this is already the Play Console state on 2026-11-20 (not verified from the repository); confirm the card still shows it before sending the release for review. This card is eligibility; the IARC content rating in the row above is a separate rating of the content and is not changed to express it. Recorded in `target_audience` of the Android listing JSON. Source, read 2026-11-15: https://support.google.com/googleplay/android-developer/answer/9867159 |
+| Data safety                       | Section 7.5                                                                                                                                       |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Financial features                | "My app doesn't provide any financial features"                                                                                                   | `bankLinking` is `false`; the bank connector is filtered out. Source, read 2026-11-15: https://support.google.com/googleplay/android-developer/answer/13849271                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Health apps                       | None, after D11 hides the health-record connectors. Otherwise "Healthcare services and management"                                                | Source, read 2026-11-15: https://support.google.com/googleplay/android-developer/answer/14738291                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Government apps, News, COVID-19   | No, if the card appears                                                                                                                           | The app is a Productivity app. Google's pages for these cards were found only by search on 2026-11-15, not read: unverified                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Generative AI (if the card shows) | Declare that the app generates content and that reporting is inside the app                                                                       | Report… on every answer (`apps/mobile/src/features/chat/components/MessageBubble.tsx`). Library items and artifacts have Report on Android through the app's own menu sheet (4.3). Source, read 2026-11-15: https://support.google.com/googleplay/android-developer/answer/13985936                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| Foreground service (if shown)     | None used                                                                                                                                         | WebRTC's screen-capture service is removed (`apps/mobile/native/android/withoutWebRTCScreenCapture.cjs`). Confirm on the merged manifest                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| Photo and video permissions       | Do not file a declaration                                                                                                                         | No `android.permission.READ_MEDIA_IMAGES` or `android.permission.READ_MEDIA_VIDEO` (`granularPermissions: []` for expo-media-library in `apps/mobile/app.config.js`); attachments use the system picker. Source, read 2026-11-15: https://support.google.com/googleplay/android-developer/answer/14115180                                                                                                                                                                                                                                                                                                                                                                                                         |
 
 The App access instructions field: paste the block under "Paste this into
 App access" at the top of `apps/mobile/store-listing/REVIEWER-NOTES-ANDROID.md`
@@ -1084,6 +1164,10 @@ than yours.
 ### 7.10 Production and review
 
 - **First:** confirm that nothing can be bought (section 4.5).
+- **Then:** steps 1 to 3 of 4.2a are done (migration 0425 applied, the web app
+  deployed, the bundle cut from a commit with pull request 612 and the 18 and
+  over change), and the upgrade test in 11.5 passed on that bundle. Never
+  attach build 6 or any bundle with the 13 and over gate.
 - **Organization account, or personal after the closed test:** Test and
   release, Production, Create new release, Add from library, choose the
   tagged `production` build from section 9.4 (not the hand-made `beta` bundle
@@ -1230,8 +1314,8 @@ definitions page:
 
 | Item                                             | Answer     | Tier it reaches | Why                                                                 |
 | ------------------------------------------------ | ---------- | --------------- | ------------------------------------------------------------------- |
-| Parental Controls                                | Yes (D13)  | 4+              | Your call                                                           |
-| Age Assurance                                    | Yes        | 4+              | The Declared Age Range request and the typed age                    |
+| Parental Controls                                | No (D13)   | None            | The screen was removed with the move to 18; your call               |
+| Age Assurance                                    | Yes        | 4+              | Declared Age Range at 18, else the typed age, before every path     |
 | Unrestricted Web Access                          | Yes        | 16+             | A link in an answer opens any page in the in-app Safari sheet       |
 | User-Generated Content                           | Yes        | 4+              | Projects and agents shared by other people, and published artifacts |
 | Social Media; Social Media Disabled for Under 13 | No; No     | None            | No feed and no social features                                      |
@@ -1252,11 +1336,21 @@ definitions page:
 | Simulated Gambling, Contests                     | None       | None            | Not in the app                                                      |
 
 Before Save, read the calculated rating under Additional Information. It must
-say 16+ (`age_rating.rating` in the JSON), set by Unrestricted Web Access, and
-never Unrated. 16+ is above the Terms minimum of 13, so no override is needed.
-AGI Cloud accounts are 13 and over, 16 in EU zones and 18 in India and Brazil
-(`apps/mobile/src/features/auth/services/ageGate.ts`). Whether App Review
-requires higher regional overrides is unverified.
+say 16+ (`age_rating.calculated_rating` in the JSON), set by Unrestricted Web
+Access, and never Unrated. That is the content rating; do not change a content
+answer to move it.
+
+Who may use the app is a separate rule. Since 2026-11-20 the Terms and the app
+admit only people 18 and over, on every path, Local Mode included
+(`ACCOUNT_MINIMUM_AGE` in `packages/contracts/types/src/account-eligibility.ts`,
+the default rule in `apps/mobile/src/features/auth/services/ageGate.ts`; no
+region is lower). Apple's set-an-age-rating page (read 2026-11-15) says that
+when a EULA's minimum age exceeds the calculated rating, "you must override to
+a rating that adheres to the requirements". So, under Override, choose 18+
+(`age_rating.rating` and `age_rating.rating_override` in the JSON). That
+override is yours (D13). The age you see on the App Store then reflects the
+Terms; the content answers, and the 16+ they produce, stay as recorded. Apple's
+wording was not re-read on 2026-11-20.
 
 ### 8.6 Export compliance
 
@@ -1603,6 +1697,15 @@ that needs only an email and a password.
    Clerk asks for a code sent by email on a new device, Client Trust is on:
    turn it off in the production Clerk dashboard (Configure, Attack
    protection), or the reviewer cannot get in.
+
+   In the same window, give the account its 18 and over decision once, after
+   4.2a steps 1 and 2: open `https://agiworkforce.com/chat`. An account without
+   a decision is sent to `/login/complete`; enter an age of 18 or more, and the
+   chat opens. The server keeps only the decision, so the reviewer is not asked
+   again after signing in on the phone (the phone still asks its own device
+   age step first). Make sure the account has a password set: the reviewer
+   signs in with email and password only.
+
 4. **Grant it a plan by hand** (D6). On 2026-11-14 the Free plan allowed 2
    credits per five hours, and in the iPhone simulator a Free account's photo
    message was refused at the limit after one earlier short message. The Free
@@ -1647,7 +1750,8 @@ that needs only an email and a password.
    Settings, Subscription then shows the plan name and a plain-text Billing
    line.
 
-5. On a phone, go through the whole path once: Cloud, age, sign-in, Terms,
+5. On a phone, go through the whole path once: the age step at first launch,
+   Cloud, sign-in (no second age question for this account), Terms,
    "Share with AI providers?" (answer Not now first: the app must stay in Local
    Mode, signed in, and tapping Cloud must ask again; then Allow), one chat with
    web search and a photo, Settings, Subscription. Then delete the account from
@@ -1948,7 +2052,8 @@ that load was checked only in plain Node on 2026-11-15.
   the universal APK.
 - **Play Age Signals** on the Google Play image: decline, then share; with the
   service unavailable the app falls back to the typed age without blocking or
-  crashing.
+  crashing. The app asks only for the 18 threshold, and the age step comes
+  before onboarding and Local Mode.
 - **The merged manifest** of the release bundle (bundletool or Android Studio's
   APK Analyzer): `targetSdkVersion` 36 and `minSdkVersion` 26; none of
   `android.permission.READ_MEDIA_IMAGES`, `android.permission.READ_MEDIA_VIDEO`, `READ_MEDIA_VISUAL_USER_SELECTED`,
@@ -1994,6 +2099,49 @@ Android 16 and, if you can, one with Android 15.
   release, App bundle explorer shows the target SDK.
 - Read the pre-launch report (crashes, accessibility, screenshots) before you
   promote past Internal testing (7.9).
+
+### 11.5 Upgrade from Android build 6 (the 18 and over change)
+
+Build 6 on the internal track ships the 13 and over gate. A person upgrading
+in place keeps its stored result, so this is run once on a real Android phone,
+after 4.2a steps 1 and 2 and on the exact bundle you will attach in 7.10.
+`apps/mobile/__tests__/UpgradeFromAndroidBuild6.test.tsx` covers the same
+path from build 6's stored state, but cannot install one build over another.
+
+1. On a phone with no AGI installed, install build 6 from the Play Internal
+   testing track.
+2. Open it and pass its age gate with an age from 13 to 17 (for example 15),
+   which build 6 accepts.
+3. Use Local Mode: send one local chat.
+4. Tap Cloud and sign in to AGI Cloud with a test account that has no 18 and
+   over decision on the server. Leave the session signed in.
+5. Without uninstalling, install the new build over it from the internal
+   track.
+6. Open it. Expected: the **Your age** step appears before anything else,
+   before Local chat and before Cloud; nothing is usable until it is answered.
+7. Enter 18. Expected: the app opens; Local Mode works and keeps the chat
+   from step 3; Cloud opens only once the server answers confirmed for the
+   signed-in account (the phone reports the device result to
+   `POST /api/eligibility`, so no second question for that account).
+8. Close the app fully and open it again. Expected: no age question; Local
+   and Cloud open as before.
+9. Sign in to a second account on the same phone (add or switch account).
+   Expected: the app checks that account with the server again; Cloud does
+   not open for it on the first account's decision.
+10. Repeat steps 1 to 6 on a fresh install and enter 17 at the age step.
+    Expected: the **Age requirement** screen on every path; Local Mode and
+    Cloud stay closed; it offers Export and Erase this device's data and,
+    since an account is signed in, Sign out and Account data and deletion.
+    Closing and opening the app shows the same screen.
+
+Server-side, for a phone still on build 6 (run before step 5, or on a second
+phone left on build 6) with a valid session for an account that has no
+decision: Cloud chat and image jobs are refused with HTTP 403, as are video,
+speech, live voice, transcription and embeddings and a new device sign-in
+token, until that account confirms its age at
+`https://agiworkforce.com/login/complete` or in the new build. After it
+confirms 18 or more, the same build 6 session is served again. What build 6
+shows the person for that refusal was not checked.
 
 ## 12. Firebase, for Android push (optional, D3)
 

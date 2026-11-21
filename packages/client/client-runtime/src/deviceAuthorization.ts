@@ -120,7 +120,10 @@ export async function pollDeviceAuthorization(
     case 'terms_acceptance_required':
       return {
         kind: 'rejected',
-        message: `Accept the updated Terms of Service at ${refusal.acceptance_url}, then sign in again.`,
+        message:
+          refusal.review === 'age'
+            ? `Confirm your age at ${refusal.acceptance_url}, then sign in again.`
+            : `Accept the updated Terms of Service at ${refusal.acceptance_url}, then sign in again.`,
       };
     case 'account_unavailable':
       return { kind: 'rejected', message: refusal.error_description };

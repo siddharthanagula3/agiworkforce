@@ -58,6 +58,7 @@ vi.mock('@clerk/nextjs', () => ({
 
 import { resolveAuthProviders } from '@agiworkforce/client-runtime';
 
+import { AGE_CHECK_STORAGE_KEY } from '@/app/signup/signupAttemptMarkers';
 import { CANONICAL_POLICY_ROUTES } from '@/lib/legal-constants';
 import { AuthFlow } from '../AuthFlow';
 import { AuthLayout } from '../AuthLayout';
@@ -65,6 +66,7 @@ import { AUTH_RESEND_COOLDOWN_SECONDS, type AuthMode } from '../authContract';
 
 const PROVIDERS = resolveAuthProviders('google,microsoft,apple');
 const EMAIL = 'person@example.com';
+const TYPED_AGE = '57';
 const ONE_SECOND_MS = 1000;
 const REDIRECTS = {
   completeUrl: '/login/complete?redirectTo=%2Fchat',
@@ -219,16 +221,23 @@ describe('sign-up screen', () => {
     expect(screen.getByTestId('auth-phase')).toBeEmptyDOMElement();
     expect(window.localStorage.getItem('agi.terms-accepted-version')).toBeNull();
     expect(window.localStorage.getItem('agiworkforce-auth-last-method')).toBeNull();
+    expect(window.localStorage.getItem(AGE_CHECK_STORAGE_KEY)).toBeNull();
     expect(emailField()).toHaveValue(EMAIL);
 
-    await enterAge();
+    await userEvent.type(ageField(), TYPED_AGE);
     expect(screen.queryByRole('alert')).toBeNull();
     await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
     await waitFor(() =>
       expect(signUpState.create).toHaveBeenCalledWith({ emailAddress: EMAIL, legalAccepted: true }),
     );
     expect(signUpState.create.mock.calls).toEqual([[{ emailAddress: EMAIL, legalAccepted: true }]]);
-    expect(Object.keys({ ...window.localStorage }).filter((key) => /age/i.test(key))).toEqual([]);
+    expect(Object.keys({ ...window.localStorage }).filter((key) => /age/i.test(key))).toEqual([
+      AGE_CHECK_STORAGE_KEY,
+    ]);
+    expect(window.localStorage.getItem(AGE_CHECK_STORAGE_KEY)).toBe(String(ACCOUNT_MINIMUM_AGE));
+    expect(Object.values({ ...window.localStorage, ...window.sessionStorage })).not.toContain(
+      TYPED_AGE,
+    );
   });
 
   it('mounts a challenge only where an account is created, and only as a mount point', () => {

@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
   redirect: vi.fn(),
   requireTerms: vi.fn(),
+  adultEligibility: vi.fn(),
   getOnboardingStatus: vi.fn(),
   getCurrentUserRlsDb: vi.fn(),
   scopedDb: { query: vi.fn(), execute: vi.fn(), transaction: vi.fn() },
@@ -20,6 +21,10 @@ vi.mock('next/navigation', () => ({
 vi.mock('@/lib/server/require-current-terms', () => ({
   requireCurrentTermsAcceptance: (userId: string, returnTo: string) =>
     mocks.requireTerms(userId, returnTo),
+}));
+vi.mock('@/lib/server/adult-eligibility', async (importOriginal) => ({
+  ...(await importOriginal()),
+  readAdultEligibilityState: (...args: unknown[]) => mocks.adultEligibility(...args),
 }));
 vi.mock('@/lib/server/user-identity', () => ({
   getOnboardingStatus: (db: unknown, userId: string) => mocks.getOnboardingStatus(db, userId),
@@ -38,6 +43,7 @@ describe('/welcome', () => {
     vi.clearAllMocks();
     mocks.auth.mockResolvedValue({ userId: 'user-1' });
     mocks.requireTerms.mockResolvedValue(undefined);
+    mocks.adultEligibility.mockResolvedValue('confirmed');
     mocks.getOnboardingStatus.mockResolvedValue({ completed: false, primaryUseCase: null });
     mocks.getCurrentUserRlsDb.mockResolvedValue({ db: mocks.scopedDb, userId: 'user-1' });
   });
@@ -63,4 +69,16 @@ describe('/welcome', () => {
     expect(mocks.requireTerms).toHaveBeenCalledWith('user-1', '/welcome');
     expect(mocks.getOnboardingStatus).toHaveBeenCalledWith(mocks.scopedDb, 'user-1');
   });
+
+  it.each(['unconfirmed', 'ineligible'])(
+    'sends an account whose age decision is %s to the review screen before reading onboarding',
+    async (state) => {
+      mocks.adultEligibility.mockResolvedValue(state);
+
+      await expect(WelcomePage()).rejects.toThrow('redirect:/login/complete?redirectTo=%2Fwelcome');
+      expect(mocks.adultEligibility).toHaveBeenCalledWith('user-1');
+      expect(mocks.getCurrentUserRlsDb).not.toHaveBeenCalled();
+      expect(mocks.getOnboardingStatus).not.toHaveBeenCalled();
+    },
+  );
 });

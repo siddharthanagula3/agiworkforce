@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, waitFor, within, type RenderResult } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-import { ACCOUNT_AGE_FIELD_LABEL } from '@agiworkforce/types';
+import { ACCOUNT_AGE_FIELD_LABEL, ACCOUNT_MINIMUM_AGE } from '@agiworkforce/types';
 
 const signUpState = vi.hoisted(() => ({
   status: 'missing_requirements' as string | null,
@@ -77,6 +77,7 @@ import { MARKETING_EMAIL_CONSENT_PURPOSE } from '@/lib/consent-purposes';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 import { RecordTermsAcceptance } from './complete/RecordTermsAcceptance';
 import {
+  AGE_CHECK_STORAGE_KEY,
   MARKETING_EMAIL_ATTEMPT_STORAGE_KEY,
   MARKETING_EMAIL_CHOICE_STORAGE_KEY,
   TERMS_GATE_STORAGE_KEY,
@@ -89,7 +90,10 @@ const REDIRECTS = {
 };
 const PROVIDERS = [{ id: 'google' as const, label: 'Google' }];
 const TYPED_AGE = '57';
-const TERMS_ONLY = { surface: 'web-signup', version: POLICY_LAST_UPDATED.terms };
+const AGE_CHECKED = {
+  eligibility: { kind: 'age_checked_on_device', minimumAge: ACCOUNT_MINIMUM_AGE },
+};
+const TERMS_ONLY = { surface: 'web-signup', version: POLICY_LAST_UPDATED.terms, ...AGE_CHECKED };
 const TERMS_AND_GRANT = { ...TERMS_ONLY, marketingEmailNoticeVersion: POLICY_LAST_UPDATED.privacy };
 
 function openSignup(): RenderResult {
@@ -167,6 +171,7 @@ function switchBackToTab(held: TabSession): void {
 function everyMarker(): (string | null)[] {
   return [
     window.localStorage.getItem(TERMS_GATE_STORAGE_KEY),
+    window.localStorage.getItem(AGE_CHECK_STORAGE_KEY),
     window.localStorage.getItem(MARKETING_EMAIL_CHOICE_STORAGE_KEY),
     window.localStorage.getItem(MARKETING_EMAIL_ATTEMPT_STORAGE_KEY),
     window.sessionStorage.getItem(MARKETING_EMAIL_ATTEMPT_STORAGE_KEY),
@@ -201,9 +206,27 @@ describe('a sign-up attempt carried from the sign-up screen to the account', () 
       tab.unmount();
 
       expect(await landOnSignupCompleteWithTheNewAccount()).toEqual([TERMS_AND_GRANT]);
-      expect(everyMarker()).toEqual([null, null, null, null]);
+      expect(everyMarker()).toEqual([null, null, null, null, null]);
     },
   );
+
+  it.each([
+    ['the email step', admitByEmail],
+    ['a provider round trip', admitByProvider],
+  ])('carries the minimum age checked before %s and never the age typed', async (_path, admit) => {
+    const tab = openSignup();
+    await admit(tab, { marketingEmail: false });
+    tab.unmount();
+
+    expect(window.localStorage.getItem(AGE_CHECK_STORAGE_KEY)).toBe(String(ACCOUNT_MINIMUM_AGE));
+    const carried = [
+      ...Object.values({ ...window.localStorage }),
+      ...Object.values({ ...window.sessionStorage }),
+    ];
+    expect(carried).not.toContain(TYPED_AGE);
+    const [body] = await landOnSignupCompleteWithTheNewAccount();
+    expect(body).toEqual(TERMS_ONLY);
+  });
 
   it.each([
     ['the email step', admitByEmail],
@@ -263,7 +286,7 @@ describe('two sign-up attempts open in one browser', () => {
     switchBackToTab(olderTab);
 
     expect(await landOnSignupCompleteWithTheNewAccount(ASKED_AGAIN_AT)).toEqual([]);
-    expect(everyMarker()).toEqual([null, null, null, null]);
+    expect(everyMarker()).toEqual([null, null, null, null, null]);
   });
 
   it('records the choice for the newer attempt, in the tab that ticked it', async () => {
@@ -282,7 +305,7 @@ describe('two sign-up attempts open in one browser', () => {
     switchBackToTab(olderTab);
 
     expect(await landOnSignupCompleteWithTheNewAccount(ASKED_AGAIN_AT)).toEqual([]);
-    expect(everyMarker()).toEqual([null, null, null, null]);
+    expect(everyMarker()).toEqual([null, null, null, null, null]);
   });
 
   it('records nothing for the older attempt whose ticked choice the newer tab removed, and asks again', async () => {
@@ -292,7 +315,7 @@ describe('two sign-up attempts open in one browser', () => {
     switchBackToTab(olderTab);
 
     expect(await landOnSignupCompleteWithTheNewAccount(ASKED_AGAIN_AT)).toEqual([]);
-    expect(everyMarker()).toEqual([null, null, null, null]);
+    expect(everyMarker()).toEqual([null, null, null, null, null]);
   });
 
   it('records the terms alone for the newer attempt that left the box empty', async () => {
@@ -308,6 +331,6 @@ describe('two sign-up attempts open in one browser', () => {
     await admitInItsOwnTab(admitByEmail, { marketingEmail: true });
 
     expect(await landOnSignupCompleteWithTheNewAccount(ASKED_AGAIN_AT)).toEqual([]);
-    expect(everyMarker()).toEqual([null, null, null, null]);
+    expect(everyMarker()).toEqual([null, null, null, null, null]);
   });
 });

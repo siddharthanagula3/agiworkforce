@@ -18,6 +18,7 @@ type ScanModule6 = typeof import('@/app/api/llm/v1/chat/completions/lib/tool-app
 type ScanModule7 = typeof import('@/app/api/llm/v1/chat/completions/lib/tool-loop-routing');
 type ScanModule8 = typeof import('@/lib/services/managed-usage-request-service');
 type ScanModule9 = typeof import('@/lib/services/provider-adapter-service');
+type ScanModule10 = typeof import('@/lib/server/adult-eligibility');
 
 const ZHIPU_MODEL_ID = requireProviderDefaultModel('zhipu');
 const USER_ID = 'user-1';
@@ -29,12 +30,33 @@ const admitManagedTurnSlot = () => ({
   active: 0,
   slot: { release: async () => {} },
 });
-// Terms standing is the auth gate's own concern (auth-gate-terms.test.ts); these
-// turns run for an account that accepted the current version.
+// Terms standing and the age decision are the auth gate's own concern (auth-gate.test.ts);
+// these turns run for an account that accepted the current version and is confirmed 18 and over.
 vi.mock('@/lib/server/terms', async (importOriginal) => ({
   ...(await importOriginal<ScanModule0>()),
   readTermsStanding: async () => ({ kind: 'current' }),
 }));
+const ageDecision = vi.hoisted(() => ({
+  row: { adult_eligibility_outcome: 'eligible', adult_eligibility_minimum_age: 18 } as {
+    adult_eligibility_outcome: string | null;
+    adult_eligibility_minimum_age: number | null;
+  },
+  asked: [] as string[],
+}));
+vi.mock('@/lib/server/adult-eligibility', async (importOriginal) => {
+  const actual = await importOriginal<ScanModule10>();
+  return {
+    ...actual,
+    readAdultEligibilityState: async (userId: string) => {
+      ageDecision.asked.push(userId);
+      return actual.adultEligibilityStateOf(ageDecision.row);
+    },
+  };
+});
+beforeEach(() => {
+  ageDecision.row = { adult_eligibility_outcome: 'eligible', adult_eligibility_minimum_age: 18 };
+  ageDecision.asked = [];
+});
 
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn().mockResolvedValue(null),

@@ -13,6 +13,7 @@ type ScanModule10 = typeof import('@/lib/services/managed-compute-access');
 type ScanModule11 = typeof import('@/lib/services/managed-usage-request-service');
 type ScanModule12 = typeof import('@/lib/services/scheduled-agent-executor');
 type ScanModule13 = typeof import('@/app/api/llm/v1/chat/completions/lib/secret-handling-gate');
+type ScanModule14 = typeof import('@/lib/server/adult-eligibility');
 
 const {
   estimateTokens,
@@ -23,6 +24,8 @@ const {
   complete,
   selectRoute,
   applySecrets,
+  adultEligibility,
+  mustAcceptTerms,
   db,
 } = vi.hoisted(() => ({
   estimateTokens: vi.fn(),
@@ -33,6 +36,8 @@ const {
   complete: vi.fn(),
   selectRoute: vi.fn(),
   applySecrets: vi.fn(),
+  adultEligibility: vi.fn(),
+  mustAcceptTerms: vi.fn(),
   db: { query: vi.fn(), execute: vi.fn(), transaction: vi.fn() },
 }));
 
@@ -70,7 +75,11 @@ vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
 }));
 vi.mock('@/lib/server/terms', async (importOriginal) => ({
   ...(await importOriginal<ScanModule7>()),
-  mustAcceptTerms: vi.fn(async () => false),
+  mustAcceptTerms,
+}));
+vi.mock('@/lib/server/adult-eligibility', async (importOriginal) => ({
+  ...(await importOriginal<ScanModule14>()),
+  readAdultEligibilityState: adultEligibility,
 }));
 vi.mock('@/lib/services/entitlement-resolution', async (importOriginal) => ({
   ...(await importOriginal<ScanModule8>()),
@@ -116,6 +125,8 @@ const input = {
 describe('Siri managed usage reservation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mustAcceptTerms.mockResolvedValue(false);
+    adultEligibility.mockResolvedValue('confirmed');
     applySecrets.mockImplementation(async (_userId: string, texts: string[]) => ({
       action: 'clean',
       texts,
@@ -260,5 +271,69 @@ describe('Siri managed usage reservation', () => {
     expect(finalize).not.toHaveBeenCalled();
     expect(db.query).not.toHaveBeenCalled();
     expect(db.execute).not.toHaveBeenCalled();
+  });
+
+  describe('adult eligibility', () => {
+    function expectNothingStarted() {
+      expect(selectRoute).not.toHaveBeenCalled();
+      expect(reserve).not.toHaveBeenCalled();
+      expect(providerStarted).not.toHaveBeenCalled();
+      expect(complete).not.toHaveBeenCalled();
+      expect(db.query).not.toHaveBeenCalled();
+      expect(db.execute).not.toHaveBeenCalled();
+    }
+
+    it('reads the decision for the token owner before moderating, routing or reserving anything', async () => {
+      await answerMobileIntentAsk(input);
+
+      expect(adultEligibility).toHaveBeenCalledWith(input.owner.userId);
+      expect(adultEligibility.mock.invocationCallOrder[0]).toBeLessThan(
+        selectRoute.mock.invocationCallOrder[0]!,
+      );
+    });
+
+    it('refuses an account nobody has asked its age with 403 age_confirmation_required', async () => {
+      adultEligibility.mockResolvedValue('unconfirmed');
+
+      await expect(answerMobileIntentAsk(input)).rejects.toMatchObject({
+        name: 'MobileIntentRefusal',
+        status: 403,
+        code: 'age_confirmation_required',
+        message: expect.stringContaining('https://agiworkforce.test/login/complete'),
+      });
+      expectNothingStarted();
+    });
+
+    it('refuses an account that declared an age under the minimum with 403 age_ineligible', async () => {
+      adultEligibility.mockResolvedValue('ineligible');
+
+      await expect(answerMobileIntentAsk(input)).rejects.toMatchObject({
+        status: 403,
+        code: 'age_ineligible',
+      });
+      expectNothingStarted();
+    });
+
+    it('refuses with 503 when the decision cannot be read, not admitting an account nobody asked', async () => {
+      adultEligibility.mockRejectedValue(new Error('database unavailable'));
+
+      await expect(answerMobileIntentAsk(input)).rejects.toMatchObject({
+        status: 503,
+        code: 'age_eligibility_unavailable',
+      });
+      expectNothingStarted();
+    });
+
+    it('answers a terms revision first, without reading the age decision', async () => {
+      mustAcceptTerms.mockResolvedValue(true);
+      adultEligibility.mockResolvedValue('unconfirmed');
+
+      await expect(answerMobileIntentAsk(input)).rejects.toMatchObject({
+        status: 403,
+        code: 'terms_acceptance_required',
+      });
+      expect(adultEligibility).not.toHaveBeenCalled();
+      expectNothingStarted();
+    });
   });
 });

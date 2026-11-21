@@ -4,6 +4,7 @@ import { assertAccountActive } from '@/lib/api-auth';
 import { getIdentityUser, getRequestIdentity } from '@/lib/server/identity';
 import { sessionExpiredRedirect } from '@/lib/server/session-expired';
 import { logger } from '@/lib/logger';
+import { requireAdultEligibility } from '@/lib/server/require-adult-eligibility';
 import { requireCurrentTermsAcceptance } from '@/lib/server/require-current-terms';
 import { hasAdminConsoleAccess } from '@/features/admin/lib/admin-console-access';
 import {
@@ -22,6 +23,8 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   }
 
   await requireCurrentTermsAcceptance(userId, '/admin');
+
+  await requireAdultEligibility(userId, '/admin');
 
   // Two populations share this segment: a platform operator, who holds no org
   // role at all and owns the console at `/admin`, and an org admin/owner, whose

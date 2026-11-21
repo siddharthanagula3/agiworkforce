@@ -14,7 +14,15 @@ describe('Onboarding, local setup with cloud invite gate', () => {
     await device.terminateApp();
   });
 
-  it('shows the hero screen on first launch', async () => {
+  it('asks for an age before anything else on first launch', async () => {
+    await waitFor(element(by.id('age-gate-root')))
+      .toBeVisible()
+      .withTimeout(20000);
+    await element(by.id('age-gate-input')).typeText('30');
+    await element(by.id('age-gate-continue-btn')).tap();
+  });
+
+  it('shows the hero screen once the age is answered', async () => {
     await waitFor(element(by.id('onboarding-hero-screen')))
       .toBeVisible()
       .withTimeout(8000);

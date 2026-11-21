@@ -7,7 +7,6 @@ const FIXED_ROW_HEIGHT =
   /(?<![\w-])h-(?:11|12|13|14)\b|(?<![A-Za-z])(?<!width: 48,\s+)height: (?:48|58),/;
 
 const HEADER_SCREENS: Array<{ file: string; titles: number }> = [
-  { file: 'app/(public)/age-gate.tsx', titles: 1 },
   { file: 'app/(app)/(tabs)/projects.tsx', titles: 1 },
   { file: 'app/(app)/about.tsx', titles: 1 },
   { file: 'app/(app)/companion/agent/[id].tsx', titles: 2 },

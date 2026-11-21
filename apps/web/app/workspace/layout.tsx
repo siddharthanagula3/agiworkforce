@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { assertAccountActive } from '@/lib/api-auth';
 import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { requireAdultEligibility } from '@/lib/server/require-adult-eligibility';
 import { requireCurrentTermsAcceptance } from '@/lib/server/require-current-terms';
 import { resolveOrgMembership, type OrgRole } from '@/lib/services/org-sharing-service';
 import { WorkspaceConsoleShell } from '@/features/workspace-console/components/WorkspaceConsoleShell';
@@ -22,6 +23,8 @@ export default async function WorkspaceConsoleLayout({ children }: { children: R
   }
 
   await requireCurrentTermsAcceptance(userId, '/workspace');
+
+  await requireAdultEligibility(userId, '/workspace');
 
   try {
     await assertAccountActive(userId);

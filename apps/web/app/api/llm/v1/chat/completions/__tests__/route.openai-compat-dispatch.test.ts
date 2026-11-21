@@ -66,6 +66,10 @@ const admitManagedTurnSlot = () => ({
   slot: { release: async () => {} },
 });
 const agentTurnMocks = vi.hoisted(() => ({ loadAgentTurnConfig: vi.fn() }));
+vi.mock('@/lib/server/adult-eligibility', async (importOriginal) => ({
+  ...(await importOriginal()),
+  readAdultEligibilityState: vi.fn(async () => 'confirmed'),
+}));
 vi.mock('@/lib/agents/agent-turn-config', async (importOriginal) => ({
   ...(await importOriginal<AgentTurnConfigModule>()),
   loadAgentTurnConfig: agentTurnMocks.loadAgentTurnConfig,

@@ -16,7 +16,8 @@ vi.mock('@/lib/rate-limit', async (importOriginal) => ({
   ...(await importOriginal<ImportedModule0>()),
   withRateLimit: vi.fn(async () => null),
 }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/server/neon-db', () => ({
@@ -38,6 +39,8 @@ vi.mock('@/lib/security-audit', () => ({
 vi.mock('@/lib/server/claimed-user-scope-db', () => ({
   createClaimedUserScopedDb: (_db: unknown, scope: unknown) => ({ scope }),
 }));
+
+import { ACCOUNT_MINIMUM_AGE } from '@agiworkforce/types';
 
 import { hashDeviceRefreshToken } from '@/lib/server/device-refresh-token';
 import { CURRENT_TERMS_VERSION } from '@/lib/server/terms';
@@ -95,6 +98,8 @@ describe('POST /api/auth/device/refresh', () => {
       owner_deletion_scheduled_for: null,
       owner_terms_version: CURRENT_TERMS_VERSION,
       owner_terms_accepted_at: new Date().toISOString(),
+      owner_adult_eligibility_outcome: 'eligible',
+      owner_adult_eligibility_minimum_age: ACCOUNT_MINIMUM_AGE,
     };
   }
 
@@ -172,6 +177,8 @@ describe('POST /api/auth/device/refresh', () => {
           owner_deletion_scheduled_for: null,
           owner_terms_version: CURRENT_TERMS_VERSION,
           owner_terms_accepted_at: new Date().toISOString(),
+          owner_adult_eligibility_outcome: 'eligible',
+          owner_adult_eligibility_minimum_age: ACCOUNT_MINIMUM_AGE,
         },
       ])
       .mockResolvedValueOnce([{ id: '33333333-3333-4333-8333-333333333333' }]);
@@ -209,6 +216,8 @@ describe('POST /api/auth/device/refresh', () => {
       owner_deletion_scheduled_for: null,
       owner_terms_version: CURRENT_TERMS_VERSION,
       owner_terms_accepted_at: new Date().toISOString(),
+      owner_adult_eligibility_outcome: 'eligible',
+      owner_adult_eligibility_minimum_age: ACCOUNT_MINIMUM_AGE,
     };
   }
 
@@ -308,6 +317,8 @@ describe('POST /api/auth/device/refresh', () => {
         owner_deletion_scheduled_for: null,
         owner_terms_version: null,
         owner_terms_accepted_at: null,
+        owner_adult_eligibility_outcome: 'eligible',
+        owner_adult_eligibility_minimum_age: ACCOUNT_MINIMUM_AGE,
       },
     ]);
 
@@ -320,6 +331,121 @@ describe('POST /api/auth/device/refresh', () => {
     });
     expect(mocks.execute).not.toHaveBeenCalled();
     expect(mocks.issueDeveloperToken).not.toHaveBeenCalled();
+  });
+
+  describe('adult eligibility', () => {
+    const REVIEW_URL = 'https://agiworkforce.com/login/complete?redirectTo=%2F';
+    const LEGACY_MINIMUM_AGE = 13;
+
+    function rowWithDecision(outcome: string | null, minimumAge: number | null) {
+      return {
+        ...healthyRow(),
+        user_email: 'user@example.com',
+        owner_adult_eligibility_outcome: outcome,
+        owner_adult_eligibility_minimum_age: minimumAge,
+      };
+    }
+
+    function expectFamilyIntactAndNothingIssued() {
+      expect(mocks.issueDeveloperToken).not.toHaveBeenCalled();
+      expect(mocks.query).toHaveBeenCalledTimes(1);
+      expect(mocks.execute).not.toHaveBeenCalled();
+    }
+
+    it('reads the account decision in the same locked query that reads the token', async () => {
+      mocks.query
+        .mockResolvedValueOnce([healthyRow()])
+        .mockResolvedValueOnce([{ id: '33333333-3333-4333-8333-333333333333' }]);
+
+      await POST(request());
+
+      const sql = String(mocks.query.mock.calls[0]?.[0]);
+      expect(sql).toContain('p.adult_eligibility_outcome AS owner_adult_eligibility_outcome');
+      expect(sql).toContain(
+        'p.adult_eligibility_minimum_age AS owner_adult_eligibility_minimum_age',
+      );
+    });
+
+    it.each([
+      ['an account nobody has asked', null, null],
+      [
+        'an admission recorded under the earlier 13 and over minimum',
+        'eligible',
+        LEGACY_MINIMUM_AGE,
+      ],
+      ['an admission with no minimum recorded', 'eligible', null],
+      ['an outcome the server does not know', 'verified', ACCOUNT_MINIMUM_AGE],
+    ])(
+      'asks %s to answer its age on web and rotates nothing',
+      async (_label, outcome, minimumAge) => {
+        mocks.query.mockResolvedValueOnce([rowWithDecision(outcome, minimumAge)]);
+
+        const response = await POST(request());
+
+        expect(response.status).toBe(403);
+        expect(response.headers.get('Cache-Control')).toBe('no-store');
+        await expect(response.json()).resolves.toMatchObject({
+          error: 'terms_acceptance_required',
+          review: 'age',
+          acceptance_url: REVIEW_URL,
+          error_description: expect.stringContaining(REVIEW_URL),
+        });
+        expectFamilyIntactAndNothingIssued();
+      },
+    );
+
+    it('tells an account that declared an age under the minimum it is unavailable, whatever minimum it was refused under', async () => {
+      mocks.query.mockResolvedValueOnce([rowWithDecision('ineligible', LEGACY_MINIMUM_AGE)]);
+
+      const response = await POST(request());
+
+      expect(response.status).toBe(403);
+      expect(response.headers.get('Cache-Control')).toBe('no-store');
+      const body = (await response.json()) as Record<string, unknown>;
+      expect(body['error']).toBe('account_unavailable');
+      expect(body['recovery_url']).toBe(REVIEW_URL);
+      expect(typeof body['error_description']).toBe('string');
+      expectFamilyIntactAndNothingIssued();
+    });
+
+    it('rotates the very same credential once the account has answered its age', async () => {
+      mocks.query.mockResolvedValueOnce([rowWithDecision(null, null)]);
+      const withheld = await POST(request());
+      expect(withheld.status).toBe(403);
+
+      mocks.query.mockReset();
+      mocks.query
+        .mockResolvedValueOnce([rowWithDecision('eligible', ACCOUNT_MINIMUM_AGE)])
+        .mockResolvedValueOnce([{ id: '33333333-3333-4333-8333-333333333333' }]);
+
+      const resumed = await POST(request());
+
+      expect(resumed.status).toBe(200);
+      expect(mocks.issueDeveloperToken).toHaveBeenCalledWith({
+        userId: 'user-1',
+        email: 'user@example.com',
+        sessionFamilyId: '22222222-2222-4222-8222-222222222222',
+      });
+    });
+
+    it('names the terms first when the account owes both', async () => {
+      mocks.query.mockResolvedValueOnce([
+        {
+          ...rowWithDecision(null, null),
+          owner_terms_version: null,
+          owner_terms_accepted_at: null,
+        },
+      ]);
+
+      const response = await POST(request());
+
+      expect(response.status).toBe(403);
+      const body = (await response.json()) as Record<string, unknown>;
+      expect(body['error']).toBe('terms_acceptance_required');
+      expect(body['terms_version']).toBe(CURRENT_TERMS_VERSION);
+      expect(body['review']).toBeUndefined();
+      expectFamilyIntactAndNothingIssued();
+    });
   });
 
   it('rejects malformed credentials before opening a transaction', async () => {

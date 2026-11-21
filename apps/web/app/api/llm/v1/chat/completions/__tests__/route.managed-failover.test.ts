@@ -20,6 +20,10 @@ const admitManagedTurnSlot = () => ({
   active: 0,
   slot: { release: async () => {} },
 });
+vi.mock('@/lib/server/adult-eligibility', async (importOriginal) => ({
+  ...(await importOriginal()),
+  readAdultEligibilityState: vi.fn(async () => 'confirmed'),
+}));
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn().mockResolvedValue(null),
   acquireManagedTurnSlot: vi.fn(async () => admitManagedTurnSlot()),

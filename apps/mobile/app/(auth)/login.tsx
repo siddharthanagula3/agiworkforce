@@ -30,6 +30,12 @@ import {
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useTierStore } from '@/src/features/billing/store';
 import { useTermsAcceptanceStore } from '@/src/features/auth/store/termsAcceptanceStore';
+import {
+  adultEligibilityNeedsAnswer,
+  isAdultEligibilityConfirmed,
+  useAdultEligibilityStore,
+} from '@/src/features/auth/store/adultEligibilityStore';
+import { AccountAgeCheck } from '@/src/features/auth/components/AccountAgeCheck';
 import { useAuthStore } from '@/src/features/auth/store';
 import { deviceAccountErrorMessage } from '@/src/features/accounts/deviceAccounts';
 import { isAgeGateConfirmed } from '@/src/features/auth/services/ageGate';
@@ -55,8 +61,13 @@ export default function LoginScreen() {
   const termsStatus = useTermsAcceptanceStore((state) => state.status);
   const termsVersion = useTermsAcceptanceStore((state) => state.currentVersion);
   const termsError = useTermsAcceptanceStore((state) => state.error);
-  const completionRef = useRef({ isSignedIn, userId, termsUserId, termsStatus, cloudUnlocked });
-  completionRef.current = { isSignedIn, userId, termsUserId, termsStatus, cloudUnlocked };
+  const eligibilityUserId = useAdultEligibilityStore((state) => state.userId);
+  const eligibilityStatus = useAdultEligibilityStore((state) => state.status);
+  const eligibility = { userId: eligibilityUserId, status: eligibilityStatus };
+  const adultConfirmed = isAdultEligibilityConfirmed(eligibility, userId);
+  const cloudAdmitted = termsUserId === userId && termsStatus === 'accepted' && adultConfirmed;
+  const completionRef = useRef({ isSignedIn, cloudAdmitted, cloudUnlocked });
+  completionRef.current = { isSignedIn, cloudAdmitted, cloudUnlocked };
   const [termsConfirmation, setTermsConfirmation] = useState<{
     userId: string;
     version: string;
@@ -90,7 +101,7 @@ export default function LoginScreen() {
         isLoaded,
         isSignedIn: isSignedIn === true,
         userId,
-        termsAccepted: termsUserId === userId && termsStatus === 'accepted',
+        termsAccepted: cloudAdmitted,
         cloudUnlocked,
         subscriptionTier,
       });
@@ -100,13 +111,12 @@ export default function LoginScreen() {
     resetPostAuthDestinationToLocal();
   }, [
     additionFromUserId,
+    cloudAdmitted,
     cloudUnlocked,
     isLoaded,
     isSignedIn,
     postAuthIntent,
     subscriptionTier,
-    termsStatus,
-    termsUserId,
     userId,
   ]);
 
@@ -119,13 +129,7 @@ export default function LoginScreen() {
       }
       if (!isAgeGateConfirmed()) return;
       const completion = completionRef.current;
-      if (
-        completion.isSignedIn &&
-        completion.termsUserId === completion.userId &&
-        completion.termsStatus === 'accepted' &&
-        completion.cloudUnlocked
-      )
-        return;
+      if (completion.isSignedIn && completion.cloudAdmitted && completion.cloudUnlocked) return;
       if (clearPostAuthIntent()) resetPostAuthDestinationToLocal();
     },
     [],
@@ -155,6 +159,15 @@ export default function LoginScreen() {
 
   if (!FEATURES.auth) return <Redirect href="/(app)" />;
   if (isLoaded && isSignedIn && !addingAccount) {
+    if (userId && adultEligibilityNeedsAnswer(eligibility, userId)) {
+      return (
+        <AccountAgeCheck
+          userId={userId}
+          onContinueLocal={handleDismiss}
+          onSignOut={handleSignOut}
+        />
+      );
+    }
     if (termsUserId === userId && (termsStatus === 'required' || termsStatus === 'error')) {
       return (
         <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceBase }}>

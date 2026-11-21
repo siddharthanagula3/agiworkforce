@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-11-11
+Last updated: 2026-11-20
 
 `pnpm dev:accounts` makes a named set of accounts on the local stack, one per
 plan and one per lane, so a feature can be tried on any plan without touching
@@ -40,9 +40,16 @@ added there gets an account.
 
 Each account is a Clerk development-instance user with a `+clerk_test` address
 and the matching local rows. The rows are written by the functions the product
-uses itself: terms acceptance, the Stripe webhook's subscription and top-up
-handlers, credit allocation and credit settlement. The meters read a test
+uses itself: terms acceptance, the 18 and over eligibility decision, the Stripe
+webhook's subscription and top-up handlers, credit allocation and credit
+settlement. The meters read a test
 account exactly as they read a real one.
+
+Every seeded account holds an 18 and over decision, because product pages and
+Cloud requests refuse an account without one. To see the age step an existing
+account gets, clear the five `adult_eligibility_*` columns on its `profiles`
+row in the local database and sign in again; `pnpm dev:accounts reset <name>`
+puts the decision back.
 
 ## Signing in
 

@@ -3,7 +3,7 @@
     "schema": "app-store-connect-2026",
     "bundle_id": "com.agiworkforce.app",
     "version": "0.0.1",
-    "last_updated": "2026-11-17",
+    "last_updated": "2026-11-20",
     "char_limits": {
       "name": 30,
       "subtitle": 30,
@@ -32,18 +32,30 @@
     "secondary": "Utilities"
   },
   "age_rating": {
-    "rating": "16+",
+    "rating": "18+",
     "calculated_rating": "16+",
+    "eligibility": {
+      "minimum_age": 18,
+      "since": "2026-11-20",
+      "statement": "AGI Mobile is for people 18 and over. Every path, account-free Local Mode included, starts with the age step, and Cloud opens only when the server holds an 18 and over decision for the account (ACCOUNT_MINIMUM_AGE, packages/contracts/types/src/account-eligibility.ts; src/features/auth/services/rootRouting.ts; apps/web/lib/server/adult-eligibility-gate.ts).",
+      "not_a_content_rating": "This is who may use the app, not a rating of its content. calculated_rating is the content rating Apple derives from the questionnaire below; rating is what the App Store shows after the EULA override in the note."
+    },
+    "rating_override": {
+      "from": "16+",
+      "to": "18+",
+      "basis": "Apple's EULA minimum-age override (quoted in the note), because the Terms admit only people 18 and over. No content answer changes.",
+      "owner_decision": "Setting the override in App Store Connect, Age Ratings, Override, is the owner's. The documents record 18+ because Apple's text requires a rating that adheres to a higher EULA minimum; if the owner leaves the override off, the App Store shows the calculated 16+ and the app still admits only 18 and over."
+    },
     "questionnaire": {
       "In-App Controls": {
         "Parental Controls": {
-          "answer": "Yes",
-          "reason": "Settings > Parental Controls shows minor-safe mode, a content filter on every outgoing prompt that an age under the device's threshold turns on and nothing in the app turns off (src/features/settings/parental-controls/index.tsx, lib/contentFilter.ts).",
-          "owner_decision": "Yes or No is the owner's call. Apple defines Parental Controls as settings or tools that let parents or guardians monitor, manage or restrict a child's access. The screen only shows the status that follows from the stored device age, says parent accounts can't be linked, and its one control is Review Device Age Settings; Yes rests on an adult being able to set a minor age that turns the filter on."
+          "answer": "No",
+          "reason": "The app has no parental controls: the Parental Controls screen and its Settings row were removed when the minimum age became 18 (2026-11-20). Settings > Age shows only whether this device met the age (src/features/settings/age/index.tsx); no parent or guardian can monitor, manage or restrict anything.",
+          "owner_decision": "The answer in App Store Connect is the owner's. The app no longer has anything Apple's definition (settings or tools that let parents or guardians monitor, manage or restrict a child's access) could describe, so No is what the build supports."
         },
         "Age Assurance": {
           "answer": "Yes",
-          "reason": "Before AGI Cloud sign-in the app asks iOS for a declared age range through the Declared Age Range API (expo-age-range) on iOS 26 and later where iOS offers age features, and otherwise asks for a typed age (app/(public)/age-gate.tsx)."
+          "reason": "Before anything else, Local Mode included, the app asks iOS for a declared age range through the Declared Age Range API (expo-age-range) on iOS 26 and later, asking only whether the person is 18 or over; an unavailable, declined or inconclusive answer falls through to a typed age (src/features/age-assurance/ageAssurance.ts, app/(public)/age-gate.tsx). For a Cloud account the server keeps only the 18 and over decision (POST /api/eligibility)."
         }
       },
       "Capabilities": {
@@ -107,7 +119,7 @@
         },
         "Graphic Sexual Content and Nudity": {
           "answer": "None",
-          "reason": "The providers' filters refuse it, minor-safe mode blocks such prompts, and any other answer makes the app Unrated, which cannot be published."
+          "reason": "The providers' filters refuse it, and any other answer makes the app Unrated, which cannot be published."
         }
       },
       "Violence": {
@@ -147,7 +159,7 @@
         }
       }
     },
-    "note": "Questions, groups and levels are Apple's current form (https://developer.apple.com/help/app-store-connect/reference/app-information/age-ratings-values-and-definitions and https://developer.apple.com/help/app-store-connect/manage-app-information/set-an-app-age-rating, read 2026-11-15): content items take None, Infrequent or Frequent, and Gambling, Loot Boxes, Health or Wellness Topics, the in-app controls and the capabilities take Yes or No. The calculated rating is 16+, set by Unrestricted Web Access; without it the answers reach 13+. Apple: \"If your app has a EULA with minimum age requirements that exceed the rating that Apple calculated, you must override to a rating that adheres to the requirements\"; the Terms set the account minimum at 13 (ACCOUNT_MINIMUM_AGE, packages/contracts/types/src/account-eligibility.ts), below 16+, so no override is needed; the regional gates of 16 in EU zones and North Macedonia and 18 in India and Brazil (ageGate.ts) are stricter local thresholds, not the EULA minimum. How links open: the app has no address bar and no place to type a web address. Fixed agiworkforce.com pages (legal, help, account and sign-in recovery) open in an in-app Safari sheet, marked from=mobile (apps/mobile/src/platform/webContentPage.ts) so that, once the from=mobile change in apps/web/lib/embedded-page.ts is deployed, the site shows them without pricing or purchase routes; until then production pages opened this way still link to /pricing and /contact-sales; a link in an answer opens any web page in the same sheet (apps/mobile/lib/safeOpenURL.ts); the change-email page and a few hand-offs to other sites, such as connecting GitHub, open the system browser. Shared chat links are read on the web, not inside the app. Answering No to Unrestricted Web Access would need a build that opens answer links outside the app."
+    "note": "Questions, groups and levels are Apple's current form (https://developer.apple.com/help/app-store-connect/reference/app-information/age-ratings-values-and-definitions and https://developer.apple.com/help/app-store-connect/manage-app-information/set-an-app-age-rating, read 2026-11-15): content items take None, Infrequent or Frequent, and Gambling, Loot Boxes, Health or Wellness Topics, the in-app controls and the capabilities take Yes or No. The calculated rating is 16+, set by Unrestricted Web Access; without it the answers reach 13+. That calculated rating is the content rating, and only the questionnaire sets it. Who may use the app is a separate rule: since 2026-11-20 the Terms set the account minimum at 18 (ACCOUNT_MINIMUM_AGE, packages/contracts/types/src/account-eligibility.ts), on every surface and on every path into the app, Local Mode included (ageGate.ts takes its default from ACCOUNT_MINIMUM_AGE; no region is lower). Apple: \"If your app has a EULA with minimum age requirements that exceed the rating that Apple calculated, you must override to a rating that adheres to the requirements\"; 18 is above the calculated 16+, so the shown rating is 18+ by that override, not by any content answer. The override is set by the owner in App Store Connect. How links open: the app has no address bar and no place to type a web address. Fixed agiworkforce.com pages (legal, help, account and sign-in recovery) open in an in-app Safari sheet, marked from=mobile (apps/mobile/src/platform/webContentPage.ts) so that, once the from=mobile change in apps/web/lib/embedded-page.ts is deployed, the site shows them without pricing or purchase routes; until then production pages opened this way still link to /pricing and /contact-sales; a link in an answer opens any web page in the same sheet (apps/mobile/lib/safeOpenURL.ts); the change-email page and a few hand-offs to other sites, such as connecting GitHub, open the system browser. Shared chat links are read on the web, not inside the app. Answering No to Unrestricted Web Access would need a build that opens answer links outside the app."
   },
   "privacy_nutrition_labels": {
     "data_not_collected": false,

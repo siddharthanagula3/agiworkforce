@@ -5,6 +5,31 @@ import { getModelMetadataById, getRoutingSlotModel } from '@agiworkforce/types';
 type ScanModule0 = typeof import('@/lib/services/managed-usage-request-service');
 
 vi.mock('server-only', () => ({}));
+type AdultEligibilityModule = typeof import('@/lib/server/adult-eligibility');
+const ageDecision = vi.hoisted(() => ({
+  row: { adult_eligibility_outcome: 'eligible', adult_eligibility_minimum_age: 18 } as {
+    adult_eligibility_outcome: string | null;
+    adult_eligibility_minimum_age: number | null;
+  },
+  unreadable: false,
+  asked: [] as string[],
+}));
+vi.mock('@/lib/server/adult-eligibility', async (importOriginal) => {
+  const actual = await importOriginal<AdultEligibilityModule>();
+  return {
+    ...actual,
+    readAdultEligibilityState: async (userId: string) => {
+      ageDecision.asked.push(userId);
+      if (ageDecision.unreadable) throw new Error('adult eligibility unreadable');
+      return actual.adultEligibilityStateOf(ageDecision.row);
+    },
+  };
+});
+beforeEach(() => {
+  ageDecision.row = { adult_eligibility_outcome: 'eligible', adult_eligibility_minimum_age: 18 };
+  ageDecision.unreadable = false;
+  ageDecision.asked = [];
+});
 
 const mocks = vi.hoisted(() => ({
   getClerkAuthUser: vi.fn(),
@@ -70,7 +95,8 @@ vi.mock('@/lib/cors', () => ({
   getCorsHeaders: vi.fn(() => ({})),
   getSecurityHeaders: vi.fn(() => ({})),
 }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal()),
   PINO_LEVELS: vi.fn(),
   loggerOptions: vi.fn(),
   resolveLogLevel: vi.fn(),
@@ -222,6 +248,55 @@ describe('POST /api/voice/speech', () => {
 
     expect(response.status).toBe(429);
     expect(mocks.withRateLimit).toHaveBeenCalledWith(expect.anything(), 'voice-speech');
+  });
+
+  describe('adult eligibility', () => {
+    const LEGACY_MINIMUM_AGE = 13;
+
+    function expectNothingReservedOrSent() {
+      expect(mocks.reserve).not.toHaveBeenCalled();
+      expect(mocks.providerStarted).not.toHaveBeenCalled();
+      expect(mocks.fetch).not.toHaveBeenCalled();
+    }
+
+    it.each([
+      ['has never been asked its age', null, null],
+      ['was admitted under the earlier 13 and over rule', 'eligible', LEGACY_MINIMUM_AGE],
+    ])('refuses a signed-in client that %s, reserving and sending nothing', async (_l, o, m) => {
+      ageDecision.row = { adult_eligibility_outcome: o, adult_eligibility_minimum_age: m };
+
+      const response = await POST(request({ text: 'Hello' }));
+
+      expect(response.status).toBe(403);
+      const body = await response.json();
+      expect(body.error.code).toBe('age_confirmation_required');
+      expect(body.review_url).toBe('http://localhost/login/complete?redirectTo=%2Fchat');
+      expect(ageDecision.asked).toEqual(['user-1']);
+      expectNothingReservedOrSent();
+    });
+
+    it('refuses an account that declared an age under the minimum', async () => {
+      ageDecision.row = {
+        adult_eligibility_outcome: 'ineligible',
+        adult_eligibility_minimum_age: 18,
+      };
+
+      const response = await POST(request({ text: 'Hello' }));
+
+      expect(response.status).toBe(403);
+      expect((await response.json()).error.code).toBe('age_ineligible');
+      expectNothingReservedOrSent();
+    });
+
+    it('refuses with 503 when the decision cannot be read', async () => {
+      ageDecision.unreadable = true;
+
+      const response = await POST(request({ text: 'Hello' }));
+
+      expect(response.status).toBe(503);
+      expect((await response.json()).error.code).toBe('age_eligibility_unavailable');
+      expectNothingReservedOrSent();
+    });
   });
 
   it('returns the managed compute gate response when the feature is off', async () => {

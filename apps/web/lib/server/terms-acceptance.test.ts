@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+type AdultEligibilityModule = typeof import('@/lib/server/adult-eligibility');
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
@@ -7,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   bindQuery: vi.fn(),
   auth: vi.fn(),
   withRateLimit: vi.fn(),
+  adultEligibility: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -18,7 +20,12 @@ vi.mock('@/lib/auth/email-confirmation', async (importOriginal) => ({
     createdAt: Date.now(),
   })),
 }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/server/adult-eligibility', async (importOriginal) => ({
+  ...(await importOriginal<AdultEligibilityModule>()),
+  readAdultEligibilityState: (...args: unknown[]) => mocks.adultEligibility(...args),
+}));
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/server/neon-db', () => ({
@@ -188,6 +195,7 @@ describe('POST /api/terms/accept', () => {
     mocks.bindExecute.mockReset();
     mocks.bindQuery.mockReset();
     mocks.auth.mockReset();
+    mocks.adultEligibility.mockReset().mockResolvedValue('confirmed');
   });
 
   it('records the acceptance for the signed-in account', async () => {
@@ -508,4 +516,23 @@ describe('POST /api/terms/accept', () => {
 
     expect(response.status).toBe(500);
   });
+
+  it.each(['unconfirmed', 'ineligible'] as const)(
+    'writes no acceptance for a web account whose age decision is %s',
+    async (state) => {
+      mocks.auth.mockResolvedValue({ userId: 'user_abc' });
+      mocks.adultEligibility.mockResolvedValue(state);
+
+      const response = await acceptTerms(
+        acceptRequest({ surface: 'web-login', version: POLICY_LAST_UPDATED.terms }),
+      );
+
+      expect(response.status).toBe(403);
+      await expect(response.json()).resolves.toMatchObject({
+        error: { code: state === 'ineligible' ? 'age_ineligible' : 'age_confirmation_required' },
+      });
+      expect(mocks.adultEligibility).toHaveBeenCalledWith('user_abc');
+      expect(writes()).toEqual([]);
+    },
+  );
 });

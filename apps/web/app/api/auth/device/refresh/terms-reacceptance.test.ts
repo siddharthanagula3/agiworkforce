@@ -11,7 +11,8 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/server/neon-db', () => ({
@@ -38,6 +39,8 @@ vi.mock('@/lib/server/terms', async (importOriginal) => {
       }),
   };
 });
+
+import { ACCOUNT_MINIMUM_AGE } from '@agiworkforce/types';
 
 import { CURRENT_TERMS_VERSION } from '@/lib/server/terms';
 import { POST } from './route';
@@ -66,6 +69,8 @@ function storedToken(termsVersion: string | null) {
     owner_deletion_scheduled_for: null,
     owner_terms_version: termsVersion,
     owner_terms_accepted_at: termsVersion ? new Date().toISOString() : null,
+    owner_adult_eligibility_outcome: 'eligible',
+    owner_adult_eligibility_minimum_age: ACCOUNT_MINIMUM_AGE,
   };
 }
 

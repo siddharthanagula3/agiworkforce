@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import { ACCOUNT_AGE_REQUIREMENT_NOTICE } from '@agiworkforce/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -109,7 +110,8 @@ function post(body: unknown) {
   });
 }
 
-const HELLO = { messages: [{ role: 'user', content: 'Hello there' }] };
+const MESSAGES = [{ role: 'user', content: 'Hello there' }];
+const HELLO = { messages: MESSAGES, ageCheckedAgainst: 18 };
 
 function allowed(remaining = 5) {
   return {
@@ -159,9 +161,42 @@ describe(GUEST_CHAT_PATH, () => {
     expect(mocks.rateLimit).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['carries no age check', { messages: MESSAGES }],
+    ['was checked against 13 by an old page', { messages: MESSAGES, ageCheckedAgainst: 13 }],
+    ['carries a fractional age check', { messages: MESSAGES, ageCheckedAgainst: 17.5 }],
+    ['carries a text age check', { messages: MESSAGES, ageCheckedAgainst: '18' }],
+    ['carries a null age check', { messages: MESSAGES, ageCheckedAgainst: null }],
+  ])('refuses a turn that %s before any quota, slot or model', async (_name, body) => {
+    const response = await POST(post(body));
+
+    expect(response.status).toBe(403);
+    expect((await response.json()).error).toMatchObject({
+      code: 'age_confirmation_required',
+      message: ACCOUNT_AGE_REQUIREMENT_NOTICE,
+    });
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(mocks.rateLimit).not.toHaveBeenCalled();
+    expect(mocks.reserve).not.toHaveBeenCalled();
+    expect(mocks.estimate).not.toHaveBeenCalled();
+    expect(mocks.moderate).not.toHaveBeenCalled();
+    expect(mocks.settle).not.toHaveBeenCalled();
+  });
+
+  it('keeps refusing the chat while the switch is off before it asks about age', async () => {
+    mocks.available.mockResolvedValue(false);
+
+    const response = await POST(post({ messages: MESSAGES }));
+
+    expect((await response.json()).error.code).toBe('guest_chat_unavailable');
+  });
+
   it('takes text only and says how to get more', async () => {
     const response = await POST(
-      post({ messages: [{ role: 'user', content: 'Read this', attachments: ['file'] }] }),
+      post({
+        messages: [{ role: 'user', content: 'Read this', attachments: ['file'] }],
+        ageCheckedAgainst: 18,
+      }),
     );
 
     expect(response.status).toBe(400);
@@ -277,6 +312,14 @@ describe(GUEST_CHAT_PATH, () => {
     expect(response.headers.get('x-guest-messages-remaining')).toBe('5');
     expect(await response.text()).toContain('data: [DONE]');
     expect(mocks.human).toHaveBeenCalled();
+    expect(mocks.reserve).toHaveBeenCalledTimes(1);
+  });
+
+  it('admits a turn checked against the current minimum', async () => {
+    const response = await POST(post({ messages: MESSAGES, ageCheckedAgainst: 21 }));
+
+    expect(response.status).toBe(200);
+    expect(mocks.rateLimit).toHaveBeenCalled();
     expect(mocks.reserve).toHaveBeenCalledTimes(1);
   });
 });

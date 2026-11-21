@@ -34,6 +34,7 @@ import {
 } from '@/lib/observability/media-telemetry';
 import { annotateActiveSpan } from '@/lib/observability/span';
 import { getClerkAuthUser } from '@/lib/api-auth';
+import { buildAdultEligibilityGateResponse } from '@/lib/server/adult-eligibility-gate';
 import {
   getModelMetadataById,
   getModels,
@@ -886,6 +887,13 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
   }
 
   const { userId } = await getClerkAuthUser(request);
+  const ageGateResponse = await buildAdultEligibilityGateResponse({
+    userId,
+    request,
+    gate: 'media-video',
+    headers: { ...getCorsHeaders(request), ...getSecurityHeaders() },
+  });
+  if (ageGateResponse) return ageGateResponse;
 
   // Resolved exactly once: the workspace admitted at the start of the turn is
   // the workspace the row is written to, so a switch mid-request cannot move it.

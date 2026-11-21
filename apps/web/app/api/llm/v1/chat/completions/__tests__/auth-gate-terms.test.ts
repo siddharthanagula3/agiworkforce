@@ -3,6 +3,10 @@ import { NextRequest } from 'next/server';
 type ScanModule0 = typeof import('@/lib/server/terms');
 type ScanModule1 = typeof import('@/lib/observability/metrics');
 
+vi.mock('@/lib/server/adult-eligibility', async (importOriginal) => ({
+  ...(await importOriginal()),
+  readAdultEligibilityState: vi.fn(async () => 'confirmed'),
+}));
 vi.mock('server-only', () => ({}));
 
 const mocks = vi.hoisted(() => ({

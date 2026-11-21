@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { ScrollView, StyleSheet } from 'react-native';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { ACCOUNT_AGE_REQUIREMENT_NOTICE, ACCOUNT_MINIMUM_AGE } from '@agiworkforce/types';
 import {
   clearAgeGate,
@@ -15,8 +15,6 @@ import {
   beginCloudPostAuthIntent,
   clearPostAuthIntent,
 } from '@/src/features/auth/services/postAuthIntent';
-import { HEADER_TEXT_SCALE_LIMIT } from '@/src/features/chat/components/WorkModeSwitch';
-import ParentalControlsScreen from '@/src/features/settings/parental-controls';
 
 const mockStore = new Map<string, string>();
 
@@ -31,14 +29,13 @@ jest.mock('@/lib/mmkv', () => ({
 }));
 
 // The gate reads the device zone, so the fixture states one rather than
-// inheriting whatever the machine running the suite is set to. New York
-// matches no rule, which leaves the account minimum as the threshold.
+// inheriting whatever the machine running the suite is set to.
 const DEFAULT_TIME_ZONE = 'America/New_York';
 let mockTimeZone = DEFAULT_TIME_ZONE;
 const realIntl = global.Intl;
 
 const mockReplace = jest.fn();
-let mockSearchParams: { returnTo?: string; entry?: string } = {};
+let mockSearchParams: { returnTo?: string } = {};
 
 jest.mock('expo-router', () => {
   const actual = jest.requireActual('expo-router');
@@ -54,8 +51,6 @@ jest.mock('expo-router', () => {
   };
 });
 
-jest.mock('@/src/features/chat/components/WorkModeSwitch', () => ({ HEADER_TEXT_SCALE_LIMIT: 2 }));
-
 let mockSignedIn = false;
 const mockSignOut = jest.fn(() => Promise.resolve());
 const mockSignOutAllAccounts = jest.fn(() => Promise.resolve());
@@ -67,6 +62,23 @@ jest.mock('@/src/features/auth/store', () => ({
       signOut: mockSignOut,
       signOutAllAccounts: mockSignOutAllAccounts,
     }),
+}));
+
+jest.mock('@/src/features/settings/data-controls/useLocalDataExport', () => ({
+  useLocalDataExport: () => ({ exporting: false, progress: null, handleExport: jest.fn() }),
+}));
+
+let mockErased: (() => void) | null = null;
+jest.mock('@/src/features/settings/data-controls/useEraseDeviceData', () => ({
+  useEraseDeviceData: (onErased: () => void) => {
+    mockErased = onErased;
+    return { isWiping: false, eraseDeviceData: jest.fn() };
+  },
+}));
+
+const mockOpenWebContentPage = jest.fn(() => Promise.resolve(true));
+jest.mock('@/src/platform/webContentPage', () => ({
+  openWebContentPage: (path: string) => mockOpenWebContentPage(path),
 }));
 
 beforeAll(() => {
@@ -95,9 +107,10 @@ const AGE_RECORD_KEYS: (keyof AgeGateRecord)[] = [
   'threshold',
 ];
 
-// The age record is a device fact. Putting it in a request body, a header or a
-// query string is what would tell the server, and other users, a minor is here.
-const SENDS_MINOR_STATUS =
+// The device record stays on the device. The server learns only what the
+// shared eligibility contract carries, so a request body, header or query
+// naming a field of the device record would be a leak.
+const SENDS_DEVICE_RECORD =
   /(body|headers|params|payload|query)[^\n]*\b(isMinor|minorMode|ageEntered|ageGate)\b/;
 
 function sourceFiles(): { path: string; text: string }[] {
@@ -143,8 +156,8 @@ describe('what the age gate keeps about a person', () => {
     expect({ ...younger, confirmedAt: '' }).toEqual({ ...older, confirmedAt: '' });
   });
 
-  it('never carries the answer off the device', () => {
-    const leaking = FILES.filter((file) => SENDS_MINOR_STATUS.test(file.text)).map(
+  it('never sends the device record itself off the device', () => {
+    const leaking = FILES.filter((file) => SENDS_DEVICE_RECORD.test(file.text)).map(
       (file) => file.path,
     );
 
@@ -154,26 +167,37 @@ describe('what the age gate keeps about a person', () => {
   it('has source to sweep, so an empty tree cannot pass this', () => {
     expect(FILES.length).toBeGreaterThan(200);
   });
+
+  it('makes no claim that the age is never shared', () => {
+    const claiming = FILES.filter((file) => /never shared/i.test(file.text)).map(
+      (file) => file.path,
+    );
+
+    expect(claiming).toEqual([]);
+  });
 });
 
-describe('the age screen when the answer does not work', () => {
+describe('the age screen', () => {
   beforeEach(() => {
     clearAgeGate();
+    clearPostAuthIntent();
     mockReplace.mockClear();
     mockSignOut.mockClear();
     mockSignOutAllAccounts.mockClear();
+    mockOpenWebContentPage.mockClear();
     mockSignedIn = false;
     mockSearchParams = {};
     mockTimeZone = DEFAULT_TIME_ZONE;
   });
 
-  it('returns to Local chat when Cloud sign-in needs age verification', () => {
-    mockSearchParams = { returnTo: '/(auth)/login' };
+  it('states the rule with the shared notice', () => {
     render(<AgeGateScreen />);
 
-    fireEvent.press(screen.getByLabelText('Go back'));
-
-    expect(mockReplace).toHaveBeenCalledWith('/(app)');
+    expect(screen.getByTestId('age-gate-subtitle')).toHaveTextContent(
+      ACCOUNT_AGE_REQUIREMENT_NOTICE,
+      { exact: false },
+    );
+    expect(screen.queryByLabelText('Go back')).toBeNull();
   });
 
   it('returns to the requested Cloud sign-in after an adult confirms age', () => {
@@ -190,52 +214,8 @@ describe('the age screen when the answer does not work', () => {
     });
   });
 
-  it('returns to parental controls when reviewing device age settings', () => {
-    mockSearchParams = { returnTo: '/(app)/settings/parental-controls' };
-    render(<AgeGateScreen />);
-
-    fireEvent.press(screen.getByLabelText('Go back'));
-
-    expect(mockReplace).toHaveBeenCalledWith('/(app)/settings/parental-controls');
-  });
-
-  it('hands the Age entry back to parental controls when backing out of the review', () => {
-    mockSearchParams = { returnTo: '/(app)/settings/parental-controls', entry: 'age' };
-    render(<AgeGateScreen />);
-
-    fireEvent.press(screen.getByLabelText('Go back'));
-
-    expect(mockReplace).toHaveBeenCalledWith({
-      pathname: '/(app)/settings/parental-controls',
-      params: { entry: 'age' },
-    });
-  });
-
-  it('hands the Age entry back to parental controls after an adult confirms their age', () => {
-    mockSearchParams = { returnTo: '/(app)/settings/parental-controls', entry: 'age' };
-    render(<AgeGateScreen />);
-
-    fireEvent.changeText(screen.getByTestId('age-gate-input'), '30');
-    fireEvent.press(screen.getByTestId('age-gate-continue-btn'));
-
-    expect(mockReplace).toHaveBeenCalledWith({
-      pathname: '/(app)/settings/parental-controls',
-      params: { entry: 'age' },
-    });
-  });
-
-  it('drops an entry it does not know instead of passing it on', () => {
-    mockSearchParams = { returnTo: '/(app)/settings/parental-controls', entry: 'elsewhere' };
-    render(<AgeGateScreen />);
-
-    fireEvent.press(screen.getByLabelText('Go back'));
-
-    expect(mockReplace).toHaveBeenCalledWith('/(app)/settings/parental-controls');
-  });
-
-  it('takes the entry only for the parental controls return path', () => {
-    clearPostAuthIntent();
-    mockSearchParams = { returnTo: '/(auth)/login', entry: 'age' };
+  it('returns to plain Cloud sign-in when no intent is staged', () => {
+    mockSearchParams = { returnTo: '/(auth)/login' };
     render(<AgeGateScreen />);
 
     fireEvent.changeText(screen.getByTestId('age-gate-input'), '30');
@@ -244,33 +224,15 @@ describe('the age screen when the answer does not work', () => {
     expect(mockReplace).toHaveBeenCalledWith('/(auth)/login');
   });
 
-  it('still refuses a return path that is not on the allow-list, entry or not', () => {
-    mockSearchParams = { returnTo: '/(app)/settings/account-security', entry: 'age' };
+  it('refuses a return path that is not on the allow-list', () => {
+    mockSearchParams = { returnTo: '/(app)/settings/account-security' };
     render(<AgeGateScreen />);
 
-    expect(screen.queryByLabelText('Go back')).toBeNull();
     fireEvent.changeText(screen.getByTestId('age-gate-input'), '30');
     fireEvent.press(screen.getByTestId('age-gate-continue-btn'));
 
     expect(mockReplace).toHaveBeenCalledTimes(1);
     expect(mockReplace).toHaveBeenCalledWith('/(public)/onboarding');
-  });
-
-  it('lets the review header grow and caps its title at the largest text size', () => {
-    mockSearchParams = { returnTo: '/(app)/settings/parental-controls' };
-    render(<AgeGateScreen />);
-
-    const title = screen.getByRole('header', { name: 'Review Age Settings' });
-    expect(title.props.maxFontSizeMultiplier).toBe(HEADER_TEXT_SCALE_LIMIT);
-    let node = title.parent;
-    let row: Record<string, unknown> | undefined;
-    while (node && !row) {
-      const flat = StyleSheet.flatten(node.props?.style) as Record<string, unknown> | undefined;
-      if (flat && 'flexDirection' in flat) row = flat;
-      node = node.parent;
-    }
-    expect(row?.minHeight).toBeGreaterThan(0);
-    expect(row?.height).toBeUndefined();
   });
 
   it('says what went wrong instead of ignoring the button', () => {
@@ -319,57 +281,44 @@ describe('the age screen when the answer does not work', () => {
     expect(style.alignSelf).toBe('center');
   });
 
-  it('refuses anyone under the account minimum with the Terms wording and moves them nowhere', () => {
+  it('refuses a typed 17 with the shared notice and moves them nowhere', () => {
     render(<AgeGateScreen />);
 
-    fireEvent.changeText(screen.getByTestId('age-gate-input'), String(ACCOUNT_MINIMUM_AGE - 1));
+    fireEvent.changeText(screen.getByTestId('age-gate-input'), '17');
     fireEvent.press(screen.getByTestId('age-gate-continue-btn'));
 
     expect(screen.getByTestId('age-gate-refusal')).toHaveTextContent(
       ACCOUNT_AGE_REQUIREMENT_NOTICE,
     );
     expect(screen.queryByTestId('age-gate-refused-sign-out-btn')).toBeNull();
+    expect(screen.queryByTestId('age-gate-refused-account-data')).toBeNull();
     expect(mockReplace).not.toHaveBeenCalled();
     expect(isMinorMode()).toBe(true);
     expect(isAgeGateConfirmed()).toBe(false);
   });
 
-  it.each([ACCOUNT_MINIMUM_AGE, 17])(
-    'lets a %i year old through where no regional age is higher',
-    (age) => {
-      render(<AgeGateScreen />);
+  it.each([13, 16])('refuses a typed %i in a zone that once allowed it', (age) => {
+    mockTimeZone = age === 16 ? 'Europe/Berlin' : 'Europe/London';
+    render(<AgeGateScreen />);
 
-      fireEvent.changeText(screen.getByTestId('age-gate-input'), String(age));
-      fireEvent.press(screen.getByTestId('age-gate-continue-btn'));
+    fireEvent.changeText(screen.getByTestId('age-gate-input'), String(age));
+    fireEvent.press(screen.getByTestId('age-gate-continue-btn'));
 
-      expect(screen.queryByTestId('age-gate-refusal')).toBeNull();
-      expect(mockReplace).toHaveBeenCalledWith('/(public)/onboarding');
-      expect(isMinorMode()).toBe(false);
-      expect(isAgeGateConfirmed()).toBe(true);
-    },
-  );
+    expect(screen.getByTestId('age-gate-refused')).toBeTruthy();
+    expect(isMinorMode()).toBe(true);
+  });
 
-  it.each([
-    ['Europe/Berlin', 15, 16],
-    ['Asia/Kolkata', 17, 18],
-  ])(
-    'refuses under the regional age in %s by naming that age, not the lower account minimum',
-    (zone, age, regionalAge) => {
-      mockTimeZone = zone;
-      render(<AgeGateScreen />);
+  it('admits a typed 18 and continues to onboarding', () => {
+    render(<AgeGateScreen />);
 
-      fireEvent.changeText(screen.getByTestId('age-gate-input'), String(age));
-      fireEvent.press(screen.getByTestId('age-gate-continue-btn'));
+    fireEvent.changeText(screen.getByTestId('age-gate-input'), '18');
+    fireEvent.press(screen.getByTestId('age-gate-continue-btn'));
 
-      const refusal = screen.getByTestId('age-gate-refusal');
-      expect(refusal).toHaveTextContent(
-        `AGI accounts are for people ${regionalAge} and older in your region.`,
-      );
-      expect(refusal).not.toHaveTextContent(ACCOUNT_AGE_REQUIREMENT_NOTICE);
-      expect(mockReplace).not.toHaveBeenCalled();
-      expect(isMinorMode()).toBe(true);
-    },
-  );
+    expect(screen.queryByTestId('age-gate-refusal')).toBeNull();
+    expect(mockReplace).toHaveBeenCalledWith('/(public)/onboarding');
+    expect(isMinorMode()).toBe(false);
+    expect(isAgeGateConfirmed()).toBe(true);
+  });
 
   it('keeps Cloud sign-in closed to a device that was refused', () => {
     confirmAgeGate(ACCOUNT_MINIMUM_AGE - 1);
@@ -378,53 +327,47 @@ describe('the age screen when the answer does not work', () => {
 
     expect(screen.getByTestId('age-gate-refused')).toBeTruthy();
     expect(screen.queryByTestId('age-gate-input')).toBeNull();
-
-    fireEvent.press(screen.getByLabelText('Go back'));
-
-    expect(mockReplace).toHaveBeenCalledWith('/(app)');
+    expect(screen.queryByLabelText('Go back')).toBeNull();
   });
 
-  it('signs every account on the phone out when a person refused an account signs out', async () => {
+  it('signs every account on the phone out when a refused person signs out', async () => {
     mockSignedIn = true;
     confirmAgeGate(ACCOUNT_MINIMUM_AGE - 1);
     render(<AgeGateScreen />);
 
     fireEvent.press(screen.getByTestId('age-gate-refused-sign-out-btn'));
 
-    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/(app)'));
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/(public)/age-gate'));
     expect(mockSignOutAllAccounts).toHaveBeenCalledTimes(1);
     expect(mockSignOut).not.toHaveBeenCalled();
   });
-});
 
-describe('the guardian surface', () => {
-  beforeEach(() => {
+  it('points a signed-in refused person to the web data-rights page for their account', () => {
+    mockSignedIn = true;
+    confirmAgeGate(ACCOUNT_MINIMUM_AGE - 1);
+    render(<AgeGateScreen />);
+
+    fireEvent.press(screen.getByTestId('age-gate-refused-account-data'));
+
+    expect(mockOpenWebContentPage).toHaveBeenCalledWith('/privacy/requests');
+  });
+
+  it('asks again from scratch once the device data is erased', () => {
+    confirmAgeGate(ACCOUNT_MINIMUM_AGE - 1);
+    render(<AgeGateScreen />);
+    expect(screen.getByTestId('age-gate-refused')).toBeTruthy();
+
     clearAgeGate();
+    expect(mockErased).not.toBeNull();
+    act(() => mockErased?.());
+
+    expect(screen.getByTestId('age-gate-input')).toBeTruthy();
+    expect(mockReplace).toHaveBeenCalledWith('/(public)/age-gate');
   });
 
-  it('offers a protected device the lock explanation and no way to raise the age', () => {
-    confirmAgeGate(9);
-
-    render(<ParentalControlsScreen />);
-
-    expect(screen.getByTestId('parental-controls-minor-lock')).toBeTruthy();
-    expect(screen.queryByLabelText('Review Device Age Settings')).toBeNull();
-  });
-
-  it('leaves an adult device its review route and no minor-safe claim', () => {
-    confirmAgeGate(41);
-
-    render(<ParentalControlsScreen />);
-
-    expect(screen.queryByTestId('parental-controls-minor-lock')).toBeNull();
-    expect(screen.getByLabelText('Review Device Age Settings')).toBeTruthy();
-  });
-
-  it('returns only to the two screens that can send someone to the age gate', () => {
-    expect(resolveReturnPath('/(app)/settings/parental-controls')).toBe(
-      '/(app)/settings/parental-controls',
-    );
-    expect(resolveReturnPath('/(app)/settings/account-security')).toBeNull();
+  it('returns only to Cloud sign-in', () => {
+    expect(resolveReturnPath('/(auth)/login')).toBe('/(auth)/login');
+    expect(resolveReturnPath('/(app)/settings/parental-controls')).toBeNull();
     expect(resolveReturnPath('https://example.test/anything')).toBeNull();
     expect(resolveReturnPath(undefined)).toBeNull();
   });

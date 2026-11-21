@@ -3,7 +3,7 @@
     "schema": "play-console-2026",
     "package_name": "com.agiworkforce.app",
     "version": "0.0.1",
-    "last_updated": "2026-11-15",
+    "last_updated": "2026-11-20",
     "char_limits": {
       "app_name": 30,
       "short_description": 80,
@@ -40,14 +40,16 @@
       "in_app_purchases": false,
       "unrestricted_internet_access": true
     },
-    "note": "Mirrors ChatGPT and Claude on Google Play (both Teen, Diverse Content: Discretion Advised, checked 2026-10-19). AI output is not fixed content, so answer the IARC questions for the most mature output the filters allow, not the median reply. Unrestricted internet access is true: a link in an answer opens any http or https page in an in-app Custom Tab (openUntrustedUrlInAppBrowser in apps/mobile/lib/safeOpenURL.ts, called from apps/mobile/src/features/chat/components/MarkdownInline.tsx), and Cloud chats run web search. user_generated_content_shared is true for projects and agents shared by people the user works with and for artifacts a user publishes; in_app_communication_with_unknown_users is false because the app has no person-to-person messaging; shares_user_location is false because the app requests no location permission. Google's content rating pages read on 2026-11-15 (answers 9898843, 188189 and 9859655) do not show the questionnaire's wording, so these keys describe what each answer must reflect, not the live question text: read each question in Play Console before answering."
+    "note": "A rating of the content only, assigned by IARC from the questionnaire; it is not the eligibility rule, which is target_audience (18 and over). Mirrors ChatGPT and Claude on Google Play (both Teen, Diverse Content: Discretion Advised, checked 2026-10-19). AI output is not fixed content, so answer the IARC questions for the most mature output the filters allow, not the median reply. Unrestricted internet access is true: a link in an answer opens any http or https page in an in-app Custom Tab (openUntrustedUrlInAppBrowser in apps/mobile/lib/safeOpenURL.ts, called from apps/mobile/src/features/chat/components/MarkdownInline.tsx), and Cloud chats run web search. user_generated_content_shared is true for projects and agents shared by people the user works with and for artifacts a user publishes; in_app_communication_with_unknown_users is false because the app has no person-to-person messaging; shares_user_location is false because the app requests no location permission. Google's content rating pages read on 2026-11-15 (answers 9898843, 188189 and 9859655) do not show the questionnaire's wording, so these keys describe what each answer must reflect, not the live question text: read each question in Play Console before answering."
   },
   "target_audience": {
-    "age_group": "13+",
-    "play_age_bands": ["13-15", "16-17", "18 and over"],
+    "age_group": "18+",
+    "play_age_bands": ["18 and over"],
     "appeal_to_children": false,
+    "restrict_minor_access": true,
     "ads": false,
-    "note": "13+ is the lowest age the binary admits. getAgeThreshold in apps/mobile/src/features/auth/services/ageGate.ts takes the larger of the device time zone's regional age (18 for India and Brazil, 16 for EU member-state zones and North Macedonia, 13 for the United Kingdom and every other zone) and ACCOUNT_MINIMUM_AGE (13, packages/contracts/types/src/account-eligibility.ts), so Cloud sign-in asks for 18 in India and Brazil, 16 in those EU zones and 13 everywhere else, and every band from 13 up is declared. An age under the device's threshold is refused and puts the install into one-way minor-safe mode, which filters every outgoing prompt against a shared blocklist before it reaches any model and cannot be switched off from inside the app."
+    "play_console_state": "Reported by the owner on 2026-11-20, not verified from the repository: Play Console App content, Target audience and content has \"18 and over\" as the only target age group, with Restrict Minor Access on. Internal-test build 6 still ships the earlier 13 and over gate; the production draft has release notes and no bundle attached.",
+    "note": "Since 2026-11-20 the app is for people 18 and over. 18 is the lowest age the binary admits: getAgeThreshold in apps/mobile/src/features/auth/services/ageGate.ts takes its default from ACCOUNT_MINIMUM_AGE (18, packages/contracts/types/src/account-eligibility.ts), and no regional row is lower (India and Brazil are 18). The age step comes before anything else on every path, account-free Local Mode included (src/features/auth/services/rootRouting.ts). It asks Play Age Signals for the 18 threshold where available and falls back to a typed age (src/features/age-assurance/ageAssurance.ts). A device that recorded an age under 18 is refused on every path and offered Sign out, Export this device's data, Erase this device's data and the web data-rights page; there is no minor-safe mode and no parental controls screen. This is who may use the app; the IARC rating under content_rating is a separate rating of the content and is not changed to express it."
   },
   "data_safety": {
     "data_collected": true,

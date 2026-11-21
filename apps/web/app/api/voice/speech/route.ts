@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireEnv } from '@shared/utils/env';
 import { getClerkAuthUser } from '@/lib/api-auth';
+import { buildAdultEligibilityGateResponse } from '@/lib/server/adult-eligibility-gate';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -74,6 +75,13 @@ async function handleSpeech(request: NextRequest) {
   if (rateLimitResponse) return rateLimitResponse;
   const { userId } = await getClerkAuthUser(request);
   const headers = { ...getCorsHeaders(request), ...getSecurityHeaders() };
+  const ageGateResponse = await buildAdultEligibilityGateResponse({
+    userId,
+    request,
+    gate: 'voice-speech',
+    headers: headers,
+  });
+  if (ageGateResponse) return ageGateResponse;
 
   const managedGateResponse = buildManagedComputeGateResponse(
     request,

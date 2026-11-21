@@ -118,7 +118,6 @@ import SettingsTabScreen from '@/src/features/settings';
 
 const ROUTES_REACHED_TWICE_ON_PURPOSE: Record<string, number> = {
   '/(app)/about': 2,
-  '/(app)/settings/parental-controls': 2,
 };
 
 function pressedDestinations() {

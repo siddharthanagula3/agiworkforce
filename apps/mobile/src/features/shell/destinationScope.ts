@@ -22,7 +22,7 @@ export const DESTINATION_SCOPE = {
   '/(app)/settings/capabilities': 'device',
   '/(app)/settings/code': 'device',
   '/(app)/settings/storage': 'device',
-  '/(app)/settings/parental-controls': 'device',
+  '/(app)/settings/age': 'device',
 
   '/(app)/cloud-code': 'cloud',
   '/(app)/schedules': 'cloud',

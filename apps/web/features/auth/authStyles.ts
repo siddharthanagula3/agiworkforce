@@ -34,7 +34,6 @@ export const AUTH_FIELD_AID_CLASS = 'mt-3 flex justify-end';
 export const AUTH_CHECK_ROW_CLASS = `flex min-h-11 cursor-pointer items-start gap-3 ${SECONDARY_TEXT}`;
 export const AUTH_CHECKBOX_CLASS = 'auth-checkbox mt-0.5 shrink-0 cursor-pointer';
 export const AUTH_AGREEMENT_CLASS = `mt-4 ${FINE_PRINT}`;
-export const AUTH_AGE_CONFIRMATION_CLASS = 'mb-4';
 const OPTIONAL_CHECK_ROW = `flex min-h-11 items-start gap-3 pt-2 pb-3 ${FINE_PRINT}`;
 export const AUTH_OPTIONAL_CHECK_ROW_CLASS = `${OPTIONAL_CHECK_ROW} cursor-pointer`;
 export const AUTH_HELD_CHECK_ROW_CLASS = `${OPTIONAL_CHECK_ROW} cursor-not-allowed`;

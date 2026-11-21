@@ -18,6 +18,9 @@ import { accountAccessForSignIn } from '@/lib/auth/account-lifecycle';
 import { readPrimaryEmailState } from '@/lib/auth/email-confirmation';
 import { IDENTITY_SIGN_IN_LOOKUP_TIMEOUT_MS } from '@/lib/server/identity-timeouts';
 import { AccountAccessNotice } from '@/features/auth/AccountAccessNotice';
+import { AgeConfirmationStep } from '@/features/auth/AgeConfirmationStep';
+import { AgeIneligibleNotice } from '@/features/auth/AgeIneligibleNotice';
+import { readAdultEligibilityState } from '@/lib/server/adult-eligibility';
 import { AccountPolicyLinks } from '@/features/auth/AccountPolicyLinks';
 import { ConfirmEmailStep } from '@/features/auth/ConfirmEmailStep';
 import { AuthLayout } from '@/features/auth/AuthLayout';
@@ -84,6 +87,24 @@ export default async function LoginCompletePage({
     );
   }
 
+  // A signed-in session is not an age decision. The account is asked here, once,
+  // before anything else, and an account the server holds a refusal for is told so.
+  const adultEligibility = await readAdultEligibilityState(userId);
+  if (adultEligibility === 'ineligible') {
+    return (
+      <AuthLayout embedded={isDesktopSurface} scene>
+        <AgeIneligibleNotice footer={<TermsReviewSignOut />} />
+      </AuthLayout>
+    );
+  }
+  if (adultEligibility === 'unconfirmed') {
+    return (
+      <AuthLayout embedded={isDesktopSurface} scene>
+        <AgeConfirmationStep footer={<TermsReviewSignOut />} />
+      </AuthLayout>
+    );
+  }
+
   // An account on an older valid version continues without a click-through;
   // review=terms is the notice's link for accepting a published revision early.
   const mustAccept =
@@ -116,7 +137,6 @@ export default async function LoginCompletePage({
         <TermsGate
           restorePreAuthMarker={false}
           confirmationLabel="Continue"
-          confirmAge={firstAcceptance}
           offerMarketingEmail={offerMarketingEmail}
           optedOutBySignal={optedOutBySignal}
         >

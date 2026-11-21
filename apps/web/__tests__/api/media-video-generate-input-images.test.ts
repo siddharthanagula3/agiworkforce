@@ -6,6 +6,31 @@ type ScanModule2 = typeof import('@/lib/error-handler');
 type ScanModule3 = typeof import('@/lib/services/managed-usage-request-service');
 
 vi.mock('server-only', () => ({}));
+type AdultEligibilityModule = typeof import('@/lib/server/adult-eligibility');
+const ageDecision = vi.hoisted(() => ({
+  row: { adult_eligibility_outcome: 'eligible', adult_eligibility_minimum_age: 18 } as {
+    adult_eligibility_outcome: string | null;
+    adult_eligibility_minimum_age: number | null;
+  },
+  unreadable: false,
+  asked: [] as string[],
+}));
+vi.mock('@/lib/server/adult-eligibility', async (importOriginal) => {
+  const actual = await importOriginal<AdultEligibilityModule>();
+  return {
+    ...actual,
+    readAdultEligibilityState: async (userId: string) => {
+      ageDecision.asked.push(userId);
+      if (ageDecision.unreadable) throw new Error('adult eligibility unreadable');
+      return actual.adultEligibilityStateOf(ageDecision.row);
+    },
+  };
+});
+beforeEach(() => {
+  ageDecision.row = { adult_eligibility_outcome: 'eligible', adult_eligibility_minimum_age: 18 };
+  ageDecision.unreadable = false;
+  ageDecision.asked = [];
+});
 
 const modelCatalogMocks = vi.hoisted(() => ({
   runwayApiModelId: undefined as string | undefined,

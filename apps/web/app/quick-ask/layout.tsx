@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { ChatStreamRuntimeProvider } from '@/features/chat/components/ChatStreamRuntimeProvider';
 import { getRequestIdentity } from '@/lib/server/identity';
+import { requireAdultEligibility } from '@/lib/server/require-adult-eligibility';
 import { requireCurrentTermsAcceptance } from '@/lib/server/require-current-terms';
 import { sessionExpiredRedirect } from '@/lib/server/session-expired';
 import ProductRuntimeProviders from '../ProductRuntimeProviders';
@@ -20,6 +21,8 @@ export default async function QuickAskLayout({ children }: { children: ReactNode
   }
 
   await requireCurrentTermsAcceptance(userId, redirectTo);
+
+  await requireAdultEligibility(userId, redirectTo);
 
   return (
     <ProductRuntimeProviders>

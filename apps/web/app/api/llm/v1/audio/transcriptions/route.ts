@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireEnv } from '@shared/utils/env';
 import { getClerkAuthUser } from '@/lib/api-auth';
+import { buildAdultEligibilityGateResponse } from '@/lib/server/adult-eligibility-gate';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withAdmittedRateLimitHeaders } from '@/lib/rate-limit-headers';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -303,6 +304,14 @@ async function handleTranscriptions(request: NextRequest, admit?: TranscriptionA
       { ...getCorsHeaders(request), ...getSecurityHeaders() },
     );
     if (spendRefusal) return spendRefusal;
+  } else {
+    const ageGateResponse = await buildAdultEligibilityGateResponse({
+      userId,
+      request,
+      gate: 'audio-transcription',
+      headers: { ...getCorsHeaders(request), ...getSecurityHeaders() },
+    });
+    if (ageGateResponse) return ageGateResponse;
   }
 
   const managedGateResponse = buildManagedComputeGateResponse(

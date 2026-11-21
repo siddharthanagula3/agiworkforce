@@ -1,6 +1,6 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import { PageLink } from '@shared/components/layout/EmbeddedPage';
-import { productNameWithArticle } from '@agiworkforce/types';
+import { ACCOUNT_MINIMUM_AGE, productNameWithArticle } from '@agiworkforce/types';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import {
@@ -21,6 +21,7 @@ import { LEGAL_ENTITY, POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 import { MARKETING_EMAIL_CONSENT_PURPOSE } from '@/lib/consent-purposes';
 import { GLOBAL_PRIVACY_CONTROL_BLOCKS_GRANT_NOTICE } from '@/lib/consent-signals';
 import {
+  AGE_CHECK_STORAGE_KEY,
   MARKETING_EMAIL_ATTEMPT_STORAGE_KEY,
   MARKETING_EMAIL_CHOICE_STORAGE_KEY,
   TERMS_GATE_STORAGE_KEY,
@@ -230,6 +231,21 @@ const STORAGE: StorageRow[] = [
     clearedBy:
       'Completing sign-up, using Edit email, starting a provider or passkey sign-in, signing out or clearing site data.',
     source: 'app/signup/signupAttemptMarkers.ts',
+  },
+  {
+    key: AGE_CHECK_STORAGE_KEY,
+    store: 'Local storage',
+    holds: `The minimum age the sign-up screen checked your typed age against, which is ${ACCOUNT_MINIMUM_AGE}, never the age itself. It is sent to us once, with your acceptance of the terms, so the new account records that it passed the check.`,
+    clearedBy:
+      'Completing sign-up, using Edit email, starting a provider or passkey sign-in, signing out or clearing site data.',
+    source: 'app/signup/signupAttemptMarkers.ts',
+  },
+  {
+    key: 'agi.guest-age-checked-minimum',
+    store: 'Local storage',
+    holds: `Where chat without an account is offered: the minimum age the chat screen checked your typed age against, which is ${ACCOUNT_MINIMUM_AGE}, never the age itself. It is kept so you are not asked on every visit, and sent with each message you send without an account. No record of it is kept on our side.`,
+    clearedBy: 'Clearing site data, which asks your age again before the next message.',
+    source: 'features/chat/guest',
   },
   {
     key: MARKETING_EMAIL_ATTEMPT_STORAGE_KEY,

@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   gate: vi.fn(),
   access: vi.fn(),
   email: vi.fn(),
+  adultEligibility: vi.fn(),
   latestConsent: vi.fn(),
   headers: vi.fn(),
 }));
@@ -32,6 +33,20 @@ vi.mock('@/lib/auth/email-confirmation', async (importOriginal) => ({
 vi.mock('@/features/auth/ConfirmEmailStep', () => ({
   ConfirmEmailStep: ({ footer }: { footer: ReactNode }) => (
     <div data-testid="confirm-email-step">{footer}</div>
+  ),
+}));
+vi.mock('@/lib/server/adult-eligibility', async (importOriginal) => ({
+  ...(await importOriginal()),
+  readAdultEligibilityState: (userId: string) => mocks.adultEligibility(userId),
+}));
+vi.mock('@/features/auth/AgeConfirmationStep', () => ({
+  AgeConfirmationStep: ({ footer }: { footer: ReactNode }) => (
+    <div data-testid="age-confirmation-step">{footer}</div>
+  ),
+}));
+vi.mock('@/features/auth/AgeIneligibleNotice', () => ({
+  AgeIneligibleNotice: ({ footer }: { footer: ReactNode }) => (
+    <div data-testid="age-ineligible-notice">{footer}</div>
   ),
 }));
 vi.mock('./StaleSessionRecovery', () => ({
@@ -111,6 +126,7 @@ describe('/login/complete', () => {
     mocks.acceptedAny.mockResolvedValue(true);
     mocks.access.mockResolvedValue({ allowed: true });
     mocks.email.mockResolvedValue({ confirmed: true, email: 'person@example.com' });
+    mocks.adultEligibility.mockResolvedValue('confirmed');
     mocks.latestConsent.mockResolvedValue(null);
     mocks.headers.mockResolvedValue(new Headers());
   });
@@ -173,23 +189,110 @@ describe('/login/complete', () => {
       expect.objectContaining({
         restorePreAuthMarker: false,
         confirmationLabel: 'Continue',
-        confirmAge: false,
       }),
     );
+    expect(mocks.gate.mock.lastCall?.[0]).not.toHaveProperty('confirmAge');
   });
 
-  it('asks an account that never accepted the terms for its age on the same first screen', async () => {
+  it('does not ask an account that never accepted the terms for its age on the terms screen', async () => {
     mocks.acceptedAny.mockResolvedValue(false);
 
     render(await LoginCompletePage({ searchParams: Promise.resolve({ redirectTo: '/chat' }) }));
 
     expect(mocks.acceptedAny).toHaveBeenCalledWith('user-1');
     expect(mocks.gate).toHaveBeenCalledWith(
-      expect.objectContaining({ confirmationLabel: 'Continue', confirmAge: true }),
+      expect.objectContaining({ confirmationLabel: 'Continue' }),
     );
+    expect(mocks.gate.mock.lastCall?.[0]).not.toHaveProperty('confirmAge');
+    expect(screen.queryByTestId('age-confirmation-step')).toBeNull();
     expect(mocks.recorder).toHaveBeenCalledWith({
       redirectTo: '/chat',
       surface: 'web-login',
+    });
+  });
+
+  describe('age decision', () => {
+    it('shows the age question, and nothing else, to an account nobody has asked', async () => {
+      mocks.adultEligibility.mockResolvedValue('unconfirmed');
+
+      render(await LoginCompletePage({ searchParams: Promise.resolve({ redirectTo: '/chat' }) }));
+
+      const step = screen.getByTestId('age-confirmation-step');
+      expect(mocks.adultEligibility).toHaveBeenCalledWith('user-1');
+      expect(step).toContainElement(screen.getByRole('button', { name: 'Sign out' }));
+      expect(screen.queryByTestId('age-ineligible-notice')).toBeNull();
+      expect(screen.queryByTestId('terms-gate')).toBeNull();
+      expect(mocks.recorder).not.toHaveBeenCalled();
+      expect(mocks.continue).not.toHaveBeenCalled();
+      expect(mocks.must).not.toHaveBeenCalled();
+    });
+
+    it('tells an account the server holds a refusal for, and offers it no way on', async () => {
+      mocks.adultEligibility.mockResolvedValue('ineligible');
+
+      render(await LoginCompletePage({ searchParams: Promise.resolve({ redirectTo: '/chat' }) }));
+
+      const notice = screen.getByTestId('age-ineligible-notice');
+      expect(notice).toContainElement(screen.getByRole('button', { name: 'Sign out' }));
+      expect(screen.queryByTestId('age-confirmation-step')).toBeNull();
+      expect(screen.queryByTestId('terms-gate')).toBeNull();
+      expect(mocks.recorder).not.toHaveBeenCalled();
+      expect(mocks.continue).not.toHaveBeenCalled();
+      expect(mocks.must).not.toHaveBeenCalled();
+    });
+
+    it('stops an account on the current terms at the age question, not at the product', async () => {
+      mocks.adultEligibility.mockResolvedValue('unconfirmed');
+      mocks.accepted.mockResolvedValue(true);
+
+      render(await LoginCompletePage({ searchParams: Promise.resolve({ redirectTo: '/chat' }) }));
+
+      expect(screen.getByTestId('age-confirmation-step')).toBeInTheDocument();
+      expect(mocks.continue).not.toHaveBeenCalled();
+    });
+
+    it('falls through to the terms logic for a confirmed account', async () => {
+      mocks.adultEligibility.mockResolvedValue('confirmed');
+
+      render(await LoginCompletePage({ searchParams: Promise.resolve({ redirectTo: '/chat' }) }));
+
+      expect(screen.queryByTestId('age-confirmation-step')).toBeNull();
+      expect(screen.queryByTestId('age-ineligible-notice')).toBeNull();
+      expect(screen.getByTestId('terms-gate')).toBeInTheDocument();
+    });
+
+    it('keeps the desktop window layout on the age question', async () => {
+      mocks.adultEligibility.mockResolvedValue('unconfirmed');
+
+      const { container } = render(
+        await LoginCompletePage({
+          searchParams: Promise.resolve({ redirectTo: '/chat', surface: 'desktop' }),
+        }),
+      );
+
+      expect(screen.getByTestId('age-confirmation-step')).toBeInTheDocument();
+      expect(container.querySelector('[data-embedded="true"]')).not.toBeNull();
+    });
+
+    it('asks only after the address is confirmed', async () => {
+      mocks.adultEligibility.mockResolvedValue('unconfirmed');
+      mocks.email.mockResolvedValue({ confirmed: false, email: 'victim@corp.example' });
+
+      render(await LoginCompletePage({ searchParams: Promise.resolve({ redirectTo: '/chat' }) }));
+
+      expect(screen.getByTestId('confirm-email-step')).toBeInTheDocument();
+      expect(screen.queryByTestId('age-confirmation-step')).toBeNull();
+      expect(mocks.adultEligibility).not.toHaveBeenCalled();
+    });
+
+    it('lets the error surface when the decision cannot be read, rather than assuming one', async () => {
+      mocks.adultEligibility.mockRejectedValue(new Error('database unavailable'));
+
+      await expect(
+        LoginCompletePage({ searchParams: Promise.resolve({ redirectTo: '/chat' }) }),
+      ).rejects.toThrow('database unavailable');
+      expect(mocks.continue).not.toHaveBeenCalled();
+      expect(mocks.recorder).not.toHaveBeenCalled();
     });
   });
 
@@ -366,8 +469,8 @@ describe('/login/complete', () => {
         'user-1',
         MARKETING_EMAIL_CONSENT_PURPOSE.id,
       );
+      expect(gateProps()).not.toHaveProperty('confirmAge');
       expect(gateProps()).toMatchObject({
-        confirmAge: true,
         offerMarketingEmail: true,
         optedOutBySignal: false,
       });
@@ -386,7 +489,7 @@ describe('/login/complete', () => {
 
       await renderTermsStep();
 
-      expect(gateProps()).toMatchObject({ confirmAge: true, offerMarketingEmail: false });
+      expect(gateProps()).toMatchObject({ offerMarketingEmail: false });
       expect(mocks.headers).not.toHaveBeenCalled();
     });
 
@@ -411,7 +514,7 @@ describe('/login/complete', () => {
 
       await renderTermsStep();
 
-      expect(gateProps()).toMatchObject({ confirmAge: true, offerMarketingEmail: true });
+      expect(gateProps()).toMatchObject({ offerMarketingEmail: true });
     });
 
     it('does not ask when the ledger cannot be read, rather than assume nobody asked', async () => {
@@ -429,7 +532,7 @@ describe('/login/complete', () => {
 
       await renderTermsStep();
 
-      expect(gateProps()).toMatchObject({ confirmAge: false, offerMarketingEmail: false });
+      expect(gateProps()).toMatchObject({ offerMarketingEmail: false });
       expect(mocks.latestConsent).not.toHaveBeenCalled();
     });
 

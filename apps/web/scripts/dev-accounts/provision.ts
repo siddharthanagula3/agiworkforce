@@ -1,6 +1,7 @@
 import type Stripe from 'stripe';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
+  ACCOUNT_MINIMUM_AGE,
   BILLING_PLAN_CATALOG_VERSION,
   BILLING_PLAN_PRICING,
   isSelfServePaidPlanTier,
@@ -10,6 +11,7 @@ import { createClerkSessionManager } from '@agiworkforce/identity/management';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { recordTermsAcceptance } from '@/lib/server/terms';
+import { submitAdultEligibilityEvidence } from '@/lib/server/adult-eligibility';
 import { getStripeClient } from '@/lib/server/stripe-client';
 import { getPriceSelectionForCurrency } from '@/lib/server/localized-pricing-service';
 import { getPlanSessionUsageBudgetMicrousd } from '@/lib/server/managed-usage-policy';
@@ -434,6 +436,10 @@ export async function provisionDevAccount(
   const seedRun = Date.now().toString(36);
   await ensureProfileExists(serviceDb(), userId, devAccountEmail(account.name));
   await recordTermsAcceptance(userId, 'web-signup');
+  await submitAdultEligibilityEvidence(userId, 'web-signup', {
+    kind: 'age_checked_on_device',
+    minimumAge: ACCOUNT_MINIMUM_AGE,
+  });
   await clearSeededState(userId, account);
 
   if (account.billing === 'manual') await provisionManualSubscription(userId, account);

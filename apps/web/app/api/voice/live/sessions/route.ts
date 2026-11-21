@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { LIVE_VOICE_CLIENT_HANDOFFS } from '@agiworkforce/cloud-contracts';
 import { requireEnv } from '@shared/utils/env';
 import { getClerkAuthUser } from '@/lib/api-auth';
+import { buildAdultEligibilityGateResponse } from '@/lib/server/adult-eligibility-gate';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -177,6 +178,13 @@ async function handleCreateLiveSession(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'voice-live-session');
   if (rateLimitResponse) return rateLimitResponse;
   const { userId } = await getClerkAuthUser(request);
+  const ageGateResponse = await buildAdultEligibilityGateResponse({
+    userId,
+    request,
+    gate: 'voice-live',
+    headers: { ...getCorsHeaders(request), ...getSecurityHeaders() },
+  });
+  if (ageGateResponse) return ageGateResponse;
 
   const liveModel = getModelMetadataById(getRoutingSlotModel('voice_live'));
   if (!liveModel || !isModelLive(liveModel)) {

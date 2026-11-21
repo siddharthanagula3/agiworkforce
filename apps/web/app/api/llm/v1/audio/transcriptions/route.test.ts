@@ -34,6 +34,31 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
+type AdultEligibilityModule = typeof import('@/lib/server/adult-eligibility');
+const ageDecision = vi.hoisted(() => ({
+  row: { adult_eligibility_outcome: 'eligible', adult_eligibility_minimum_age: 18 } as {
+    adult_eligibility_outcome: string | null;
+    adult_eligibility_minimum_age: number | null;
+  },
+  unreadable: false,
+  asked: [] as string[],
+}));
+vi.mock('@/lib/server/adult-eligibility', async (importOriginal) => {
+  const actual = await importOriginal<AdultEligibilityModule>();
+  return {
+    ...actual,
+    readAdultEligibilityState: async (userId: string) => {
+      ageDecision.asked.push(userId);
+      if (ageDecision.unreadable) throw new Error('adult eligibility unreadable');
+      return actual.adultEligibilityStateOf(ageDecision.row);
+    },
+  };
+});
+beforeEach(() => {
+  ageDecision.row = { adult_eligibility_outcome: 'eligible', adult_eligibility_minimum_age: 18 };
+  ageDecision.unreadable = false;
+  ageDecision.asked = [];
+});
 vi.mock('@/lib/csrf', async () => ({
   ...(await vi.importActual<CsrfModule>('@/lib/csrf')),
   requireCsrfToken: vi.fn(async () => null),
@@ -73,6 +98,10 @@ vi.mock('@/lib/api-auth', async () => ({
 
   getClerkAuthUser: vi.fn(async () => ({ userId: 'user-1' })),
 }));
+vi.mock('@/lib/developer-api/project-spend', async (importOriginal) => ({
+  ...(await importOriginal()),
+  developerProjectSpendRefusal: async () => null,
+}));
 vi.mock('@/lib/server/rls-db', async () => ({
   ...(await vi.importActual<RlsDbModule>('@/lib/server/rls-db')),
 
@@ -111,6 +140,8 @@ vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) =
     markManagedUsageClientDelivered: (...args: unknown[]) => mocks.clientDelivered(...args),
   };
 });
+
+import { getClerkAuthUser } from '@/lib/api-auth';
 
 const {
   POST,
@@ -658,6 +689,80 @@ describe('transcription cost model', () => {
     expect(estimateTranscriptionCostMicrousd(TRANSCRIPTION_MODEL, 1, 0)).toBeGreaterThan(0);
     expect(estimateTranscriptionCostCents({ inputCost: 0, outputCost: 0 }, 1_000, 1_000)).toBe(0);
   });
+});
+
+describe('POST /api/llm/v1/audio/transcriptions, adult eligibility', () => {
+  const LEGACY_MINIMUM_AGE = 13;
+
+  function expectNothingReservedOrSent() {
+    expect(mocks.reserve).not.toHaveBeenCalled();
+    expect(mocks.providerStarted).not.toHaveBeenCalled();
+    expect(mocks.grantFree).not.toHaveBeenCalled();
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  }
+
+  it.each([
+    ['has never been asked its age', null, null],
+    ['was admitted under the earlier 13 and over rule', 'eligible', LEGACY_MINIMUM_AGE],
+  ])('refuses a signed-in client that %s, reserving and sending nothing', async (_l, o, m) => {
+    ageDecision.row = { adult_eligibility_outcome: o, adult_eligibility_minimum_age: m };
+    providerReturns({ text: 'hello' });
+
+    const response = await POST(transcriptionRequest());
+
+    expect(response.status).toBe(403);
+    const body = (await response.json()) as { error: { code: string }; review_url: string };
+    expect(body.error.code).toBe('age_confirmation_required');
+    expect(body.review_url).toBe('http://localhost/login/complete?redirectTo=%2Fchat');
+    expect(ageDecision.asked).toEqual(['user-1']);
+    expectNothingReservedOrSent();
+  });
+
+  it('refuses an account that declared an age under the minimum', async () => {
+    ageDecision.row = {
+      adult_eligibility_outcome: 'ineligible',
+      adult_eligibility_minimum_age: 18,
+    };
+
+    const response = await POST(transcriptionRequest());
+
+    expect(response.status).toBe(403);
+    expect(((await response.json()) as { error: { code: string } }).error.code).toBe(
+      'age_ineligible',
+    );
+    expectNothingReservedOrSent();
+  });
+
+  it('refuses with 503 when the decision cannot be read', async () => {
+    ageDecision.unreadable = true;
+
+    const response = await POST(transcriptionRequest());
+
+    expect(response.status).toBe(503);
+    expect(((await response.json()) as { error: { code: string } }).error.code).toBe(
+      'age_eligibility_unavailable',
+    );
+    expectNothingReservedOrSent();
+  });
+
+  it.each([
+    ['unconfirmed', null, null],
+    ['legacy', 'eligible', LEGACY_MINIMUM_AGE],
+    ['ineligible', 'ineligible', 18],
+  ])(
+    'does not ask a developer API key caller, whose owner agreed to the commercial terms (%s)',
+    async (_l, o, m) => {
+      ageDecision.row = { adult_eligibility_outcome: o, adult_eligibility_minimum_age: m };
+      vi.mocked(getClerkAuthUser).mockResolvedValueOnce({ userId: 'user-1', apiKeyId: 'key-1' });
+      providerReturns({ text: 'hello' });
+
+      const response = await POST(transcriptionRequest({ authorization: 'Bearer sk_live_abc123' }));
+
+      expect(response.status).toBe(200);
+      expect(ageDecision.asked).toEqual([]);
+      expect(mocks.reserve).toHaveBeenCalledTimes(1);
+    },
+  );
 });
 
 describe('POST /api/llm/v1/audio/transcriptions, outside the proxy', () => {

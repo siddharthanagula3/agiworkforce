@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
+  ADULT_ELIGIBILITY_ERROR_CODES,
   TermsAcceptanceRequestSchema,
+  type AdultEligibilityState,
   type TermsAcceptanceRequest,
 } from '@agiworkforce/cloud-contracts';
+import { ACCOUNT_AGE_INELIGIBLE_MESSAGE } from '@agiworkforce/types';
 
 import { withErrorHandler } from '@/lib/error-handler';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -34,10 +37,52 @@ import {
   readLatestConsent,
   recordConsent,
 } from '@/lib/server/consent-records';
+import {
+  readAdultEligibilityState,
+  submitAdultEligibilityEvidence,
+} from '@/lib/server/adult-eligibility';
 import { trackProductAnalyticsEvent } from '@/lib/server/product-analytics';
 import { attributeReferralFromRequest } from '@/lib/services/referral-attribution';
 
 const SIGN_UP_SURFACE = 'web-signup';
+const NATIVE_SURFACE = 'mobile-auth';
+const AGE_REFUSED_STATUS = 403;
+
+/**
+ * Evidence sent with the acceptance is judged first, on any surface. Without
+ * it, a web acceptance still needs the account's 18 and over decision to be on
+ * record: the web flows collect one before this call. The phone app reports its
+ * evidence through the eligibility route, and builds released before that
+ * route existed send none here, so their acceptance is recorded as before and
+ * the Cloud gates are what hold them.
+ */
+async function adultEligibilityForAcceptance(
+  userId: string,
+  payload: TermsAcceptanceRequest,
+): Promise<AdultEligibilityState> {
+  if (payload.eligibility) {
+    return submitAdultEligibilityEvidence(userId, payload.surface, payload.eligibility);
+  }
+  return payload.surface === NATIVE_SURFACE ? 'confirmed' : readAdultEligibilityState(userId);
+}
+
+function ageRefusal(state: Exclude<AdultEligibilityState, 'confirmed'>): NextResponse {
+  return NextResponse.json(
+    {
+      error:
+        state === 'ineligible'
+          ? {
+              code: ADULT_ELIGIBILITY_ERROR_CODES.ineligible,
+              message: ACCOUNT_AGE_INELIGIBLE_MESSAGE,
+            }
+          : {
+              code: ADULT_ELIGIBILITY_ERROR_CODES.confirmationRequired,
+              message: 'Confirm your age before accepting the terms.',
+            },
+    },
+    { status: AGE_REFUSED_STATUS },
+  );
+}
 
 interface MarketingEmailGrant {
   surface: ConsentSurface;
@@ -115,6 +160,9 @@ async function handleAcceptTerms(request: NextRequest) {
       { status: SIGN_UP_AGREEMENT_NOT_APPLICABLE_STATUS },
     );
   }
+
+  const adultEligibility = await adultEligibilityForAcceptance(userId, parsed.data);
+  if (adultEligibility !== 'confirmed') return ageRefusal(adultEligibility);
 
   try {
     const undecidedGrant =

@@ -31,6 +31,31 @@ const mocks = vi.hoisted(() => {
 });
 
 vi.mock('server-only', () => ({}));
+type AdultEligibilityModule = typeof import('@/lib/server/adult-eligibility');
+const ageDecision = vi.hoisted(() => ({
+  row: { adult_eligibility_outcome: 'eligible', adult_eligibility_minimum_age: 18 } as {
+    adult_eligibility_outcome: string | null;
+    adult_eligibility_minimum_age: number | null;
+  },
+  unreadable: false,
+  asked: [] as string[],
+}));
+vi.mock('@/lib/server/adult-eligibility', async (importOriginal) => {
+  const actual = await importOriginal<AdultEligibilityModule>();
+  return {
+    ...actual,
+    readAdultEligibilityState: async (userId: string) => {
+      ageDecision.asked.push(userId);
+      if (ageDecision.unreadable) throw new Error('adult eligibility unreadable');
+      return actual.adultEligibilityStateOf(ageDecision.row);
+    },
+  };
+});
+beforeEach(() => {
+  ageDecision.row = { adult_eligibility_outcome: 'eligible', adult_eligibility_minimum_age: 18 };
+  ageDecision.unreadable = false;
+  ageDecision.asked = [];
+});
 vi.mock('@/lib/server/side-call-training-policy', async (importOriginal) => ({
   ...(await importOriginal<SideCallTrainingPolicyModule>()),
   sideCallProviderAllowed: (...args: unknown[]) => mocks.providerAllowed(...args),
@@ -40,7 +65,8 @@ vi.mock('@/lib/server/neon-chat', () => ({
 }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal()),
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 vi.mock('@/lib/server/rls-db', () => ({
@@ -148,6 +174,64 @@ describe('POST /api/llm/v1/embeddings, Only use models that do not train on your
     expect(mocks.providerAllowed).toHaveBeenCalledWith(null, 'user-1', expect.any(String));
     expect(mocks.reserve).not.toHaveBeenCalled();
     expect(providerCalls()).toHaveLength(0);
+  });
+});
+
+describe('POST /api/llm/v1/embeddings, adult eligibility', () => {
+  const LEGACY_MINIMUM_AGE = 13;
+
+  function expectNothingReservedOrSent() {
+    expect(mocks.reserve).not.toHaveBeenCalled();
+    expect(mocks.markStarted).not.toHaveBeenCalled();
+    expect(providerCalls()).toHaveLength(0);
+  }
+
+  it.each([
+    ['has never been asked its age', null, null],
+    ['was admitted under the earlier 13 and over rule', 'eligible', LEGACY_MINIMUM_AGE],
+  ])('refuses a signed-in client that %s, reserving and sending nothing', async (_l, o, m) => {
+    ageDecision.row = { adult_eligibility_outcome: o, adult_eligibility_minimum_age: m };
+
+    const response = await POST(post({ input: ['first'] }));
+
+    expect(response.status).toBe(403);
+    const body = (await response.json()) as {
+      error: { code: string };
+      review_url: string;
+      minimum_age: number;
+    };
+    expect(body.error.code).toBe('age_confirmation_required');
+    expect(body.review_url).toBe('https://agiworkforce.com/login/complete?redirectTo=%2Fchat');
+    expect(body.minimum_age).toBe(18);
+    expect(ageDecision.asked).toEqual(['user-1']);
+    expectNothingReservedOrSent();
+  });
+
+  it('refuses an account that declared an age under the minimum', async () => {
+    ageDecision.row = {
+      adult_eligibility_outcome: 'ineligible',
+      adult_eligibility_minimum_age: 18,
+    };
+
+    const response = await POST(post({ input: ['first'] }));
+
+    expect(response.status).toBe(403);
+    expect(((await response.json()) as { error: { code: string } }).error.code).toBe(
+      'age_ineligible',
+    );
+    expectNothingReservedOrSent();
+  });
+
+  it('refuses with 503 when the decision cannot be read', async () => {
+    ageDecision.unreadable = true;
+
+    const response = await POST(post({ input: ['first'] }));
+
+    expect(response.status).toBe(503);
+    expect(((await response.json()) as { error: { code: string } }).error.code).toBe(
+      'age_eligibility_unavailable',
+    );
+    expectNothingReservedOrSent();
   });
 });
 

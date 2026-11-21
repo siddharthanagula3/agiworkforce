@@ -6,6 +6,31 @@ type ScanModule2 = typeof import('@/lib/error-handler');
 type ScanModule3 = typeof import('@/lib/services/managed-usage-request-service');
 
 vi.mock('server-only', () => ({}));
+type AdultEligibilityModule = typeof import('@/lib/server/adult-eligibility');
+const ageDecision = vi.hoisted(() => ({
+  row: { adult_eligibility_outcome: 'eligible', adult_eligibility_minimum_age: 18 } as {
+    adult_eligibility_outcome: string | null;
+    adult_eligibility_minimum_age: number | null;
+  },
+  unreadable: false,
+  asked: [] as string[],
+}));
+vi.mock('@/lib/server/adult-eligibility', async (importOriginal) => {
+  const actual = await importOriginal<AdultEligibilityModule>();
+  return {
+    ...actual,
+    readAdultEligibilityState: async (userId: string) => {
+      ageDecision.asked.push(userId);
+      if (ageDecision.unreadable) throw new Error('adult eligibility unreadable');
+      return actual.adultEligibilityStateOf(ageDecision.row);
+    },
+  };
+});
+beforeEach(() => {
+  ageDecision.row = { adult_eligibility_outcome: 'eligible', adult_eligibility_minimum_age: 18 };
+  ageDecision.unreadable = false;
+  ageDecision.asked = [];
+});
 
 const modelCatalogMocks = vi.hoisted(() => ({
   runwayApiModelId: undefined as string | undefined,
@@ -712,6 +737,71 @@ describe('POST /api/media/video/generate', () => {
       expect(durableJobMocks.admit).not.toHaveBeenCalled();
       expect(managedUsageMocks.reserve).not.toHaveBeenCalled();
       expect(mockFetch).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Adult eligibility', () => {
+    const LEGACY_MINIMUM_AGE = 13;
+
+    function expectNoVideoJobStarted() {
+      expect(durableJobMocks.admit).not.toHaveBeenCalled();
+      expect(durableJobMocks.create).not.toHaveBeenCalled();
+      expect(durableJobMocks.beginSubmission).not.toHaveBeenCalled();
+      expect(managedUsageMocks.reserve).not.toHaveBeenCalled();
+      expect(mockCheckAvailable).not.toHaveBeenCalled();
+      expect(mockDeductCredits).not.toHaveBeenCalled();
+      expect(mockFetch).not.toHaveBeenCalled();
+    }
+
+    it.each([
+      ['has never been asked its age', null, null],
+      ['was admitted under the earlier 13 and over rule', 'eligible', LEGACY_MINIMUM_AGE],
+    ])(
+      'an older signed-in client that %s cannot start a video job',
+      async (_label, outcome, minimumAge) => {
+        ageDecision.row = {
+          adult_eligibility_outcome: outcome,
+          adult_eligibility_minimum_age: minimumAge,
+        };
+
+        const response = await POST(
+          makeAuthedRequest({ prompt: 'a snowy mountain', provider: 'google' }),
+        );
+
+        expect(response.status).toBe(403);
+        const body = await response.json();
+        expect(body.error.code).toBe('age_confirmation_required');
+        expect(body.review_url).toBe('http://localhost/login/complete?redirectTo=%2Fchat');
+        expect(ageDecision.asked).toEqual([TEST_USER.userId]);
+        expectNoVideoJobStarted();
+      },
+    );
+
+    it('refuses an account that declared an age under the minimum and starts nothing', async () => {
+      ageDecision.row = {
+        adult_eligibility_outcome: 'ineligible',
+        adult_eligibility_minimum_age: 18,
+      };
+
+      const response = await POST(
+        makeAuthedRequest({ prompt: 'a snowy mountain', provider: 'google' }),
+      );
+
+      expect(response.status).toBe(403);
+      expect((await response.json()).error.code).toBe('age_ineligible');
+      expectNoVideoJobStarted();
+    });
+
+    it('refuses with 503 when the decision cannot be read and starts nothing', async () => {
+      ageDecision.unreadable = true;
+
+      const response = await POST(
+        makeAuthedRequest({ prompt: 'a snowy mountain', provider: 'google' }),
+      );
+
+      expect(response.status).toBe(503);
+      expect((await response.json()).error.code).toBe('age_eligibility_unavailable');
+      expectNoVideoJobStarted();
     });
   });
 

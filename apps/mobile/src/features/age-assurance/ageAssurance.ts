@@ -8,30 +8,20 @@ import {
   type AgeRangeRequest,
   type AgeRangeResponse,
 } from 'expo-age-range';
-import { PARENTAL_PERMISSION_BELOW_AGE } from '@agiworkforce/types';
-import { storage } from '@/lib/mmkv';
+import { ACCOUNT_MINIMUM_AGE } from '@agiworkforce/types';
 import {
   confirmAgeGateFromRange,
   getAgeThreshold,
   type AgeGateRecord,
 } from '@/src/features/auth/services/ageGate';
+import {
+  readAgeAssurance,
+  writeAgeAssurance,
+  type AgeAssuranceOutcome,
+  type AgeAssuranceRecord,
+} from './ageAssuranceRecord';
 
-export type AgeAssuranceOutcome =
-  'range' | 'notRegulated' | 'declined' | 'verificationRequired' | 'unavailable';
-
-export type SignificantChangeStatus = 'APPROVED' | 'PENDING' | 'DECLINED' | null;
-
-export type AgeAssuranceRecord = {
-  checkedAt: string;
-  platform: 'ios' | 'android';
-  outcome: AgeAssuranceOutcome;
-  regulated: boolean | null;
-  lowerBound: number | null;
-  upperBound: number | null;
-  guardianManaged: boolean;
-  installId: string | null;
-  significantChangeStatus: SignificantChangeStatus;
-};
+export * from './ageAssuranceRecord';
 
 export type PurchaseGate =
   { allowed: true } | { allowed: false; reason: 'guardianConsentRequired' | 'ageUnconfirmed' };
@@ -39,35 +29,12 @@ export type PurchaseGate =
 export type SignificantUpdateResult =
   'notRequired' | 'acknowledged' | 'parentalConsentRequired' | 'failed';
 
-const MMKV_KEY = 'age-assurance:v1';
 const IOS_DECLARED_AGE_RANGE_MAJOR = 26;
 const IOS_USER_DECLINED = 'ERR_AGE_RANGE_USER_DECLINED';
 const ANDROID_TASK_CANCELLED = 'ERR_AGE_RANGE_TASK_CANCELLED';
 
-export function readAgeAssurance(): AgeAssuranceRecord | null {
-  try {
-    const raw = storage?.getString(MMKV_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw) as AgeAssuranceRecord;
-  } catch {
-    return null;
-  }
-}
-
-function writeAgeAssurance(record: AgeAssuranceRecord): AgeAssuranceRecord {
-  storage.set(MMKV_KEY, JSON.stringify(record));
-  return record;
-}
-
-export function clearAgeAssurance(): void {
-  storage.delete(MMKV_KEY);
-}
-
 export function ageRangeRequest(): AgeRangeRequest {
-  const accountThreshold = getAgeThreshold();
-  return accountThreshold < PARENTAL_PERMISSION_BELOW_AGE
-    ? { threshold1: accountThreshold, threshold2: PARENTAL_PERMISSION_BELOW_AGE }
-    : { threshold1: accountThreshold };
+  return { threshold1: getAgeThreshold() };
 }
 
 function supportsDeclaredAgeRange(): boolean {
@@ -143,18 +110,27 @@ export async function runAgeAssurance(): Promise<AgeAssuranceRecord | null> {
 }
 
 /**
- * Asks the OS for the user's age range and records it in the age gate.
- * Returns null when the OS gave no answer that settles the account threshold,
- * so the typed age gate stays the fallback.
+ * Asks the OS for the person's age range and records it in the age gate.
+ * An unavailable, declined, not regulated or verification-required answer, and
+ * a range that straddles the threshold or carries no bounds, returns null:
+ * the typed age is then the only way through, and nothing here admits anyone.
  */
 export async function assureAgeWithOs(): Promise<AgeGateRecord | null> {
   const assurance = await runAgeAssurance();
-  if (assurance?.outcome !== 'range') return null;
-  return confirmAgeGateFromRange(assurance);
+  if (assurance === null) return null;
+  switch (assurance.outcome) {
+    case 'range':
+      return confirmAgeGateFromRange(assurance);
+    case 'notRegulated':
+    case 'declined':
+    case 'verificationRequired':
+    case 'unavailable':
+      return null;
+  }
 }
 
 function isUnderAdultAge(assurance: AgeAssuranceRecord): boolean {
-  return assurance.upperBound !== null && assurance.upperBound < PARENTAL_PERMISSION_BELOW_AGE;
+  return assurance.upperBound !== null && assurance.upperBound < ACCOUNT_MINIMUM_AGE;
 }
 
 export function canPurchase(): PurchaseGate {

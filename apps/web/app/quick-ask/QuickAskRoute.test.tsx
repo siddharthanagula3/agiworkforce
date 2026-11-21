@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   getRequestIdentity: vi.fn(),
   headers: vi.fn(),
   redirect: vi.fn(),
+  adultEligibility: vi.fn(),
   requireCurrentTermsAcceptance: vi.fn(),
   webChatRoot: vi.fn(),
 }));
@@ -22,6 +23,10 @@ vi.mock('@/lib/server/identity', () => ({
 vi.mock('@/lib/server/require-current-terms', () => ({
   requireCurrentTermsAcceptance: (...args: unknown[]) =>
     mocks.requireCurrentTermsAcceptance(...args),
+}));
+vi.mock('@/lib/server/adult-eligibility', async (importOriginal) => ({
+  ...(await importOriginal()),
+  readAdultEligibilityState: (...args: unknown[]) => mocks.adultEligibility(...args),
 }));
 vi.mock('@/features/chat/components/ChatStreamRuntimeProvider', () => ({
   useChatStreamRuntime: vi.fn(),
@@ -48,6 +53,7 @@ describe('/quick-ask route', () => {
     mocks.getRequestIdentity.mockResolvedValue({ subject: 'user-1' });
     mocks.headers.mockResolvedValue(new Headers({ 'x-agi-pathname': '/quick-ask/session-1' }));
     mocks.requireCurrentTermsAcceptance.mockResolvedValue(undefined);
+    mocks.adultEligibility.mockResolvedValue('confirmed');
   });
 
   it('renders the compact chat root for new and existing conversations', () => {
@@ -71,6 +77,26 @@ describe('/quick-ask route', () => {
       '/quick-ask/session-1',
     );
   });
+
+  it('renders for an account with a current 18 and over decision', async () => {
+    await QuickAskLayout({ children: <div>Quick Ask</div> });
+
+    expect(mocks.adultEligibility).toHaveBeenCalledWith('user-1');
+    expect(mocks.redirect).not.toHaveBeenCalled();
+  });
+
+  it.each(['unconfirmed', 'ineligible'])(
+    'sends an account whose age decision is %s to the review screen and back to the exact Quick Ask URL',
+    async (state) => {
+      mocks.adultEligibility.mockResolvedValue(state);
+
+      await QuickAskLayout({ children: <div>Quick Ask</div> });
+
+      expect(mocks.redirect).toHaveBeenCalledWith(
+        '/login/complete?redirectTo=%2Fquick-ask%2Fsession-1',
+      );
+    },
+  );
 
   it('preserves the Quick Ask URL when recovering an expired session', async () => {
     mocks.getRequestIdentity.mockResolvedValue({ subject: null });

@@ -78,13 +78,14 @@ function remainingFrom(headers: Headers): number | null {
 
 export async function sendGuestTurn(
   messages: readonly GuestChatMessage[],
+  ageCheckedAgainst: number,
   signal: AbortSignal,
   onText: (content: string) => void,
 ): Promise<GuestTurn> {
   const response = await fetch(GUEST_CHAT_PATH, {
     method: 'POST',
     headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
-    body: JSON.stringify({ messages }),
+    body: JSON.stringify({ messages, ageCheckedAgainst }),
     signal,
   });
   if (!response.ok || !response.body) throw await refusalFrom(response);

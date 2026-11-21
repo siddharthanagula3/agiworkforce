@@ -462,18 +462,41 @@
       "ledger": "COMPLIANCE",
       "label": "DPDP (India): verifiable parental consent under s.9",
       "owner": "Founder",
-      "reviewedOn": "2026-10-07",
-      "asOf": "2026-10-07",
-      "digest": "9e72d70648bbc7f4",
+      "reviewedOn": "2026-11-20",
+      "asOf": "2026-11-20",
+      "digest": "d32a73fe020d8b54",
       "jurisdiction": "India (Digital Personal Data Protection Act, 2023)",
       "scope": "The web surface and the mobile apps",
       "implementation": [
-        "apps/mobile/src/features/auth/services/ageGate.ts#confirmAgeGate",
-        "apps/mobile/services/dsarExport.ts#storage.clearAll",
-        "packages/contracts/types/src/account-eligibility.ts#evaluateAccountAge"
+        "packages/contracts/types/src/account-eligibility.ts#ACCOUNT_MINIMUM_AGE",
+        "packages/contracts/types/src/account-eligibility.ts#decideAdultEligibility",
+        "apps/web/lib/server/adult-eligibility.ts#submitAdultEligibilityEvidence",
+        "apps/web/lib/server/require-adult-eligibility.ts#requireAdultEligibility",
+        "apps/mobile/src/features/auth/services/ageGate.ts#ageGateStatus"
       ],
-      "proof": [],
-      "reason": "Clearable by the child through the in-app wipe of all local data, which empties the store the age record lives in; no test pins that path. The web sign-up age field accepts whatever is typed and verifies neither the age nor a parent's permission, an absence no test enumerates."
+      "proof": [
+        {
+          "kind": "test",
+          "file": "packages/contracts/types/src/__tests__/account-eligibility.test.ts",
+          "name": "offers no parental permission route for a younger person"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/adult-eligibility.test.ts",
+          "name": "never writes the declared age or an operating system range"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/require-adult-eligibility.test.ts",
+          "name": "sends an account nobody has asked to the review screen and back to its route"
+        },
+        {
+          "kind": "test",
+          "file": "apps/mobile/__tests__/age-gate.test.ts",
+          "name": "only clearing the device lifts a refusal"
+        }
+      ],
+      "external": "Whether a self-declared age, backed by the operating system's age range where one exists, is enough under the Act and its rules is a question for counsel; no age verification exists in the repository."
     },
     {
       "page": "apps/web/app/trust/page.tsx",

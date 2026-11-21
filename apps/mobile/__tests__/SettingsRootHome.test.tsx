@@ -1,12 +1,12 @@
 import React from 'react';
 import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
-import type { AgeGateRecord } from '../src/features/auth/services/ageGate';
+import type { AgeGateStatus } from '../src/features/auth/services/ageGate';
 
 const mockPush = jest.fn();
 const mockBack = jest.fn();
 const mockOpenBrowserAsync = jest.fn();
 let mockApiUrl = 'https://agiworkforce.com';
-let mockAgeRecord: AgeGateRecord | null = null;
+let mockAgeStatus: AgeGateStatus = 'required';
 
 jest.mock('expo-web-browser', () => ({
   openBrowserAsync: (...args: unknown[]) => mockOpenBrowserAsync(...args),
@@ -90,7 +90,7 @@ jest.mock('../services/authSession', () => ({
 
 jest.mock('../src/features/auth/services/ageGate', () => ({
   ...jest.requireActual('../src/features/auth/services/ageGate'),
-  readAgeGateRecord: () => mockAgeRecord,
+  ageGateStatus: () => mockAgeStatus,
 }));
 
 import {
@@ -111,15 +111,6 @@ import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useAuthStore } from '../src/features/auth/store';
 import { useWaitlistStore } from '../src/features/waitlist/store';
 
-const record = (overrides: Partial<AgeGateRecord> = {}): AgeGateRecord => ({
-  confirmed: true,
-  isMinor: false,
-  confirmedAt: '2026-11-01T00:00:00.000Z',
-  regionCode: 'DEFAULT',
-  threshold: 13,
-  ...overrides,
-});
-
 function signInToCloud() {
   useChatAppModeStore.setState({ appMode: 'cloud' });
   useAuthStore.setState({ isClerkLoaded: true, isClerkSignedIn: true });
@@ -129,7 +120,7 @@ function signInToCloud() {
 describe('Settings home header', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockAgeRecord = null;
+    mockAgeStatus = 'required';
     useChatAppModeStore.setState({ appMode: 'local' });
     useAuthStore.setState({ isClerkLoaded: true, isClerkSignedIn: false });
   });
@@ -175,13 +166,13 @@ describe('Settings home header', () => {
 describe('Settings home Age', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockAgeRecord = null;
+    mockAgeStatus = 'required';
     useChatAppModeStore.setState({ appMode: 'local' });
     useAuthStore.setState({ isClerkLoaded: true, isClerkSignedIn: false });
   });
 
   it('puts Age after Subscription in the Cloud Account section and opens the screen titled Age', () => {
-    mockAgeRecord = record({ threshold: 13 });
+    mockAgeStatus = 'confirmed';
     signInToCloud();
     const { getByLabelText, getAllByTestId } = render(<SettingsTabScreen />);
 
@@ -189,60 +180,33 @@ describe('Settings home Age', () => {
     expect(order.indexOf('settings-row-label-account-age')).toBe(
       order.indexOf('settings-row-label-account-subscription') + 1,
     );
-    fireEvent.press(getByLabelText('Age. 13 or older'));
+    fireEvent.press(getByLabelText('Age. 18 or older'));
 
-    expect(mockPush).toHaveBeenCalledWith({
-      pathname: '/(app)/settings/parental-controls',
-      params: { entry: 'age' },
-    });
+    expect(mockPush).toHaveBeenCalledWith('/(app)/settings/age');
   });
 
-  it('reads the threshold from the stored record instead of assuming 18', () => {
-    mockAgeRecord = record({ threshold: 16 });
-    signInToCloud();
-    const { getByLabelText, queryByLabelText } = render(<SettingsTabScreen />);
-
-    expect(getByLabelText('Age. 16 or older')).toBeTruthy();
-    expect(queryByLabelText(/18 or older/)).toBeNull();
-  });
-
-  it('says Under the threshold for a minor and Not set without a record', () => {
-    mockAgeRecord = record({ isMinor: true, threshold: 13 });
-    signInToCloud();
-    const minor = render(<SettingsTabScreen />);
-    expect(minor.getByLabelText('Age. Under 13')).toBeTruthy();
-    minor.unmount();
-
-    mockAgeRecord = null;
-    const unset = render(<SettingsTabScreen />);
-    expect(unset.getByLabelText('Age. Not set')).toBeTruthy();
-  });
-
-  it('shows the same value on the Parental Controls row in Local, where Account is hidden', () => {
-    mockAgeRecord = record({ threshold: 16 });
-    const { getByLabelText, queryByText } = render(<SettingsTabScreen />);
-
-    expect(queryByText('Account')).toBeNull();
-    fireEvent.press(getByLabelText('Parental Controls. 16 or older'));
-
-    expect(mockPush).toHaveBeenCalledWith('/(app)/settings/parental-controls');
-  });
-
-  it('keeps Parental Controls in Device in Cloud as well, beside Age, without repeating the value', () => {
-    mockAgeRecord = record({ threshold: 16 });
+  it('says Not set while the person still has to be asked', () => {
     signInToCloud();
     const { getByLabelText } = render(<SettingsTabScreen />);
+    expect(getByLabelText('Age. Not set')).toBeTruthy();
+  });
 
-    fireEvent.press(getByLabelText('Parental Controls'));
+  it('has no Parental Controls row in Local or Cloud', () => {
+    mockAgeStatus = 'confirmed';
+    const local = render(<SettingsTabScreen />);
+    expect(local.queryByText('Parental Controls')).toBeNull();
+    local.unmount();
 
-    expect(mockPush).toHaveBeenCalledWith('/(app)/settings/parental-controls');
+    signInToCloud();
+    const cloud = render(<SettingsTabScreen />);
+    expect(cloud.queryByText('Parental Controls')).toBeNull();
   });
 });
 
 describe('Settings home Security and login', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockAgeRecord = null;
+    mockAgeStatus = 'required';
     useChatAppModeStore.setState({ appMode: 'local' });
     useAuthStore.setState({ isClerkLoaded: true, isClerkSignedIn: false });
   });
@@ -276,7 +240,7 @@ describe('Settings home rows at large text sizes', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockAgeRecord = null;
+    mockAgeStatus = 'required';
     useChatAppModeStore.setState({ appMode: 'cloud' });
     useAuthStore.setState({ isClerkLoaded: true, isClerkSignedIn: false });
   });
@@ -326,7 +290,7 @@ describe('Settings home rows at large text sizes', () => {
 describe('Settings home search', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockAgeRecord = null;
+    mockAgeStatus = 'required';
     useChatAppModeStore.setState({ appMode: 'local' });
     useAuthStore.setState({ isClerkLoaded: true, isClerkSignedIn: false });
   });
@@ -367,7 +331,7 @@ describe('Settings home search', () => {
     ['theme', 'Appearance. Device'],
     ['memory', 'Memory. Assistant'],
     ['delete account', 'Data controls. Assistant'],
-    ['age', 'Parental controls. Device'],
+    ['age', 'Age. Account'],
     ['permissions', 'Permissions. Device'],
     ['safety', 'Safety & Security. Device'],
     ['accent', 'Accent Color. Device'],
@@ -453,8 +417,11 @@ describe('Settings home search', () => {
     const labels = screen
       .getAllByRole('button')
       .map((node) => node.props.accessibilityLabel as string | undefined)
-      .filter((label): label is string => label !== undefined && label.endsWith('. Device'));
-    expect(labels[0]).toBe('Parental controls. Device');
+      .filter(
+        (label): label is string =>
+          label !== undefined && (label.endsWith('. Device') || label.endsWith('. Account')),
+      );
+    expect(labels[0]).toBe('Age. Account');
     expect(labels).toContain('General. Device');
   });
 
@@ -563,7 +530,7 @@ describe('Settings home search', () => {
 describe('Settings home Help Center', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockAgeRecord = null;
+    mockAgeStatus = 'required';
     mockOpenBrowserAsync.mockResolvedValue({ type: 'dismiss' });
     useChatAppModeStore.setState({ appMode: 'local' });
     useAuthStore.setState({ isClerkLoaded: true, isClerkSignedIn: false });
@@ -612,7 +579,7 @@ describe('Settings home on a tablet', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockAgeRecord = null;
+    mockAgeStatus = 'required';
     useChatAppModeStore.setState({ appMode: 'local' });
     useAuthStore.setState({ isClerkLoaded: true, isClerkSignedIn: false });
   });

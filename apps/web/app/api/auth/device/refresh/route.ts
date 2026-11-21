@@ -31,6 +31,9 @@ import {
   termsStandingFor,
   type TermsStanding,
 } from '@/lib/server/terms';
+import { adultEligibilityStateOf } from '@/lib/server/adult-eligibility';
+import type { AdultEligibilityState } from '@agiworkforce/cloud-contracts';
+import { deviceAdultEligibilityResponse } from '../adult-eligibility-refusal';
 
 export const runtime = 'nodejs';
 
@@ -54,6 +57,8 @@ interface RefreshTokenRow {
   owner_account_status: string | null;
   owner_terms_version: string | null;
   owner_terms_accepted_at: string | null;
+  owner_adult_eligibility_outcome: string | null;
+  owner_adult_eligibility_minimum_age: number | null;
 }
 
 function termsAcceptanceUrl(request: NextRequest, returnTo = '/'): string {
@@ -79,7 +84,8 @@ type RotationResult =
       compromiseRecorded: boolean;
     }
   | { kind: 'account_unavailable'; message: string; recoveryPath: string | null }
-  | { kind: 'invalid' | 'expired' | 'erased' | 'terms_required' };
+  | { kind: 'invalid' | 'expired' | 'erased' | 'terms_required' }
+  | { kind: 'age_review_required'; state: Exclude<AdultEligibilityState, 'confirmed'> };
 
 async function handleDeviceRefresh(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'device-poll');
@@ -107,7 +113,9 @@ async function handleDeviceRefresh(request: NextRequest): Promise<NextResponse> 
               p.deletion_scheduled_for AS owner_deletion_scheduled_for,
               p.account_status AS owner_account_status,
               p.terms_version AS owner_terms_version,
-              p.terms_accepted_at AS owner_terms_accepted_at
+              p.terms_accepted_at AS owner_terms_accepted_at,
+              p.adult_eligibility_outcome AS owner_adult_eligibility_outcome,
+              p.adult_eligibility_minimum_age AS owner_adult_eligibility_minimum_age
          FROM device_refresh_tokens t
          LEFT JOIN profiles p ON p.id = t.user_id
         WHERE t.token_hash = $1
@@ -193,6 +201,16 @@ async function handleDeviceRefresh(request: NextRequest): Promise<NextResponse> 
       return { kind: 'terms_required' };
     }
 
+    // Withheld the same way and for the same reason: the family stays intact and unused, so
+    // the device resumes once the account has answered the age question on web.
+    const adultEligibility = adultEligibilityStateOf({
+      adult_eligibility_outcome: current.owner_adult_eligibility_outcome,
+      adult_eligibility_minimum_age: current.owner_adult_eligibility_minimum_age,
+    });
+    if (adultEligibility !== 'confirmed') {
+      return { kind: 'age_review_required', state: adultEligibility };
+    }
+
     const nextCredential = createDeviceRefreshCredential();
     const { accessToken, expiresIn } = issueDeveloperToken({
       userId: current.user_id,
@@ -250,6 +268,14 @@ async function handleDeviceRefresh(request: NextRequest): Promise<NextResponse> 
       } satisfies DeviceTokenError,
       { status: 403, headers: { 'Cache-Control': 'no-store' } },
     );
+  }
+
+  if (result.kind === 'age_review_required') {
+    logger.warn(
+      { reason: result.kind, state: result.state },
+      'Device refresh withheld until the account has an 18 and over decision',
+    );
+    return deviceAdultEligibilityResponse(result.state, termsAcceptanceUrl(request));
   }
 
   if (result.kind === 'account_unavailable') {

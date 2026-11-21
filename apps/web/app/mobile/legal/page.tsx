@@ -1,6 +1,6 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
-import { ACCOUNT_MINIMUM_AGE, PARENTAL_PERMISSION_BELOW_AGE } from '@agiworkforce/types';
+import { ACCOUNT_MINIMUM_AGE } from '@agiworkforce/types';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import {
@@ -408,14 +408,23 @@ export default function MobileLegalPage() {
                 <Link href="/terms" className="agi-ds-link">
                   terms
                 </Link>{' '}
-                applies to Mobile: you must be at least {ACCOUNT_MINIMUM_AGE} to create an account,
-                and anyone under {PARENTAL_PERMISSION_BELOW_AGE} needs permission from a parent or
-                guardian. Mobile is not offered to children under {ACCOUNT_MINIMUM_AGE}, and in
-                jurisdictions setting a higher digital-consent age, including the European Union and
-                the United Kingdom, where it may be 16, and India, where processing children&rsquo;s
-                data requires verifiable parental consent, that higher threshold applies instead. We
-                do not knowingly collect personal data from children below that age. If you believe
-                a child has provided personal data, contact{' '}
+                applies to Mobile: it is for adults, and you must be at least {ACCOUNT_MINIMUM_AGE},
+                or older where the law of the place you live sets a higher age, to use it. The app
+                checks before anything else, before onboarding, Local mode or sign-in. Where the
+                operating system can answer, through Declared Age Range on iOS 26 and later or Play
+                Age Signals on Android, the app asks it only whether you are {ACCOUNT_MINIMUM_AGE}{' '}
+                or over; otherwise it asks you to type your age. The phone keeps the outcome, the
+                minimum age it was judged against and the operating system&rsquo;s answer, never a
+                typed age. A result from the earlier rule does not count, so the app asks once more.
+                A phone found to be used by someone under {ACCOUNT_MINIMUM_AGE} cannot use the app
+                in any mode, Local mode included, except to sign out, export or erase the
+                app&rsquo;s data on the phone and open the data rights page. For a Cloud account the
+                app checks with our server each time it opens and whenever the signed-in account
+                changes, Cloud opens only once the server confirms the account, and the server keeps
+                only the decision, as section 09 of the privacy policy describes. We do not verify a
+                typed age. We do not knowingly collect personal data from anyone under{' '}
+                {ACCOUNT_MINIMUM_AGE}. If you believe someone under {ACCOUNT_MINIMUM_AGE} has
+                provided personal data, contact{' '}
                 <a href={contactMailto(CONTACT_SUBJECTS.privacy)} className="agi-ds-link">
                   {CONTACT_EMAIL}
                 </a>

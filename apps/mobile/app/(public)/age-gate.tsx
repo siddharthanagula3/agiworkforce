@@ -10,49 +10,39 @@ import {
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ArrowLeft, Lock, Shield } from 'lucide-react-native';
-import { ACCOUNT_AGE_REQUIREMENT_NOTICE, ACCOUNT_MINIMUM_AGE } from '@agiworkforce/types';
+import { Shield } from 'lucide-react-native';
+import { ACCOUNT_AGE_REQUIREMENT_NOTICE } from '@agiworkforce/types';
 import { Text } from '@/components/ui/Text';
-import { HEADER_TEXT_SCALE_LIMIT } from '@/src/features/chat/components/WorkModeSwitch';
 import { useTheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { contentColumn } from '@/src/shared/layout/contentColumn';
 import { useAuthStore } from '@/src/features/auth/store';
 import { confirmAgeGate, getAgeThreshold, isMinorMode } from '@/src/features/auth/services/ageGate';
 import { assureAgeWithOs } from '@/src/features/age-assurance';
+import { AgeRefused } from '@/src/features/auth/components/AgeRefused';
+import { useAdultEligibilityStore } from '@/src/features/auth/store/adultEligibilityStore';
 import {
-  AGE_ENTRY_PARAMS,
-  PARENTAL_CONTROLS_ROUTE,
-} from '@/src/features/settings/parental-controls/entry';
-import { APP_PATH, CLOUD_SIGN_IN_RETURN_PATH } from '@/src/features/auth/services/rootRouting';
+  AGE_GATE_PATH,
+  CLOUD_SIGN_IN_RETURN_PATH,
+  ONBOARDING_PATH,
+} from '@/src/features/auth/services/rootRouting';
 import {
   clearPostAuthIntent,
   peekPostAuthIntent,
   POST_AUTH_INTENT_PARAM,
 } from '@/src/features/auth/services/postAuthIntent';
 
-const PARENTAL_CONTROLS_RETURN_PATH = PARENTAL_CONTROLS_ROUTE;
-
-const RETURN_PATHS = [PARENTAL_CONTROLS_RETURN_PATH, CLOUD_SIGN_IN_RETURN_PATH] as const;
+const RETURN_PATHS = [CLOUD_SIGN_IN_RETURN_PATH] as const;
 type ReturnPath = (typeof RETURN_PATHS)[number];
 
 export function resolveReturnPath(raw: string | undefined): ReturnPath | null {
   return RETURN_PATHS.find((path) => path === raw) ?? null;
 }
 
-export function resolveReturnEntry(
-  returnTo: ReturnPath | null,
-  raw: string | string[] | undefined,
-): typeof AGE_ENTRY_PARAMS.entry | null {
-  return returnTo === PARENTAL_CONTROLS_RETURN_PATH && raw === AGE_ENTRY_PARAMS.entry
-    ? AGE_ENTRY_PARAMS.entry
-    : null;
-}
-
 export default function AgeGateScreen() {
   const { colors, isDark } = useTheme();
   const router = useRouter();
-  const params = useLocalSearchParams<{ returnTo?: string; entry?: string }>();
+  const params = useLocalSearchParams<{ returnTo?: string }>();
   const [ageText, setAgeText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [refused, setRefused] = useState(isMinorMode);
@@ -63,23 +53,9 @@ export default function AgeGateScreen() {
   const threshold = getAgeThreshold();
   const canContinue = ageText.trim().length > 0;
   const primaryButtonTextColor = isDark ? colors.black : colors.white;
-  const disabledButtonBg = isDark ? colors.surfaceHover : colors.surfaceHover;
+  const disabledButtonBg = colors.surfaceHover;
   const disabledButtonTextColor = colors.textMuted;
   const returnTo = resolveReturnPath(params.returnTo);
-  const returnEntry = resolveReturnEntry(returnTo, params.entry);
-
-  const handleBack = useCallback(() => {
-    if (returnTo) {
-      if (returnTo === CLOUD_SIGN_IN_RETURN_PATH) clearPostAuthIntent();
-      router.replace(
-        returnTo === CLOUD_SIGN_IN_RETURN_PATH
-          ? APP_PATH
-          : returnEntry
-            ? { pathname: returnTo, params: AGE_ENTRY_PARAMS }
-            : returnTo,
-      );
-    }
-  }, [returnEntry, returnTo, router]);
 
   const handleComplete = useCallback(() => {
     if (returnTo === CLOUD_SIGN_IN_RETURN_PATH) {
@@ -91,23 +67,23 @@ export default function AgeGateScreen() {
       );
       return;
     }
-    router.replace(
-      returnTo && returnEntry
-        ? { pathname: returnTo, params: AGE_ENTRY_PARAMS }
-        : (returnTo ?? ('/(public)/onboarding' as const)),
-    );
-  }, [returnEntry, returnTo, router]);
+    router.replace(ONBOARDING_PATH);
+  }, [returnTo, router]);
 
   const osCheckStarted = useRef(false);
   useEffect(() => {
-    if (osCheckStarted.current || refused || returnTo === PARENTAL_CONTROLS_RETURN_PATH) return;
+    if (osCheckStarted.current || refused) return;
     osCheckStarted.current = true;
     void assureAgeWithOs().then((record) => {
       if (!record) return;
-      if (record.isMinor) setRefused(true);
-      else handleComplete();
+      if (record.isMinor) {
+        setRefused(true);
+        return;
+      }
+      void useAdultEligibilityStore.getState().reportDeviceGateAnswer(null);
+      handleComplete();
     });
-  }, [handleComplete, refused, returnTo]);
+  }, [handleComplete, refused]);
 
   const handleContinue = useCallback(() => {
     const parsed = parseInt(ageText.trim(), 10);
@@ -119,94 +95,39 @@ export default function AgeGateScreen() {
     const record = confirmAgeGate(parsed);
     if (record.isMinor) {
       setRefused(true);
-    } else {
-      handleComplete();
+      return;
     }
+    void useAdultEligibilityStore.getState().reportDeviceGateAnswer(parsed);
+    handleComplete();
   }, [ageText, handleComplete]);
 
   const handleSignOut = useCallback(async () => {
     await signOutAllAccounts().catch(() => {});
     clearPostAuthIntent();
-    router.replace(APP_PATH);
+    router.replace(AGE_GATE_PATH);
   }, [router, signOutAllAccounts]);
 
-  const header = returnTo ? (
-    <View style={styles.header}>
-      <Pressable
-        onPress={handleBack}
-        accessibilityRole="button"
-        accessibilityLabel="Go back"
-        hitSlop={8}
-        style={({ pressed }) => [
-          styles.backButton,
-          { backgroundColor: pressed ? colors.surfaceHover : colors.transparent },
-        ]}
-      >
-        <ArrowLeft size={22} color={colors.textPrimary} />
-      </Pressable>
-      <Text
-        accessibilityRole="header"
-        maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
-        style={[styles.headerTitle, { color: colors.textPrimary }]}
-      >
-        Review Age Settings
-      </Text>
-    </View>
-  ) : null;
+  const handleDeviceDataErased = useCallback(() => {
+    setAgeText('');
+    setError(null);
+    setRefused(false);
+    router.replace(AGE_GATE_PATH);
+  }, [router]);
 
   if (refused) {
     return (
-      <SafeAreaView
-        testID="age-gate-refused"
-        style={{ flex: 1, backgroundColor: colors.background }}
-      >
-        {header}
-        <ScrollView
-          contentInsetAdjustmentBehavior="automatic"
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={[
-            styles.scrollContent,
-            { backgroundColor: colors.background, justifyContent: 'center' },
-          ]}
-        >
-          <View style={[styles.iconWrap, { backgroundColor: colors.accentSurface }]}>
-            <Lock size={40} color={colors.teal} />
-          </View>
-
-          <Text style={[styles.title, { color: colors.textPrimary }]} accessibilityRole="header">
-            Age requirement
-          </Text>
-
-          <Text testID="age-gate-refusal" style={[styles.body, { color: colors.textSecondary }]}>
-            {threshold === ACCOUNT_MINIMUM_AGE
-              ? ACCOUNT_AGE_REQUIREMENT_NOTICE
-              : `AGI accounts are for people ${threshold} and older in your region.`}
-          </Text>
-
-          <Text style={[styles.body, { color: colors.textSecondary }]}>
-            This device recorded an age under {threshold}, which only erasing AGI’s data on this
-            device can reset.
-          </Text>
-
-          {isClerkSignedIn ? (
-            <Pressable
-              testID="age-gate-refused-sign-out-btn"
-              onPress={() => void handleSignOut()}
-              accessibilityRole="button"
-              accessibilityLabel="Sign out"
-              style={[styles.ctaBtn, { backgroundColor: colors.teal }]}
-            >
-              <Text style={[styles.ctaBtnText, { color: primaryButtonTextColor }]}>Sign out</Text>
-            </Pressable>
-          ) : null}
-        </ScrollView>
-      </SafeAreaView>
+      <AgeRefused
+        scope="device"
+        threshold={threshold}
+        signedIn={isClerkSignedIn}
+        onSignOut={() => void handleSignOut()}
+        onDeviceDataErased={handleDeviceDataErased}
+      />
     );
   }
 
   return (
     <SafeAreaView testID="age-gate-root" style={{ flex: 1, backgroundColor: colors.background }}>
-      {header}
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -233,7 +154,7 @@ export default function AgeGateScreen() {
             testID="age-gate-subtitle"
             style={[styles.subtitle, { color: colors.textSecondary }]}
           >
-            AGI accounts are for people {threshold} and older. Please enter your age to continue.
+            {ACCOUNT_AGE_REQUIREMENT_NOTICE} Enter your age to continue.
           </Text>
 
           <TextInput
@@ -297,7 +218,7 @@ export default function AgeGateScreen() {
             testID="age-gate-policy-note"
             style={[styles.policyNote, { color: colors.textMuted }]}
           >
-            Your age stays on this device and is never shared.
+            AGI keeps only whether you meet the age, not your age.
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -306,25 +227,6 @@ export default function AgeGateScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: {
-    minHeight: 58,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-  },
-  backButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    flex: 1,
-    fontSize: typeScale.title3,
-    fontWeight: '700',
-    marginLeft: 4,
-  },
   scrollContent: {
     ...contentColumn('form'),
     flexGrow: 1,
@@ -393,11 +295,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 18,
     paddingHorizontal: 8,
-  },
-  body: {
-    fontSize: typeScale.body,
-    lineHeight: 22,
-    textAlign: 'center',
-    marginBottom: 16,
   },
 });

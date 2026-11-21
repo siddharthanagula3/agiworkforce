@@ -44,6 +44,14 @@ export type DeviceTokenResponse = z.infer<typeof DeviceTokenResponseSchema>;
  * RFC 8628 3.5 and RFC 6749 5.2; the last two are this service's own and carry
  * what the person needs to do next.
  */
+/**
+ * Why the account has to visit the review screen before a device gets a token.
+ * Both reasons travel under `terms_acceptance_required`, the one refusal every
+ * released client already knows how to follow to `acceptance_url`; a client
+ * that reads `review` can say which it is.
+ */
+export const DEVICE_REVIEW_REASONS = ['terms', 'age'] as const;
+
 export const DeviceTokenErrorSchema = z.discriminatedUnion('error', [
   z.object({ error: z.literal('authorization_pending') }),
   z.object({ error: z.literal('slow_down'), interval: z.number().positive().optional() }),
@@ -60,6 +68,7 @@ export const DeviceTokenErrorSchema = z.discriminatedUnion('error', [
     terms_version: z.string().optional(),
     acceptance_url: z.string().url(),
     error_description: z.string().optional(),
+    review: z.enum(DEVICE_REVIEW_REASONS).optional(),
   }),
 ]);
 export type DeviceTokenError = z.infer<typeof DeviceTokenErrorSchema>;

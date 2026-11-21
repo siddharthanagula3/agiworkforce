@@ -18,6 +18,7 @@ import {
 } from '@/lib/managed-compute-gate';
 import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { requireCsrfToken } from '@/lib/csrf';
+import { buildAdultEligibilityGateResponse } from '@/lib/server/adult-eligibility-gate';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getCorsHeaders, getSecurityHeaders, handleCorsPreflightRequest } from '@/lib/cors';
@@ -113,6 +114,14 @@ async function handleEmbeddings(request: NextRequest): Promise<Response> {
 
   const csrfResponse = await requireCsrfToken(request);
   if (csrfResponse) return csrfResponse;
+
+  const ageGateResponse = await buildAdultEligibilityGateResponse({
+    userId,
+    request,
+    gate: 'embeddings',
+    headers: { ...getCorsHeaders(request), ...getSecurityHeaders() },
+  });
+  if (ageGateResponse) return ageGateResponse;
 
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse)

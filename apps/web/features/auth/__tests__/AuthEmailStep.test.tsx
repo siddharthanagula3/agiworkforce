@@ -9,7 +9,6 @@ import {
   ACCOUNT_AGE_REQUIRED_MESSAGE,
   ACCOUNT_AGE_REQUIREMENT_NOTICE,
   ACCOUNT_MINIMUM_AGE,
-  PARENTAL_PERMISSION_BELOW_AGE,
 } from '@agiworkforce/types';
 
 import { MARKETING_EMAIL_CONSENT_PURPOSE } from '@/lib/consent-purposes';
@@ -27,7 +26,9 @@ const AGREEMENT_SENTENCE =
   'By creating an account, you agree to the Terms of Use and acknowledge the Privacy Policy.';
 const YOUNGEST_ADMITTED = String(ACCOUNT_MINIMUM_AGE);
 const TOO_YOUNG = String(ACCOUNT_MINIMUM_AGE - 1);
-const ADMITTED_AGES = [YOUNGEST_ADMITTED, String(PARENTAL_PERMISSION_BELOW_AGE - 1), '18'];
+const ADMITTED_AGES = [YOUNGEST_ADMITTED, '19', '64'];
+const REFUSED_AGES = ['13', '16', TOO_YOUNG];
+const ADMITTED_CHOICES = { ageCheckedAgainst: ACCOUNT_MINIMUM_AGE };
 
 function renderStep(overrides: Partial<Parameters<typeof AuthEmailStep>[0]> = {}) {
   const props = {
@@ -308,6 +309,23 @@ describe('AuthEmailStep', () => {
     Reflect.deleteProperty(window, 'PublicKeyCredential');
   });
 
+  it.each(REFUSED_AGES)(
+    'refuses a %s year old, with no mention of a parent or guardian',
+    async (age) => {
+      const props = renderStep({ mode: 'signup' });
+      await userEvent.type(screen.getByLabelText('Email address'), 'person@example.com');
+      await enterAge(age);
+
+      await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
+
+      expectRefused(ACCOUNT_AGE_INELIGIBLE_MESSAGE);
+      expect(document.body).not.toHaveTextContent(/parent|guardian|permission/i);
+      expect(props.onSubmit).not.toHaveBeenCalled();
+      expect(props.onStartProvider).not.toHaveBeenCalled();
+    },
+  );
+
   it.each(ADMITTED_AGES)('admits a %s year old at every way in', async (age) => {
     withPasskeys();
     const onStartPasskey = vi.fn();
@@ -365,6 +383,8 @@ describe('AuthEmailStep', () => {
     await userEvent.type(ageField(), '1');
     expect(ageAlert()).toHaveTextContent(ACCOUNT_AGE_REQUIRED_MESSAGE);
     await userEvent.type(ageField(), '6');
+    expect(ageAlert()).toHaveTextContent(ACCOUNT_AGE_REQUIRED_MESSAGE);
+    await userEvent.type(ageField(), '{Backspace}8');
     expect(screen.queryByRole('alert')).toBeNull();
 
     await enterAge(TOO_YOUNG);
@@ -440,11 +460,19 @@ describe('AuthEmailStep', () => {
     expect(leaving.onStartProvider.mock.calls).toEqual(PROVIDERS.map(({ id }) => [id]));
     expect(leaving.onStartPasskey.mock.calls).toEqual([[]]);
     expect(leaving.onSignupAdmitted.mock.calls).toEqual(
-      Array.from({ length: 2 + PROVIDERS.length + 1 }, () => [{ marketingEmail: false }]),
+      Array.from({ length: 2 + PROVIDERS.length + 1 }, () => [
+        { marketingEmail: false, ...ADMITTED_CHOICES },
+      ]),
     );
-    const carried = JSON.stringify(Object.values(leaving).map((callback) => callback.mock.calls));
-    expect(carried).not.toContain('57');
-    expect(carried).not.toMatch(/age/i);
+    const others = [
+      leaving.onSubmit,
+      leaving.onStartProvider,
+      leaving.onStartPasskey,
+      leaving.onRetry,
+    ];
+    const carried = JSON.stringify(others.map((callback) => callback.mock.calls));
+    expect(carried).not.toMatch(/age|57/i);
+    expect(JSON.stringify(leaving.onSignupAdmitted.mock.calls)).not.toContain('57');
     expect(window.localStorage.length).toBe(0);
     expect(window.sessionStorage.length).toBe(0);
     expect(document.cookie).toBe(cookiesBefore);
@@ -990,7 +1018,7 @@ describe('the optional marketing email box on sign up', () => {
 
     expect(onStartProvider).toHaveBeenCalledWith('google');
     expect(onSignupAdmitted).toHaveBeenCalledTimes(1);
-    expect(onSignupAdmitted).toHaveBeenCalledWith({ marketingEmail: ticked });
+    expect(onSignupAdmitted).toHaveBeenCalledWith({ marketingEmail: ticked, ...ADMITTED_CHOICES });
     expect(onSignupAdmitted.mock.invocationCallOrder[0] ?? Number.NaN).toBeLessThan(
       onStartProvider.mock.invocationCallOrder[0] ?? Number.NaN,
     );
@@ -1039,8 +1067,8 @@ describe('the optional marketing email box on sign up', () => {
 
     expect(onRetry).toHaveBeenCalledTimes(2);
     expect(onSignupAdmitted.mock.calls).toEqual([
-      [{ marketingEmail: true }],
-      [{ marketingEmail: false }],
+      [{ marketingEmail: true, ...ADMITTED_CHOICES }],
+      [{ marketingEmail: false, ...ADMITTED_CHOICES }],
     ]);
   });
 
@@ -1074,7 +1102,7 @@ describe('the optional marketing email box on sign up', () => {
 
       expect(box).not.toBeChecked();
       expect(props.onStartProvider).toHaveBeenCalledWith('google');
-      expect(onSignupAdmitted).toHaveBeenCalledWith({ marketingEmail: false });
+      expect(onSignupAdmitted).toHaveBeenCalledWith({ marketingEmail: false, ...ADMITTED_CHOICES });
     },
   );
 
@@ -1120,7 +1148,7 @@ describe('the optional marketing email box on sign up', () => {
     expect(marketingEmailBox()).not.toBeChecked();
     await enterAge();
     await userEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
-    expect(onSignupAdmitted).toHaveBeenCalledWith({ marketingEmail: false });
+    expect(onSignupAdmitted).toHaveBeenCalledWith({ marketingEmail: false, ...ADMITTED_CHOICES });
   });
 
   it('says nothing about the signal when the browser sends none', () => {

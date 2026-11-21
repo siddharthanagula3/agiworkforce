@@ -6586,29 +6586,58 @@
       ]
     },
     {
-      "id": "signup-minimum-age-and-parental-permission",
+      "id": "signup-minimum-age-adults-only",
       "doc": "signing-up",
       "section": "Create the account",
       "kind": "prose",
-      "sentence": "You must be at least 13 to create an account, and if you are under 18 you need permission from a parent or guardian.",
+      "sentence": "AGI is for adults: you must be at least 18 to create an account, and an age under 18 is refused on the screen before any account is created.",
       "implementation": [
-        "packages/contracts/types/src/account-eligibility.ts#ACCOUNT_AGE_REQUIREMENT_NOTICE"
+        "packages/contracts/types/src/account-eligibility.ts#ACCOUNT_AGE_REQUIREMENT_NOTICE",
+        "apps/web/features/auth/useSignupAgeGate.ts"
       ],
       "proof": [
         {
           "kind": "copy",
           "file": "packages/contracts/types/src/account-eligibility.ts",
-          "text": "export const ACCOUNT_MINIMUM_AGE = 13;"
+          "text": "export const ACCOUNT_MINIMUM_AGE = 18;"
         },
         {
-          "kind": "copy",
-          "file": "packages/contracts/types/src/account-eligibility.ts",
-          "text": "export const PARENTAL_PERMISSION_BELOW_AGE = 18;"
+          "kind": "test",
+          "file": "packages/contracts/types/src/__tests__/account-eligibility.test.ts",
+          "name": "is for adults only"
         },
         {
-          "kind": "copy",
-          "file": "packages/contracts/types/src/account-eligibility.ts",
-          "text": "return age < ACCOUNT_MINIMUM_AGE ? 'too_young' : 'eligible';"
+          "kind": "test",
+          "file": "apps/web/features/auth/__tests__/AuthEmailStep.test.tsx",
+          "name": "refuses a ${TOO_YOUNG} year old at every way in, and starts none of them"
+        }
+      ]
+    },
+    {
+      "id": "signup-typed-age-not-stored-or-sent",
+      "doc": "signing-up",
+      "section": "Create the account",
+      "kind": "prose",
+      "sentence": "The age you type is judged in your browser and is not stored or sent to us; the new account records only that it passed the check.",
+      "implementation": [
+        "apps/web/app/signup/signupAttemptMarkers.ts#AGE_CHECK_STORAGE_KEY",
+        "apps/web/lib/server/adult-eligibility.ts#submitAdultEligibilityEvidence"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/auth/__tests__/AuthEmailStep.test.tsx",
+          "name": "hands the age to nothing that leaves the screen, and writes it nowhere"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/signup/signupAttemptMarkers.test.ts",
+          "name": "stores the minimum age the screen checked against under its own key"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/adult-eligibility.test.ts",
+          "name": "never writes the declared age or an operating system range"
         }
       ]
     },
@@ -6642,37 +6671,76 @@
       ]
     },
     {
-      "id": "signup-provider-account-asks-age-and-terms-first",
+      "id": "signup-undecided-account-asked-at-sign-in",
       "doc": "signing-up",
       "section": "Create the account",
       "kind": "prose",
-      "sentence": "When a provider button on the sign-in page, such as **Continue with Google**, creates a new account, the account's first screen asks for your age and for you to accept the terms, and the account cannot be used until the terms are ticked and an eligible age is entered.",
+      "sentence": "An account with no age decision on record, such as one created by a provider button on the log-in page like **Continue with Google**, or one created before the minimum age became 18, is asked to confirm its age at its next sign-in, and it cannot use chat until it gives an age of 18 or over.",
       "implementation": [
-        "apps/web/app/login/complete/page.tsx#confirmAge={firstAcceptance}",
-        "apps/web/app/signup/TermsGate.tsx#AuthAgeConfirmation",
-        "apps/web/lib/server/require-current-terms.ts#requireCurrentTermsAcceptance",
-        "apps/web/app/api/llm/v1/chat/completions/lib/auth-gate.ts#termsRefusal"
+        "apps/web/app/login/complete/page.tsx#AgeConfirmationStep",
+        "apps/web/lib/server/require-adult-eligibility.ts#requireAdultEligibility",
+        "apps/web/lib/server/adult-eligibility-gate.ts#refuseWithoutAdultEligibility"
       ],
       "proof": [
         {
           "kind": "test",
-          "file": "apps/web/app/signup/TermsAcceptanceGate.test.tsx",
-          "name": "drops it when a provider sign-in starts, so an account that sign-in creates is asked its age"
+          "file": "apps/web/lib/server/require-adult-eligibility.test.ts",
+          "name": "sends an account nobody has asked to the review screen and back to its route"
         },
         {
           "kind": "test",
-          "file": "apps/web/app/login/complete/page.test.tsx",
-          "name": "asks an account that never accepted the terms for its age on the same first screen"
+          "file": "apps/web/lib/server/adult-eligibility.test.ts",
+          "name": "is unconfirmed when nobody has been asked"
         },
         {
           "kind": "test",
-          "file": "apps/web/app/signup/TermsGate.test.tsx",
-          "name": "asks for the terms and the age on the first screen and goes on only with the terms ticked and an eligible age"
+          "file": "apps/web/lib/server/adult-eligibility.test.ts",
+          "name": "is unconfirmed, not admitted, by an admission made under the earlier 13 and over rule"
+        }
+      ]
+    },
+    {
+      "id": "signup-refused-account-stays-refused",
+      "doc": "signing-up",
+      "section": "Create the account",
+      "kind": "prose",
+      "sentence": "An account found to be under 18 cannot use AGI, and a second answer does not reopen it.",
+      "implementation": [
+        "apps/web/lib/server/adult-eligibility.ts#submitAdultEligibilityEvidence",
+        "apps/web/features/auth/AgeIneligibleNotice.tsx"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/adult-eligibility.test.ts",
+          "name": "does not reopen a refused account when a later answer says 30"
         },
         {
           "kind": "test",
-          "file": "apps/web/lib/server/require-current-terms.test.ts",
-          "name": "sends missing or outdated accounts through fresh acceptance and back to their route"
+          "file": "apps/web/lib/server/require-adult-eligibility.test.ts",
+          "name": "sends a refused account to the same screen, which tells it why"
+        }
+      ]
+    },
+    {
+      "id": "signup-age-self-declared",
+      "doc": "signing-up",
+      "section": "Create the account",
+      "kind": "prose",
+      "sentence": "The age is your own statement and is not verified, except on a phone that reports an age range.",
+      "implementation": [
+        "packages/contracts/types/src/account-eligibility.ts#decideAdultEligibility"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "packages/contracts/types/src/__tests__/account-eligibility.test.ts",
+          "name": "accepts a declared age of 18 and refuses 17"
+        },
+        {
+          "kind": "test",
+          "file": "packages/contracts/types/src/__tests__/account-eligibility.test.ts",
+          "name": "accepts an operating system range that starts at 18 or above"
         }
       ]
     },
@@ -8105,18 +8173,6 @@
       "sentence": "SMS MFA is not part of the current account contract, so it is not offered rather than silently ignored.",
       "implementation": ["apps/web/features/auth"],
       "reason": "Which second factors the identity provider offers is decided outside this repository, so nothing here can assert that SMS is absent. It stays unproven until the account contract enumerates the factors it accepts in code."
-    },
-    {
-      "id": "signup-age-not-stored-or-sent",
-      "doc": "signing-up",
-      "section": "Create the account",
-      "kind": "prose",
-      "sentence": "The age is checked in your browser and is not stored or sent to us.",
-      "implementation": [
-        "apps/web/features/auth/useSignupAgeGate.ts",
-        "apps/web/features/auth/AuthAgeField.tsx"
-      ],
-      "reason": "The claim is an absence: nothing stores or transmits the typed age. The sign-up form that holds it is being rebuilt and its tests are not final, so no test is cited yet; cite the one that pins the nameless field once it lands."
     }
   ],
   "narrative": [

@@ -1,6 +1,6 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
-import { ACCOUNT_MINIMUM_AGE, PARENTAL_PERMISSION_BELOW_AGE } from '@agiworkforce/types';
+import { ACCOUNT_MINIMUM_AGE } from '@agiworkforce/types';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { PolicyContents } from '@shared/components/legal/PolicyContents';
@@ -355,7 +355,7 @@ const DPDP_DUTIES: readonly LedgerRow[] = [
   },
   {
     label: 'Children (s. 9)',
-    value: `AGI performs no age verification and no verifiable parental consent. Sign-up asks for an age and refuses anyone under ${ACCOUNT_MINIMUM_AGE}; the age is self-declared, checked in the browser and not stored, and the Terms of Service require anyone under ${PARENTAL_PERMISSION_BELOW_AGE} to have permission from a parent or guardian, which AGI does not verify. This is named as a gap against the Act rather than implied away.`,
+    value: `AGI is not offered to anyone under ${ACCOUNT_MINIMUM_AGE}, so it does not seek verifiable parental consent for anyone, and it performs no age verification. Sign-up, and the check an existing account meets at its next sign-in, ask for an age in years and refuse anyone who gives an age under ${ACCOUNT_MINIMUM_AGE}; the phone app uses the operating system's age range where one is available. Apart from that signal the age is self-declared, so a child who gives a false age is not detected. AGI keeps only the decision, never the age. This is named as a gap against the Act rather than implied away.`,
   },
 ];
 

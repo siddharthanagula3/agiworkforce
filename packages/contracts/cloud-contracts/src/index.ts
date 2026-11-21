@@ -94,6 +94,7 @@ export * from './header-names';
 export * from './free-quota';
 export * from './free-model-promotion';
 export * from './account-deletion';
+export * from './adult-eligibility';
 export * from './terms-acceptance';
 export * from './device-authorization';
 export * from './notifications';

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { evaluateAccountAge } from '@agiworkforce/types';
+import { ACCOUNT_MINIMUM_AGE, evaluateAccountAge } from '@agiworkforce/types';
 import { Spinner } from '@agiworkforce/ui';
 
 import { useAuthSceneBridge } from '@agiworkforce/ui/auth-scene';
@@ -160,7 +160,12 @@ export function AuthEmailStep({
   const attempt = (action: () => void) => {
     const admitted = ageGate.admit(() => {
       setAttempted({ email, password });
-      if (isSignup) onSignupAdmitted?.({ marketingEmail: marketingEmail.wanted });
+      if (isSignup) {
+        onSignupAdmitted?.({
+          marketingEmail: marketingEmail.wanted,
+          ageCheckedAgainst: ACCOUNT_MINIMUM_AGE,
+        });
+      }
       action();
     });
     if (!admitted) scene.setMood('error');

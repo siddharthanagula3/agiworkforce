@@ -153,7 +153,9 @@ describe('what the form tells the scene', () => {
 
     await userEvent.type(ageField(), '1');
     expect(store.getSnapshot().mood).toBe('error');
-    await userEvent.type(ageField(), '5');
+    await userEvent.type(ageField(), '7');
+    expect(store.getSnapshot().mood).toBe('error');
+    await userEvent.type(ageField(), '{Backspace}8');
     expect(store.getSnapshot().mood).toBe('neutral');
   });
 

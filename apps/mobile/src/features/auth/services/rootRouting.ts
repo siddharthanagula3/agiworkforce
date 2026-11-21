@@ -3,8 +3,8 @@ import { CLOUD_CHAT_POST_AUTH_INTENT, POST_AUTH_INTENT_PARAM } from './postAuthI
 export const CLOUD_SIGN_IN_RETURN_PATH = '/(auth)/login' as const;
 
 export const APP_PATH = '/(app)' as const;
-const ONBOARDING_PATH = '/(public)/onboarding' as const;
-const AGE_GATE_PATH = '/(public)/age-gate' as const;
+export const ONBOARDING_PATH = '/(public)/onboarding' as const;
+export const AGE_GATE_PATH = '/(public)/age-gate' as const;
 
 export interface RootRouteInput {
   segments: readonly string[];
@@ -34,7 +34,13 @@ export function resolveRootRedirect(input: RootRouteInput): RootRedirect | null 
   const inAgeGate = inPublic && screen === 'age-gate';
   const inLegal = group === 'legal';
   const { authEnabled, isClerkLoaded, isClerkSignedIn, onboardingDone, ageGateConfirmed } = input;
-  const firstRunGate = { pathname: ageGateConfirmed ? ONBOARDING_PATH : AGE_GATE_PATH } as const;
+
+  if (!ageGateConfirmed) {
+    if (inAgeGate || inLegal) return null;
+    return inAuthGroup && authEnabled && !isClerkSignedIn
+      ? { pathname: AGE_GATE_PATH, params: { returnTo: CLOUD_SIGN_IN_RETURN_PATH } }
+      : { pathname: AGE_GATE_PATH };
+  }
 
   if (!authEnabled) {
     if (!onboardingDone && !inPublic && !inLegal) return { pathname: ONBOARDING_PATH };
@@ -43,11 +49,7 @@ export function resolveRootRedirect(input: RootRouteInput): RootRedirect | null 
   }
   if (!isClerkLoaded) return null;
   if (!isClerkSignedIn) {
-    if (inAuthGroup) {
-      return ageGateConfirmed
-        ? null
-        : { pathname: AGE_GATE_PATH, params: { returnTo: CLOUD_SIGN_IN_RETURN_PATH } };
-    }
+    if (inAuthGroup) return null;
     if (!onboardingDone && !inPublic && !inLegal) return { pathname: ONBOARDING_PATH };
     if (onboardingDone && inPublic && !inAgeGate) return { pathname: APP_PATH };
     if (input.signInOwedForEndedSession && onboardingDone && !inPublic && !inLegal) {
@@ -60,10 +62,10 @@ export function resolveRootRedirect(input: RootRouteInput): RootRedirect | null 
   }
   if (inAuthGroup) {
     if (input.addingAccount && onboardingDone && screen === 'login') return null;
-    return onboardingDone ? { pathname: APP_PATH } : firstRunGate;
+    return { pathname: onboardingDone ? APP_PATH : ONBOARDING_PATH };
   }
   if (inPublic) {
     return onboardingDone && !inAgeGate ? { pathname: APP_PATH } : null;
   }
-  return onboardingDone ? null : firstRunGate;
+  return onboardingDone ? null : { pathname: ONBOARDING_PATH };
 }

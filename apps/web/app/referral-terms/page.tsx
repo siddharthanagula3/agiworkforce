@@ -1,10 +1,6 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
-import {
-  ACCOUNT_MINIMUM_AGE,
-  PARENTAL_PERMISSION_BELOW_AGE,
-  getBillingPlanPricing,
-} from '@agiworkforce/types';
+import { ACCOUNT_MINIMUM_AGE, getBillingPlanPricing } from '@agiworkforce/types';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import {
@@ -112,9 +108,9 @@ export default function ReferralTermsPage() {
               How it works.
             </h2>
             <Prose>
-              To take part you must be at least {ACCOUNT_MINIMUM_AGE} and hold an AGI Workforce
-              account in your own name. If you are under {PARENTAL_PERMISSION_BELOW_AGE}, you need
-              permission from a parent or guardian, as section 02 of the terms of service says.
+              To take part you must be at least {ACCOUNT_MINIMUM_AGE}, as section 02 of the terms of
+              service says, and hold an AGI Workforce account in your own name. A friend you refer
+              must meet the same age rule to create an account.
             </Prose>
             <Ledger caption="How the referral program works" rows={HOW} />
           </Stack>

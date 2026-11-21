@@ -1,8 +1,12 @@
-import type { AgeGateRecord } from '@/src/features/auth/services/ageGate';
+import type { AgeGateStatus } from '@/src/features/auth/services/ageGate';
 
 export const AGE_SETTING_LABEL = 'Age';
 
-export function ageSettingValue(record: AgeGateRecord | null): string {
-  if (record?.confirmed !== true || !Number.isFinite(record.threshold)) return 'Not set';
-  return record.isMinor ? `Under ${record.threshold}` : `${record.threshold} or older`;
+export const AGE_SETTING_ROUTE = '/(app)/settings/age';
+
+export function ageSettingValue(status: AgeGateStatus, threshold: number): string {
+  if (!Number.isFinite(threshold)) return 'Not set';
+  if (status === 'confirmed') return `${threshold} or older`;
+  if (status === 'refused') return `Under ${threshold}`;
+  return 'Not set';
 }

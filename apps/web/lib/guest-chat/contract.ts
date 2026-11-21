@@ -1,3 +1,4 @@
+import { ADULT_ELIGIBILITY_ERROR_CODES } from '@agiworkforce/cloud-contracts';
 import { z } from 'zod';
 
 export const GUEST_CHAT_PATH = '/api/llm/v1/chat/completions/guest';
@@ -14,6 +15,7 @@ export const GUEST_CHAT_ERROR_CODES = {
   textOnly: 'guest_text_only',
   contentPolicy: 'content_policy_violation',
   upstream: 'guest_upstream_error',
+  ageConfirmationRequired: ADULT_ELIGIBILITY_ERROR_CODES.confirmationRequired,
 } as const;
 
 export type GuestChatErrorCode =
@@ -36,6 +38,7 @@ export function guestChatRequestSchema(limits: { maxMessages: number; maxMessage
         .refine((messages) => messages.at(-1)?.role === 'user', {
           message: 'The last message must be the visitor’s.',
         }),
+      ageCheckedAgainst: z.number().optional().catch(undefined),
     })
     .strict();
 }

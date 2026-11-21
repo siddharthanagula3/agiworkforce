@@ -17,6 +17,7 @@ import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { getNeonDb } from '@/lib/server/neon-db';
 import type { MobileIntentTokenOwner } from '@/lib/server/mobile-intent-tokens';
 import { mustAcceptTerms } from '@/lib/server/terms';
+import { refuseWithoutAdultEligibility } from '@/lib/server/adult-eligibility-gate';
 import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { evaluateManagedComputeAccess } from '@/lib/services/managed-compute-access';
@@ -127,6 +128,15 @@ export async function answerMobileIntentAsk(input: {
       'terms_acceptance_required',
       'Open AGI Mobile to review the updated terms.',
     );
+  }
+  const ageRefusal = await refuseWithoutAdultEligibility({
+    userId: owner.userId,
+    origin: new URL(request.url).origin,
+    returnTo: '/chat',
+    gate: 'mobile_intent',
+  });
+  if (ageRefusal) {
+    throw new MobileIntentRefusal(ageRefusal.status, ageRefusal.code, ageRefusal.message);
   }
   const moderation = moderateManagedPrompt({ userId: owner.userId, segments: [prompt] });
   if (!moderation.allowed) {

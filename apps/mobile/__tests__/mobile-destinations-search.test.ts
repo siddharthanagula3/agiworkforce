@@ -123,7 +123,8 @@ describe('mobile destinations search', () => {
   it('lists the pages that name the query before the pages that only contain its letters', () => {
     const routes = searchSettingsPages('age', 'local').map((page) => page.route);
 
-    expect(routes[0]).toBe('/(app)/settings/parental-controls');
+    expect(routes[0]).toBe('/(app)/settings/age');
+    expect(routes).not.toContain('/(app)/settings/parental-controls');
     expect(routes).toContain('/(app)/settings/general');
     expect(searchSettingsPages('voice', 'local').map((page) => page.route)).toEqual([
       '/(app)/settings/voice',

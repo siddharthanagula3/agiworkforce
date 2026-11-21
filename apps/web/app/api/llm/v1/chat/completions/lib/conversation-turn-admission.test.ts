@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { requireProviderDefaultModel } from '@agiworkforce/types';
 type ScanModule0 = typeof import('@/lib/server/terms');
@@ -8,6 +8,7 @@ type ScanModule3 = typeof import('@/lib/user-connector-tools');
 type ScanModule4 = typeof import('@/app/api/llm/v1/chat/completions/lib/tool-loop');
 type ScanModule5 = typeof import('@/lib/services/managed-usage-request-service');
 type ScanModule6 = typeof import('@/lib/services/provider-adapter-service');
+type ScanModule7 = typeof import('@/lib/server/adult-eligibility');
 
 const ZHIPU_MODEL_ID = requireProviderDefaultModel('zhipu');
 const USER_ID = 'user-1';
@@ -17,12 +18,33 @@ const REQUIRED_ARRIVALS = 2;
 const SUCCESS_STATUS = 200;
 const CONFLICT_STATUS = 409;
 
-// Terms standing is the auth gate's own concern (auth-gate-terms.test.ts); these
-// turns run for an account that accepted the current version.
+// Terms standing and the age decision are the auth gate's own concern (auth-gate.test.ts);
+// these turns run for an account that accepted the current version and is confirmed 18 and over.
 vi.mock('@/lib/server/terms', async (importOriginal) => ({
   ...(await importOriginal<ScanModule0>()),
   readTermsStanding: async () => ({ kind: 'current' }),
 }));
+const ageDecision = vi.hoisted(() => ({
+  row: { adult_eligibility_outcome: 'eligible', adult_eligibility_minimum_age: 18 } as {
+    adult_eligibility_outcome: string | null;
+    adult_eligibility_minimum_age: number | null;
+  },
+  asked: [] as string[],
+}));
+vi.mock('@/lib/server/adult-eligibility', async (importOriginal) => {
+  const actual = await importOriginal<ScanModule7>();
+  return {
+    ...actual,
+    readAdultEligibilityState: async (userId: string) => {
+      ageDecision.asked.push(userId);
+      return actual.adultEligibilityStateOf(ageDecision.row);
+    },
+  };
+});
+beforeEach(() => {
+  ageDecision.row = { adult_eligibility_outcome: 'eligible', adult_eligibility_minimum_age: 18 };
+  ageDecision.asked = [];
+});
 
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn().mockResolvedValue(null),
@@ -476,6 +498,71 @@ describe('WEB-ROUTE-NEAR-SIMULTANEOUS-TURNS-SAME-01', () => {
     expect(advisoryKeys).toHaveLength(1);
     expect(advisoryKeys[0]).toContain(USER_ID);
     expect(advisoryKeys[0]).toContain(CONVERSATION_ID);
+  });
+});
+
+describe('a signed-in client with no 18 and over decision on record', () => {
+  const LEGACY_MINIMUM_AGE = 13;
+
+  function arrangeValidSession(): void {
+    vi.clearAllMocks();
+    mockGetClerkAuthUser.mockResolvedValue({
+      userId: USER_ID,
+      email: 'u@example.com',
+      boundSurface: 'web',
+    });
+    mockGetSubscription.mockResolvedValue(makeSubscription());
+    mockCheckAvailable.mockResolvedValue(true);
+    mockDeductCredits.mockResolvedValue({ success: true, remaining_cents: 10000 });
+    mockGetProviderFromModel.mockReturnValue('zhipu');
+  }
+
+  it.each([
+    ['has never been asked its age', null, null],
+    ['was admitted under the earlier 13 and over rule', 'eligible', LEGACY_MINIMUM_AGE],
+  ])(
+    'cannot send a Cloud chat when it %s, and nothing is reserved, billed, run or sent to a model',
+    async (_label, outcome, minimumAge) => {
+      arrangeValidSession();
+      ageDecision.row = {
+        adult_eligibility_outcome: outcome,
+        adult_eligibility_minimum_age: minimumAge,
+      };
+
+      const response = await POST(makeAgiWorkRequest('older-client-turn'));
+
+      expect(response.status).toBe(403);
+      const body = await response.json();
+      expect(body.error.code).toBe('age_confirmation_required');
+      expect(body.review_url).toBe('http://localhost/login/complete?redirectTo=%2Fchat');
+      expect(body.error.review_url).toBe(body.review_url);
+      expect(body.minimum_age).toBe(18);
+      expect(ageDecision.asked).toEqual([USER_ID]);
+      expect(managedUsageMocks.reserve).not.toHaveBeenCalled();
+      expect(managedUsageMocks.providerStarted).not.toHaveBeenCalled();
+      expect(mockCheckAvailable).not.toHaveBeenCalled();
+      expect(mockDeductCredits).not.toHaveBeenCalled();
+      expect(mockGetProviderFromModel).not.toHaveBeenCalled();
+      expect(runServiceMocks.createRun).not.toHaveBeenCalled();
+      expect(workflowMocks.start).not.toHaveBeenCalled();
+      expect(rlsMocks.getUserScopedDb).not.toHaveBeenCalled();
+    },
+  );
+
+  it('cannot send a Cloud chat once it declared an age under the minimum', async () => {
+    arrangeValidSession();
+    ageDecision.row = {
+      adult_eligibility_outcome: 'ineligible',
+      adult_eligibility_minimum_age: 18,
+    };
+
+    const response = await POST(makeAgiWorkRequest('refused-client-turn'));
+
+    expect(response.status).toBe(403);
+    expect((await response.json()).error.code).toBe('age_ineligible');
+    expect(managedUsageMocks.reserve).not.toHaveBeenCalled();
+    expect(mockDeductCredits).not.toHaveBeenCalled();
+    expect(workflowMocks.start).not.toHaveBeenCalled();
   });
 });
 

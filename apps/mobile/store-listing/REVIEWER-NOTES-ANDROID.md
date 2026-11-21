@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Mobile lead
-Last updated: 2026-11-17
+Last updated: 2026-11-20
 Applies to: `com.agiworkforce.app`, version 0.0.1 (`app.config.js` → `version`,
 `android.package`)
 
@@ -21,10 +21,10 @@ this text is kept short rather than held to a known limit. When pasting, check
 the field's character counter in Play Console.
 
 ```text
-Local Mode works without an account. AGI Cloud needs the sign-in above; no one-time code is needed.
-1. Finish onboarding, then tap Cloud in the Local/Cloud switch (side menu or Settings).
-2. Age step: share the age signal if Android asks, or enter an age of 18 or more.
-3. Sign in with the email and password above, and accept the Terms if asked.
+AGI is for people 18 and over. Local Mode works without an account. AGI Cloud needs the sign-in above; no one-time code is needed.
+1. First launch shows the age step before anything else, Local Mode included: share the age signal if Android asks, or enter an age of 18 or more under "Your age" and tap Continue. It is asked once per device.
+2. Finish onboarding, then tap Cloud in the Local/Cloud switch (side menu or Settings).
+3. Sign in with the email and password above, and accept the Terms if asked. The review account already holds an 18 and over decision; if the app asks "Your age" again, enter 18 or more.
 4. Before AGI Cloud opens, the app asks "Share with AI providers?": tap Allow. Not now keeps Local Mode, and tapping Cloud asks again. To withdraw: Settings > Privacy > Share with AI providers, off.
 Nothing is sold on any platform before 1 January 2027: the app has no purchase, upgrade or price, and no plan or credit can be bought on the web either. The review account's plan was granted for this review without a purchase.
 Report: three-dot menu under any answer. Delete Account: Settings > Email > Danger Zone; in Local Mode, Settings > Data Controls > Delete account, then Check deletion status.
@@ -89,15 +89,18 @@ and has no in-app products; see **Billing** below.
 
 ## How to review it
 
-Local Mode needs no account. Launch the app, complete onboarding and start a
-local chat. On devices without the supported system model, a local model must
+Local Mode needs no account. Launch the app, pass the age step (see **Age
+gate: 18 and over**), complete onboarding and start a local chat. On devices without the supported system model, a local model must
 be downloaded before offline inference.
 
 Cloud features require sign-in. Before submission, provide an active review
 account (email and password, no one-time code) in Play Console's secure App
-access instructions; do not put credentials in this repository. The Cloud entry path
-includes age confirmation, and a signed-in account must accept the current
-Terms before Cloud unlocks. The review account needs no purchase setup: this
+access instructions; do not put credentials in this repository. The account
+must have a password set and must already hold an 18 and over decision on the
+server (confirmed once on the web at `/login/complete`, or in this build); if
+it does not, the reviewer is asked "Your age" after sign-in and enters 18 or
+more. A signed-in account must also accept the current Terms before Cloud
+unlocks. The review account needs no purchase setup: this
 version has no in-app products.
 
 **Consent before AGI Cloud opens.** After sign-in and the Terms, and whenever a
@@ -122,60 +125,62 @@ something to pause, one line says what was paused or what could not be.
 Turning it on asks the same question
 (`src/features/settings/cloud-privacy/CloudProviderSharingGroup.tsx`).
 
-## Age gate and minor-safe mode
+## Age gate: 18 and over
 
-Implemented in `src/features/auth/services/ageGate.ts` and
-`app/(public)/age-gate.tsx`.
-That screen first asks Play Age Signals for the age range (`expo-age-range`) and falls back to typed age if none is shared.
+AGI is for people 18 and over on every surface (since 2026-11-20). Implemented
+in `src/features/auth/services/ageGate.ts`, `src/features/auth/services/rootRouting.ts`,
+`src/features/age-assurance/ageAssurance.ts` and `app/(public)/age-gate.tsx`.
 
-**Where it fires.** The gate guards Cloud sign-in, not first launch. The moment a
-signed-out user heads for the auth group, `app/_layout.tsx` redirects to
-`/(public)/age-gate` with `returnTo` set to the Cloud sign-in path. Local first
-launch is deliberately _not_ gated, Local Mode sends no chat content and no
-account data off the device, so the gate would only be a wall. That
-boundary is pinned by a test that fails if anyone reintroduces it:
-`__tests__/age-gate-guards-cloud-not-local.test.ts`.
+**Where it fires.** Before anything else, on every path. `resolveRootRedirect`
+sends any launch to `/(public)/age-gate` until the device holds a current
+result, before onboarding, before Local Mode and before Cloud sign-in; only the
+legal pages stay readable. Account-free Local Mode is behind it too. Pinned by
+`__tests__/age-gate-guards-cloud-not-local.test.ts` and `__tests__/root-routing.test.ts`.
 
-**Threshold: 13, or the regional age where that is higher.** `getAgeThreshold`
-takes the larger of the device time zone's regional age and `ACCOUNT_MINIMUM_AGE`
-(13, in `packages/contracts/types/src/account-eligibility.ts`), so Cloud sign-in
-asks for the regional age in the table below and never for less than 13. The
-region comes from the device's IANA time zone
-(`Intl.DateTimeFormat().resolvedOptions().timeZone`), no location permission, no
-IP geolocation, no network call, and no regional age is above 18:
+**What the reviewer sees.** If Play Age Signals is available, the app asks it
+whether the person is 18 or over (the only threshold it asks for). An
+unavailable, declined or inconclusive answer falls through to the **Your age**
+screen: "This service is for adults. You must be at least 18 years old to use
+it. Enter your age to continue.", a number field and **Continue**, with the
+line "AGI keeps only whether you meet the age, not your age."
 
-| Regional age | Regions (by time-zone prefix)                                                                                                                                                  |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 18           | India (`Asia/Kolkata`, `Asia/Calcutta`), Brazil (all `America/*` BR zones)                                                                                                     |
-| 16           | EU member-state zones (AT, BE, BG, CY, CZ, DE, DK, EE, ES, FI, FR, GR, HR, HU, IE, IT, LT, LU, LV, MT, NL, PL, PT, RO, SE, SI, SK), plus North Macedonia (`Europe/Skopje`, MK) |
-| 13           | United Kingdom (`Europe/London`, Belfast, Jersey, Guernsey)                                                                                                                    |
-| 13           | Everywhere else (`DEFAULT_RULE`), including when the time zone cannot be read                                                                                                  |
+**Threshold: 18.** `getAgeThreshold` takes the larger of the device time
+zone's regional age and `ACCOUNT_MINIMUM_AGE` (18, in
+`packages/contracts/types/src/account-eligibility.ts`). The default rule takes
+its value from that constant, and the only regional rows left, India and
+Brazil, are also 18, so every device asks for 18. The time zone is read from
+the device; no location permission, IP lookup or network call.
 
-**What it stores.** One MMKV record under `age-gate:v1`: confirmed flag, minor
-flag, timestamp, region code, threshold. It is on-device only and is never sent
-anywhere. The screen says so verbatim: "Your age stays on this device and is
-never shared."
+**What it stores.** One MMKV record under `age-gate:v1`: the outcome, the
+threshold it was judged against, a timestamp and a region code; never the age.
+A result stored under the earlier rule (threshold 13 or 16) is not accepted,
+so a person upgrading from an earlier build is asked once more.
 
-**Minor-safe mode is one-way.** If the entered age is under the device's
-threshold, `confirmAgeGate` records `isMinor: true` and thereafter refuses to accept a higher age, nothing in
-the app verifies a typed age, so accepting one would let the protected user
-switch the protection off. Only `clearAgeGate` lifts it, and the refusal screen
-tells the user the honest way to do that: "This device recorded an age under
-13, which only erasing AGI’s data on this device can reset." (with the
-regional age in place of 13). The screen is `age-gate-refused` in
-`app/(public)/age-gate.tsx`.
+**AGI Cloud.** For a signed-in account the app reads the server's decision on
+every launch and on every account change, and reports the device's evidence to
+`POST /api/eligibility`; Cloud opens only when the server answers confirmed.
+The server keeps only the decision (`apps/web/db/neon/0425_adult_eligibility.sql`),
+never an age. Without a current 18 and over decision the server refuses Cloud
+chat, images, video, speech, live voice, transcription and embeddings, and
+refuses a device sign-in token, and sends the account to the web review screen
+(`/login/complete`) to confirm its age once
+(`apps/web/lib/server/adult-eligibility-gate.ts`). This holds for older builds
+too.
 
-**What minor mode does.** `lib/contentFilter.ts` checks every outgoing prompt
-against a shared blocklist before it reaches any model, local or cloud. The check
-is synchronous and purely client-side. A blocked prompt gets the fixed
-`MINOR_SAFE_REFUSAL` copy. Settings → Parental Controls
-(`src/features/settings/parental-controls/index.tsx`) shows the state and can
-review, but explicitly cannot turn it off.
+**A refused device.** An age under 18 is recorded and cannot be replaced by a
+higher one, since nothing in the app verifies a typed age. The **Age
+requirement** screen (`src/features/auth/components/AgeRefused.tsx`) appears on
+every path, Local Mode included, and says "This device recorded an age under 18. Only erasing AGI’s data on this device resets it." It offers **Export this device’s data** and **Erase this device’s data**, and,
+when an account is signed in, **Sign out** and **Account data and deletion**,
+which opens the web data-rights page (`/privacy/requests`).
 
-**To exercise it:** tap Cloud sign-in, enter an age under 13, and the "Age
-requirement" screen appears; Settings → Parental Controls then reads "Minor-safe
-mode is active". Only erasing AGI's data on that device lets it sign in to
-Cloud again.
+**No minor-safe mode, no parental controls.** The Parental Controls screen and
+its Settings row are gone; Settings → **Age** shows only "18 or older" or
+"Under 18". No admitted person can reach a minor-safe mode.
+
+**To exercise it:** on a fresh install, enter 17: the Age requirement screen
+appears and nothing else opens. Erase this device's data, then enter 18: the
+app opens and does not ask again on the next launch.
 
 ## Reporting AI-generated content
 

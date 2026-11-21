@@ -4,6 +4,8 @@ import { useSession } from '@/lib/identity/client';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { ADULT_ELIGIBILITY_ERROR_CODES } from '@agiworkforce/cloud-contracts';
+
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { SIGN_UP_AGREEMENT_NOT_APPLICABLE_STATUS } from '@/lib/auth/new-account';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
@@ -16,10 +18,23 @@ import {
   carriedChoiceMustBeAskedAgain,
   clearSignupAttemptMarkers,
   hasCurrentTermsGateMarker,
+  readCarriedAgeCheck,
   readCarriedMarketingEmailChoice,
 } from '../signupAttemptMarkers';
 
 const RECORD_TIMEOUT_MS = 20_000;
+const AGE_REFUSED_STATUS = 403;
+const AGE_REFUSAL_CODES: readonly string[] = Object.values(ADULT_ELIGIBILITY_ERROR_CODES);
+
+async function refusedForAge(response: Response): Promise<boolean> {
+  if (response.status !== AGE_REFUSED_STATUS) return false;
+  const body: unknown = await response
+    .clone()
+    .json()
+    .catch(() => null);
+  const code = (body as { error?: { code?: unknown } } | null)?.error?.code;
+  return typeof code === 'string' && AGE_REFUSAL_CODES.includes(code);
+}
 
 export function ContinueWithCurrentTerms({ redirectTo }: { redirectTo: string }) {
   const router = useRouter();
@@ -49,6 +64,7 @@ export function RecordTermsAcceptance({
   const attempted = useRef(false);
   const grantedOnThisScreen = useMarketingEmailGrant();
   const carriedGrant = useRef<string | null>(null);
+  const carriedAgeCheck = useRef<number | null>(null);
 
   const record = useCallback(async () => {
     setFailure('none');
@@ -64,17 +80,31 @@ export function RecordTermsAcceptance({
           surface,
           version: POLICY_LAST_UPDATED.terms,
           ...(marketingEmailNoticeVersion ? { marketingEmailNoticeVersion } : {}),
+          ...(surface === 'web-signup' && carriedAgeCheck.current !== null
+            ? {
+                eligibility: {
+                  kind: 'age_checked_on_device',
+                  minimumAge: carriedAgeCheck.current,
+                },
+              }
+            : {}),
         }),
       });
       if (response.status === 409) {
         setFailure('outdated');
         return;
       }
-      if (response.status === SIGN_UP_AGREEMENT_NOT_APPLICABLE_STATUS) {
+      if (
+        response.status === SIGN_UP_AGREEMENT_NOT_APPLICABLE_STATUS ||
+        (await refusedForAge(response))
+      ) {
         clearSignupAttemptMarkers();
-        router.replace(
-          buildLoginCompleteUrl({ redirectTo, desktopSurface: false, authRetry: false }),
-        );
+        if (surface === 'web-login') router.refresh();
+        else {
+          router.replace(
+            buildLoginCompleteUrl({ redirectTo, desktopSurface: false, authRetry: false }),
+          );
+        }
         return;
       }
       if (!response.ok) throw new Error(`terms acceptance failed: ${response.status}`);
@@ -103,6 +133,7 @@ export function RecordTermsAcceptance({
         return;
       }
       carriedGrant.current = carried.kind === 'current' ? carried.noticeVersion : null;
+      carriedAgeCheck.current = readCarriedAgeCheck();
     }
     void record();
   }, [isLoaded, isSignedIn, record, redirectTo, router, surface]);

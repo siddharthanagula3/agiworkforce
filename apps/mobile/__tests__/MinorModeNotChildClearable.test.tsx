@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
-import { render } from '@testing-library/react-native';
+import { fireEvent, render } from '@testing-library/react-native';
 
 const mockStorage = new Map<string, string>();
 
@@ -18,8 +18,6 @@ jest.mock('@/lib/mmkv', () => ({
     delete: (key: string) => mockStorage.delete(key),
   },
 }));
-
-jest.mock('@/src/features/chat/components/WorkModeSwitch', () => ({ HEADER_TEXT_SCALE_LIMIT: 2 }));
 
 const mockPush = jest.fn();
 const mockReplace = jest.fn();
@@ -45,7 +43,7 @@ jest.mock('react-native-safe-area-context', () => {
 jest.mock('lucide-react-native', () => {
   const { View } = require('react-native');
   const icon = (props: Record<string, unknown>) => <View {...props} />;
-  return { ArrowLeft: icon, Baby: icon, ChevronRight: icon, Lock: icon, Shield: icon };
+  return { ChevronRight: icon, Lock: icon, Shield: icon };
 });
 
 jest.mock('@/src/features/auth/store', () => ({
@@ -58,17 +56,31 @@ jest.mock('../stores/settingsStore', () => ({
     selector({ hapticsEnabled: false }),
 }));
 
-import { clearAgeGate, confirmAgeGate, isMinorMode } from '../src/features/auth/services/ageGate';
-import AgeGateScreen from '../app/(public)/age-gate';
-import ParentalControlsScreen from '../src/features/settings/parental-controls';
+const mockHandleExport = jest.fn();
+jest.mock('@/src/features/settings/data-controls/useLocalDataExport', () => ({
+  useLocalDataExport: () => ({ exporting: false, progress: null, handleExport: mockHandleExport }),
+}));
 
-describe('minor-safe mode cannot be cleared by the device it protects', () => {
+const mockEraseDeviceData = jest.fn();
+jest.mock('@/src/features/settings/data-controls/useEraseDeviceData', () => ({
+  useEraseDeviceData: () => ({ isWiping: false, eraseDeviceData: mockEraseDeviceData }),
+}));
+
+import {
+  ageGateStatus,
+  clearAgeGate,
+  confirmAgeGate,
+  isMinorMode,
+} from '../src/features/auth/services/ageGate';
+import AgeGateScreen from '../app/(public)/age-gate';
+
+describe('a refusal cannot be cleared by the device it protects', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockStorage.clear();
   });
 
-  it('keeps the minor record when an adult age is typed afterwards', () => {
+  it('keeps the refusal when an adult age is typed afterwards', () => {
     confirmAgeGate(12);
     expect(isMinorMode()).toBe(true);
 
@@ -84,19 +96,20 @@ describe('minor-safe mode cannot be cleared by the device it protects', () => {
     expect(isMinorMode()).toBe(false);
   });
 
-  it('still lets an adult device record a minor age', () => {
+  it('still lets an adult device record an under-age answer', () => {
     confirmAgeGate(30);
     expect(confirmAgeGate(12).isMinor).toBe(true);
     expect(isMinorMode()).toBe(true);
   });
 
-  it('lets an explicit reset clear the record', () => {
+  it('lets only an explicit erase clear the record', () => {
     confirmAgeGate(12);
     clearAgeGate();
     expect(isMinorMode()).toBe(false);
+    expect(ageGateStatus()).toBe('required');
   });
 
-  it('offers no age input on the age-gate screen once minor mode is on', () => {
+  it('offers no age input on the age-gate screen once refused', () => {
     confirmAgeGate(12);
     const { queryByTestId, getByTestId } = render(<AgeGateScreen />);
 
@@ -108,33 +121,23 @@ describe('minor-safe mode cannot be cleared by the device it protects', () => {
   it('says erasing the app data resets the recorded age, not only reinstalling', () => {
     confirmAgeGate(12);
     const refused = render(<AgeGateScreen />);
-    expect(refused.getByText(/only erasing AGI’s data on this\s+device can reset/)).toBeTruthy();
+    expect(refused.getByText(/Only erasing AGI’s data on this device resets it\./)).toBeTruthy();
     expect(refused.queryByText(/reinstall/i)).toBeNull();
-    refused.unmount();
-
-    const parental = render(<ParentalControlsScreen />);
-    expect(
-      parental.getByText('An adult can lift it only by erasing AGI’s data on this device.'),
-    ).toBeTruthy();
-    expect(parental.queryByText(/reinstall/i)).toBeNull();
   });
 
-  it('shows the age input while no minor record exists', () => {
+  it('keeps the device data reachable from the refusal', () => {
+    confirmAgeGate(12);
+    const { getByTestId } = render(<AgeGateScreen />);
+
+    fireEvent.press(getByTestId('age-gate-refused-export'));
+    fireEvent.press(getByTestId('age-gate-refused-erase'));
+
+    expect(mockHandleExport).toHaveBeenCalledTimes(1);
+    expect(mockEraseDeviceData).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the age input while no refusal exists', () => {
     const { getByTestId } = render(<AgeGateScreen />);
     expect(getByTestId('age-gate-input')).toBeTruthy();
-  });
-
-  it('does not route a protected device back to the self-declare screen', () => {
-    confirmAgeGate(12);
-    const { queryByRole, getByTestId } = render(<ParentalControlsScreen />);
-
-    expect(queryByRole('button', { name: 'Review Device Age Settings' })).toBeNull();
-    expect(getByTestId('parental-controls-minor-lock')).toBeTruthy();
-  });
-
-  it('still offers the age review on an adult device', () => {
-    confirmAgeGate(30);
-    const { getByRole } = render(<ParentalControlsScreen />);
-    expect(getByRole('button', { name: 'Review Device Age Settings' })).toBeTruthy();
   });
 });

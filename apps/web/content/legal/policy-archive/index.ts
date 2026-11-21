@@ -2,6 +2,7 @@ import terms_2026_08_11 from './terms/2026-08-11.json';
 import terms_2026_09_23 from './terms/2026-09-23.json';
 import terms_2026_10_08 from './terms/2026-10-08.json';
 import terms_2026_11_11 from './terms/2026-11-11.json';
+import terms_2026_11_13 from './terms/2026-11-13.json';
 import privacy_2026_09_12 from './privacy/2026-09-12.json';
 import privacy_2026_09_21 from './privacy/2026-09-21.json';
 import privacy_2026_09_22 from './privacy/2026-09-22.json';
@@ -13,14 +14,17 @@ import privacy_2026_10_18 from './privacy/2026-10-18.json';
 import privacy_2026_11_10 from './privacy/2026-11-10.json';
 import privacy_2026_11_11 from './privacy/2026-11-11.json';
 import privacy_2026_11_13 from './privacy/2026-11-13.json';
+import privacy_2026_11_16 from './privacy/2026-11-16.json';
 import acceptableUse_2026_08_05 from './acceptableUse/2026-08-05.json';
 import acceptableUse_2026_09_22 from './acceptableUse/2026-09-22.json';
 import acceptableUse_2026_09_27 from './acceptableUse/2026-09-27.json';
 import dpa_2026_08_17 from './dpa/2026-08-17.json';
 import dpa_2026_10_08 from './dpa/2026-10-08.json';
 import dpa_2026_11_11 from './dpa/2026-11-11.json';
+import dpa_2026_11_13 from './dpa/2026-11-13.json';
 import cookies_2026_09_12 from './cookies/2026-09-12.json';
 import cookies_2026_09_23 from './cookies/2026-09-23.json';
+import cookies_2026_10_08 from './cookies/2026-10-08.json';
 import subprocessors_2026_09_12 from './subprocessors/2026-09-12.json';
 import subprocessors_2026_09_21 from './subprocessors/2026-09-21.json';
 import subprocessors_2026_09_22 from './subprocessors/2026-09-22.json';
@@ -31,10 +35,12 @@ import subprocessors_2026_11_10 from './subprocessors/2026-11-10.json';
 import security_2026_08_14 from './security/2026-08-14.json';
 import security_2026_10_08 from './security/2026-10-08.json';
 import security_2026_11_10 from './security/2026-11-10.json';
+import security_2026_11_13 from './security/2026-11-13.json';
 import sla_2026_09_04 from './sla/2026-09-04.json';
 import refunds_2026_08_13 from './refunds/2026-08-13.json';
 import refunds_2026_09_27 from './refunds/2026-09-27.json';
 import referralTerms_2026_09_27 from './referralTerms/2026-09-27.json';
+import referralTerms_2026_10_08 from './referralTerms/2026-10-08.json';
 import accessibility_2026_08_05 from './accessibility/2026-08-05.json';
 import accessibility_2026_09_27 from './accessibility/2026-09-27.json';
 import trust_2026_09_12 from './trust/2026-09-12.json';
@@ -42,10 +48,12 @@ import trust_2026_09_21 from './trust/2026-09-21.json';
 import trust_2026_10_08 from './trust/2026-10-08.json';
 import trust_2026_10_18 from './trust/2026-10-18.json';
 import trust_2026_11_10 from './trust/2026-11-10.json';
+import trust_2026_11_13 from './trust/2026-11-13.json';
 import euRepresentative_2026_08_05 from './euRepresentative/2026-08-05.json';
 import mobile_2026_08_13 from './mobile/2026-08-13.json';
 import mobile_2026_09_21 from './mobile/2026-09-21.json';
 import mobile_2026_09_29 from './mobile/2026-09-29.json';
+import mobile_2026_10_08 from './mobile/2026-10-08.json';
 import copyright_2026_08_06 from './copyright/2026-08-06.json';
 import copyright_2026_09_27 from './copyright/2026-09-27.json';
 import modelLicenses_2026_08_06 from './modelLicenses/2026-08-06.json';
@@ -54,6 +62,7 @@ import indiaPrivacy_2026_10_08 from './indiaPrivacy/2026-10-08.json';
 import indiaPrivacy_2026_10_15 from './indiaPrivacy/2026-10-15.json';
 import indiaPrivacy_2026_11_10 from './indiaPrivacy/2026-11-10.json';
 import indiaPrivacy_2026_11_11 from './indiaPrivacy/2026-11-11.json';
+import indiaPrivacy_2026_11_13 from './indiaPrivacy/2026-11-13.json';
 import dataRights_2026_08_13 from './dataRights/2026-08-13.json';
 import dataRights_2026_10_08 from './dataRights/2026-10-08.json';
 import dataRights_2026_11_11 from './dataRights/2026-11-11.json';
@@ -76,6 +85,7 @@ export const ARCHIVED_POLICY_TEXT = {
     '2026-09-23': terms_2026_09_23,
     '2026-10-08': terms_2026_10_08,
     '2026-11-11': terms_2026_11_11,
+    '2026-11-13': terms_2026_11_13,
   },
   privacy: {
     '2026-09-12': privacy_2026_09_12,
@@ -89,6 +99,7 @@ export const ARCHIVED_POLICY_TEXT = {
     '2026-11-10': privacy_2026_11_10,
     '2026-11-11': privacy_2026_11_11,
     '2026-11-13': privacy_2026_11_13,
+    '2026-11-16': privacy_2026_11_16,
   },
   acceptableUse: {
     '2026-08-05': acceptableUse_2026_08_05,
@@ -99,10 +110,12 @@ export const ARCHIVED_POLICY_TEXT = {
     '2026-08-17': dpa_2026_08_17,
     '2026-10-08': dpa_2026_10_08,
     '2026-11-11': dpa_2026_11_11,
+    '2026-11-13': dpa_2026_11_13,
   },
   cookies: {
     '2026-09-12': cookies_2026_09_12,
     '2026-09-23': cookies_2026_09_23,
+    '2026-10-08': cookies_2026_10_08,
   },
   subprocessors: {
     '2026-09-12': subprocessors_2026_09_12,
@@ -117,6 +130,7 @@ export const ARCHIVED_POLICY_TEXT = {
     '2026-08-14': security_2026_08_14,
     '2026-10-08': security_2026_10_08,
     '2026-11-10': security_2026_11_10,
+    '2026-11-13': security_2026_11_13,
   },
   sla: {
     '2026-09-04': sla_2026_09_04,
@@ -127,6 +141,7 @@ export const ARCHIVED_POLICY_TEXT = {
   },
   referralTerms: {
     '2026-09-27': referralTerms_2026_09_27,
+    '2026-10-08': referralTerms_2026_10_08,
   },
   accessibility: {
     '2026-08-05': accessibility_2026_08_05,
@@ -138,6 +153,7 @@ export const ARCHIVED_POLICY_TEXT = {
     '2026-10-08': trust_2026_10_08,
     '2026-10-18': trust_2026_10_18,
     '2026-11-10': trust_2026_11_10,
+    '2026-11-13': trust_2026_11_13,
   },
   euRepresentative: {
     '2026-08-05': euRepresentative_2026_08_05,
@@ -146,6 +162,7 @@ export const ARCHIVED_POLICY_TEXT = {
     '2026-08-13': mobile_2026_08_13,
     '2026-09-21': mobile_2026_09_21,
     '2026-09-29': mobile_2026_09_29,
+    '2026-10-08': mobile_2026_10_08,
   },
   copyright: {
     '2026-08-06': copyright_2026_08_06,
@@ -160,6 +177,7 @@ export const ARCHIVED_POLICY_TEXT = {
     '2026-10-15': indiaPrivacy_2026_10_15,
     '2026-11-10': indiaPrivacy_2026_11_10,
     '2026-11-11': indiaPrivacy_2026_11_11,
+    '2026-11-13': indiaPrivacy_2026_11_13,
   },
   dataRights: {
     '2026-08-13': dataRights_2026_08_13,

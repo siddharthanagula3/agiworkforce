@@ -2,6 +2,7 @@ import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { CODE_ROUTES } from '@/features/code/code-surface';
+import { requireAdultEligibility } from '@/lib/server/require-adult-eligibility';
 import { requireCurrentTermsAcceptance } from '@/lib/server/require-current-terms';
 import { getRequestIdentity } from '@/lib/server/identity';
 import { sessionExpiredRedirect } from '@/lib/server/session-expired';
@@ -22,6 +23,8 @@ export default async function CodeLayout({ children }: { children: ReactNode }) 
   }
 
   await requireCurrentTermsAcceptance(userId, redirectTo);
+
+  await requireAdultEligibility(userId, redirectTo);
 
   return <ProductRuntimeProviders>{children}</ProductRuntimeProviders>;
 }

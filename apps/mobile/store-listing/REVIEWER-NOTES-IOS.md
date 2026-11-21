@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Mobile lead
-Last updated: 2026-11-17
+Last updated: 2026-11-20
 Applies to: `com.agiworkforce.app`, version 0.0.1
 
 `store-listing/LISTING-METADATA-IOS.json` points
@@ -23,7 +23,7 @@ a factual claim about the binary.
 or less, so the filled-in credentials still fit under Apple's limit.
 
 ```text
-AGI Mobile is an AI assistant with two modes.
+AGI Mobile is an AI assistant with two modes, for people 18 and over.
 - Local Mode: chats run on a model on this device. No account is needed, and no chat content leaves the device unless the person chooses to send a report.
 - AGI Cloud: optional, needs sign-in. Chats run on AGI's servers and the AI provider that serves the chosen model.
 
@@ -32,10 +32,10 @@ Email: [REVIEW ACCOUNT EMAIL]
 Password: [REVIEW ACCOUNT PASSWORD]
 
 To review AGI Cloud:
-1. Launch the app and finish onboarding. On a device without a built-in model the app offers a local model download over Wi-Fi; tap "Sign in to use Cloud" on that screen to skip it.
-2. In the side menu or Settings, tap Cloud in the Local/Cloud switch.
-3. Age step: on iOS 26 and later iOS may ask to share an age range; otherwise enter an age of 18 or more under "Your age" and tap Continue.
-4. Enter the email, tap Continue, then the password. If "Review the Terms for AGI Cloud" appears, accept it. Sign in with Apple is offered wherever Google or GitHub sign-in is.
+1. Launch the app. The age step comes first, before Local Mode too: on iOS 26 and later iOS may ask to share an age range; otherwise enter an age of 18 or more under "Your age" and tap Continue. It is asked once.
+2. Finish onboarding. On a device without a built-in model the app offers a local model download over Wi-Fi; tap "Sign in to use Cloud" on that screen to skip it.
+3. In the side menu or Settings, tap Cloud in the Local/Cloud switch.
+4. Enter the email, tap Continue, then the password. If "Review the Terms for AGI Cloud" appears, accept it. The demo account already holds an 18 and over decision; if "Your age" appears again, enter 18 or more. Sign in with Apple is offered wherever Google or GitHub sign-in is.
 5. Before AGI Cloud opens, the app asks "Share with AI providers?" and names them. Tap Allow to enter AGI Cloud; Not now keeps Local Mode, and tapping Cloud asks again. Then chat, search the web or attach a photo.
 To withdraw: Settings > Privacy > Share with AI providers, off. The app returns to Local Mode and pauses the account's scheduled and running tasks.
 
@@ -48,7 +48,7 @@ Reporting AI content: tap the three-dot button under any answer (or long-press t
 Not reachable in review, and why:
 - Remote Control and Send to Desktop are not in this version; the app shows no control for them.
 - The built-in Apple Intelligence model is used only on devices that support it; other devices use the downloaded model.
-- The age-range prompt appears only on iOS 26 and later where iOS offers age features.
+- The age-range prompt appears only on iOS 26 and later where iOS offers age features. An age under 18 shows "Age requirement" on every path and opens nothing; the app has no minor-safe mode and no parental controls.
 - Connectors and Connect GitHub sign in to the reviewer's own account with that service.
 - Calendar answers need calendar access and events on the test device.
 
@@ -112,18 +112,47 @@ carry the app's name, AGI Mobile, in the share sheet and the widget gallery.
 Before submission, provide Apple an active AGI Cloud review account through
 App Store Connect's secure demo-account fields (email and password; sign-in
 needs no one-time code). Do not put its credentials in this repository. The account must remain accessible throughout review and
-must be able to exercise Cloud chat and web search.
+must be able to exercise Cloud chat and web search. It must have a password
+set and must already hold an 18 and over decision on the server (confirmed once
+on the web at `/login/complete`, or in this build); if it does not, the
+reviewer is asked **Your age** after sign-in and enters 18 or more.
 
-1. **Local Mode requires no account at all.** Launch the app, tap through
+**The age step comes first, on every path.** AGI is for people 18 and over
+(since 2026-11-20). Before onboarding, before Local Mode and before Cloud
+sign-in, `resolveRootRedirect` (`src/features/auth/services/rootRouting.ts`)
+sends the app to `app/(public)/age-gate.tsx`. On iOS 26 and later, where
+iOS offers age features, the app asks the Declared Age Range API
+(`expo-age-range`) only whether the person is 18 or over
+(`src/features/age-assurance/ageAssurance.ts`); an unavailable, declined or
+inconclusive answer falls through to **Your age**: "This service is for
+adults. You must be at least 18 years old to use it. Enter your age to
+continue.", a number field and **Continue**. The device keeps the outcome
+and the threshold, never the age, and does not ask again; a result stored
+under the earlier 13 or 16 rule is not accepted, so an upgrade asks once
+more. An age under 18 shows **Age requirement** ("This device recorded an
+age under 18. Only erasing AGI’s data on this device resets it.") on every
+path, Local Mode included, with **Export this device’s data** and **Erase
+this device’s data**, and, when signed in, **Sign out** and **Account data
+and deletion** (`src/features/auth/components/AgeRefused.tsx`). There is no
+minor-safe mode and no Parental Controls screen; Settings → **Age** shows
+only whether this device met the age.
+
+For a signed-in account the app reads the server's decision on every launch
+and every account change and reports the device's evidence to
+`POST /api/eligibility`; AGI Cloud opens only when the server answers
+confirmed. The server keeps only the decision
+(`apps/web/db/neon/0425_adult_eligibility.sql`) and, without a current 18
+and over decision, refuses Cloud chat, images, video, speech, live voice,
+transcription, embeddings and device sign-in tokens
+(`apps/web/lib/server/adult-eligibility-gate.ts`).
+
+1. **Local Mode requires no account at all.** After the age step, tap through
    onboarding, and chat. This exercises the core product. On supported devices, onboarding uses the built-in system model without a
    download. Otherwise it downloads a local model over Wi-Fi; please allow
    that to finish, or tap **Sign in to use Cloud** on the screen before the
    download to skip it.
 2. **AGI Cloud.** In the side menu or Settings, tap **Cloud** in the
-   Local/Cloud switch. Then comes the age step: on iOS 26 and later, where iOS
-   offers age features, the app asks iOS for a declared age range
-   (`expo-age-range`); otherwise **Your age** asks for an age and
-   **Continue** (`app/(public)/age-gate.tsx`). Sign-in is the app's own form,
+   Local/Cloud switch. Sign-in is the app's own form,
    not a browser (`app/(auth)/login.tsx`,
    `src/features/auth/components/MobileSignIn.tsx`): **Email address**,
    **Continue**, then a password or an emailed code. Sign in with Apple sits

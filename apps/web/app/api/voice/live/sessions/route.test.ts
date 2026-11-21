@@ -55,6 +55,31 @@ vi.mock('@/lib/server/provider-training-opt-out', async (importOriginal) => {
 });
 
 vi.mock('server-only', () => ({}));
+type AdultEligibilityModule = typeof import('@/lib/server/adult-eligibility');
+const ageDecision = vi.hoisted(() => ({
+  row: { adult_eligibility_outcome: 'eligible', adult_eligibility_minimum_age: 18 } as {
+    adult_eligibility_outcome: string | null;
+    adult_eligibility_minimum_age: number | null;
+  },
+  unreadable: false,
+  asked: [] as string[],
+}));
+vi.mock('@/lib/server/adult-eligibility', async (importOriginal) => {
+  const actual = await importOriginal<AdultEligibilityModule>();
+  return {
+    ...actual,
+    readAdultEligibilityState: async (userId: string) => {
+      ageDecision.asked.push(userId);
+      if (ageDecision.unreadable) throw new Error('adult eligibility unreadable');
+      return actual.adultEligibilityStateOf(ageDecision.row);
+    },
+  };
+});
+beforeEach(() => {
+  ageDecision.row = { adult_eligibility_outcome: 'eligible', adult_eligibility_minimum_age: 18 };
+  ageDecision.unreadable = false;
+  ageDecision.asked = [];
+});
 vi.mock('@/lib/csrf', async () => ({
   ...(await vi.importActual<CsrfModule>('@/lib/csrf')),
   requireCsrfToken: vi.fn(async () => null),
@@ -362,6 +387,66 @@ describe('POST /api/voice/live/sessions', () => {
         ]),
       );
     }
+  });
+
+  describe('adult eligibility', () => {
+    const LEGACY_MINIMUM_AGE = 13;
+
+    function expectNoSessionStarted() {
+      expect(mocks.reserve).not.toHaveBeenCalled();
+      expect(mocks.providerStarted).not.toHaveBeenCalled();
+      expect(mocks.grantFree).not.toHaveBeenCalled();
+      expect(mocks.fetch).not.toHaveBeenCalled();
+      expect(mocks.userScopedDb).not.toHaveBeenCalled();
+    }
+
+    it.each([
+      ['has never been asked its age', null, null],
+      ['was admitted under the earlier 13 and over rule', 'eligible', LEGACY_MINIMUM_AGE],
+    ])('refuses a signed-in client that %s, starting no session', async (_l, o, m) => {
+      ageDecision.row = { adult_eligibility_outcome: o, adult_eligibility_minimum_age: m };
+
+      const response = await POST(
+        request({ sdp: OFFER, voice: 'quartz', conversationId: CONVERSATION_ID }),
+      );
+
+      expect(response.status).toBe(403);
+      const body = (await response.json()) as {
+        error: { code: string };
+        review_url: string;
+      };
+      expect(body.error.code).toBe('age_confirmation_required');
+      expect(body.review_url).toBe('http://localhost/login/complete?redirectTo=%2Fchat');
+      expect(ageDecision.asked).toEqual(['user-1']);
+      expectNoSessionStarted();
+    });
+
+    it('refuses an account that declared an age under the minimum', async () => {
+      ageDecision.row = {
+        adult_eligibility_outcome: 'ineligible',
+        adult_eligibility_minimum_age: 18,
+      };
+
+      const response = await POST(request({ sdp: OFFER, conversationId: CONVERSATION_ID }));
+
+      expect(response.status).toBe(403);
+      expect(((await response.json()) as { error: { code: string } }).error.code).toBe(
+        'age_ineligible',
+      );
+      expectNoSessionStarted();
+    });
+
+    it('refuses with 503 when the decision cannot be read', async () => {
+      ageDecision.unreadable = true;
+
+      const response = await POST(request({ sdp: OFFER, conversationId: CONVERSATION_ID }));
+
+      expect(response.status).toBe(503);
+      expect(((await response.json()) as { error: { code: string } }).error.code).toBe(
+        'age_eligibility_unavailable',
+      );
+      expectNoSessionStarted();
+    });
   });
 
   describe('on the Free monthly voice allowance', () => {

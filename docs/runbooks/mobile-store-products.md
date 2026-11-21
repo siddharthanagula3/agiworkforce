@@ -2,7 +2,7 @@
 
 Status: Draft. Nothing below has been exercised against a real App Store Connect or Play Console account; the code paths are covered by unit tests only.
 Owner: Founder / billing operator
-Last updated: 2026-11-11
+Last updated: 2026-11-20
 
 This runbook creates the in-app purchase products the mobile app sells, connects
 both stores' server notifications, and sets the server configuration that turns
@@ -392,6 +392,17 @@ acknowledged while the app was closed is consumed the next time Billing opens,
 so the same top-up can be bought again.
 
 ### 5.1 A parent or guardian withdraws consent
+
+Since 2026-11-20 AGI is for people 18 and over on every surface: the app asks
+for an age before anything else, takes the operating system's age range where
+it can (Apple Declared Age Range on iOS 26 and later, Google Play Age Signals),
+asking only whether the person is 18 or over, and otherwise a typed age
+(`apps/mobile/src/features/age-assurance/ageAssurance.ts`). There is no
+parental permission path and no Parental Controls screen, and the server
+refuses Cloud to an account without an 18 and over decision. A withdrawal of
+parental consent should therefore not concern an admitted person, but the
+stores can still send one (for example, a supervised account on a shared
+device), so the handling below stays.
 
 Texas SB 2420, Utah and Louisiana let a parent or guardian withdraw consent for
 a child's use of the app. Apple reports it with the App Store Server

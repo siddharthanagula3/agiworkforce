@@ -10,7 +10,7 @@ const base: RootRouteInput = {
   isClerkLoaded: true,
   isClerkSignedIn: false,
   onboardingDone: true,
-  ageGateConfirmed: false,
+  ageGateConfirmed: true,
   signInOwedForEndedSession: false,
 };
 
@@ -20,28 +20,77 @@ const at = (segments: string[], overrides: Partial<RootRouteInput> = {}): RootRo
   segments,
 });
 
-describe('resolveRootRedirect', () => {
-  it('leaves a signed-out Local user alone in the app', () => {
-    expect(resolveRootRedirect(at(['(app)', '(tabs)', 'chat']))).toBeNull();
-  });
+const AGE_GATE = { pathname: '/(public)/age-gate' };
 
-  it('raises the age gate when a signed-out user heads for Cloud sign-in', () => {
-    expect(resolveRootRedirect(at(['(auth)', 'login']))).toEqual({
-      pathname: '/(public)/age-gate',
-      params: { returnTo: CLOUD_SIGN_IN_RETURN_PATH },
+describe('resolveRootRedirect', () => {
+  describe('a device with no current adult result', () => {
+    const unconfirmed = { ageGateConfirmed: false };
+
+    it('reaches the age gate on a first launch with no account, before onboarding and Local Mode', () => {
+      const firstLaunch = { ...unconfirmed, onboardingDone: false };
+      expect(resolveRootRedirect(at(['(public)', 'onboarding'], firstLaunch))).toEqual(AGE_GATE);
+      expect(resolveRootRedirect(at(['(app)', '(tabs)', 'chat'], firstLaunch))).toEqual(AGE_GATE);
+      expect(resolveRootRedirect(at(['(public)', 'age-gate'], firstLaunch))).toBeNull();
+    });
+
+    it('cannot reach Local chat after onboarding either', () => {
+      expect(resolveRootRedirect(at(['(app)', '(tabs)', 'chat'], unconfirmed))).toEqual(AGE_GATE);
+      expect(resolveRootRedirect(at(['(app)', 'settings'], unconfirmed))).toEqual(AGE_GATE);
+    });
+
+    it('is gated before Clerk answers, so a slow or offline launch is gated too', () => {
+      expect(
+        resolveRootRedirect(
+          at(['(app)', '(tabs)', 'chat'], { ...unconfirmed, isClerkLoaded: false }),
+        ),
+      ).toEqual(AGE_GATE);
+    });
+
+    it('is gated with auth disabled', () => {
+      expect(
+        resolveRootRedirect(
+          at(['(app)', '(tabs)', 'chat'], { ...unconfirmed, authEnabled: false }),
+        ),
+      ).toEqual(AGE_GATE);
+    });
+
+    it('raises the age gate before Cloud sign-in and keeps the way back to it', () => {
+      expect(resolveRootRedirect(at(['(auth)', 'login'], unconfirmed))).toEqual({
+        pathname: '/(public)/age-gate',
+        params: { returnTo: CLOUD_SIGN_IN_RETURN_PATH },
+      });
+    });
+
+    it('gates a signed-in person too', () => {
+      const signedIn = { ...unconfirmed, isClerkSignedIn: true };
+      expect(resolveRootRedirect(at(['(app)', '(tabs)', 'chat'], signedIn))).toEqual(AGE_GATE);
+      expect(resolveRootRedirect(at(['(auth)', 'login'], signedIn))).toEqual(AGE_GATE);
+    });
+
+    it('still lets the legal pages open', () => {
+      expect(resolveRootRedirect(at(['legal', 'privacy'], unconfirmed))).toBeNull();
+    });
+
+    it('wins over a sign-in owed for an ended session', () => {
+      expect(
+        resolveRootRedirect(
+          at(['(app)', '(tabs)', 'chat'], { ...unconfirmed, signInOwedForEndedSession: true }),
+        ),
+      ).toEqual(AGE_GATE);
     });
   });
 
-  it('keeps the age gate on screen for a signed-out user who finished onboarding', () => {
-    expect(resolveRootRedirect(at(['(public)', 'age-gate']))).toBeNull();
+  it('leaves a signed-out Local user with a current adult result alone in the app', () => {
+    expect(resolveRootRedirect(at(['(app)', '(tabs)', 'chat']))).toBeNull();
   });
 
-  it('keeps the age gate on screen for a signed-in user who finished onboarding', () => {
+  it('keeps the age gate on screen once it is open', () => {
+    expect(resolveRootRedirect(at(['(public)', 'age-gate']))).toBeNull();
     expect(resolveRootRedirect(at(['(public)', 'age-gate'], { isClerkSignedIn: true }))).toBeNull();
   });
 
   it('shows Cloud sign-in once the age gate is confirmed', () => {
-    expect(resolveRootRedirect(at(['(auth)', 'login'], { ageGateConfirmed: true }))).toBeNull();
+    expect(resolveRootRedirect(at(['(auth)', 'login']))).toBeNull();
   });
 
   it('sends a finished user who lands back on onboarding into the app', () => {
@@ -51,7 +100,7 @@ describe('resolveRootRedirect', () => {
     });
   });
 
-  it('sends a user with no onboarding straight to onboarding on the Local path', () => {
+  it('sends a confirmed user with no onboarding to onboarding', () => {
     expect(resolveRootRedirect(at(['(app)', '(tabs)', 'chat'], { onboardingDone: false }))).toEqual(
       { pathname: '/(public)/onboarding' },
     );
@@ -59,26 +108,14 @@ describe('resolveRootRedirect', () => {
       resolveRootRedirect(at(['(public)', 'onboarding'], { onboardingDone: false })),
     ).toBeNull();
     expect(resolveRootRedirect(at(['legal', 'privacy'], { onboardingDone: false }))).toBeNull();
-  });
-
-  it('gates the signed-in first run on age before onboarding', () => {
-    expect(
-      resolveRootRedirect(
-        at(['(auth)', 'login'], { isClerkSignedIn: true, onboardingDone: false }),
-      ),
-    ).toEqual({ pathname: '/(public)/age-gate' });
     expect(
       resolveRootRedirect(
         at(['(app)', '(tabs)', 'chat'], { isClerkSignedIn: true, onboardingDone: false }),
       ),
-    ).toEqual({ pathname: '/(public)/age-gate' });
+    ).toEqual({ pathname: '/(public)/onboarding' });
     expect(
       resolveRootRedirect(
-        at(['(app)', '(tabs)', 'chat'], {
-          isClerkSignedIn: true,
-          onboardingDone: false,
-          ageGateConfirmed: true,
-        }),
+        at(['(auth)', 'login'], { isClerkSignedIn: true, onboardingDone: false }),
       ),
     ).toEqual({ pathname: '/(public)/onboarding' });
   });
@@ -93,7 +130,7 @@ describe('resolveRootRedirect', () => {
     expect(resolveRootRedirect(at(['(auth)', 'login'], { isClerkLoaded: false }))).toBeNull();
   });
 
-  it('never routes through the age gate when auth is disabled', () => {
+  it('never routes a confirmed device through sign-in when auth is disabled', () => {
     expect(resolveRootRedirect(at(['(auth)', 'login'], { authEnabled: false }))).toEqual({
       pathname: '/(app)',
     });
@@ -105,7 +142,7 @@ describe('resolveRootRedirect', () => {
   });
 
   describe('a session that ended without the person signing out', () => {
-    const owed = { signInOwedForEndedSession: true, ageGateConfirmed: true };
+    const owed = { signInOwedForEndedSession: true };
 
     it('opens sign-in with the way back to Cloud chat', () => {
       expect(resolveRootRedirect(at(['(app)', '(tabs)', 'chat'], owed))).toEqual({
@@ -136,9 +173,7 @@ describe('resolveRootRedirect', () => {
     });
 
     it('is not opened for a person who chose to sign out', () => {
-      expect(
-        resolveRootRedirect(at(['(app)', '(tabs)', 'chat'], { ageGateConfirmed: true })),
-      ).toBeNull();
+      expect(resolveRootRedirect(at(['(app)', '(tabs)', 'chat']))).toBeNull();
     });
   });
 });

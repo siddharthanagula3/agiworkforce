@@ -18,6 +18,8 @@ import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { pseudonymizeIdentifier } from '@/lib/server/pseudonymize';
 import { mustAcceptTerms } from '@/lib/server/terms';
+import { refuseWithoutAdultEligibility } from '@/lib/server/adult-eligibility-gate';
+import { ADULT_ELIGIBILITY_REVIEW_PATH } from '@agiworkforce/cloud-contracts';
 import { CliUserCodeSchema } from '@/lib/validations/device';
 
 const DeviceCodeApproveSchema = z.object({
@@ -155,10 +157,11 @@ async function handleDeviceCodeApprove(request: NextRequest): Promise<NextRespon
     );
   }
 
+  const returnParams = new URLSearchParams({ user_code: userCode });
+  if (parsed.data.surface === 'desktop') returnParams.set('surface', 'desktop');
+  const returnTo = `/auth/device?${returnParams.toString()}`;
+
   if (await mustAcceptTerms(authUser.userId, 'device-approve')) {
-    const returnParams = new URLSearchParams({ user_code: userCode });
-    if (parsed.data.surface === 'desktop') returnParams.set('surface', 'desktop');
-    const returnTo = `/auth/device?${returnParams.toString()}`;
     return NextResponse.json(
       {
         error: {
@@ -168,6 +171,26 @@ async function handleDeviceCodeApprove(request: NextRequest): Promise<NextRespon
         acceptanceUrl: `/login/complete?redirectTo=${encodeURIComponent(returnTo)}`,
       },
       { status: 403, headers: { 'Cache-Control': 'no-store' } },
+    );
+  }
+
+  const ageRefusal = await refuseWithoutAdultEligibility({
+    userId: authUser.userId,
+    origin: new URL(request.url).origin,
+    returnTo,
+    gate: 'device-approve',
+  });
+  if (ageRefusal) {
+    return NextResponse.json(
+      {
+        error: { code: ageRefusal.code.toUpperCase(), message: ageRefusal.message },
+        ...(ageRefusal.reviewUrl
+          ? {
+              acceptanceUrl: `${ADULT_ELIGIBILITY_REVIEW_PATH}?redirectTo=${encodeURIComponent(returnTo)}`,
+            }
+          : {}),
+      },
+      { status: ageRefusal.status, headers: { 'Cache-Control': 'no-store' } },
     );
   }
 

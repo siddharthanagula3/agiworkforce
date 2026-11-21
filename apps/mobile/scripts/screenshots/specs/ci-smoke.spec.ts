@@ -16,6 +16,14 @@ describe('Mobile first-run shell', () => {
     await device.terminateApp();
   });
 
+  it('asks for an age before onboarding', async () => {
+    await waitFor(element(by.id('age-gate-root')))
+      .toBeVisible()
+      .withTimeout(20_000);
+    await element(by.id('age-gate-input')).typeText('30');
+    await element(by.id('age-gate-continue-btn')).tap();
+  });
+
   it('lands on the local-first onboarding hero', async () => {
     await waitFor(element(by.id('onboarding-hero-screen')))
       .toBeVisible()

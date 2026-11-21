@@ -8,6 +8,18 @@ const mocks = vi.hoisted(() => ({
   dbQuery: vi.fn(),
   readOrganizationCollectionState: vi.fn(),
   getOrCreateAccount: vi.fn(async () => 'account-1'),
+  adultEligibility: vi.fn(),
+  projectSpendRefusal: vi.fn(),
+}));
+
+vi.mock('@/lib/server/adult-eligibility', async (importOriginal) => ({
+  ...(await importOriginal()),
+  readAdultEligibilityState: (...args: unknown[]) => mocks.adultEligibility(...args),
+}));
+
+vi.mock('@/lib/developer-api/project-spend', async (importOriginal) => ({
+  ...(await importOriginal()),
+  developerProjectSpendRefusal: (...args: unknown[]) => mocks.projectSpendRefusal(...args),
 }));
 
 vi.mock('@/lib/rate-limit', () => ({
@@ -66,6 +78,8 @@ function makeRequest() {
 describe('runAuthGate rate limiting', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.adultEligibility.mockResolvedValue('confirmed');
+    mocks.projectSpendRefusal.mockResolvedValue(null);
     mocks.withRateLimit.mockResolvedValue(null);
     mocks.getClerkAuthUser.mockResolvedValue({ userId: 'user-123', boundSurface: 'web' });
     mocks.getSubscription.mockResolvedValue({
@@ -106,6 +120,8 @@ function makeRequestWithPersonalHeader() {
 describe('runAuthGate enterprise collection grace', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.adultEligibility.mockResolvedValue('confirmed');
+    mocks.projectSpendRefusal.mockResolvedValue(null);
     mocks.withRateLimit.mockResolvedValue(null);
     mocks.getClerkAuthUser.mockResolvedValue({ userId: 'user-123', boundSurface: 'web' });
     mocks.dbQuery.mockResolvedValue([{ organization_id: 'org-123' }]);
@@ -259,6 +275,8 @@ describe('runAuthGate enterprise collection grace', () => {
 describe('runAuthGate lapsed paid plans', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.adultEligibility.mockResolvedValue('confirmed');
+    mocks.projectSpendRefusal.mockResolvedValue(null);
     mocks.withRateLimit.mockResolvedValue(null);
     mocks.getClerkAuthUser.mockResolvedValue({ userId: 'user-123', boundSurface: 'web' });
     mocks.dbQuery.mockResolvedValue([]);
@@ -306,6 +324,8 @@ function flushPendingWork(): Promise<void> {
 describe('runAuthGate first-token cost', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.adultEligibility.mockResolvedValue('confirmed');
+    mocks.projectSpendRefusal.mockResolvedValue(null);
     mocks.withRateLimit.mockResolvedValue(null);
     mocks.getClerkAuthUser.mockResolvedValue({ userId: 'user-123', boundSurface: 'web' });
     mocks.getSubscription.mockResolvedValue({
@@ -347,6 +367,8 @@ describe('runAuthGate first-token cost', () => {
 describe('runAuthGate organization seats', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.adultEligibility.mockResolvedValue('confirmed');
+    mocks.projectSpendRefusal.mockResolvedValue(null);
     mocks.withRateLimit.mockResolvedValue(null);
     mocks.getClerkAuthUser.mockResolvedValue({ userId: 'member-1', boundSurface: 'web' });
     mocks.getSubscription.mockResolvedValue(null);
@@ -390,5 +412,107 @@ describe('runAuthGate organization seats', () => {
 
     expect(result.ok).toBe(true);
     expect(result.ok && result.subscription.seat_source).toBeUndefined();
+  });
+});
+
+describe('runAuthGate adult eligibility', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.withRateLimit.mockResolvedValue(null);
+    mocks.getClerkAuthUser.mockResolvedValue({ userId: 'user-123', boundSurface: 'web' });
+    mocks.getSubscription.mockResolvedValue({
+      id: 'subscription-123',
+      status: 'active',
+      plan_tier: 'basic',
+    });
+    mocks.dbQuery.mockResolvedValue([]);
+    mocks.projectSpendRefusal.mockResolvedValue(null);
+  });
+
+  it('admits an account with a current 18 and over decision on record', async () => {
+    mocks.adultEligibility.mockResolvedValue('confirmed');
+
+    const result = await runAuthGate(makeRequest());
+
+    expect(result.ok).toBe(true);
+    expect(mocks.adultEligibility).toHaveBeenCalledWith('user-123');
+  });
+
+  it('refuses an account nobody has asked, with the review link and the minimum age', async () => {
+    mocks.adultEligibility.mockResolvedValue('unconfirmed');
+
+    const result = await runAuthGate(makeRequest());
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.response.status).toBe(403);
+    const body = await (result.response as Response).clone().json();
+    expect(body.error.code).toBe('age_confirmation_required');
+    expect(body.error.type).toBe('invalid_request_error');
+    expect(body.minimum_age).toBe(18);
+    expect(body.review_url).toBe('http://localhost/login/complete?redirectTo=%2Fchat');
+    expect(body.error.review_url).toBe(body.review_url);
+    expect(body.error.message).toContain(body.review_url);
+  });
+
+  it('refuses an account that declared an age under the minimum', async () => {
+    mocks.adultEligibility.mockResolvedValue('ineligible');
+
+    const result = await runAuthGate(makeRequest());
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.response.status).toBe(403);
+    const body = await (result.response as Response).clone().json();
+    expect(body.error.code).toBe('age_ineligible');
+    expect(body.minimum_age).toBe(18);
+  });
+
+  it('refuses with 503 when the decision cannot be read, never admitting an account nobody asked', async () => {
+    mocks.adultEligibility.mockRejectedValue(new Error('database unavailable'));
+
+    const result = await runAuthGate(makeRequest());
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.response.status).toBe(503);
+    const body = await (result.response as Response).clone().json();
+    expect(body.error.code).toBe('age_eligibility_unavailable');
+    expect(body.error.type).toBe('server_error');
+    expect(body.review_url).toBeUndefined();
+  });
+
+  it.each(['unconfirmed', 'ineligible'])(
+    'does not ask an API-key caller, whose owner agreed to the commercial terms, when the account is %s',
+    async (state) => {
+      mocks.adultEligibility.mockResolvedValue(state);
+      mocks.getClerkAuthUser.mockResolvedValue({
+        userId: 'user-123',
+        boundSurface: 'web',
+        apiKeyId: 'key-1',
+      });
+
+      const result = await runAuthGate(makeRequest());
+
+      expect(result.ok).toBe(true);
+      expect(mocks.adultEligibility).not.toHaveBeenCalled();
+    },
+  );
+
+  it('asks the age question before any billing refusal can answer for the account', async () => {
+    mocks.adultEligibility.mockResolvedValue('unconfirmed');
+    mocks.getSubscription.mockResolvedValue({
+      id: 'subscription-123',
+      status: 'past_due',
+      plan_tier: 'enterprise',
+    });
+    mocks.readOrganizationCollectionState.mockResolvedValue({ readOnly: true });
+
+    const result = await runAuthGate(makeRequest());
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    const body = await (result.response as Response).clone().json();
+    expect(body.error.code).toBe('age_confirmation_required');
   });
 });

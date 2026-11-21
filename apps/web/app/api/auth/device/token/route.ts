@@ -19,6 +19,7 @@ import {
 import { pseudonymizeIdentifier } from '@/lib/server/pseudonymize';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 import { CURRENT_TERMS_VERSION, mustAcceptTerms } from '@/lib/server/terms';
+import { deviceAdultEligibilityRefusal } from '../adult-eligibility-refusal';
 import { accountAccessDecision } from '@/lib/auth/account-status';
 import { devicePairingFlow } from '@/lib/validations/device';
 import { DEVICE_POLL_INTERVAL_SECONDS } from '../grant-policy';
@@ -177,6 +178,13 @@ async function handleDeviceCodePoll(request: NextRequest): Promise<NextResponse>
       { status: 403, ...noStore },
     );
   }
+
+  const ageRefusal = await deviceAdultEligibilityRefusal({
+    userId: record.user_id,
+    acceptanceUrl: termsAcceptanceUrl(request, record.user_code),
+    gate: 'device-token',
+  });
+  if (ageRefusal) return ageRefusal;
 
   let accessToken: string;
   let expiresIn: number;

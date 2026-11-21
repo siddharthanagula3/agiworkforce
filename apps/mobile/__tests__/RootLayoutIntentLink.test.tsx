@@ -138,6 +138,16 @@ jest.mock('../src/features/auth/store/termsAcceptanceStore', () => ({
     { getState: () => ({ reset: jest.fn(), verify: jest.fn() }) },
   ),
 }));
+jest.mock('../src/features/auth/store/adultEligibilityStore', () => ({
+  isAdultEligibilityAnswerPending: jest.fn(() => false),
+  isAdultEligibilityConfirmed: jest.fn(() => true),
+  adultEligibilityNeedsAnswer: jest.fn(() => false),
+  useAdultEligibilityStore: Object.assign(
+    (selector: (state: { status: string; userId: string | null }) => unknown) =>
+      selector({ status: 'confirmed', userId: 'user-1' }),
+    { getState: () => ({ reset: jest.fn(), verify: jest.fn() }) },
+  ),
+}));
 const mockSetCloudAccess = jest.fn();
 jest.mock('../src/features/waitlist/store', () => ({
   useWaitlistStore: Object.assign(

@@ -2,14 +2,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-const { mockAuth, mockRedirect, mockGetUser, mockAssertAccountActive, mockRequireTerms } =
-  vi.hoisted(() => ({
-    mockAuth: vi.fn(),
-    mockRedirect: vi.fn(),
-    mockGetUser: vi.fn(),
-    mockAssertAccountActive: vi.fn(),
-    mockRequireTerms: vi.fn(),
-  }));
+const {
+  mockAuth,
+  mockRedirect,
+  mockGetUser,
+  mockAssertAccountActive,
+  mockRequireTerms,
+  mockAdultEligibility,
+} = vi.hoisted(() => ({
+  mockAuth: vi.fn(),
+  mockRedirect: vi.fn(),
+  mockGetUser: vi.fn(),
+  mockAssertAccountActive: vi.fn(),
+  mockRequireTerms: vi.fn(),
+  mockAdultEligibility: vi.fn(),
+}));
 
 vi.mock('@clerk/nextjs/server', () => ({
   auth: (...args: unknown[]) => mockAuth(...args),
@@ -24,7 +31,12 @@ vi.mock('@/lib/server/require-current-terms', () => ({
   requireCurrentTermsAcceptance: (...args: unknown[]) => mockRequireTerms(...args),
 }));
 
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/server/adult-eligibility', async (importOriginal) => ({
+  ...(await importOriginal()),
+  readAdultEligibilityState: (...args: unknown[]) => mockAdultEligibility(...args),
+}));
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal()),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
@@ -76,6 +88,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   process.env[PLATFORM_ADMIN_ENV_VAR] = OPERATOR_ID;
   mockRequireTerms.mockResolvedValue(undefined);
+  mockAdultEligibility.mockResolvedValue('confirmed');
   mockAssertAccountActive.mockResolvedValue(undefined);
   mockGetUser.mockResolvedValue({ publicMetadata: {} });
 });

@@ -47,7 +47,13 @@ import {
   readAgeAssurance,
   runAgeAssurance,
 } from '../ageAssurance';
-import { isAgeGateConfirmed, isMinorMode } from '@/src/features/auth/services/ageGate';
+import { ACCOUNT_MINIMUM_AGE } from '@agiworkforce/types';
+import {
+  ageGateStatus,
+  deviceAdultEvidence,
+  isAgeGateConfirmed,
+  isMinorMode,
+} from '@/src/features/auth/services/ageGate';
 import * as AgeRange from 'expo-age-range';
 import { Platform } from 'react-native';
 
@@ -67,18 +73,64 @@ beforeEach(() => {
 });
 
 describe('ageRangeRequest', () => {
-  it('asks for the account minimum and adulthood in the default region', () => {
-    expect(ageRangeRequest()).toEqual({ threshold1: 13, threshold2: 18 });
+  it.each(['America/Chicago', 'Europe/Berlin', 'Europe/London', 'Asia/Kolkata'])(
+    'asks only whether the person is at least the account minimum in %s',
+    (zone) => {
+      mockTimezone = zone;
+      expect(ageRangeRequest()).toEqual({ threshold1: ACCOUNT_MINIMUM_AGE });
+    },
+  );
+});
+
+describe('an OS answer that settles nothing leads to the typed age, never to access', () => {
+  it.each([
+    ['unavailable before iOS 26', () => (mockPlatform.Version = '18.6')],
+    ['not regulated', () => mockAgeRange.isEligibleForAgeFeaturesAsync.mockResolvedValue(false)],
+    [
+      'declined',
+      () => {
+        mockAgeRange.isEligibleForAgeFeaturesAsync.mockResolvedValue(true);
+        mockAgeRange.requestAgeRangeAsync.mockRejectedValue(
+          codedError('ERR_AGE_RANGE_USER_DECLINED'),
+        );
+      },
+    ],
+    [
+      'unavailable after an error',
+      () => {
+        mockAgeRange.isEligibleForAgeFeaturesAsync.mockResolvedValue(true);
+        mockAgeRange.requestAgeRangeAsync.mockRejectedValue(new Error('boom'));
+      },
+    ],
+    [
+      'a range straddling the minimum',
+      () => {
+        mockAgeRange.isEligibleForAgeFeaturesAsync.mockResolvedValue(true);
+        mockAgeRange.requestAgeRangeAsync.mockResolvedValue({ lowerBound: 16, upperBound: 20 });
+      },
+    ],
+    [
+      'an empty range',
+      () => {
+        mockAgeRange.isEligibleForAgeFeaturesAsync.mockResolvedValue(true);
+        mockAgeRange.requestAgeRangeAsync.mockResolvedValue({ lowerBound: null, upperBound: null });
+      },
+    ],
+  ])('%s', async (_label, arrange) => {
+    arrange();
+
+    expect(await assureAgeWithOs()).toBeNull();
+    expect(ageGateStatus()).toBe('required');
+    expect(isAgeGateConfirmed()).toBe(false);
   });
 
-  it('uses the EU threshold of 16', () => {
-    mockTimezone = 'Europe/Berlin';
-    expect(ageRangeRequest()).toEqual({ threshold1: 16, threshold2: 18 });
-  });
+  it('keeps a stored straddling range from counting as proof later', async () => {
+    mockAgeRange.isEligibleForAgeFeaturesAsync.mockResolvedValue(true);
+    mockAgeRange.requestAgeRangeAsync.mockResolvedValue({ lowerBound: 13, upperBound: 17 });
+    await runAgeAssurance();
 
-  it('asks only for 18 where the account minimum is 18', () => {
-    mockTimezone = 'Asia/Kolkata';
-    expect(ageRangeRequest()).toEqual({ threshold1: 18 });
+    expect(deviceAdultEvidence()).toBeNull();
+    expect(ageGateStatus()).toBe('required');
   });
 });
 
@@ -100,11 +152,18 @@ describe('iOS Declared Age Range', () => {
     const gate = await assureAgeWithOs();
 
     expect(mockAgeRange.requestAgeRangeAsync).toHaveBeenCalledWith({
-      threshold1: 13,
-      threshold2: 18,
+      threshold1: ACCOUNT_MINIMUM_AGE,
     });
     expect(gate?.isMinor).toBe(false);
     expect(isAgeGateConfirmed()).toBe(true);
+  });
+
+  it('refuses a range wholly under the minimum, 13 to 17 included', async () => {
+    mockAgeRange.isEligibleForAgeFeaturesAsync.mockResolvedValue(true);
+    mockAgeRange.requestAgeRangeAsync.mockResolvedValue({ lowerBound: 13, upperBound: 17 });
+
+    expect((await assureAgeWithOs())?.isMinor).toBe(true);
+    expect(isMinorMode()).toBe(true);
   });
 
   it('sends a user under the account minimum to the refusal path', async () => {
@@ -158,7 +217,7 @@ describe('Android Play Age Signals', () => {
 
     const gate = await assureAgeWithOs();
 
-    expect(gate?.isMinor).toBe(false);
+    expect(gate?.isMinor).toBe(true);
     expect(readAgeAssurance()).toMatchObject({
       regulated: true,
       guardianManaged: true,

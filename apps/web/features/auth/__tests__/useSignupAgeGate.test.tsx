@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
 
-import { ACCOUNT_MINIMUM_AGE, PARENTAL_PERMISSION_BELOW_AGE } from '@agiworkforce/types';
+import { ACCOUNT_MINIMUM_AGE } from '@agiworkforce/types';
 
 import { useSignupAgeGate } from '../useSignupAgeGate';
 
@@ -17,6 +17,11 @@ function mountedGate() {
 }
 
 describe('the sign-up age gate', () => {
+  it('admits from 18 and no younger', () => {
+    expect(ACCOUNT_MINIMUM_AGE).toBe(18);
+    expect(TOO_YOUNG).toBe('17');
+  });
+
   it.each([
     ['an empty field', '', 'missing'],
     ['spaces only', '   ', 'missing'],
@@ -24,6 +29,8 @@ describe('the sign-up age gate', () => {
     ['zero', '0', 'invalid'],
     ['an impossible age', '999', 'invalid'],
     ['the year under the minimum', TOO_YOUNG, 'too_young'],
+    ['17', '17', 'too_young'],
+    ['13, the minimum before adults only', '13', 'too_young'],
   ] as const)('runs nothing for %s, says why and moves focus to the field', (_case, entry, why) => {
     const { result, field } = mountedGate();
     const attempt = vi.fn();
@@ -41,7 +48,7 @@ describe('the sign-up age gate', () => {
     field.remove();
   });
 
-  it.each([YOUNGEST, String(PARENTAL_PERMISSION_BELOW_AGE - 1), '18', '64'])(
+  it.each([YOUNGEST, '19', '64'])(
     'runs the attempt for a %s year old and refuses nothing',
     (age) => {
       const { result, field } = mountedGate();

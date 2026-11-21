@@ -2,6 +2,7 @@ import { NATIVE_PURCHASES_AVAILABLE } from '@/src/features/billing/nativePurchas
 import type { MobileChatAppMode } from '@/src/features/chat/store/appModeStore';
 import { CLOUD_CODE_SCREEN_TITLE } from '@/src/features/cloud-code/presentation';
 import { isShownInMode } from '@/src/features/shell/destinationScope';
+import { AGE_SETTING_LABEL, AGE_SETTING_ROUTE } from '@/src/features/settings/ageSettingValue';
 import {
   NOTIFICATIONS_SCREEN_TITLE,
   SECURITY_LOGIN_SCREEN_TITLE,
@@ -252,11 +253,11 @@ export const MOBILE_DESTINATIONS: readonly MobileDestination[] = [
     settingsSection: 'Device',
   },
   {
-    route: '/(app)/settings/parental-controls',
-    title: 'Parental controls',
+    route: AGE_SETTING_ROUTE,
+    title: AGE_SETTING_LABEL,
     section: 'Settings',
-    keywords: ['family', 'teen', 'age', 'minor'],
-    settingsSection: 'Device',
+    keywords: ['age', 'adult'],
+    settingsSection: 'Account',
   },
   {
     route: '/(app)/about',

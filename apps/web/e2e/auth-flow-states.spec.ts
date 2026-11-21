@@ -26,11 +26,13 @@ const PHONE = { width: 390, height: 844 };
 const ZOOMED = { width: 640, height: 512 };
 const NO_AGE_ATTEMPT_EMAIL = 'no-age-attempt@example.invalid';
 const AGE_REQUIRED = /enter your age in years to continue/i;
-const AGE_INELIGIBLE = /you must be at least \d+ years old to create an account/i;
+const AGE_INELIGIBLE = /you must be at least \d+ years old to continue/i;
 const AGREEMENT =
   'By creating an account, you agree to the Terms of Use and acknowledge the Privacy Policy.';
 const ELIGIBLE_AGE = String(ACCOUNT_MINIMUM_AGE);
 const TOO_YOUNG = String(ACCOUNT_MINIMUM_AGE - 1);
+const ADULT_AGE_UNLIKE_THE_MINIMUM = String(ACCOUNT_MINIMUM_AGE + 39);
+const AGE_CHECK_KEY = 'agi.age-checked-minimum';
 const MOCK_CODE = MOCK_EMAILED_CODE;
 const WRONG_CODE = '000000';
 const CODE_REFUSED = /check the last code we emailed you/i;
@@ -44,7 +46,16 @@ const PASSWORDLESS_REASON = /does not use a password, so we emailed a code/i;
 const LAPTOP = { width: 1366, height: 768 };
 const NEW_ACCOUNT_DESTINATION = '/chat';
 const TERMS_REVIEW_PATH = '/login/complete';
-const NOTHING_CARRIED = { terms: null, choice: null, attempt: null, attemptInThisTab: null };
+const AGE_CHECKED = {
+  eligibility: { kind: 'age_checked_on_device', minimumAge: ACCOUNT_MINIMUM_AGE },
+};
+const NOTHING_CARRIED = {
+  terms: null,
+  ageCheckedAgainst: null,
+  choice: null,
+  attempt: null,
+  attemptInThisTab: null,
+};
 const NEXT_DOCUMENT_TIMEOUT_MS = 30_000;
 
 function ageField(page: Page) {
@@ -204,6 +215,7 @@ async function stopWhereTheFlowHandsOn(page: Page, path: string): Promise<Locato
 function carriedMarkers(page: Page) {
   return page.evaluate(() => ({
     terms: window.localStorage.getItem('agi.terms-accepted-version'),
+    ageCheckedAgainst: window.localStorage.getItem('agi.age-checked-minimum'),
     choice: window.localStorage.getItem('agi.marketing-email-notice-version'),
     attempt: window.localStorage.getItem('agi.marketing-email-attempt-id'),
     attemptInThisTab: window.sessionStorage.getItem('agi.marketing-email-attempt-id'),
@@ -513,7 +525,7 @@ test.describe('auth flow states', () => {
       if (/(?:^|[?&"\s{,])age(?:"|=|%3D)/i.test(sent)) carriedAnAge.push(request.url());
     });
 
-    await ageField(page).fill(ELIGIBLE_AGE);
+    await ageField(page).fill(ADULT_AGE_UNLIKE_THE_MINIMUM);
     await expect(ageField(page)).not.toHaveAttribute('name');
     await page.getByLabel('Email address').fill(MOCK_SIGNUP_CODE_ONLY_ACCOUNT);
     await submitButton(page).click();
@@ -522,14 +534,18 @@ test.describe('auth flow states', () => {
     expect((await mockAuthProviderCalls(page)).signUpCreate).toBe(1);
     expect(carriedAnAge, 'no request names an age').toEqual([]);
     expect(new URL(page.url()).search).not.toMatch(/age/i);
+    const stored = await page.evaluate(() =>
+      [window.localStorage, window.sessionStorage].flatMap((area) =>
+        Object.keys(area).map((key) => [key, area.getItem(key)] as const),
+      ),
+    );
     expect(
-      await page
-        .evaluate(() => [
-          ...Object.keys(window.localStorage),
-          ...Object.keys(window.sessionStorage),
-        ])
-        .then((keys) => keys.filter(namesAnAge)),
-      'no stored key names an age',
+      stored.filter(([key]) => namesAnAge(key)),
+      'the only stored key that names an age holds the minimum it was checked against',
+    ).toEqual([[AGE_CHECK_KEY, String(ACCOUNT_MINIMUM_AGE)]]);
+    expect(
+      stored.filter(([, value]) => value === ADULT_AGE_UNLIKE_THE_MINIMUM),
+      'the typed age is stored nowhere',
     ).toEqual([]);
     await expect(ageField(page)).toHaveCount(0);
   });
@@ -911,6 +927,7 @@ test.describe('auth flow states', () => {
         surface: 'web-signup',
         version: POLICY_LAST_UPDATED.terms,
         marketingEmailNoticeVersion: POLICY_LAST_UPDATED.privacy,
+        ...AGE_CHECKED,
       },
     ]);
     expect(await carriedMarkers(page), 'nothing outlives the recorded attempt').toEqual(
@@ -933,6 +950,7 @@ test.describe('auth flow states', () => {
     expect(await carriedMarkers(page)).toEqual({
       ...NOTHING_CARRIED,
       terms: POLICY_LAST_UPDATED.terms,
+      ageCheckedAgainst: String(ACCOUNT_MINIMUM_AGE),
     });
 
     await code.pressSequentially(MOCK_CODE);
@@ -940,7 +958,9 @@ test.describe('auth flow states', () => {
     await expect(handedOn).toHaveText(NEW_ACCOUNT_DESTINATION, {
       timeout: NEXT_DOCUMENT_TIMEOUT_MS,
     });
-    expect(termsRequests).toEqual([{ surface: 'web-signup', version: POLICY_LAST_UPDATED.terms }]);
+    expect(termsRequests).toEqual([
+      { surface: 'web-signup', version: POLICY_LAST_UPDATED.terms, ...AGE_CHECKED },
+    ]);
     expect(Object.keys(termsRequests[0] ?? {})).not.toContain('marketingEmailNoticeVersion');
     expect(await carriedMarkers(page)).toEqual(NOTHING_CARRIED);
     expect(leaving, 'nothing left this machine and no identity API was called').toEqual([]);
@@ -1015,6 +1035,7 @@ test.describe('auth flow states', () => {
       'the newer tab removed the choice and the older tab still holds its attempt',
     ).toEqual({
       terms: POLICY_LAST_UPDATED.terms,
+      ageCheckedAgainst: String(ACCOUNT_MINIMUM_AGE),
       choice: null,
       attempt: null,
       attemptInThisTab: ticked.attempt,

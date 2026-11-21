@@ -13,10 +13,13 @@ import {
 import { CircleAlert, RefreshCw } from '@agiworkforce/icons';
 import { AgiMark, Spinner, useUiTranslation } from '@agiworkforce/ui';
 import { BrandedGreeting } from '@agiworkforce/unified-chat';
+import { GUEST_CHAT_ERROR_CODES } from '@/lib/guest-chat/contract';
 import { CANONICAL_POLICY_ROUTES } from '@/lib/legal-constants';
 import { toUserMessage } from '@/lib/user-error-message';
 import { SendButton } from '../components/Composer/SendButton';
 import { TranscriptNotice } from '../components/messages/TranscriptNotice';
+import { GuestAgeStep } from './GuestAgeStep';
+import { clearStoredAgeCheck, readStoredAgeCheck, storeAgeCheck } from './guest-age-check';
 import {
   GUEST_BLOCKING_CODES,
   GUEST_SEND_FAILED,
@@ -72,6 +75,8 @@ export function GuestChat({ dailyLimit, signInHref, signUpHref }: GuestChatProps
   const [notice, setNotice] = useState<string | null>(null);
   const [blocked, setBlocked] = useState<string | null>(null);
   const [remaining, setRemaining] = useState<number | null>(null);
+  const [checkedAgainst, setCheckedAgainst] = useState<number | null | undefined>(undefined);
+  const [ageRefused, setAgeRefused] = useState(false);
   const controllerRef = useRef<AbortController | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const logRef = useRef<HTMLDivElement>(null);
@@ -81,73 +86,104 @@ export function GuestChat({ dailyLimit, signInHref, signUpHref }: GuestChatProps
   useEffect(() => () => controllerRef.current?.abort(), []);
 
   useLayoutEffect(() => {
+    setCheckedAgainst(readStoredAgeCheck());
+  }, []);
+
+  const confirmAge = useCallback((minimumAge: number) => {
+    storeAgeCheck(minimumAge);
+    setAgeRefused(false);
+    setCheckedAgainst(minimumAge);
+  }, []);
+
+  useLayoutEffect(() => {
     const input = inputRef.current;
     if (!input) return;
     input.style.height = 'auto';
     input.style.height = `${input.scrollHeight}px`;
-  }, [draft, blocked]);
+  }, [draft, blocked, checkedAgainst]);
 
   useEffect(() => {
     const log = logRef.current;
     if (log && followRef.current) log.scrollTop = log.scrollHeight;
   }, [entries, failure]);
 
-  const run = useCallback(async (history: GuestEntry[], sentDraft: string | null) => {
-    const controller = new AbortController();
-    controllerRef.current = controller;
-    const id = crypto.randomUUID();
-    followRef.current = true;
-    setEntries([...history, { id, role: 'assistant', content: '' }]);
-    setReplyId(id);
-    setFailure(null);
-    setNotice(null);
-    try {
-      const turn = await sendGuestTurn(
-        history.map(({ role, content }) => ({ role, content })),
-        controller.signal,
-        (content) =>
-          setEntries((current) =>
-            current.map((entry) => (entry.id === id ? { ...entry, content } : entry)),
-          ),
-      );
-      if (turn.remaining !== null) setRemaining(turn.remaining);
-      if (turn.failure) setFailure(turn.failure);
-      if (!turn.content) setEntries((current) => current.filter((entry) => entry.id !== id));
-    } catch (error) {
-      if (controller.signal.aborted) {
-        setEntries((current) => current.filter((entry) => entry.id !== id || entry.content));
-        return;
+  const run = useCallback(
+    async (history: GuestEntry[], sentDraft: string | null, minimumAge: number) => {
+      const controller = new AbortController();
+      controllerRef.current = controller;
+      const id = crypto.randomUUID();
+      followRef.current = true;
+      setEntries([...history, { id, role: 'assistant', content: '' }]);
+      setReplyId(id);
+      setFailure(null);
+      setNotice(null);
+      try {
+        const turn = await sendGuestTurn(
+          history.map(({ role, content }) => ({ role, content })),
+          minimumAge,
+          controller.signal,
+          (content) =>
+            setEntries((current) =>
+              current.map((entry) => (entry.id === id ? { ...entry, content } : entry)),
+            ),
+        );
+        if (turn.remaining !== null) setRemaining(turn.remaining);
+        if (turn.failure) setFailure(turn.failure);
+        if (!turn.content) setEntries((current) => current.filter((entry) => entry.id !== id));
+      } catch (error) {
+        if (controller.signal.aborted) {
+          setEntries((current) => current.filter((entry) => entry.id !== id || entry.content));
+          return;
+        }
+        if (sentDraft === null) {
+          setEntries(history);
+        } else {
+          setEntries(history.slice(0, -1));
+          setDraft((current) => current || sentDraft);
+        }
+        if (
+          error instanceof GuestChatRefusal &&
+          error.code === GUEST_CHAT_ERROR_CODES.ageConfirmationRequired
+        ) {
+          clearStoredAgeCheck();
+          setAgeRefused(true);
+          setCheckedAgainst(null);
+          return;
+        }
+        const message = toUserMessage(error, GUEST_SEND_FAILED);
+        if (
+          error instanceof GuestChatRefusal &&
+          error.code &&
+          GUEST_BLOCKING_CODES.has(error.code)
+        ) {
+          setBlocked(message);
+        } else {
+          setNotice(message);
+        }
+      } finally {
+        if (controllerRef.current === controller) controllerRef.current = null;
+        setReplyId(null);
       }
-      if (sentDraft === null) {
-        setEntries(history);
-      } else {
-        setEntries(history.slice(0, -1));
-        setDraft((current) => current || sentDraft);
-      }
-      const message = toUserMessage(error, GUEST_SEND_FAILED);
-      if (error instanceof GuestChatRefusal && error.code && GUEST_BLOCKING_CODES.has(error.code)) {
-        setBlocked(message);
-      } else {
-        setNotice(message);
-      }
-    } finally {
-      if (controllerRef.current === controller) controllerRef.current = null;
-      setReplyId(null);
-    }
-  }, []);
+    },
+    [],
+  );
 
   const send = useCallback(() => {
     const text = draft.trim();
-    if (!text || streaming || blocked) return;
+    if (!text || streaming || blocked || !checkedAgainst) return;
     setDraft('');
-    void run([...entries, { id: crypto.randomUUID(), role: 'user', content: text }], text);
-  }, [blocked, draft, entries, run, streaming]);
+    void run(
+      [...entries, { id: crypto.randomUUID(), role: 'user', content: text }],
+      text,
+      checkedAgainst,
+    );
+  }, [blocked, checkedAgainst, draft, entries, run, streaming]);
 
   const retry = useCallback(() => {
     const index = lastUserIndex(entries);
-    if (index === -1 || streaming) return;
-    void run(entries.slice(0, index + 1), null);
-  }, [entries, run, streaming]);
+    if (index === -1 || streaming || !checkedAgainst) return;
+    void run(entries.slice(0, index + 1), null, checkedAgainst);
+  }, [checkedAgainst, entries, run, streaming]);
 
   const stop = useCallback(() => controllerRef.current?.abort(), []);
 
@@ -178,6 +214,10 @@ export function GuestChat({ dailyLimit, signInHref, signUpHref }: GuestChatProps
         </Link>
       </div>
     </div>
+  ) : checkedAgainst === undefined ? (
+    <div aria-hidden className="min-h-[52px]" />
+  ) : checkedAgainst === null ? (
+    <GuestAgeStep focusOnMount={ageRefused} onChecked={confirmAge} />
   ) : (
     <div className="flex flex-row items-end gap-2 rounded-2xl border border-[var(--chat-border-strong)] bg-[var(--chat-input-bg)] p-1.5 transition-all duration-quick focus-within:shadow-e2 focus-within:ring-2 focus-within:ring-[var(--chat-focus-ring)]">
       <textarea

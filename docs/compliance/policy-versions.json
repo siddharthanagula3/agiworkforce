@@ -121,6 +121,12 @@
           "digest": "a4e5ebd956a7e336",
           "summary": "Corrects what happens to your data when you delete your account. Erasure is scheduled 24 hours after the request and carried out by a daily job, and if an active legal hold covers your account, erasure waits until the hold is released. The terms used to say the request schedules permanent erasure 24 hours later without that exception. The product already worked this way, and you do not need to accept the terms again. The hosted mode is also called Cloud throughout, where it said Managed Cloud.",
           "note": "Ship-day version. The text is the 2026-11-11 version unchanged (same digest), re-dated to 2026-11-13, the day it is first deployed to production, under the owner's standing rule that a release carrying policy text moves the date to the ship day. Production served the 2026-10-08 version until this release (application commit a8e278c62e, as the release lead verified for this release), so the 2026-11-11 version was never published and this is the first published version since 2026-10-08. Against what production served it carries the 2026-11-11 correction to section 12 on account deletion (substantive) and the editorial Cloud rename recorded under 2026-10-08; each keeps the materiality its own entry records, and the public summary here states the whole change against the 2026-10-08 version."
+        },
+        {
+          "date": "2026-11-20",
+          "digest": "10263568328a48ce",
+          "summary": "AGI is now for adults. You must be at least 18, or older where the law where you live sets a higher age, to create an account or use AGI, and no one can accept these terms for someone younger. The earlier rule allowed accounts from 13 with a parent or guardian's permission. Every account without a decision on record, including accounts created before this version, is asked its age at its next sign-in and cannot use AGI until it gives an age of 18 or over; settings and billing stay open so it can export its data, delete the account or cancel. The age is not verified, and an account found to be under 18 cannot use AGI. Chat without an account, where offered, asks your age first.",
+          "note": "Substantive. On 2026-11-20 the owner decided AGI is for adults (18 and over) on every consumer surface, superseding the 2026-10-07 rule (13 and over, with a parent or guardian's permission under 18) and decision 30 of 2026-10-22. Section 02 now states the adults-only rule, the age check at sign-up and at the next sign-in for accounts with no decision, what stays reachable, that the age is self-declared, and the guest chat check. The change is material under the Changes row of section 18; MIN_REQUIRED_TERMS_VERSION in apps/web/lib/server/terms.ts was deliberately left null on the brief's instruction, and whether asking existing accounts at once squares with the 30-day notice clause is flagged for counsel. The text follows the implementation: ACCOUNT_MINIMUM_AGE and the removal of PARENTAL_PERMISSION_BELOW_AGE in packages/contracts/types/src/account-eligibility.ts; the decision record in apps/web/db/neon/0425_adult_eligibility.sql and apps/web/lib/server/adult-eligibility.ts; the review screen in apps/web/app/login/complete/page.tsx; the gates in apps/web/lib/server/require-adult-eligibility.ts and adult-eligibility-gate.ts. Dated 2026-11-20, the day the owner decided the rule; under the owner's standing rule that a release carrying policy text moves the date to the ship day, re-date it if it ships later."
         }
       ]
     },
@@ -278,6 +284,12 @@
           "digest": "634ff4532bf255c7",
           "summary": "Says that on the Free plan AGI chooses the default model and you may pick another model the plan includes, within a usage allowance, and that a Free chat on a model from Anthropic goes to Anthropic. Removes the statement that paid plans have more capacity than Free.",
           "note": "Substantive: it names a provider a Free chat can now reach. Since f9637bc3ee a Free account can pick a model from Anthropic besides the default, which stays on a model AGI chooses; the summary sentence at the top of the page and the Free plan paragraph of the providers section now say so, pinned by apps/web/app/privacy/__tests__/free-plan-model-claims.test.ts. The clause saying paid plans have more capacity left because the Free allowance is above the Basic allowance in every window since the same commit. Dated 2026-11-16, the day this text is planned to ship, under the owner's standing rule that a release carrying policy text moves the date to the ship day."
+        },
+        {
+          "date": "2026-11-20",
+          "digest": "480b103bac71815d",
+          "summary": "AGI is now for adults: you must be at least 18. Section 09 sets out how your age is asked on the web, in chat without an account, for accounts with no decision on record and on a phone; that the age you type at sign-up is not stored or sent, while an age you confirm at sign-in is sent once and not kept; and that the account keeps only the decision, never an age, an age range or a birth date, and erases it with the account. The earlier policy said accounts were open from 13 with a parent or guardian's permission and that the age never reached our servers.",
+          "note": "Substantive. On 2026-11-20 the owner decided AGI is for adults (18 and over) on every consumer surface, superseding the 2026-10-07 rule (13 and over, with a parent or guardian's permission under 18) and decision 30 of 2026-10-22. The Account row of what we collect now lists the eligibility decision the server keeps, and section 09 replaces the parental-permission rule and the sentence that the age is not sent to our servers, which is no longer true for an account asked at sign-in or for a Cloud account on the phone. It also discloses the age check before guest chat. It replaces the 2026-11-16 version, which production had not served by the last publications record. The text follows the implementation: ACCOUNT_MINIMUM_AGE and the removal of PARENTAL_PERMISSION_BELOW_AGE in packages/contracts/types/src/account-eligibility.ts; the decision record in apps/web/db/neon/0425_adult_eligibility.sql and apps/web/lib/server/adult-eligibility.ts; the review screen in apps/web/app/login/complete/page.tsx; the gates in apps/web/lib/server/require-adult-eligibility.ts and adult-eligibility-gate.ts. Dated 2026-11-20, the day the owner decided the rule; under the owner's standing rule that a release carrying policy text moves the date to the ship day, re-date it if it ships later."
         }
       ]
     },
@@ -364,6 +376,12 @@
           "digest": "19bda3eaa7d527a1",
           "summary": "Corrects the deletion terms. Erasure after an account deletion request or termination is scheduled 24 hours out and carried out by a daily job, and if an active legal hold covers the account, including one the Customer places on its workspace, erasure waits until the hold is released. The agreement used to say erasure is performed without that exception. The hosted mode is also called Cloud throughout, where it said Managed Cloud. No processing, sub-processor, role or transfer changes.",
           "note": "Ship-day version. The text is the 2026-11-11 version unchanged (same digest), re-dated to 2026-11-13, the day it is first deployed to production, under the owner's standing rule that a release carrying policy text moves the date to the ship day. Production served the 2026-10-08 version until this release (application commit a8e278c62e, as the release lead verified for this release), so the 2026-11-11 version was never published and this is the first published version since 2026-10-08. Against what production served it carries the 2026-11-11 correction to the deletion terms (substantive) and the editorial Cloud rename recorded under 2026-10-08; each keeps the materiality its own entry records, and the public summary here states the whole change against the 2026-10-08 version."
+        },
+        {
+          "date": "2026-11-20",
+          "digest": "d2ce941b8d06d159",
+          "summary": "The DPDP Children row now says AGI is not offered to anyone under 18, so it does not seek parental consent for anyone; that sign-up and the check at an existing account's next sign-in refuse an age under 18; that the age is self-declared apart from a phone's age range; and that only the decision is kept. It used to describe the earlier rule, accounts from 13 with a parent or guardian's permission.",
+          "note": "Substantive. On 2026-11-20 the owner decided AGI is for adults (18 and over) on every consumer surface, superseding the 2026-10-07 rule (13 and over, with a parent or guardian's permission under 18) and decision 30 of 2026-10-22. Only the Children (s. 9) row of the DPDP table changes; no processing, sub-processor, role or transfer changes. The text follows the implementation: ACCOUNT_MINIMUM_AGE and the removal of PARENTAL_PERMISSION_BELOW_AGE in packages/contracts/types/src/account-eligibility.ts; the decision record in apps/web/db/neon/0425_adult_eligibility.sql and apps/web/lib/server/adult-eligibility.ts; the review screen in apps/web/app/login/complete/page.tsx; the gates in apps/web/lib/server/require-adult-eligibility.ts and adult-eligibility-gate.ts. Dated 2026-11-20, the day the owner decided the rule; under the owner's standing rule that a release carrying policy text moves the date to the ship day, re-date it if it ships later."
         }
       ]
     },
@@ -436,6 +454,12 @@
           "date": "2026-10-08",
           "digest": "a081185ecc55ed1e",
           "note": "Editorial, recorded 2026-11-10. After the product-name change the local storage row read a Chat or an Work thread, and the entry before this one corrected the article in a literal string. The row now renders both names from PRODUCT_NAMES with the article productNameWithArticle in packages/contracts/types/src/product-names.ts derives from each name, so it reads a Chat or a Work thread and follows any later rename. Nothing stored, read or kept changes, so the date does not move."
+        },
+        {
+          "date": "2026-11-20",
+          "digest": "0855ca783aa8df93",
+          "summary": "Adds two entries to what we put on your device: the minimum age the sign-up screen checked your typed age against, kept for the length of a sign-up and sent once with your acceptance of the terms, and, where chat without an account is offered, the minimum age the chat screen checked against, kept until you clear site data and sent with each message. Neither holds your age.",
+          "note": "Substantive: two device storage rows added. AGE_CHECK_STORAGE_KEY (agi.age-checked-minimum) in apps/web/app/signup/signupAttemptMarkers.ts, written by writeSignupAttemptMarkers and removed by clearSignupAttemptMarkers; agi.guest-age-checked-minimum for guest chat under apps/web/features/chat/guest, as the coordinator described it on 2026-11-20. Dated 2026-11-20, the day the owner decided the rule; under the owner's standing rule that a release carrying policy text moves the date to the ship day, re-date it if it ships later."
         }
       ]
     },
@@ -712,6 +736,12 @@
           "digest": "8a5ec86fbe9902dd",
           "summary": "Corrects what the page says about Desktop. Desktop chat uses Cloud and keeps no chat database of its own. A local coding session in Desktop runs the CLI and can use the same local runtimes as CLI Local mode; for it, Desktop signs the CLI in to your account, and the CLI keeps that sign-in in the operating system credential store. The page used to call Desktop cloud only. The hosted mode is also called Cloud throughout, where it said Managed Cloud.",
           "note": "Ship-day version. The text is the 2026-11-10 version unchanged (same digest), re-dated to 2026-11-13, the day it is first deployed to production, under the owner's standing rule that a release carrying policy text moves the date to the ship day. Production served the 2026-10-08 version until this release (application commit a8e278c62e, as the release lead verified for this release), so the 2026-11-10 version was never published and this is the first published version since 2026-10-08. Against what production served it carries the 2026-11-10 Desktop correction (substantive) and the editorial Cloud rename recorded under 2026-10-08; each keeps the materiality its own entry records, and the public summary here states the whole change against the 2026-10-08 version."
+        },
+        {
+          "date": "2026-11-20",
+          "digest": "fc06a582395f7ae1",
+          "summary": "The India row now names the age gap correctly. AGI is not offered to anyone under 18, so the gap is that the age is self-declared and not verified, rather than missing parental consent for accounts held from 13.",
+          "note": "Substantive, one row. On 2026-11-20 the owner decided AGI is for adults (18 and over) on every consumer surface, superseding the 2026-10-07 rule (13 and over, with a parent or guardian's permission under 18) and decision 30 of 2026-10-22. The India: DPDP Act, 2023 row named no verifiable parental consent as a gap, which followed from the earlier rule; it now names no age verification, matching /privacy/india section 09. Dated 2026-11-20, the day the owner decided the rule; under the owner's standing rule that a release carrying policy text moves the date to the ship day, re-date it if it ships later."
         }
       ]
     },
@@ -792,6 +822,12 @@
           "digest": "c482db09e8400a02",
           "note": "The trial conversion clause now says the plan is billed every month, removing the choice of yearly billing at checkout that the trial does not offer. First recorded under 2026-10-07, the day it reached main, when the launch was expected that day. Production never served that date, so the entry is dated 2026-10-08, the day it ships. Same-day revision before release on the owner’s decision: the age to take part drops from 18 to the account minimum, read from ACCOUNT_MINIMUM_AGE, and anyone under PARENTAL_PERMISSION_BELOW_AGE needs a parent or guardian’s permission, as terms section 02 says. Nothing in the referral code enforced 18.",
           "summary": "A referral trial that converts to a paid plan is billed every month; the earlier text also mentioned yearly billing, which the trial does not offer. The age to take part changes: you must be at least 13, where the terms said 18, and anyone under 18 needs permission from a parent or guardian."
+        },
+        {
+          "date": "2026-11-20",
+          "digest": "c970bb8f72d11221",
+          "summary": "To take part in the referral program you must now be at least 18, the account minimum in section 02 of the terms of service. The parent or guardian permission route for younger members is gone.",
+          "note": "Substantive. On 2026-11-20 the owner decided AGI is for adults (18 and over) on every consumer surface, superseding the 2026-10-07 rule (13 and over, with a parent or guardian's permission under 18) and decision 30 of 2026-10-22. The How it works paragraph follows terms section 02. Dated 2026-11-20, the day the owner decided the rule; under the owner's standing rule that a release carrying policy text moves the date to the ship day, re-date it if it ships later."
         }
       ]
     },
@@ -939,6 +975,12 @@
           "digest": "2fde846265885049",
           "summary": "Corrects two rows. Local mode isolation and Desktop credential storage said Desktop uses Cloud only. Desktop chat does, but its local coding sessions run the CLI, which can use a local model or a provider key set up in the CLI, and Desktop signs that CLI in to your account, which keeps the sign-in in the operating system credential store. The hosted mode is also called Cloud throughout, and the Managed Cloud maturity row is now Cloud maturity.",
           "note": "Ship-day version. The text is the 2026-11-10 version unchanged (same digest), re-dated to 2026-11-13, the day it is first deployed to production, under the owner's standing rule that a release carrying policy text moves the date to the ship day. Production served the 2026-10-18 version until this release (application commit a8e278c62e, as the release lead verified for this release), so the 2026-11-10 version was never published and this is the first published version since 2026-10-18. Against what production served it carries the 2026-11-10 correction of the Local mode isolation and Desktop credential storage rows (substantive) and the editorial Cloud rename recorded under 2026-10-18. The top row of the page's own change record moves from 2026-11-10 to 2026-11-13 with it; that label is a single token, outside the digest, and the rows keep their as-of date of 2026-11-10 from docs/compliance/trust-claims.json; each keeps the materiality its own entry records, and the public summary here states the whole change against the 2026-10-18 version."
+        },
+        {
+          "date": "2026-11-20",
+          "digest": "c878817192d6a9da",
+          "summary": "Corrects the DPDP parental consent row, with no review of the rest of the page. AGI is now for adults only, so parental consent is not sought; the row says how the age is checked, that the server keeps only the decision, and that the remaining gap is that the age is self-declared and not verified.",
+          "note": "Substantive. On 2026-11-20 the owner decided AGI is for adults (18 and over) on every consumer surface, superseding the 2026-10-07 rule (13 and over, with a parent or guardian's permission under 18) and decision 30 of 2026-10-22. One posture row and the change record move; docs/compliance/trust-claims.json records the review. Dated 2026-11-20, the day the owner decided the rule; under the owner's standing rule that a release carrying policy text moves the date to the ship day, re-date it if it ships later."
         }
       ]
     },
@@ -1048,6 +1090,12 @@
           "date": "2026-10-08",
           "digest": "fc6c989d28ec4b27",
           "note": "Editorial, recorded 2026-11-10. Product-name change in commit 3a0d329bb4 (2026-11-08): app names drop the AGI prefix, as PRODUCT_NAMES in packages/contracts/types/src/product-names.ts now does, and the hosted mode is now called Cloud, the label PRIVACY_MODE_DISPLAY.managed carries in packages/contracts/types/src/suite-contracts.ts. AGI Mobile now reads Mobile, and managed-cloud, managed cloud and AGI Cloud read cloud or Cloud, in the page description, the planned mode boundary, the data table, the analytics paragraph, the training statement, the AI Act section, the age rule and the app terms. No other word changed and nothing planned to be collected, used or shared changes, so the date does not move."
+        },
+        {
+          "date": "2026-11-20",
+          "digest": "1d99112f2693b501",
+          "summary": "Mobile is now for adults: you must be at least 18. The app checks before anything else, Local mode included, using the phone's age range where the operating system offers one and a typed age otherwise, keeps only the outcome and the operating system's answer, never a typed age, and refuses a phone found to be used by someone under 18 except for sign-out, export and erasure. The earlier page allowed accounts from 13 with a parent or guardian's permission.",
+          "note": "Substantive. On 2026-11-20 the owner decided AGI is for adults (18 and over) on every consumer surface, superseding the 2026-10-07 rule (13 and over, with a parent or guardian's permission under 18) and decision 30 of 2026-10-22. The Children paragraph follows apps/mobile/src/features/auth/services/ageGate.ts, rootRouting.ts, apps/mobile/src/features/age-assurance/ageAssurance.ts and ageAssuranceRecord.ts and apps/mobile/src/features/auth/components/AgeRefused.tsx as reported finished on 2026-11-20. Dated 2026-11-20, the day the owner decided the rule; under the owner's standing rule that a release carrying policy text moves the date to the ship day, re-date it if it ships later."
         }
       ]
     },
@@ -1167,6 +1215,12 @@
           "digest": "e0226f1b2dc6ecfb",
           "summary": "Corrects what the notice says about Desktop: Desktop chat uses Cloud, as before, and a local coding session in Desktop runs the CLI on your computer and can use a model that Ollama or LM Studio serves there; the notice used to say the Desktop app does not expose Local inference. Corrects what it says about deleting your account: erasure is scheduled 24 hours after the request and carried out by a daily job, and if an active legal hold covers your account, erasure waits until the hold is released. The notice used to say the account was permanently erased 24 hours after the request. The hosted mode is also called Cloud throughout, where it said Managed Cloud, and the install-notice purpose names the apps without the AGI prefix.",
           "note": "Ship-day version. The text is the 2026-11-11 version unchanged (same digest), re-dated to 2026-11-13, the day it is first deployed to production, under the owner's standing rule that a release carrying policy text moves the date to the ship day. Production served the 2026-10-15 version until this release (application commit a8e278c62e, as the release lead verified for this release), so the 2026-11-10 and 2026-11-11 versions were never published and this is the first published version since 2026-10-15. Against what production served it carries the 2026-11-10 Desktop correction (substantive), the 2026-11-11 account deletion correction (substantive) and the editorial Cloud rename recorded under 2026-10-15; each keeps the materiality its own entry records, and the public summary here states the whole change against the 2026-10-15 version."
+        },
+        {
+          "date": "2026-11-20",
+          "digest": "435b9c3fb86b32e3",
+          "summary": "AGI is not offered to anyone under 18, so no parent or guardian is asked to consent for anyone. The notice now says how the age is checked, that only the outcome is kept, and that the age is self-declared and not verified, which remains an open item under the Act. The earlier notice said accounts could be held from 13 with a parent or guardian's permission.",
+          "note": "Substantive. On 2026-11-20 the owner decided AGI is for adults (18 and over) on every consumer surface, superseding the 2026-10-07 rule (13 and over, with a parent or guardian's permission under 18) and decision 30 of 2026-10-22. Section 09 and the account row now state the adults-only rule and what is kept; the statement of what the Act requires for a child is unchanged. The text follows the implementation: ACCOUNT_MINIMUM_AGE and the removal of PARENTAL_PERMISSION_BELOW_AGE in packages/contracts/types/src/account-eligibility.ts; the decision record in apps/web/db/neon/0425_adult_eligibility.sql and apps/web/lib/server/adult-eligibility.ts; the review screen in apps/web/app/login/complete/page.tsx; the gates in apps/web/lib/server/require-adult-eligibility.ts and adult-eligibility-gate.ts. Dated 2026-11-20, the day the owner decided the rule; under the owner's standing rule that a release carrying policy text moves the date to the ship day, re-date it if it ships later."
         }
       ]
     },

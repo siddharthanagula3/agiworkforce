@@ -175,6 +175,8 @@ jest.mock('react-native-safe-area-context', () => {
 import LoginScreen from '../app/(auth)/login';
 import { useAuthStore } from '../src/features/auth/store';
 import { useTermsAcceptanceStore } from '../src/features/auth/store/termsAcceptanceStore';
+import { useAdultEligibilityStore } from '../src/features/auth/store/adultEligibilityStore';
+import { ACCOUNT_AGE_REQUIREMENT_NOTICE } from '@agiworkforce/types';
 import { useTierStore } from '../src/features/billing/store';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import {
@@ -221,6 +223,7 @@ describe('LoginScreen', () => {
       clerkUserId: null,
     });
     useTermsAcceptanceStore.getState().reset();
+    useAdultEligibilityStore.getState().reset();
     resetPostAuthDestinationToLocal();
     lastAuthViewProps = {};
     mockSignUp.status = 'missing_requirements';
@@ -1164,6 +1167,7 @@ describe('LoginScreen', () => {
       clerkUserId: ownerId,
     });
     useTermsAcceptanceStore.setState({ userId: ownerId, status: 'accepted' });
+    useAdultEligibilityStore.setState({ userId: ownerId, status: 'confirmed' });
     const expectedModelId = getDefaultCloudModelIdForTier(useTierStore.getState().tier);
     expect(expectedModelId).toBeDefined();
 
@@ -1186,6 +1190,7 @@ describe('LoginScreen', () => {
       status: 'required',
       currentVersion: 'current-policy',
     });
+    useAdultEligibilityStore.setState({ userId: ownerId, status: 'confirmed' });
 
     const screen = render(<LoginScreen />);
 
@@ -1199,6 +1204,107 @@ describe('LoginScreen', () => {
 
     expect(peekPostAuthIntent()).toBeNull();
     expect(useChatAppModeStore.getState().appMode).toBe('cloud');
+  });
+
+  describe('the account’s age for AGI Cloud', () => {
+    const ownerId = 'fixture-age-owner';
+
+    beforeEach(() => {
+      mockIsSignedIn = true;
+      mockUserId = ownerId;
+      mockSearchParams = { [POST_AUTH_INTENT_PARAM]: CLOUD_CHAT_POST_AUTH_INTENT };
+      useWaitlistStore.getState().setCloudAccess(true);
+      useTermsAcceptanceStore.setState({ userId: ownerId, status: 'accepted' });
+    });
+
+    it('keeps a pending Cloud destination in Local Mode until the age is confirmed', () => {
+      useAdultEligibilityStore.setState({ userId: ownerId, status: 'checking' });
+
+      render(<LoginScreen />);
+
+      expect(peekPostAuthIntent()).toBe(CLOUD_CHAT_POST_AUTH_INTENT);
+      expect(useChatAppModeStore.getState().appMode).toBe('local');
+
+      act(() => {
+        useAdultEligibilityStore.setState({ status: 'confirmed' });
+      });
+
+      expect(peekPostAuthIntent()).toBeNull();
+      expect(useChatAppModeStore.getState().appMode).toBe('cloud');
+    });
+
+    it('asks for the typed age before the Terms and sends it when the server needs it', async () => {
+      const submitAge = jest.fn(async () => undefined);
+      const originalSubmit = useAdultEligibilityStore.getState().submitAge;
+      useTermsAcceptanceStore.setState({
+        userId: ownerId,
+        status: 'required',
+        currentVersion: 'current-policy',
+      });
+      useAdultEligibilityStore.setState({ userId: ownerId, status: 'age_required', submitAge });
+
+      try {
+        const screen = render(<LoginScreen />);
+
+        expect(screen.getByTestId('mobile-age-check')).toBeTruthy();
+        expect(screen.queryByTestId('mobile-terms-review')).toBeNull();
+        expect(screen.getByText(ACCOUNT_AGE_REQUIREMENT_NOTICE)).toBeTruthy();
+
+        fireEvent.changeText(screen.getByTestId('mobile-age-check-input'), 'abc');
+        fireEvent.changeText(screen.getByTestId('mobile-age-check-input'), '0');
+        fireEvent.press(screen.getByTestId('mobile-age-check-continue'));
+        expect(screen.getByTestId('mobile-age-check-error')).toBeTruthy();
+        expect(submitAge).not.toHaveBeenCalled();
+
+        fireEvent.changeText(screen.getByTestId('mobile-age-check-input'), '34');
+        fireEvent.press(screen.getByTestId('mobile-age-check-continue'));
+
+        expect(submitAge).toHaveBeenCalledWith(ownerId, 34);
+        expect(useChatAppModeStore.getState().appMode).toBe('local');
+      } finally {
+        useAdultEligibilityStore.setState({ submitAge: originalSubmit });
+      }
+    });
+
+    it('shows the refused screen for an ineligible account and keeps Cloud closed', () => {
+      useAdultEligibilityStore.setState({ userId: ownerId, status: 'ineligible' });
+
+      const screen = render(<LoginScreen />);
+
+      expect(screen.getByTestId('age-gate-refusal')).toHaveTextContent(
+        ACCOUNT_AGE_REQUIREMENT_NOTICE,
+      );
+      expect(screen.getByTestId('age-gate-refused-account-data')).toBeTruthy();
+      expect(screen.queryByTestId('age-gate-refused-erase')).toBeNull();
+      expect(peekPostAuthIntent()).toBe(CLOUD_CHAT_POST_AUTH_INTENT);
+      expect(useChatAppModeStore.getState().appMode).toBe('local');
+
+      fireEvent.press(screen.getByTestId('age-gate-refused-continue-local'));
+      expect(mockReplace).toHaveBeenCalledWith('/(app)');
+      expect(peekPostAuthIntent()).toBeNull();
+    });
+
+    it('offers a retry after a failed check and never opens Cloud', () => {
+      const verify = jest.fn(async () => undefined);
+      const originalVerify = useAdultEligibilityStore.getState().verify;
+      useAdultEligibilityStore.setState({
+        userId: ownerId,
+        status: 'error',
+        error: 'Could not confirm your age for AGI Cloud. Retry to continue.',
+        verify,
+      });
+
+      try {
+        const screen = render(<LoginScreen />);
+
+        expect(screen.getByText('AGI Cloud sign-in could not finish')).toBeTruthy();
+        fireEvent.press(screen.getByTestId('mobile-age-check-retry'));
+        expect(verify).toHaveBeenCalledWith(ownerId);
+        expect(useChatAppModeStore.getState().appMode).toBe('local');
+      } finally {
+        useAdultEligibilityStore.setState({ verify: originalVerify });
+      }
+    });
   });
 
   it('requires an explicit click before recording the current Terms for a signed-in account', () => {

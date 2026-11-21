@@ -12,6 +12,10 @@ type ScanModule6 = typeof import('@/lib/services/provider-adapter-service');
 const budget = vi.hoisted(() => ({ attemptMs: 40, turnMs: 90 }));
 const HANG_MS = 5_000;
 
+vi.mock('@/lib/server/adult-eligibility', async (importOriginal) => ({
+  ...(await importOriginal()),
+  readAdultEligibilityState: vi.fn(async () => 'confirmed'),
+}));
 vi.mock('@/lib/deadline-policy', async (importOriginal) => ({
   ...(await importOriginal<ScanModule0>()),
   PROVIDER_FIRST_TOKEN_DEADLINE_MS: budget.attemptMs,

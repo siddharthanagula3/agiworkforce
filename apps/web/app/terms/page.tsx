@@ -1,6 +1,6 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import { PageLink } from '@shared/components/layout/EmbeddedPage';
-import { ACCOUNT_MINIMUM_AGE, PARENTAL_PERMISSION_BELOW_AGE } from '@agiworkforce/types';
+import { ACCOUNT_MINIMUM_AGE } from '@agiworkforce/types';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { PolicyContents } from '@shared/components/legal/PolicyContents';
@@ -323,16 +323,34 @@ export default function TermsPage() {
                     02 · Eligibility and age
                   </h2>
                   <Prose>
-                    You must be at least {ACCOUNT_MINIMUM_AGE} years old to create an account. If
-                    you are under {PARENTAL_PERMISSION_BELOW_AGE}, you need permission from a parent
-                    or guardian, who accepts these terms on your behalf and is responsible for your
-                    use. Sign-up asks for your age and refuses anyone under {ACCOUNT_MINIMUM_AGE};
-                    we do not verify the age you enter or the permission, and the age you enter is
-                    not kept. AGI is not offered to children under {ACCOUNT_MINIMUM_AGE}, and in
-                    jurisdictions setting a higher digital-consent age, including the European Union
-                    and the United Kingdom, where it may be 16, and India, where processing
-                    children&rsquo;s data requires verifiable parental consent, that higher
-                    threshold applies instead.
+                    AGI is for adults. You must be at least {ACCOUNT_MINIMUM_AGE} years old to
+                    create an account or use AGI, or older where the law of the place you live sets
+                    a higher age to agree to these terms. AGI is not offered to anyone younger, and
+                    no one may accept these terms on behalf of someone under {ACCOUNT_MINIMUM_AGE}.
+                  </Prose>
+                  <Prose>
+                    Sign-up asks for your age in years and refuses anyone under{' '}
+                    {ACCOUNT_MINIMUM_AGE} before an account is created. The rule applies to every
+                    account, including one created before this version of these terms: an account
+                    with no decision on record that its holder is {ACCOUNT_MINIMUM_AGE} or over is
+                    asked its age at its next sign-in, and it cannot use AGI until it gives an age
+                    of {ACCOUNT_MINIMUM_AGE} or over. While it is asked, or if it is refused, its
+                    settings and billing stay open, so it can still export its data, delete the
+                    account and manage or cancel its subscription. Where chat without an account is
+                    offered, it asks your age in years once in each browser before your first
+                    message, and stays closed to anyone who gives an age under {ACCOUNT_MINIMUM_AGE}
+                    .
+                  </Prose>
+                  <Prose>
+                    We do not verify the age you give. It is your own statement, except on a phone
+                    whose operating system reports an age range, where that range is used. If we
+                    learn that an account holder is under {ACCOUNT_MINIMUM_AGE}, the account can no
+                    longer use AGI and a later answer does not reopen it; contact us if you believe
+                    that is a mistake. What we keep about the check is set out in section 09 of the{' '}
+                    <PageLink href="/privacy#s-09" className="agi-ds-link">
+                      privacy policy
+                    </PageLink>
+                    .
                   </Prose>
                   <Prose>
                     If you accept these terms for an organisation, you represent that you are

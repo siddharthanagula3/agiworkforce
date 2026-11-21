@@ -12,13 +12,11 @@ import {
   AUTH_OPTIONAL_CONSENT_CLASS,
   AUTH_PRIMARY_BUTTON_CLASS,
 } from '@/features/auth/authStyles';
-import { AuthAgeConfirmation } from '@/features/auth/AuthAgeConfirmation';
 import { AuthMarketingEmailConsent } from '@/features/auth/AuthMarketingEmailConsent';
 import {
   MarketingEmailGrantProvider,
   useMarketingEmailChoice,
 } from '@/features/auth/marketingEmailChoice';
-import { useSignupAgeGate } from '@/features/auth/useSignupAgeGate';
 
 import {
   clearSignupAttemptMarkers,
@@ -33,27 +31,22 @@ export function TermsGate({
   blockedMessage = 'Accept the terms above to create an account. Local Mode stays free and needs no account.',
   restorePreAuthMarker = true,
   confirmationLabel,
-  confirmAge = false,
   offerMarketingEmail = false,
   optedOutBySignal = false,
 }: {
   children: ReactNode;
   blockedMessage?: ReactNode;
   restorePreAuthMarker?: boolean;
+  confirmationLabel?: string;
   offerMarketingEmail?: boolean;
   optedOutBySignal?: boolean;
-} & (
-  | { confirmationLabel: string; confirmAge?: boolean }
-  | { confirmationLabel?: undefined; confirmAge?: false }
-)) {
+}) {
   const [accepted, setAccepted] = useState(false);
-  const ageGate = useSignupAgeGate(confirmAge);
   const [hydrated, setHydrated] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
   const marketingEmail = useMarketingEmailChoice(optedOutBySignal);
   const checkboxId = useId();
   const noteId = useId();
-  const ready = accepted && (!confirmAge || ageGate.verdict === 'eligible');
   const marketingEmailGrant =
     offerMarketingEmail && marketingEmail.wanted ? POLICY_LAST_UPDATED.privacy : null;
 
@@ -64,14 +57,12 @@ export function TermsGate({
 
   const onToggle = (next: boolean) => {
     setAccepted(next);
-    if (next) writeSignupAttemptMarkers({ marketingEmail: false });
+    if (next) writeSignupAttemptMarkers({ marketingEmail: false, ageCheckedAgainst: null });
     else clearSignupAttemptMarkers();
   };
 
   return (
     <div className={confirmationLabel ? 'flex flex-col' : 'flex flex-col gap-5'}>
-      {confirmAge ? <AuthAgeConfirmation gate={ageGate} disabled={!hydrated || confirmed} /> : null}
-
       <label htmlFor={checkboxId} className={AUTH_CHECK_ROW_CLASS}>
         <input
           id={checkboxId}
@@ -122,11 +113,11 @@ export function TermsGate({
           type="button"
           className={AUTH_PRIMARY_BUTTON_CLASS}
           disabled={!hydrated || !accepted}
-          onClick={() => ageGate.admit(() => setConfirmed(true))}
+          onClick={() => setConfirmed(true)}
         >
           {confirmationLabel}
         </button>
-      ) : ready ? (
+      ) : accepted ? (
         <div className={confirmationLabel ? 'mt-8' : undefined}>
           <MarketingEmailGrantProvider value={marketingEmailGrant}>
             {children}

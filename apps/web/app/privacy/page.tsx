@@ -1,6 +1,6 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import { PageLink } from '@shared/components/layout/EmbeddedPage';
-import { ACCOUNT_MINIMUM_AGE, PARENTAL_PERMISSION_BELOW_AGE } from '@agiworkforce/types';
+import { ACCOUNT_MINIMUM_AGE } from '@agiworkforce/types';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { PolicyContents } from '@shared/components/legal/PolicyContents';
@@ -171,8 +171,10 @@ const COLLECT_LEDGER: readonly LedgerRow[] = [
     value: (
       <>
         <strong>Examples:</strong> email, account ID, authentication metadata held by our identity
-        provider. Sign-up also asks for your age; it is checked in your browser and is not stored,
-        sent to our servers or sent to our identity provider.
+        provider. The outcome of the age check: whether the account holder was found to be at least{' '}
+        {ACCOUNT_MINIMUM_AGE}, the minimum age it was judged against, whether it came from an age
+        you gave or a phone&rsquo;s age range, the app it came from and when. Never the age itself,
+        an age range or a birth date. Section 09 says how the age is asked.
         <br />
         <strong>Why, and how it is protected:</strong> authentication, and optional marketing email
         only if you choose &ldquo;{MARKETING_EMAIL_CONSENT_PURPOSE.label}&rdquo; separately. We do
@@ -1613,18 +1615,84 @@ export default function PrivacyPage() {
                     09 · Children
                   </h2>
                   <Prose>
-                    You must be at least {ACCOUNT_MINIMUM_AGE} to create an account, and anyone
-                    under {PARENTAL_PERMISSION_BELOW_AGE} needs permission from a parent or
-                    guardian, as set out in section 02 of the{' '}
+                    AGI is for adults. You must be at least {ACCOUNT_MINIMUM_AGE} to create an
+                    account or use AGI, as set out in section 02 of the{' '}
                     <PageLink href="/terms" className="agi-ds-link">
                       terms
                     </PageLink>
-                    . Sign-up asks for your age to apply that rule. The number is checked in your
-                    browser and is not stored, sent to our servers or sent to our identity provider,
-                    and we do not verify it or the permission. We do not knowingly collect personal
-                    data from children under {ACCOUNT_MINIMUM_AGE}, or under the higher
-                    digital-consent age where one applies. If you believe a child has provided us
-                    data, email us and we will delete it.
+                    , and we do not knowingly collect personal data from anyone younger, or younger
+                    than a higher age the law sets where you live. If you believe someone under{' '}
+                    {ACCOUNT_MINIMUM_AGE} has given us personal data, email us and we will delete
+                    it.
+                  </Prose>
+                  <Prose>
+                    <strong>On the web.</strong> Sign-up asks for your age in years and judges it in
+                    your browser. Anyone under {ACCOUNT_MINIMUM_AGE} is refused there and no account
+                    is created. The age you type is not stored and is not sent to us or to our
+                    identity provider. For the length of the sign-up, your browser keeps only the
+                    minimum age the screen checked against (see the{' '}
+                    <PageLink href="/cookies" className="agi-ds-link">
+                      cookie policy
+                    </PageLink>
+                    ), and that minimum is sent to us once, with your acceptance of the terms.
+                  </Prose>
+                  <Prose>
+                    <strong>Chat without an account.</strong> Where it is offered, the chat screen
+                    asks your age in years before your first message and judges it in your browser.
+                    If you give an age under {ACCOUNT_MINIMUM_AGE}, you cannot send a message. The
+                    age you type is not stored and is not sent. Your browser keeps the minimum age
+                    it checked against until you clear site data, so you are not asked on every
+                    visit, and sends that minimum with each message; a message sent without it is
+                    refused. We keep no record of the check for a visitor without an account.
+                  </Prose>
+                  <Prose>
+                    <strong>Accounts with no decision on record.</strong> That includes every
+                    account created before this rule, an account created by signing in with Google,
+                    GitHub or Apple from the log-in screen, and one created in another AGI app. At
+                    its next sign-in the account is asked once to confirm its age. An age under{' '}
+                    {ACCOUNT_MINIMUM_AGE} is refused on the screen and is not sent. Any other age is
+                    sent to our server once, judged there and not kept. A decision made under the
+                    earlier rule, which admitted accounts from 13, does not count, so those accounts
+                    are asked again. Until a decision that the holder is {ACCOUNT_MINIMUM_AGE} or
+                    over is on record, the product pages, such as chat, code and workspace, send the
+                    account back to that question, Cloud requests are refused, and the CLI, the
+                    desktop app and the editor extension cannot be signed in to it. Settings and
+                    billing stay open, so the account can export its data, delete the account,
+                    manage its subscription and make a request at{' '}
+                    <PageLink href="/privacy/requests" className="agi-ds-link">
+                      /privacy/requests
+                    </PageLink>
+                    . Calls made with an API key are not asked one by one.
+                  </Prose>
+                  <Prose>
+                    <strong>On a phone.</strong> The app checks before anything else, before
+                    onboarding, Local mode or sign-in. It asks the operating system whether you are{' '}
+                    {ACCOUNT_MINIMUM_AGE} or over where it can answer, and asks you to type your age
+                    otherwise. The phone keeps the outcome, the minimum age it was judged against
+                    and, where the operating system answered, that answer, including the age range
+                    it reported. A typed age is not kept. A result from the earlier rule does not
+                    count, so the app asks once more. For a Cloud account the app checks with our
+                    server each time it opens and whenever the signed-in account changes. When the
+                    server has no decision, the app sends what it has: the operating system&rsquo;s
+                    age range, that the age was checked on the phone against {ACCOUNT_MINIMUM_AGE},
+                    or, if you are asked while signed in, the age you type, once. A typed age under{' '}
+                    {ACCOUNT_MINIMUM_AGE} is not sent. Cloud opens only once the server confirms the
+                    account. A phone found to be used by someone under {ACCOUNT_MINIMUM_AGE} cannot
+                    use the app in any mode, except to sign out, export or erase the app&rsquo;s
+                    data on the phone and open the data rights page. An account found to be under{' '}
+                    {ACCOUNT_MINIMUM_AGE} cannot use Cloud on any phone.
+                  </Prose>
+                  <Prose>
+                    <strong>What we keep, and what we do not check.</strong> On the account we keep
+                    only the decision: eligible or not, the minimum age it was made against, whether
+                    it came from an age you gave or a phone&rsquo;s age range, the app it came from
+                    and when. We never store an age, an age range or a birth date, and the decision
+                    is erased with the account. We do not verify the age you give: apart from a
+                    phone&rsquo;s age range, it is your own statement. If we learn that an account
+                    holder is under {ACCOUNT_MINIMUM_AGE}, for example from a phone&rsquo;s age
+                    range that ends below it, the account is marked as not eligible. It cannot use
+                    Cloud, a later answer does not reopen it, and it can still export its data and
+                    delete the account.
                   </Prose>
                 </Stack>
               </Section>

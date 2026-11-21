@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getOnboardingStatus } from '@/lib/server/user-identity';
 import { getCurrentUserRlsDb } from '@/lib/server/rls-db';
+import { requireAdultEligibility } from '@/lib/server/require-adult-eligibility';
 import { requireCurrentTermsAcceptance } from '@/lib/server/require-current-terms';
 import { OnboardingWizard } from '@/features/onboarding/components/OnboardingWizard';
 import { getRequestIdentity } from '@/lib/server/identity';
@@ -15,6 +16,8 @@ export default async function WelcomePage() {
   }
 
   await requireCurrentTermsAcceptance(userId, '/welcome');
+
+  await requireAdultEligibility(userId, '/welcome');
 
   const scoped = await getCurrentUserRlsDb();
   if (!scoped) {

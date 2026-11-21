@@ -56,7 +56,10 @@ function providerCheckedThePassword(result: AuthResult): boolean {
   );
 }
 
-const NO_OPTIONAL_CHOICES: SignupAttemptChoices = { marketingEmail: false };
+const NO_OPTIONAL_CHOICES: SignupAttemptChoices = {
+  marketingEmail: false,
+  ageCheckedAgainst: null,
+};
 
 export function AuthFlow({
   mode,

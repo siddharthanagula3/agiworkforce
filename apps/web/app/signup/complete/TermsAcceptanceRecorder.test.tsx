@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event';
 const mocks = vi.hoisted(() => ({
   useAuth: vi.fn(),
   replace: vi.fn(),
+  refresh: vi.fn(),
   redirect: vi.fn(),
   identity: vi.fn(),
   email: vi.fn(),
@@ -15,7 +16,7 @@ vi.mock('@clerk/nextjs', () => ({
 }));
 vi.mock('server-only', () => ({}));
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ replace: mocks.replace }),
+  useRouter: () => ({ replace: mocks.replace, refresh: mocks.refresh }),
   redirect: (url: string) => {
     mocks.redirect(url);
     throw new Error(`redirect:${url}`);
@@ -29,19 +30,22 @@ vi.mock('@/lib/auth/email-confirmation', async (importOriginal) => ({
   ...(await importOriginal()),
   readPrimaryEmailState: (userId: string) => mocks.email(userId),
 }));
-vi.mock('@/lib/client/csrf', () => ({
+vi.mock('@/lib/client/csrf', async (importOriginal) => ({
+  ...(await importOriginal()),
   addCsrfHeaders: vi.fn(async (headers: Record<string, string>) => ({
     ...headers,
     'x-csrf-token': 'csrf-test-token',
   })),
 }));
 
-import { ACCOUNT_AGE_FIELD_LABEL } from '@agiworkforce/types';
+import { ADULT_ELIGIBILITY_ERROR_CODES } from '@agiworkforce/cloud-contracts';
+import { ACCOUNT_AGE_FIELD_LABEL, ACCOUNT_MINIMUM_AGE } from '@agiworkforce/types';
 
 import { MarketingEmailGrantProvider } from '@/features/auth/marketingEmailChoice';
 import { SIGN_UP_AGREEMENT_NOT_APPLICABLE_STATUS } from '@/lib/auth/new-account';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 import {
+  AGE_CHECK_STORAGE_KEY,
   MARKETING_EMAIL_ATTEMPT_STORAGE_KEY,
   MARKETING_EMAIL_CHOICE_STORAGE_KEY,
   writeSignupAttemptMarkers,
@@ -50,7 +54,21 @@ import { ContinueWithCurrentTerms, RecordTermsAcceptance } from './RecordTermsAc
 import SignupCompletePage from './page';
 
 function admitTickedAttemptInThisTab(): void {
-  writeSignupAttemptMarkers({ marketingEmail: true });
+  writeSignupAttemptMarkers({ marketingEmail: true, ageCheckedAgainst: null });
+}
+
+function admitAgeCheckedAttemptInThisTab(): void {
+  writeSignupAttemptMarkers({ marketingEmail: false, ageCheckedAgainst: ACCOUNT_MINIMUM_AGE });
+}
+
+const AGE_CHECKED = {
+  eligibility: { kind: 'age_checked_on_device', minimumAge: ACCOUNT_MINIMUM_AGE },
+};
+const AGE_REFUSAL_CODES = Object.values(ADULT_ELIGIBILITY_ERROR_CODES);
+const REVIEW_URL = '/login/complete?redirectTo=%2Fchat';
+
+function refusedForAge(code: string): Response {
+  return Response.json({ error: { code } }, { status: 403 });
 }
 
 function openAnotherTab(): void {
@@ -60,6 +78,7 @@ function openAnotherTab(): void {
 function everyMarker(): (string | null)[] {
   return [
     window.localStorage.getItem('agi.terms-accepted-version'),
+    window.localStorage.getItem(AGE_CHECK_STORAGE_KEY),
     window.localStorage.getItem(MARKETING_EMAIL_CHOICE_STORAGE_KEY),
     window.localStorage.getItem(MARKETING_EMAIL_ATTEMPT_STORAGE_KEY),
     window.sessionStorage.getItem(MARKETING_EMAIL_ATTEMPT_STORAGE_KEY),
@@ -78,6 +97,7 @@ describe('signup terms recorder', () => {
     window.sessionStorage.clear();
     window.localStorage.setItem('agi.terms-accepted-version', POLICY_LAST_UPDATED.terms);
     mocks.replace.mockReset();
+    mocks.refresh.mockReset();
     mocks.useAuth.mockReturnValue({
       isLoaded: true,
       isSignedIn: true,
@@ -231,6 +251,7 @@ describe('the marketing email choice carried to the recorder', () => {
     window.sessionStorage.clear();
     window.localStorage.setItem('agi.terms-accepted-version', POLICY_LAST_UPDATED.terms);
     mocks.replace.mockReset();
+    mocks.refresh.mockReset();
     mocks.useAuth.mockReturnValue({
       isLoaded: true,
       isSignedIn: true,
@@ -256,7 +277,7 @@ describe('the marketing email choice carried to the recorder', () => {
         marketingEmailNoticeVersion: POLICY_LAST_UPDATED.privacy,
       },
     ]);
-    expect(everyMarker()).toEqual([null, null, null, null]);
+    expect(everyMarker()).toEqual([null, null, null, null, null]);
   });
 
   it('sends no choice when the box was left unticked', async () => {
@@ -292,7 +313,7 @@ describe('the marketing email choice carried to the recorder', () => {
     );
     expect(mocks.replace).toHaveBeenCalledTimes(1);
     expect(globalThis.fetch).not.toHaveBeenCalled();
-    expect(everyMarker()).toEqual([null, null, null, null]);
+    expect(everyMarker()).toEqual([null, null, null, null, null]);
   });
 
   it('records nothing when this tab ticked the box in a different attempt from the one carried', async () => {
@@ -308,14 +329,14 @@ describe('the marketing email choice carried to the recorder', () => {
       expect(mocks.replace).toHaveBeenCalledWith('/login/complete?redirectTo=%2Fchat'),
     );
     expect(globalThis.fetch).not.toHaveBeenCalled();
-    expect(everyMarker()).toEqual([null, null, null, null]);
+    expect(everyMarker()).toEqual([null, null, null, null, null]);
   });
 
   it('records nothing for a ticked attempt whose choice another tab removed, and sends the person to be asked again', async () => {
     admitTickedAttemptInThisTab();
     const thisTabsAttempt = window.sessionStorage.getItem(MARKETING_EMAIL_ATTEMPT_STORAGE_KEY);
     openAnotherTab();
-    writeSignupAttemptMarkers({ marketingEmail: false });
+    writeSignupAttemptMarkers({ marketingEmail: false, ageCheckedAgainst: null });
     window.sessionStorage.setItem(MARKETING_EMAIL_ATTEMPT_STORAGE_KEY, String(thisTabsAttempt));
 
     render(<RecordTermsAcceptance redirectTo="/chat" />);
@@ -325,7 +346,7 @@ describe('the marketing email choice carried to the recorder', () => {
     );
     expect(mocks.replace).toHaveBeenCalledTimes(1);
     expect(globalThis.fetch).not.toHaveBeenCalled();
-    expect(everyMarker()).toEqual([null, null, null, null]);
+    expect(everyMarker()).toEqual([null, null, null, null, null]);
   });
 
   it('records nothing for a choice that carries no attempt id at all', async () => {
@@ -337,7 +358,7 @@ describe('the marketing email choice carried to the recorder', () => {
       expect(mocks.replace).toHaveBeenCalledWith('/login/complete?redirectTo=%2Fchat'),
     );
     expect(globalThis.fetch).not.toHaveBeenCalled();
-    expect(everyMarker()).toEqual([null, null, null, null]);
+    expect(everyMarker()).toEqual([null, null, null, null, null]);
   });
 
   it('keeps nothing of a carried choice when the server says this sign-up did not create the account', async () => {
@@ -352,7 +373,7 @@ describe('the marketing email choice carried to the recorder', () => {
     await waitFor(() =>
       expect(mocks.replace).toHaveBeenCalledWith('/login/complete?redirectTo=%2Fchat'),
     );
-    expect(everyMarker()).toEqual([null, null, null, null]);
+    expect(everyMarker()).toEqual([null, null, null, null, null]);
   });
 
   it('drops a carried choice when nobody is signed in to attribute it to', async () => {
@@ -459,8 +480,164 @@ describe('the marketing email choice carried to the recorder', () => {
     render(<ContinueWithCurrentTerms redirectTo="/chat" />);
 
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/chat'));
-    expect(everyMarker()).toEqual([null, null, null, null]);
+    expect(everyMarker()).toEqual([null, null, null, null, null]);
     expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+});
+
+describe('the age check carried to the recorder', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+    window.localStorage.setItem('agi.terms-accepted-version', POLICY_LAST_UPDATED.terms);
+    mocks.replace.mockReset();
+    mocks.refresh.mockReset();
+    mocks.useAuth.mockReturnValue({
+      isLoaded: true,
+      isSignedIn: true,
+      userId: 'new-user',
+      sessionId: 'new-session',
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(null, { status: 200 })),
+    );
+  });
+
+  it('sends the minimum age the sign-up screen checked against in the request that records the terms, then forgets it', async () => {
+    admitAgeCheckedAttemptInThisTab();
+
+    render(<RecordTermsAcceptance redirectTo="/chat" />);
+
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/chat'));
+    expect(sentBodies()).toEqual([
+      { surface: 'web-signup', version: POLICY_LAST_UPDATED.terms, ...AGE_CHECKED },
+    ]);
+    expect(everyMarker()).toEqual([null, null, null, null, null]);
+  });
+
+  it('sends it beside a ticked marketing email choice', async () => {
+    writeSignupAttemptMarkers({ marketingEmail: true, ageCheckedAgainst: ACCOUNT_MINIMUM_AGE });
+
+    render(<RecordTermsAcceptance redirectTo="/chat" />);
+
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/chat'));
+    expect(sentBodies()).toEqual([
+      {
+        surface: 'web-signup',
+        version: POLICY_LAST_UPDATED.terms,
+        marketingEmailNoticeVersion: POLICY_LAST_UPDATED.privacy,
+        ...AGE_CHECKED,
+      },
+    ]);
+  });
+
+  it('sends no eligibility when the attempt carried no age check', async () => {
+    render(<RecordTermsAcceptance redirectTo="/chat" />);
+
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/chat'));
+    const [body] = sentBodies();
+    expect(body).toEqual({ surface: 'web-signup', version: POLICY_LAST_UPDATED.terms });
+    expect(body).not.toHaveProperty('eligibility');
+  });
+
+  it('sends no eligibility when the stored value is not a minimum age', async () => {
+    window.localStorage.setItem(AGE_CHECK_STORAGE_KEY, 'eighteen');
+
+    render(<RecordTermsAcceptance redirectTo="/chat" />);
+
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/chat'));
+    expect(sentBodies()).toEqual([{ surface: 'web-signup', version: POLICY_LAST_UPDATED.terms }]);
+  });
+
+  it('never reads a check out of the browser for the login surface', async () => {
+    admitAgeCheckedAttemptInThisTab();
+
+    render(<RecordTermsAcceptance redirectTo="/chat" surface="web-login" />);
+
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/chat'));
+    const [body] = sentBodies();
+    expect(body).toEqual({ surface: 'web-login', version: POLICY_LAST_UPDATED.terms });
+    expect(body).not.toHaveProperty('eligibility');
+  });
+
+  it('keeps the check through a failed write, so Try again sends it again', async () => {
+    admitAgeCheckedAttemptInThisTab();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(null, { status: 500 }))
+      .mockResolvedValueOnce(new Response(null, { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<RecordTermsAcceptance redirectTo="/chat" />);
+
+    expect(await screen.findByTestId('terms-record-failed')).toBeInTheDocument();
+    expect(window.localStorage.getItem(AGE_CHECK_STORAGE_KEY)).toBe(String(ACCOUNT_MINIMUM_AGE));
+    await userEvent.click(screen.getByRole('button', { name: /try again/i }));
+
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/chat'));
+    const expected = { surface: 'web-signup', version: POLICY_LAST_UPDATED.terms, ...AGE_CHECKED };
+    expect(sentBodies()).toEqual([expected, expected]);
+  });
+
+  it.each(AGE_REFUSAL_CODES)(
+    'follows a sign-up refused with %s to the review screen and clears every marker',
+    async (code) => {
+      writeSignupAttemptMarkers({ marketingEmail: true, ageCheckedAgainst: ACCOUNT_MINIMUM_AGE });
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => refusedForAge(code)),
+      );
+
+      render(<RecordTermsAcceptance redirectTo="/chat" />);
+
+      await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith(REVIEW_URL));
+      expect(mocks.replace).toHaveBeenCalledTimes(1);
+      expect(mocks.refresh).not.toHaveBeenCalled();
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+      expect(screen.queryByTestId('terms-record-failed')).toBeNull();
+      expect(everyMarker()).toEqual([null, null, null, null, null]);
+    },
+  );
+
+  it.each(AGE_REFUSAL_CODES)(
+    'refreshes the screen instead of leaving it when a sign-in is refused with %s',
+    async (code) => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => refusedForAge(code)),
+      );
+
+      render(<RecordTermsAcceptance redirectTo="/chat" surface="web-login" />);
+
+      await waitFor(() => expect(mocks.refresh).toHaveBeenCalledTimes(1));
+      expect(mocks.replace).not.toHaveBeenCalled();
+      expect(screen.queryByTestId('terms-record-failed')).toBeNull();
+      expect(everyMarker()).toEqual([null, null, null, null, null]);
+    },
+  );
+
+  it.each([
+    ['a refusal with another code', () => refusedForAge('FORBIDDEN')],
+    ['a refusal with no body', () => new Response(null, { status: 403 })],
+    ['a refusal whose body is not JSON', () => new Response('no', { status: 403 })],
+    [
+      'an age code on another status',
+      () => Response.json({ error: { code: 'age_ineligible' } }, { status: 400 }),
+    ],
+  ])('treats %s as a failed write, keeping the markers for Try again', async (_case, respond) => {
+    admitAgeCheckedAttemptInThisTab();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => respond()),
+    );
+
+    render(<RecordTermsAcceptance redirectTo="/chat" />);
+
+    expect(await screen.findByTestId('terms-record-failed')).toBeInTheDocument();
+    expect(mocks.replace).not.toHaveBeenCalled();
+    expect(mocks.refresh).not.toHaveBeenCalled();
+    expect(window.localStorage.getItem(AGE_CHECK_STORAGE_KEY)).toBe(String(ACCOUNT_MINIMUM_AGE));
   });
 });
 
@@ -469,6 +646,7 @@ describe('/signup/complete agreement record', () => {
     window.localStorage.clear();
     window.sessionStorage.clear();
     mocks.replace.mockReset();
+    mocks.refresh.mockReset();
     mocks.redirect.mockReset();
     mocks.identity.mockResolvedValue({ subject: 'new-user' });
     mocks.email.mockReset().mockResolvedValue({ confirmed: true, email: 'person@example.com' });

@@ -27,6 +27,12 @@ import {
   isTermsAnswerPending,
   useTermsAcceptanceStore,
 } from '@/src/features/auth/store/termsAcceptanceStore';
+import {
+  adultEligibilityNeedsAnswer,
+  isAdultEligibilityAnswerPending,
+  isAdultEligibilityConfirmed,
+  useAdultEligibilityStore,
+} from '@/src/features/auth/store/adultEligibilityStore';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useTierStore } from '@/src/features/billing/store';
 import { clearLocalCloudAccountState } from '@/src/features/auth/services/cloudAccountTeardown';
@@ -342,6 +348,8 @@ function ClerkTokenBridge() {
   const setCloudAccess = useWaitlistStore((s) => s.setCloudAccess);
   const termsUserId = useTermsAcceptanceStore((s) => s.userId);
   const termsStatus = useTermsAcceptanceStore((s) => s.status);
+  const eligibilityUserId = useAdultEligibilityStore((s) => s.userId);
+  const eligibilityStatus = useAdultEligibilityStore((s) => s.status);
   const wasSignedIn = useRef(false);
 
   useEffect(() => {
@@ -369,8 +377,22 @@ function ClerkTokenBridge() {
       if (termsUserId !== userId) {
         void useTermsAcceptanceStore.getState().verify(userId);
       }
-      if (termsUserId !== userId || termsStatus !== 'accepted') {
-        if (termsUserId === userId && termsStatus === 'required') answerCloudSession(null);
+      if (eligibilityUserId !== userId) {
+        void useAdultEligibilityStore.getState().verify(userId);
+      }
+      const eligibility = { userId: eligibilityUserId, status: eligibilityStatus };
+      if (
+        termsUserId !== userId ||
+        termsStatus !== 'accepted' ||
+        !isAdultEligibilityConfirmed(eligibility, userId)
+      ) {
+        if (
+          (termsUserId === userId && termsStatus === 'required') ||
+          (eligibilityUserId === userId &&
+            (eligibilityStatus === 'age_required' || eligibilityStatus === 'ineligible'))
+        ) {
+          answerCloudSession(null);
+        }
         const recordedOwnerId = recordedCloudAccountOwnerId();
         if (recordedOwnerId !== userId) useRolloutStore.getState().clear();
         if (
@@ -382,7 +404,10 @@ function ClerkTokenBridge() {
         }
         setCloudAccess(false);
         setClerkSignedIn(false);
-        if (!isTermsAnswerPending({ userId: termsUserId, status: termsStatus }, userId)) {
+        if (
+          !isTermsAnswerPending({ userId: termsUserId, status: termsStatus }, userId) &&
+          !isAdultEligibilityAnswerPending(eligibility, userId)
+        ) {
           setClerkLoaded(true);
         }
         return;
@@ -420,6 +445,7 @@ function ClerkTokenBridge() {
       }
       setClerkTokenMinter(null, null);
       useTermsAcceptanceStore.getState().reset();
+      useAdultEligibilityStore.getState().reset();
       setClerkUserId(null);
       setClerkSignedIn(false);
       invalidateCloudAccount();
@@ -439,18 +465,24 @@ function ClerkTokenBridge() {
     setCloudAccess,
     termsUserId,
     termsStatus,
+    eligibilityUserId,
+    eligibilityStatus,
   ]);
 
   // Loaded with signed-in false reads as signed out, and the chat tab answers
-  // that by persisting Local Mode. A session whose Terms answer is still in
-  // flight is neither, so it stays unloaded, bounded by the same settle window;
-  // a Local fallback taken before any answer returns to Cloud only when the
-  // recorded Cloud account confirms (answerCloudSession).
+  // that by persisting Local Mode. A session whose Terms or age answer is still
+  // in flight is neither, so it stays unloaded, bounded by the same settle
+  // window; a Local fallback taken before any answer returns to Cloud only when
+  // the recorded Cloud account confirms (answerCloudSession).
   const termsAnswerPending =
     isLoaded &&
     isSignedIn === true &&
     typeof userId === 'string' &&
-    isTermsAnswerPending({ userId: termsUserId, status: termsStatus }, userId);
+    (isTermsAnswerPending({ userId: termsUserId, status: termsStatus }, userId) ||
+      isAdultEligibilityAnswerPending(
+        { userId: eligibilityUserId, status: eligibilityStatus },
+        userId,
+      ));
 
   useEffect(() => {
     if (!termsAnswerPending) return;
@@ -486,6 +518,16 @@ export default function RootLayout() {
   const clerkUserId = useAuthStore((state) => state.clerkUserId);
   const isClerkLoaded = useAuthStore((s) => s.isClerkLoaded);
   const termsStatus = useTermsAcceptanceStore((s) => s.status);
+  const eligibilityUserId = useAdultEligibilityStore((s) => s.userId);
+  const eligibilityStatus = useAdultEligibilityStore((s) => s.status);
+  const cloudAnswerOwed =
+    Boolean(clerkUserId) &&
+    (termsStatus === 'required' ||
+      termsStatus === 'error' ||
+      adultEligibilityNeedsAnswer(
+        { userId: eligibilityUserId, status: eligibilityStatus },
+        clerkUserId,
+      ));
   const authEnabled = FEATURES.auth;
   const refreshTier = useTierStore((s) => s.refreshTier);
   const segments = useSegments();
@@ -689,13 +731,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (!isInitialized || !isMmkvReady) return;
-    if (
-      clerkUserId &&
-      (termsStatus === 'required' || termsStatus === 'error') &&
-      isCloud &&
-      isAgeGateConfirmed() &&
-      segments[0] !== '(auth)'
-    ) {
+    if (cloudAnswerOwed && isCloud && isAgeGateConfirmed() && segments[0] !== '(auth)') {
       router.replace(beginCloudPostAuthIntent());
       return;
     }
@@ -734,7 +770,8 @@ export default function RootLayout() {
     segments,
     router,
     authEnabled,
-    termsStatus,
+    cloudAnswerOwed,
+    eligibilityStatus,
     isCloud,
   ]);
 
@@ -798,10 +835,7 @@ export default function RootLayout() {
 
   const appRouteBlocked =
     isMmkvReady &&
-    ((Boolean(clerkUserId) &&
-      (termsStatus === 'required' || termsStatus === 'error') &&
-      isCloud &&
-      isAgeGateConfirmed()) ||
+    ((cloudAnswerOwed && isCloud && isAgeGateConfirmed()) ||
       resolveRootRedirect({
         segments: ['(app)'],
         authEnabled,

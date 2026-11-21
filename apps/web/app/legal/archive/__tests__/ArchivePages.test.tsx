@@ -66,6 +66,7 @@ describe('/legal/archive', () => {
         .getAllByRole('link', { name: 'Read this version' })
         .map((link) => link.getAttribute('href')),
     ).toEqual([
+      '/legal/archive/terms/2026-11-13',
       '/legal/archive/terms/2026-11-11',
       '/legal/archive/terms/2026-10-08',
       '/legal/archive/terms/2026-09-23',
@@ -185,6 +186,7 @@ describe('/legal/archive', () => {
       unmount();
     }
     expect(policyHistoryForKey('referralTerms')?.versions.map((version) => version.date)).toEqual([
+      '2026-11-20',
       '2026-10-08',
       '2026-09-27',
     ]);

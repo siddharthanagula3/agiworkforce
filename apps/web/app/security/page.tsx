@@ -424,7 +424,7 @@ const NOT_DONE: { label: string; value: string }[] = [
   {
     label: 'India: DPDP Act, 2023',
     value:
-      'Our position is published in full at /privacy/india, including the parts that are gaps rather than controls: no verifiable parental consent (the Act treats anyone under 18 as a child), no notice translations into Eighth Schedule languages, no Indian data residency, and a grievance contact published as a role rather than a named officer. The consent and rights machinery is implemented; those four are not.',
+      'Our position is published in full at /privacy/india, including the parts that are gaps rather than controls: no age verification (the Act treats anyone under 18 as a child, and AGI is not offered to them, but the age is self-declared), no notice translations into Eighth Schedule languages, no Indian data residency, and a grievance contact published as a role rather than a named officer. The consent and rights machinery is implemented; those four are not.',
   },
   {
     label: 'Automated-abuse verification',

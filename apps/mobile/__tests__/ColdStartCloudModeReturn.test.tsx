@@ -140,6 +140,28 @@ jest.mock('../src/features/auth/store/termsAcceptanceStore', () => ({
   ),
 }));
 
+type MockEligibility = { userId: string | null; status: string };
+let mockEligibilityOverride: MockEligibility | null = null;
+const mockEligibility = (): MockEligibility =>
+  mockEligibilityOverride ?? { userId: mockTerms.userId, status: 'confirmed' };
+const mockEligibilityActions = { reset: jest.fn(), verify: jest.fn() };
+jest.mock('../src/features/auth/store/adultEligibilityStore', () => ({
+  isAdultEligibilityAnswerPending: (eligibility: MockEligibility, userId: string) =>
+    eligibility.userId !== userId ||
+    eligibility.status === 'idle' ||
+    eligibility.status === 'checking',
+  isAdultEligibilityConfirmed: (eligibility: MockEligibility, userId: string | null) =>
+    Boolean(userId) && eligibility.userId === userId && eligibility.status === 'confirmed',
+  adultEligibilityNeedsAnswer: (eligibility: MockEligibility, userId: string | null) =>
+    Boolean(userId) &&
+    eligibility.userId === userId &&
+    ['age_required', 'ineligible', 'error'].includes(eligibility.status),
+  useAdultEligibilityStore: Object.assign(
+    (selector: (state: MockEligibility) => unknown) => selector(mockEligibility()),
+    { getState: () => mockEligibilityActions },
+  ),
+}));
+
 const mockWaitlistState = { setCloudAccess: jest.fn(), cloudUnlocked: true };
 jest.mock('../src/features/waitlist/store', () => ({
   useWaitlistStore: Object.assign(
@@ -346,6 +368,8 @@ describe('a Cloud session that answers after the settle window', () => {
     useChatAppModeStore.setState({ appMode: 'cloud' });
     mockClerk = { isLoaded: false, getToken: mockGetToken };
     mockTerms = { userId: null, status: 'idle' };
+    mockEligibilityOverride = null;
+    mockEligibilityActions.verify.mockClear();
     mockAuthState.isClerkSignedIn = false;
     mockAuthState.clerkUserId = null;
     mockAuthState.isClerkLoaded = false;
@@ -353,6 +377,77 @@ describe('a Cloud session that answers after the settle window', () => {
 
   afterEach(() => {
     jest.useRealTimers();
+  });
+
+  describe('the account’s age answer', () => {
+    it('keeps Cloud closed while the age check is out, then opens it once confirmed', async () => {
+      mockEligibilityOverride = { userId: 'person-a', status: 'checking' };
+      const screen = await launch();
+
+      clerkAnswers(
+        screen,
+        { isSignedIn: true, userId: 'person-a' },
+        { userId: 'person-a', status: 'accepted' },
+      );
+      expect(mockAuthState.isClerkSignedIn).toBe(false);
+
+      mockEligibilityOverride = { userId: 'person-a', status: 'confirmed' };
+      clerkAnswers(screen, { isSignedIn: true, userId: 'person-a' });
+      expect(mockAuthState.isClerkSignedIn).toBe(true);
+    });
+
+    it.each(['ineligible', 'age_required', 'error'])(
+      'keeps Cloud closed for an account whose age answer is %s',
+      async (status) => {
+        mockEligibilityOverride = { userId: 'person-a', status };
+        const screen = await launch();
+
+        clerkAnswers(
+          screen,
+          { isSignedIn: true, userId: 'person-a' },
+          { userId: 'person-a', status: 'accepted' },
+        );
+        settleWindowEnds();
+        chatTabReadsSession();
+
+        expect(mockAuthState.isClerkSignedIn).toBe(false);
+        expect(mockWaitlistState.setCloudAccess).not.toHaveBeenLastCalledWith(true);
+        expect(appMode()).toBe('local');
+      },
+    );
+
+    it('runs the check again when the signed-in account changes', async () => {
+      mockEligibilityOverride = { userId: 'person-a', status: 'confirmed' };
+      const screen = await launch();
+
+      clerkAnswers(
+        screen,
+        { isSignedIn: true, userId: 'person-a' },
+        { userId: 'person-a', status: 'accepted' },
+      );
+      expect(mockEligibilityActions.verify).not.toHaveBeenCalled();
+      expect(mockAuthState.isClerkSignedIn).toBe(true);
+
+      clerkAnswers(
+        screen,
+        { isSignedIn: true, userId: 'person-b' },
+        { userId: 'person-b', status: 'accepted' },
+      );
+
+      expect(mockEligibilityActions.verify).toHaveBeenCalledWith('person-b');
+      expect(mockAuthState.isClerkSignedIn).toBe(false);
+    });
+
+    it('runs the check on every launch, so a new app version checks again', async () => {
+      mockEligibilityOverride = { userId: null, status: 'idle' };
+      mockClerk = { isLoaded: true, isSignedIn: true, userId: 'person-a', getToken: mockGetToken };
+      mockTerms = { userId: 'person-a', status: 'accepted' };
+
+      await launch();
+
+      expect(mockEligibilityActions.verify).toHaveBeenCalledWith('person-a');
+      expect(mockAuthState.isClerkSignedIn).toBe(false);
+    });
   });
 
   it('returns to Cloud when Clerk loads late and confirms the same account', async () => {

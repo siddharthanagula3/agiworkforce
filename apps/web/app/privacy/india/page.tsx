@@ -1,6 +1,6 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import { PageLink } from '@shared/components/layout/EmbeddedPage';
-import { ACCOUNT_MINIMUM_AGE, PARENTAL_PERMISSION_BELOW_AGE } from '@agiworkforce/types';
+import { ACCOUNT_MINIMUM_AGE } from '@agiworkforce/types';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import {
@@ -101,8 +101,8 @@ const PROCESSING: readonly LedgerRow[] = [
         Purpose: creating and securing your account. Optionally, the account choice &ldquo;
         {MARKETING_EMAIL_CONSENT_PURPOSE.label}&rdquo; is a separate box at sign-up that you can
         leave unticked or turn off on its own. Held by our identity provider. We do not store your
-        password. Sign-up also asks for your age; it is checked in your browser and is not stored or
-        sent to us. Basis: your request for the account; your consent for marketing email.
+        password. We also keep the outcome of the age check described in section 09, never the age
+        itself. Basis: your request for the account; your consent for marketing email.
       </>
     ),
   },
@@ -509,24 +509,26 @@ export default function IndiaDpdpNoticePage() {
                   </h2>
                   <Prose>
                     Under this Act a child is anyone under 18, and processing a child&rsquo;s data
-                    requires verifiable consent from a parent or guardian. Sign-up asks for your age
-                    and refuses anyone under {ACCOUNT_MINIMUM_AGE}, and the{' '}
+                    requires verifiable consent from a parent or lawful guardian. AGI is not offered
+                    to anyone under {ACCOUNT_MINIMUM_AGE}, as the{' '}
                     <PageLink href={CANONICAL_POLICY_ROUTES.terms} className="agi-ds-link">
                       terms
                     </PageLink>{' '}
-                    require anyone under {PARENTAL_PERMISSION_BELOW_AGE} to have permission from a
-                    parent or guardian.{' '}
-                    <strong>
-                      We do not currently perform verifiable parental consent or age verification.
-                    </strong>{' '}
-                    The age is whatever is typed, it is checked once in the browser and not kept,
-                    and nobody checks the permission. That is a gap against this Act, and it is
-                    tracked as an open item. Because an account can be created from the age of{' '}
-                    {ACCOUNT_MINIMUM_AGE}, people this Act treats as children can hold accounts
-                    here, and we cannot tell which accounts those are. If you believe we hold a
-                    child&rsquo;s personal data without a parent&rsquo;s consent, use the grievance
-                    contact above and we will delete it. We do not run behavioural advertising or
-                    tracking directed at children in any mode.
+                    say, so we do not ask a parent or guardian to consent for anyone. Sign-up, and
+                    the check an existing account meets at its next sign-in, ask for an age in years
+                    and refuse anyone who gives an age under {ACCOUNT_MINIMUM_AGE}. The phone app
+                    checks before anything else, Local mode included, and asks the operating system
+                    where it can answer. Our server keeps only the outcome of the check, never the
+                    age, as section 09 of the{' '}
+                    <PageLink href={CANONICAL_POLICY_ROUTES.privacy} className="agi-ds-link">
+                      privacy policy
+                    </PageLink>{' '}
+                    sets out. <strong>We do not perform age verification.</strong> Apart from a
+                    phone&rsquo;s age range, the age is whatever is typed, so a child who gives a
+                    false age is not detected. Whether a declared age is enough under this Act is
+                    tracked as an open item. If you believe we hold a child&rsquo;s personal data,
+                    use the grievance contact above and we will delete it. We do not run behavioural
+                    advertising or tracking directed at children in any mode.
                   </Prose>
                 </Stack>
               </Section>

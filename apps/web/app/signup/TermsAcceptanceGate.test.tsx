@@ -12,6 +12,7 @@ import {
 import { MARKETING_EMAIL_CONSENT_PURPOSE } from '@/lib/consent-purposes';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 import {
+  AGE_CHECK_STORAGE_KEY,
   MARKETING_EMAIL_ATTEMPT_STORAGE_KEY,
   MARKETING_EMAIL_CHOICE_STORAGE_KEY,
   writeSignupAttemptMarkers,
@@ -123,7 +124,7 @@ function carried() {
 }
 
 function leaveChoiceFromAnEarlierAttempt(): void {
-  writeSignupAttemptMarkers({ marketingEmail: true });
+  writeSignupAttemptMarkers({ marketingEmail: true, ageCheckedAgainst: null });
 }
 
 /**
@@ -165,6 +166,7 @@ describe('/signup agreement', () => {
     expect(signUpState.sso).not.toHaveBeenCalled();
     expect(signUpState.create).not.toHaveBeenCalled();
     expect(window.localStorage.getItem(TERMS_GATE_STORAGE_KEY)).toBeNull();
+    expect(window.localStorage.getItem(AGE_CHECK_STORAGE_KEY)).toBeNull();
   });
 
   it(`writes no marker and calls no provider for a ${TOO_YOUNG} year old`, async () => {
@@ -195,6 +197,8 @@ describe('/signup agreement', () => {
       }),
     );
     expect(window.localStorage.getItem(TERMS_GATE_STORAGE_KEY)).toBe(POLICY_LAST_UPDATED.terms);
+    expect(window.localStorage.getItem(AGE_CHECK_STORAGE_KEY)).toBe(String(ACCOUNT_MINIMUM_AGE));
+    expect(Object.values({ ...window.localStorage })).not.toContain(TYPED_AGE);
     expect(sentToTheIdentityProvider()).not.toContain(TYPED_AGE);
   });
 
@@ -209,6 +213,8 @@ describe('/signup agreement', () => {
       ),
     );
     expect(window.localStorage.getItem(TERMS_GATE_STORAGE_KEY)).toBe(POLICY_LAST_UPDATED.terms);
+    expect(window.localStorage.getItem(AGE_CHECK_STORAGE_KEY)).toBe(String(ACCOUNT_MINIMUM_AGE));
+    expect(Object.values({ ...window.localStorage })).not.toContain(TYPED_AGE);
     expect(sentToTheIdentityProvider()).not.toContain(TYPED_AGE);
     expect(sentToTheIdentityProvider()).not.toMatch(/"age|birth/i);
   });

@@ -6,6 +6,7 @@ const routeMocks = vi.hoisted(() => ({
   auth: vi.fn(),
   headers: vi.fn(),
   redirect: vi.fn(),
+  adultEligibility: vi.fn(),
   requireCurrentTermsAcceptance: vi.fn(),
   webChatRoot: vi.fn(),
 }));
@@ -27,6 +28,11 @@ vi.mock('@/lib/server/require-current-terms', () => ({
     routeMocks.requireCurrentTermsAcceptance(...args),
 }));
 
+vi.mock('@/lib/server/adult-eligibility', async (importOriginal) => ({
+  ...(await importOriginal()),
+  readAdultEligibilityState: (...args: unknown[]) => routeMocks.adultEligibility(...args),
+}));
+
 vi.mock('@/features/chat/components/WebChatRoot', () => ({
   WebChatRoot: (props: { initialWorkMode?: string }) => {
     routeMocks.webChatRoot(props);
@@ -45,6 +51,7 @@ beforeEach(() => {
   routeMocks.headers.mockResolvedValue(new Headers({ 'x-agi-pathname': '/chat' }));
   routeMocks.redirect.mockReset();
   routeMocks.requireCurrentTermsAcceptance.mockResolvedValue(undefined);
+  routeMocks.adultEligibility.mockResolvedValue('confirmed');
   routeMocks.webChatRoot.mockReset();
 });
 
@@ -107,4 +114,27 @@ describe('/chat route', () => {
       '/chat/session-123?panel=artifacts',
     );
   });
+
+  it('renders for an account with a current 18 and over decision', async () => {
+    await ChatLayout({ children: <div>Chat</div> });
+
+    expect(routeMocks.adultEligibility).toHaveBeenCalledWith('user_123');
+    expect(routeMocks.redirect).not.toHaveBeenCalled();
+  });
+
+  it.each(['unconfirmed', 'ineligible'])(
+    'sends an account whose age decision is %s to the review screen and back to the exact chat path',
+    async (state) => {
+      routeMocks.adultEligibility.mockResolvedValue(state);
+      routeMocks.headers.mockResolvedValue(
+        new Headers({ 'x-agi-pathname': '/chat/session-123?panel=artifacts' }),
+      );
+
+      await ChatLayout({ children: <div>Chat</div> });
+
+      expect(routeMocks.redirect).toHaveBeenCalledWith(
+        '/login/complete?redirectTo=%2Fchat%2Fsession-123%3Fpanel%3Dartifacts',
+      );
+    },
+  );
 });

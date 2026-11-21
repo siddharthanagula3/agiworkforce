@@ -2,14 +2,21 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-const { mockAuth, mockGetUser, mockRedirect, mockAssertAccountActive, mockRequireCurrentTerms } =
-  vi.hoisted(() => ({
-    mockAuth: vi.fn(),
-    mockGetUser: vi.fn(),
-    mockRedirect: vi.fn(),
-    mockAssertAccountActive: vi.fn(),
-    mockRequireCurrentTerms: vi.fn(),
-  }));
+const {
+  mockAuth,
+  mockGetUser,
+  mockRedirect,
+  mockAssertAccountActive,
+  mockRequireCurrentTerms,
+  mockAdultEligibility,
+} = vi.hoisted(() => ({
+  mockAuth: vi.fn(),
+  mockGetUser: vi.fn(),
+  mockRedirect: vi.fn(),
+  mockAssertAccountActive: vi.fn(),
+  mockRequireCurrentTerms: vi.fn(),
+  mockAdultEligibility: vi.fn(),
+}));
 
 vi.mock('@clerk/nextjs/server', () => ({
   auth: (...args: unknown[]) => mockAuth(...args),
@@ -28,7 +35,8 @@ vi.mock('next/navigation', () => ({
   },
 }));
 
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/api-auth', () => ({
@@ -36,6 +44,10 @@ vi.mock('@/lib/api-auth', () => ({
 }));
 vi.mock('@/lib/server/require-current-terms', () => ({
   requireCurrentTermsAcceptance: (...args: unknown[]) => mockRequireCurrentTerms(...args),
+}));
+vi.mock('@/lib/server/adult-eligibility', async (importOriginal) => ({
+  ...(await importOriginal()),
+  readAdultEligibilityState: (...args: unknown[]) => mockAdultEligibility(...args),
 }));
 
 import AdminLayout from '../layout';
@@ -60,6 +72,7 @@ beforeEach(() => {
   mockGetUser.mockResolvedValue({ publicMetadata: { role: 'admin' } });
   mockAssertAccountActive.mockResolvedValue(undefined);
   mockRequireCurrentTerms.mockResolvedValue(undefined);
+  mockAdultEligibility.mockResolvedValue('confirmed');
 });
 
 describe('admin layout account-status gate', () => {
@@ -109,4 +122,18 @@ describe('admin layout account-status gate', () => {
     expect(redirectedTo).toBe('/');
     expect(mockAssertAccountActive).not.toHaveBeenCalled();
   });
+
+  it.each(['unconfirmed', 'ineligible'])(
+    'sends an admin whose age decision is %s to the review screen before any status read',
+    async (state) => {
+      mockAdultEligibility.mockResolvedValue(state);
+
+      const { redirectedTo, rendered } = await renderLayout();
+
+      expect(redirectedTo).toBe('/login/complete?redirectTo=%2Fadmin');
+      expect(rendered).toBeNull();
+      expect(mockAdultEligibility).toHaveBeenCalledWith(ADMIN_ID);
+      expect(mockAssertAccountActive).not.toHaveBeenCalled();
+    },
+  );
 });

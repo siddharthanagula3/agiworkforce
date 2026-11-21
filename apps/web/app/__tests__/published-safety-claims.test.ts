@@ -589,8 +589,24 @@ describe('dated labels', () => {
   it('takes the referral age from the account rule', () => {
     const page = prose('app/referral-terms/page.tsx');
     expect(page).toContain('you must be at least {ACCOUNT_MINIMUM_AGE}');
-    expect(page).toContain('under {PARENTAL_PERMISSION_BELOW_AGE}');
     expect(page).not.toContain('at least 18');
+    expect(page).not.toMatch(/parent or guardian/iu);
+  });
+
+  it.each([
+    'app/terms/page.tsx',
+    'app/privacy/page.tsx',
+    'app/privacy/india/page.tsx',
+    'app/mobile/legal/page.tsx',
+    'app/referral-terms/page.tsx',
+    'app/dpa/page.tsx',
+    'app/trust/page.tsx',
+  ])('%s states the adults-only rule from the constant and offers no permission route', (page) => {
+    const text = read(page);
+    expect(text).toContain('ACCOUNT_MINIMUM_AGE');
+    expect(text).not.toContain('PARENTAL_PERMISSION_BELOW_AGE');
+    expect(text).not.toMatch(/you need permission from a parent/iu);
+    expect(text).not.toMatch(/is not stored, sent to our servers/iu);
   });
 });
 

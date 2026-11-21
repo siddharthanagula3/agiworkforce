@@ -1,6 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
+const profile = vi.hoisted(() => ({
+  standing: undefined as Record<string, unknown> | undefined,
+  written: undefined as Record<string, unknown> | undefined,
+  reads: 0,
+  writes: [] as unknown[][],
+}));
+
 const mocks = vi.hoisted(() => ({
   standing: vi.fn(),
   record: vi.fn(),
@@ -12,6 +19,25 @@ const mocks = vi.hoisted(() => ({
   email: vi.fn(),
 }));
 
+vi.mock('server-only', () => ({}));
+vi.mock('@/lib/server/neon-db', () => ({
+  getNeonDb: vi.fn(() => ({
+    query: async () => [],
+    transaction: async (callback: (tx: unknown) => Promise<unknown>) =>
+      callback({
+        query: async (sql: string, params: unknown[]) => {
+          if (sql.includes("set_config('request.jwt.claim.sub'")) return [];
+          if (sql.includes('insert into public.profiles')) {
+            profile.writes.push(params);
+            return profile.written ? [profile.written] : [];
+          }
+          profile.reads += 1;
+          return profile.standing ? [profile.standing] : [];
+        },
+        execute: async () => 0,
+      }),
+  })),
+}));
 vi.mock('@/lib/error-handler', async (importOriginal) => ({
   ...(await importOriginal()),
   withErrorHandler: (handler: unknown) => handler,
@@ -52,6 +78,9 @@ vi.mock('@/lib/server/terms', async (importOriginal) => ({
   recordTermsAcceptance: (...args: unknown[]) => mocks.record(...args),
 }));
 
+import { ACCOUNT_MINIMUM_AGE } from '@agiworkforce/types';
+
+import { forgetAdultEligibilityState } from '@/lib/server/adult-eligibility';
 import { MARKETING_EMAIL_CONSENT_PURPOSE } from '@/lib/consent-purposes';
 import { GLOBAL_PRIVACY_CONTROL_HEADER } from '@/lib/consent-signals';
 import {
@@ -80,6 +109,20 @@ function accept(body: Record<string, unknown>, headers: Record<string, string> =
     }),
   );
 }
+
+const LEGACY_MINIMUM_AGE = 13;
+
+function decision(outcome: string | null, minimumAge: number | null) {
+  return { adult_eligibility_outcome: outcome, adult_eligibility_minimum_age: minimumAge };
+}
+
+beforeEach(() => {
+  forgetAdultEligibilityState();
+  profile.standing = decision('eligible', ACCOUNT_MINIMUM_AGE);
+  profile.written = undefined;
+  profile.reads = 0;
+  profile.writes = [];
+});
 
 function firstCallOrder(mock: { mock: { invocationCallOrder: number[] } }): number {
   return mock.mock.invocationCallOrder[0] ?? Number.NaN;
@@ -502,5 +545,220 @@ describe('marketing email asked with the terms', () => {
 
     expect(mocks.track).not.toHaveBeenCalled();
     expect(mocks.referral).not.toHaveBeenCalled();
+  });
+});
+
+describe('adult eligibility asked with the terms', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.csrf.mockResolvedValue(null);
+    mocks.email.mockResolvedValue(confirmedAccountCreated(Date.now()));
+    mocks.record.mockResolvedValue({
+      version: 'current-policy',
+      acceptedAt: '2026-11-20T00:00:00Z',
+    });
+    mocks.referral.mockResolvedValue(undefined);
+    mocks.latestConsent.mockResolvedValue(null);
+  });
+
+  function expectNothingRecorded() {
+    expect(mocks.record).not.toHaveBeenCalled();
+    expect(mocks.consent).not.toHaveBeenCalled();
+    expect(mocks.track).not.toHaveBeenCalled();
+    expect(mocks.referral).not.toHaveBeenCalled();
+  }
+
+  describe('evidence sent with the acceptance', () => {
+    beforeEach(() => {
+      profile.standing = undefined;
+    });
+
+    it.each(['web-signup', 'web-login', 'mobile-auth'] as const)(
+      'refuses a declared age of 17 on %s, records the refusal and accepts nothing',
+      async (surface) => {
+        profile.written = decision('ineligible', ACCOUNT_MINIMUM_AGE);
+
+        const response = await accept({
+          surface,
+          version: 'current-policy',
+          eligibility: { kind: 'declared_age', age: 17 },
+        });
+
+        expect(response.status).toBe(403);
+        expect(await response.json()).toMatchObject({ error: { code: 'age_ineligible' } });
+        expect(profile.writes).toHaveLength(1);
+        expect(profile.writes[0]?.slice(1)).toEqual([
+          'ineligible',
+          ACCOUNT_MINIMUM_AGE,
+          'declared_age',
+          surface,
+        ]);
+        expectNothingRecorded();
+      },
+    );
+
+    it.each(['web-signup', 'web-login', 'mobile-auth'] as const)(
+      'accepts a declared age of 18 on %s, keeps the outcome and records the acceptance',
+      async (surface) => {
+        profile.written = decision('eligible', ACCOUNT_MINIMUM_AGE);
+
+        const response = await accept({
+          surface,
+          version: 'current-policy',
+          eligibility: { kind: 'declared_age', age: 18 },
+        });
+
+        expect(response.status).toBe(200);
+        expect(profile.writes).toHaveLength(1);
+        expect(profile.writes[0]?.slice(1)).toEqual([
+          'eligible',
+          ACCOUNT_MINIMUM_AGE,
+          'declared_age',
+          surface,
+        ]);
+        expect(JSON.stringify(profile.writes)).not.toContain('"age"');
+        expect(mocks.record).toHaveBeenCalledWith('person-a', surface);
+      },
+    );
+
+    it('refuses an on-device check made against the earlier minimum of 13 as age_confirmation_required, writing nothing', async () => {
+      const response = await accept({
+        surface: 'mobile-auth',
+        version: 'current-policy',
+        eligibility: { kind: 'age_checked_on_device', minimumAge: LEGACY_MINIMUM_AGE },
+      });
+
+      expect(response.status).toBe(403);
+      expect(await response.json()).toMatchObject({
+        error: { code: 'age_confirmation_required' },
+      });
+      expect(profile.writes).toEqual([]);
+      expectNothingRecorded();
+    });
+
+    it('accepts an on-device check made against the current minimum', async () => {
+      profile.written = decision('eligible', ACCOUNT_MINIMUM_AGE);
+
+      const response = await accept({
+        surface: 'mobile-auth',
+        version: 'current-policy',
+        eligibility: { kind: 'age_checked_on_device', minimumAge: ACCOUNT_MINIMUM_AGE },
+      });
+
+      expect(response.status).toBe(200);
+      expect(mocks.record).toHaveBeenCalledWith('person-a', 'mobile-auth');
+    });
+
+    it('refuses a platform age range that straddles the minimum as unconfirmed, writing nothing', async () => {
+      const response = await accept({
+        surface: 'web-login',
+        version: 'current-policy',
+        eligibility: { kind: 'platform_age_signal', lowerBound: 13, upperBound: 20 },
+      });
+
+      expect(response.status).toBe(403);
+      expect(await response.json()).toMatchObject({
+        error: { code: 'age_confirmation_required' },
+      });
+      expect(profile.writes).toEqual([]);
+      expectNothingRecorded();
+    });
+
+    it('does not let a later answer of 18 reopen an account that was refused', async () => {
+      profile.standing = decision('ineligible', ACCOUNT_MINIMUM_AGE);
+
+      const response = await accept({
+        surface: 'web-login',
+        version: 'current-policy',
+        eligibility: { kind: 'declared_age', age: 18 },
+      });
+
+      expect(response.status).toBe(403);
+      expect(await response.json()).toMatchObject({ error: { code: 'age_ineligible' } });
+      expect(profile.writes).toEqual([]);
+      expectNothingRecorded();
+    });
+
+    it('rejects evidence that is not one of the known shapes before reading anything', async () => {
+      await expect(
+        accept({
+          surface: 'web-login',
+          version: 'current-policy',
+          eligibility: { kind: 'declared_age', age: 'eighteen' },
+        }),
+      ).rejects.toMatchObject({ statusCode: 400 });
+
+      expect(profile.reads).toBe(0);
+      expect(profile.writes).toEqual([]);
+      expectNothingRecorded();
+    });
+  });
+
+  describe('no evidence sent with the acceptance', () => {
+    it.each(['web-signup', 'web-login'] as const)(
+      'refuses %s for an account nobody has asked, writing nothing',
+      async (surface) => {
+        profile.standing = undefined;
+
+        const response = await accept({ surface, version: 'current-policy' });
+
+        expect(response.status).toBe(403);
+        expect(await response.json()).toMatchObject({
+          error: { code: 'age_confirmation_required' },
+        });
+        expect(profile.writes).toEqual([]);
+        expectNothingRecorded();
+      },
+    );
+
+    it.each(['web-signup', 'web-login'] as const)(
+      'refuses %s for an account admitted only under the earlier 13 and over minimum',
+      async (surface) => {
+        profile.standing = decision('eligible', LEGACY_MINIMUM_AGE);
+
+        const response = await accept({ surface, version: 'current-policy' });
+
+        expect(response.status).toBe(403);
+        expect(await response.json()).toMatchObject({
+          error: { code: 'age_confirmation_required' },
+        });
+        expectNothingRecorded();
+      },
+    );
+
+    it.each(['web-signup', 'web-login'] as const)(
+      'refuses %s for an account that declared an age under the minimum',
+      async (surface) => {
+        profile.standing = decision('ineligible', ACCOUNT_MINIMUM_AGE);
+
+        const response = await accept({ surface, version: 'current-policy' });
+
+        expect(response.status).toBe(403);
+        expect(await response.json()).toMatchObject({ error: { code: 'age_ineligible' } });
+        expectNothingRecorded();
+      },
+    );
+
+    it.each(['web-signup', 'web-login'] as const)(
+      'records %s for an account whose current 18 and over decision is on record',
+      async (surface) => {
+        const response = await accept({ surface, version: 'current-policy' });
+
+        expect(response.status).toBe(200);
+        expect(mocks.record).toHaveBeenCalledWith('person-a', surface);
+        expect(profile.writes).toEqual([]);
+      },
+    );
+
+    it('still records a mobile-auth acceptance from a build that sends no evidence, without reading the decision', async () => {
+      profile.standing = undefined;
+
+      const response = await accept({ surface: 'mobile-auth', version: 'current-policy' });
+
+      expect(response.status).toBe(200);
+      expect(mocks.record).toHaveBeenCalledWith('person-a', 'mobile-auth');
+      expect(profile.reads).toBe(0);
+      expect(profile.writes).toEqual([]);
+    });
   });
 });

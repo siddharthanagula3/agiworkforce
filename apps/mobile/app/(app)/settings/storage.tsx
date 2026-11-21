@@ -26,8 +26,9 @@ import {
   MODEL_BUSY_REMOVAL_MESSAGE,
   modelRemovalUnsupportedReason,
 } from '@/services/modelDownload';
-import { wipeAllLocalData, type DsarExportProgress } from '@/services/dsarExport';
-import { resetLocalInMemoryState } from '@/src/features/settings/data-controls/localDataSnapshot';
+import type { DsarExportProgress } from '@/services/dsarExport';
+import { useEraseDeviceData } from '@/src/features/settings/data-controls/useEraseDeviceData';
+import { AGE_GATE_PATH } from '@/src/features/auth/services/rootRouting';
 import { getDirectorySizeBytes } from '@/src/features/settings/storageUsage';
 import { formatAttachmentSize } from '@/src/features/chat/utils/attachmentSize';
 import { StorageScopeNotice } from '@/src/features/settings/StorageScopeNotice';
@@ -194,7 +195,10 @@ export default function StorageManagerScreen() {
   const forgetInstalledModel = useModelInstallStore((s) => s.forgetInstalledModel);
 
   const { exporting: isExporting, progress: exportProgress, handleExport } = useLocalDataExport();
-  const [isWiping, setIsWiping] = useState(false);
+  const returnToAgeGate = useCallback(() => {
+    router.replace(AGE_GATE_PATH);
+  }, [router]);
+  const { isWiping, eraseDeviceData: handleDeleteEverything } = useEraseDeviceData(returnToAgeGate);
 
   const loadStorageInfo = useCallback(async (): Promise<boolean> => {
     const load = ++latestLoad.current;
@@ -299,43 +303,6 @@ export default function StorageManagerScreen() {
       ],
     );
   }, []);
-
-  const handleDeleteEverything = useCallback(() => {
-    Alert.alert(
-      'Delete all local data?',
-      'This permanently deletes all conversations, memory, settings, and downloaded models from this device. This action cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete Everything',
-          style: 'destructive',
-          onPress: () => {
-            Alert.alert(
-              'Are you absolutely sure?',
-              'All local data will be wiped. You will be signed out and returned to onboarding.',
-              [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                  text: 'Yes, delete everything',
-                  style: 'destructive',
-                  onPress: async () => {
-                    setIsWiping(true);
-                    try {
-                      await wipeAllLocalData({ afterPersistentWipe: resetLocalInMemoryState });
-                      router.replace('/(public)/age-gate' as Parameters<typeof router.replace>[0]);
-                    } catch {
-                      setIsWiping(false);
-                      Alert.alert('Wipe failed', 'Could not delete all local data. Try again.');
-                    }
-                  },
-                },
-              ],
-            );
-          },
-        },
-      ],
-    );
-  }, [router]);
 
   const installedModels = models.status === 'ready' ? models.value : [];
   const totalModelBytes = installedModels.reduce((sum, m) => sum + (m.size_bytes ?? 0), 0);

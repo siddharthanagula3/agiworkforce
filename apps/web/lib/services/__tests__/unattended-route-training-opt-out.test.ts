@@ -9,6 +9,7 @@ type ScanModule6 = typeof import('@/lib/services/entitlement-resolution');
 type ScanModule7 = typeof import('@/lib/services/managed-compute-access');
 type ScanModule8 = typeof import('@/lib/services/managed-usage-request-service');
 type ScanModule9 = typeof import('@/lib/server/claimed-user-scope-db');
+type ScanModule10 = typeof import('@/lib/server/adult-eligibility');
 
 const state = vi.hoisted(() => ({
   optOut: 'off' as 'on' | 'off' | 'unreadable',
@@ -17,7 +18,8 @@ const state = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal()),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@agiworkforce/routing', async (importOriginal) => ({
@@ -36,6 +38,10 @@ vi.mock('@/lib/auth/account-lifecycle', async (importOriginal) => ({
 vi.mock('@/lib/server/terms', async (importOriginal) => ({
   ...(await importOriginal<ScanModule3>()),
   mustAcceptTerms: vi.fn(async () => false),
+}));
+vi.mock('@/lib/server/adult-eligibility', async (importOriginal) => ({
+  ...(await importOriginal<ScanModule10>()),
+  readAdultEligibilityState: vi.fn(async () => 'confirmed'),
 }));
 vi.mock('@/lib/feature-flags/capability-gate', async (importOriginal) => ({
   ...(await importOriginal<ScanModule4>()),

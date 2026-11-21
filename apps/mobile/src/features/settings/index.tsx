@@ -9,7 +9,6 @@ import { useUser } from '@clerk/expo';
 import { normalizeDisplayName } from '@agiworkforce/utils/display-name';
 import {
   Archive,
-  Baby,
   Bell,
   BookOpen,
   Brain,
@@ -47,7 +46,7 @@ import {
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/Text';
 import { useAuthStore } from '@/src/features/auth/store';
-import { readAgeGateRecord } from '@/src/features/auth/services/ageGate';
+import { ageGateStatus, getAgeThreshold } from '@/src/features/auth/services/ageGate';
 import type { PostAuthDestination } from '@/src/features/auth/services/postAuthIntent';
 import { useTierStore } from '@/src/features/billing/store';
 import { planCheckOf } from '@/src/features/billing/planCheck';
@@ -67,11 +66,11 @@ import {
 import { DEVICE_INTEGRATIONS_SCREEN_TITLE } from '@/src/features/integrations/presentation';
 import { searchSettingsPages } from '@/src/features/search/mobileDestinations';
 import { destinationScope } from '@/src/features/shell/destinationScope';
-import { AGE_SETTING_LABEL, ageSettingValue } from '@/src/features/settings/ageSettingValue';
 import {
-  AGE_ENTRY_PARAMS,
-  PARENTAL_CONTROLS_ROUTE,
-} from '@/src/features/settings/parental-controls/entry';
+  AGE_SETTING_LABEL,
+  AGE_SETTING_ROUTE,
+  ageSettingValue,
+} from '@/src/features/settings/ageSettingValue';
 import { SettingsSearchField, SettingsSearchResults } from '@/src/features/settings/SettingsSearch';
 import { settingsSearchEntries } from '@/src/features/settings/settingsSearchEntries';
 import { useOpenCloudRoute } from '@/src/features/settings/useOpenCloudRoute';
@@ -545,13 +544,13 @@ export default function SettingsTabScreen() {
     }
   }, [router]);
 
-  const [ageRecord, setAgeRecord] = useState(readAgeGateRecord);
+  const [ageStatus, setAgeStatus] = useState(ageGateStatus);
   useFocusEffect(
     useCallback(() => {
-      setAgeRecord(readAgeGateRecord());
+      setAgeStatus(ageGateStatus());
     }, []),
   );
-  const ageValue = ageSettingValue(ageRecord);
+  const ageValue = ageSettingValue(ageStatus, getAgeThreshold());
 
   const [searchQuery, setSearchQuery] = useState('');
   const isSearching = searchQuery.trim().length > 0;
@@ -639,12 +638,7 @@ export default function SettingsTabScreen() {
             label: AGE_SETTING_LABEL,
             icon: Cake,
             value: ageValue,
-            route: PARENTAL_CONTROLS_ROUTE,
-            onPress: () =>
-              router.push({
-                pathname: PARENTAL_CONTROLS_ROUTE,
-                params: AGE_ENTRY_PARAMS,
-              } as Parameters<typeof router.push>[0]),
+            ...pushTo(AGE_SETTING_ROUTE),
           },
           {
             key: 'account-shared-links',
@@ -730,13 +724,6 @@ export default function SettingsTabScreen() {
             label: 'Safety & Security',
             icon: Shield,
             ...pushTo('/(app)/settings/safety-security'),
-          },
-          {
-            key: 'parental-controls',
-            label: 'Parental Controls',
-            icon: Baby,
-            value: isCloud ? undefined : ageValue,
-            ...pushTo('/(app)/settings/parental-controls'),
           },
           {
             key: 'storage',

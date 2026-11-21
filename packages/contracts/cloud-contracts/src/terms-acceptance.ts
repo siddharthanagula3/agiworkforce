@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { AdultEligibilityEvidenceSchema } from './adult-eligibility';
+
 export const TERMS_ACCEPTANCE_PATH = '/api/terms/accept';
 
 export const TERMS_ACCEPTANCE_SURFACES = ['web-signup', 'web-login', 'mobile-auth'] as const;
@@ -10,6 +12,7 @@ export const TermsAcceptanceRequestSchema = z.object({
   surface: z.enum(TERMS_ACCEPTANCE_SURFACES),
   version: POLICY_VERSION,
   marketingEmailNoticeVersion: POLICY_VERSION.optional(),
+  eligibility: AdultEligibilityEvidenceSchema.optional(),
 });
 
 export type TermsAcceptanceRequest = z.infer<typeof TermsAcceptanceRequestSchema>;

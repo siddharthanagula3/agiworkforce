@@ -7,6 +7,7 @@ import { GuestChat } from '@/features/chat/guest/GuestChat';
 import { getOrCreateAnonSession } from '@/lib/csrf';
 import { GUEST_CHAT_CONFIG } from '@/lib/guest-chat/config';
 import { isGuestChatAvailable } from '@/lib/guest-chat/guest-chat-access';
+import { requireAdultEligibility } from '@/lib/server/require-adult-eligibility';
 import { requireCurrentTermsAcceptance } from '@/lib/server/require-current-terms';
 import { getIdentityProvider, getRequestIdentity } from '@/lib/server/identity';
 import { sessionExpiredRedirect } from '@/lib/server/session-expired';
@@ -57,6 +58,8 @@ export default async function ChatLayout({ children }: { children: ReactNode }) 
   }
 
   await requireCurrentTermsAcceptance(userId, redirectTo);
+
+  await requireAdultEligibility(userId, redirectTo);
 
   return (
     <ProductRuntimeProviders>

@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   transaction: vi.fn(),
   issueDeveloperToken: vi.fn(),
   hasAcceptedCurrentTerms: vi.fn(),
+  adultEligibility: vi.fn(),
   resolveActiveOrganizationId: vi.fn(),
 }));
 
@@ -27,10 +28,15 @@ vi.mock('@/lib/server/terms', () => ({
   hasAcceptedCurrentTerms: (...args: unknown[]) => mocks.hasAcceptedCurrentTerms(...args),
   mustAcceptTerms: async (userId: string) => !(await mocks.hasAcceptedCurrentTerms(userId)),
 }));
+vi.mock('@/lib/server/adult-eligibility', async (importOriginal) => ({
+  ...(await importOriginal()),
+  readAdultEligibilityState: (...args: unknown[]) => mocks.adultEligibility(...args),
+}));
 vi.mock('@/lib/services/active-workspace-service', () => ({
   resolveActiveOrganizationId: (...args: unknown[]) => mocks.resolveActiveOrganizationId(...args),
 }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
@@ -46,6 +52,7 @@ describe('POST /api/auth/device/token', () => {
       expiresIn: 604800,
     });
     mocks.hasAcceptedCurrentTerms.mockResolvedValue(true);
+    mocks.adultEligibility.mockResolvedValue('confirmed');
     mocks.resolveActiveOrganizationId.mockResolvedValue(null);
     mocks.transaction.mockImplementation(async (callback: (tx: unknown) => Promise<unknown>) =>
       callback({
@@ -326,4 +333,101 @@ describe('POST /api/auth/device/token', () => {
     expect(mocks.issueDeveloperToken).not.toHaveBeenCalled();
     expect(mocks.transaction).not.toHaveBeenCalled();
   });
+
+  describe('adult eligibility', () => {
+    const ACCEPTANCE_URL =
+      'https://agiworkforce.com/login/complete?redirectTo=%2Fauth%2Fdevice%3Fuser_code%3DABCD-2345';
+
+    function approvedAccount() {
+      mocks.query
+        .mockReset()
+        .mockResolvedValueOnce([codeRow('approved')])
+        .mockResolvedValueOnce([{ account_status: 'active' }])
+        .mockResolvedValueOnce([{ status: 'consumed' }]);
+    }
+
+    function expectCodeLeftUnconsumed() {
+      expect(mocks.issueDeveloperToken).not.toHaveBeenCalled();
+      expect(mocks.transaction).not.toHaveBeenCalled();
+      expect(mocks.execute).not.toHaveBeenCalled();
+      expect(mocks.query).toHaveBeenCalledTimes(2);
+    }
+
+    it('asks an account that was never asked its age to answer on web, in the terms-review shape clients follow', async () => {
+      approvedAccount();
+      mocks.adultEligibility.mockResolvedValue('unconfirmed');
+
+      const response = await POST(poll());
+
+      expect(response.status).toBe(403);
+      expect(response.headers.get('Cache-Control')).toBe('no-store');
+      const body = (await response.json()) as Record<string, unknown>;
+      expect(body['error']).toBe('terms_acceptance_required');
+      expect(body['review']).toBe('age');
+      expect(body['acceptance_url']).toBe(ACCEPTANCE_URL);
+      expect(String(body['error_description'])).toContain(ACCEPTANCE_URL);
+      expect(mocks.adultEligibility).toHaveBeenCalledWith('user-1');
+      expectCodeLeftUnconsumed();
+    });
+
+    it('treats an admission recorded under the earlier 13 and over minimum as not confirmed', async () => {
+      const { adultEligibilityStateOf } = await vi.importActual<AdultEligibilityModule>(
+        '@/lib/server/adult-eligibility',
+      );
+      approvedAccount();
+      mocks.adultEligibility.mockResolvedValue(
+        adultEligibilityStateOf({
+          adult_eligibility_outcome: 'eligible',
+          adult_eligibility_minimum_age: 13,
+        }),
+      );
+
+      const response = await POST(poll());
+
+      expect(response.status).toBe(403);
+      await expect(response.json()).resolves.toMatchObject({
+        error: 'terms_acceptance_required',
+        review: 'age',
+      });
+      expectCodeLeftUnconsumed();
+    });
+
+    it('tells an account that declared an age under the minimum it is unavailable', async () => {
+      approvedAccount();
+      mocks.adultEligibility.mockResolvedValue('ineligible');
+
+      const response = await POST(poll());
+
+      expect(response.status).toBe(403);
+      expect(response.headers.get('Cache-Control')).toBe('no-store');
+      const body = (await response.json()) as Record<string, unknown>;
+      expect(body['error']).toBe('account_unavailable');
+      expect(body['recovery_url']).toBe(ACCEPTANCE_URL);
+      expect(typeof body['error_description']).toBe('string');
+      expectCodeLeftUnconsumed();
+    });
+
+    it('asks the client to try again, and issues nothing, when the decision cannot be read', async () => {
+      approvedAccount();
+      mocks.adultEligibility.mockRejectedValue(new Error('database offline'));
+
+      const response = await POST(poll());
+
+      expect(response.status).toBe(503);
+      expect(response.headers.get('Cache-Control')).toBe('no-store');
+      await expect(response.json()).resolves.toMatchObject({ error: 'temporarily_unavailable' });
+      expectCodeLeftUnconsumed();
+    });
+
+    it('is not asked for a code the poll refuses for another reason first', async () => {
+      mocks.query.mockReset().mockResolvedValue([codeRow('denied')]);
+
+      const response = await POST(poll());
+
+      expect(response.status).toBe(400);
+      expect(mocks.adultEligibility).not.toHaveBeenCalled();
+    });
+  });
 });
+
+type AdultEligibilityModule = typeof import('@/lib/server/adult-eligibility');

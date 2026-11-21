@@ -34,7 +34,9 @@ afterAll(() => {
 
 import { ACCOUNT_MINIMUM_AGE } from '@agiworkforce/types';
 import {
+  ageGateStatus,
   detectRegionRule,
+  deviceAdultEvidence,
   getAgeThreshold,
   confirmAgeGate,
   confirmAgeGateFromRange,
@@ -42,237 +44,188 @@ import {
   isMinorMode,
   clearAgeGate,
   readAgeGateRecord,
+  type AgeGateRecord,
 } from '../src/features/auth/services/ageGate';
 
 function setTimezone(tz: string) {
   _mockTimezone = tz;
 }
 
-describe('detectRegionRule, country thresholds', () => {
-  afterEach(() => {
-    mockStorage.clear();
-    setTimezone('America/New_York');
-  });
+function storeRecord(overrides: Partial<AgeGateRecord>): void {
+  mockStorage.set(
+    'age-gate:v1',
+    JSON.stringify({
+      confirmed: true,
+      isMinor: false,
+      confirmedAt: '2026-06-01T00:00:00.000Z',
+      regionCode: 'DEFAULT',
+      threshold: ACCOUNT_MINIMUM_AGE,
+      ...overrides,
+    }),
+  );
+}
 
-  it('returns 18 threshold for India (Asia/Kolkata)', () => {
-    setTimezone('Asia/Kolkata');
-    const rule = detectRegionRule();
-    expect(rule.code).toBe('IN');
-    expect(rule.threshold).toBe(18);
-  });
+function storeOsRange(lowerBound: number | null, upperBound: number | null): void {
+  mockStorage.set(
+    'age-assurance:v1',
+    JSON.stringify({
+      checkedAt: '2026-06-01T00:00:00.000Z',
+      platform: 'ios',
+      outcome: 'range',
+      regulated: true,
+      lowerBound,
+      upperBound,
+      guardianManaged: false,
+      installId: null,
+      significantChangeStatus: null,
+    }),
+  );
+}
 
-  it('returns 18 threshold for Brazil (America/Sao_Paulo)', () => {
-    setTimezone('America/Sao_Paulo');
-    const rule = detectRegionRule();
-    expect(rule.code).toBe('BR');
-    expect(rule.threshold).toBe(18);
-  });
-
-  it('returns 18 threshold for Brazil (Manaus)', () => {
-    setTimezone('America/Manaus');
-    expect(detectRegionRule().threshold).toBe(18);
-  });
-
-  it('returns 16 threshold for Germany (Europe/Berlin)', () => {
-    setTimezone('Europe/Berlin');
-    const rule = detectRegionRule();
-    expect(rule.code).toBe('DE');
-    expect(rule.threshold).toBe(16);
-  });
-
-  it('returns 16 threshold for France (Europe/Paris)', () => {
-    setTimezone('Europe/Paris');
-    expect(detectRegionRule().threshold).toBe(16);
-  });
-
-  it('returns 16 threshold for Italy (Europe/Rome)', () => {
-    setTimezone('Europe/Rome');
-    expect(detectRegionRule().threshold).toBe(16);
-  });
-
-  it('returns 16 threshold for Spain (Europe/Madrid)', () => {
-    setTimezone('Europe/Madrid');
-    expect(detectRegionRule().threshold).toBe(16);
-  });
-
-  it('returns 13 threshold for UK (Europe/London)', () => {
-    setTimezone('Europe/London');
-    const rule = detectRegionRule();
-    expect(rule.code).toBe('GB');
-    expect(rule.threshold).toBe(13);
-  });
-
-  it('returns 13 threshold for US (America/New_York)', () => {
-    setTimezone('America/New_York');
-    const rule = detectRegionRule();
-    expect(rule.code).toBe('DEFAULT');
-    expect(rule.threshold).toBe(13);
-  });
-
-  it('returns 13 default for unrecognized timezone', () => {
-    setTimezone('Antarctica/Troll');
-    const rule = detectRegionRule();
-    expect(rule.threshold).toBe(13);
-  });
+afterEach(() => {
+  mockStorage.clear();
+  setTimezone('America/New_York');
 });
 
-describe('getAgeThreshold', () => {
-  afterEach(() => {
-    setTimezone('America/New_York');
+describe('one minimum age', () => {
+  it('is 18', () => {
+    expect(ACCOUNT_MINIMUM_AGE).toBe(18);
   });
 
-  it('returns 18 for India timezone', () => {
-    setTimezone('Asia/Kolkata');
-    expect(getAgeThreshold()).toBe(18);
-  });
-
-  it('keeps the 16 regional age in the EU, above the account minimum', () => {
-    setTimezone('Europe/Berlin');
-    expect(getAgeThreshold()).toBe(16);
-    expect(getAgeThreshold()).toBeGreaterThan(ACCOUNT_MINIMUM_AGE);
-  });
-
-  it('returns the account minimum where no regional age is higher', () => {
-    setTimezone('America/New_York');
+  it.each([
+    'America/New_York',
+    'Europe/London',
+    'Europe/Berlin',
+    'Europe/Paris',
+    'Asia/Kolkata',
+    'America/Sao_Paulo',
+    'Antarctica/Troll',
+    'Etc/UTC',
+  ])('never resolves below the account minimum in %s', (zone) => {
+    setTimezone(zone);
     expect(getAgeThreshold()).toBe(ACCOUNT_MINIMUM_AGE);
+    expect(detectRegionRule().threshold).toBeGreaterThanOrEqual(ACCOUNT_MINIMUM_AGE);
   });
 
-  it('never asks for less than the account minimum in any zone', () => {
-    for (const zone of ['Europe/London', 'Antarctica/Troll', 'Etc/UTC', 'Asia/Tokyo']) {
-      setTimezone(zone);
-      expect(getAgeThreshold()).toBeGreaterThanOrEqual(ACCOUNT_MINIMUM_AGE);
-    }
+  it('still names the region where a regional rule matches', () => {
+    setTimezone('Asia/Kolkata');
+    expect(detectRegionRule().code).toBe('IN');
+    setTimezone('America/Manaus');
+    expect(detectRegionRule().code).toBe('BR');
+    setTimezone('Europe/Berlin');
+    expect(detectRegionRule().code).toBe('DEFAULT');
   });
 });
 
-describe('confirmAgeGate', () => {
-  beforeEach(() => {
-    mockStorage.clear();
-    setTimezone('America/New_York');
-  });
-
-  it('marks adult as confirmed and non-minor (US, age 20)', () => {
-    const record = confirmAgeGate(20);
-    expect(record.confirmed).toBe(true);
-    expect(record.isMinor).toBe(false);
-    expect(record.threshold).toBe(ACCOUNT_MINIMUM_AGE);
-    expect(record.regionCode).toBe('DEFAULT');
-    expect(isAgeGateConfirmed()).toBe(true);
-    expect(isMinorMode()).toBe(false);
-  });
-
-  it('marks minor correctly (US, age 12)', () => {
-    const record = confirmAgeGate(12);
-    expect(record.confirmed).toBe(true);
+describe('a typed age', () => {
+  it('refuses 17', () => {
+    const record = confirmAgeGate(17);
     expect(record.isMinor).toBe(true);
-    expect(isMinorMode()).toBe(true);
+    expect(record.threshold).toBe(ACCOUNT_MINIMUM_AGE);
+    expect(ageGateStatus()).toBe('refused');
     expect(isAgeGateConfirmed()).toBe(false);
   });
 
-  it.each([13, 16, 17])('admits a %i year old where no regional age is higher (US)', (age) => {
-    const record = confirmAgeGate(age);
-    expect(record.isMinor).toBe(false);
-    expect(record.threshold).toBe(ACCOUNT_MINIMUM_AGE);
-    expect(isAgeGateConfirmed()).toBe(true);
-    expect(isMinorMode()).toBe(false);
-  });
-
-  it('refuses the year under the account minimum (US)', () => {
-    const record = confirmAgeGate(ACCOUNT_MINIMUM_AGE - 1);
-    expect(record.isMinor).toBe(true);
-    expect(isAgeGateConfirmed()).toBe(false);
-  });
-
-  it('marks adult for India threshold (18), age 18', () => {
-    setTimezone('Asia/Kolkata');
+  it('admits 18', () => {
     const record = confirmAgeGate(18);
     expect(record.isMinor).toBe(false);
-    expect(record.regionCode).toBe('IN');
+    expect(record.threshold).toBe(ACCOUNT_MINIMUM_AGE);
+    expect(ageGateStatus()).toBe('confirmed');
+    expect(isMinorMode()).toBe(false);
   });
 
-  it.each([13, 16, 17])('marks minor for India threshold (18), age %i', (age) => {
-    setTimezone('Asia/Kolkata');
-    const record = confirmAgeGate(age);
-    expect(record.isMinor).toBe(true);
-    expect(record.threshold).toBe(18);
-    expect(isAgeGateConfirmed()).toBe(false);
-  });
-
-  it.each([13, 15])('marks minor for EU threshold (16), age %i', (age) => {
-    setTimezone('Europe/Berlin');
-    const record = confirmAgeGate(age);
-    expect(record.isMinor).toBe(true);
-    expect(record.regionCode).toBe('DE');
-    expect(record.threshold).toBe(16);
-    expect(isAgeGateConfirmed()).toBe(false);
-  });
-
-  it.each([16, 17])('admits a %i year old in the EU, at or over its regional age', (age) => {
-    setTimezone('Europe/Berlin');
-    const record = confirmAgeGate(age);
-    expect(record.isMinor).toBe(false);
-    expect(record.threshold).toBe(16);
-    expect(isAgeGateConfirmed()).toBe(true);
+  it.each([12, 13, 15, 16, 17])('refuses %i in every region', (age) => {
+    for (const zone of ['America/New_York', 'Europe/London', 'Europe/Berlin']) {
+      mockStorage.clear();
+      setTimezone(zone);
+      expect(confirmAgeGate(age).isMinor).toBe(true);
+      expect(isAgeGateConfirmed()).toBe(false);
+    }
   });
 
   it('stores a valid ISO timestamp in confirmedAt', () => {
     const record = confirmAgeGate(25);
-    expect(() => new Date(record.confirmedAt)).not.toThrow();
     expect(new Date(record.confirmedAt).getTime()).toBeGreaterThan(0);
   });
 });
 
-describe('isAgeGateConfirmed', () => {
-  beforeEach(() => mockStorage.clear());
+describe('a stored result', () => {
+  it.each([13, 16])('asks again when the adult result was made against %i', (threshold) => {
+    storeRecord({ threshold });
 
-  it('returns false when no record exists', () => {
-    expect(isAgeGateConfirmed()).toBe(false);
-  });
-
-  it('returns true after confirmation', () => {
-    confirmAgeGate(20);
-    expect(isAgeGateConfirmed()).toBe(true);
-  });
-
-  it('returns false for a device refused an account', () => {
-    confirmAgeGate(ACCOUNT_MINIMUM_AGE - 1);
-    expect(isAgeGateConfirmed()).toBe(false);
-  });
-});
-
-describe('clearAgeGate', () => {
-  beforeEach(() => mockStorage.clear());
-
-  it('removes the stored record', () => {
-    confirmAgeGate(25);
-    expect(isAgeGateConfirmed()).toBe(true);
-    clearAgeGate();
+    expect(ageGateStatus()).toBe('required');
     expect(isAgeGateConfirmed()).toBe(false);
     expect(isMinorMode()).toBe(false);
+    expect(deviceAdultEvidence()).toBeNull();
+  });
+
+  it('reuses an adult result made against 18 without asking', () => {
+    storeRecord({ threshold: 18, regionCode: 'IN' });
+
+    expect(ageGateStatus()).toBe('confirmed');
+    expect(deviceAdultEvidence()).toEqual({ kind: 'age_checked_on_device', minimumAge: 18 });
+  });
+
+  it('reuses a stored OS range whose lower bound is 18, even over a 13-based result', () => {
+    storeRecord({ threshold: 13 });
+    storeOsRange(18, null);
+
+    expect(ageGateStatus()).toBe('confirmed');
+    expect(deviceAdultEvidence()).toEqual({
+      kind: 'platform_age_signal',
+      lowerBound: 18,
+      upperBound: null,
+    });
+  });
+
+  it.each([
+    [13, 17],
+    [16, 20],
+    [null, null],
+  ])('does not reuse a stored OS range from %p to %p', (lower, upper) => {
+    storeOsRange(lower, upper);
+    expect(ageGateStatus()).toBe('required');
+  });
+
+  it.each([13, 16, 18])('keeps an under-age result made against %i a refusal', (threshold) => {
+    storeRecord({ threshold, isMinor: true });
+    storeOsRange(18, null);
+
+    expect(ageGateStatus()).toBe('refused');
+    expect(deviceAdultEvidence()).toBeNull();
+  });
+
+  it('lets a person asked again record a new verdict over an old adult result', () => {
+    storeRecord({ threshold: 13 });
+
+    expect(confirmAgeGate(16).isMinor).toBe(true);
+    expect(ageGateStatus()).toBe('refused');
+  });
+
+  it('is required on a device with nothing stored', () => {
+    expect(ageGateStatus()).toBe('required');
   });
 });
 
 describe('confirmAgeGateFromRange', () => {
-  afterEach(() => {
-    mockStorage.clear();
-    setTimezone('America/New_York');
-  });
-
-  it('confirms an OS range at or above the threshold', () => {
-    expect(confirmAgeGateFromRange({ lowerBound: 13, upperBound: 17 })?.isMinor).toBe(false);
+  it('confirms a range at or above 18', () => {
+    expect(confirmAgeGateFromRange({ lowerBound: 18, upperBound: null })?.isMinor).toBe(false);
     expect(isAgeGateConfirmed()).toBe(true);
   });
 
-  it('refuses an OS range below the regional threshold', () => {
-    setTimezone('Europe/Berlin');
-    expect(confirmAgeGateFromRange({ lowerBound: 13, upperBound: 15 })?.isMinor).toBe(true);
+  it('refuses a range wholly under 18', () => {
+    expect(confirmAgeGateFromRange({ lowerBound: 13, upperBound: 17 })?.isMinor).toBe(true);
     expect(isMinorMode()).toBe(true);
   });
 
-  it('records nothing when the range straddles the threshold', () => {
-    setTimezone('Europe/Berlin');
-    expect(confirmAgeGateFromRange({ lowerBound: 13, upperBound: 17 })).toBeNull();
-    expect(isAgeGateConfirmed()).toBe(false);
+  it.each([
+    [16, 20],
+    [null, null],
+    [13, null],
+    [null, 21],
+  ])('records nothing for %p to %p, which falls back to the typed age', (lower, upper) => {
+    expect(confirmAgeGateFromRange({ lowerBound: lower, upperBound: upper })).toBeNull();
+    expect(ageGateStatus()).toBe('required');
   });
 
   it('keeps a refused device refused when the OS later reports an adult', () => {
@@ -281,30 +234,24 @@ describe('confirmAgeGateFromRange', () => {
   });
 });
 
-describe('readAgeGateRecord', () => {
-  afterEach(() => {
-    mockStorage.clear();
-    setTimezone('America/New_York');
-  });
-
+describe('readAgeGateRecord and clearAgeGate', () => {
   it('returns null before any age was recorded', () => {
     expect(readAgeGateRecord()).toBeNull();
   });
 
-  it('returns the stored record, with the regional threshold it was confirmed against', () => {
-    setTimezone('Europe/Berlin');
+  it('returns the stored record with the threshold it was decided against', () => {
     const written = confirmAgeGate(40);
-
     expect(readAgeGateRecord()).toEqual(written);
-    expect(readAgeGateRecord()).toMatchObject({ confirmed: true, isMinor: false, threshold: 16 });
+    expect(readAgeGateRecord()).toMatchObject({ confirmed: true, isMinor: false, threshold: 18 });
   });
 
-  it('keeps a minor record readable and returns null once it is cleared', () => {
+  it('only clearing the device lifts a refusal', () => {
     confirmAgeGate(ACCOUNT_MINIMUM_AGE - 1);
-    expect(readAgeGateRecord()).toMatchObject({ confirmed: true, isMinor: true });
+    expect(confirmAgeGate(30).isMinor).toBe(true);
 
     clearAgeGate();
 
     expect(readAgeGateRecord()).toBeNull();
+    expect(ageGateStatus()).toBe('required');
   });
 });

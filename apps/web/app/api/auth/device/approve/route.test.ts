@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   audit: vi.fn(),
   loggerInfo: vi.fn(),
   hasAcceptedCurrentTerms: vi.fn(),
+  adultEligibility: vi.fn(),
   notifySignIn: vi.fn(),
 }));
 
@@ -55,6 +56,12 @@ vi.mock('@/lib/server/terms', async () => ({
   hasAcceptedCurrentTerms: (...args: unknown[]) => mocks.hasAcceptedCurrentTerms(...args),
   mustAcceptTerms: async (userId: string) => !(await mocks.hasAcceptedCurrentTerms(userId)),
 }));
+vi.mock('@/lib/server/adult-eligibility', async (importOriginal) => ({
+  ...(await importOriginal()),
+  ...(await vi.importActual<AdultEligibilityModule>('@/lib/server/adult-eligibility')),
+
+  readAdultEligibilityState: (...args: unknown[]) => mocks.adultEligibility(...args),
+}));
 vi.mock('@/lib/server/neon-db', async () => ({
   ...(await vi.importActual<NeonDbModule>('@/lib/server/neon-db')),
 
@@ -85,6 +92,7 @@ type SecurityAuditModule = typeof import('@/lib/security-audit');
 type AccountActivityNotificationsModule =
   typeof import('@/lib/services/account-activity-notifications');
 type TermsModule = typeof import('@/lib/server/terms');
+type AdultEligibilityModule = typeof import('@/lib/server/adult-eligibility');
 type NeonDbModule = typeof import('@/lib/server/neon-db');
 type LoggerModule = typeof import('@/lib/logger');
 
@@ -98,6 +106,7 @@ describe('POST /api/auth/device/approve', () => {
     });
     vi.mocked(readDeviceCodeSignInPolicy).mockClear();
     mocks.hasAcceptedCurrentTerms.mockResolvedValue(true);
+    mocks.adultEligibility.mockResolvedValue('confirmed');
     mocks.settingsQuery.mockResolvedValue([{ settings: {} }]);
     mocks.scopedExecute.mockResolvedValue(0);
     mocks.scopedQuery.mockImplementation((sql: string, params: unknown[]) => {
@@ -198,10 +207,99 @@ describe('POST /api/auth/device/approve', () => {
         '/login/complete?redirectTo=%2Fauth%2Fdevice%3Fuser_code%3DABCD-2345%26surface%3Ddesktop',
     });
     expect(mocks.query).toHaveBeenCalledOnce();
+    expect(mocks.adultEligibility).not.toHaveBeenCalled();
     expect(mocks.loggerInfo).not.toHaveBeenCalledWith(
       expect.objectContaining({ userId: 'user_approved' }),
       'Device code approved',
     );
+  });
+
+  async function approveForAccountInState(state: 'unconfirmed' | 'ineligible' | 'unreadable') {
+    if (state === 'unreadable') {
+      mocks.adultEligibility.mockRejectedValue(new Error('database offline'));
+    } else {
+      mocks.adultEligibility.mockResolvedValue(state);
+    }
+    return POST(
+      new NextRequest('https://agiworkforce.com/api/auth/device/approve', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ user_code: 'ABCD-2345', surface: 'desktop' }),
+      }),
+    );
+  }
+
+  function expectNothingApproved() {
+    expect(mocks.query).toHaveBeenCalledOnce();
+    expect(mocks.query.mock.calls[0]?.[0]).toContain('SELECT device_id, status, expires_at');
+    expect(mocks.execute).not.toHaveBeenCalled();
+    expect(mocks.notifySignIn).not.toHaveBeenCalled();
+    expect(mocks.audit).not.toHaveBeenCalled();
+    expect(mocks.loggerInfo).not.toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'user_approved' }),
+      'Device code approved',
+    );
+  }
+
+  it('does not approve a device for an account nobody has asked its age, and sends it to answer on web', async () => {
+    const response = await approveForAccountInState('unconfirmed');
+
+    expect(response.status).toBe(403);
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'AGE_CONFIRMATION_REQUIRED' },
+      acceptanceUrl:
+        '/login/complete?redirectTo=%2Fauth%2Fdevice%3Fuser_code%3DABCD-2345%26surface%3Ddesktop',
+    });
+    expectNothingApproved();
+  });
+
+  it('does not approve a device for an account that declared an age under the minimum', async () => {
+    const response = await approveForAccountInState('ineligible');
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'AGE_INELIGIBLE' },
+    });
+    expectNothingApproved();
+  });
+
+  it('does not approve a device when the age decision cannot be read', async () => {
+    const response = await approveForAccountInState('unreadable');
+
+    expect(response.status).toBe(503);
+    const body = await response.json();
+    expect(body.error.code).toBe('AGE_ELIGIBILITY_UNAVAILABLE');
+    expect(body.acceptanceUrl).toBeUndefined();
+    expectNothingApproved();
+  });
+
+  it('reads the age decision for the signed-in account and approves when it is confirmed', async () => {
+    const response = await approveForAccountInState('unconfirmed');
+    expect(response.status).toBe(403);
+
+    mocks.query.mockReset();
+    mocks.query
+      .mockResolvedValueOnce([
+        {
+          device_id: '8cc8544f-7d36-4ec3-aae2-ce49740fa59c',
+          status: 'pending',
+          expires_at: new Date(Date.now() + 60_000).toISOString(),
+        },
+      ])
+      .mockResolvedValueOnce([{ status: 'approved' }]);
+    mocks.adultEligibility.mockResolvedValue('confirmed');
+    const approved = await POST(
+      new NextRequest('https://agiworkforce.com/api/auth/device/approve', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ user_code: 'ABCD-2345' }),
+      }),
+    );
+
+    expect(approved.status).toBe(200);
+    expect(mocks.adultEligibility).toHaveBeenLastCalledWith('user_approved');
+    expect(mocks.notifySignIn).toHaveBeenCalledOnce();
   });
 
   it.each([
