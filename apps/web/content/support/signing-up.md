@@ -25,8 +25,8 @@ scope: public
 An address that no account uses starts a new account, and an address that has
 one logs in to it, so there is no separate sign-up form. The screen does not
 ask your age and has no terms checkbox or marketing email box: under
-**Continue** it states "By continuing, you agree to the Terms of Use and
-acknowledge the Privacy Policy."
+**Continue** it states "By continuing, you agree to our Terms and Privacy
+Policy."
 
 The code always comes before the password: a new account is asked for a
 password only after the code proves the address is yours. The password screen

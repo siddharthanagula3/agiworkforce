@@ -129,7 +129,7 @@ describe('the agreement on the one screen', () => {
 
     const agreement = screen.getByTestId('auth-signup-agreement');
     expect(agreement).toHaveTextContent(
-      'By continuing, you agree to the Terms of Use and acknowledge the Privacy Policy.',
+      'By continuing, you agree to our Terms and Privacy Policy.',
     );
     expect(within(agreement).queryByRole('checkbox')).toBeNull();
     expect(screen.queryByRole('checkbox')).toBeNull();

@@ -16,8 +16,7 @@ const PROVIDERS: readonly AuthProvider[] = [
 ];
 
 const HEADING = 'Log in or sign up';
-const AGREEMENT_SENTENCE =
-  'By continuing, you agree to the Terms of Use and acknowledge the Privacy Policy.';
+const AGREEMENT_SENTENCE = 'By continuing, you agree to our Terms and Privacy Policy.';
 const EMAIL = 'person@example.com';
 const PASSKEY_BUTTON = 'Sign in with a passkey or security key';
 
@@ -113,7 +112,7 @@ describe('the one screen for logging in and signing up', () => {
     expect(agreement.tagName).toBe('P');
     expect(agreement).toHaveClass('text-xs');
     expect(screen.getAllByText(/By continuing/)).toHaveLength(1);
-    expect(within(agreement).getByRole('link', { name: 'Terms of Use' })).toHaveAttribute(
+    expect(within(agreement).getByRole('link', { name: 'Terms' })).toHaveAttribute(
       'href',
       '/terms',
     );
@@ -138,28 +137,24 @@ describe('the one screen for logging in and signing up', () => {
     }
   });
 
-  it('keeps the footer links as they were, and every policy reachable exactly once', () => {
+  it('keeps the footer links as they were, and links each policy once from the agreement', () => {
     renderStep();
 
-    const footer = screen.getByTestId('auth-legal-footer');
-    expect(
-      within(footer)
+    const linksIn = (region: HTMLElement) =>
+      within(region)
         .getAllByRole('link')
-        .map((link) => link.textContent),
-    ).toEqual(['Help', 'Privacy', 'Terms', 'Contact']);
-    const expected: ReadonlyArray<[string, string]> = [
-      ['Terms of Use', '/terms'],
-      ['Privacy Policy', '/privacy'],
+        .map((link) => [link.textContent, link.getAttribute('href')]);
+
+    expect(linksIn(screen.getByTestId('auth-legal-footer'))).toEqual([
       ['Help', '/help'],
       ['Privacy', '/privacy'],
       ['Terms', '/terms'],
       ['Contact', '/contact'],
-    ];
-    for (const [name, href] of expected) {
-      const links = screen.getAllByRole('link', { name });
-      expect(links, name).toHaveLength(1);
-      expect(links[0]).toHaveAttribute('href', href);
-    }
+    ]);
+    expect(linksIn(screen.getByTestId('auth-signup-agreement'))).toEqual([
+      ['Terms', '/terms'],
+      ['Privacy Policy', '/privacy'],
+    ]);
   });
 
   it('submits the trimmed email from Continue and from Enter', async () => {

@@ -24,8 +24,7 @@ const ROUTES = ['/login', '/signup'] as const;
 const PHONE = { width: 390, height: 844 };
 const ZOOMED = { width: 640, height: 512 };
 const HEADING = 'Log in or sign up';
-const AGREEMENT =
-  'By continuing, you agree to the Terms of Use and acknowledge the Privacy Policy.';
+const AGREEMENT = 'By continuing, you agree to our Terms and Privacy Policy.';
 const FOOTER_LINKS = ['Help', 'Privacy', 'Terms', 'Contact'];
 const MOCK_CODE = MOCK_EMAILED_CODE;
 const WRONG_CODE = '000000';

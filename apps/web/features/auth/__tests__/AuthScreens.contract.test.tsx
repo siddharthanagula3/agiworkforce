@@ -66,8 +66,7 @@ const REDIRECTS = {
   signUpCompleteUrl: '/signup/complete?redirectTo=%2Fchat',
   ssoCallbackUrl: '/auth/sso-callback?redirectTo=%2Fchat',
 };
-const AGREEMENT_SENTENCE =
-  'By continuing, you agree to the Terms of Use and acknowledge the Privacy Policy.';
+const AGREEMENT_SENTENCE = 'By continuing, you agree to our Terms and Privacy Policy.';
 
 const ok = { error: null };
 
@@ -179,7 +178,7 @@ describe('the one screen, for an address no account uses', () => {
     renderScreen();
 
     const agreement = screen.getByTestId('auth-signup-agreement');
-    expect(within(agreement).getByRole('link', { name: 'Terms of Use' })).toHaveAttribute(
+    expect(within(agreement).getByRole('link', { name: 'Terms' })).toHaveAttribute(
       'href',
       CANONICAL_POLICY_ROUTES.terms,
     );

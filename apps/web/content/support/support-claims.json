@@ -6618,7 +6618,7 @@
       "doc": "signing-up",
       "section": "Create the account",
       "kind": "prose",
-      "sentence": "The screen does not ask your age and has no terms checkbox or marketing email box: under **Continue** it states \"By continuing, you agree to the Terms of Use and acknowledge the Privacy Policy.\"",
+      "sentence": "The screen does not ask your age and has no terms checkbox or marketing email box: under **Continue** it states \"By continuing, you agree to our Terms and Privacy Policy.\"",
       "implementation": [
         "apps/web/features/auth/AuthEmailStep.tsx",
         "apps/web/features/auth/AuthSignupAgreement.tsx"
@@ -6637,12 +6637,12 @@
         {
           "kind": "copy",
           "file": "apps/web/features/auth/AuthSignupAgreement.tsx",
-          "text": "'By continuing, you agree to the'"
+          "text": "'By continuing, you agree to our'"
         },
         {
           "kind": "copy",
           "file": "apps/web/features/auth/AuthSignupAgreement.tsx",
-          "text": "'and acknowledge the'"
+          "text": "'flow.agreement.join', 'and'"
         }
       ]
     },

@@ -12,11 +12,11 @@ export function AuthSignupAgreement({ id }: { id?: string }) {
 
   return (
     <p id={id} className={AUTH_AGREEMENT_CLASS} data-testid="auth-signup-agreement">
-      {copy.text('flow.agreement.continuingLead', 'By continuing, you agree to the')}{' '}
+      {copy.text('flow.agreement.continuingLead', 'By continuing, you agree to our')}{' '}
       <PageLink href={CANONICAL_POLICY_ROUTES.terms} className={AUTH_LINK_CLASS}>
-        {copy.text('flow.legal.terms', 'Terms of Use')}
+        {copy.text('flow.legal.termsShort', 'Terms')}
       </PageLink>{' '}
-      {copy.text('flow.legal.agreementJoin', 'and acknowledge the')}{' '}
+      {copy.text('flow.agreement.join', 'and')}{' '}
       <PageLink href={CANONICAL_POLICY_ROUTES.privacy} className={AUTH_LINK_CLASS}>
         {copy.text('flow.legal.privacy', 'Privacy Policy')}
       </PageLink>
