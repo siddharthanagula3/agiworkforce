@@ -1,12 +1,6 @@
 'use client';
 
-import {
-  useAuth,
-  useClerk,
-  useSession as useProviderSession,
-  useSignUp,
-  useUser,
-} from '@clerk/nextjs';
+import { useAuth, useClerk, useSession as useProviderSession, useUser } from '@clerk/nextjs';
 import type { SessionVerificationResource } from '@clerk/nextjs/types';
 import { useCallback, useMemo, useRef } from 'react';
 import type { AuthProviderId } from '@agiworkforce/client-runtime';
@@ -88,25 +82,6 @@ type NativeClerkSession = NonNullable<ReturnType<typeof useClerk>['session']>;
 
 export function nativeClerkSession(authority: RequestAuthority): NativeClerkSession {
   return nativeSessionFor<NativeClerkSession>(authority.session);
-}
-
-export function useCompletedSignUpForCurrentSession(): {
-  isLoaded: boolean;
-  createdThisSession: boolean;
-} {
-  const { isLoaded: authLoaded, userId, sessionId } = useAuth();
-  const { fetchStatus, signUp } = useSignUp();
-  const isLoaded = authLoaded && fetchStatus === 'idle';
-  return {
-    isLoaded,
-    createdThisSession:
-      isLoaded &&
-      signUp.status === 'complete' &&
-      userId !== null &&
-      sessionId !== null &&
-      signUp.createdUserId === userId &&
-      signUp.createdSessionId === sessionId,
-  };
 }
 
 export function useCurrentUser(): IdentityCurrentUserState {

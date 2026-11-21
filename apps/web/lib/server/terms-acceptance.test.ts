@@ -12,7 +12,11 @@ const mocks = vi.hoisted(() => ({
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/auth/email-confirmation', async (importOriginal) => ({
   ...(await importOriginal()),
-  readPrimaryEmailState: vi.fn(async () => ({ confirmed: true, email: 'person@example.com' })),
+  readAccountForEmailCheck: vi.fn(async () => ({
+    primaryEmail: 'person@example.com',
+    primaryEmailVerification: 'verified',
+    createdAt: Date.now(),
+  })),
 }));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },

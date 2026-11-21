@@ -22,21 +22,30 @@ export const MISSING_REPLY_EMAIL_MESSAGE =
 const EMAIL_UNREADABLE_MESSAGE =
   'Your email address could not be checked, so nothing was changed. Try again in a moment.';
 
-export async function readPrimaryEmailState(
+export async function readAccountForEmailCheck(
   userId: string,
   timeoutMs: number = IDENTITY_LOOKUP_TIMEOUT_MS,
-): Promise<PrimaryEmailState> {
-  let user: IdentityUser | null;
+): Promise<IdentityUser | null> {
   try {
-    user = await withTimeout(() => getIdentityUser(userId), timeoutMs);
+    return await withTimeout(() => getIdentityUser(userId), timeoutMs);
   } catch (error) {
     logger.warn({ userId, error }, 'Primary email lookup failed');
     throw createError.serviceUnavailable(EMAIL_UNREADABLE_MESSAGE).asUserSafe();
   }
+}
+
+export function primaryEmailStateOf(account: IdentityUser | null): PrimaryEmailState {
   return {
-    confirmed: user?.primaryEmailVerification === 'verified',
-    email: user?.primaryEmail ?? null,
+    confirmed: account?.primaryEmailVerification === 'verified',
+    email: account?.primaryEmail ?? null,
   };
+}
+
+export async function readPrimaryEmailState(
+  userId: string,
+  timeoutMs: number = IDENTITY_LOOKUP_TIMEOUT_MS,
+): Promise<PrimaryEmailState> {
+  return primaryEmailStateOf(await readAccountForEmailCheck(userId, timeoutMs));
 }
 
 /**

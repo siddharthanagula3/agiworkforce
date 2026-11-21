@@ -1,12 +1,11 @@
 export const AUTH_MARK_SIZE = 22;
 export const AUTH_PROVIDER_ICON_SIZE = 20;
-export const AUTH_ACTION_ICON_SIZE = 18;
-export const AUTH_INLINE_ICON_SIZE = 14;
 
 const CONTROL_SIZE = 'h-13 w-full rounded-full';
 const CONTROL = `auth-control ${CONTROL_SIZE}`;
 const SECONDARY_TEXT = 'text-base leading-normal text-text-secondary';
 const SMALL_SECONDARY_TEXT = 'text-[0.9375rem] leading-normal text-text-secondary';
+const FINE_PRINT = 'text-sm leading-normal text-text-secondary';
 const TOUCH_TARGET = 'inline-flex min-h-11 items-center';
 
 export const AUTH_PAGE_CLASS = 'relative flex min-h-svh w-full flex-col bg-surface-elevated px-6';
@@ -34,19 +33,16 @@ export const AUTH_FIELD_STACK_CLASS = 'mt-5';
 export const AUTH_FIELD_AID_CLASS = 'mt-3 flex justify-end';
 export const AUTH_CHECK_ROW_CLASS = `flex min-h-11 cursor-pointer items-start gap-3 ${SECONDARY_TEXT}`;
 export const AUTH_CHECKBOX_CLASS = 'auth-checkbox mt-0.5 shrink-0 cursor-pointer';
-export const AUTH_AGREEMENT_CLASS = `mt-4 ${SECONDARY_TEXT}`;
+export const AUTH_AGREEMENT_CLASS = `mt-4 ${FINE_PRINT}`;
 export const AUTH_AGE_CONFIRMATION_CLASS = 'mb-4';
-const OPTIONAL_CHECK_ROW = `flex min-h-11 items-start gap-3 pt-2 pb-3 ${SECONDARY_TEXT}`;
+const OPTIONAL_CHECK_ROW = `flex min-h-11 items-start gap-3 pt-2 pb-3 ${FINE_PRINT}`;
 export const AUTH_OPTIONAL_CHECK_ROW_CLASS = `${OPTIONAL_CHECK_ROW} cursor-pointer`;
 export const AUTH_HELD_CHECK_ROW_CLASS = `${OPTIONAL_CHECK_ROW} cursor-not-allowed`;
-export const AUTH_OPTIONAL_CHECK_NOTE_CLASS = `ms-8 pb-3 ${SECONDARY_TEXT}`;
+export const AUTH_OPTIONAL_CHECK_NOTE_CLASS = `ms-8 pb-3 ${FINE_PRINT}`;
 export const AUTH_OPTIONAL_CONSENT_CLASS = '-mb-3 flex flex-col';
-export const AUTH_NOTICE_CLASS = `mt-4 -mb-2 flex items-start gap-3 ${SECONDARY_TEXT}`;
 export const AUTH_LINK_CLASS =
   'auth-inline rounded-compact text-accent-text underline underline-offset-4';
 export const AUTH_STANDALONE_LINK_CLASS = `${AUTH_LINK_CLASS} ${TOUCH_TARGET}`;
-export const AUTH_NOTICE_LINK_CLASS = `${AUTH_STANDALONE_LINK_CLASS} -mt-1.5 -mb-2.5 gap-1`;
-export const AUTH_NOTICE_DETAIL_LINK_CLASS = `${AUTH_STANDALONE_LINK_CLASS} -my-2 self-start`;
 export const AUTH_INPUT_CLASS =
   'auth-field h-13 w-full rounded-none border-0 border-b bg-transparent px-0 text-base text-text-primary placeholder:text-text-muted';
 export const AUTH_FLOATING_INPUT_CLASS = `${AUTH_INPUT_CLASS} auth-field-float`;
@@ -71,13 +67,10 @@ export const AUTH_FOOTER_LINK_CLASS =
   'auth-inline rounded-compact text-text-secondary underline-offset-4 hover:underline';
 export const AUTH_FOOTER_NAV_LINK_CLASS = `${AUTH_FOOTER_LINK_CLASS} ${TOUCH_TARGET} px-2`;
 export const AUTH_FIELD_AID_LINK_CLASS = `${AUTH_FOOTER_LINK_CLASS} ${TOUCH_TARGET} -my-2.5 text-base leading-normal underline`;
-export const AUTH_DISCLOSURE_CLASS =
-  'mt-5 flex flex-col gap-1 rounded-xl bg-surface-elevated p-4 text-base leading-normal text-text-secondary';
-export const AUTH_DISCLOSURE_TITLE_CLASS = 'font-semibold text-text-primary';
-export const AUTH_CHECK_NOTE_CLASS = `ms-8 mt-1 pb-3 ${SMALL_SECONDARY_TEXT}`;
+export const AUTH_CHECK_NOTE_CLASS = `ms-8 mt-1 pb-3 ${FINE_PRINT}`;
 export const AUTH_OPTIONAL_ROW_CLASS = 'flex items-start justify-between gap-3';
-export const AUTH_OPTIONAL_TAG_CLASS = `shrink-0 pt-2.5 ${SMALL_SECONDARY_TEXT}`;
-export const AUTH_POLICY_LINKS_CLASS = `mt-1 flex flex-wrap items-center justify-center gap-x-2 ${SMALL_SECONDARY_TEXT}`;
+export const AUTH_OPTIONAL_TAG_CLASS = `shrink-0 pt-2.5 ${FINE_PRINT}`;
+export const AUTH_POLICY_LINKS_CLASS = `mt-1 flex flex-wrap items-center justify-center gap-x-2 ${FINE_PRINT}`;
 export const AUTH_STEP_LINKS_CLASS = 'mt-2.5 flex flex-col items-center';
 export const AUTH_STATUS_CLASS = `text-center ${SMALL_SECONDARY_TEXT}`;
 export const AUTH_STATUS_SPOKEN_CLASS = `mt-3 ${AUTH_STATUS_CLASS}`;

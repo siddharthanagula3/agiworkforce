@@ -1,10 +1,11 @@
 'use client';
 
-import { useCompletedSignUpForCurrentSession, useSession } from '@/lib/identity/client';
+import { useSession } from '@/lib/identity/client';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { addCsrfHeaders } from '@/lib/client/csrf';
+import { SIGN_UP_AGREEMENT_NOT_APPLICABLE_STATUS } from '@/lib/auth/new-account';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 import { AuthProgress } from '@/features/auth/AuthProgress';
 import { AuthStepFrame } from '@/features/auth/AuthStepFrame';
@@ -43,7 +44,6 @@ export function RecordTermsAcceptance({
   surface?: 'web-signup' | 'web-login';
 }) {
   const { isLoaded, isSignedIn } = useSession();
-  const completedSignUp = useCompletedSignUpForCurrentSession();
   const router = useRouter();
   const [failure, setFailure] = useState<'none' | 'retryable' | 'outdated'>('none');
   const attempted = useRef(false);
@@ -70,6 +70,13 @@ export function RecordTermsAcceptance({
         setFailure('outdated');
         return;
       }
+      if (response.status === SIGN_UP_AGREEMENT_NOT_APPLICABLE_STATUS) {
+        clearSignupAttemptMarkers();
+        router.replace(
+          buildLoginCompleteUrl({ redirectTo, desktopSurface: false, authRetry: false }),
+        );
+        return;
+      }
       if (!response.ok) throw new Error(`terms acceptance failed: ${response.status}`);
       clearSignupAttemptMarkers();
       router.replace(redirectTo);
@@ -79,7 +86,7 @@ export function RecordTermsAcceptance({
   }, [grantedOnThisScreen, redirectTo, router, surface]);
 
   useEffect(() => {
-    if (!isLoaded || !completedSignUp.isLoaded || attempted.current) return;
+    if (!isLoaded || attempted.current) return;
     attempted.current = true;
     if (!isSignedIn) {
       clearSignupAttemptMarkers();
@@ -88,11 +95,7 @@ export function RecordTermsAcceptance({
     }
     if (surface === 'web-signup') {
       const carried = readCarriedMarketingEmailChoice();
-      if (
-        !hasCurrentTermsGateMarker() ||
-        !completedSignUp.createdThisSession ||
-        carriedChoiceMustBeAskedAgain(carried)
-      ) {
+      if (!hasCurrentTermsGateMarker() || carriedChoiceMustBeAskedAgain(carried)) {
         clearSignupAttemptMarkers();
         router.replace(
           buildLoginCompleteUrl({ redirectTo, desktopSurface: false, authRetry: false }),
@@ -102,16 +105,7 @@ export function RecordTermsAcceptance({
       carriedGrant.current = carried.kind === 'current' ? carried.noticeVersion : null;
     }
     void record();
-  }, [
-    completedSignUp.createdThisSession,
-    completedSignUp.isLoaded,
-    isLoaded,
-    isSignedIn,
-    record,
-    redirectTo,
-    router,
-    surface,
-  ]);
+  }, [isLoaded, isSignedIn, record, redirectTo, router, surface]);
 
   if (failure === 'outdated') {
     return (

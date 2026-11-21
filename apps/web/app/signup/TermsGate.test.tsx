@@ -13,7 +13,6 @@ import {
 import { AuthSceneBridgeProvider, createSceneStore } from '@agiworkforce/ui/auth-scene';
 
 import { useMarketingEmailGrant } from '@/features/auth/marketingEmailChoice';
-import { FREE_PLAN_TRAINING_SIGNUP_STATEMENT } from '@/lib/compliance/free-plan-training-disclosure';
 import { MARKETING_EMAIL_CONSENT_PURPOSE } from '@/lib/consent-purposes';
 import { GLOBAL_PRIVACY_CONTROL_BLOCKS_GRANT_NOTICE } from '@/lib/consent-signals';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
@@ -75,7 +74,7 @@ describe('terms confirmation', () => {
     const terms = termsBox();
     const age = ageField();
     const button = screen.getByRole('button', { name: 'Continue' });
-    expect(screen.getByText(FREE_PLAN_TRAINING_SIGNUP_STATEMENT)).toBeInTheDocument();
+    expect(screen.queryByText(/train/i)).toBeNull();
     expect(screen.getAllByRole('checkbox')).toEqual([terms]);
     expect(age).toHaveValue('');
     expect(age).toHaveAccessibleDescription(ACCOUNT_AGE_REQUIREMENT_NOTICE);

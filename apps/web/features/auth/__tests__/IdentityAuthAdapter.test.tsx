@@ -281,6 +281,47 @@ describe('identity auth adapter contract', () => {
     expect(result).toEqual({ status: 'complete' });
   });
 
+  it('hands a browser that is already signed in to the completion route instead of failing', async () => {
+    const assign = vi.fn();
+    vi.stubGlobal('location', { ...window.location, assign });
+    signInState.create.mockResolvedValue({
+      error: {
+        status: 400,
+        errors: [{ code: 'session_exists', message: 'Session already exists' }],
+      },
+    });
+
+    try {
+      const result = await client('login').current.startPasswordResetFor(EMAIL);
+
+      expect(result).toEqual({ status: 'redirecting' });
+      expect(assign).toHaveBeenCalledWith(REDIRECTS.completeUrl);
+      expect(signInState.resetPasswordEmailCode.sendCode).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('hands an already signed-in browser on from the sign-up screen as well', async () => {
+    const assign = vi.fn();
+    vi.stubGlobal('location', { ...window.location, assign });
+    signUpState.create.mockResolvedValue({
+      error: {
+        status: 400,
+        errors: [{ code: 'session_exists', message: 'Session already exists' }],
+      },
+    });
+
+    try {
+      const result = await client('signup').current.startWithEmail(EMAIL);
+
+      expect(result).toEqual({ status: 'redirecting' });
+      expect(assign).toHaveBeenCalledWith(REDIRECTS.completeUrl);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('says nothing when the person dismisses the passkey prompt', async () => {
     signInState.passkey.mockResolvedValue({
       error: { code: 'passkey_retrieval_cancelled', message: 'cancelled' },

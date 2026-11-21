@@ -15,7 +15,6 @@ import {
 } from './lib/mock-auth-provider';
 import { test, expect, type Locator, type Page } from '@playwright/test';
 import { ACCOUNT_MINIMUM_AGE } from '@agiworkforce/types';
-import { FREE_PLAN_TRAINING_SIGNUP_STATEMENT } from '../lib/compliance/free-plan-training-disclosure';
 import { POLICY_LAST_UPDATED } from '../lib/legal-constants';
 
 // Vendor-response states are covered in features/auth/__tests__/AuthFlow.states.test.tsx.
@@ -333,44 +332,6 @@ test.describe('auth flow states', () => {
       expect(box?.width ?? 0).toBeGreaterThanOrEqual(24);
     });
   }
-
-  test('/signup opens nearby data-use details from the keyboard without starting a sign-up', async ({
-    page,
-  }) => {
-    await page.setViewportSize(PHONE);
-    await openAuth(page, '/signup');
-
-    const notice = page.getByTestId('auth-data-use-notice');
-    const summary = notice.locator('summary');
-    const fullStatement = notice.getByText(FREE_PLAN_TRAINING_SIGNUP_STATEMENT);
-    await expect(fullStatement).not.toBeVisible();
-
-    await summary.focus();
-    await summary.press('Enter');
-
-    await expect(fullStatement).toBeVisible();
-    await expect(notice.getByRole('link', { name: 'Data Use Guidelines' })).toHaveAttribute(
-      'href',
-      '/data-use',
-    );
-    await expect(ageField(page)).toHaveValue('');
-    await expect(ageAlert(page)).toHaveCount(0);
-    expect(await mockAuthProviderCalls(page)).toEqual({
-      signInCreate: 0,
-      signUpCreate: 0,
-      signUpSso: 0,
-    });
-    expect(
-      await page.evaluate(
-        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-      ),
-    ).toBeLessThanOrEqual(0);
-
-    await summary.press('Space');
-
-    await expect(fullStatement).not.toBeVisible();
-    await expect(summary).toBeFocused();
-  });
 
   test('/signup asks about marketing email in a separate optional box that starts unticked', async ({
     page,

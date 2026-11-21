@@ -6,7 +6,6 @@ import { ACCOUNT_AGE_FIELD_LABEL } from '@agiworkforce/types';
 
 const signUpState = vi.hoisted(() => ({
   status: 'missing_requirements' as string | null,
-  createdUserId: null as string | null,
   createdSessionId: null as string | null,
   emailAddress: 'person@example.com',
   missingFields: [] as string[],
@@ -133,7 +132,6 @@ async function landOnSignupCompleteWithTheNewAccount(
   sentOnTo = '/chat',
 ): Promise<Record<string, unknown>[]> {
   signUpState.status = 'complete';
-  signUpState.createdUserId = 'new-user';
   signUpState.createdSessionId = 'new-session';
   session.auth = {
     isLoaded: true,
@@ -181,7 +179,6 @@ describe('a sign-up attempt carried from the sign-up screen to the account', () 
     window.sessionStorage.clear();
     session.replace.mockReset();
     signUpState.status = 'missing_requirements';
-    signUpState.createdUserId = null;
     signUpState.createdSessionId = null;
     signUpState.create.mockReset().mockResolvedValue({ error: null });
     signUpState.verifications.sendEmailCode.mockReset().mockResolvedValue({ error: null });
@@ -238,7 +235,6 @@ describe('two sign-up attempts open in one browser', () => {
     window.sessionStorage.clear();
     session.replace.mockReset();
     signUpState.status = 'missing_requirements';
-    signUpState.createdUserId = null;
     signUpState.createdSessionId = null;
     signUpState.create.mockReset().mockResolvedValue({ error: null });
     signUpState.verifications.sendEmailCode.mockReset().mockResolvedValue({ error: null });

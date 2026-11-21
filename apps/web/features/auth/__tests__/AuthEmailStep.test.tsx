@@ -489,12 +489,10 @@ describe('AuthEmailStep', () => {
 
   it('keeps every policy reachable from the sign-up screen, each exactly once', async () => {
     renderStep({ mode: 'signup' });
-    await userEvent.click(screen.getByText('Data use details'));
 
     const expected: ReadonlyArray<[string, string]> = [
       ['Terms of Use', '/terms'],
       ['Privacy Policy', '/privacy'],
-      ['Data Use Guidelines', '/data-use'],
       ['Help', '/help'],
       ['Privacy', '/privacy'],
       ['Terms', '/terms'],
@@ -509,17 +507,12 @@ describe('AuthEmailStep', () => {
     expect(screen.queryByRole('link', { name: 'Age requirements' })).toBeNull();
   });
 
-  it('states the free-model training notice once, above the account switch', () => {
+  it('shows no training notice on the sign-up screen, which carries only its agreement line', () => {
     renderStep({ mode: 'signup' });
 
-    const notice = screen.getByTestId('auth-data-use-notice');
-    expect(notice).toHaveTextContent(
-      'Some free-model providers may use your content to train AI models.',
-    );
-    const switchLink = screen.getByRole('link', { name: 'Log in' });
-    expect(
-      notice.compareDocumentPosition(switchLink) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
+    expect(screen.queryByTestId('auth-data-use-notice')).toBeNull();
+    expect(screen.queryByText(/train/i)).toBeNull();
+    expect(screen.queryByText('Data use details')).toBeNull();
   });
 
   it('asks nothing about age when signing in, and starts every way in without one', async () => {
@@ -933,7 +926,7 @@ describe('the optional marketing email box on sign up', () => {
     const agreement = screen.getByTestId('auth-signup-agreement');
     const optional = screen.getByTestId('auth-marketing-email-consent');
     expect(agreement.nextElementSibling).toBe(optional);
-    expect(optional.nextElementSibling).toBe(screen.getByTestId('auth-data-use-notice'));
+    expect(optional.nextElementSibling).toBeNull();
   });
 
   it('follows the action and the two policy links of its agreement in keyboard order', async () => {

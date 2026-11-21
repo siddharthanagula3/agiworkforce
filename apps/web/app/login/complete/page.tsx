@@ -18,7 +18,7 @@ import { accountAccessForSignIn } from '@/lib/auth/account-lifecycle';
 import { readPrimaryEmailState } from '@/lib/auth/email-confirmation';
 import { IDENTITY_SIGN_IN_LOOKUP_TIMEOUT_MS } from '@/lib/server/identity-timeouts';
 import { AccountAccessNotice } from '@/features/auth/AccountAccessNotice';
-import { AccountPolicyLinks } from '@/features/auth/AccountDataDisclosure';
+import { AccountPolicyLinks } from '@/features/auth/AccountPolicyLinks';
 import { ConfirmEmailStep } from '@/features/auth/ConfirmEmailStep';
 import { AuthLayout } from '@/features/auth/AuthLayout';
 import { AuthStepFrame } from '@/features/auth/AuthStepFrame';

@@ -34,7 +34,7 @@ vi.mock('@/lib/server/product-analytics', async (importOriginal) => ({
 }));
 vi.mock('@/lib/auth/email-confirmation', async (importOriginal) => ({
   ...(await importOriginal()),
-  readPrimaryEmailState: (...args: unknown[]) => mocks.email(...args),
+  readAccountForEmailCheck: (...args: unknown[]) => mocks.email(...args),
 }));
 vi.mock('@/lib/server/consent-records', async (importOriginal) => ({
   ...(await importOriginal()),
@@ -54,10 +54,22 @@ vi.mock('@/lib/server/terms', async (importOriginal) => ({
 
 import { MARKETING_EMAIL_CONSENT_PURPOSE } from '@/lib/consent-purposes';
 import { GLOBAL_PRIVACY_CONTROL_HEADER } from '@/lib/consent-signals';
+import {
+  NEW_ACCOUNT_WINDOW_MS,
+  SIGN_UP_AGREEMENT_NOT_APPLICABLE_STATUS,
+} from '@/lib/auth/new-account';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 import { GET, POST } from './route';
 
 const NOTICE_ON_SCREEN = POLICY_LAST_UPDATED.privacy;
+
+function confirmedAccountCreated(createdAt: number) {
+  return {
+    primaryEmail: 'person@example.com',
+    primaryEmailVerification: 'verified',
+    createdAt,
+  };
+}
 
 function accept(body: Record<string, unknown>, headers: Record<string, string> = {}) {
   return POST(
@@ -77,7 +89,7 @@ describe('native Terms acceptance API', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.csrf.mockResolvedValue(null);
-    mocks.email.mockResolvedValue({ confirmed: true, email: 'person@example.com' });
+    mocks.email.mockResolvedValue(confirmedAccountCreated(Date.now()));
   });
 
   it('reports the current version and account-specific acceptance without caching', async () => {
@@ -118,7 +130,11 @@ describe('native Terms acceptance API', () => {
   });
 
   it('refuses an account whose email address was never confirmed, writing nothing', async () => {
-    mocks.email.mockResolvedValue({ confirmed: false, email: 'victim@corp.example' });
+    mocks.email.mockResolvedValue({
+      ...confirmedAccountCreated(Date.now()),
+      primaryEmail: 'victim@corp.example',
+      primaryEmailVerification: 'unverified',
+    });
 
     await expect(
       POST(
@@ -133,6 +149,50 @@ describe('native Terms acceptance API', () => {
     });
     expect(mocks.email).toHaveBeenCalledWith('person-a');
     expect(mocks.record).not.toHaveBeenCalled();
+  });
+
+  it('records the sign-up screen agreement for the account that sign-up just created', async () => {
+    mocks.record.mockResolvedValue({
+      version: 'current-policy',
+      acceptedAt: '2026-11-20T00:00:00Z',
+    });
+    mocks.email.mockResolvedValue(confirmedAccountCreated(Date.now() - 5_000));
+
+    const response = await accept({ surface: 'web-signup', version: 'current-policy' });
+
+    expect(response.status).toBe(200);
+    expect(mocks.record).toHaveBeenCalledWith('person-a', 'web-signup');
+  });
+
+  it('refuses the sign-up screen agreement for an account that sign-up did not just create, writing nothing', async () => {
+    mocks.email.mockResolvedValue(
+      confirmedAccountCreated(Date.now() - NEW_ACCOUNT_WINDOW_MS - 60_000),
+    );
+
+    const response = await accept({ surface: 'web-signup', version: 'current-policy' });
+
+    expect(response.status).toBe(SIGN_UP_AGREEMENT_NOT_APPLICABLE_STATUS);
+    expect(await response.json()).toMatchObject({
+      error: { code: 'SIGN_UP_AGREEMENT_NOT_APPLICABLE' },
+    });
+    expect(mocks.record).not.toHaveBeenCalled();
+    expect(mocks.track).not.toHaveBeenCalled();
+    expect(mocks.consent).not.toHaveBeenCalled();
+  });
+
+  it('still records an older account that accepts on the sign-in surface', async () => {
+    mocks.record.mockResolvedValue({
+      version: 'current-policy',
+      acceptedAt: '2026-11-20T00:00:00Z',
+    });
+    mocks.email.mockResolvedValue(
+      confirmedAccountCreated(Date.now() - NEW_ACCOUNT_WINDOW_MS - 60_000),
+    );
+
+    const response = await accept({ surface: 'web-login', version: 'current-policy' });
+
+    expect(response.status).toBe(200);
+    expect(mocks.record).toHaveBeenCalledWith('person-a', 'web-login');
   });
 
   it('rejects a stale version before writing acceptance', async () => {
@@ -152,7 +212,7 @@ describe('marketing email asked with the terms', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.csrf.mockResolvedValue(null);
-    mocks.email.mockResolvedValue({ confirmed: true, email: 'person@example.com' });
+    mocks.email.mockResolvedValue(confirmedAccountCreated(Date.now()));
     mocks.record.mockResolvedValue({
       version: 'current-policy',
       acceptedAt: '2026-10-04T00:00:00Z',

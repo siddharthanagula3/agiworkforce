@@ -9,7 +9,12 @@ import {
   BROWSER_SIGN_IN_NEEDS_UPDATE,
   cancelBrowserSignIn,
 } from '@/features/desktop-host/lib/browser-sign-in';
-import { classifyAuthError, isAuthNoticeKind, type AuthErrorKind } from '@/lib/auth/error-taxonomy';
+import {
+  classifyAuthError,
+  isAuthNoticeKind,
+  readVendorAuthError,
+  type AuthErrorKind,
+} from '@/lib/auth/error-taxonomy';
 import { useAuthCopy } from './authCopy';
 import type {
   AuthClient,
@@ -69,6 +74,10 @@ const FIRST_FACTOR_PASSED_STATUSES: readonly string[] = [
 ];
 
 const EMAIL_CODE_STRATEGY = 'email_code';
+
+// The provider allows one session per browser and refuses every attempt made
+// while one is active, whichever address was typed.
+const SESSION_EXISTS_CODE = 'session_exists';
 
 const STAY_ON_PAGE = (): void => undefined;
 
@@ -161,6 +170,10 @@ export function useIdentityAuthClient(
       error: unknown,
       overrides: { inline?: boolean; message?: string; switchMode?: boolean } = {},
     ): AuthResult => {
+      if (readVendorAuthError(error)?.code === SESSION_EXISTS_CODE) {
+        window.location.assign(redirectsRef.current.completeUrl);
+        return { status: 'redirecting' };
+      }
       const descriptor = classifyAuthError(error);
       if (!overrides.inline && isAuthNoticeKind(descriptor.kind)) {
         return {

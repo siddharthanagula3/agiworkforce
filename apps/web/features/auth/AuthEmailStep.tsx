@@ -13,7 +13,6 @@ import { useEmbeddedAccountPage } from '@shared/components/layout/EmbeddedPage';
 
 import { AuthAgeField } from './AuthAgeField';
 import { useAuthCopy } from './authCopy';
-import { AuthDataUseNotice } from './AuthDataUseNotice';
 import { AuthDivider } from './AuthDivider';
 import { AuthField } from './AuthField';
 import { AuthLegalFooter } from './AuthLegalFooter';
@@ -333,8 +332,6 @@ export function AuthEmailStep({
           />
         </>
       ) : null}
-
-      {isSignup ? <AuthDataUseNotice /> : null}
 
       {retryOffered && onRetry && retryStillMatchesTheFields ? (
         <div className={AUTH_STEP_LINKS_CLASS}>

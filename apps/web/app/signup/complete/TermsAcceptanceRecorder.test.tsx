@@ -4,7 +4,6 @@ import userEvent from '@testing-library/user-event';
 
 const mocks = vi.hoisted(() => ({
   useAuth: vi.fn(),
-  useSignUp: vi.fn(),
   replace: vi.fn(),
   redirect: vi.fn(),
   identity: vi.fn(),
@@ -13,7 +12,6 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@clerk/nextjs', () => ({
   useAuth: () => mocks.useAuth(),
-  useSignUp: () => mocks.useSignUp(),
 }));
 vi.mock('server-only', () => ({}));
 vi.mock('next/navigation', () => ({
@@ -41,6 +39,7 @@ vi.mock('@/lib/client/csrf', () => ({
 import { ACCOUNT_AGE_FIELD_LABEL } from '@agiworkforce/types';
 
 import { MarketingEmailGrantProvider } from '@/features/auth/marketingEmailChoice';
+import { SIGN_UP_AGREEMENT_NOT_APPLICABLE_STATUS } from '@/lib/auth/new-account';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 import {
   MARKETING_EMAIL_ATTEMPT_STORAGE_KEY,
@@ -85,19 +84,18 @@ describe('signup terms recorder', () => {
       userId: 'new-user',
       sessionId: 'new-session',
     });
-    mocks.useSignUp.mockReturnValue({
-      fetchStatus: 'idle',
-      signUp: {
-        status: 'complete',
-        createdUserId: 'new-user',
-        createdSessionId: 'new-session',
-        legalAcceptedAt: Date.now(),
-      },
-    });
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => new Response(null, { status: 200 })),
     );
+  });
+
+  it('records the acceptance without asking the identity client, which no longer holds the finished sign-up after the page load', async () => {
+    render(<RecordTermsAcceptance redirectTo="/chat" />);
+
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/chat'));
+    expect(mocks.replace).not.toHaveBeenCalledWith('/login/complete?redirectTo=%2Fchat');
+    expect(sentBodies()).toEqual([{ surface: 'web-signup', version: POLICY_LAST_UPDATED.terms }]);
   });
 
   it('records the acceptance before handing the new account on to the app', async () => {
@@ -129,105 +127,21 @@ describe('signup terms recorder', () => {
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
-  it('does not record a stale signup marker for a different signed-in account', async () => {
-    mocks.useSignUp.mockReturnValue({
-      fetchStatus: 'idle',
-      signUp: {
-        status: 'complete',
-        createdUserId: 'previous-user',
-        createdSessionId: 'previous-session',
-        legalAcceptedAt: Date.now(),
-      },
-    });
+  it('sends an account the server says this sign-up did not create to review the terms itself', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(null, { status: SIGN_UP_AGREEMENT_NOT_APPLICABLE_STATUS })),
+    );
 
     render(<RecordTermsAcceptance redirectTo="/chat" />);
 
     await waitFor(() =>
       expect(mocks.replace).toHaveBeenCalledWith('/login/complete?redirectTo=%2Fchat'),
     );
-    expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(mocks.replace).toHaveBeenCalledTimes(1);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('terms-record-failed')).toBeNull();
     expect(window.localStorage.getItem('agi.terms-accepted-version')).toBeNull();
-  });
-
-  it('does not attribute a previous signup to a later session of the same user', async () => {
-    mocks.useSignUp.mockReturnValue({
-      fetchStatus: 'idle',
-      signUp: {
-        status: 'complete',
-        createdUserId: 'new-user',
-        createdSessionId: 'previous-session',
-        legalAcceptedAt: Date.now(),
-      },
-    });
-
-    render(<RecordTermsAcceptance redirectTo="/chat" />);
-
-    await waitFor(() =>
-      expect(mocks.replace).toHaveBeenCalledWith('/login/complete?redirectTo=%2Fchat'),
-    );
-    expect(globalThis.fetch).not.toHaveBeenCalled();
-  });
-
-  it('records the sign-up page agreement when the identity provider keeps no consent time', async () => {
-    mocks.useSignUp.mockReturnValue({
-      fetchStatus: 'idle',
-      signUp: {
-        status: 'complete',
-        createdUserId: 'new-user',
-        createdSessionId: 'new-session',
-        legalAcceptedAt: null,
-      },
-    });
-
-    render(<RecordTermsAcceptance redirectTo="/chat" />);
-
-    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/chat'));
-    expect(mocks.replace).not.toHaveBeenCalledWith('/login/complete?redirectTo=%2Fchat');
-    expect(globalThis.fetch).toHaveBeenCalledWith(
-      '/api/terms/accept',
-      expect.objectContaining({
-        body: JSON.stringify({ surface: 'web-signup', version: POLICY_LAST_UPDATED.terms }),
-      }),
-    );
-  });
-
-  it('sends a new account to the terms screen when the provider dropped the finished sign-up', async () => {
-    mocks.useSignUp.mockReturnValue({
-      fetchStatus: 'idle',
-      signUp: {
-        status: null,
-        createdUserId: null,
-        createdSessionId: null,
-        legalAcceptedAt: null,
-      },
-    });
-
-    render(<RecordTermsAcceptance redirectTo="/chat" />);
-
-    await waitFor(() =>
-      expect(mocks.replace).toHaveBeenCalledWith('/login/complete?redirectTo=%2Fchat'),
-    );
-    expect(globalThis.fetch).not.toHaveBeenCalled();
-    expect(window.localStorage.getItem('agi.terms-accepted-version')).toBeNull();
-  });
-
-  it('does not auto-record a marker left by an abandoned signup', async () => {
-    mocks.useSignUp.mockReturnValue({
-      fetchStatus: 'idle',
-      signUp: {
-        status: 'abandoned',
-        createdUserId: null,
-        createdSessionId: null,
-        legalAcceptedAt: null,
-      },
-    });
-
-    render(<RecordTermsAcceptance redirectTo="/chat" />);
-
-    await waitFor(() =>
-      expect(mocks.replace).toHaveBeenCalledWith('/login/complete?redirectTo=%2Fchat'),
-    );
-    expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
   it('still records an explicitly confirmed login acceptance without a signup marker', async () => {
@@ -243,15 +157,6 @@ describe('signup terms recorder', () => {
 
   it('records a sign-in acceptance at once, leaving the age question to the terms screen', async () => {
     window.localStorage.clear();
-    mocks.useSignUp.mockReturnValue({
-      fetchStatus: 'idle',
-      signUp: {
-        status: 'complete',
-        createdUserId: 'new-user',
-        createdSessionId: 'new-session',
-        legalAcceptedAt: null,
-      },
-    });
 
     render(<RecordTermsAcceptance redirectTo="/chat" surface="web-login" />);
 
@@ -331,15 +236,6 @@ describe('the marketing email choice carried to the recorder', () => {
       isSignedIn: true,
       userId: 'new-user',
       sessionId: 'new-session',
-    });
-    mocks.useSignUp.mockReturnValue({
-      fetchStatus: 'idle',
-      signUp: {
-        status: 'complete',
-        createdUserId: 'new-user',
-        createdSessionId: 'new-session',
-        legalAcceptedAt: Date.now(),
-      },
     });
     vi.stubGlobal(
       'fetch',
@@ -444,25 +340,19 @@ describe('the marketing email choice carried to the recorder', () => {
     expect(everyMarker()).toEqual([null, null, null, null]);
   });
 
-  it('never attributes a choice left by another sign-up to the account now signed in', async () => {
+  it('keeps nothing of a carried choice when the server says this sign-up did not create the account', async () => {
     admitTickedAttemptInThisTab();
-    mocks.useSignUp.mockReturnValue({
-      fetchStatus: 'idle',
-      signUp: {
-        status: 'complete',
-        createdUserId: 'previous-user',
-        createdSessionId: 'previous-session',
-        legalAcceptedAt: Date.now(),
-      },
-    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(null, { status: SIGN_UP_AGREEMENT_NOT_APPLICABLE_STATUS })),
+    );
 
     render(<RecordTermsAcceptance redirectTo="/chat" />);
 
     await waitFor(() =>
       expect(mocks.replace).toHaveBeenCalledWith('/login/complete?redirectTo=%2Fchat'),
     );
-    expect(globalThis.fetch).not.toHaveBeenCalled();
-    expect(window.localStorage.getItem(MARKETING_EMAIL_CHOICE_STORAGE_KEY)).toBeNull();
+    expect(everyMarker()).toEqual([null, null, null, null]);
   });
 
   it('drops a carried choice when nobody is signed in to attribute it to', async () => {
@@ -588,15 +478,6 @@ describe('/signup/complete agreement record', () => {
       userId: 'new-user',
       sessionId: 'new-session',
     });
-    mocks.useSignUp.mockReturnValue({
-      fetchStatus: 'idle',
-      signUp: {
-        status: 'complete',
-        createdUserId: 'new-user',
-        createdSessionId: 'new-session',
-        legalAcceptedAt: Date.now(),
-      },
-    });
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => new Response(null, { status: 200 })),
@@ -614,25 +495,6 @@ describe('/signup/complete agreement record', () => {
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/chat'));
     expect(globalThis.fetch).toHaveBeenCalledWith('/api/terms/accept', expect.anything());
-  });
-
-  it('records it on an instance without express legal consent, with no second terms screen', async () => {
-    mocks.useSignUp.mockReturnValue({
-      fetchStatus: 'idle',
-      signUp: {
-        status: 'complete',
-        createdUserId: 'new-user',
-        createdSessionId: 'new-session',
-        legalAcceptedAt: null,
-      },
-    });
-    window.localStorage.setItem('agi.terms-accepted-version', POLICY_LAST_UPDATED.terms);
-
-    await renderComplete();
-
-    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/chat'));
-    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
-    expect(mocks.replace).toHaveBeenCalledTimes(1);
   });
 
   it('sends an account whose address was never proved to confirm it, recording nothing', async () => {

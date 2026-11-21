@@ -250,9 +250,6 @@ test.describe('auth accessibility', () => {
       }) => {
         await page.setViewportSize(viewport);
         await openAuth(page, route);
-        const details = page.getByTestId('auth-data-use-notice').locator('summary');
-        if (await details.count()) await details.click();
-
         expect(await shortStandaloneTargets(page)).toEqual([]);
       });
 
@@ -264,14 +261,6 @@ test.describe('auth accessibility', () => {
         await waitForCookieBanner(page);
 
         expect(await controlsUnderCookieBanner(page)).toEqual([]);
-        const details = page.getByTestId('auth-data-use-notice').locator('summary');
-        if (await details.count()) {
-          await details.click();
-          await expect(
-            page.getByRole('link', { name: 'Data Use Guidelines', exact: true }),
-          ).toBeVisible();
-          expect(await controlsUnderCookieBanner(page)).toEqual([]);
-        }
       });
     }
 

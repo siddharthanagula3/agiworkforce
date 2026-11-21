@@ -5,7 +5,7 @@ import { useEffect } from 'react';
 import { useAuthSceneBridge } from '@agiworkforce/ui/auth-scene';
 
 import { TermsGate } from '@/app/signup/TermsGate';
-import { AccountPolicyLinks } from '@/features/auth/AccountDataDisclosure';
+import { AccountPolicyLinks } from '@/features/auth/AccountPolicyLinks';
 import { AuthCodeStep } from '@/features/auth/AuthCodeStep';
 import { AuthEmailStep } from '@/features/auth/AuthEmailStep';
 import { AuthNewPasswordStep } from '@/features/auth/AuthNewPasswordStep';

@@ -14,7 +14,12 @@ import {
   recordTermsAcceptance,
 } from '@/lib/server/terms';
 import { getClerkAuthUser } from '@/lib/api-auth';
-import { readPrimaryEmailState, UNCONFIRMED_EMAIL_MESSAGE } from '@/lib/auth/email-confirmation';
+import {
+  primaryEmailStateOf,
+  readAccountForEmailCheck,
+  UNCONFIRMED_EMAIL_MESSAGE,
+} from '@/lib/auth/email-confirmation';
+import { isNewAccount, SIGN_UP_AGREEMENT_NOT_APPLICABLE_STATUS } from '@/lib/auth/new-account';
 import {
   isConsentSurface,
   MARKETING_EMAIL_CONSENT_PURPOSE,
@@ -31,6 +36,8 @@ import {
 } from '@/lib/server/consent-records';
 import { trackProductAnalyticsEvent } from '@/lib/server/product-analytics';
 import { attributeReferralFromRequest } from '@/lib/services/referral-attribution';
+
+const SIGN_UP_SURFACE = 'web-signup';
 
 interface MarketingEmailGrant {
   surface: ConsentSurface;
@@ -91,8 +98,22 @@ async function handleAcceptTerms(request: NextRequest) {
     );
   }
 
-  if (!(await readPrimaryEmailState(userId)).confirmed) {
+  const account = await readAccountForEmailCheck(userId);
+  if (!primaryEmailStateOf(account).confirmed) {
     throw createError.forbidden(UNCONFIRMED_EMAIL_MESSAGE);
+  }
+  // The sign-up screen's agreement covers only the account that screen just
+  // created. Any other account reviews the terms itself, on the sign-in surface.
+  if (parsed.data.surface === SIGN_UP_SURFACE && !isNewAccount(account)) {
+    return NextResponse.json(
+      {
+        error: {
+          code: 'SIGN_UP_AGREEMENT_NOT_APPLICABLE',
+          message: 'This account was not created by this sign-up. Review the terms to continue.',
+        },
+      },
+      { status: SIGN_UP_AGREEMENT_NOT_APPLICABLE_STATUS },
+    );
   }
 
   try {
@@ -110,7 +131,7 @@ async function handleAcceptTerms(request: NextRequest) {
         surface: undecidedGrant.surface,
       });
     }
-    if (parsed.data.surface === 'web-signup') {
+    if (parsed.data.surface === SIGN_UP_SURFACE) {
       trackProductAnalyticsEvent({ userId }, { name: 'signup', surface: 'web' });
     }
     await attributeReferralFromRequest(request, userId);

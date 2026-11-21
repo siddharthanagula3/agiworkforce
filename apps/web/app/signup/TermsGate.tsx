@@ -12,7 +12,6 @@ import {
   AUTH_OPTIONAL_CONSENT_CLASS,
   AUTH_PRIMARY_BUTTON_CLASS,
 } from '@/features/auth/authStyles';
-import { AccountDataDisclosure } from '@/features/auth/AccountDataDisclosure';
 import { AuthAgeConfirmation } from '@/features/auth/AuthAgeConfirmation';
 import { AuthMarketingEmailConsent } from '@/features/auth/AuthMarketingEmailConsent';
 import {
@@ -117,8 +116,6 @@ export function TermsGate({
           optionalTag
         />
       ) : null}
-
-      <AccountDataDisclosure />
 
       {confirmationLabel && !confirmed ? (
         <button
