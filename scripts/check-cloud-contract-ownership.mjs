@@ -92,6 +92,7 @@ const cloudModules = [
   'free-quota',
   'free-model-promotion',
   'account-deletion',
+  'adult-eligibility',
   'terms-acceptance',
   'device-authorization',
   'notifications',
