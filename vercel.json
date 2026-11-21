@@ -2,7 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "corepack enable && corepack prepare pnpm@10.34.7 --activate && bash apps/web/scripts/build-with-chat.sh",
   "devCommand": "pnpm --filter @agiworkforce/web dev",
-  "installCommand": "corepack enable && corepack prepare pnpm@10.34.7 --activate && pnpm install --frozen-lockfile",
+  "installCommand": "corepack enable && corepack prepare pnpm@10.34.7 --activate && pnpm install --frozen-lockfile --os=current --os=linux --cpu=current --cpu=arm64 --libc=current --libc=glibc",
   "outputDirectory": "apps/web/.next",
   "framework": "nextjs",
   "ignoreCommand": "bash vercel-ignore-build.sh",
