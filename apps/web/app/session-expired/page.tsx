@@ -1,7 +1,8 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import type { CSSProperties } from 'react';
-import { Eyebrow, Prose, Section } from '@/features/marketing/components/system';
-import { SessionExpiredActions } from './SessionExpiredActions';
+import { Section } from '@/features/marketing/components/system';
+import { sameOriginReturnPath } from './sameOriginReturnPath';
+import { SessionRecovery } from './SessionRecovery';
 
 export const metadata = buildMetadata({
   title: 'Session expired',
@@ -22,27 +23,19 @@ const statementStyle: CSSProperties = {
   marginInline: 'auto',
 };
 
-export default function SessionExpiredPage() {
+export default async function SessionExpiredPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ redirectTo?: string | string[] }>;
+}) {
+  const { redirectTo } = await searchParams;
+
   return (
     <div data-design="agi" className="agi-ds-page">
       <main id="main-content">
         <Section size="sm">
           <div style={statementStyle}>
-            <div>
-              <Eyebrow>Signed out</Eyebrow>
-              <h1 className="agi-ds-h1">Your session expired.</h1>
-            </div>
-            <Prose>
-              Sign-ins last a limited time, so this happens on its own after a while. Nothing you
-              saved was lost.
-            </Prose>
-            <Prose size="sm">
-              A session ends when it reaches its lifetime, when you sign out on another device, or
-              after a long stretch of inactivity. Signing in again issues a fresh one; you do not
-              need to clear anything or reinstall. If you are sent back here immediately after
-              signing in, allow third-party cookies for this site and try again.
-            </Prose>
-            <SessionExpiredActions />
+            <SessionRecovery returnPath={sameOriginReturnPath(redirectTo)} />
           </div>
         </Section>
       </main>
