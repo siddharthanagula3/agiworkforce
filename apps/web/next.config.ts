@@ -127,6 +127,12 @@ const nextConfig: NextConfig = {
 
   async redirects() {
     return [
+      {
+        source: '/:path*',
+        has: [{ type: 'host' as const, value: 'chat.agiworkforce.com' }],
+        destination: 'https://agiworkforce.com/:path*',
+        permanent: true,
+      },
       { source: '/cowork', destination: '/agi-work', permanent: true },
       { source: '/chats', destination: '/chat', permanent: false },
       { source: '/chat-multi', destination: '/chat', permanent: false },
