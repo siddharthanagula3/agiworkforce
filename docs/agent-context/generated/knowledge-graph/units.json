@@ -2615,10 +2615,10 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 8659,
+      "files": 8660,
       "roles": {
         "asset": 58,
-        "config": 103,
+        "config": 104,
         "doc": 51,
         "generated": 2,
         "migration": 754,

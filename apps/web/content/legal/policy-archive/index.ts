@@ -32,6 +32,7 @@ import subprocessors_2026_09_28 from './subprocessors/2026-09-28.json';
 import subprocessors_2026_10_08 from './subprocessors/2026-10-08.json';
 import subprocessors_2026_10_15 from './subprocessors/2026-10-15.json';
 import subprocessors_2026_11_10 from './subprocessors/2026-11-10.json';
+import subprocessors_2026_11_13 from './subprocessors/2026-11-13.json';
 import security_2026_08_14 from './security/2026-08-14.json';
 import security_2026_10_08 from './security/2026-10-08.json';
 import security_2026_11_10 from './security/2026-11-10.json';
@@ -125,6 +126,7 @@ export const ARCHIVED_POLICY_TEXT = {
     '2026-10-08': subprocessors_2026_10_08,
     '2026-10-15': subprocessors_2026_10_15,
     '2026-11-10': subprocessors_2026_11_10,
+    '2026-11-13': subprocessors_2026_11_13,
   },
   security: {
     '2026-08-14': security_2026_08_14,
