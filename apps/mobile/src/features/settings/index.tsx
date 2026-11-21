@@ -928,7 +928,6 @@ export default function SettingsTabScreen() {
       hasClerkSession,
       isClerkLoaded,
       isClerkSignedIn,
-      isCloud,
       imageModelChoosable,
       cloudTo,
       pushTo,
