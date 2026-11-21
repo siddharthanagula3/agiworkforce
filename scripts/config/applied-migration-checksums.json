@@ -419,5 +419,9 @@
   "0418_feedback_screenshot_cleanups.sql": "3ea8bf5b93be5fa0d069f4dc71657802a035c19918b47f3f1dc5933660b323af",
   "0419_project_knowledge_object_lifecycle.sql": "d7665b2969dcdc72f1384eb05c10b8a43977de9acdb5cc9949ec07f68c775588",
   "0420_managed_usage_plan_finishes_crossing_turn.sql": "56ac9846f049ed4ea88b4f86699856df2f810f94566707625951333462b67f78",
-  "0421_projects_follow_workspace_deletion.sql": "54d03f53f00ba947b36ffb1b5ab8c58f4be85e252db6762754b5cf76031de3c6"
+  "0421_projects_follow_workspace_deletion.sql": "54d03f53f00ba947b36ffb1b5ab8c58f4be85e252db6762754b5cf76031de3c6",
+  "0422_chat_file_intakes.sql": "68b401d56665caeec1a39c58cde22fc734adad0b8f90d57b2a130dd9319d47db",
+  "0423_cloud_code_environments.sql": "92a7b1cc41bafd2c40bbe26d1c9c751852b50b1c48e502177e08c919acbacf0c",
+  "0424_message_metadata_objects.sql": "dafb826257040d152e75eb0814988194a2c780312358f1085c21a3251807fbb8",
+  "0425_adult_eligibility.sql": "53863612d6c86c22320280bac0fa0e6c2f9c1b4a36fc176bc9ac52206b3ef51f"
 }

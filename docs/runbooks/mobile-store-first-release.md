@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder
-Last updated: 2026-11-20
+Last updated: 2026-11-21
 
 This is the whole submission of AGI Mobile version 0.0.1 to the Apple App Store
 and to Google Play, written for the owner, who follows it himself. Work through
@@ -84,11 +84,10 @@ weight:
 | The work is committed on pull request 602, which is not merged. Store builds are made by the tagged release from committed code on `main`, so the pull request must be merged first.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Both    | Owner              | 9.1, 9.4   |
 | No store build has ever succeeded. Three Android builds on 2026-10-17 and 18 failed or were cancelled; no iOS store build has been attempted. Local builds, all made with Xcode 27.1: release builds for the simulator and, on 2026-11-17, an unsigned release build for a real iPhone (arm64), which compiled and linked the app and both extensions. The store image in `apps/mobile/eas.json` (`macos-tahoe-26.5-xcode-26.6`) leaves out the iOS 27 error mapping in `apps/mobile/native/ios/AGIFoundationModels.swift` (two regions guarded by `compiler(>=6.4)`); the file also compiled with those regions switched off, on the newer toolchain. Signing, and a build on the store image itself, have never been tried | Both    | Owner, then Claude | 9          |
 | The first iOS signing credentials must be made in an interactive session signed in to Apple, unless the App Store Connect key has the role EAS needs                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | iOS     | Owner              | 6.2        |
-| The web changes the review builds rely on are not deployed. Nothing on the pull request is deployed, and its migrations 0422, 0423 and 0424 are applied nowhere; all three must be applied to production with the deploy                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Both    | Owner's deploy     | 4.2        |
 | The built-in Apple model in Local, Help and Support against production, and the Reduce sensitive content switch have not been checked on a real iPhone. The built-in model shows ready on the simulator but cannot generate there                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | iOS     | Owner              | 11.2       |
 | The build supports iPad, so a 13-inch iPad screenshot is required and App Review can test on iPad. A code audit and a layout pass for iPad were done on 2026-11-17, and the first-run screen was seen on an iPad Pro 13-inch simulator. No other screen has been used on an iPad and no iPad screenshot exists, because the simulator control needs your access grant for that device (`MOBILE-IPAD-NOT-EXERCISED-01`)                                                                                                                                                                                                                                                                                                       | iOS     | Owner              | D2, 8.8    |
 | Counsel has not confirmed 18 and over as the minimum age on `/privacy` and `/terms`, replacing the recorded 13 (D14); the 18+ override you chose is not yet set in App Store Connect, and the Parental Controls answer is yours (D13)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Both    | Owner, counsel     | D14, D13   |
-| The 18 and over change is not deployed: migration 0425 is applied nowhere, the web build that reads it is not live, and no Android build contains both pull request 612 and this change. The order in 4.2a must hold, or Cloud is refused for everyone or build 6 reaches production                                                                                                                                                                                                                                                                                                                                                                                                                                         | Both    | Owner's deploy     | 4.2a, 11.5 |
+| No Android build contains both pull request 612 and the 18 and over change. Migration 0425 and the web build that reads it went live on 2026-11-21 and main carries both changes, so the next bundle is cut from main. Build 6 must not reach production                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Android | Owner              | 4.2a, 11.5 |
 | Nobody has confirmed that checkout is closed in production, that no access code was given out and that no Stripe subscription is live                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Both    | Owner              | 4.5        |
 | The review account does not exist, and its plan must be granted by hand                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Both    | Owner              | 10         |
 | Export compliance is open with counsel                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | iOS     | Owner, counsel     | D9, 8.6    |
@@ -102,10 +101,10 @@ Controls and minor-safe mode; and the listing, reviewer notes and age-rating
 records (D13's Parental Controls answer now follows the code). It leaves open,
 each for a person: counsel's confirmation of 18 (D14); setting the 18+
 override you chose, and giving the Parental Controls answer, in App Store
-Connect (D13, 8.5); applying 0425
-and deploying the web app (4.2a); the Android bundle cut with pull request 612
-(4.2a); the upgrade test on a phone (11.5); and checking that Play's Target
-audience still shows 18 and over only (7.4).
+Connect (D13, 8.5); the Android bundle cut with pull request 612 (4.2a); the
+upgrade test on a phone (11.5); and checking that Play's Target audience still
+shows 18 and over only (7.4). Migration 0425 and the web app that reads it went
+live on 2026-11-21.
 
 ## 3. The order of everything
 
@@ -121,7 +120,7 @@ https://support.google.com/googleplay/android-developer/answer/9859348).
 | 1   | Make the owner decisions in 4.1                                                            | Owner              | This file, section 4.1                               | 1 to 2 hours             | Nothing                                            |
 | 2   | The engineering work left in section 4.3, then merge pull request 602 once its checks pass | Claude, then owner | The repository, GitHub                               | 1 to 2 days              | Decisions D11, D12, D20, D21, D22                  |
 | 3   | Founder-actions items in 4.4 and the sales check in 4.5                                    | Owner, counsel     | Vercel, Clerk, the operator dashboard, counsel       | Varies                   | Nothing                                            |
-| 4   | Migration 0425, then the web changes the phone depends on (4.2, 4.2a)                      | Owner's go-ahead   | Vercel production                                    | 30 minutes               | Step 2 merged                                      |
+| 4   | Migration 0425, then the web changes the phone depends on (4.2, 4.2a)                      | Owner's go-ahead   | Vercel production                                    | 30 minutes               | Done 2026-11-21                                    |
 | 5   | Apple and Google accounts and agreements (5)                                               | Owner              | developer.apple.com, App Store Connect, Play Console | 1 hour                   | Nothing                                            |
 | 6   | Create the Play app and give the upload account access (7.1, 7.2)                          | Owner              | Play Console                                         | 20 minutes               | Step 5                                             |
 | 7   | First iOS credentials, interactively (6.2)                                                 | Owner              | Terminal, `eas credentials`                          | 30 minutes               | Steps 2, 5                                         |
@@ -407,13 +406,11 @@ What is already true in production:
   mobile code exists in production's route tree (checked 2026-11-15; changes to
   request or response shapes are not covered by that check).
 
-What needs the web deploy before the review builds are used. On 2026-11-16 all
-of it is on pull request 602, which is not merged, and none of it is deployed.
-The pull request also adds migrations 0422 (`chat_file_intakes`), 0423
-(`cloud_code_environments`) and 0424 (stored message and project metadata is
-always an object), which are applied nowhere. Apply all three to production
-with the deploy
-(`pnpm db:migrate -- apply --target production --confirm-production`):
+What the review builds need from the web. All of it came in on pull request
+602, merged on 2026-11-19, and went live on 2026-11-21 with commit
+`57bf292f5d`. Production applied the pull request's migrations the same day:
+0422 (`chat_file_intakes`), 0423 (`cloud_code_environments`) and 0424 (stored
+message and project metadata is always an object). Why each matters:
 account deletion also deletes from the table that 0423 creates, and does not
 complete without it. 0424 changes no schema: it rewrites the rows whose
 metadata is not an object, which made chat sync answer an error for the whole
@@ -424,15 +421,15 @@ works before 0424 runs, and 0424 repairs what is stored.
    Status and the account pages with `from=mobile`
    (`apps/mobile/src/platform/webContentPage.ts`). The website change that reads
    it and leaves out the site header, footer, pricing and contact-sales links is
-   `apps/web/lib/embedded-page.ts`. On 2026-11-15 production pages opened that
-   way still linked to `/pricing` and `/contact-sales`. App Review would see
-   those links inside the app.
+   `apps/web/lib/embedded-page.ts`. On 2026-11-21 production's `/terms` opened
+   that way linked to neither `/pricing` nor `/contact-sales`; the other
+   embedded pages were not read that day.
 2. **Deleting a granted plan.** In production,
    `apps/web/app/api/user/delete-account/route.ts` refuses a renewing paid plan
    whose billing source is manual and tells the person to email support. The
    pull request schedules it instead when the plan is a personal plan with no
    Stripe customer behind it, which is how the review account's plan is given
-   (D6). Until this is deployed, the reviewer's Delete Account is refused.
+   (D6). It is live since 2026-11-21 and has not been exercised on production.
 3. **The Sign in with Apple sentence in the deletion message.** The same route
    adds "If you signed in with Apple, also remove this app from Sign in with
    Apple" with the iPhone steps. The web's success dialog and the app's
@@ -440,7 +437,8 @@ works before 0424 runs, and 0424 repairs what is stored.
 4. **The deletion help page.** `https://agiworkforce.com/help/delete-your-account`
    (`apps/web/content/support/delete-your-account.md`, with the regenerated
    help corpus and the `RETENTION.statutoryRecordYears` value) now gives the web
-   pathway. Deploy it before you enter the URL in Play Console (7.5).
+   pathway. It is live since 2026-11-21 (the page answers), so the URL can go
+   into Play Console (7.5).
 5. **The Free plan's allowance and its two models** (decided 2026-11-16). The
    phone reads which models Free may pick from the catalogue built into it
    (`apps/mobile/src/features/model-picker/service.ts`), not from the server,
@@ -522,14 +520,15 @@ and the phone. Every Cloud gate on the server reads a stored decision, and a
 decision it cannot read is refused, never assumed
 (`adultEligibilityForGate` in `apps/web/lib/server/adult-eligibility-gate.ts`).
 So the order is fixed. Deploying is yours to authorise; each step waits for the
-one before it.
+one before it. Steps 1 and 2 were done on 2026-11-21; steps 3 and 4 are open.
 
 1. **Apply migration `0425_adult_eligibility.sql` to production** before any
    web build that reads it serves traffic:
    `pnpm db:migrate -- apply --target production --confirm-production`, then
    `pnpm db:migrate -- status` must list 0425 as applied. It adds five
    nullable columns to `public.profiles` that hold the decision, never an age.
-   On 2026-11-20 its header says it is a draft applied nowhere.
+   Done on 2026-11-21: production lists 0425 as applied. Its header still
+   says draft, because an applied migration is never edited.
    _If the web build goes first:_ the server cannot read any decision, so
    every Cloud chat, image, video, speech, live voice, transcription and
    embeddings request answers 503 ("Your account could not be checked just
@@ -547,8 +546,8 @@ one before it.
 3. **Cut the Android build from a commit that contains both** release pull
    request 612 (`codex/mobile-store-build-dependencies`, commit `fc9da2ac5a`,
    the Expo dependency alignment used for build 6, which changes only
-   `apps/mobile/package.json` and `pnpm-lock.yaml`) **and** this change. On
-   2026-11-20 the branch carrying this change does not contain `fc9da2ac5a`.
+   `apps/mobile/package.json` and `pnpm-lock.yaml`) **and** this change. Since
+   2026-11-21 main contains both, so cut the build from main.
    Check before building:
    `git merge-base --is-ancestor fc9da2ac5a HEAD && echo ok`, and
    `rg -n "threshold: ACCOUNT_MINIMUM_AGE" apps/mobile/src/features/auth/services/ageGate.ts`
@@ -764,11 +763,15 @@ runbook; recheck any row you depend on):
      https://support.google.com/googleplay/android-developer/answer/14151465.
      Start that test the day the first build is uploaded (section 7.8); nothing
      shortens the 14 days.
-   - **Organization:** Google's page does not mention organization accounts.
-     The earlier runbook said organizations need nothing more; that came from
-     third-party sites, so it is unverified. If Play Console shows no
-     "Apply for production" requirement on the Dashboard, you can promote
-     directly.
+   - **Organization:** Google's page is titled for, and limits the requirement
+     to, "personal developer accounts created after November 13, 2023" (read
+     again 2026-11-21, same source). It says nothing that applies it to an
+     organization account. If Play Console shows no "Apply for production"
+     requirement on the Dashboard, you can promote directly.
+   - **This account:** the owner's Account details page showed account type
+     Organization on 2026-11-21, so step 13 and section 7.8 do not apply. The
+     Dashboard check above is still the confirmation, since it has not been
+     seen.
 2. **Payments profile.** Not needed: the app is free and sells nothing.
 
 ### 5.3 EAS (Expo)

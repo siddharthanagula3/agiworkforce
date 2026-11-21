@@ -61,6 +61,12 @@
       "served": "e822c4fda6c7fdf27dafda5e2c44a83788c23099",
       "main": "9baeca79d325522e34ad44bef6f04a2bfef2c1df",
       "note": "Production read on 2026-11-20 before the 18 and over change shipped: /api/version returned deployment dpl_ExwsGX8i5MQwBtX5p9n7S72bRZY9 with migration sequence 421 and no commit id, and /privacy and /terms each printed Last updated 2026-11-13, the dates POLICY_LAST_UPDATED gives at commit e822c4fda6c7fdf27dafda5e2c44a83788c23099. The 2026-11-16 privacy revision was therefore on main but never published by this site. The commit named as main is the one on the branch that moves the privacy date off 2026-11-16, first to 2026-11-20; a later commit on the same branch moves it to 2026-11-21, the day the text ships; it has to reach main by a merge commit, not a squash or a rebase. No email notice is asserted."
+    },
+    {
+      "checkedOn": "2026-11-21",
+      "served": "57bf292f5d600c39f520f986118d64e1f4084401",
+      "main": "57bf292f5d600c39f520f986118d64e1f4084401",
+      "note": "Production read on 2026-11-21 after the release was promoted: /api/version returned application commit 57bf292f5d600c39f520f986118d64e1f4084401, deployment dpl_22MpjoDHxJjnjTncpkGUG6Y8rudS and migration sequence 425 (0425_adult_eligibility.sql). /terms, /privacy, /dpa, /security, /trust, /privacy/india, /cookies and /referral-terms each printed Last updated 2026-11-21, and /mobile/legal showed the date 2026-11-21 in its text; /subprocessors, /privacy/requests, /data-use and /agent-permissions printed Last updated 2026-11-13, and /acceptable-use printed 2026-10-08. These are the dates POLICY_LAST_UPDATED gives at that commit. That commit was main's head when it was promoted, so the 2026-11-21 versions of those nine pages are the ones this site publishes. The 18 and over change reached main by a fast-forward push of its branch, so commit 9baeca79d325522e34ad44bef6f04a2bfef2c1df, named as main in the 2026-11-20 record, is in main's history unchanged. No email notice is asserted."
     }
   ],
   "documents": {
