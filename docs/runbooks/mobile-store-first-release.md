@@ -87,7 +87,7 @@ weight:
 | The web changes the review builds rely on are not deployed. Nothing on the pull request is deployed, and its migrations 0422, 0423 and 0424 are applied nowhere; all three must be applied to production with the deploy                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Both    | Owner's deploy     | 4.2        |
 | The built-in Apple model in Local, Help and Support against production, and the Reduce sensitive content switch have not been checked on a real iPhone. The built-in model shows ready on the simulator but cannot generate there                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | iOS     | Owner              | 11.2       |
 | The build supports iPad, so a 13-inch iPad screenshot is required and App Review can test on iPad. A code audit and a layout pass for iPad were done on 2026-11-17, and the first-run screen was seen on an iPad Pro 13-inch simulator. No other screen has been used on an iPad and no iPad screenshot exists, because the simulator control needs your access grant for that device (`MOBILE-IPAD-NOT-EXERCISED-01`)                                                                                                                                                                                                                                                                                                       | iOS     | Owner              | D2, 8.8    |
-| Counsel has not confirmed 18 and over as the minimum age on `/privacy` and `/terms`, replacing the recorded 13 (D14); the age-rating override and the Parental Controls answer are yours (D13)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Both    | Owner, counsel     | D14, D13   |
+| Counsel has not confirmed 18 and over as the minimum age on `/privacy` and `/terms`, replacing the recorded 13 (D14); the 18+ override you chose is not yet set in App Store Connect, and the Parental Controls answer is yours (D13)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Both    | Owner, counsel     | D14, D13   |
 | The 18 and over change is not deployed: migration 0425 is applied nowhere, the web build that reads it is not live, and no Android build contains both pull request 612 and this change. The order in 4.2a must hold, or Cloud is refused for everyone or build 6 reaches production                                                                                                                                                                                                                                                                                                                                                                                                                                         | Both    | Owner's deploy     | 4.2a, 11.5 |
 | Nobody has confirmed that checkout is closed in production, that no access code was given out and that no Stripe subscription is live                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Both    | Owner              | 4.5        |
 | The review account does not exist, and its plan must be granted by hand                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Both    | Owner              | 10         |
@@ -100,8 +100,9 @@ the age step before every path, Local Mode included; the server-held 18 and
 over decision and the Cloud refusal without it; the removal of Parental
 Controls and minor-safe mode; and the listing, reviewer notes and age-rating
 records (D13's Parental Controls answer now follows the code). It leaves open,
-each for a person: counsel's confirmation of 18 (D14); the 18+ override and
-the Parental Controls answer in App Store Connect (D13, 8.5); applying 0425
+each for a person: counsel's confirmation of 18 (D14); setting the 18+
+override you chose, and giving the Parental Controls answer, in App Store
+Connect (D13, 8.5); applying 0425
 and deploying the web app (4.2a); the Android bundle cut with pull request 612
 (4.2a); the upgrade test on a phone (11.5); and checking that Play's Target
 audience still shows 18 and over only (7.4).
@@ -286,13 +287,12 @@ leaving a decision alone keeps it.
   calculated rating "must override to a rating that adheres to the
   requirements"; the listing therefore records the shown rating as 18+ by
   override (`age_rating.rating_override`), with every content answer
-  unchanged. Setting that override is yours. Parental Controls is No because
+  unchanged. You chose that override on 2026-11-20; it is set in App Store
+  Connect at section 8.5. Parental Controls is No because
   the screen and its Settings row were removed with the move to 18; the answer
   in App Store Connect is still yours. Content Rights: the app shows web search
   results and provider output, and Apple's question covers apps that "contain,
-  show, or access third-party content". Alternative: leave the override off,
-  so the App Store shows 16+ while the app still admits only 18 and over.
-  Needed before section 8.5.
+  show, or access third-party content". Needed before section 8.5.
 - **D14. Minimum age (counsel).** On 2026-11-20 you decided the product is 18
   and over on every consumer surface, superseding the 13 and over rule (with
   parental permission under 18) and decision 30, "Keep 13". The app and the
@@ -1348,7 +1348,8 @@ region is lower). Apple's set-an-age-rating page (read 2026-11-15) says that
 when a EULA's minimum age exceeds the calculated rating, "you must override to
 a rating that adheres to the requirements". So, under Override, choose 18+
 (`age_rating.rating` and `age_rating.rating_override` in the JSON). That
-override is yours (D13). The age you see on the App Store then reflects the
+override is the one you chose on 2026-11-20 (D13). The age you see on the App
+Store then reflects the
 Terms; the content answers, and the 16+ they produce, stay as recorded. Apple's
 wording was not re-read on 2026-11-20.
 

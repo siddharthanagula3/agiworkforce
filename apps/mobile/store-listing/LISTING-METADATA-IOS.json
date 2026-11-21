@@ -44,7 +44,7 @@
       "from": "16+",
       "to": "18+",
       "basis": "Apple's EULA minimum-age override (quoted in the note), because the Terms admit only people 18 and over. No content answer changes.",
-      "owner_decision": "Setting the override in App Store Connect, Age Ratings, Override, is the owner's. The documents record 18+ because Apple's text requires a rating that adheres to a higher EULA minimum; if the owner leaves the override off, the App Store shows the calculated 16+ and the app still admits only 18 and over."
+      "owner_decision": "The owner chose the 18+ override on 2026-11-20, because Apple's text requires a rating that adheres to a higher EULA minimum. It is set in App Store Connect, Age Ratings, Override, when the listing is submitted; until it is set there the App Store shows the calculated 16+ and the app still admits only 18 and over."
     },
     "questionnaire": {
       "In-App Controls": {
