@@ -85,6 +85,16 @@
       "file": "apps/web/lib/services/deletion-manifest.ts",
       "migration": 423,
       "reason": "This code ships with 0423_cloud_code_environments.sql: a manual production deploy applies pending migrations before the new code is promoted (docs/runbooks/release-rollback.md, \"Deploying by hand: migrations first\")."
+    },
+    {
+      "file": "apps/web/lib/server/adult-eligibility.ts",
+      "migration": 425,
+      "reason": "This code ships with 0425_adult_eligibility.sql: a manual production deploy applies pending migrations before the new code is promoted (docs/runbooks/release-rollback.md, \"Deploying by hand: migrations first\")."
+    },
+    {
+      "file": "apps/web/app/api/auth/device/refresh/route.ts",
+      "migration": 425,
+      "reason": "This code ships with 0425_adult_eligibility.sql: a manual production deploy applies pending migrations before the new code is promoted (docs/runbooks/release-rollback.md, \"Deploying by hand: migrations first\")."
     }
   ]
 }
