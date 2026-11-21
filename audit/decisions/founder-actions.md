@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder
-Last updated: 2026-11-20
+Last updated: 2026-11-21
 
 Only actions that need the founder: an account, a credential, a signature, a
 paid decision, or a call the founder reserves. Engineering work is never listed
@@ -562,7 +562,7 @@ vendor is a legal-risk and spend decision.
 **How to verify completion** The under-threshold flow matches the choice end to end; no marketing or listing claims compliance before then.
 **What remains after founder action** The gate is being built on a documented default threshold table; counsel's confirmation replaces the defaults.
 **Decided 2026-10-22 (decision 30)** Keep 13. Rows DEF-0672 and DEF-3086 close when counsel confirms 13 as the minimum age on `/privacy` and `/terms`.
-**Decided 2026-11-20, superseding decision 30** 18 and over on every consumer surface (web, desktop, mobile, CLI, extensions); the parent or guardian permission route is gone. The code holds it: `ACCOUNT_MINIMUM_AGE` in `packages/contracts/types/src/account-eligibility.ts`, the server decision record (migration 0425, not yet applied), the review screen at `/login/complete`, and the phone age gate. `/terms` section 02, `/privacy` section 09, `/privacy/india`, `/mobile/legal`, `/referral-terms`, `/dpa`, `/trust`, `/security` and `/cookies` state it, dated 2026-11-20 in `apps/web/lib/legal-constants.ts`. DEF-0672 and DEF-3086 now close when counsel confirms 18 instead of 13.
+**Decided 2026-11-20, superseding decision 30** 18 and over on every consumer surface (web, desktop, mobile, CLI, extensions); the parent or guardian permission route is gone. The code holds it: `ACCOUNT_MINIMUM_AGE` in `packages/contracts/types/src/account-eligibility.ts`, the server decision record (migration 0425, not yet applied), the age screens at `/signup/complete` for a new web account and `/login/complete` for an account with no decision, and the phone age gate. `/terms` section 02, `/privacy` section 09, `/privacy/india`, `/mobile/legal`, `/referral-terms`, `/dpa`, `/trust`, `/security` and `/cookies` state it, dated 2026-11-20 in `apps/web/lib/legal-constants.ts`. DEF-0672 and DEF-3086 now close when counsel confirms 18 instead of 13.
 **What still needs counsel** (1) Whether asking existing accounts their age, and closing Cloud until they answer, from release day squares with the 30-day notice the Terms promise for a material change (`MIN_REQUIRED_TERMS_VERSION` was left null). (2) Whether a self-declared age, with the operating system's age range where one exists, is enough under India's DPDP Act and in other offered regions, and whether an age of majority above 18 (for example 19 or 21 in some places) must be enforced rather than only stated in the Terms. (3) What happens to an existing paid subscription of an account refused as under 18, which no code or policy settles today.
 **Impact** RELEASE-BLOCKING (mobile stores)
 **Status** DECIDED 2026-11-20; COUNSEL CONFIRMATION REQUIRED

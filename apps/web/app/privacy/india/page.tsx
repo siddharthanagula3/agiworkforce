@@ -99,10 +99,11 @@ const PROCESSING: readonly LedgerRow[] = [
     value: (
       <>
         Purpose: creating and securing your account. Optionally, the account choice &ldquo;
-        {MARKETING_EMAIL_CONSENT_PURPOSE.label}&rdquo; is a separate box at sign-up that you can
-        leave unticked or turn off on its own. Held by our identity provider. We do not store your
-        password. We also keep the outcome of the age check described in section 09, never the age
-        itself. Basis: your request for the account; your consent for marketing email.
+        {MARKETING_EMAIL_CONSENT_PURPOSE.label}&rdquo; is a separate box, shown when you first
+        accept the terms after signing in, that you can leave unticked or turn off on its own. Held
+        by our identity provider. We do not store your password. We also keep the outcome of the age
+        check described in section 09, never the age itself. Basis: your request for the account;
+        your consent for marketing email.
       </>
     ),
   },
@@ -349,8 +350,9 @@ export default function IndiaDpdpNoticePage() {
                       affirmative action. New optional choices start unticked, and an optional
                       purpose never blocks a necessary one. Decisions are recorded against the
                       revision of the privacy notice that was on screen. On the early-access forms
-                      this includes the boxes you leave unticked; at sign-up a marketing email box
-                      you leave unticked records no decision. These are the purposes we ask about:
+                      this includes the boxes you leave unticked; a marketing email box you leave
+                      unticked when you first accept the terms records no decision. These are the
+                      purposes we ask about:
                     </Prose>
                   </div>
                   <Ledger caption="Consent purposes" rows={consentRows()} />
@@ -514,12 +516,12 @@ export default function IndiaDpdpNoticePage() {
                     <PageLink href={CANONICAL_POLICY_ROUTES.terms} className="agi-ds-link">
                       terms
                     </PageLink>{' '}
-                    say, so we do not ask a parent or guardian to consent for anyone. Sign-up, and
-                    the check an existing account meets at its next sign-in, ask for an age in years
-                    and refuse anyone who gives an age under {ACCOUNT_MINIMUM_AGE}. The phone app
-                    checks before anything else, Local mode included, and asks the operating system
-                    where it can answer. Our server keeps only the outcome of the check, never the
-                    age, as section 09 of the{' '}
+                    say, so we do not ask a parent or guardian to consent for anyone. On the web a
+                    new account is asked its age in years as soon as it is created, and an existing
+                    account with no decision at its next sign-in; neither can use AGI while the age
+                    given is under {ACCOUNT_MINIMUM_AGE}. The phone app checks before anything else,
+                    Local mode included, and asks the operating system where it can answer. Our
+                    server keeps only the outcome of the check, never the age, as section 09 of the{' '}
                     <PageLink href={CANONICAL_POLICY_ROUTES.privacy} className="agi-ds-link">
                       privacy policy
                     </PageLink>{' '}

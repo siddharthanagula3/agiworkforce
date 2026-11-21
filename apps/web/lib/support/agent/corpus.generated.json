@@ -2,7 +2,7 @@
   "version": 1,
   "generatedBy": "scripts/build-support-corpus.mjs",
   "documentCount": 46,
-  "chunkCount": 262,
+  "chunkCount": 263,
   "documents": [
     {
       "id": "account-security",
@@ -2359,6 +2359,7 @@
       "tags": [
         "sign up",
         "signup",
+        "log in or sign up",
         "create account",
         "register",
         "new account",
@@ -2368,12 +2369,13 @@
         "verification code",
         "password",
         "age",
+        "confirm your age",
         "terms",
         "first message",
         "first chat"
       ],
       "description": "How to create an account, what you can do right away and what to try if sign-up does not complete.",
-      "updated": "2026-11-20",
+      "updated": "2026-11-21",
       "source": "content/support/signing-up.md",
       "onPhone": true,
       "chunks": [
@@ -2382,29 +2384,36 @@
           "ordinal": 0,
           "heading": "Create the account",
           "headingPath": "Create an account and send your first message › Create the account",
-          "text": "1. Open the sign-up page and enter your age in **Your age**.\n2. Choose **Continue with Google** or **Continue with GitHub**, or enter the\n   email address you want the account under and press **Continue**.\n3. If you used email, enter the code sent to that address. If the code has not\n   arrived, check the spam folder before requesting another.\n4. If a **Create a password** screen follows, choose the password you will use\n   with that address to log in.\n\nThe sign-up form asks for your age in a field labelled \"Your age\". AGI is for\nadults: you must be at least 18 to create an account, and an age under 18 is\nrefused on the screen before any account is created. The age you type is judged\nin your browser and is not stored or sent to us; the new account records only\nthat it passed the check. There is no terms checkbox: under the button the form states \"By\ncreating an account, you agree to the Terms of Use and acknowledge the Privacy\nPolicy.\" One optional box, \"Email me product news, tips and offers.\", starts\nunticked.\n\nAn account with no age decision on record, such as one created by a provider\nbutton on the log-in page like **Continue with Google**, or one created before\nthe minimum age became 18, is asked to confirm its age at its next sign-in, and\nit cannot use chat until it gives an age of 18 or over. While it is asked,\nSettings stays open, so it can export its data or delete the account. An account found to be under 18 cannot use AGI, and a second\nanswer does not reopen it. The age is your own statement and is not verified,\nexcept on a phone that reports an age range. The code always comes before the password: the\nsign-up page asks for a password only after the code proves the address is\nyours. The password screen states its rule before you type: use at least 8\ncharacters, and a password that is easy to guess or found in a data breach is\nrefused."
+          "text": "1. Open the sign-up page. Logging in and signing up share one screen, headed\n   **Log in or sign up**.\n2. Choose **Continue with Google** or **Continue with GitHub**, or enter the\n   email address you want the account under and press **Continue**.\n3. If you used email, enter the code sent to that address. If the code has not\n   arrived, check the spam folder before requesting another.\n4. If a **Create a password** screen follows, choose the password you will use\n   with that address to log in.\n5. On **Confirm your age**, enter your age in **Your age** and press\n   **Continue**.\n\nAn address that no account uses starts a new account, and an address that has\none logs in to it, so there is no separate sign-up form. The screen does not\nask your age and has no terms checkbox or marketing email box: under\n**Continue** it states \"By continuing, you agree to the Terms of Use and\nacknowledge the Privacy Policy.\"\n\nThe code always comes before the password: a new account is asked for a\npassword only after the code proves the address is yours. The password screen\nstates its rule before you type: use at least 8 characters, and a password that\nis easy to guess or found in a data breach is refused."
         },
         {
           "id": "signing-up#1",
           "ordinal": 1,
+          "heading": "Confirm your age",
+          "headingPath": "Create an account and send your first message › Confirm your age",
+          "text": "AGI is for adults: you must be at least 18. Once the account exists, the\n**Confirm your age** screen asks for your age once, and the account cannot be\nused until you give an age of 18 or over. An age under 18 is refused on the\nscreen and is not sent, and the screen offers links to export your data, delete\nthe account or make a data request. An age of 18 or over is sent to AGI once\nand is not kept: the account keeps only the decision, never the age.\n\nAn account with no age decision on record, such as one created before the\nminimum age became 18 or a new one whose age question was left unanswered, is\nasked to confirm its age at its next sign-in, and it cannot use chat until it\ngives an age of 18 or over. While it is asked, Settings stays open, so it can\nexport its data or delete the account. An account found to be under 18 cannot\nuse AGI, and a second answer does not reopen it. The age is your own statement\nand is not verified, except on a phone that reports an age range."
+        },
+        {
+          "id": "signing-up#2",
+          "ordinal": 2,
           "heading": "What you can do immediately",
           "headingPath": "Create an account and send your first message › What you can do immediately",
           "text": "The {{PLAN.free}} plan is open by default. A new account can open the chat surface and\nsend a message straight away: it has no waitlist and no invite code to redeem.\n\nA self-serve paid plan starts at checkout when paid upgrades are open to your\naccount; while they are not, it needs an access code, and without one you join\nthe upgrade waitlist.",
           "phoneText": "The {{PLAN.free}} plan is open by default. A new account can open the chat surface and\nsend a message straight away: it has no waitlist and no invite code to redeem."
         },
         {
-          "id": "signing-up#2",
-          "ordinal": 2,
+          "id": "signing-up#3",
+          "ordinal": 3,
           "heading": "Send the first message",
           "headingPath": "Create an account and send your first message › Send the first message",
           "text": "Open the chat surface, type into the composer, and press Enter. The composer\nplaceholder reads \"Ask anything. Type / for commands\". Below the composer the\nmodel selector shows which model will answer; leaving it on **Auto** lets AGI\npick a model for each message from the ones your plan and trust mode allow."
         },
         {
-          "id": "signing-up#3",
-          "ordinal": 3,
+          "id": "signing-up#4",
+          "ordinal": 4,
           "heading": "If sign-up does not complete",
           "headingPath": "Create an account and send your first message › If sign-up does not complete",
-          "text": "- \"No account uses this email. Sign up instead.\" on a sign-in screen means the\n  address has never been registered. Sign up rather than resetting a password.\n- \"This email already has an account. Log in instead.\" on the sign-up screen\n  means the address is registered already. Log in with it rather than signing\n  up again.\n- A refused password keeps you on the password screen with the reason under the\n  field. A password refused as too weak also lists suggestions for a stronger\n  one.\n- A sign-up that needs a detail the screen cannot collect ends with a message\n  that starts \"This sign-up also needs\" and tells you to contact support. Email\n  {{CONTACT.email}} to finish creating the account."
+          "text": "- A password or code screen after **Continue**, when you meant to create an\n  account, means the address has an account already. Log in with it, or press\n  **Edit** beside the address to use another one.\n- A refused password keeps you on the password screen with the reason under the\n  field. A password refused as too weak also lists suggestions for a stronger\n  one.\n- A sign-up that needs a detail the screen cannot collect ends with a message\n  that starts \"This sign-up also needs\" and tells you to contact support. Email\n  {{CONTACT.email}} to finish creating the account."
         }
       ]
     },

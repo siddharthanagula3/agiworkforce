@@ -375,7 +375,10 @@ describe('legal policy set, account marketing email consent', () => {
     expect(india).not.toMatch(/every box is unticked when you meet it/i);
     expect(india).not.toMatch(/every decision \(including the boxes you leave unticked\)/i);
     expect(india).toMatch(/early-access forms.*includes the boxes you leave unticked/i);
-    expect(india).toMatch(/sign-up.*marketing email box you leave unticked records no decision/i);
+    expect(india).toMatch(
+      /marketing email box you leave unticked when you first accept the terms records no decision/i,
+    );
+    expect(india).not.toMatch(/box at sign-up/i);
     expect(india).toContain('CONSENT_PURPOSES.map');
   });
 

@@ -1911,7 +1911,7 @@
         {
           "kind": "test",
           "file": "apps/web/features/chat/components/share/ShareConversationDialog.test.tsx",
-          "name": "revokes the chat\u2019s link from the result state"
+          "name": "revokes the chat’s link from the result state"
         },
         {
           "kind": "copy",
@@ -1997,7 +1997,7 @@
         {
           "kind": "test",
           "file": "apps/web/features/chat/components/share/ShareConversationDialog.test.tsx",
-          "name": "updates the chat\u2019s link in place, keeping its address and expiry"
+          "name": "updates the chat’s link in place, keeping its address and expiry"
         },
         {
           "kind": "test",
@@ -3616,7 +3616,7 @@
       "doc": "chat-basics",
       "section": "Branch a conversation",
       "kind": "prose",
-      "sentence": "While a branch is being created the control reads \"Creating branch\u2026\" and cannot be pressed a second time.",
+      "sentence": "While a branch is being created the control reads \"Creating branch…\" and cannot be pressed a second time.",
       "implementation": [
         "apps/web/features/chat/components/messages/MessageBubble.tsx",
         "apps/web/features/chat/hooks/use-conversation-branches.ts"
@@ -6586,14 +6586,74 @@
       ]
     },
     {
-      "id": "signup-minimum-age-adults-only",
+      "id": "signup-one-screen-for-log-in-and-sign-up",
       "doc": "signing-up",
       "section": "Create the account",
       "kind": "prose",
-      "sentence": "AGI is for adults: you must be at least 18 to create an account, and an age under 18 is refused on the screen before any account is created.",
+      "sentence": "An address that no account uses starts a new account, and an address that has one logs in to it, so there is no separate sign-up form.",
       "implementation": [
-        "packages/contracts/types/src/account-eligibility.ts#ACCOUNT_AGE_REQUIREMENT_NOTICE",
-        "apps/web/features/auth/useSignupAgeGate.ts"
+        "apps/web/features/auth/IdentityAuthAdapter.tsx#startWithEmail",
+        "apps/web/app/signup/page.tsx#AuthEntryScreen"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/auth/__tests__/IdentityAuthAdapter.test.tsx",
+          "name": "starts a sign-up with the same address, and says nothing, when no account uses it"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/auth/__tests__/IdentityAuthAdapter.test.tsx",
+          "name": "tries sign-in first and starts no sign-up for an address an account uses"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/app/signup/page.tsx",
+          "text": "return AuthEntryScreen({"
+        }
+      ]
+    },
+    {
+      "id": "signup-agreement-line-no-age-no-boxes",
+      "doc": "signing-up",
+      "section": "Create the account",
+      "kind": "prose",
+      "sentence": "The screen does not ask your age and has no terms checkbox or marketing email box: under **Continue** it states \"By continuing, you agree to the Terms of Use and acknowledge the Privacy Policy.\"",
+      "implementation": [
+        "apps/web/features/auth/AuthEmailStep.tsx",
+        "apps/web/features/auth/AuthSignupAgreement.tsx"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/auth/__tests__/AuthEmailStep.test.tsx",
+          "name": "asks for no password, no age and no marketing email choice"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/auth/__tests__/AuthEmailStep.test.tsx",
+          "name": "states the agreement under Continue as one line of fine print, with no box to tick"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/auth/AuthSignupAgreement.tsx",
+          "text": "'By continuing, you agree to the'"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/auth/AuthSignupAgreement.tsx",
+          "text": "'and acknowledge the'"
+        }
+      ]
+    },
+    {
+      "id": "signup-minimum-age-adults-only",
+      "doc": "signing-up",
+      "section": "Confirm your age",
+      "kind": "prose",
+      "sentence": "AGI is for adults: you must be at least 18.",
+      "implementation": [
+        "packages/contracts/types/src/account-eligibility.ts#ACCOUNT_AGE_REQUIREMENT_NOTICE"
       ],
       "proof": [
         {
@@ -6605,34 +6665,85 @@
           "kind": "test",
           "file": "packages/contracts/types/src/__tests__/account-eligibility.test.ts",
           "name": "is for adults only"
-        },
-        {
-          "kind": "test",
-          "file": "apps/web/features/auth/__tests__/AuthEmailStep.test.tsx",
-          "name": "refuses a ${TOO_YOUNG} year old at every way in, and starts none of them"
         }
       ]
     },
     {
-      "id": "signup-typed-age-not-stored-or-sent",
+      "id": "signup-new-account-asked-age-once",
       "doc": "signing-up",
-      "section": "Create the account",
+      "section": "Confirm your age",
       "kind": "prose",
-      "sentence": "The age you type is judged in your browser and is not stored or sent to us; the new account records only that it passed the check.",
+      "sentence": "Once the account exists, the **Confirm your age** screen asks for your age once, and the account cannot be used until you give an age of 18 or over.",
       "implementation": [
-        "apps/web/app/signup/signupAttemptMarkers.ts#AGE_CHECK_STORAGE_KEY",
+        "apps/web/app/signup/complete/page.tsx#AgeConfirmationStep",
+        "apps/web/lib/server/require-adult-eligibility.ts#requireAdultEligibility"
+      ],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/app/signup/complete/page.tsx",
+          "text": "<AgeConfirmationStep surface=\"web-signup\""
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/auth/AgeConfirmationStep.tsx",
+          "text": "'Confirm your age'"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/auth/__tests__/AgeConfirmationStep.test.tsx",
+          "name": "asks the age once, states the rule, and links the age requirements"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/require-adult-eligibility.test.ts",
+          "name": "sends an account nobody has asked to the review screen and back to its route"
+        }
+      ]
+    },
+    {
+      "id": "signup-under-age-refused-on-screen",
+      "doc": "signing-up",
+      "section": "Confirm your age",
+      "kind": "prose",
+      "sentence": "An age under 18 is refused on the screen and is not sent, and the screen offers links to export your data, delete the account or make a data request.",
+      "implementation": [
+        "apps/web/features/auth/useSignupAgeGate.ts#admit",
+        "apps/web/features/auth/AgeDataAccessLinks.tsx"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/auth/__tests__/AgeConfirmationStep.test.tsx",
+          "name": "refuses %s on the field and never posts it, with the data access links beside it"
+        }
+      ]
+    },
+    {
+      "id": "signup-typed-age-sent-once-not-kept",
+      "doc": "signing-up",
+      "section": "Confirm your age",
+      "kind": "prose",
+      "sentence": "An age of 18 or over is sent to AGI once and is not kept: the account keeps only the decision, never the age.",
+      "implementation": [
+        "apps/web/features/auth/AgeConfirmationStep.tsx",
         "apps/web/lib/server/adult-eligibility.ts#submitAdultEligibilityEvidence"
       ],
       "proof": [
         {
           "kind": "test",
-          "file": "apps/web/features/auth/__tests__/AuthEmailStep.test.tsx",
-          "name": "hands the age to nothing that leaves the screen, and writes it nowhere"
+          "file": "apps/web/features/auth/__tests__/AgeConfirmationStep.test.tsx",
+          "name": "posts the declared age to the eligibility route with the CSRF headers, and sends nothing else"
         },
         {
           "kind": "test",
-          "file": "apps/web/app/signup/signupAttemptMarkers.test.ts",
-          "name": "stores the minimum age the screen checked against under its own key"
+          "file": "apps/web/features/auth/__tests__/AgeConfirmationStep.test.tsx",
+          "name": "holds the form while the age is being sent, and sends it once"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/auth/__tests__/AgeConfirmationStep.test.tsx",
+          "name": "keeps the typed age out of the browser and out of the address"
         },
         {
           "kind": "test",
@@ -6642,40 +6753,11 @@
       ]
     },
     {
-      "id": "signup-agreement-statement-and-optional-email-box",
-      "doc": "signing-up",
-      "section": "Create the account",
-      "kind": "prose",
-      "sentence": "There is no terms checkbox: under the button the form states \"By creating an account, you agree to the Terms of Use and acknowledge the Privacy Policy.\" One optional box, \"Email me product news, tips and offers.\", starts unticked.",
-      "implementation": [
-        "apps/web/features/auth/AuthSignupAgreement.tsx",
-        "apps/web/features/auth/AuthMarketingEmailConsent.tsx",
-        "apps/web/features/auth/marketingEmailChoice.ts"
-      ],
-      "proof": [
-        {
-          "kind": "copy",
-          "file": "apps/web/features/auth/AuthSignupAgreement.tsx",
-          "text": "'By creating an account, you agree to the'"
-        },
-        {
-          "kind": "copy",
-          "file": "apps/web/lib/consent-purposes.ts",
-          "text": "label: 'Email me product news, tips and offers.',"
-        },
-        {
-          "kind": "copy",
-          "file": "apps/web/features/auth/marketingEmailChoice.ts",
-          "text": "const [ticked, setTicked] = useState(false);"
-        }
-      ]
-    },
-    {
       "id": "signup-undecided-account-asked-at-sign-in",
       "doc": "signing-up",
-      "section": "Create the account",
+      "section": "Confirm your age",
       "kind": "prose",
-      "sentence": "An account with no age decision on record, such as one created by a provider button on the log-in page like **Continue with Google**, or one created before the minimum age became 18, is asked to confirm its age at its next sign-in, and it cannot use chat until it gives an age of 18 or over.",
+      "sentence": "An account with no age decision on record, such as one created before the minimum age became 18 or a new one whose age question was left unanswered, is asked to confirm its age at its next sign-in, and it cannot use chat until it gives an age of 18 or over.",
       "implementation": [
         "apps/web/app/login/complete/page.tsx#AgeConfirmationStep",
         "apps/web/lib/server/require-adult-eligibility.ts#requireAdultEligibility",
@@ -6702,7 +6784,7 @@
     {
       "id": "signup-refused-account-stays-refused",
       "doc": "signing-up",
-      "section": "Create the account",
+      "section": "Confirm your age",
       "kind": "prose",
       "sentence": "An account found to be under 18 cannot use AGI, and a second answer does not reopen it.",
       "implementation": [
@@ -6725,7 +6807,7 @@
     {
       "id": "signup-age-self-declared",
       "doc": "signing-up",
-      "section": "Create the account",
+      "section": "Confirm your age",
       "kind": "prose",
       "sentence": "The age is your own statement and is not verified, except on a phone that reports an age range.",
       "implementation": [
@@ -6749,7 +6831,7 @@
       "doc": "signing-up",
       "section": "Create the account",
       "kind": "prose",
-      "sentence": "The code always comes before the password: the sign-up page asks for a password only after the code proves the address is yours.",
+      "sentence": "The code always comes before the password: a new account is asked for a password only after the code proves the address is yours.",
       "implementation": [
         "apps/web/features/auth/IdentityAuthAdapter.tsx#resolveSignUpState",
         "apps/web/features/auth/IdentityAuthAdapter.tsx#submitNewPassword"
@@ -6859,29 +6941,6 @@
           "kind": "test",
           "file": "apps/web/app/api/checkout/route.test.ts",
           "name": "requires redeemed waitlist access before a free account can open checkout"
-        }
-      ]
-    },
-    {
-      "id": "signup-unknown-email-offers-sign-up",
-      "doc": "signing-up",
-      "section": "If sign-up does not complete",
-      "kind": "prose",
-      "sentence": "\"No account uses this email. Sign up instead.\" on a sign-in screen means the address has never been registered.",
-      "implementation": [
-        "apps/web/lib/auth/error-taxonomy.copy.ts",
-        "apps/web/features/auth/AuthSwitchLine.tsx"
-      ],
-      "proof": [
-        {
-          "kind": "copy",
-          "file": "apps/web/lib/auth/error-taxonomy.copy.ts",
-          "text": "message: 'No account uses this email.',"
-        },
-        {
-          "kind": "copy",
-          "file": "apps/web/features/auth/AuthSwitchLine.tsx",
-          "text": "label: 'Sign up instead.'"
         }
       ]
     },
@@ -7837,7 +7896,7 @@
       "doc": "models-and-reasoning",
       "section": "What the badges mean",
       "kind": "prose",
-      "sentence": "**Auto (free) \u00b7 community models, capacity varies**: the free routing lane, whose capacity is not guaranteed.",
+      "sentence": "**Auto (free) · community models, capacity varies**: the free routing lane, whose capacity is not guaranteed.",
       "implementation": [
         "apps/web/features/chat/components/Composer/ComposerFooter.tsx#FREE_LANE_SLOT_TEXT"
       ],
@@ -7845,7 +7904,7 @@
         {
           "kind": "copy",
           "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
-          "text": "const FREE_LANE_SLOT_TEXT = 'Auto (free) \u00b7 community models, capacity varies';"
+          "text": "const FREE_LANE_SLOT_TEXT = 'Auto (free) · community models, capacity varies';"
         },
         {
           "kind": "test",

@@ -20,12 +20,7 @@ import { PolicyContents } from '@shared/components/legal/PolicyContents';
 import { LEGAL_ENTITY, POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 import { MARKETING_EMAIL_CONSENT_PURPOSE } from '@/lib/consent-purposes';
 import { GLOBAL_PRIVACY_CONTROL_BLOCKS_GRANT_NOTICE } from '@/lib/consent-signals';
-import {
-  AGE_CHECK_STORAGE_KEY,
-  MARKETING_EMAIL_ATTEMPT_STORAGE_KEY,
-  MARKETING_EMAIL_CHOICE_STORAGE_KEY,
-  TERMS_GATE_STORAGE_KEY,
-} from '@/app/signup/signupAttemptMarkers';
+import { TERMS_GATE_STORAGE_KEY } from '@/app/signup/signupAttemptMarkers';
 import { PolicyVersionsLink } from '@shared/components/legal/PolicyVersionsLink';
 import { REFERRAL_ATTRIBUTION_COOKIE, REFERRAL_PROGRAM } from '@/lib/services/referral-program';
 
@@ -220,24 +215,12 @@ const STORAGE: StorageRow[] = [
     source: 'lib/hooks/useTTS.ts',
   },
   {
-    key: [
-      TERMS_GATE_STORAGE_KEY,
-      MARKETING_EMAIL_CHOICE_STORAGE_KEY,
-      MARKETING_EMAIL_ATTEMPT_STORAGE_KEY,
-    ].join(', '),
+    key: TERMS_GATE_STORAGE_KEY,
     store: 'Local storage',
     holds:
-      'The revision of the terms you accepted and, only if you tick the marketing email box, the privacy notice revision and a random identifier for that sign-up attempt. They carry your choices across a provider sign-up redirect.',
+      'The revision of the terms named under the log-in or sign-up screen, written when an email address you enter starts a new account or when you choose a provider such as Google. It carries your agreement to the screen that finishes sign-up, including across a provider redirect, so a new account records it.',
     clearedBy:
-      'Completing sign-up, using Edit email, starting a provider or passkey sign-in, signing out or clearing site data.',
-    source: 'app/signup/signupAttemptMarkers.ts',
-  },
-  {
-    key: AGE_CHECK_STORAGE_KEY,
-    store: 'Local storage',
-    holds: `The minimum age the sign-up screen checked your typed age against, which is ${ACCOUNT_MINIMUM_AGE}, never the age itself. It is sent to us once, with your acceptance of the terms, so the new account records that it passed the check.`,
-    clearedBy:
-      'Completing sign-up, using Edit email, starting a provider or passkey sign-in, signing out or clearing site data.',
+      'Completing sign-up, entering the address of an existing account, pressing Edit beside your address, starting a passkey sign-in, signing out or clearing site data.',
     source: 'app/signup/signupAttemptMarkers.ts',
   },
   {
@@ -248,13 +231,12 @@ const STORAGE: StorageRow[] = [
     source: 'features/chat/guest',
   },
   {
-    key: MARKETING_EMAIL_ATTEMPT_STORAGE_KEY,
+    key: 'agi.session-recovery-attempt',
     store: 'Session storage',
     holds:
-      'The same random identifier, kept in this tab only, so a marketing email choice is recorded only for the sign-up it was ticked in, and a choice another tab removed is asked again.',
-    clearedBy:
-      'Closing the tab, completing sign-up, using Edit email, starting a provider or passkey sign-in, signing out or clearing site data.',
-    source: 'app/signup/signupAttemptMarkers.ts',
+      'When a page sends you to the session-expired screen: the address within this site of each page it recently tried to restore, and when. The screen reloads the page you were on to restore your session, and this entry limits how often it tries, so a session that cannot be restored is told it expired. It is not sent to us.',
+    clearedBy: 'Closing the tab, signing out or clearing site data.',
+    source: 'app/session-expired/SessionRecovery.tsx',
   },
   {
     key: 'agi.team.invitation-token',
@@ -427,8 +409,9 @@ export default function CookiesPage() {
                     <strong>We honour Global Privacy Control.</strong> When a consent request sends
                     the Sec-GPC header, new optional-purpose grants are recorded as refusals. These
                     include the account choice &ldquo;{MARKETING_EMAIL_CONSENT_PURPOSE.label}&rdquo;
-                    and waitlist product updates. The sign-up box is also held off when
-                    navigator.globalPrivacyControl is true, with &ldquo;
+                    and waitlist product updates. The box for it, shown when you first accept the
+                    terms after signing in, is also held off when navigator.globalPrivacyControl is
+                    true, with &ldquo;
                     {GLOBAL_PRIVACY_CONTROL_BLOCKS_GRANT_NOTICE}&rdquo; beside it. An existing
                     account grant shown in Settings is not automatically erased by this browser
                     signal; you can withdraw it there or in the consent centre. The browser signal

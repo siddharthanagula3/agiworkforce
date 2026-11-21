@@ -3,42 +3,52 @@ id: signing-up
 title: Create an account and send your first message
 path: /get-started
 category: getting-started
-tags: sign up, signup, create account, register, new account, google, github, oauth, verification code, password, age, terms, first message, first chat
-updated: 2026-11-20
+tags: sign up, signup, log in or sign up, create account, register, new account, google, github, oauth, verification code, password, age, confirm your age, terms, first message, first chat
+updated: 2026-11-21
 description: How to create an account, what you can do right away and what to try if sign-up does not complete.
 scope: public
 ---
 
 ## Create the account
 
-1. Open the sign-up page and enter your age in **Your age**.
+1. Open the sign-up page. Logging in and signing up share one screen, headed
+   **Log in or sign up**.
 2. Choose **Continue with Google** or **Continue with GitHub**, or enter the
    email address you want the account under and press **Continue**.
 3. If you used email, enter the code sent to that address. If the code has not
    arrived, check the spam folder before requesting another.
 4. If a **Create a password** screen follows, choose the password you will use
    with that address to log in.
+5. On **Confirm your age**, enter your age in **Your age** and press
+   **Continue**.
 
-The sign-up form asks for your age in a field labelled "Your age". AGI is for
-adults: you must be at least 18 to create an account, and an age under 18 is
-refused on the screen before any account is created. The age you type is judged
-in your browser and is not stored or sent to us; the new account records only
-that it passed the check. There is no terms checkbox: under the button the form states "By
-creating an account, you agree to the Terms of Use and acknowledge the Privacy
-Policy." One optional box, "Email me product news, tips and offers.", starts
-unticked.
+An address that no account uses starts a new account, and an address that has
+one logs in to it, so there is no separate sign-up form. The screen does not
+ask your age and has no terms checkbox or marketing email box: under
+**Continue** it states "By continuing, you agree to the Terms of Use and
+acknowledge the Privacy Policy."
 
-An account with no age decision on record, such as one created by a provider
-button on the log-in page like **Continue with Google**, or one created before
-the minimum age became 18, is asked to confirm its age at its next sign-in, and
-it cannot use chat until it gives an age of 18 or over. While it is asked,
-Settings stays open, so it can export its data or delete the account. An account found to be under 18 cannot use AGI, and a second
-answer does not reopen it. The age is your own statement and is not verified,
-except on a phone that reports an age range. The code always comes before the password: the
-sign-up page asks for a password only after the code proves the address is
-yours. The password screen states its rule before you type: use at least 8
-characters, and a password that is easy to guess or found in a data breach is
-refused.
+The code always comes before the password: a new account is asked for a
+password only after the code proves the address is yours. The password screen
+states its rule before you type: use at least 8 characters, and a password that
+is easy to guess or found in a data breach is refused.
+
+## Confirm your age
+
+AGI is for adults: you must be at least 18. Once the account exists, the
+**Confirm your age** screen asks for your age once, and the account cannot be
+used until you give an age of 18 or over. An age under 18 is refused on the
+screen and is not sent, and the screen offers links to export your data, delete
+the account or make a data request. An age of 18 or over is sent to AGI once
+and is not kept: the account keeps only the decision, never the age.
+
+An account with no age decision on record, such as one created before the
+minimum age became 18 or a new one whose age question was left unanswered, is
+asked to confirm its age at its next sign-in, and it cannot use chat until it
+gives an age of 18 or over. While it is asked, Settings stays open, so it can
+export its data or delete the account. An account found to be under 18 cannot
+use AGI, and a second answer does not reopen it. The age is your own statement
+and is not verified, except on a phone that reports an age range.
 
 ## What you can do immediately
 
@@ -62,11 +72,9 @@ pick a model for each message from the ones your plan and trust mode allow.
 
 ## If sign-up does not complete
 
-- "No account uses this email. Sign up instead." on a sign-in screen means the
-  address has never been registered. Sign up rather than resetting a password.
-- "This email already has an account. Log in instead." on the sign-up screen
-  means the address is registered already. Log in with it rather than signing
-  up again.
+- A password or code screen after **Continue**, when you meant to create an
+  account, means the address has an account already. Log in with it, or press
+  **Edit** beside the address to use another one.
 - A refused password keeps you on the password screen with the reason under the
   field. A password refused as too weak also lists suggestions for a stronger
   one.

@@ -650,9 +650,10 @@ const BASIS_LEDGER: readonly LedgerRow[] = [
         <br />
         <strong>Purpose:</strong> {MARKETING_EMAIL_CONSENT_PURPOSE.label}
         <br />
-        <strong>Basis:</strong> <strong>your consent</strong>, asked in a separate unticked box at
-        sign-up or when you first accept the terms after signing in, if no decision is on record for
-        this purpose. You can also choose in Settings, Privacy, or withdraw on the{' '}
+        <strong>Basis:</strong> <strong>your consent</strong>, asked in a separate unticked box when
+        you first accept the terms on the screen shown after signing in, if no decision is on record
+        for this purpose. The log-in or sign-up screen does not ask. You can also choose in
+        Settings, Privacy, or withdraw on the{' '}
         <PageLink href={CANONICAL_POLICY_ROUTES.dataRights} className="agi-ds-link">
           data rights page
         </PageLink>
@@ -1626,15 +1627,16 @@ export default function PrivacyPage() {
                     it.
                   </Prose>
                   <Prose>
-                    <strong>On the web.</strong> Sign-up asks for your age in years and judges it in
-                    your browser. Anyone under {ACCOUNT_MINIMUM_AGE} is refused there and no account
-                    is created. The age you type is not stored and is not sent to us or to our
-                    identity provider. For the length of the sign-up, your browser keeps only the
-                    minimum age the screen checked against (see the{' '}
-                    <PageLink href="/cookies" className="agi-ds-link">
-                      cookie policy
-                    </PageLink>
-                    ), and that minimum is sent to us once, with your acceptance of the terms.
+                    <strong>On the web.</strong> The log-in or sign-up screen does not ask your age.
+                    Once a new account is created, whether with your email address or with a
+                    provider such as Google, the next screen asks once for your age in years, and
+                    the account cannot be used until it gives an age of {ACCOUNT_MINIMUM_AGE} or
+                    over. Your browser checks the number first. An age under {ACCOUNT_MINIMUM_AGE}{' '}
+                    is refused on the screen and is not sent, and the account is left with no
+                    decision. An age of {ACCOUNT_MINIMUM_AGE} or over is sent to our server once,
+                    judged there and not kept: the account keeps only the decision described below.
+                    The age you type is not sent to our identity provider and is not written to your
+                    browser&rsquo;s storage, a cookie or the page address.
                   </Prose>
                   <Prose>
                     <strong>Chat without an account.</strong> Where it is offered, the chat screen
@@ -1647,18 +1649,19 @@ export default function PrivacyPage() {
                   </Prose>
                   <Prose>
                     <strong>Accounts with no decision on record.</strong> That includes every
-                    account created before this rule, an account created by signing in with Google,
-                    GitHub or Apple from the log-in screen, and one created in another AGI app. At
-                    its next sign-in the account is asked once to confirm its age. An age under{' '}
-                    {ACCOUNT_MINIMUM_AGE} is refused on the screen and is not sent. Any other age is
-                    sent to our server once, judged there and not kept. A decision made under the
-                    earlier rule, which admitted accounts from 13, does not count, so those accounts
-                    are asked again. Until a decision that the holder is {ACCOUNT_MINIMUM_AGE} or
-                    over is on record, the product pages, such as chat, code and workspace, send the
-                    account back to that question, Cloud requests are refused, and the CLI, the
-                    desktop app and the editor extension cannot be signed in to it. Settings and
-                    billing stay open, so the account can export its data, delete the account,
-                    manage its subscription and make a request at{' '}
+                    account created before this rule, a new account whose holder did not answer or
+                    gave an age under {ACCOUNT_MINIMUM_AGE}, and one created in another AGI app. At
+                    its next sign-in on the web the account is asked once to confirm its age, in the
+                    same way: an age under {ACCOUNT_MINIMUM_AGE} is refused on the screen and is not
+                    sent, and an age of {ACCOUNT_MINIMUM_AGE} or over is sent to our server once,
+                    judged there and not kept. A decision made under the earlier rule, which
+                    admitted accounts from 13, does not count, so those accounts are asked again.
+                    Until a decision that the holder is {ACCOUNT_MINIMUM_AGE} or over is on record,
+                    the product pages, such as chat, code and workspace, send the account back to
+                    that question, Cloud requests are refused, and the CLI, the desktop app and the
+                    editor extension cannot be signed in to it. Settings and billing stay open, so
+                    the account can export its data, delete the account, manage its subscription and
+                    make a request at{' '}
                     <PageLink href="/privacy/requests" className="agi-ds-link">
                       /privacy/requests
                     </PageLink>

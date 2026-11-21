@@ -329,12 +329,12 @@ export default function TermsPage() {
                     no one may accept these terms on behalf of someone under {ACCOUNT_MINIMUM_AGE}.
                   </Prose>
                   <Prose>
-                    Sign-up asks for your age in years and refuses anyone under{' '}
-                    {ACCOUNT_MINIMUM_AGE} before an account is created. The rule applies to every
-                    account, including one created before this version of these terms: an account
-                    with no decision on record that its holder is {ACCOUNT_MINIMUM_AGE} or over is
-                    asked its age at its next sign-in, and it cannot use AGI until it gives an age
-                    of {ACCOUNT_MINIMUM_AGE} or over. While it is asked, or if it is refused, its
+                    On the web, a new account is asked its age in years as soon as it is created.
+                    The rule applies to every account, including one created before this version of
+                    these terms: an account with no decision on record that its holder is{' '}
+                    {ACCOUNT_MINIMUM_AGE} or over is asked its age, when it is created or at its
+                    next sign-in, and it cannot use AGI until it gives an age of{' '}
+                    {ACCOUNT_MINIMUM_AGE} or over. While it is asked, or if it is refused, its
                     settings and billing stay open, so it can still export its data, delete the
                     account and manage or cancel its subscription. Where chat without an account is
                     offered, it asks your age in years once in each browser before your first

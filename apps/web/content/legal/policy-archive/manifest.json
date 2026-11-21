@@ -21,7 +21,7 @@
       "versions": [
         {
           "date": "2026-11-21",
-          "summary": "AGI is now for adults. You must be at least 18, or older where the law where you live sets a higher age, to create an account or use AGI, and no one can accept these terms for someone younger. The earlier rule allowed accounts from 13 with a parent or guardian's permission. Every account without a decision on record, including accounts created before this version, is asked its age at its next sign-in and cannot use AGI until it gives an age of 18 or over; settings and billing stay open so it can export its data, delete the account or cancel. The age is not verified, and an account found to be under 18 cannot use AGI. Chat without an account, where offered, asks your age first.",
+          "summary": "AGI is now for adults. You must be at least 18, or older where the law where you live sets a higher age, to create an account or use AGI, and no one can accept these terms for someone younger. The earlier rule allowed accounts from 13 with a parent or guardian's permission. On the web a new account is asked its age as soon as it is created, and every account without a decision on record, including accounts created before this version, is asked at its next sign-in; neither can use AGI until it gives an age of 18 or over; settings and billing stay open so it can export its data, delete the account or cancel. The age is not verified, and an account found to be under 18 cannot use AGI. Chat without an account, where offered, asks your age first.",
           "status": "current",
           "published": null
         },
@@ -70,7 +70,7 @@
       "versions": [
         {
           "date": "2026-11-21",
-          "summary": "AGI is now for adults: you must be at least 18. Section 09 sets out how your age is asked on the web, in chat without an account, for accounts with no decision on record and on a phone; that the age you type at sign-up is not stored or sent, while an age you confirm at sign-in is sent once and not kept; and that the account keeps only the decision, never an age, an age range or a birth date, and erases it with the account. The earlier policy said accounts were open from 13 with a parent or guardian's permission and that the age never reached our servers.",
+          "summary": "AGI is now for adults: you must be at least 18. Section 09 sets out how your age is asked on the web, in chat without an account, for accounts with no decision on record and on a phone; that on the web the age is asked once a new account exists, or at the next sign-in for an account with no decision, that an age under 18 is refused on the screen and not sent, and that an age of 18 or over is sent once and not kept; and that the account keeps only the decision, never an age, an age range or a birth date, and erases it with the account. The marketing email choice is asked only when you first accept the terms after signing in, not on the sign-up screen. The earlier policy said accounts were open from 13 with a parent or guardian's permission and that the age never reached our servers.",
           "status": "current",
           "published": null
         },
@@ -186,7 +186,7 @@
       "versions": [
         {
           "date": "2026-11-21",
-          "summary": "The DPDP Children row now says AGI is not offered to anyone under 18, so it does not seek parental consent for anyone; that sign-up and the check at an existing account's next sign-in refuse an age under 18; that the age is self-declared apart from a phone's age range; and that only the decision is kept. It used to describe the earlier rule, accounts from 13 with a parent or guardian's permission.",
+          "summary": "The DPDP Children row now says AGI is not offered to anyone under 18, so it does not seek parental consent for anyone; that on the web a new account is asked its age as soon as it is created and an existing account with no decision at its next sign-in, and neither can use AGI while the age given is under 18; that the age is self-declared apart from a phone's age range; and that only the decision is kept. It used to describe the earlier rule, accounts from 13 with a parent or guardian's permission.",
           "status": "current",
           "published": null
         },
@@ -223,7 +223,7 @@
       "versions": [
         {
           "date": "2026-11-21",
-          "summary": "Adds two entries to what we put on your device: the minimum age the sign-up screen checked your typed age against, kept for the length of a sign-up and sent once with your acceptance of the terms, and, where chat without an account is offered, the minimum age the chat screen checked against, kept until you clear site data and sent with each message. Neither holds your age.",
+          "summary": "Changes what we put on your device. Where chat without an account is offered, adds the minimum age the chat screen checked your typed age against, kept until you clear site data and sent with each message; it never holds your age. Adds the session-expired screen's record of its recent attempts to restore your session, kept in that tab and not sent to us. Removes the two marketing email sign-up entries, which the sign-up screen no longer writes, and says when the terms entry is written now that log in and sign up share one screen. The marketing email box that Global Privacy Control holds off is now the one shown when you first accept the terms after signing in.",
           "status": "current",
           "published": null
         },
@@ -589,7 +589,7 @@
       "versions": [
         {
           "date": "2026-11-21",
-          "summary": "AGI is not offered to anyone under 18, so no parent or guardian is asked to consent for anyone. The notice now says how the age is checked, that only the outcome is kept, and that the age is self-declared and not verified, which remains an open item under the Act. The earlier notice said accounts could be held from 13 with a parent or guardian's permission.",
+          "summary": "AGI is not offered to anyone under 18, so no parent or guardian is asked to consent for anyone. The notice now says how the age is checked, on the web once a new account exists or at an existing account's next sign-in, that only the outcome is kept, and that the age is self-declared and not verified, which remains an open item under the Act. The marketing email box is described where it now appears, when you first accept the terms after signing in. The earlier notice said accounts could be held from 13 with a parent or guardian's permission.",
           "status": "current",
           "published": null
         },

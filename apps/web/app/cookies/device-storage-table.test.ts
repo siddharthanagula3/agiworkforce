@@ -3,7 +3,9 @@ import { join, resolve } from 'node:path';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
+import { SESSION_RECOVERY_STORAGE_KEY } from '@/app/session-expired/SessionRecovery';
 import {
+  AGE_CHECK_STORAGE_KEY,
   MARKETING_EMAIL_ATTEMPT_STORAGE_KEY,
   MARKETING_EMAIL_CHOICE_STORAGE_KEY,
   TERMS_GATE_STORAGE_KEY,
@@ -182,48 +184,43 @@ describe('the device-storage table on /cookies', () => {
     }
   });
 
-  it('discloses the canonical signup markers in local storage instead of treating tab closure as cleanup', () => {
+  it('discloses the one sign-up marker in local storage instead of treating tab closure as cleanup', () => {
     const entries = storageEntries();
-    const local = entries.filter(
-      (entry) =>
-        entry.get('key')?.includes('TERMS_GATE_STORAGE_KEY') ||
-        entry.get('key') === `'${TERMS_GATE_STORAGE_KEY}'`,
-    );
+    const local = entries.filter((entry) => entry.get('key') === 'TERMS_GATE_STORAGE_KEY');
     expect(local).toHaveLength(1);
     expect(local[0]?.get('store')).toBe("'Local storage'");
-    expect(local[0]?.get('key')).toContain('MARKETING_EMAIL_CHOICE_STORAGE_KEY');
-    expect(local[0]?.get('key')).toContain('MARKETING_EMAIL_ATTEMPT_STORAGE_KEY');
     expect(local[0]?.get('clearedBy')).not.toMatch(/closing the tab/i);
 
     const markers = readFileSync(join(webRoot, 'app/signup/signupAttemptMarkers.ts'), 'utf8');
-    for (const name of [
-      'TERMS_GATE_STORAGE_KEY',
-      'MARKETING_EMAIL_CHOICE_STORAGE_KEY',
-      'MARKETING_EMAIL_ATTEMPT_STORAGE_KEY',
-    ]) {
-      expect(markers).toContain(`window.localStorage.setItem(${name},`);
-    }
-    for (const key of [
-      TERMS_GATE_STORAGE_KEY,
-      MARKETING_EMAIL_CHOICE_STORAGE_KEY,
-      MARKETING_EMAIL_ATTEMPT_STORAGE_KEY,
-    ]) {
-      expect(PREFIXED.test(key)).toBe(true);
+    expect(markers).toContain('window.localStorage.setItem(TERMS_GATE_STORAGE_KEY,');
+    expect(PREFIXED.test(TERMS_GATE_STORAGE_KEY)).toBe(true);
+  });
+
+  it('lists no key the sign-up screens only clear as leftovers', () => {
+    const files = sourceFiles();
+    const writtenKeyNames = new Set(writtenKeys(files, constantValues(files)).map((e) => e.key));
+    const page = readFileSync(join(webRoot, 'app/cookies/page.tsx'), 'utf8');
+    for (const [name, key] of [
+      ['AGE_CHECK_STORAGE_KEY', AGE_CHECK_STORAGE_KEY],
+      ['MARKETING_EMAIL_CHOICE_STORAGE_KEY', MARKETING_EMAIL_CHOICE_STORAGE_KEY],
+      ['MARKETING_EMAIL_ATTEMPT_STORAGE_KEY', MARKETING_EMAIL_ATTEMPT_STORAGE_KEY],
+    ] as const) {
+      expect(writtenKeyNames.has(key), `${key} is written again`).toBe(false);
+      expect(page).not.toContain(name);
+      expect(page).not.toContain(key);
     }
   });
 
-  it('separately discloses the canonical per-tab marketing attempt identifier', () => {
+  it('discloses the session recovery attempt in session storage, as the page that writes it names it', () => {
     const entries = storageEntries();
     const session = entries.filter(
-      (entry) => entry.get('key') === 'MARKETING_EMAIL_ATTEMPT_STORAGE_KEY',
+      (entry) => entry.get('key') === `'${SESSION_RECOVERY_STORAGE_KEY}'`,
     );
     expect(session).toHaveLength(1);
     expect(session[0]?.get('store')).toBe("'Session storage'");
-    expect(session[0]?.get('holds')).toMatch(/this tab only/i);
-    expect(session[0]?.get('holds')).toMatch(/another tab removed is asked again/i);
-    const markers = readFileSync(join(webRoot, 'app/signup/signupAttemptMarkers.ts'), 'utf8');
-    expect(markers).toContain(
-      'window.sessionStorage.setItem(MARKETING_EMAIL_ATTEMPT_STORAGE_KEY, attemptId)',
-    );
+    expect(session[0]?.get('holds')).toMatch(/address within this site/i);
+    expect(session[0]?.get('holds')).toMatch(/not sent to us/i);
+    const recovery = readFileSync(join(webRoot, 'app/session-expired/SessionRecovery.tsx'), 'utf8');
+    expect(recovery).toMatch(/window\.sessionStorage\.setItem\(\s*SESSION_RECOVERY_STORAGE_KEY,/);
   });
 });

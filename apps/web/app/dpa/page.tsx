@@ -355,7 +355,7 @@ const DPDP_DUTIES: readonly LedgerRow[] = [
   },
   {
     label: 'Children (s. 9)',
-    value: `AGI is not offered to anyone under ${ACCOUNT_MINIMUM_AGE}, so it does not seek verifiable parental consent for anyone, and it performs no age verification. Sign-up, and the check an existing account meets at its next sign-in, ask for an age in years and refuse anyone who gives an age under ${ACCOUNT_MINIMUM_AGE}; the phone app uses the operating system's age range where one is available. Apart from that signal the age is self-declared, so a child who gives a false age is not detected. AGI keeps only the decision, never the age. This is named as a gap against the Act rather than implied away.`,
+    value: `AGI is not offered to anyone under ${ACCOUNT_MINIMUM_AGE}, so it does not seek verifiable parental consent for anyone, and it performs no age verification. On the web a new account is asked its age in years as soon as it is created, and an existing account with no decision at its next sign-in, and neither can use AGI while the age given is under ${ACCOUNT_MINIMUM_AGE}; the phone app uses the operating system's age range where one is available. Apart from that signal the age is self-declared, so a child who gives a false age is not detected. AGI keeps only the decision, never the age. This is named as a gap against the Act rather than implied away.`,
   },
 ];
 

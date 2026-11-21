@@ -150,7 +150,7 @@ const COMPLIANCE: { label: string; value: string }[] = [
   },
   {
     label: 'DPDP (India): verifiable parental consent under s.9',
-    value: `Not sought, because AGI is not offered to children. Under this Act a child is anyone under 18 and verifiable parental consent is mandatory for a child's data. AGI is for adults only: web sign-up, and the check an existing account meets at its next sign-in, refuse anyone who gives an age under ${ACCOUNT_MINIMUM_AGE}, and the phone app does the same before anything else, Local mode included, asking the operating system where it can answer. The server keeps only the decision, never the age. Apart from that phone signal the age is self-declared and not verified, so a child who gives a false age is not detected, and a phone refused on the device is asked again once the app's data on it is erased. This is the largest open gap in our DPDP position and we are listing it rather than letting you discover it. As of 2026-11-20.`,
+    value: `Not sought, because AGI is not offered to children. Under this Act a child is anyone under 18 and verifiable parental consent is mandatory for a child's data. AGI is for adults only: on the web a new account is asked its age as soon as it is created, and an existing account with no decision at its next sign-in, and neither can use AGI while the age given is under ${ACCOUNT_MINIMUM_AGE}; the phone app checks before anything else, Local mode included, asking the operating system where it can answer. The server keeps only the decision, never the age. Apart from that phone signal the age is self-declared and not verified, so a child who gives a false age is not detected, and a phone refused on the device is asked again once the app's data on it is erased. This is the largest open gap in our DPDP position and we are listing it rather than letting you discover it. As of 2026-11-21.`,
   },
   {
     label: 'DPDP (India): notice languages under s.6(4)',
@@ -387,7 +387,7 @@ export default function TrustPage() {
                     rows={[
                       {
                         label: '2026-11-21',
-                        value: `One row corrected, with no review of the rest of the page. DPDP verifiable parental consent described the earlier age rule: accounts from 13, with a parent or guardian's permission for anyone younger than an adult, a web age that was never sent to the server, and a phone minor-safe mode the child could clear. AGI is now for adults only. Sign-up and the check every existing account meets at its next sign-in refuse an age under ${ACCOUNT_MINIMUM_AGE}, the server keeps only the decision, and the row says the remaining gap is that the age is self-declared and not verified.`,
+                        value: `One row corrected, with no review of the rest of the page. DPDP verifiable parental consent described the earlier age rule: accounts from 13, with a parent or guardian's permission for anyone younger than an adult, a web age that was never sent to the server, and a phone minor-safe mode the child could clear. AGI is now for adults only. On the web a new account is asked its age as soon as it is created, and an existing account with no decision at its next sign-in; neither can use AGI while the age given is under ${ACCOUNT_MINIMUM_AGE}. The server keeps only the decision, and the row says the remaining gap is that the age is self-declared and not verified.`,
                       },
                       {
                         label: '2026-11-13',
