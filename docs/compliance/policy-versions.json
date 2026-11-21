@@ -55,6 +55,12 @@
       "served": "e822c4fda6c7fdf27dafda5e2c44a83788c23099",
       "main": "e822c4fda6c7fdf27dafda5e2c44a83788c23099",
       "note": "Production read after the 2026-11-13 release: /api/version returned application commit e822c4fda6c7fdf27dafda5e2c44a83788c23099, deployment dpl_AbDfsdvu6mBivXgCytkrp5Mxrfwh and migration sequence 421, and /terms, /privacy, /dpa, /subprocessors, /security, /trust, /privacy/india, /privacy/requests, /data-use and /agent-permissions each printed Last updated 2026-11-13, the dates POLICY_LAST_UPDATED gives at that commit. That commit was main's head when it was promoted, so the 2026-11-13 versions of those ten pages are the ones this site publishes. No email notice is asserted."
+    },
+    {
+      "checkedOn": "2026-11-20",
+      "served": "e822c4fda6c7fdf27dafda5e2c44a83788c23099",
+      "main": "9baeca79d325522e34ad44bef6f04a2bfef2c1df",
+      "note": "Production read on 2026-11-20 before the 18 and over change shipped: /api/version returned deployment dpl_ExwsGX8i5MQwBtX5p9n7S72bRZY9 with migration sequence 421 and no commit id, and /privacy and /terms each printed Last updated 2026-11-13, the dates POLICY_LAST_UPDATED gives at commit e822c4fda6c7fdf27dafda5e2c44a83788c23099. The 2026-11-16 privacy revision was therefore on main but never published by this site. The commit named as main is the one on the branch that moves the privacy date to 2026-11-20; it has to reach main by a merge commit, not a squash or a rebase. No email notice is asserted."
     }
   ],
   "documents": {

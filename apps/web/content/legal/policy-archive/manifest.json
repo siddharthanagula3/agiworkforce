@@ -10,7 +10,8 @@
     "2026-11-10",
     "2026-11-11",
     "2026-11-13",
-    "2026-11-13"
+    "2026-11-13",
+    "2026-11-20"
   ],
   "policies": {
     "terms": {
@@ -77,7 +78,7 @@
           "date": "2026-11-16",
           "summary": "Says that on the Free plan AGI chooses the default model and you may pick another model the plan includes, within a usage allowance, and that a Free chat on a model from Anthropic goes to Anthropic. Removes the statement that paid plans have more capacity than Free.",
           "status": "archived",
-          "published": null
+          "published": false
         },
         {
           "date": "2026-11-13",
