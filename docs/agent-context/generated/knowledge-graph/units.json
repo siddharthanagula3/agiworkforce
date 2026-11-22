@@ -2551,16 +2551,16 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 2484,
+      "files": 2486,
       "roles": {
         "asset": 4,
         "config": 14,
         "doc": 4,
         "generated": 1,
         "other": 49,
-        "source": 1229,
+        "source": 1230,
         "style": 1,
-        "test": 1182
+        "test": 1183
       }
     },
     {

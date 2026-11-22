@@ -68808,6 +68808,9 @@
     "isActivelyRoutedModel": [
       "apps/web/lib/web-search/web-search-pricing.ts"
     ],
+    "isActiveMobileSsoCallback": [
+      "apps/mobile/src/features/auth/services/mobileSsoCallback.ts"
+    ],
     "isActiveSubscriptionStatus": [
       "apps/web/lib/constants.ts"
     ],
@@ -158479,6 +158482,9 @@
     ],
     "withMediaJobSpan": [
       "apps/web/lib/observability/media-telemetry.ts"
+    ],
+    "withMobileSsoCallback": [
+      "apps/mobile/src/features/auth/services/mobileSsoCallback.ts"
     ],
     "withMoonshotCacheUsageNormalization": [
       "packages/ai/providers/moonshot/src/cache-usage.ts",
