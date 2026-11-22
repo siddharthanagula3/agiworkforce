@@ -50,6 +50,7 @@ import {
 
 export default function LoginScreen() {
   const [authMode, setAuthMode] = useState<'signIn' | 'signUp'>('signIn');
+  const [signupEmail, setSignupEmail] = useState<string>();
   const [nativeSignUpFallback, setNativeSignUpFallback] = useState(false);
   const [nativeSignInFallback, setNativeSignInFallback] = useState(false);
   const router = useRouter();
@@ -301,7 +302,7 @@ export default function LoginScreen() {
   }
 
   return (
-    <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceElevated }}>
+    <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
       <View
         testID="cloud-sign-in-header"
         style={{
@@ -314,11 +315,11 @@ export default function LoginScreen() {
         }}
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <AgiMark size={20} mono />
+          <AgiMark size={32} />
           <Text
             style={{ color: colors.textPrimary, fontSize: typeScale.callout, fontWeight: '700' }}
           >
-            AGI
+            AGI Cloud
           </Text>
         </View>
         <Pressable
@@ -359,16 +360,16 @@ export default function LoginScreen() {
         {authMode === 'signIn' && !nativeSignInFallback ? (
           <MobileSignIn
             addingAccount={addingAccount}
-            postAuthIntent={postAuthIntent}
             onNativeFallback={() => setNativeSignInFallback(true)}
-            onSignUp={() => {
+            onSignUp={(email) => {
+              setSignupEmail(email);
               setNativeSignUpFallback(false);
               setAuthMode('signUp');
             }}
           />
         ) : authMode === 'signUp' && !nativeSignUpFallback ? (
           <MobileSignUp
-            postAuthIntent={postAuthIntent}
+            initialEmail={signupEmail}
             onNativeFallback={() => setNativeSignUpFallback(true)}
             onSignIn={() => {
               setNativeSignInFallback(false);
@@ -416,6 +417,7 @@ export default function LoginScreen() {
             onPress={() => {
               setNativeSignUpFallback(false);
               setNativeSignInFallback(false);
+              setSignupEmail(undefined);
               setAuthMode(authMode === 'signIn' ? 'signUp' : 'signIn');
             }}
             style={{ minHeight: 44, paddingHorizontal: 8, justifyContent: 'center' }}

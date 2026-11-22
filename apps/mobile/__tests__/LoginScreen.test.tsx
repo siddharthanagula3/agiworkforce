@@ -247,11 +247,12 @@ describe('LoginScreen', () => {
     const { findByTestId, getByText, getByTestId } = render(<LoginScreen />);
 
     expect(getByTestId('mobile-custom-sign-in')).toBeTruthy();
-    expect(getByText('Welcome back')).toBeTruthy();
-    expect(getByText('AGI')).toBeTruthy();
+    expect(getByText('Log in or sign up')).toBeTruthy();
+    expect(getByText('AGI Cloud')).toBeTruthy();
     expect(getByText('Terms')).toBeTruthy();
     expect(getByText('Privacy')).toBeTruthy();
     expect(getByText('Data use')).toBeTruthy();
+    fireEvent.press(getByTestId('mobile-sign-in-native-options'));
     fireEvent.press(getByTestId('cloud-auth-signUp'));
     expect(getByText('Already have an account?')).toBeTruthy();
     expect(getByTestId('cloud-sign-up-data-use')).toBeTruthy();
@@ -277,6 +278,8 @@ describe('LoginScreen', () => {
     await waitFor(() => expect(screen.getByText('Enter a valid email address.')).toBeTruthy());
     expect(mockSignInCreate).not.toHaveBeenCalled();
 
+    fireEvent.press(screen.getByTestId('mobile-sign-in-native-options'));
+
     fireEvent.press(screen.getByTestId('cloud-auth-signUp'));
     fireEvent.changeText(screen.getByTestId('mobile-sign-up-email'), 'not-an-email');
     fireEvent.press(screen.getByTestId('mobile-sign-up-continue'));
@@ -289,6 +292,7 @@ describe('LoginScreen', () => {
       error: { code: 'form_identifier_exists', message: 'Identifier is already taken' },
     });
     const screen = render(<LoginScreen />);
+    fireEvent.press(screen.getByTestId('mobile-sign-in-native-options'));
     fireEvent.press(screen.getByTestId('cloud-auth-signUp'));
     fireEvent.changeText(screen.getByTestId('mobile-sign-up-email'), 'person@example.com');
     fireEvent.press(screen.getByTestId('mobile-sign-up-continue'));
@@ -309,9 +313,12 @@ describe('LoginScreen', () => {
     fireEvent.changeText(screen.getByTestId('mobile-sign-in-email'), 'new@example.com');
     fireEvent.press(screen.getByTestId('mobile-sign-in-continue'));
 
-    await waitFor(() => expect(screen.getByText('No account uses this email.')).toBeTruthy());
-    fireEvent.press(screen.getByTestId('mobile-sign-in-account-missing-sign-up'));
-    expect(screen.getByTestId('mobile-custom-sign-up')).toBeTruthy();
+    await waitFor(() => expect(screen.getByTestId('mobile-sign-up-code')).toBeTruthy());
+    expect(mockSignUpCreate).toHaveBeenCalledWith({
+      emailAddress: 'new@example.com',
+      legalAccepted: true,
+    });
+    expect(mockSendEmailCode).toHaveBeenCalledTimes(1);
   });
 
   it('continues an email sign-in with a password and finalizes the session', async () => {
@@ -509,13 +516,14 @@ describe('LoginScreen', () => {
 
   it('keeps the entered email and shows a safe sign-in error', async () => {
     mockSignInCreate.mockResolvedValueOnce({
-      error: { code: 'form_identifier_not_found', message: 'Account not found at /private/auth' },
+      error: { code: 'unexpected_error', message: 'Account not found at /private/auth' },
     });
     const screen = render(<LoginScreen />);
     fireEvent.changeText(screen.getByTestId('mobile-sign-in-email'), 'person@example.com');
     fireEvent.press(screen.getByTestId('mobile-sign-in-continue'));
 
-    await waitFor(() => expect(screen.getByText('No account uses this email.')).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy());
+    expect(mockSignUpCreate).not.toHaveBeenCalled();
     expect(screen.getByTestId('mobile-sign-in-email').props.value).toBe('person@example.com');
   });
 
@@ -548,9 +556,10 @@ describe('LoginScreen', () => {
     await waitFor(() =>
       expect(mockStartSSOFlow).toHaveBeenCalledWith({
         strategy: 'oauth_google',
-        redirectUrl: 'agiworkforce:///login?postAuthIntent=cloud-schedules',
+        redirectUrl: 'agiworkforce:///login',
       }),
     );
+    expect(peekPostAuthIntent()).toBe('cloud-schedules');
   });
 
   it('leaves completed social sign-in activation to the experimental SSO hook', async () => {
@@ -647,6 +656,7 @@ describe('LoginScreen', () => {
     try {
       const screen = render(<LoginScreen />);
       expect(screen.queryByTestId('mobile-sign-in-apple')).toBeNull();
+      fireEvent.press(screen.getByTestId('mobile-sign-in-native-options'));
       fireEvent.press(screen.getByTestId('cloud-auth-signUp'));
       expect(screen.queryByTestId('mobile-sign-up-apple')).toBeNull();
       expect(mockAppleAvailable).not.toHaveBeenCalled();
@@ -663,6 +673,7 @@ describe('LoginScreen', () => {
     expect(await screen.findByTestId('mobile-sign-in-apple')).toBeTruthy();
     expect(screen.getByTestId('mobile-sign-in-google')).toBeTruthy();
     expect(screen.getByTestId('mobile-sign-in-github')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('mobile-sign-in-native-options'));
     fireEvent.press(screen.getByTestId('cloud-auth-signUp'));
     expect(await screen.findByTestId('mobile-sign-up-apple')).toBeTruthy();
     expect(screen.getByTestId('mobile-sign-up-google')).toBeTruthy();
@@ -683,6 +694,7 @@ describe('LoginScreen', () => {
       }
       expect(screen.queryByText('OR')).toBeNull();
       expect(screen.getByTestId('mobile-sign-in-email')).toBeTruthy();
+      fireEvent.press(screen.getByTestId('mobile-sign-in-native-options'));
       fireEvent.press(screen.getByTestId('cloud-auth-signUp'));
       await act(async () => undefined);
       for (const id of ['google', 'github', 'apple']) {
@@ -718,6 +730,7 @@ describe('LoginScreen', () => {
       expect(screen.getByTestId('mobile-sign-in-google')).toBeTruthy();
       expect(screen.getByTestId('mobile-sign-in-github')).toBeTruthy();
       expect(screen.queryByTestId('mobile-sign-in-apple')).toBeNull();
+      fireEvent.press(screen.getByTestId('mobile-sign-in-native-options'));
       fireEvent.press(screen.getByTestId('cloud-auth-signUp'));
       expect(screen.getByTestId('mobile-sign-up-google')).toBeTruthy();
       expect(screen.getByTestId('mobile-sign-up-github')).toBeTruthy();
@@ -789,6 +802,7 @@ describe('LoginScreen', () => {
       return { error: null };
     });
     const screen = render(<LoginScreen />);
+    fireEvent.press(screen.getByTestId('mobile-sign-in-native-options'));
     fireEvent.press(screen.getByTestId('cloud-auth-signUp'));
     fireEvent.changeText(screen.getByTestId('mobile-sign-up-email'), 'person@example.com');
     fireEvent.press(screen.getByTestId('mobile-sign-up-continue'));
@@ -813,6 +827,7 @@ describe('LoginScreen', () => {
       authSessionResult: { type: 'success' },
     };
     const screen = render(<LoginScreen />);
+    fireEvent.press(screen.getByTestId('mobile-sign-in-native-options'));
     fireEvent.press(screen.getByTestId('cloud-auth-signUp'));
     fireEvent.press(await screen.findByTestId('mobile-sign-up-google'));
 
@@ -831,15 +846,17 @@ describe('LoginScreen', () => {
     mockSearchParams = { postAuthIntent: 'cloud-models' };
     mockSSOResult = { createdSessionId: null, authSessionResult: { type: 'cancel' } };
     const screen = render(<LoginScreen />);
+    fireEvent.press(screen.getByTestId('mobile-sign-in-native-options'));
     fireEvent.press(screen.getByTestId('cloud-auth-signUp'));
     fireEvent.press(await screen.findByTestId('mobile-sign-up-google'));
 
     await waitFor(() =>
       expect(mockStartSSOFlow).toHaveBeenCalledWith({
         strategy: 'oauth_google',
-        redirectUrl: 'agiworkforce:///login?postAuthIntent=cloud-models',
+        redirectUrl: 'agiworkforce:///login',
       }),
     );
+    expect(peekPostAuthIntent()).toBe('cloud-models');
   });
 
   it('does not reactivate an existing social session from the create-account screen', async () => {
@@ -849,6 +866,7 @@ describe('LoginScreen', () => {
       signUp: { existingSession: { sessionId: 'signup-existing-session' } },
     };
     const screen = render(<LoginScreen />);
+    fireEvent.press(screen.getByTestId('mobile-sign-in-native-options'));
     fireEvent.press(screen.getByTestId('cloud-auth-signUp'));
     fireEvent.press(await screen.findByTestId('mobile-sign-up-google'));
 
@@ -870,6 +888,7 @@ describe('LoginScreen', () => {
         }),
     );
     const screen = render(<LoginScreen />);
+    fireEvent.press(screen.getByTestId('mobile-sign-in-native-options'));
     fireEvent.press(screen.getByTestId('cloud-auth-signUp'));
     const google = await screen.findByTestId('mobile-sign-up-google');
     const github = screen.getByTestId('mobile-sign-up-github');
@@ -899,6 +918,7 @@ describe('LoginScreen', () => {
       setActive,
     });
     const screen = render(<LoginScreen />);
+    fireEvent.press(screen.getByTestId('mobile-sign-in-native-options'));
     fireEvent.press(screen.getByTestId('cloud-auth-signUp'));
 
     await waitFor(() => expect(screen.getByTestId('mobile-sign-up-apple')).toBeTruthy());
@@ -916,6 +936,7 @@ describe('LoginScreen', () => {
     process.env.EXPO_PUBLIC_AGI_AUTH_PROVIDERS = 'google,github,apple';
     mockStartAppleAuthenticationFlow.mockRejectedValueOnce({ code: 'ERR_REQUEST_CANCELED' });
     const screen = render(<LoginScreen />);
+    fireEvent.press(screen.getByTestId('mobile-sign-in-native-options'));
     fireEvent.press(screen.getByTestId('cloud-auth-signUp'));
 
     await waitFor(() => expect(screen.getByTestId('mobile-sign-up-apple')).toBeTruthy());
@@ -931,6 +952,7 @@ describe('LoginScreen', () => {
       setActive: jest.fn(),
     });
     const screen = render(<LoginScreen />);
+    fireEvent.press(screen.getByTestId('mobile-sign-in-native-options'));
     fireEvent.press(screen.getByTestId('cloud-auth-signUp'));
 
     fireEvent.press(await screen.findByTestId('mock-apple-button'));
@@ -946,6 +968,7 @@ describe('LoginScreen', () => {
       setActive: undefined,
     });
     const screen = render(<LoginScreen />);
+    fireEvent.press(screen.getByTestId('mobile-sign-in-native-options'));
     fireEvent.press(screen.getByTestId('cloud-auth-signUp'));
 
     fireEvent.press(await screen.findByTestId('mock-apple-button'));
@@ -960,6 +983,7 @@ describe('LoginScreen', () => {
       signUp: { id: 'sua_apple', status: 'missing_requirements' },
     });
     const screen = render(<LoginScreen />);
+    fireEvent.press(screen.getByTestId('mobile-sign-in-native-options'));
     fireEvent.press(screen.getByTestId('cloud-auth-signUp'));
 
     fireEvent.press(await screen.findByTestId('mock-apple-button'));
@@ -970,6 +994,7 @@ describe('LoginScreen', () => {
     process.env.EXPO_PUBLIC_AGI_AUTH_PROVIDERS = 'apple';
     mockAppleAvailable.mockResolvedValue(false);
     const screen = render(<LoginScreen />);
+    fireEvent.press(screen.getByTestId('mobile-sign-in-native-options'));
     fireEvent.press(screen.getByTestId('cloud-auth-signUp'));
 
     await waitFor(() => expect(mockAppleAvailable).toHaveBeenCalled());
@@ -985,6 +1010,7 @@ describe('LoginScreen', () => {
       signIn: {},
     };
     const screen = render(<LoginScreen />);
+    fireEvent.press(screen.getByTestId('mobile-sign-in-native-options'));
     fireEvent.press(screen.getByTestId('cloud-auth-signUp'));
     fireEvent.press(await screen.findByTestId('mobile-sign-up-google'));
 
@@ -997,6 +1023,7 @@ describe('LoginScreen', () => {
 
   it('explains when Clerk has not loaded before a social attempt', async () => {
     const screen = render(<LoginScreen />);
+    fireEvent.press(screen.getByTestId('mobile-sign-in-native-options'));
     fireEvent.press(screen.getByTestId('cloud-auth-signUp'));
     fireEvent.press(await screen.findByTestId('mobile-sign-up-google'));
 
@@ -1009,6 +1036,7 @@ describe('LoginScreen', () => {
   it('offers native recovery after a social provider or legal error', async () => {
     mockStartSSOFlow.mockRejectedValueOnce(new Error('Legal acceptance required'));
     const screen = render(<LoginScreen />);
+    fireEvent.press(screen.getByTestId('mobile-sign-in-native-options'));
     fireEvent.press(screen.getByTestId('cloud-auth-signUp'));
     fireEvent.press(await screen.findByTestId('mobile-sign-up-google'));
 
@@ -1026,6 +1054,7 @@ describe('LoginScreen', () => {
       signIn: {},
     };
     const screen = render(<LoginScreen />);
+    fireEvent.press(screen.getByTestId('mobile-sign-in-native-options'));
     fireEvent.press(screen.getByTestId('cloud-auth-signUp'));
     fireEvent.press(await screen.findByTestId('mobile-sign-up-google'));
 
@@ -1037,6 +1066,7 @@ describe('LoginScreen', () => {
       error: { code: 'form_identifier_exists', message: 'Email already registered' },
     });
     const screen = render(<LoginScreen />);
+    fireEvent.press(screen.getByTestId('mobile-sign-in-native-options'));
     fireEvent.press(screen.getByTestId('cloud-auth-signUp'));
     fireEvent.changeText(screen.getByTestId('mobile-sign-up-email'), 'person@example.com');
     fireEvent.press(screen.getByTestId('mobile-sign-up-continue'));
@@ -1051,6 +1081,7 @@ describe('LoginScreen', () => {
   it('offers a resend path when the first verification email fails', async () => {
     mockSendEmailCode.mockResolvedValueOnce({ error: { message: 'Email could not be sent' } });
     const screen = render(<LoginScreen />);
+    fireEvent.press(screen.getByTestId('mobile-sign-in-native-options'));
     fireEvent.press(screen.getByTestId('cloud-auth-signUp'));
     fireEvent.changeText(screen.getByTestId('mobile-sign-up-email'), 'person@example.com');
     fireEvent.press(screen.getByTestId('mobile-sign-up-continue'));
@@ -1075,6 +1106,7 @@ describe('LoginScreen', () => {
         }),
     );
     const screen = render(<LoginScreen />);
+    fireEvent.press(screen.getByTestId('mobile-sign-in-native-options'));
     fireEvent.press(screen.getByTestId('cloud-auth-signUp'));
     fireEvent.changeText(screen.getByTestId('mobile-sign-up-email'), 'person@example.com');
     fireEvent.press(screen.getByTestId('mobile-sign-up-continue'));
@@ -1087,6 +1119,7 @@ describe('LoginScreen', () => {
 
   it('hands incomplete email verification to the native auth flow', async () => {
     const screen = render(<LoginScreen />);
+    fireEvent.press(screen.getByTestId('mobile-sign-in-native-options'));
     fireEvent.press(screen.getByTestId('cloud-auth-signUp'));
     fireEvent.changeText(screen.getByTestId('mobile-sign-up-email'), 'person@example.com');
     fireEvent.press(screen.getByTestId('mobile-sign-up-continue'));
