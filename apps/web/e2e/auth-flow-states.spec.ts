@@ -580,6 +580,30 @@ test.describe('auth flow states', () => {
     expect(leaving, 'nothing left this machine and no identity API was called').toEqual([]);
   });
 
+  for (const returnTo of ['/', '/signup/complete?redirectTo=%2Fsignup']) {
+    test(`a completed signup opens chat once when the incoming destination is ${returnTo}`, async ({
+      page,
+    }) => {
+      await keepEveryRequestOnThisMachine(page);
+      const terms = await answerTermsRequests(page);
+      const chat = await stopWhereTheFlowHandsOn(page, NEW_ACCOUNT_DESTINATION);
+      await openAuth(page, `/signup?redirectTo=${encodeURIComponent(returnTo)}`, {
+        signUpOpensSession: true,
+      });
+      await continueWith(page, MOCK_SIGNUP_CODE_ONLY_ACCOUNT);
+      const documents: string[] = [];
+      page.on('request', (request) => {
+        if (request.isNavigationRequest() && request.frame() === page.mainFrame()) {
+          documents.push(new URL(request.url()).pathname);
+        }
+      });
+      await page.getByLabel('Code', { exact: true }).pressSequentially(MOCK_CODE);
+      await expect(chat).toBeVisible({ timeout: NEXT_DOCUMENT_TIMEOUT_MS });
+      expect(documents).toEqual(['/signup/complete', '/chat']);
+      expect(terms).toHaveLength(1);
+    });
+  }
+
   test('a provider starts as a sign-in, and a refused hand-off leaves no marker', async ({
     page,
   }) => {

@@ -129,6 +129,6 @@ describe('/login', () => {
       await LoginPage({ searchParams: Promise.resolve({ redirectTo: 'https://evil.example' }) }),
     );
 
-    expect(lastRedirects()['signInCompleteUrl']).toBe('/login/complete?redirectTo=%2F');
+    expect(lastRedirects()['signInCompleteUrl']).toBe('/login/complete?redirectTo=%2Fchat');
   });
 });
