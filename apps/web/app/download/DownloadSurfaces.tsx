@@ -214,7 +214,7 @@ function CliArchives({ availability }: { availability: CliAvailability }) {
               className="agi-ds-btn"
               data-variant="secondary"
               rel="noreferrer"
-              aria-label={`Download ${download.assetName}`}
+              aria-label={`Download ${CLI_PLATFORM_LABELS[download.platform]} (${download.assetName})`}
             >
               {CLI_PLATFORM_LABELS[download.platform]}
             </a>

@@ -327,9 +327,10 @@ describe('the CLI row on /download', () => {
 
     const cli = row('cli');
     const archives = await within(cli).findByRole('list', { name: 'CLI archives' });
-    expect(
-      within(archives).getByRole('link', { name: 'Download agiworkforce-darwin-arm64.tar.gz' }),
-    ).toHaveAttribute('href', `${CLI_BASE_URL}/agiworkforce-darwin-arm64.tar.gz`);
+    expect(within(archives).getByRole('link', { name: /macOS · Apple silicon/ })).toHaveAttribute(
+      'href',
+      `${CLI_BASE_URL}/agiworkforce-darwin-arm64.tar.gz`,
+    );
     expect(cli).toHaveTextContent(AVAILABLE_NOW_LABEL);
   });
 
