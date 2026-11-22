@@ -177,9 +177,10 @@ describe('platform labels on /download', () => {
     for (const platform of CLI_RELEASE_PLATFORMS) {
       const [os, architecture] = platform.split('-') as [string, string];
       const link = within(archives).getByRole('link', {
-        name: `Download ${archiveName(platform)}`,
+        name: (name) => name.endsWith(`(${archiveName(platform)})`),
       });
       const label = link.textContent ?? '';
+      expect(link).toHaveAccessibleName(`Download ${label} (${archiveName(platform)})`);
       expect(label).toMatch(OS_NAMES[os]!);
       expect(label).toMatch(ARCHITECTURE_NAMES[architecture]!);
       expect(label).not.toContain(platform);
