@@ -1,6 +1,8 @@
 import * as Linking from 'expo-linking';
 import { isAgiWorkforceUniversalLinkHost } from '@/src/integrations/universalLinks';
 
+import { isActiveMobileSsoCallback } from '@/src/features/auth/services/mobileSsoCallback';
+
 const ROOT_LAYOUT_SCHEME_HOSTS = new Set(['intent', 'pair']);
 
 function isHandledByRootLayout(url: string): boolean {
@@ -18,7 +20,9 @@ function isHandledByRootLayout(url: string): boolean {
 
 export function redirectSystemPath({ path }: { path: string; initial: boolean }): string | null {
   try {
-    return isHandledByRootLayout(path) ? null : path;
+    // The browser session consumes this link. Routing it to a second login screen
+    // would clear the Cloud destination before Clerk finishes the exchange.
+    return isActiveMobileSsoCallback(path) || isHandledByRootLayout(path) ? null : path;
   } catch {
     return path;
   }

@@ -1,3 +1,4 @@
+import { FREE_PLAN_TRAINING_SIGNUP_NOTICE } from '@agiworkforce/compliance';
 import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, TextInput, View } from 'react-native';
@@ -5,7 +6,7 @@ import { useClerk, useSignIn } from '@clerk/expo';
 import { useSignInWithApple } from '@clerk/expo/apple';
 import { useSSO } from '@clerk/expo/experimental';
 import * as AppleAuthentication from 'expo-apple-authentication';
-import { createURL } from 'expo-linking';
+import { withMobileSsoCallback } from '../services/mobileSsoCallback';
 import * as WebBrowser from 'expo-web-browser';
 import {
   classifyAuthError,
@@ -16,7 +17,7 @@ import { validateEmail } from '@agiworkforce/utils';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
 import { useTheme } from '@/src/ui/theme';
-import { typeScale } from '@/src/ui/theme/tokens';
+import { radii, typeScale } from '@/src/ui/theme/tokens';
 import {
   ACCOUNT_SUSPENDED_MESSAGE,
   authErrorMessage,
@@ -24,10 +25,6 @@ import {
   suspensionAppealUrl,
 } from './authErrorMessage';
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
-import {
-  POST_AUTH_INTENT_PARAM,
-  type PostAuthIntent,
-} from '@/src/features/auth/services/postAuthIntent';
 import {
   appleFlowWithoutSession,
   buildIncludesSignInWithApple,
@@ -53,12 +50,10 @@ export function MobileSignIn({
   addingAccount = false,
   onNativeFallback,
   onSignUp,
-  postAuthIntent,
 }: {
   addingAccount?: boolean;
   onNativeFallback: () => void;
-  onSignUp: () => void;
-  postAuthIntent?: PostAuthIntent | null;
+  onSignUp: (email?: string) => void;
 }) {
   const { colors, isDark } = useTheme();
   const clerk = useClerk();
@@ -161,12 +156,6 @@ export function MobileSignIn({
     await rememberSignedIn(REMEMBERED_EMAIL_METHOD, admittedEmailRef.current);
   };
 
-  const ssoRedirectUrl = () =>
-    createURL(
-      '/login',
-      postAuthIntent ? { queryParams: { [POST_AUTH_INTENT_PARAM]: postAuthIntent } } : undefined,
-    );
-
   const settleSSOResult = async (
     result: Awaited<ReturnType<typeof startSSOFlow>>,
     method: RememberedAccountMethod,
@@ -190,11 +179,13 @@ export function MobileSignIn({
   };
 
   const startEnterpriseSso = async (identifier: string) => {
-    const result = await startSSOFlow({
-      strategy: 'enterprise_sso',
-      identifier,
-      redirectUrl: ssoRedirectUrl(),
-    });
+    const result = await withMobileSsoCallback((redirectUrl) =>
+      startSSOFlow({
+        strategy: 'enterprise_sso',
+        identifier,
+        redirectUrl,
+      }),
+    );
     await settleSSOResult(result, REMEMBERED_EMAIL_METHOD, identifier);
   };
 
@@ -259,7 +250,7 @@ export function MobileSignIn({
     setCodeDeliveryFailed(false);
   };
 
-  const signInWithEmail = (typed: string) =>
+  const signInWithEmail = (typed: string, fromRememberedAccount = false) =>
     void perform(async () => {
       setAccountMissing(false);
       const identifier = typed.trim();
@@ -271,6 +262,10 @@ export function MobileSignIn({
       const result = await signInRef.current.create({ identifier });
       if (result.error) {
         const missing = classifyAuthError(result.error).kind === 'identifier_not_found';
+        if (missing && !fromRememberedAccount) {
+          onSignUp(identifier);
+          return;
+        }
         setAccountMissing(missing);
         setError(authErrorMessage(result.error, 'sign-in'));
         return;
@@ -330,10 +325,12 @@ export function MobileSignIn({
   const startProvider = (provider: AuthProviderId) =>
     void perform(async () => {
       setPendingProvider(provider);
-      const result = await startSSOFlow({
-        strategy: `oauth_${provider}`,
-        redirectUrl: ssoRedirectUrl(),
-      });
+      const result = await withMobileSsoCallback((redirectUrl) =>
+        startSSOFlow({
+          strategy: `oauth_${provider}`,
+          redirectUrl,
+        }),
+      );
       await settleSSOResult(result, provider);
     });
 
@@ -367,7 +364,7 @@ export function MobileSignIn({
   const continueAs = (account: RememberedAccount) => {
     if (account.method === REMEMBERED_EMAIL_METHOD) {
       setEmail(account.email);
-      signInWithEmail(account.email);
+      signInWithEmail(account.email, true);
     } else if (account.method === 'apple') startApple();
     else startProvider(account.method);
   };
@@ -403,8 +400,8 @@ export function MobileSignIn({
       onPress={onPress}
       style={{
         minHeight: 52,
-        borderRadius: 26,
-        backgroundColor: colors.teal,
+        borderRadius: radii.xl,
+        backgroundColor: colors.textPrimary,
         alignItems: 'center',
         justifyContent: 'center',
         marginTop: 28,
@@ -414,7 +411,7 @@ export function MobileSignIn({
       {busy ? (
         <LoadingIndicator />
       ) : (
-        <Text style={{ color: colors.accentText, fontSize: typeScale.callout, fontWeight: '600' }}>
+        <Text style={{ color: colors.surfaceBase, fontSize: typeScale.callout, fontWeight: '600' }}>
           {label}
         </Text>
       )}
@@ -434,26 +431,26 @@ export function MobileSignIn({
           flexGrow: 1,
           justifyContent: 'flex-start',
           paddingHorizontal: 24,
-          paddingTop: 42,
+          paddingTop: 28,
           paddingBottom: 32,
         }}
         {...emailReveal.scrollProps}
       >
-        <View style={{ width: '100%', maxWidth: 340, alignSelf: 'center' }}>
+        <View style={{ width: '100%', maxWidth: 392, alignSelf: 'center' }}>
           <Text
             accessibilityRole="header"
             style={{
               color: colors.textPrimary,
               fontSize: typeScale.largeTitle,
               fontWeight: '700',
-              textAlign: 'center',
-              marginBottom: 32,
+              textAlign: 'left',
+              marginBottom: 24,
             }}
           >
             {step === 'email'
               ? addingAccount
                 ? 'Add an account'
-                : 'Welcome back'
+                : 'Log in or sign up'
               : step === 'password'
                 ? 'Enter your password'
                 : 'Check your email'}
@@ -476,7 +473,7 @@ export function MobileSignIn({
                             ? AppleAuthentication.AppleAuthenticationButtonStyle.WHITE
                             : AppleAuthentication.AppleAuthenticationButtonStyle.BLACK
                         }
-                        cornerRadius={26}
+                        cornerRadius={radii.xl}
                         style={{ height: 52, width: '100%' }}
                         onPress={startApple}
                       />
@@ -490,9 +487,10 @@ export function MobileSignIn({
                       onPress={() => startProvider(provider.id)}
                       style={{
                         minHeight: 52,
-                        borderRadius: 26,
+                        borderRadius: radii.xl,
                         borderWidth: 1,
                         borderColor: colors.border,
+                        backgroundColor: colors.surfaceElevated,
                         alignItems: 'center',
                         justifyContent: 'center',
                         opacity: busy ? 0.5 : 1,
@@ -521,7 +519,7 @@ export function MobileSignIn({
                     onPress={() => continueAs(continueAsAccount)}
                     style={{
                       minHeight: 52,
-                      borderRadius: 26,
+                      borderRadius: radii.xl,
                       borderWidth: 1,
                       borderColor: colors.border,
                       alignItems: 'center',
@@ -580,7 +578,7 @@ export function MobileSignIn({
                       fontWeight: '600',
                     }}
                   >
-                    OR
+                    or
                   </Text>
                   <View style={{ height: 1, flex: 1, backgroundColor: colors.border }} />
                 </View>
@@ -591,14 +589,16 @@ export function MobileSignIn({
                     color: colors.textPrimary,
                     fontSize: typeScale.subhead,
                     fontWeight: '600',
-                    textAlign: 'center',
-                    marginBottom: 10,
+                    textAlign: 'left',
+                    marginBottom: 8,
                   }}
                 >
                   Email address
                 </Text>
                 <TextInput
                   {...emailReveal.inputProps}
+                  placeholder="name@example.com"
+                  placeholderTextColor={colors.textMuted}
                   testID="mobile-sign-in-email"
                   accessibilityLabel="Email address"
                   value={email}
@@ -616,14 +616,14 @@ export function MobileSignIn({
                   onSubmitEditing={startEmail}
                   style={{
                     minHeight: 52,
-                    borderRadius: 26,
+                    borderRadius: radii.xl,
                     borderWidth: 1,
                     borderColor: colors.border,
                     color: colors.textPrimary,
                     backgroundColor: colors.surfaceElevated,
                     fontSize: typeScale.callout,
-                    textAlign: 'center',
-                    paddingHorizontal: 20,
+                    textAlign: 'left',
+                    paddingHorizontal: 16,
                   }}
                 />
                 {button('Continue', startEmail, busy || !email.trim(), 'mobile-sign-in-continue')}
@@ -652,14 +652,14 @@ export function MobileSignIn({
                   onSubmitEditing={step === 'password' ? submitPassword : submitCode}
                   style={{
                     minHeight: 52,
-                    borderRadius: 26,
+                    borderRadius: radii.xl,
                     borderWidth: 1,
                     borderColor: colors.border,
                     color: colors.textPrimary,
                     backgroundColor: colors.surfaceElevated,
                     fontSize: typeScale.callout,
-                    textAlign: 'center',
-                    paddingHorizontal: 20,
+                    textAlign: 'left',
+                    paddingHorizontal: 16,
                   }}
                 />
               )}
@@ -755,7 +755,7 @@ export function MobileSignIn({
               testID="mobile-sign-in-account-missing-sign-up"
               accessibilityRole="button"
               disabled={busy}
-              onPress={onSignUp}
+              onPress={() => onSignUp()}
               style={{
                 minHeight: 44,
                 alignItems: 'center',
@@ -780,30 +780,13 @@ export function MobileSignIn({
             </Text>
           </Pressable>
           {step === 'email' ? (
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                marginTop: 20,
-              }}
-            >
-              <Text style={{ color: colors.textSecondary, fontSize: typeScale.subhead }}>
-                New to AGI?
+            <View style={{ gap: 8, marginTop: 20 }}>
+              <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}>
+                By continuing, you agree to the Terms of Use and acknowledge the Privacy Policy.
               </Text>
-              <Pressable
-                testID="cloud-auth-signUp"
-                accessibilityRole="button"
-                disabled={busy}
-                onPress={onSignUp}
-                style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 6 }}
-              >
-                <Text
-                  style={{ color: colors.teal, fontSize: typeScale.subhead, fontWeight: '600' }}
-                >
-                  Create an account
-                </Text>
-              </Pressable>
+              <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}>
+                {FREE_PLAN_TRAINING_SIGNUP_NOTICE}
+              </Text>
             </View>
           ) : null}
         </View>

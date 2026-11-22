@@ -1,11 +1,11 @@
 import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, TextInput, View } from 'react-native';
 import { useClerk, useSignUp } from '@clerk/expo';
 import { useSignInWithApple } from '@clerk/expo/apple';
 import { useSSO } from '@clerk/expo/experimental';
 import * as AppleAuthentication from 'expo-apple-authentication';
-import { createURL } from 'expo-linking';
+import { withMobileSsoCallback } from '../services/mobileSsoCallback';
 import * as WebBrowser from 'expo-web-browser';
 import {
   classifyAuthError,
@@ -21,12 +21,8 @@ import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
 import { openWebContentPage } from '@/src/platform/webContentPage';
 import { useTheme } from '@/src/ui/theme';
-import { typeScale } from '@/src/ui/theme/tokens';
+import { radii, typeScale } from '@/src/ui/theme/tokens';
 import { authErrorMessage, isNativeAppleCancellation } from './authErrorMessage';
-import {
-  POST_AUTH_INTENT_PARAM,
-  type PostAuthIntent,
-} from '@/src/features/auth/services/postAuthIntent';
 import {
   appleFlowWithoutSession,
   buildIncludesSignInWithApple,
@@ -40,11 +36,11 @@ WebBrowser.maybeCompleteAuthSession();
 export function MobileSignUp({
   onNativeFallback,
   onSignIn,
-  postAuthIntent,
+  initialEmail,
 }: {
   onNativeFallback: () => void;
   onSignIn: () => void;
-  postAuthIntent?: PostAuthIntent | null;
+  initialEmail?: string;
 }) {
   const { colors, isDark } = useTheme();
   const clerk = useClerk();
@@ -60,7 +56,9 @@ export function MobileSignUp({
     Platform.OS,
     appleSignInBuilt && appleAvailable,
   );
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(initialEmail ?? '');
+  const pendingEmail = useRef(initialEmail);
+  const [openingVerification, setOpeningVerification] = useState(Boolean(initialEmail));
   const [code, setCode] = useState('');
   const [verificationEmail, setVerificationEmail] = useState<string | null>(null);
   const [codeDeliveryFailed, setCodeDeliveryFailed] = useState(false);
@@ -89,19 +87,22 @@ export function MobileSignUp({
     };
   }, [appleSignInBuilt]);
 
-  const runRequest = async (request: () => Promise<void>) => {
-    if (requestInFlight.current || busy) return;
-    requestInFlight.current = true;
-    setWorking(true);
-    try {
-      await request();
-    } finally {
-      requestInFlight.current = false;
-      setWorking(false);
-    }
-  };
+  const runRequest = useCallback(
+    async (request: () => Promise<void>) => {
+      if (requestInFlight.current || busy) return;
+      requestInFlight.current = true;
+      setWorking(true);
+      try {
+        await request();
+      } finally {
+        requestInFlight.current = false;
+        setWorking(false);
+      }
+    },
+    [busy],
+  );
 
-  const startEmail = async () => {
+  const startEmail = useCallback(async () => {
     const emailAddress = email.trim();
     if (!emailAddress) return;
     if (!validateEmail(emailAddress)) {
@@ -134,7 +135,13 @@ export function MobileSignUp({
         setError(authErrorMessage(cause, 'sign-up'));
       }
     });
-  };
+  }, [email, runRequest]);
+
+  useEffect(() => {
+    if (!pendingEmail.current || busy) return;
+    pendingEmail.current = undefined;
+    void startEmail().finally(() => setOpeningVerification(false));
+  }, [busy, startEmail]);
 
   const resendEmail = async () => {
     await runRequest(async () => {
@@ -188,15 +195,9 @@ export function MobileSignUp({
       setError(null);
       setSocialRecoveryAvailable(false);
       try {
-        const result = await startSSOFlow({
-          strategy: `oauth_${provider}`,
-          redirectUrl: createURL(
-            '/login',
-            postAuthIntent
-              ? { queryParams: { [POST_AUTH_INTENT_PARAM]: postAuthIntent } }
-              : undefined,
-          ),
-        });
+        const result = await withMobileSsoCallback((redirectUrl) =>
+          startSSOFlow({ strategy: `oauth_${provider}`, redirectUrl }),
+        );
         if (
           result.authSessionResult?.type === 'cancel' ||
           result.authSessionResult?.type === 'dismiss'
@@ -262,6 +263,10 @@ export function MobileSignUp({
           setError(authErrorMessage(reset.error, 'sign-up'));
           return;
         }
+        if (initialEmail) {
+          onSignIn();
+          return;
+        }
         setVerificationEmail(null);
         setCodeDeliveryFailed(false);
         setCode('');
@@ -273,6 +278,8 @@ export function MobileSignUp({
   };
 
   const emailReveal = useAuthEmailFieldReveal();
+
+  if (openingVerification) return <LoadingIndicator />;
 
   return (
     <KeyboardAvoidingView
@@ -287,20 +294,20 @@ export function MobileSignUp({
           flexGrow: 1,
           justifyContent: 'flex-start',
           paddingHorizontal: 24,
-          paddingTop: 42,
+          paddingTop: 28,
           paddingBottom: 32,
         }}
         {...emailReveal.scrollProps}
       >
-        <View style={{ width: '100%', maxWidth: 340, alignSelf: 'center' }}>
+        <View style={{ width: '100%', maxWidth: 392, alignSelf: 'center' }}>
           <Text
             accessibilityRole="header"
             style={{
               color: colors.textPrimary,
               fontSize: typeScale.largeTitle,
               fontWeight: '700',
-              textAlign: 'center',
-              marginBottom: 32,
+              textAlign: 'left',
+              marginBottom: 24,
             }}
           >
             {verifying ? 'Verify your email' : 'Create an account'}
@@ -343,7 +350,7 @@ export function MobileSignUp({
                     autoCapitalize="none"
                     style={{
                       minHeight: 52,
-                      borderRadius: 26,
+                      borderRadius: radii.xl,
                       borderWidth: 1,
                       borderColor: colors.border,
                       color: colors.textPrimary,
@@ -360,8 +367,8 @@ export function MobileSignUp({
                     onPress={() => void verifyEmail()}
                     style={{
                       minHeight: 52,
-                      borderRadius: 26,
-                      backgroundColor: colors.teal,
+                      borderRadius: radii.xl,
+                      backgroundColor: colors.textPrimary,
                       alignItems: 'center',
                       justifyContent: 'center',
                       marginTop: 28,
@@ -373,7 +380,7 @@ export function MobileSignUp({
                     ) : (
                       <Text
                         style={{
-                          color: colors.accentText,
+                          color: colors.surfaceBase,
                           fontSize: typeScale.callout,
                           fontWeight: '600',
                         }}
@@ -429,7 +436,7 @@ export function MobileSignUp({
                             ? AppleAuthentication.AppleAuthenticationButtonStyle.WHITE
                             : AppleAuthentication.AppleAuthenticationButtonStyle.BLACK
                         }
-                        cornerRadius={26}
+                        cornerRadius={radii.xl}
                         style={{ height: 52, width: '100%' }}
                         onPress={() => void startApple()}
                       />
@@ -443,9 +450,10 @@ export function MobileSignUp({
                       onPress={() => void startProvider(provider.id)}
                       style={{
                         minHeight: 52,
-                        borderRadius: 26,
+                        borderRadius: radii.xl,
                         borderWidth: 1,
                         borderColor: colors.border,
+                        backgroundColor: colors.surfaceElevated,
                         alignItems: 'center',
                         justifyContent: 'center',
                         opacity: busy ? 0.5 : 1,
@@ -494,8 +502,8 @@ export function MobileSignUp({
                     color: colors.textPrimary,
                     fontSize: typeScale.subhead,
                     fontWeight: '600',
-                    textAlign: 'center',
-                    marginBottom: 10,
+                    textAlign: 'left',
+                    marginBottom: 8,
                   }}
                 >
                   Email address
@@ -519,14 +527,14 @@ export function MobileSignUp({
                   onSubmitEditing={() => void startEmail()}
                   style={{
                     minHeight: 52,
-                    borderRadius: 26,
+                    borderRadius: radii.xl,
                     borderWidth: 1,
                     borderColor: colors.border,
                     color: colors.textPrimary,
                     backgroundColor: colors.surfaceElevated,
                     fontSize: typeScale.callout,
-                    textAlign: 'center',
-                    paddingHorizontal: 20,
+                    textAlign: 'left',
+                    paddingHorizontal: 16,
                   }}
                 />
                 <Pressable
@@ -536,8 +544,8 @@ export function MobileSignUp({
                   onPress={() => void startEmail()}
                   style={{
                     minHeight: 52,
-                    borderRadius: 26,
-                    backgroundColor: colors.teal,
+                    borderRadius: radii.xl,
+                    backgroundColor: colors.textPrimary,
                     alignItems: 'center',
                     justifyContent: 'center',
                     marginTop: 28,
@@ -549,7 +557,7 @@ export function MobileSignUp({
                   ) : (
                     <Text
                       style={{
-                        color: colors.accentText,
+                        color: colors.surfaceBase,
                         fontSize: typeScale.callout,
                         fontWeight: '600',
                       }}
