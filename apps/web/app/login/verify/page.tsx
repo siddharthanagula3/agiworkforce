@@ -5,8 +5,7 @@ import { AccountSecurityHandoff } from '@/features/account-security/components/A
 import { AccountSecurityVerify } from '@/features/account-security/components/AccountSecurityVerify';
 import { AuthLayout } from '@/features/auth/AuthLayout';
 import { AuthStepFrame } from '@/features/auth/AuthStepFrame';
-import { getSafeRedirectUrl } from '@/lib/safe-redirect';
-import { SITE_URL } from '@/lib/seo/site';
+import { postAuthDestination } from '@/features/auth/postAuthDestination';
 import { subjectSessionPassesAccountSecurity } from '@/lib/server/account-security/gate';
 import { getRequestIdentity } from '@/lib/server/identity';
 
@@ -44,7 +43,7 @@ export default async function AccountSecurityVerifyPage({
     );
   }
 
-  const redirectTo = getSafeRedirectUrl(params.redirectTo, SITE_URL, '/chat');
+  const redirectTo = postAuthDestination(params.redirectTo);
   const { subject, sessionId } = await getRequestIdentity();
   if (!subject) redirect(`/login?redirectTo=${encodeURIComponent(redirectTo)}`);
   if (await subjectSessionPassesAccountSecurity(subject, sessionId)) redirect(redirectTo);

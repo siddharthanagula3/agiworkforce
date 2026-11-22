@@ -12194,6 +12194,9 @@
     "beginBrowserSignIn": [
       "apps/web/features/desktop-host/lib/browser-sign-in.ts"
     ],
+    "beginChatHandoff": [
+      "apps/web/features/auth/chatHandoff.ts"
+    ],
     "beginCloudAccountAddition": [
       "apps/mobile/src/features/auth/services/accountAddition.ts"
     ],
@@ -53587,6 +53590,9 @@
     "finishBrowserHandoff": [
       "apps/web/features/desktop-host/index.ts",
       "apps/web/features/desktop-host/lib/browser-handoff.ts"
+    ],
+    "finishChatHandoff": [
+      "apps/web/features/auth/chatHandoff.ts"
     ],
     "finishCloudHistoryLoad": [
       "apps/mobile/stores/chat/cloudHistoryLoad.ts"
@@ -103685,6 +103691,9 @@
     ],
     "postAsShellAccount": [
       "apps/desktop/electron/shellIdentity.ts"
+    ],
+    "postAuthDestination": [
+      "apps/web/features/auth/postAuthDestination.ts"
     ],
     "PostAuthDestination": [
       "apps/mobile/src/features/auth/services/postAuthIntent.ts"

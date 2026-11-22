@@ -344,7 +344,7 @@ describe('/login/complete', () => {
       }),
     );
 
-    expect(mocks.continue).toHaveBeenCalledWith({ redirectTo: '/' });
+    expect(mocks.continue).toHaveBeenCalledWith({ redirectTo: '/chat' });
   });
 
   it.each(DENIALS)(

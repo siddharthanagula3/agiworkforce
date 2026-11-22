@@ -3,8 +3,7 @@ import { headers } from 'next/headers';
 import { MARKETING_EMAIL_CONSENT_PURPOSE } from '@/lib/consent-purposes';
 import { readGlobalPrivacyControlHeader } from '@/lib/consent-signals';
 import { logger } from '@/lib/logger';
-import { getSafeRedirectUrl } from '@/lib/safe-redirect';
-import { SITE_URL } from '@/lib/seo/site';
+import { postAuthDestination } from '@/features/auth/postAuthDestination';
 import { readLatestConsent } from '@/lib/server/consent-records';
 import { hasAcceptedAnyTerms, hasAcceptedCurrentTerms, mustAcceptTerms } from '@/lib/server/terms';
 import { TermsGate } from '../../signup/TermsGate';
@@ -49,7 +48,7 @@ export default async function LoginCompletePage({
   }>;
 }) {
   const params = await searchParams;
-  const redirectTo = getSafeRedirectUrl(params.redirectTo, SITE_URL, '/');
+  const redirectTo = postAuthDestination(params.redirectTo);
   const isDesktopSurface = params.surface === 'desktop';
   const { subject: userId } = await getRequestIdentity();
 

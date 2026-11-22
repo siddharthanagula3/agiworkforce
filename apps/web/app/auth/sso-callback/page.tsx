@@ -11,10 +11,7 @@ import {
   readAuthRouteContext,
 } from '@/features/auth/authRoutes';
 import { classifyProviderCallbackError } from '@/lib/auth/error-taxonomy';
-import { getSafeRedirectUrl } from '../../../lib/safe-redirect';
-import { SITE_URL } from '@/lib/seo/site';
-
-const CALLBACK_FALLBACK_REDIRECT = '/';
+import { postAuthDestination } from '@/features/auth/postAuthDestination';
 
 export default async function SsoCallbackPage({
   searchParams,
@@ -27,7 +24,7 @@ export default async function SsoCallbackPage({
   }>;
 }) {
   const params = await searchParams;
-  const redirectTo = getSafeRedirectUrl(params.redirectTo, SITE_URL, CALLBACK_FALLBACK_REDIRECT);
+  const redirectTo = postAuthDestination(params.redirectTo);
   const context = readAuthRouteContext(params, redirectTo);
 
   // The provider answers a cancelled or failed consent by redirecting here with

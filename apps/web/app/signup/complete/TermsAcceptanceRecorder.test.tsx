@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
@@ -49,6 +49,7 @@ vi.mock('@/lib/client/csrf', async (importOriginal) => ({
 import { ADULT_ELIGIBILITY_ERROR_CODES } from '@agiworkforce/cloud-contracts';
 import { ACCOUNT_AGE_FIELD_LABEL, ACCOUNT_AGE_INELIGIBLE_MESSAGE } from '@agiworkforce/types';
 
+import { finishChatHandoff } from '@/features/auth/chatHandoff';
 import { MarketingEmailGrantProvider } from '@/features/auth/marketingEmailChoice';
 import { SIGN_UP_AGREEMENT_NOT_APPLICABLE_STATUS } from '@/lib/auth/new-account';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
@@ -61,6 +62,9 @@ import {
 } from '../signupAttemptMarkers';
 import { ContinueWithCurrentTerms, RecordTermsAcceptance } from './RecordTermsAcceptance';
 import SignupCompletePage from './page';
+
+beforeAll(() => vi.stubGlobal('location', { ...window.location, replace: mocks.replace }));
+afterAll(() => vi.unstubAllGlobals());
 
 function leaveEarlierAttemptKeys(): void {
   window.localStorage.setItem(MARKETING_EMAIL_CHOICE_STORAGE_KEY, POLICY_LAST_UPDATED.privacy);
@@ -199,6 +203,24 @@ describe('signup terms recorder', () => {
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
+  it('stops automatic navigation when chat sends the same tab back to completion', async () => {
+    const first = render(<ContinueWithCurrentTerms redirectTo="/chat" />);
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledTimes(1));
+    first.unmount();
+    render(<ContinueWithCurrentTerms redirectTo="/chat" />);
+    expect(await screen.findByRole('link', { name: 'Open chat' })).toHaveAttribute('href', '/chat');
+    expect(mocks.replace).toHaveBeenCalledTimes(1);
+  });
+
+  it('allows a later sign-in in the same tab after chat actually opened', async () => {
+    const first = render(<ContinueWithCurrentTerms redirectTo="/chat" />);
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledTimes(1));
+    first.unmount();
+    finishChatHandoff();
+    render(<ContinueWithCurrentTerms redirectTo="/chat" />);
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledTimes(2));
+  });
+
   it('surfaces a failed record instead of continuing as if it had been written', async () => {
     vi.stubGlobal(
       'fetch',
@@ -241,7 +263,9 @@ describe('signup terms recorder', () => {
 
     render(<RecordTermsAcceptance redirectTo="/chat" />);
 
-    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/chat'));
+    await waitFor(() =>
+      expect(mocks.replace).toHaveBeenCalledWith('/login/complete?redirectTo=%2Fchat&authRetry=1'),
+    );
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 });
@@ -508,13 +532,13 @@ describe('/signup/complete agreement record', () => {
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
-  it('leaves a signed-out visitor to the recorder without asking the provider about them', async () => {
+  it('sends a signed-out visitor to bounded recovery instead of bouncing through the workspace', async () => {
     mocks.identity.mockResolvedValue({ subject: null });
     mocks.useAuth.mockReturnValue({ isLoaded: true, isSignedIn: false });
-
     await renderComplete();
-
-    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/chat'));
+    await waitFor(() =>
+      expect(mocks.replace).toHaveBeenCalledWith('/login/complete?redirectTo=%2Fchat&authRetry=1'),
+    );
     expect(mocks.email).not.toHaveBeenCalled();
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });

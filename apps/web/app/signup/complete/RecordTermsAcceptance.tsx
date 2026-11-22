@@ -9,6 +9,8 @@ import { ADULT_ELIGIBILITY_ERROR_CODES } from '@agiworkforce/cloud-contracts';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { SIGN_UP_AGREEMENT_NOT_APPLICABLE_STATUS } from '@/lib/auth/new-account';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
+import { beginChatHandoff } from '@/features/auth/chatHandoff';
+import { NEW_CHAT_PATH } from '@/features/chat/lib/new-chat-entry';
 import { AuthProgress } from '@/features/auth/AuthProgress';
 import { AuthStepFrame } from '@/features/auth/AuthStepFrame';
 import { buildLoginCompleteUrl } from '@/features/auth/authRoutes';
@@ -30,14 +32,40 @@ async function refusedForAge(response: Response): Promise<boolean> {
   return typeof code === 'string' && AGE_REFUSAL_CODES.includes(code);
 }
 
+function useWorkspaceHandoff(redirectTo: string) {
+  const [returned, setReturned] = useState(false);
+  const leave = useCallback(() => {
+    if (redirectTo === NEW_CHAT_PATH && !beginChatHandoff()) {
+      setReturned(true);
+      return;
+    }
+    window.location.replace(redirectTo);
+  }, [redirectTo]);
+  return { returned, leave };
+}
+
+function OpenWorkspace({ href }: { href: string }) {
+  return (
+    <AuthStepFrame heading="Continue to your workspace">
+      <a className={AUTH_PRIMARY_BUTTON_CLASS} href={href}>
+        Open chat
+      </a>
+    </AuthStepFrame>
+  );
+}
+
 export function ContinueWithCurrentTerms({ redirectTo }: { redirectTo: string }) {
-  const router = useRouter();
+  const started = useRef(false);
+  const { returned, leave } = useWorkspaceHandoff(redirectTo);
 
   useEffect(() => {
+    if (started.current) return;
+    started.current = true;
     clearSignupAttemptMarkers();
-    router.replace(redirectTo);
-  }, [redirectTo, router]);
+    leave();
+  }, [leave]);
 
+  if (returned) return <OpenWorkspace href={redirectTo} />;
   return (
     <AuthStepFrame heading="Finishing signing in">
       <AuthProgress label="Taking you to your workspace" />
@@ -54,6 +82,7 @@ export function RecordTermsAcceptance({
 }) {
   const { isLoaded, isSignedIn } = useSession();
   const router = useRouter();
+  const { returned, leave } = useWorkspaceHandoff(redirectTo);
   const [failure, setFailure] = useState<'none' | 'retryable' | 'outdated'>('none');
   const attempted = useRef(false);
   const grantedOnThisScreen = useMarketingEmailGrant();
@@ -84,7 +113,7 @@ export function RecordTermsAcceptance({
         clearSignupAttemptMarkers();
         if (surface === 'web-login') router.refresh();
         else {
-          router.replace(
+          window.location.replace(
             buildLoginCompleteUrl({ redirectTo, desktopSurface: false, authRetry: false }),
           );
         }
@@ -92,29 +121,33 @@ export function RecordTermsAcceptance({
       }
       if (!response.ok) throw new Error(`terms acceptance failed: ${response.status}`);
       clearSignupAttemptMarkers();
-      router.replace(redirectTo);
+      leave();
     } catch {
       setFailure('retryable');
     }
-  }, [grantedOnThisScreen, redirectTo, router, surface]);
+  }, [grantedOnThisScreen, leave, redirectTo, router, surface]);
 
   useEffect(() => {
     if (!isLoaded || attempted.current) return;
     attempted.current = true;
     if (!isSignedIn) {
       clearSignupAttemptMarkers();
-      router.replace(redirectTo);
+      window.location.replace(
+        buildLoginCompleteUrl({ redirectTo, desktopSurface: false, authRetry: true }),
+      );
       return;
     }
     if (surface === 'web-signup' && !hasCurrentTermsGateMarker()) {
       clearSignupAttemptMarkers();
-      router.replace(
+      window.location.replace(
         buildLoginCompleteUrl({ redirectTo, desktopSurface: false, authRetry: false }),
       );
       return;
     }
     void record();
-  }, [isLoaded, isSignedIn, record, redirectTo, router, surface]);
+  }, [isLoaded, isSignedIn, record, redirectTo, surface]);
+
+  if (returned) return <OpenWorkspace href={redirectTo} />;
 
   if (failure === 'outdated') {
     return (
