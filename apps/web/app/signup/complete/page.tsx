@@ -8,8 +8,7 @@ import { readPrimaryEmailState } from '@/lib/auth/email-confirmation';
 import { readAdultEligibilityState } from '@/lib/server/adult-eligibility';
 import { IDENTITY_SIGN_IN_LOOKUP_TIMEOUT_MS } from '@/lib/server/identity-timeouts';
 import { getRequestIdentity } from '@/lib/server/identity';
-import { getSafeRedirectUrl } from '../../../lib/safe-redirect';
-import { SITE_URL } from '@/lib/seo/site';
+import { postAuthDestination } from '@/features/auth/postAuthDestination';
 import { TermsReviewSignOut } from '../../login/complete/TermsReviewSignOut';
 import { RecordTermsAcceptance } from './RecordTermsAcceptance';
 
@@ -19,7 +18,7 @@ export default async function SignupCompletePage({
   searchParams: Promise<{ redirectTo?: string }>;
 }) {
   const params = await searchParams;
-  const redirectTo = getSafeRedirectUrl(params.redirectTo, SITE_URL, '/welcome');
+  const redirectTo = postAuthDestination(params.redirectTo);
   const { subject: userId } = await getRequestIdentity();
   if (userId) {
     if (!(await readPrimaryEmailState(userId, IDENTITY_SIGN_IN_LOOKUP_TIMEOUT_MS)).confirmed) {

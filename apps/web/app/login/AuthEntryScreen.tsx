@@ -14,8 +14,7 @@ import {
   readAuthRouteContext,
 } from '@/features/auth/authRoutes';
 import { DesktopBrowserSignIn } from '@/features/desktop-host/components/DesktopBrowserSignIn';
-import { getSafeRedirectUrl } from '@/lib/safe-redirect';
-import { SITE_URL } from '@/lib/seo/site';
+import { postAuthDestination } from '@/features/auth/postAuthDestination';
 import { getRequestIdentity } from '@/lib/server/identity';
 
 export interface AuthEntryParams {
@@ -33,18 +32,8 @@ async function hasVerifiedSession(): Promise<boolean> {
   }
 }
 
-export async function AuthEntryScreen({
-  params,
-  fallbackRedirect,
-}: {
-  params: AuthEntryParams;
-  fallbackRedirect: string;
-}) {
-  const redirectTo = getSafeRedirectUrl(
-    params.redirectTo ?? params.next,
-    SITE_URL,
-    fallbackRedirect,
-  );
+export async function AuthEntryScreen({ params }: { params: AuthEntryParams }) {
+  const redirectTo = postAuthDestination(params.redirectTo ?? params.next);
   const context = readAuthRouteContext(params, redirectTo);
   if (params.authRetry !== '1' && (await hasVerifiedSession())) {
     redirect(buildLoginCompleteUrl(context));
