@@ -149,6 +149,7 @@ import {
   browserPermissionModeToStored,
   DEFAULT_BROWSER_PERMISSION_MODE,
   readBrowserPermissionMode,
+  unattendedComposerTask,
   type BrowserPermissionMode,
 } from './features/computer-use/askBeforeActing';
 import { UUID_PATTERN } from './lib/uuid';
@@ -7547,6 +7548,28 @@ async function requestBrowserSiteAccess(
     return { status: 'unavailable', reason: t('spSiteBlockedByYou', [hostLabel(origin)]) };
   }
   const tabId = tab.id;
+  if ((await currentPermissionMode()) === 'yolo') {
+    if (!(await originApprovedForBrowserControl(origin)))
+      return {
+        status: 'unavailable',
+        reason: t('spUnattendedSiteUnavailable', [hostLabel(origin)]),
+      };
+    if (isExtensionAccountOrigin(origin))
+      return { status: 'unavailable', reason: ACCOUNT_ORIGIN_REFUSAL };
+    const policy = await evaluateSiteAccess(tab.url ?? origin, 'automation');
+    if (!policy.allowed)
+      return {
+        status: 'unavailable',
+        reason: sitePolicyDenialMessage(policy, PAGE_CONTEXT_BLOCKED_REASON),
+      };
+    if (!(await originHasHostPermission(origin)))
+      return {
+        status: 'unavailable',
+        reason: t('spUnattendedSiteUnavailable', [hostLabel(origin)]),
+      };
+    if (!stillCurrent()) return { status: 'unavailable', reason: PAGE_CONTEXT_CHANGED_REASON };
+    return { status: 'granted', origin, tabId };
+  }
   if (scope === 'act') {
     if (isExtensionAccountOrigin(origin))
       return { status: 'unavailable', reason: ACCOUNT_ORIGIN_REFUSAL };
@@ -7915,6 +7938,7 @@ async function runHistorySearchTool(
   request: HistorySearchRequest,
 ): Promise<string> {
   if (!(await hasHistoryPermission())) return t('spHistorySearchOff');
+  if ((await currentPermissionMode()) === 'yolo') return t('spUnattendedHistoryUnavailable');
   if (!(await confirmHistorySearch(streamId, request))) return t('spHistorySearchDeclined');
   recordBrowserActivity(streamId, [
     {
@@ -8486,7 +8510,9 @@ function selectedModelSupportsChatTools(): boolean {
   );
 }
 
-function sendMessage(text: string, displayText?: string): boolean {
+let composerPermissionMode = DEFAULT_BROWSER_PERMISSION_MODE as BrowserPermissionMode;
+
+function sendMessage(text: string, displayText?: string, explicitBrowserTask = false): boolean {
   if (!canAdmitComposerMessage(text)) return false;
   if (composerVideoMode) {
     if (pendingAttachmentCount() > 0 || _ctx.pendingPageContext !== null) {
@@ -8543,13 +8569,15 @@ function sendMessage(text: string, displayText?: string): boolean {
       ? { display: prompt, prompt, captureContext: true }
       : null);
   if (
-    !slashCmd &&
+    !explicitSlashCommand &&
     !editableRewrites.current() &&
-    !modelChoosesBrowserTools &&
-    pendingDocuments.length === 0 &&
+    pendingAttachmentCount() === 0 &&
     !_ctx.pendingPageContext &&
     pendingBrowserContextTabs.length === 0 &&
-    classifyTaskLocally(prompt, []).type === 'computer-use'
+    (explicitBrowserTask ||
+      ((!modelChoosesBrowserTools || composerPermissionMode === 'yolo') &&
+        (composerPermissionMode === 'yolo' || !slashCmd) &&
+        classifyTaskLocally(prompt, []).type === 'computer-use'))
   ) {
     void startComposerBrowserTask(prompt);
     return true;
@@ -14009,6 +14037,35 @@ function buildUI(): void {
     }
   });
 
+  let savingUnattendedCommand = false;
+  function handleUnattendedCommand(text: string): boolean {
+    const task = unattendedComposerTask(text);
+    if (task === undefined) return false;
+    if (savingUnattendedCommand) return true;
+    savingUnattendedCommand = true;
+    const revision = composerDraftRevision;
+    void chrome.storage.local
+      .set({ [ASK_BEFORE_ACTING_KEY]: browserPermissionModeToStored('yolo') })
+      .then(() => {
+        renderAutonomyChip('yolo');
+        if (composerDraftRevision !== revision || inputEl.value !== text) return;
+        inputEl.value = task;
+        if (!task || sendMessage(task, undefined, true)) inputEl.value = '';
+        composerContextNotice = t('spAutonomyYoloTooltip');
+        autoResizeInput(inputEl);
+        updateSendButton();
+        updateAttachmentPreview();
+      })
+      .catch(() => {
+        composerContextNotice = t('optSaveFailed');
+        updateAttachmentPreview();
+      })
+      .finally(() => {
+        savingUnattendedCommand = false;
+      });
+    return true;
+  }
+
   inputEl.addEventListener('input', () => {
     composerDraftRevision += 1;
     autoResizeInput(inputEl);
@@ -14018,6 +14075,7 @@ function buildUI(): void {
     if (e.key === 'Enter' && !e.shiftKey && !isImeComposingKey(e)) {
       e.preventDefault();
       const text = inputEl.value;
+      if (handleUnattendedCommand(text)) return;
       if (!submitComposerText(text)) return;
       inputEl.value = '';
       autoResizeInput(inputEl);
@@ -14045,6 +14103,7 @@ function buildUI(): void {
       return;
     }
     const text = inputEl.value;
+    if (handleUnattendedCommand(text)) return;
     if (!sendMessage(text)) return;
     inputEl.value = '';
     autoResizeInput(inputEl);
@@ -14822,9 +14881,21 @@ function buildUI(): void {
   fullAccessOption.appendChild(fullAccessCopy);
   const fullAccessCheck = el('span', { class: 'sp-autonomy-option-check' });
   fullAccessOption.appendChild(fullAccessCheck);
+  const yoloOption = el('button', {
+    class: 'sp-autonomy-option',
+    type: 'button',
+    role: 'menuitemradio',
+  }) as HTMLButtonElement;
+  yoloOption.appendChild(renderIcon(Zap, 15));
+  const yoloCopy = el('span', { class: 'sp-autonomy-option-copy' });
+  yoloCopy.appendChild(el('strong', {}, t('spAutonomyYolo')));
+  yoloCopy.appendChild(el('small', {}, t('spAutonomyYoloDescription')));
+  const yoloCheck = el('span', { class: 'sp-autonomy-option-check' });
+  yoloOption.append(yoloCopy, yoloCheck);
   autonomyPopover.appendChild(askFirstOption);
   autonomyPopover.appendChild(autoOption);
   autonomyPopover.appendChild(fullAccessOption);
+  autonomyPopover.appendChild(yoloOption);
   const autonomyLearnMore = buildHelpArticleLink('tool-approvals', t('spAutonomyLearnMore'));
   autonomyLearnMore.classList.add('sp-autonomy-learn-more');
   autonomyLearnMore.setAttribute('role', 'menuitem');
@@ -14874,9 +14945,18 @@ function buildUI(): void {
       tooltip: t('spAutonomyFullAccessTooltip'),
       aria: t('spAutonomyFullAccessAria'),
     },
+    {
+      mode: 'yolo',
+      option: yoloOption,
+      check: yoloCheck,
+      icon: Zap,
+      tooltip: t('spAutonomyYoloTooltip'),
+      aria: t('spAutonomyYoloAria'),
+    },
   ];
 
   function renderAutonomyChip(mode: BrowserPermissionMode): void {
+    composerPermissionMode = mode;
     autonomyChip.setAttribute('data-mode', mode);
     for (const entry of autonomyModes) {
       const selected = entry.mode === mode;

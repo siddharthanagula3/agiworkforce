@@ -53,11 +53,16 @@ describe('options default site permission', () => {
     expect(UNAPPROVED_SITE_DEFAULT_HINT).toMatch(/^Auto is the default/);
   });
 
-  it('offers Auto, Ask and Full access and starts on Auto', async () => {
+  it('offers the supported permission modes and starts on Auto', async () => {
     const storage = fakeStorage();
     const section = createSitePermissionPolicySection(storage);
     await section.loaded;
-    expect([...section.select.options].map((o) => o.value)).toEqual(['auto', 'ask', 'full']);
+    expect([...section.select.options].map((o) => o.value)).toEqual([
+      'auto',
+      'ask',
+      'full',
+      'yolo',
+    ]);
     expect(section.select.value).toBe('auto');
     expect(section.select.disabled).toBe(false);
   });
@@ -73,12 +78,13 @@ describe('options default site permission', () => {
     );
   });
 
-  it('labels the modes with the side panel wording, and no option claims to run without asking', () => {
+  it('labels the modes consistently with the side panel', () => {
     const section = createSitePermissionPolicySection(fakeStorage());
     expect([...section.select.options].map((o) => o.textContent)).toEqual([
       'Auto',
       'Ask first',
       'Full access',
+      'YOLO',
     ]);
     expect(section.element.textContent).not.toMatch(/without asking/i);
   });

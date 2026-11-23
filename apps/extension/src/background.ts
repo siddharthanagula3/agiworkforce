@@ -6461,6 +6461,7 @@ async function handleMessageAsync(
           },
         });
         if (!needsApproval) return true;
+        if (permissionMode === 'yolo') return false;
         {
           const requestId = `cu_approve_${crypto.randomUUID()}`;
           let uploadBinding: BrowserUploadBinding | null = null;
@@ -6655,6 +6656,7 @@ async function handleMessageAsync(
       const guidanceQueue: PendingRunGuidance[] = [];
       computerUseGuidance.set(lease.runId, guidanceQueue);
       const completion = runAgentLoop(cuGoal, cuTabId, {
+        unattended: permissionMode === 'yolo',
         model: computerUseModel,
         fallbackAfterProviderRejection,
         ...(cuMsg.pageContext ? { pageContext: cuMsg.pageContext } : {}),

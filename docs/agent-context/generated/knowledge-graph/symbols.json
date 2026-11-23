@@ -149072,6 +149072,9 @@
     "unattended_turn": [
       "apps/desktop/src-tauri/src/core/agent/mod.rs"
     ],
+    "unattendedComposerTask": [
+      "apps/extension/src/features/computer-use/askBeforeActing.ts"
+    ],
     "UnattendedPolicyUnreadableError": [
       "apps/web/lib/services/scheduled-agent-executor.ts"
     ],

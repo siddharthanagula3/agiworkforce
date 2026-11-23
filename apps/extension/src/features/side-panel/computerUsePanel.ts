@@ -1135,6 +1135,7 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     ask: { label: t('spAutonomyAskFirst'), tooltip: t('spAutonomyAskFirstTooltip') },
     auto: { label: t('spAutonomyAuto'), tooltip: t('spAutonomyAutoTooltip') },
     full: { label: t('spAutonomyFullAccess'), tooltip: t('spAutonomyFullAccessTooltip') },
+    yolo: { label: t('spAutonomyYolo'), tooltip: t('spAutonomyYoloTooltip') },
   };
 
   const askLabel = document.createElement('label');
@@ -1143,7 +1144,7 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
   const modeSelect = document.createElement('select');
   modeSelect.id = 'sp-cu-mode-select';
   modeSelect.setAttribute('aria-label', t('spAutonomyMenuHeading'));
-  for (const mode of ['ask', 'auto', 'full'] as const) {
+  for (const mode of ['ask', 'auto', 'full', 'yolo'] as const) {
     const option = document.createElement('option');
     option.value = mode;
     option.textContent = MODE_COPY[mode].label;

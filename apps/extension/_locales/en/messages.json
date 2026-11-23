@@ -4232,7 +4232,11 @@
   },
   "spSavedProfileFillComplete": {
     "message": "Filled $COUNT$ fields from your saved profile without submitting.",
-    "placeholders": { "count": { "content": "$1" } }
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
   },
   "spBrowserTaskStartDeclined": {
     "message": "The user declined to start this browser task. Do not ask again in this answer; answer without it or say what the user can do.",
@@ -5056,5 +5060,35 @@
   "spSchedulesDateFuture": {
     "message": "Choose a future date and time.",
     "description": "Schedule creation control or validation message."
+  },
+  "spAutonomyYolo": {
+    "message": "YOLO",
+    "description": "Unattended browser permission mode."
+  },
+  "spAutonomyYoloDescription": {
+    "message": "Work unattended on approved sites",
+    "description": "Permission menu description."
+  },
+  "spAutonomyYoloTooltip": {
+    "message": "Runs routine browser actions on approved sites without questions. Steps requiring approval are left unfinished.",
+    "description": "Unattended permission mode behavior."
+  },
+  "spAutonomyYoloAria": {
+    "message": "Permission mode: YOLO, unattended",
+    "description": "Accessible permission mode name."
+  },
+  "spUnattendedHistoryUnavailable": {
+    "message": "History search needs your approval and was skipped in unattended mode.",
+    "description": "Unattended browser history result."
+  },
+  "spUnattendedSiteUnavailable": {
+    "message": "Approve $HOST$ in Permissions before starting an unattended task on this site.",
+    "description": "Shown for an unapproved unattended target.",
+    "placeholders": {
+      "host": {
+        "content": "$1",
+        "example": "example.com"
+      }
+    }
   }
 }

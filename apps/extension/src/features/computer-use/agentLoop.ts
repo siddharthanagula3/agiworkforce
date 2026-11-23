@@ -90,6 +90,7 @@ export interface AgentLoopOptions {
    * Hands the tab to the user and resolves when they hand it back. A run with
    * nobody watching leaves this out and the agent is told so.
    */
+  unattended?: boolean;
   requestTakeover?: (reason: string) => Promise<void>;
   /** The hand-back the user asked for between steps, when there is one. */
   pendingTakeover?: () => Promise<void> | null;
@@ -1071,6 +1072,9 @@ export async function runAgentLoop(
       content:
         'You are a browser automation agent powered by AGI Cloud. ' +
         'You control a real Chrome browser tab on behalf of the user. ' +
+        (options.unattended
+          ? 'The user is away. Work autonomously on approved sites. If a step requires human input or approval, leave it undone, complete independent steps, and report exactly what remains. Do not retry a refused operation by another route. '
+          : '') +
         "Use the provided tools to accomplish the user's goal.\n\n" +
         'For routine actions already requested, call the tools directly. The extension applies the active browser permission mode; do not ask the user in chat to reconfirm each action.\n\n' +
         'TAB SCOPE: Only the original task tab, tabs deliberately attached by the user and tabs created by this task are available. Use list_tabs for their IDs when offered. Never guess a personal tab ID. Read the current tab again after navigation or a tab transition; element indices belong to one page snapshot.\n\n' +
@@ -1423,6 +1427,12 @@ async function handToUser(
   args: Record<string, unknown>,
   options: AgentLoopOptions,
 ): Promise<{ handedBack: boolean; result: string }> {
+  if (options.unattended)
+    return {
+      handedBack: false,
+      result:
+        'This step needs a person. Report it as unfinished and complete any independent work.',
+    };
   if (!options.requestTakeover) return { handedBack: false, result: TAKEOVER_UNAVAILABLE };
   const reason =
     typeof args['reason'] === 'string' && args['reason'].trim()
@@ -1651,7 +1661,9 @@ async function dispatchToolCall(
       allowed = false;
     }
     if (!allowed) {
-      const skippedResult = 'Action skipped, no approval received (timeout or user denied).';
+      const skippedResult = options.unattended
+        ? 'This step requires approval or site access. It was not executed in unattended mode. Report it and continue independent work.'
+        : 'Action skipped, no approval received (timeout or user denied).';
       const actionOutcome = await settle({ claim: 'refused', reason: skippedResult }, null);
       await assertRunOwnership(options);
       options.onProgress?.({

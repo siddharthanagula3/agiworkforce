@@ -5,6 +5,14 @@ packaged as a Manifest V3 Chrome extension. See
 [`docs/threat-model.md`](docs/threat-model.md) for the full trust boundary and
 data flow reference.
 
+## Unattended browser tasks
+
+Grant browser control for the intended site in extension settings. In the side
+panel, enter `-yolo <browser task>` or `--always-approve <browser task>`.
+The permission menu shows **YOLO, unattended** until you choose another mode.
+Routine actions on approved sites run without confirmation. Steps that need
+additional access or a protected action are reported as unfinished.
+
 ## Closing finished tabs
 
 Open **More → Close tabs…**, select the tabs you have finished using, then choose

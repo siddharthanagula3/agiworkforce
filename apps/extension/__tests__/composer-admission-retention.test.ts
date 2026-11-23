@@ -211,9 +211,10 @@ describe('composer input clearing', () => {
       'autoResizeInput',
       'updateSendButton',
       'cancelCurrentManagedStream',
+      'handleUnattendedCommand',
       'isImeComposingKey',
       compiled,
-    )(inputEl, sendBtn, send, send, vi.fn(), vi.fn(), vi.fn(), isImeComposingKey);
+    )(inputEl, sendBtn, send, send, vi.fn(), vi.fn(), vi.fn(), () => false, isImeComposingKey);
     const event = { key: 'Enter', preventDefault: vi.fn() };
     listener(event);
     expect(inputEl.value).toBe('draft');

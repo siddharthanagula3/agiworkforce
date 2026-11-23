@@ -20,10 +20,11 @@ export function approvedSiteDefaultToStored(value: ApprovedSiteDefault): boolean
 }
 
 export function parseApprovedSiteDefault(value: unknown): ApprovedSiteDefault {
-  return value === 'ask' || value === 'full' ? value : 'auto';
+  return value === 'ask' || value === 'full' || value === 'yolo' ? value : 'auto';
 }
 
 export function describeApprovedSiteDefault(value: ApprovedSiteDefault): string {
+  if (value === 'yolo') return t('spAutonomyYoloTooltip');
   if (value === 'ask') return 'AGI asks before each action.';
   if (value === 'full')
     return 'AGI skips routine confirmations and still asks before protected actions.';
@@ -77,6 +78,7 @@ export function createSitePermissionPolicySection(
     ['auto', t('spAutonomyAuto')],
     ['ask', t('spAutonomyAskFirst')],
     ['full', t('spAutonomyFullAccess')],
+    ['yolo', t('spAutonomyYolo')],
   ] as const) {
     const option = document.createElement('option');
     option.value = value;

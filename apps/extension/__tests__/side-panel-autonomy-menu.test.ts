@@ -220,6 +220,8 @@ describe('the approval-mode menu beside +', () => {
     press(document.activeElement!, 'ArrowDown');
     expect(document.activeElement).toBe(option('Full access'));
     press(document.activeElement!, 'ArrowDown');
+    expect(document.activeElement).toBe(option('YOLO'));
+    press(document.activeElement!, 'ArrowDown');
     const learnMore = document.activeElement as HTMLAnchorElement;
     expect(learnMore.textContent).toContain('Learn more');
     expect(learnMore.getAttribute('role')).toBe('menuitem');
@@ -278,4 +280,18 @@ describe('the approval-mode menu beside +', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(fullAccessNotice().classList.contains('visible')).toBe(false);
   });
+  it.each(['-yolo', '--always-approve'])(
+    'sets unattended mode from the composer with %s',
+    async (alias) => {
+      chip().click();
+      option('Ask first').click();
+      const input = byId('sp-input') as HTMLTextAreaElement;
+      input.value = alias;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      if (alias === '-yolo') press(input, 'Enter');
+      else byId('sp-send-btn').click();
+      await vi.waitFor(() => expect(chip().getAttribute('data-mode')).toBe('yolo'));
+      expect(input.value).toBe('');
+    },
+  );
 });

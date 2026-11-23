@@ -98,7 +98,7 @@ interface RunSnapshot {
 }
 
 interface HarnessAPI {
-  sendMessage(text: string): void;
+  sendMessage(text: string, displayText?: string, explicitBrowserTask?: boolean): void;
   startComposerBrowserTask(
     goal: string,
   ): Promise<{ status: string; message: string; browserContext?: CallerBrowserContext }>;
@@ -255,6 +255,7 @@ function harness(activePersistenceEntry?: {
     historyRestoreInProgress: false,
     composerAttachmentIntakes: new Set(),
     composerDocumentsSettled: () => true,
+    composerPermissionMode: 'auto',
     pendingAttachmentCount: () => pendingDocuments.length,
     composerVideoMode: false,
     composerSkill: null as string | null,
@@ -470,6 +471,19 @@ describe('browser tasks from the real composer functions', () => {
     expect(h.context.messages[1]?.streaming).toBe(true);
     expect(h.context.messages[1]?.cloudAgentRun).toBeUndefined();
     expect(h.context.messages[1]?.provider).toBeUndefined();
+  });
+
+  it('sends an explicit unattended task straight to the browser runner for a tool-capable model', async () => {
+    const h = harness();
+    h.context.selectedModel = 'auto';
+    h.api.sendMessage('Use the controls on this calculator.', undefined, true);
+    await settle();
+    expect(h.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'AGI_START_COMPUTER_USE',
+        goal: 'Use the controls on this calculator.',
+      }),
+    );
   });
 
   it('keeps ordinary chat on CHAT_MESSAGE', async () => {
