@@ -116,6 +116,12 @@ function search(screen: ReturnType<typeof render>, text: string) {
   });
 }
 
+function renderOpenPicker() {
+  const screen = renderPicker();
+  act(() => mockSheetProps.current?.onChange?.(0));
+  return screen;
+}
+
 describe('model picker search', () => {
   beforeEach(() => {
     useModelStore.setState({ favorites: [], recentModels: [] });
@@ -129,7 +135,7 @@ describe('model picker search', () => {
 
   it('shows a recent model that is not a favorite when it is the only match', () => {
     useModelStore.setState({ recentModels: [FIRST!.id] });
-    const screen = renderPicker();
+    const screen = renderOpenPicker();
 
     search(screen, FIRST!.id);
 
@@ -139,7 +145,7 @@ describe('model picker search', () => {
 
   it('shows each matching model once when a recent favorite matches', () => {
     useModelStore.setState({ recentModels: [FIRST!.id], favorites: [FIRST!.id] });
-    const screen = renderPicker();
+    const screen = renderOpenPicker();
 
     search(screen, FIRST!.id);
 
@@ -148,7 +154,7 @@ describe('model picker search', () => {
 
   it('keeps a recent match beside other matches and drops non-matches', () => {
     useModelStore.setState({ recentModels: [FIRST!.id] });
-    const screen = renderPicker();
+    const screen = renderOpenPicker();
 
     expect(screen.getAllByTestId(`picker-row-${FIRST!.id}`)).toHaveLength(1);
     expect(screen.getByText('Recent')).toBeTruthy();
@@ -160,7 +166,7 @@ describe('model picker search', () => {
 
   it('says nothing matches only when nothing does, and restores Recent when cleared', () => {
     useModelStore.setState({ recentModels: [FIRST!.id] });
-    const screen = renderPicker();
+    const screen = renderOpenPicker();
 
     search(screen, 'no-such-model-anywhere');
     expect(screen.getByText(/No models matching/)).toBeTruthy();
@@ -171,16 +177,18 @@ describe('model picker search', () => {
   });
 
   it('clears the typed query when the sheet closes', () => {
-    const screen = renderPicker();
+    const screen = renderOpenPicker();
     search(screen, 'Wh');
 
     act(() => mockSheetProps.current?.onClose?.());
+    expect(screen.queryByTestId('model-picker-search-input')).toBeNull();
+    act(() => mockSheetProps.current?.onChange?.(0));
 
     expect(screen.getByTestId('model-picker-search-input').props.value).toBe('');
   });
 
   it('clears the typed query when the sheet starts opening again', () => {
-    const screen = renderPicker();
+    const screen = renderOpenPicker();
     search(screen, 'Wh');
 
     act(() => mockSheetProps.current?.onAnimate?.(-1, 0));
@@ -189,7 +197,7 @@ describe('model picker search', () => {
   });
 
   it('clears the typed query when an open is signalled', () => {
-    const screen = renderPicker();
+    const screen = renderOpenPicker();
     search(screen, 'Wh');
 
     screen.rerender(pickerElement(1));
@@ -198,7 +206,7 @@ describe('model picker search', () => {
   });
 
   it('keeps the query while the sheet moves between open positions', () => {
-    const screen = renderPicker();
+    const screen = renderOpenPicker();
     search(screen, 'Wh');
 
     act(() => mockSheetProps.current?.onAnimate?.(0, 1));
