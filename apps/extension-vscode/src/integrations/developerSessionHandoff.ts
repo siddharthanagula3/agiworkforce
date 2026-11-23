@@ -1,4 +1,4 @@
-import path from 'node:path';
+import { isSameWorkspacePath } from './developerSessionValidation';
 import type {
   DeveloperSessionHandoff,
   DeveloperSessionSource,
@@ -66,16 +66,9 @@ function credentialField(handoff: DeveloperSessionHandoff): string | null {
   return null;
 }
 
-function sameWorkspace(expected: string, received: string): boolean {
-  const left = path.normalize(expected);
-  const right = path.normalize(received);
-  return process.platform === 'win32' ? left.toLowerCase() === right.toLowerCase() : left === right;
-}
-
 /**
  * Whether this editor may take the session the record describes, and what it
- * has to start if it does. Nothing here talks to a process, so every refusal
- * is reachable from a test.
+ * has to start if it does. Folder aliases are resolved on the editor host before workspace identity is compared.
  */
 export function admitDeveloperSessionHandoff(
   handoff: DeveloperSessionHandoff,
@@ -127,7 +120,7 @@ export function admitDeveloperSessionHandoff(
   }
   if (
     context.workspaceCwd !== undefined &&
-    !sameWorkspace(context.workspaceCwd, handoff.workspace.cwd)
+    !isSameWorkspacePath(context.workspaceCwd, handoff.workspace.cwd)
   ) {
     return refuse({
       reason: 'wrongWorkspace',

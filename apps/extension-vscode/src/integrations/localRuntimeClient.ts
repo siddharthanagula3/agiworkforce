@@ -1,3 +1,4 @@
+import { isSameWorkspacePath, workspaceRealpath } from './developerSessionValidation';
 import { spawn as nodeSpawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { type Readable, type Writable } from 'node:stream';
 import { z } from 'zod';
@@ -1507,9 +1508,17 @@ export class LocalRuntimeClient {
   }
 
   async startThread(params: ThreadStartParams): Promise<ThreadSummary> {
+    const requestedRoot = params.cwd && workspaceRealpath(params.cwd);
     const connection = await this.readyConnection();
-    const result = await connection.request('thread/start', params);
-    return threadStartResponseSchema.parse(result).thread as ThreadSummary;
+    const result = await connection.request(
+      'thread/start',
+      requestedRoot ? { ...params, cwd: requestedRoot } : params,
+    );
+    const thread = threadStartResponseSchema.parse(result).thread as ThreadSummary;
+    if (requestedRoot && !isSameWorkspacePath(requestedRoot, thread.cwd)) {
+      throw new Error('The local runtime returned a thread outside the requested workspace.');
+    }
+    return thread;
   }
 
   async listThreads(params: ThreadListParams): Promise<ThreadListResponse> {

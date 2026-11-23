@@ -4344,7 +4344,7 @@ export class ChatStateManager {
       let threadCreated = false;
       if (
         this._thread === undefined ||
-        this._thread.cwd !== cwd ||
+        !isSameWorkspacePath(cwd, this._thread.cwd) ||
         this._thread.runtime !== runtime ||
         (!samePersistedModel && this._thread.providerBoundary !== requestedProviderBoundary)
       ) {

@@ -1,14 +1,28 @@
+import { realpathSync } from 'node:fs';
 import path from 'node:path';
 import type { ThreadSummary } from '@agiworkforce/types';
 
 type VerifiedDeveloperSessionTrustMode = Exclude<ThreadSummary['trustMode'], 'unknown'>;
 
+export function workspaceRealpath(cwd: string): string | undefined {
+  if (!path.isAbsolute(cwd)) return undefined;
+  try {
+    return realpathSync.native(cwd);
+  } catch {
+    return undefined;
+  }
+}
+
 export function isSameWorkspacePath(ownerCwd: string, candidateCwd?: string): boolean {
   if (candidateCwd === undefined || !path.isAbsolute(ownerCwd) || !path.isAbsolute(candidateCwd)) {
     return false;
   }
-  const owner = path.normalize(ownerCwd);
-  const candidate = path.normalize(candidateCwd);
+  if (ownerCwd === candidateCwd) return true;
+  const ownerPath = workspaceRealpath(ownerCwd);
+  const candidatePath = workspaceRealpath(candidateCwd);
+  if ((ownerPath === undefined) !== (candidatePath === undefined)) return false;
+  const owner = ownerPath ?? path.normalize(ownerCwd);
+  const candidate = candidatePath ?? path.normalize(candidateCwd);
   return process.platform === 'win32'
     ? owner.toLowerCase() === candidate.toLowerCase()
     : owner === candidate;
