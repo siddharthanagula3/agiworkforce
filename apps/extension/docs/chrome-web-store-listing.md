@@ -58,7 +58,7 @@ text with capitalised headings.
 AGI Extension puts an AI assistant in Chrome's side panel that can read the page you are on and, on sites you approve, act in it for you.
 
 CHAT ABOUT THE PAGE YOU ARE ON
-Attach the current page's text to a message with one click, or start with a slash command such as /summarize, /tldr, /explain, /translate, /extract or /code. Nothing is attached until you ask for it, and the panel tells you when a page cannot be read instead of answering about nothing.
+Attach the current page’s text to a message and ask a question about it. You choose when to share the page. If the extension can’t read it, the side panel tells you.
 
 ACT ON SITES YOU APPROVE
 On a site you approve, the assistant can click, type, scroll and navigate for you, for example to fill in a long application form. You choose how closely it is supervised. Ask first confirms every action. Auto, the default, asks before anything important such as sending, deleting, signing in, downloading or running a tool the website supplies, and before using any control it cannot identify. In every mode the assistant never completes a purchase: it stops and hands the checkout back to you. Full access asks only before protected actions such as uploads, downloads, sign-ins and sensitive input. Closing a tab always asks, because it can discard unsaved work. While the assistant controls a page, Chrome shows its own banner, and closing that banner stops the run.
