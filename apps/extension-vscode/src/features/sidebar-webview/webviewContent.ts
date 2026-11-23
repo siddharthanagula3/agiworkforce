@@ -3937,10 +3937,21 @@ export function getWebviewContent(
 
     function renderRuntimeAvailability(status, message) {
       if (status === 'probing') {
+        runtimeBlock = status;
+        renderOnboardingWorkspaceState(status);
+        updateRuntimePill('runtime-unavailable');
+        runtimeSettingsBtn.hidden = true;
+        var pendingHeadline = document.getElementById('emptyStateHeadline');
+        var pendingCopy = document.getElementById('emptyStateCopy');
+        if (pendingHeadline) pendingHeadline.textContent = 'Checking the developer runtime…';
+        if (pendingCopy) pendingCopy.textContent = 'Connecting to the CLI for this workspace.';
+        userInput.placeholder = 'Checking the developer runtime…';
+        syncComposerAvailability();
         renderRuntimeProbing();
         return;
       }
       setRuntimeRetryBusy(false);
+      runtimeSettingsBtn.hidden = false;
       runtimeBlock = status === 'ready' ? null : status;
       renderOnboardingWorkspaceState(status);
       var headline = document.getElementById('emptyStateHeadline');

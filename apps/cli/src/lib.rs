@@ -5872,6 +5872,20 @@ fn enter_repo_directory(repo: &str) -> Result<std::path::PathBuf> {
 /// Main async entry point, called from `main.rs`.
 pub async fn run_main() -> Result<()> {
     let cli = Cli::parse();
+    // Stdio clients must be able to initialize and discover local models while the OS credential store is locked.
+    let stdio_host = matches!(&cli.command, Some(Command::AppServer { listen, .. }) if listen == "stdio")
+        || matches!(&cli.command, Some(Command::Acp));
+    #[cfg(target_os = "macos")]
+    let _keychain_ui = if stdio_host {
+        // A headless child has no way to route a Keychain password dialog to its editor.
+        // An item requiring approval must remain inaccessible until the user authorizes it.
+        Some(
+            security_framework::os::macos::keychain::SecKeychain::disable_user_interaction()
+                .context("Could not open a noninteractive Keychain session")?,
+        )
+    } else {
+        None
+    };
 
     if let Some(Command::AppServer {
         account_only: true,
@@ -5914,7 +5928,7 @@ pub async fn run_main() -> Result<()> {
         ));
     }
 
-    let renewal = if cloud::CloudClient::admit(account_privacy_mode()).is_ok() {
+    let renewal = if !stdio_host && cloud::CloudClient::admit(account_privacy_mode()).is_ok() {
         crate::app_server::account::renew_managed_session_if_expiring().await
     } else {
         None

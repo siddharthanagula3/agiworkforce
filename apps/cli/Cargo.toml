@@ -118,6 +118,9 @@ nix = { version = "0.31", features = ["signal", "process", "user", "fs", "term",
 seccompiler = { version = "0.5", optional = true }
 libc = { version = "0.2", optional = true }
 
+[target.'cfg(target_os = "macos")'.dependencies]
+security-framework = "3.7.0"
+
 [features]
 default = []
 # Push-to-talk audio capture (`/voice`). Off by default because `cpal` links

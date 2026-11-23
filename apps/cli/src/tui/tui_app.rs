@@ -2543,6 +2543,11 @@ fn header_status_line(ctx: &FrameCtx, width: usize) -> Line<'static> {
 
     let labels = activity_counts_labels(&activity_counts(ctx));
     let meter = context_meter_label(ctx.context.percent);
+    let meter = if ctx.access_mode == crate::design_system::AccessMode::Local {
+        format!("catalog estimate: {meter}")
+    } else {
+        meter
+    };
     let muted = Style::default().fg(ui_muted());
     let mut spans = Vec::new();
     let with_meter = labels
@@ -3465,14 +3470,23 @@ fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
     // shortened then reduced to a bare percentage as the terminal narrows.
     let ctx_pct = ctx.context.percent;
     let ctx_color = context_color(ctx_pct);
+    let ctx_label = if ctx.access_mode == crate::design_system::AccessMode::Local {
+        "catalog est."
+    } else {
+        "ctx"
+    };
     let ctx_indicator = move |tier: usize| -> String {
         if tier >= 2 {
-            return format!("{ctx_pct}%");
+            return if ctx.access_mode == crate::design_system::AccessMode::Local {
+                format!("est. {ctx_pct}%")
+            } else {
+                format!("{ctx_pct}%")
+            };
         }
         let bar_w = if tier == 0 { 8usize } else { 4usize };
         let filled = ((ctx_pct as usize * bar_w) / 100).min(bar_w);
         format!(
-            "ctx [{}{}] {ctx_pct:>3}%",
+            "{ctx_label} [{}{}] {ctx_pct:>3}%",
             "█".repeat(filled),
             "░".repeat(bar_w - filled),
         )

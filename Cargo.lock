@@ -278,6 +278,7 @@ dependencies = [
  "roxmltree 0.20.0",
  "rustyline 18.0.1",
  "seccompiler",
+ "security-framework 3.7.0",
  "semver",
  "serde",
  "serde_json",

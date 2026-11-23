@@ -3722,6 +3722,9 @@ export class ChatStateManager {
   }
 
   async refreshRuntimeStatus(): Promise<void> {
+    if (vscode.workspace.isTrusted && vscode.workspace.workspaceFolders?.length) {
+      this._post({ type: 'runtimeStatus', payload: { status: 'probing' } });
+    }
     this._rebindThreadRuntime();
     await this._discoverLocalModels(this._thread?.runtime);
   }
