@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { ProviderConfigurationError } from './provider-configuration-error';
+
 import { getOptionalEnv } from '@shared/utils/env';
 import { logger } from '@/lib/logger';
 import { toProviderApiModelId } from '@agiworkforce/provider-protocol';
@@ -294,7 +296,7 @@ export function buildProtocolRouteAdapter(
   }
   const apiKey = getOptionalEnv(harness.apiKeyEnv);
   if (!apiKey) {
-    throw new Error(
+    throw new ProviderConfigurationError(
       `Provider "${providerId}" is not configured. ` +
         `Please ensure the ${harness.apiKeyEnv} environment variable is set. ` +
         'Check your .env.local file or deployment environment variables.',
@@ -324,13 +326,13 @@ export function buildServerProviderAdapter(
   const apiKey = options.apiKey ?? resolveServerProviderApiKey(providerId);
   if (!apiKey) {
     if (providerId === 'google') {
-      throw new Error(
+      throw new ProviderConfigurationError(
         'Provider "google" is not configured. ' +
           'Please set GOOGLE_API_KEY (or GEMINI_API_KEY). ' +
           'Check your .env.local file or deployment environment variables.',
       );
     }
-    throw new Error(
+    throw new ProviderConfigurationError(
       `Provider "${providerId}" is not configured. ` +
         `Please ensure the ${envPrefix}_API_KEY environment variable is set. ` +
         'Check your .env.local file or deployment environment variables.',

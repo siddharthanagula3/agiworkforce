@@ -368,6 +368,7 @@ describe('WebChatPage conversation title slot', () => {
 
     const trigger = await screen.findByRole('button', { name: /conversation options/i });
     expect(trigger.textContent).toContain(TITLE);
+    expect(screen.getAllByRole('heading', { level: 1, name: TITLE })).toHaveLength(1);
     expect(screen.queryByRole('status', { name: /loading conversation title/i })).toBeNull();
   });
 

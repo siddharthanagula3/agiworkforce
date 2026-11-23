@@ -319,7 +319,7 @@ import {
   ConversationTitlePlaceholder,
 } from '../components/ConversationTitleMenu';
 import { AgiWorkAutonomyNotice } from '../components/work-session/AgiWorkAutonomyNotice';
-import { AGI_WORK_LABEL } from '../lib/agi-work';
+import { AGI_WORK_LABEL, AGI_WORK_TITLE_SUFFIX } from '../lib/agi-work';
 import { resolveTurnFailureNotice } from '../lib/turn-failure-notice';
 import { useTurnErrorNotice } from '../hooks/use-turn-error-notice';
 import {
@@ -6880,6 +6880,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       if (!failed) toast.error(toUserMessage(error, 'The image could not be retried. Try again.'));
     });
   };
+  const needsProviderConfiguration =
+    lastChatMessage?.metadata?.['errorCode'] === 'provider_not_configured';
   const turnErrorNoticeElement =
     turnErrorNotice && lastChatMessage ? (
       <TranscriptNotice
@@ -6888,7 +6890,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         icon={CircleAlert}
         className="mb-2"
         message={turnErrorNotice}
-        {...(imageFailureRetry !== undefined
+        {...(imageFailureRetry !== undefined || needsProviderConfiguration
           ? {
               actionSlot: (
                 <Link
@@ -6912,7 +6914,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                 ),
               }
             : {})}
-        {...(imageFailureRetry === undefined
+        {...(imageFailureRetry === undefined && !needsProviderConfiguration
           ? {
               action: {
                 label: 'Retry',
@@ -7312,6 +7314,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                   {activeConversationTitle && activeConversationTitle !== NEW_CHAT_TITLE
                     ? activeConversationTitle
                     : t('chat:header.untitledConversation', 'Conversation')}
+                  {isAgiWorkConversation ? AGI_WORK_TITLE_SUFFIX : null}
                 </h1>
               ) : null}
               {/* Title left, actions right, the arrangement both leaders use. The

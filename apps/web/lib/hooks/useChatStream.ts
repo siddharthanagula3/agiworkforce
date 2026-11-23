@@ -683,7 +683,7 @@ function readStreamErrorFrame(raw: unknown): StreamErrorInfo | undefined {
 }
 
 function buildAssistantErrorContent(message: string, code?: string): string {
-  if (code === FREE_QUOTA_EXHAUSTED_CODE) return message;
+  if (code === FREE_QUOTA_EXHAUSTED_CODE || code === 'provider_not_configured') return message;
   if (code && INCOMPLETE_TURN_CAUSE_BY_ERROR_CODE[code] === 'messageLength') {
     return `Error: ${message}`;
   }

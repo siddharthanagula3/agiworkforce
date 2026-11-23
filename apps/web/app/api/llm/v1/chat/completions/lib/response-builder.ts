@@ -1,3 +1,4 @@
+import { ProviderConfigurationError } from '@/lib/services/provider-configuration-error';
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -521,8 +522,16 @@ export function buildUpstreamErrorResponse(
     );
   }
 
-  const shape: UpstreamErrorShape =
-    classified.status === 402
+  const missingProvider = error instanceof ProviderConfigurationError;
+  const shape: UpstreamErrorShape = missingProvider
+    ? {
+        status: 503,
+        type: 'upstream_error',
+        code: 'provider_not_configured',
+        message:
+          'This model is unavailable because the service is missing its provider configuration.',
+      }
+    : classified.status === 402
       ? {
           status: 402,
           type: 'insufficient_credits',
@@ -540,7 +549,7 @@ export function buildUpstreamErrorResponse(
         message: shape.message,
         type: shape.type,
         code: shape.code,
-        retryable: classified.retryable,
+        retryable: !missingProvider && classified.retryable,
         ...(shape.code === FREE_ALLOWANCE_EXHAUSTED_CODE
           ? {
               recovery: FREE_LANE_RECOVERY,
