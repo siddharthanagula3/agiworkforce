@@ -114,12 +114,12 @@ pub fn compaction_receipt(
 ) -> String {
     let percent = (result.after.used_fraction * 100.0) as u32;
     let sizes = format!(
-        "~{} -> ~{} tokens ({percent}% of limit)",
+        "~{} -> ~{} tokens ({percent}% of estimated model window)",
         result.before.used_tokens, result.after.used_tokens
     );
     if !result.compacted {
         format!(
-            "Nothing to compact: no earlier turn could be summarized, so the context stays at ~{} tokens ({percent}% of limit)",
+            "Nothing to compact: no earlier turn could be summarized, so the context stays at ~{} tokens ({percent}% of estimated model window)",
             result.after.used_tokens
         )
     } else if result.messages_compacted == 0 {
