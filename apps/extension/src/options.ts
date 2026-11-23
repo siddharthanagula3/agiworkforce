@@ -1578,7 +1578,12 @@ function buildPage(): void {
       consentOriginLine.textContent = origin;
       consentPrompt.hidden = false;
       addBtn.disabled = true;
-      setAllowlistStatus(`Confirm browser control for ${origin} to approve it.`);
+      const isBlocked = (await readUserSiteBlocklist()).includes(origin);
+      setAllowlistStatus(
+        isBlocked
+          ? `Granting browser control will remove ${origin} from your blocked sites.`
+          : `Confirm browser control for ${origin} to approve it.`,
+      );
       consentGrantBtn.focus();
       return;
     }
