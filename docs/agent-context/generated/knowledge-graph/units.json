@@ -2504,14 +2504,14 @@
       "lanes": [
         "vscode-extension"
       ],
-      "files": 400,
+      "files": 401,
       "roles": {
         "asset": 3,
         "config": 5,
         "doc": 8,
         "other": 4,
         "source": 191,
-        "test": 189
+        "test": 190
       }
     },
     {

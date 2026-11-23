@@ -15308,6 +15308,9 @@
     "BUILT_IN_TEMPLATES": [
       "apps/web/features/chat/components/artifacts/templates/artifact-templates.ts"
     ],
+    "built_in_tool": [
+      "apps/cli/src/platform/runtime/tool_catalog.rs"
+    ],
     "built_in_tool_definitions": [
       "apps/cli/src/platform/runtime/tool_catalog.rs"
     ],
@@ -159948,6 +159951,9 @@
     ],
     "WorkspaceQueryScope": [
       "apps/web/features/workspaces/hooks/use-workspace-query.ts"
+    ],
+    "workspaceRealpath": [
+      "apps/extension-vscode/src/integrations/developerSessionValidation.ts"
     ],
     "WorkspaceReasoningEffort": [
       "packages/contracts/types/src/enterprise/workspace-controls.ts"
