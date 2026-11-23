@@ -2,7 +2,7 @@
   "name": "agi-workforce",
   "displayName": "AGI Code",
   "description": "AI pair programming in VS Code, run by the AGI CLI on your machine with local models, your own provider keys, or AGI Cloud.",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "publisher": "agiworkforce",
   "license": "SEE LICENSE IN LICENSE",
   "repository": {
