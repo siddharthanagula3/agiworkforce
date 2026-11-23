@@ -185,6 +185,7 @@ export default function ChatTabScreen() {
   const [voiceFallbackReason, setVoiceFallbackReason] = useState<string | null>(null);
   const voiceAllowed = useCapability('canUseVoice');
   const keyboard = useKeyboardSafeComposer('screen');
+  const [modelPickerVisible, setModelPickerVisible] = useState(false);
   const [modelPickerOpenSignal, setModelPickerOpenSignal] = useState(0);
   const [styleSelectorOpenSignal, setStyleSelectorOpenSignal] = useState(0);
   const [projectPickerOpenSignal, setProjectPickerOpenSignal] = useState(0);
@@ -1158,7 +1159,11 @@ export default function ChatTabScreen() {
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: pageBackground }} edges={['top']}>
-      <View className="flex-row items-center justify-between px-4 min-h-12">
+      <View
+        accessibilityElementsHidden={modelPickerVisible}
+        importantForAccessibility={modelPickerVisible ? 'no-hide-descendants' : 'auto'}
+        className="flex-row items-center justify-between px-4 min-h-12"
+      >
         {backToProject ? (
           <ProjectChatBackButton
             testID="chat.new-chat.back-to-project"
@@ -1183,6 +1188,8 @@ export default function ChatTabScreen() {
           behavior="height" double-handles the keyboard and causes resize
           jumps. iOS keeps "padding". */}
       <KeyboardAvoidingView
+        accessibilityElementsHidden={modelPickerVisible}
+        importantForAccessibility={modelPickerVisible ? 'no-hide-descendants' : 'auto'}
         style={{ flex: 1 }}
         behavior={keyboard.behavior}
         keyboardVerticalOffset={keyboard.keyboardVerticalOffset}
@@ -1364,6 +1371,7 @@ export default function ChatTabScreen() {
       <ModelPickerSheet
         sheetRef={modelPickerRef}
         openSignal={modelPickerOpenSignal}
+        onVisibilityChange={setModelPickerVisible}
         modelScope={modelPickerScope}
         onSelect={handleSelectNewChatModel}
         onOpenCloudAccess={handleOpenCloudAccess}

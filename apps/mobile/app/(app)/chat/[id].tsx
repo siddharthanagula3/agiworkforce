@@ -1568,6 +1568,7 @@ export default function ChatScreen() {
   const voiceAllowed = useCapability('canUseVoice');
   const keyboard = useKeyboardSafeComposer('screen');
   const [voiceFallbackReason, setVoiceFallbackReason] = useState<string | null>(null);
+  const [modelPickerVisible, setModelPickerVisible] = useState(false);
   const [modelPickerOpenSignal, setModelPickerOpenSignal] = useState(0);
   const handleNewChat = useCallback(() => {
     clearNewChatProjectScope();
@@ -2194,6 +2195,8 @@ export default function ChatScreen() {
           resizes the window; stacking behavior="height" on top double-handles
           the keyboard and causes resize jumps. iOS keeps "padding". */}
       <KeyboardAvoidingView
+        accessibilityElementsHidden={modelPickerVisible}
+        importantForAccessibility={modelPickerVisible ? 'no-hide-descendants' : 'auto'}
         className="flex-1"
         behavior={keyboard.behavior}
         keyboardVerticalOffset={keyboard.keyboardVerticalOffset}
@@ -2717,15 +2720,6 @@ export default function ChatScreen() {
 
         {/* Model picker bottom sheet, conversationId scopes the reasoning-effort
             selector to this conversation (agentControlStore override). */}
-        <ModelPickerSheet
-          sheetRef={modelPickerRef}
-          openSignal={modelPickerOpenSignal}
-          modelScope={modelPickerScope}
-          conversationId={id}
-          onSelect={handleModelSelect}
-          onOpenCloudAccess={handleOpenCloudSignIn}
-          showEffort={false}
-        />
 
         {/* First-run intro carrying the recording disclosure, then the voice
             picker, then the inline bar. The thread above stays visible for the
@@ -2809,6 +2803,16 @@ export default function ChatScreen() {
 
         <RenameConversationModal rename={conversationActions.rename} />
       </KeyboardAvoidingView>
+      <ModelPickerSheet
+        sheetRef={modelPickerRef}
+        openSignal={modelPickerOpenSignal}
+        onVisibilityChange={setModelPickerVisible}
+        modelScope={modelPickerScope}
+        conversationId={id}
+        onSelect={handleModelSelect}
+        onOpenCloudAccess={handleOpenCloudSignIn}
+        showEffort={false}
+      />
     </SafeAreaView>
   );
 }

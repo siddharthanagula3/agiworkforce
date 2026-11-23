@@ -249,6 +249,7 @@ function AutoModeRow({
 interface ModelPickerSheetProps {
   sheetRef: React.RefObject<BottomSheet | null>;
   openSignal?: number;
+  onVisibilityChange?: (open: boolean) => void;
   onSelect?: (modelId: string) => void;
   selectedModelId?: string;
   onOpenCloudAccess?: (defaultTab?: 'invite' | 'waitlist') => void;
@@ -262,6 +263,7 @@ interface ModelPickerSheetProps {
 export function ModelPickerSheet({
   sheetRef,
   openSignal,
+  onVisibilityChange,
   onSelect,
   selectedModelId,
   onOpenCloudAccess,
@@ -581,6 +583,9 @@ export function ModelPickerSheet({
   }, []);
 
   const [isOpen, sheetPresence] = useBottomSheetPresence();
+  useEffect(() => {
+    onVisibilityChange?.(isOpen);
+  }, [isOpen, onVisibilityChange]);
   useHardwareBackDismiss(isOpen, () => sheetRef.current?.close());
 
   const handleSheetAnimate = useCallback(
@@ -673,7 +678,14 @@ export function ModelPickerSheet({
   );
 
   return (
-    <>
+    <View
+      style={StyleSheet.absoluteFill}
+      pointerEvents={isOpen ? 'box-none' : 'none'}
+      collapsable={false}
+      accessibilityViewIsModal={isOpen}
+      accessibilityElementsHidden={!isOpen}
+      importantForAccessibility={isOpen ? 'auto' : 'no-hide-descendants'}
+    >
       <BottomSheet
         ref={sheetRef as React.RefObject<BottomSheet>}
         index={-1}
@@ -999,6 +1011,6 @@ export function ModelPickerSheet({
           ) : null}
         </BottomSheetScrollView>
       </BottomSheet>
-    </>
+    </View>
   );
 }
