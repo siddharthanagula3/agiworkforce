@@ -540,9 +540,15 @@ async fn file_mutation_targets(
         .collect()
 }
 
-pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> Result<ToolResult> {
-    let permissions = crate::permissions::PermissionStore::load()?;
-    execute_tool_with_opts_and_permissions(call, opts, &permissions).await
+pub fn execute_tool_with_opts<'a>(
+    call: &'a ToolCall,
+    opts: &'a ToolExecOptions,
+) -> impl std::future::Future<Output = Result<ToolResult>> + 'a {
+    // Keep the dispatcher off the stack of nested runtime, approval and workspace scopes.
+    Box::pin(async move {
+        let permissions = crate::permissions::PermissionStore::load()?;
+        execute_tool_with_opts_and_permissions(call, opts, &permissions).await
+    })
 }
 
 fn saved_permission_commands(tool_name: &str, args: &HashMap<String, String>) -> Vec<String> {
@@ -670,7 +676,11 @@ async fn execute_tool_with_opts_and_permissions(
     crate::path_security::scope_workspace_paths(
         opts.workspace_root.clone(),
         opts.additional_workspace_roots.clone(),
-        execute_tool_with_scoped_permissions(call, opts, permissions),
+        Box::pin(execute_tool_with_scoped_permissions(
+            call,
+            opts,
+            permissions,
+        )),
     )
     .await
 }
@@ -2043,10 +2053,7 @@ pub(crate) fn canonical_tool_name(tool_name: &str) -> &str {
 }
 
 fn is_catalog_read_only_tool(tool_name: &str) -> bool {
-    let canonical_name = canonical_tool_name(tool_name);
-    crate::runtime::tool_catalog::all_builtin_tool_definitions()
-        .into_iter()
-        .any(|tool| tool.name == canonical_name && tool.is_read_only)
+    crate::runtime::tool_catalog::built_in_tool(tool_name).is_some_and(|tool| tool.is_read_only)
 }
 
 fn unknown_tool_result(requested: &str) -> ToolResult {
@@ -3283,6 +3290,31 @@ reason = "regression test"
         assert!(!result.success);
         assert!(result.output.contains("denied by"));
         assert!(result.output.contains(".agiworkforce/policy.toml"));
+    }
+
+    #[test]
+    fn tool_dispatch_future_fits_a_nested_worker_scope() {
+        let call = ToolCall {
+            name: "read_file".into(),
+            args: HashMap::new(),
+        };
+        let opts = ToolExecOptions {
+            additional_workspace_roots: Vec::new(),
+            tool_search_catalog: None,
+            require_confirmation: true,
+            auto_approve_safe: true,
+            auto_approve_edits: false,
+            quiet: true,
+            approval_callback: None,
+            user_input_callback: None,
+            privacy_mode: crate::agent::PrivacyMode::Local,
+            workspace_root: None,
+        };
+        let dispatch = execute_tool_with_opts(&call, &opts);
+        assert!(
+            std::mem::size_of_val(&dispatch) <= 4096,
+            "tool dispatch must not put its full future into each enclosing runtime scope",
+        );
     }
 
     #[tokio::test]

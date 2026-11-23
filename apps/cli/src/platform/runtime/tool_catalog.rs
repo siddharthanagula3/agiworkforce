@@ -485,9 +485,21 @@ pub fn is_plan_mode_mutating_tool(tool_name: &str) -> bool {
 
 /// Build native API tool definitions with JSON Schema for each built-in tool.
 pub fn built_in_tool_definitions() -> Vec<ToolDefinition> {
-    let mut definitions = core_tool_definitions();
-    definitions.extend(git_tool_definitions());
-    definitions
+    built_in_catalog().to_vec()
+}
+
+fn built_in_catalog() -> &'static [ToolDefinition] {
+    static DEFINITIONS: std::sync::LazyLock<Vec<ToolDefinition>> = std::sync::LazyLock::new(|| {
+        let mut definitions = core_tool_definitions();
+        definitions.extend(git_tool_definitions());
+        definitions
+    });
+    &DEFINITIONS
+}
+
+pub(crate) fn built_in_tool(name: &str) -> Option<&'static ToolDefinition> {
+    let name = canonical_tool_name(name);
+    built_in_catalog().iter().find(|tool| tool.name == name)
 }
 
 fn core_tool_definitions() -> Vec<ToolDefinition> {

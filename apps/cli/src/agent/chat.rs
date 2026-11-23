@@ -3294,9 +3294,9 @@ impl TurnHost for TurnHostAdapter<'_> {
     ) -> ExecResult {
         let (result, notes) = crate::tools::collect_approval_notes(async {
             if call.name == "batch" {
-                self.run_batch(call, &args).await
+                Box::pin(self.run_batch(call, &args)).await
             } else {
-                self.run_captured_tool(call, args).await
+                Box::pin(self.run_captured_tool(call, args)).await
             }
         })
         .await;
