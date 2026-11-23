@@ -13600,6 +13600,9 @@
     "browserManifestDirectories": [
       "apps/desktop/electron/browser/hostInstaller.ts"
     ],
+    "browserModelFallback": [
+      "apps/extension/src/features/computer-use/cloudAgentClient.ts"
+    ],
     "BrowserMouseButton": [
       "apps/extension/src/features/computer-use/cdpDriver.ts"
     ],
@@ -13816,6 +13819,9 @@
     "browserSiteHost": [
       "packages/contracts/local-runtime/src/browser-pane.ts",
       "packages/contracts/local-runtime/src/index.ts"
+    ],
+    "BrowserSitePermissionRequired": [
+      "apps/extension/src/features/site-policy/store.ts"
     ],
     "BrowserSites": [
       "packages/contracts/local-runtime/src/browser-pane.ts",
@@ -107333,6 +107339,9 @@
       "apps/cli/src/config.rs",
       "apps/desktop/src-tauri/src/core/llm/models_config.rs",
       "packages/contracts/types/src/model-catalog.ts"
+    ],
+    "ProviderConfigurationError": [
+      "apps/web/lib/services/provider-configuration-error.ts"
     ],
     "ProviderConsentBanner": [
       "apps/mobile/src/features/chat/components/ProviderConsentBanner.tsx"
