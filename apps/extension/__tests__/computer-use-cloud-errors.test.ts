@@ -361,3 +361,21 @@ describe('browser gateway public failure presentation', () => {
     expect(cancel).toHaveBeenCalledOnce();
   });
 });
+
+it('distinguishes a provider credential refusal from an expired reviewer session', async () => {
+  const message = 'The model provider is temporarily unavailable.';
+  const error = await failure(
+    401,
+    JSON.stringify({
+      error: { code: 'provider_credentials_rejected', type: 'upstream_error', message },
+    }),
+  );
+  expect(error).toMatchObject({ status: 401, code: 'provider_credentials_rejected', message });
+  const expired = await failure(
+    401,
+    JSON.stringify({
+      error: { code: 'invalid_api_key', type: 'invalid_request_error', message: 'Unauthorized' },
+    }),
+  );
+  expect(expired.message).toMatch(/sign in/i);
+});

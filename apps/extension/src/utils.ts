@@ -166,7 +166,13 @@ export const domUtils = {
 
   safeClick(element: Element, button: 'left' | 'middle' | 'right' = 'left'): boolean {
     try {
-      const mouseEvent = new MouseEvent('click', {
+      if (element.matches(':disabled')) return false;
+      if (button === 'left' && element instanceof HTMLElement) {
+        element.click();
+        return true;
+      }
+      const mouseEvent = new MouseEvent(button === 'left' ? 'click' : 'auxclick', {
+        button: button === 'right' ? 2 : button === 'middle' ? 1 : 0,
         bubbles: true,
         cancelable: true,
         view: window,
@@ -174,10 +180,6 @@ export const domUtils = {
       });
 
       element.dispatchEvent(mouseEvent);
-
-      if ('click' in element && typeof element.click === 'function') {
-        (element as HTMLElement).click();
-      }
 
       return true;
     } catch (error) {

@@ -10,6 +10,7 @@ import {
 } from './cdpDriver';
 import {
   callCloud,
+  CloudAgentGatewayError,
   getAuthToken,
   resolveGatewayBase,
   type AgentMessage,
@@ -83,6 +84,7 @@ export interface AgentLoopOptions {
    */
   onDebuggerDetachedByUser?: (tabId: number) => void;
   model?: string;
+  fallbackAfterProviderRejection?: (model: string) => string | undefined;
   pageContext?: string;
   /**
    * Hands the tab to the user and resolves when they hand it back. A run with
@@ -1059,6 +1061,7 @@ export async function runAgentLoop(
     await startPageWatch(tabId, pageWatchOwner).catch(() => undefined);
     await cdp.keepPageFocused(tabId, options.signal).catch(() => undefined);
     const gatewayBase = await runOwnedOperation(options, resolveGatewayBase);
+    let model = options.model;
 
     await runOwnedOperation(options, () => waitForStable(tabId, { signal: options.signal }));
     const initialDom = await readGuardedPageContent(tabId, options);
@@ -1120,20 +1123,37 @@ export async function runAgentLoop(
       appendUserGuidance(history, options, stepNumber);
       stepNumber++;
 
-      const token = await resolveCredential(options);
-      // Observations older than the newest few are resent verbatim otherwise,
-      // so a 20-step run pays for every screenshot it ever took on every step.
-      const { message, tokensUsed } = await callCloud(
-        pruneObservationHistory(history),
-        token,
-        gatewayBase,
-        options.signal,
-        options.model,
-        getBrowserToolDefinitions(
-          options.taskTabs !== undefined,
-          options.browserSiteTools !== undefined,
-        ),
-      );
+      const requestStep = async () =>
+        callCloud(
+          pruneObservationHistory(history),
+          await resolveCredential(options),
+          gatewayBase,
+          options.signal,
+          model,
+          getBrowserToolDefinitions(
+            options.taskTabs !== undefined,
+            options.browserSiteTools !== undefined,
+          ),
+        );
+      let response;
+      while (true) {
+        try {
+          response = await requestStep();
+          break;
+        } catch (error) {
+          if (
+            !(error instanceof CloudAgentGatewayError) ||
+            error.status !== 401 ||
+            error.code !== 'provider_credentials_rejected' ||
+            !model
+          )
+            throw error;
+          const fallback = options.fallbackAfterProviderRejection?.(model);
+          if (!fallback || fallback === model) throw error;
+          model = fallback;
+        }
+      }
+      const { message, tokensUsed } = response;
       await assertRunOwnership(options);
       totalTokens += tokensUsed;
       history.push(message);

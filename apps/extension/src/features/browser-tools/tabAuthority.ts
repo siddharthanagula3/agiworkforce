@@ -3,7 +3,11 @@ import {
   hasBrowserControlConsent,
 } from '../computer-use/browserControlConsent';
 import { normalizeApprovedSiteOrigin } from '../options/site-allowlist';
-import { assertSiteAccess, readAdminSitePolicy } from '../site-policy/store';
+import {
+  assertSiteAccess,
+  BrowserSitePermissionRequired,
+  readAdminSitePolicy,
+} from '../site-policy/store';
 import { hasOneTimeSiteGrant } from '../computer-use/oneTimeSiteGrants';
 import { ACCOUNT_ORIGIN_REFUSAL, isExtensionAccountOrigin } from '../computer-use/accountOrigins';
 import { evaluateSitePolicy, sitePolicyDenialMessage } from '@agiworkforce/types';
@@ -87,7 +91,10 @@ export async function authorizeBrowserToolUrl(url: string): Promise<Omit<Authori
   } catch {
     granted = false;
   }
-  if (!granted) throw new Error(browserControlConsentRequiredMessage(authorized.origin));
+  if (!granted)
+    throw new BrowserSitePermissionRequired(
+      browserControlConsentRequiredMessage(authorized.origin),
+    );
 
   return authorized;
 }

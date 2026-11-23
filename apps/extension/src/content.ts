@@ -163,6 +163,7 @@ function startApprovedFeatures(): void {
 }
 
 function stopApprovedFeatures(): void {
+  if (automationState.isRecording) handleStopRecording();
   if (!approvedStartupDone) return;
   approvedStartupDone = false;
   if (webmcpStartTimer !== null) {
@@ -324,6 +325,8 @@ async function handleMessageAsync(message: ExtensionMessage): Promise<ExtensionR
       return handleBuildAccessibilityTree();
 
     case 'START_RECORDING':
+      if (message.expectedOrigin !== undefined && message.expectedOrigin !== location.origin)
+        return { success: false, error: 'The recording target changed. Choose the website again.' };
       return handleStartRecording();
 
     case 'STOP_RECORDING':

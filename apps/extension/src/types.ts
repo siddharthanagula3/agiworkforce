@@ -730,6 +730,7 @@ export interface GetAccessibilityTreeResponse {
 
 export interface StartRecordingMessage extends BaseMessage {
   type: 'START_RECORDING';
+  expectedOrigin?: string;
 }
 
 export interface StopRecordingMessage extends BaseMessage {

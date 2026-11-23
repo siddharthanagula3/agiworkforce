@@ -664,6 +664,15 @@ describe('a recording lives in the worker, so a new page cannot take it away', (
     harness.localStore['agi_site_allowlist'] = [harness.SITE];
   });
 
+  it('refuses to start a recording after approval is removed', async () => {
+    harness.localStore['agi_site_allowlist'] = [];
+    await startWorker();
+    expect(await dispatch({ type: 'START_RECORDING', tabId: 9 })).toMatchObject({
+      success: false,
+      error: expect.stringContaining('Approve this site'),
+    });
+  });
+
   it('keeps the steps recorded before a page load and says the recording stopped there', async () => {
     await startWorker();
     expect(await dispatch({ type: 'START_RECORDING', tabId: 9 })).toMatchObject({

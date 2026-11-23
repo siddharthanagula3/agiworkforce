@@ -1552,6 +1552,7 @@ function buildPage(): void {
       if (!list.includes(origin)) list.push(origin);
       await saveAllowlist(list);
       await grantBrowserControlConsent(origin);
+      blockedSites.status.textContent = '';
       closeConsentPrompt();
       await refreshAllowlist();
       setAllowlistStatus(`${origin} approved with full browser control.`);
@@ -2092,7 +2093,11 @@ function buildPage(): void {
         diagnosticsStatus.textContent = result.summary;
       } catch (cause) {
         diagnosticsStatus.textContent =
-          cause instanceof Error ? cause.message : 'Diagnostics export failed.';
+          cause instanceof TypeError
+            ? 'No diagnostics file was saved. Check your connection and export again.'
+            : cause instanceof Error
+              ? cause.message
+              : 'Diagnostics export failed.';
       } finally {
         diagnosticsBtn.disabled = false;
       }

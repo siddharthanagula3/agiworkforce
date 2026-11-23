@@ -9,6 +9,7 @@ import {
 } from '@agiworkforce/types';
 import {
   COMPUTER_USE_MODEL,
+  browserModelFallback,
   resolveManagedComputerUseModel,
 } from '../src/features/computer-use/cloudAgentClient';
 
@@ -26,6 +27,17 @@ describe('Managed Cloud browser model admission', () => {
     modelIds: [selectedModel, browserDefault],
     allowedAutoModes: ['auto-economy', 'auto-balanced', 'auto-premium'],
   };
+
+  it('preserves explicit selections and excludes a rejected provider in Auto', () => {
+    const eligible = { ...access, modelIds: listChatModels().map((model) => model.id) };
+    const primary = resolveManagedComputerUseModel(eligible);
+    expect(browserModelFallback(eligible, primary)(primary)).toBeUndefined();
+    const recover = browserModelFallback(eligible);
+    const next = recover(primary);
+    expect(next).toBeDefined();
+    expect(getModelMetadataById(next!)?.provider).not.toBe(getModelMetadataById(primary)?.provider);
+    expect(recover(primary)).toBeUndefined();
+  });
 
   it('uses the canonical browser default for Auto', () => {
     expect(resolveManagedComputerUseModel(access)).toBe(browserDefault);

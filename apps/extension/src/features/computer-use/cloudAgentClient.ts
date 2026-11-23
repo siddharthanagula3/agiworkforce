@@ -106,6 +106,29 @@ export function resolveManagedComputerUseModel(
   return metadata.id;
 }
 
+export function browserModelFallback(
+  access: Pick<ManagedModelAccess, 'subscriptionTier' | 'modelIds' | 'allowedAutoModes'>,
+  selection = 'auto',
+): (failedModel: string) => string | undefined {
+  const excluded = new Set<string>();
+  return (failedModel) => {
+    if (!isAutoModeModelId(selection)) return undefined;
+    const provider = getModelMetadataById(failedModel)?.provider;
+    if (!provider || excluded.has(provider)) return undefined;
+    excluded.add(provider);
+    const modelIds = access.modelIds.filter((id) => {
+      const candidate = getModelMetadataById(id);
+      return candidate && !excluded.has(candidate.provider);
+    });
+    if (!modelIds.length) return undefined;
+    try {
+      return resolveManagedComputerUseModel({ ...access, modelIds }, selection);
+    } catch {
+      return undefined;
+    }
+  };
+}
+
 export const DEFAULT_GATEWAY_BASE = configuredAgiWebOrigin() ?? '';
 
 const COMPUTER_USE_MAX_SSE_FRAME_CHARS = 1_048_576;
@@ -337,7 +360,7 @@ async function callCloudRequest(
         gatewayError?.code,
       );
     }
-    if (response.status === 401) {
+    if (response.status === 401 && gatewayError?.code !== 'provider_credentials_rejected') {
       throw new CloudAgentGatewayError(
         'Sign in to AGI Cloud again from the extension drawer.',
         response.status,

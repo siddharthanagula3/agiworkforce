@@ -160,7 +160,25 @@ export function createShortcutsSection(
     const command = shortcutCommand(nameInput.value);
     commandHint.textContent = command ? t('spShortcutCommandHint', [command]) : '';
   };
-  nameInput.addEventListener('input', renderCommandHint);
+  nameInput.addEventListener('input', () => {
+    renderCommandHint();
+    if (
+      nameInput.hasAttribute('aria-invalid') &&
+      !shortcutCommandConflict(nameInput.value.trim(), promptShortcuts(), editingId ?? undefined)
+    ) {
+      nameInput.removeAttribute('aria-invalid');
+      formError.textContent = '';
+    }
+  });
+  promptInput.addEventListener('input', () => {
+    if (
+      promptInput.hasAttribute('aria-invalid') &&
+      promptInput.value.split(SHORTCUT_INPUT_PLACEHOLDER).join('').trim()
+    ) {
+      promptInput.removeAttribute('aria-invalid');
+      formError.textContent = '';
+    }
+  });
 
   const openForm = (shortcut: PromptShortcut | null): void => {
     editingId = shortcut?.id ?? null;
@@ -308,7 +326,7 @@ export function createShortcutsSection(
           .then((response) =>
             response?.success
               ? announce(t('spWorkflowCompleted', [shortcut.name]))
-              : announce(t('spWorkflowRunFailed', [shortcut.name]), true),
+              : announce(response?.error || t('spWorkflowRunFailed', [shortcut.name]), true),
           )
           .catch(() => announce(t('spWorkflowRunFailed', [shortcut.name]), true))
           .finally(() => {

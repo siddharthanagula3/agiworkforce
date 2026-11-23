@@ -209,6 +209,7 @@ import {
   type NormalizedWebMCPToolsUpdate,
 } from './background/policy';
 import {
+  BrowserSitePermissionRequired,
   ADMIN_SITE_POLICY_STORAGE_KEY,
   readAdminSitePolicy,
   readUserSiteAllowlist,
@@ -278,11 +279,13 @@ import {
   nativeReconnectDelayMs,
   NATIVE_RECONNECT_MAX_ATTEMPTS,
 } from './features/native-bridge/reconnect';
+import { isUserBlockedSite } from './features/site-policy/userBlocklist';
 import { parseManagedChatPortName } from './features/cloud-bridge/managedChatPort';
 import {
   createChromeCallerToolCustody,
   readChromeCallerToolCustody,
   acknowledgeCompletedCallerRun,
+  CallerToolCustodyError,
 } from './features/cloud-bridge/callerToolCustody';
 import { validChatToolResults, type ChatToolCursor } from './features/computer-use/chatToolResults';
 import {
@@ -339,7 +342,10 @@ import {
 } from './features/cloud-bridge/conversationSync';
 import { watchCloudMirroringEnabled } from './features/privacy/cloudMirroring';
 import { installBackgroundErrorReporting } from './features/observability/errorReporting';
-import { resolveManagedComputerUseModel } from './features/computer-use/cloudAgentClient';
+import {
+  browserModelFallback,
+  resolveManagedComputerUseModel,
+} from './features/computer-use/cloudAgentClient';
 import {
   initDownloadLedger,
   listSessionDownloads,
@@ -5661,6 +5667,11 @@ async function handleMessageAsync(
     case 'RECORDING_ACTION': {
       if (tabId === undefined || sender.tab?.id !== tabId)
         return { success: false, error: 'Only the recorded page reports its steps.' };
+      const refusal = await recordingRefusal(sender.url);
+      if (refusal) {
+        await endRecordingSession(tabId, 'stopped');
+        return { success: false, error: refusal };
+      }
       const recording = await appendRecordedAction(
         tabId,
         sender.url,
@@ -6334,12 +6345,14 @@ async function handleMessageAsync(
       }
 
       let computerUseModel: string;
+      let fallbackAfterProviderRejection: ReturnType<typeof browserModelFallback>;
       try {
         if (cuMsg.modelSelection !== undefined && typeof cuMsg.modelSelection !== 'string') {
           return failStart('AGI_START_COMPUTER_USE: valid model selection is required');
         }
         const modelAccess = await getManagedModelAccess(authContext.token);
         computerUseModel = resolveManagedComputerUseModel(modelAccess, cuMsg.modelSelection);
+        fallbackAfterProviderRejection = browserModelFallback(modelAccess, cuMsg.modelSelection);
       } catch (error) {
         return failStart(
           `AGI_START_COMPUTER_USE: ${error instanceof Error ? error.message : 'Cloud model access could not be verified'}`,
@@ -6643,6 +6656,7 @@ async function handleMessageAsync(
       computerUseGuidance.set(lease.runId, guidanceQueue);
       const completion = runAgentLoop(cuGoal, cuTabId, {
         model: computerUseModel,
+        fallbackAfterProviderRejection,
         ...(cuMsg.pageContext ? { pageContext: cuMsg.pageContext } : {}),
         runId: lease.runId,
         signal: lease.controller.signal,
@@ -7195,6 +7209,16 @@ async function handleGetAccessibilityTree(tabId: number): Promise<ExtensionRespo
  * the page whether it is still recording: a page that is not, or no longer
  * answers, has navigated, and the recording ends there with its steps kept.
  */
+async function recordingRefusal(url: string | undefined): Promise<string | null> {
+  const origin = normalizeShortcutStartUrl(url);
+  if (!origin) return 'Only a web page can be recorded.';
+  if (await isUserBlockedSite(origin)) return 'Recording is disabled for this blocked site.';
+  await siteAllowlistReady;
+  if (!isOriginApprovedForAutomation(origin))
+    return 'Approve this site in Permissions before recording.';
+  return null;
+}
+
 async function handleRecordingMessage(
   tabId: number,
   message: ExtensionMessage,
@@ -7202,9 +7226,12 @@ async function handleRecordingMessage(
   if (message.type === 'SET_RECORDING_VALUE_CAPTURE') return forwardToContentScript(tabId, message);
   if (message.type === 'START_RECORDING') {
     const tab = await chrome.tabs.get(tabId).catch(() => null);
-    if (!(await beginRecordingSession(tabId, tab?.url)))
+    const refusal = await recordingRefusal(tab?.url);
+    if (refusal) return { success: false, error: refusal };
+    const expectedOrigin = normalizeShortcutStartUrl(tab?.url);
+    if (!expectedOrigin || !(await beginRecordingSession(tabId, expectedOrigin)))
       return { success: false, error: 'Only a web page can be recorded.' } as ExtensionResponse;
-    const started = await forwardToContentScript(tabId, message);
+    const started = await forwardToContentScript(tabId, { ...message, expectedOrigin });
     if (!started?.success) await discardRecordingSession(tabId);
     return started;
   }
@@ -8048,6 +8075,7 @@ async function handleChatMessage(
               message.historyConversationId,
               streamKey,
               activeStream,
+              id,
             );
           },
           onToolHandoff: (calls, checkpoint) =>
@@ -8264,6 +8292,7 @@ async function assertOwnedCallerBrowserAction(
   historyConversationId: string | undefined,
   streamKey: string,
   active: ActiveChatStream,
+  freshStreamId?: string,
 ): Promise<void> {
   const assertCurrent = () => {
     active.controller.signal.throwIfAborted();
@@ -8299,7 +8328,28 @@ async function assertOwnedCallerBrowserAction(
     },
     active.controller.signal,
   );
-  const authorized = await authorizeBrowserToolTab(browserContext.tabId);
+  await readCallerBrowserContext(browserContext, assertCurrent);
+  let authorized;
+  try {
+    authorized = await authorizeBrowserToolTab(browserContext.tabId);
+  } catch (error) {
+    if (!(error instanceof BrowserSitePermissionRequired)) throw error;
+    if (!freshStreamId) throw new CallerToolCustodyError(error.message);
+    assertCurrent();
+    const granted = await chrome.runtime.sendMessage({
+      type: 'REQUEST_CALLER_SITE_ACCESS',
+      clientInstanceId: active.clientInstanceId,
+      owner: active.owner,
+      id: freshStreamId,
+      tabId: browserContext.tabId,
+      url: browserContext.url,
+    });
+    assertCurrent();
+    if (granted !== true)
+      throw new CallerToolCustodyError('Site access was not granted. No browser action was taken.');
+    await readCallerBrowserContext(browserContext, assertCurrent);
+    authorized = await authorizeBrowserToolTab(browserContext.tabId);
+  }
   assertCurrent();
   if (authorized.url !== browserContext.url) throw new Error('The original browser site changed.');
   await readCallerBrowserContext(browserContext, assertCurrent);

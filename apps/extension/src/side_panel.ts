@@ -8348,16 +8348,44 @@ async function handleChatToolHandoff(message: ChatToolHandoffMessage): Promise<v
   });
 }
 
-chrome.runtime.onMessage.addListener((message: unknown, sender: chrome.runtime.MessageSender) => {
-  if (sender.id !== chrome.runtime.id || sender.tab) return;
-  if (
-    !message ||
-    typeof message !== 'object' ||
-    (message as { type?: unknown }).type !== 'CHAT_TOOL_HANDOFF'
-  )
+chrome.runtime.onMessage.addListener(
+  (message: unknown, sender: chrome.runtime.MessageSender, sendResponse) => {
+    if (sender.id !== chrome.runtime.id || sender.tab) return;
+    if (
+      message &&
+      typeof message === 'object' &&
+      'type' in message &&
+      message.type === 'REQUEST_CALLER_SITE_ACCESS'
+    ) {
+      const request = message as Record<string, unknown>;
+      if (
+        request['clientInstanceId'] !== SIDE_PANEL_CLIENT_INSTANCE_ID ||
+        typeof request['id'] !== 'string' ||
+        request['id'] !== _ctx.currentStreamId ||
+        !sameManagedCloudOwner(normalizeManagedCloudOwner(request['owner']), _ctx.managedCloudOwner)
+      )
+        return;
+      const source = browserTurnMessage(request['id'])?.browserSource;
+      if (!source || source.tabId !== request['tabId'] || source.url !== request['url']) {
+        sendResponse(false);
+        return;
+      }
+      void requestBrowserSiteAccess(request['id'], 'act').then(
+        (access) => sendResponse(access.status === 'granted' && access.tabId === source.tabId),
+        () => sendResponse(false),
+      );
+      return true;
+    }
+    if (
+      !message ||
+      typeof message !== 'object' ||
+      (message as { type?: unknown }).type !== 'CHAT_TOOL_HANDOFF'
+    )
+      return;
+    void handleChatToolHandoff(message as ChatToolHandoffMessage);
     return;
-  void handleChatToolHandoff(message as ChatToolHandoffMessage);
-});
+  },
+);
 
 function mimeTypeOfDataUrl(dataUrl: string): string {
   return /^data:([^;,]+)/.exec(dataUrl)?.[1] ?? 'image/png';

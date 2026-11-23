@@ -97,13 +97,19 @@ export async function evaluateSiteAccess(
  * Throws with the org's wording when the policy denies, and with the surface's
  * own `fallback` wording when the only thing missing is the user's approval.
  */
+export class BrowserSitePermissionRequired extends Error {}
+
 export async function assertSiteAccess(
   url: string,
   capability: SitePolicyCapability,
   fallback: string,
 ): Promise<SitePolicyEvaluation> {
   const evaluation = await evaluateSiteAccess(url, capability);
-  if (!evaluation.allowed) throw new Error(sitePolicyDenialMessage(evaluation, fallback));
+  if (!evaluation.allowed) {
+    const message = sitePolicyDenialMessage(evaluation, fallback);
+    if (evaluation.reason === 'not-allowlisted') throw new BrowserSitePermissionRequired(message);
+    throw new Error(message);
+  }
   return evaluation;
 }
 

@@ -350,15 +350,14 @@ describe('domUtils', () => {
   });
 
   describe('safeClick', () => {
-    it('returns false and logs error when MouseEvent constructor throws (jsdom limitation)', () => {
-      document.body.innerHTML = '<button id="btn">Click</button>';
-      const btn = document.getElementById('btn')!;
-      vi.spyOn(console, 'error').mockImplementation(() => {});
-
-      const result = domUtils.safeClick(btn);
-      expect(typeof result).toBe('boolean');
-      expect(console.error).toHaveBeenCalled();
-      vi.restoreAllMocks();
+    it('invokes native activation exactly once when replaying a left click', () => {
+      document.body.innerHTML = '<details><summary>Open details</summary>Dock seven</details>';
+      const summary = document.querySelector('summary')!;
+      const clicked = vi.fn();
+      summary.addEventListener('click', clicked);
+      expect(domUtils.safeClick(summary)).toBe(true);
+      expect(clicked).toHaveBeenCalledTimes(1);
+      expect(document.querySelector('details')!.open).toBe(true);
     });
 
     it('returns false for right-button click in jsdom (same MouseEvent constructor limitation)', () => {
