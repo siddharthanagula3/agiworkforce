@@ -11,8 +11,8 @@ const GUARD = join(REPO_ROOT, 'scripts', 'check-executable-docs.mjs');
 
 const BASE_INPUTS = {
   'apps/cli/README.md': '# cli\n',
-  'apps/cli/src/output_styles/explanatory.md': 'explanatory\n',
-  'apps/cli/src/output_styles/learning.md': 'learning\n',
+  'crates/agiworkforce-agent-core/assets/output_styles/explanatory.md': 'explanatory\n',
+  'crates/agiworkforce-agent-core/assets/output_styles/learning.md': 'learning\n',
 };
 
 function runOnSandbox(files) {

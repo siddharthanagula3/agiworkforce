@@ -2360,12 +2360,12 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": [],
-      "files": 358,
+      "files": 354,
       "roles": {
         "config": 1,
-        "doc": 6,
+        "doc": 1,
         "other": 3,
-        "source": 315,
+        "source": 316,
         "test": 33
       }
     },
@@ -2411,15 +2411,15 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 1977,
+      "files": 1980,
       "roles": {
         "asset": 59,
         "config": 22,
         "doc": 1,
         "other": 24,
-        "source": 1202,
+        "source": 1204,
         "style": 2,
-        "test": 667
+        "test": 668
       }
     },
     {
@@ -2457,15 +2457,15 @@
       "lanes": [
         "chrome-extension"
       ],
-      "files": 611,
+      "files": 616,
       "roles": {
         "asset": 12,
         "config": 6,
         "doc": 3,
         "other": 31,
-        "source": 243,
+        "source": 247,
         "style": 3,
-        "test": 313
+        "test": 314
       }
     },
     {
@@ -2504,14 +2504,14 @@
       "lanes": [
         "vscode-extension"
       ],
-      "files": 401,
+      "files": 422,
       "roles": {
         "asset": 3,
         "config": 5,
         "doc": 8,
         "other": 4,
-        "source": 191,
-        "test": 190
+        "source": 204,
+        "test": 198
       }
     },
     {
@@ -2551,16 +2551,16 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 2486,
+      "files": 2491,
       "roles": {
         "asset": 4,
         "config": 14,
         "doc": 4,
         "generated": 1,
         "other": 49,
-        "source": 1230,
+        "source": 1233,
         "style": 1,
-        "test": 1183
+        "test": 1185
       }
     },
     {
@@ -2615,15 +2615,15 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 8664,
+      "files": 8665,
       "roles": {
-        "asset": 58,
+        "asset": 51,
         "config": 104,
         "doc": 51,
         "generated": 2,
         "migration": 754,
-        "other": 37,
-        "source": 3620,
+        "other": 36,
+        "source": 3629,
         "style": 37,
         "test": 4001
       }
@@ -2642,11 +2642,11 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": [],
-      "files": 358,
+      "files": 359,
       "roles": {
         "asset": 20,
         "config": 37,
-        "doc": 286,
+        "doc": 287,
         "other": 6,
         "source": 6,
         "test": 3
@@ -2671,12 +2671,13 @@
       "lanes": [
         "rust-runtime-protocol"
       ],
-      "files": 828,
+      "files": 854,
       "roles": {
         "config": 13,
+        "doc": 5,
         "generated": 4,
         "other": 1,
-        "source": 771,
+        "source": 792,
         "test": 39
       }
     },
@@ -2694,11 +2695,11 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": [],
-      "files": 251,
+      "files": 252,
       "roles": {
         "asset": 1,
         "config": 21,
-        "doc": 183,
+        "doc": 184,
         "generated": 45,
         "other": 1
       }
@@ -4268,10 +4269,10 @@
       "lanes": [
         "contracts-types"
       ],
-      "files": 981,
+      "files": 1001,
       "roles": {
         "config": 29,
-        "generated": 636,
+        "generated": 656,
         "source": 177,
         "test": 139
       }
@@ -4965,6 +4966,7 @@
         "./complete-inline-tokens",
         "./composer-editor",
         "./composer-editor.css",
+        "./composer-focus",
         "./connector-step-sentence",
         "./continuation-seam",
         "./continue-generation",
@@ -4979,6 +4981,8 @@
         "./markdown-document",
         "./markdown-headings",
         "./markdown-image-sources",
+        "./markdown-it-math",
+        "./markdown-it-task-lists",
         "./math-markup",
         "./mcp-app",
         "./message-format",
@@ -5044,10 +5048,10 @@
       "lanes": [
         "chat-artifacts"
       ],
-      "files": 527,
+      "files": 530,
       "roles": {
         "config": 3,
-        "source": 242,
+        "source": 245,
         "style": 3,
         "test": 279
       }

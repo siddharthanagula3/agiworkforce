@@ -621,13 +621,23 @@ mod tests {
                     ("content".into(), "ordinary workspace edit".into()),
                 ]),
             };
-            let written = execute_tool_with_opts(&write, &options).await.expect("write result");
+            let written = execute_tool_with_opts(&write, &options)
+                .await
+                .expect("write result");
             assert!(written.success, "{}", written.output);
-            assert_eq!(std::fs::read_to_string(&path).unwrap(), "ordinary workspace edit");
+            assert_eq!(
+                std::fs::read_to_string(&path).unwrap(),
+                "ordinary workspace edit"
+            );
 
             let command = "echo safe-but-requires-approval";
-            assert_eq!(crate::safety::classify_command(command), crate::safety::CommandSafety::Safe);
-            let refused = execute_tool_with_opts(&shell(command), &options).await.expect("shell result");
+            assert_eq!(
+                crate::safety::classify_command(command),
+                crate::safety::CommandSafety::Safe
+            );
+            let refused = execute_tool_with_opts(&shell(command), &options)
+                .await
+                .expect("shell result");
             assert!(!refused.success);
             assert_eq!(exec_requests(&seen).len(), 1);
             assert!(refused.output.contains("did not run"));

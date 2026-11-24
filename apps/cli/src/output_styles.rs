@@ -47,7 +47,7 @@ impl OutputStyle {
         Self {
             name: "concise".into(),
             description: "Leads with the result; no preamble, narration or recap.".into(),
-            system_prompt: include_str!("output_styles/concise.md").to_string(),
+            system_prompt: agiworkforce_agent_core::output_styles::CONCISE.to_string(),
             origin: BUILT_IN.into(),
         }
     }
@@ -56,7 +56,7 @@ impl OutputStyle {
         Self {
             name: "study".into(),
             description: "Teaches step by step with questions instead of finished answers.".into(),
-            system_prompt: include_str!("output_styles/study.md").to_string(),
+            system_prompt: agiworkforce_agent_core::output_styles::STUDY.to_string(),
             origin: BUILT_IN.into(),
         }
     }
@@ -65,7 +65,7 @@ impl OutputStyle {
         Self {
             name: "proactive".into(),
             description: "Starts work right away and makes reasonable assumptions.".into(),
-            system_prompt: include_str!("output_styles/proactive.md").to_string(),
+            system_prompt: agiworkforce_agent_core::output_styles::PROACTIVE.to_string(),
             origin: BUILT_IN.into(),
         }
     }
@@ -75,7 +75,7 @@ impl OutputStyle {
             name: "explanatory".into(),
             description: "Educational. Adds insight blocks explaining each non-trivial choice."
                 .into(),
-            system_prompt: include_str!("output_styles/explanatory.md").to_string(),
+            system_prompt: agiworkforce_agent_core::output_styles::EXPLANATORY.to_string(),
             origin: BUILT_IN.into(),
         }
     }
@@ -85,7 +85,7 @@ impl OutputStyle {
             name: "learning".into(),
             description: "Interactive. Completes changes and adds one optional learning exercise."
                 .into(),
-            system_prompt: include_str!("output_styles/learning.md").to_string(),
+            system_prompt: agiworkforce_agent_core::output_styles::LEARNING.to_string(),
             origin: BUILT_IN.into(),
         }
     }

@@ -1,8 +1,8 @@
-import concise from '../../../../cli/src/output_styles/concise.md?raw';
-import explanatory from '../../../../cli/src/output_styles/explanatory.md?raw';
-import learning from '../../../../cli/src/output_styles/learning.md?raw';
-import proactive from '../../../../cli/src/output_styles/proactive.md?raw';
-import study from '../../../../cli/src/output_styles/study.md?raw';
+import concise from '../../../../../crates/agiworkforce-agent-core/assets/output_styles/concise.md?raw';
+import explanatory from '../../../../../crates/agiworkforce-agent-core/assets/output_styles/explanatory.md?raw';
+import learning from '../../../../../crates/agiworkforce-agent-core/assets/output_styles/learning.md?raw';
+import proactive from '../../../../../crates/agiworkforce-agent-core/assets/output_styles/proactive.md?raw';
+import study from '../../../../../crates/agiworkforce-agent-core/assets/output_styles/study.md?raw';
 import type { UserInput } from '@agiworkforce/types/protocol';
 import * as vscode from 'vscode';
 

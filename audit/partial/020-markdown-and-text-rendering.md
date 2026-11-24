@@ -6,15 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S20.07: Task lists.
-
-- Done when: GFM task items (- [ ] / - [x]) render as checkboxes reflecting their state.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-
 ## S20.13: Autolinks.
 
 - Done when: A bare URL in the answer (https://…, www.…) becomes a clickable link.
@@ -36,15 +27,6 @@ nothing is left.
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S20.16: Wide-table scrolling.
-
-- Done when: A table wider than the answer column scrolls horizontally instead of overflowing or being cut off.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
 
 ## S20.18: Download-table action.
 
@@ -78,15 +60,6 @@ nothing is left.
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-
-## S20.21: Escaped delimiters.
-
-- Done when: Backslash-escaped Markdown/math delimiters (\*, \$, \_) display as the literal character without the backslash.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
 
 ## S20.26: Text selection across rendered blocks.
 

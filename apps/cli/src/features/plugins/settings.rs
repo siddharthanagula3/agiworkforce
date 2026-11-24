@@ -383,7 +383,10 @@ mod tests {
         assert_eq!(personal, "reviewer");
         assert_ne!(project, personal);
         assert_ne!(project, storage_key("reviewer", Some(second.path())));
-        assert_eq!(project, storage_key("reviewer", Some(&first.path().join("."))));
+        assert_eq!(
+            project,
+            storage_key("reviewer", Some(&first.path().join(".")))
+        );
     }
 
     #[test]

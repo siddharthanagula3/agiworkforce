@@ -68,7 +68,7 @@ function normalizeRollups() {
       const expected = expectedRollup(item);
       if (expected === item.rollup) return line;
       drift.push(`${item.id} says ${item.rollup}, its cells say ${expected}`);
-      return line.replace(`"rollup": "${item.rollup}"`, `"rollup": "${expected}"`);
+      return line.replace(/("rollup"\s*:\s*)"[^"]+"/u, `$1"${expected}"`);
     });
   return { drift, text: lines.join('\n') };
 }

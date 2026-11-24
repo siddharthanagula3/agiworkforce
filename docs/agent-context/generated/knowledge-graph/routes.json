@@ -12776,6 +12776,18 @@
     },
     {
       "surface": "web",
+      "kind": "endpoint",
+      "url": "/og-image.svg",
+      "file": "apps/web/app/og-image.svg/route.ts",
+      "segments": [
+        "og-image.svg"
+      ],
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "surface": "web",
       "kind": "page",
       "url": "/open/:target/:id",
       "file": "apps/web/app/open/[target]/[id]/page.tsx",

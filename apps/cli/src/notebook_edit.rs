@@ -605,8 +605,7 @@ mod tests {
             &mut tmp,
             r#"[{"id":"c1","cell_type":"code","source":["x=1\n"],"metadata":{},"execution_count":3,"outputs":[{"output_type":"stream","name":"stdout","text":["1\n"]}]}]"#,
         );
-        let mut request =
-            kind_request(&tmp, NotebookEditMode::Replace, Some("c1"), CellKind::Code);
+        let mut request = kind_request(&tmp, NotebookEditMode::Replace, Some("c1"), CellKind::Code);
         request.kind = None;
         let cells = edited_cells(&tmp, &request);
         assert_eq!(cells[0]["execution_count"], serde_json::Value::Null);

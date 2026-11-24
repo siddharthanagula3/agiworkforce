@@ -224,7 +224,7 @@ pub fn list_plugins(workspace_root: &Path) -> PluginListResponse {
             configurable: (!plugin.from_project_dir
                 && crate::plugins::load_manifest_for(&plugin.root)
                     .is_some_and(|(manifest, _)| !manifest.user_config.is_empty()))
-                .then_some(true),
+            .then_some(true),
             id: plugin.config_name.clone(),
         })
         .collect();

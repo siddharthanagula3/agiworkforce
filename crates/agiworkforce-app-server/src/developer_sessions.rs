@@ -25,38 +25,37 @@ use agiworkforce_protocol::developer_session::{
     AccountStatusParams, AccountStatusResponse, AccountTokenResponse, AcknowledgedResponse,
     AppServerCapabilities, AppServerClientInfo, AppServerNotification, AppServerRequest,
     AppServerResponse, ApprovalResponseParams, CheckpointDiffResponse, CheckpointListResponse,
-    CheckpointSectionsParams, CheckpointSectionsResponse, CheckpointTurnParams, ChildTaskStopParams,
-    ChildTaskStopResponse, ChildTaskTranscriptParams, ChildTaskTranscriptResponse,
-    ContextInstructionsParams, ContextInstructionsResponse, DeveloperSessionHandoff,
-    GitPullRequestParams, GitPullRequestPlanParams, GitPullRequestPlanResponse,
-    GitPullRequestResponse, HandoffAdmission, HookAddParams, HookListResponse, HookRemoveParams,
-    InitializeParams, InitializeResponse, LocalModelListResponse, ManagedWorktreeCreateParams,
-    ManagedWorktreeListResponse, ManagedWorktreeSummary, McpAddParams, McpApprovalGrantParams,
-    McpApprovalReadParams, McpApprovalRequest, McpLoginParams, McpLoginResponse,
-    McpServerInspectResponse, McpServerListResponse, McpServerParams, McpServerTestResponse,
-    McpServerToolsResponse, McpSetEnabledParams, MemoryAddParams, MemoryAddResponse,
-    ModelListParams, PermissionRulesResponse, PermissionsAddParams, PermissionsListResponse,
+    CheckpointSectionsParams, CheckpointSectionsResponse, CheckpointTurnParams,
+    ChildTaskStopParams, ChildTaskStopResponse, ChildTaskTranscriptParams,
+    ChildTaskTranscriptResponse, ContextInstructionsParams, ContextInstructionsResponse,
+    DeveloperSessionHandoff, GitPullRequestParams, GitPullRequestPlanParams,
+    GitPullRequestPlanResponse, GitPullRequestResponse, HandoffAdmission, HookAddParams,
+    HookListResponse, HookRemoveParams, InitializeParams, InitializeResponse,
+    LocalModelListResponse, ManagedWorktreeCreateParams, ManagedWorktreeListResponse,
+    ManagedWorktreeSummary, McpAddParams, McpApprovalGrantParams, McpApprovalReadParams,
+    McpApprovalRequest, McpLoginParams, McpLoginResponse, McpServerInspectResponse,
+    McpServerListResponse, McpServerParams, McpServerTestResponse, McpServerToolsResponse,
+    McpSetEnabledParams, MemoryAddParams, MemoryAddResponse, ModelListParams,
+    PermissionRulesResponse, PermissionsAddParams, PermissionsListResponse,
     PermissionsRemoveParams, PlanDecideParams, PluginInstallParams, PluginListResponse,
     PluginRemoveParams, PluginSetEnabledParams, PluginSettingSetParams, PluginSettingsReadParams,
-    PluginSettingsResponse, PluginUpdateResponse,
-    ProtocolVersionUnsupportedData, ProviderParams, ProviderSetKeyParams, ProvidersListResponse,
-    SettingsReadResponse, SettingsWriteParams, SkillConsentParams, SkillConsentResponse,
-    SkillInstallParams, SkillListResponse, SkillRemoveParams, SkillSetEnabledParams,
-    SlashCommandListResponse, SlashCommandRunParams, SlashCommandRunResponse,
-    ThreadArchiveInactiveParams, ThreadArchiveInactiveResponse, ThreadCheckpointsResponse,
-    ThreadCompactParams, ThreadCompactResponse, ThreadDeleteParams,
+    PluginSettingsResponse, PluginUpdateResponse, ProtocolVersionUnsupportedData, ProviderParams,
+    ProviderSetKeyParams, ProvidersListResponse, SettingsReadResponse, SettingsWriteParams,
+    SkillConsentParams, SkillConsentResponse, SkillInstallParams, SkillListResponse,
+    SkillRemoveParams, SkillSetEnabledParams, SlashCommandListResponse, SlashCommandRunParams,
+    SlashCommandRunResponse, ThreadArchiveInactiveParams, ThreadArchiveInactiveResponse,
+    ThreadCheckpointsResponse, ThreadCompactParams, ThreadCompactResponse, ThreadDeleteParams,
     ThreadDeleteResponse, ThreadForkParams, ThreadHandoffAcceptParams, ThreadHandoffParams,
     ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadPinParams, ThreadPinResponse,
-    ThreadReadResponse,
-    ThreadReconnectResponse, ThreadRenameParams, ThreadRenameResponse, ThreadRevertParams,
-    ThreadRevertResponse, ThreadRewindParams, ThreadRewindResponse, ThreadSearchParams,
-    ThreadSearchResponse, ThreadSideQuestionParams, ThreadSideQuestionResponse, ThreadStartParams,
-    ThreadStartResponse, ThreadSummary, ThreadWriterConflictData, TrustListResponse,
-    TrustRevokeParams, TurnInterruptParams, TurnStartParams, TurnStartResponse, TurnSteerParams,
-    TurnSummary, UserInputResponseParams, WorktreeApplyParams, WorktreeApplyResponse,
-    WorktreeArchive, WorktreeCreateParams, WorktreeCreateResponse, WorktreeIdParams,
-    WorktreeKeepParams, WorktreeKeepResponse, WorktreeListResponse, WorktreePinParams,
-    WorktreeRemoveParams, WorktreeSetupRunParams, WorktreeSummary,
+    ThreadReadResponse, ThreadReconnectResponse, ThreadRenameParams, ThreadRenameResponse,
+    ThreadRevertParams, ThreadRevertResponse, ThreadRewindParams, ThreadRewindResponse,
+    ThreadSearchParams, ThreadSearchResponse, ThreadSideQuestionParams, ThreadSideQuestionResponse,
+    ThreadStartParams, ThreadStartResponse, ThreadSummary, ThreadWriterConflictData,
+    TrustListResponse, TrustRevokeParams, TurnInterruptParams, TurnStartParams, TurnStartResponse,
+    TurnSteerParams, TurnSummary, UserInputResponseParams, WorktreeApplyParams,
+    WorktreeApplyResponse, WorktreeArchive, WorktreeCreateParams, WorktreeCreateResponse,
+    WorktreeIdParams, WorktreeKeepParams, WorktreeKeepResponse, WorktreeListResponse,
+    WorktreePinParams, WorktreeRemoveParams, WorktreeSetupRunParams, WorktreeSummary,
     LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION, MCP_APPROVAL_STALE_ERROR_CODE,
     MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION, PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE,
     SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS, THREAD_WRITER_CONFLICT_ERROR_CODE,
@@ -2272,7 +2271,10 @@ impl DeveloperSessionProcessor {
                     Ok(params) => params,
                     Err(response) => return *response,
                 };
-                self.host.background_command_list(params).await.map(serde_json::to_value)
+                self.host
+                    .background_command_list(params)
+                    .await
+                    .map(serde_json::to_value)
             }
             method::BACKGROUND_COMMAND_READ | method::BACKGROUND_COMMAND_STOP => {
                 let params = match parse_params::<BackgroundCommandIdParams>(&request) {
@@ -2491,7 +2493,10 @@ impl DeveloperSessionProcessor {
                     Ok(params) => params,
                     Err(response) => return *response,
                 };
-                self.host.read_child_task_transcript(params).await.map(serde_json::to_value)
+                self.host
+                    .read_child_task_transcript(params)
+                    .await
+                    .map(serde_json::to_value)
             }
             method::APPROVAL_RESPOND => {
                 let params = match parse_params::<ApprovalResponseParams>(&request) {

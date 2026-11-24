@@ -64,7 +64,15 @@
         "agiWorkforce.activateOnStartup",
         "agiWorkforce.useTerminal",
         "agiWorkforce.inlineCompletions.enabled",
-        "agiWorkforce.inlineCompletions.debounceMs"
+        "agiWorkforce.inlineCompletions.debounceMs",
+        "agiWorkforce.chatLocation",
+        "agiWorkforce.chat.lockEditorGroups",
+        "agiWorkforce.terminal.usePythonEnvironment",
+        "agiWorkforce.chat.focusView",
+        "agiWorkforce.context.warningPercent",
+        "agiWorkforce.editorContext.saveOpenFileBeforeSend",
+        "agiWorkforce.archiveInactiveSessionsDays",
+        "agiWorkforce.agent.requireShellApproval"
       ]
     },
     "virtualWorkspaces": {

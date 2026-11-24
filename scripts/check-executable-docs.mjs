@@ -12,12 +12,12 @@ const requiredInputs = [
     consumer: 'apps/cli/Cargo.toml package metadata',
   },
   {
-    path: 'apps/cli/src/output_styles/explanatory.md',
-    consumer: 'Rust include_str! in apps/cli/src/output_styles.rs',
+    path: 'crates/agiworkforce-agent-core/assets/output_styles/explanatory.md',
+    consumer: 'Rust include_str! in crates/agiworkforce-agent-core/src/output_styles.rs',
   },
   {
-    path: 'apps/cli/src/output_styles/learning.md',
-    consumer: 'Rust include_str! in apps/cli/src/output_styles.rs',
+    path: 'crates/agiworkforce-agent-core/assets/output_styles/learning.md',
+    consumer: 'Rust include_str! in crates/agiworkforce-agent-core/src/output_styles.rs',
   },
 ];
 

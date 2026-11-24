@@ -1169,12 +1169,12 @@ Generated output includes `docs/generated/`, any `/generated/` path, `*.generate
 - **Image** `apps/web/public/logo-512.png`
 - **Image** `apps/web/public/logo.png`
 - **Image** `apps/web/public/next.svg`
-- **Image** `apps/web/public/og-image.svg`
+- **Image** apps/web/public/og-image.svg (removed after the inventory)
 - **Image** `apps/web/public/product/agents-tool-approvals-dark.png`
 - **Image** `apps/web/public/product/agents-tool-approvals-light.png`
-- **Image** `apps/web/public/product/artifacts-library-dark.png`
-- **Image** `apps/web/public/product/artifacts-library-light.png`
-- **Image** `apps/web/public/product/code-dark-landing.png`
+- **Image** apps/web/public/product/artifacts-library-dark.png (removed after the inventory)
+- **Image** apps/web/public/product/artifacts-library-light.png (removed after the inventory)
+- **Image** apps/web/public/product/code-dark-landing.png (removed after the inventory)
 - **Image** `apps/web/public/product/composer-dark.png`
 - **Image** `apps/web/public/product/composer-light.png`
 - **Image** `apps/web/public/product/deep-research-composer-dark.png`
@@ -1186,10 +1186,10 @@ Generated output includes `docs/generated/`, any `/generated/` path, `*.generate
 - **Image** `apps/web/public/product/memory-settings-dark.png`
 - **Image** `apps/web/public/product/memory-settings-light.png`
 - **Image** `apps/web/public/product/models-dark-landing.png`
-- **Image** `apps/web/public/product/projects-dark-landing.png`
-- **Image** `apps/web/public/product/projects-dark.png`
-- **Image** `apps/web/public/product/projects-light-landing.png`
-- **Image** `apps/web/public/product/projects-light.png`
+- **Image** apps/web/public/product/projects-dark-landing.png (removed after the inventory)
+- **Image** apps/web/public/product/projects-dark.png (removed after the inventory)
+- **Image** apps/web/public/product/projects-light-landing.png (removed after the inventory)
+- **Image** apps/web/public/product/projects-light.png (removed after the inventory)
 - **Image** `apps/web/public/product/sources-dark-landing.png`
 - **Image** `apps/web/public/product/usage-dark.png`
 - **Image** `apps/web/public/product/usage-light.png`
@@ -1427,11 +1427,11 @@ Generated output includes `docs/generated/`, any `/generated/` path, `*.generate
 - `apps/cli/src/open_source_notices.rs`
 - `apps/cli/src/output.rs`
 - `apps/cli/src/output_styles.rs`
-- `apps/cli/src/output_styles/concise.md`
-- `apps/cli/src/output_styles/explanatory.md`
-- `apps/cli/src/output_styles/learning.md`
-- `apps/cli/src/output_styles/proactive.md`
-- `apps/cli/src/output_styles/study.md`
+- `crates/agiworkforce-agent-core/assets/output_styles/concise.md`
+- `crates/agiworkforce-agent-core/assets/output_styles/explanatory.md`
+- `crates/agiworkforce-agent-core/assets/output_styles/learning.md`
+- `crates/agiworkforce-agent-core/assets/output_styles/proactive.md`
+- `crates/agiworkforce-agent-core/assets/output_styles/study.md`
 - `apps/cli/src/path_security.rs`
 - `apps/cli/src/path_security/file_authority.rs`
 - `apps/cli/src/path_security/file_authority/boundary_tests.rs`
@@ -18917,106 +18917,12 @@ Generated output includes `docs/generated/`, any `/generated/` path, `*.generate
 - `tools/evals/datasets/tools.json`
 - `tools/evals/gate-policy.json`
 - `tools/evals/measurements/baselines/anthropic__claude-haiku.json`
-- `tools/evals/measurements/baselines/deepseek__deepseek-flash.json`
+- 1 model-specific measurement files in `tools/evals/measurements/baselines`
 - `tools/evals/measurements/baselines/xai__grok.json`
 - `tools/evals/measurements/ledger.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-haiku-5-5.chat.system__1.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-haiku-5-5.chat.system__1.s2.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-haiku-5-5.chat.system__1.s3.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-haiku-5-5.chat.system__11.s1.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-haiku-5-5.chat.system__11.s2.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-haiku-5-5.chat.system__11.s3.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-haiku-5-5.chat.system__12.s1.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-haiku-5-5.chat.system__12.s2.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-haiku-5-5.chat.system__12.s3.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-haiku-5-5.chat.system__13.s1.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-haiku-5-5.chat.system__13.s2.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-haiku-5-5.chat.system__13.s3.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-haiku-5-5.chat.system__5.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-haiku-5-5.chat.system__6.s1.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-haiku-5-5.chat.system__6.s10.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-haiku-5-5.chat.system__6.s11.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-haiku-5-5.chat.system__6.s12.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-haiku-5-5.chat.system__6.s2.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-haiku-5-5.chat.system__6.s3.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-haiku-5-5.chat.system__6.s4.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-haiku-5-5.chat.system__6.s5.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-haiku-5-5.chat.system__6.s6.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-haiku-5-5.chat.system__6.s7.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-haiku-5-5.chat.system__6.s8.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-haiku-5-5.chat.system__6.s9.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-haiku-5-5.chat.system__7.s1.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-haiku-5-5.chat.system__7.s2.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-haiku-5-5.chat.system__7.s3.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-sonnet-5-5.chat.system__1.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-sonnet-5-5.chat.system__1.s2.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-sonnet-5-5.chat.system__1.s3.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-sonnet-5-5.chat.system__12.s1.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-sonnet-5-5.chat.system__12.s10.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-sonnet-5-5.chat.system__12.s2.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-sonnet-5-5.chat.system__12.s3.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-sonnet-5-5.chat.system__12.s4.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-sonnet-5-5.chat.system__12.s5.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-sonnet-5-5.chat.system__12.s6.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-sonnet-5-5.chat.system__12.s7.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-sonnet-5-5.chat.system__12.s8.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-sonnet-5-5.chat.system__12.s9.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-sonnet-5-5.chat.system__13.s1.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-sonnet-5-5.chat.system__13.s2.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-sonnet-5-5.chat.system__13.s3.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-sonnet-5-5.chat.system__13.s4.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-sonnet-5-5.chat.system__13.s5.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-sonnet-5-5.chat.system__13.s6.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-sonnet-5-5.chat.system__13.s7.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-sonnet-5-5.chat.system__13.s8.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-sonnet-5-5.chat.system__5.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-sonnet-5-5.chat.system__6.s1.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-sonnet-5-5.chat.system__6.s2.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-sonnet-5-5.chat.system__6.s3.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-sonnet-5-5.chat.system__6.s4.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-sonnet-5-5.chat.system__6.s5.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-sonnet-5-5.chat.system__6.s7.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-sonnet-5-5.chat.system__6.s8.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-sonnet-5-5.chat.system__7.s1.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-sonnet-5-5.chat.system__7.s2.json`
-- `tools/evals/measurements/prompt-evals/runs/claude-sonnet-5-5.chat.system__7.s3.json`
-- `tools/evals/measurements/prompt-evals/runs/gpt-6-luna.chat.system__1.json`
-- `tools/evals/measurements/prompt-evals/runs/gpt-6-luna.chat.system__1.s2.json`
-- `tools/evals/measurements/prompt-evals/runs/gpt-6-luna.chat.system__1.s3.json`
-- `tools/evals/measurements/prompt-evals/runs/gpt-6-luna.chat.system__11.s1.json`
-- `tools/evals/measurements/prompt-evals/runs/gpt-6-luna.chat.system__11.s2.json`
-- `tools/evals/measurements/prompt-evals/runs/gpt-6-luna.chat.system__11.s3.json`
-- `tools/evals/measurements/prompt-evals/runs/gpt-6-luna.chat.system__5.json`
-- `tools/evals/measurements/prompt-evals/runs/gpt-6-luna.chat.system__6.s1.json`
-- `tools/evals/measurements/prompt-evals/runs/gpt-6-luna.chat.system__6.s10.json`
-- `tools/evals/measurements/prompt-evals/runs/gpt-6-luna.chat.system__6.s11.json`
-- `tools/evals/measurements/prompt-evals/runs/gpt-6-luna.chat.system__6.s12.json`
-- `tools/evals/measurements/prompt-evals/runs/gpt-6-luna.chat.system__6.s13.json`
-- `tools/evals/measurements/prompt-evals/runs/gpt-6-luna.chat.system__6.s14.json`
-- `tools/evals/measurements/prompt-evals/runs/gpt-6-luna.chat.system__6.s15.json`
-- `tools/evals/measurements/prompt-evals/runs/gpt-6-luna.chat.system__6.s2.json`
-- `tools/evals/measurements/prompt-evals/runs/gpt-6-luna.chat.system__6.s3.json`
-- `tools/evals/measurements/prompt-evals/runs/gpt-6-luna.chat.system__6.s4.json`
-- `tools/evals/measurements/prompt-evals/runs/gpt-6-luna.chat.system__6.s5.json`
-- `tools/evals/measurements/prompt-evals/runs/gpt-6-luna.chat.system__6.s6.json`
-- `tools/evals/measurements/prompt-evals/runs/gpt-6-luna.chat.system__6.s7.json`
-- `tools/evals/measurements/prompt-evals/runs/gpt-6-luna.chat.system__6.s8.json`
-- `tools/evals/measurements/prompt-evals/runs/gpt-6-luna.chat.system__6.s9.json`
-- `tools/evals/measurements/prompt-evals/runs/gpt-6-luna.chat.system__7.s1.json`
-- `tools/evals/measurements/prompt-evals/runs/gpt-6-luna.chat.system__7.s2.json`
-- `tools/evals/measurements/prompt-evals/runs/gpt-6-luna.chat.system__7.s3.json`
-- `tools/evals/measurements/recordings/claude-haiku-4-5.json`
-- `tools/evals/measurements/recordings/claude-haiku-5-5.json`
-- `tools/evals/measurements/recordings/deepseek-flash.json`
-- `tools/evals/measurements/recordings/deepseek-v4-flash.json`
-- `tools/evals/measurements/recordings/grok-4.6.json`
-- `tools/evals/measurements/recordings/grok-4.7.json`
-- `tools/evals/measurements/runs/claude-haiku-4-5.json`
-- `tools/evals/measurements/runs/claude-haiku-5-5.json`
-- `tools/evals/measurements/runs/deepseek-flash.json`
-- `tools/evals/measurements/runs/deepseek-v4-flash.json`
-- `tools/evals/measurements/runs/grok-4.6.json`
-- `tools/evals/measurements/runs/grok-4.7.json`
+- 85 model-specific measurement files in `tools/evals/measurements/prompt-evals/runs`
+- 6 model-specific measurement files in `tools/evals/measurements/recordings`
+- 6 model-specific measurement files in `tools/evals/measurements/runs`
 - `tools/evals/prompt-coverage.json`
 - `tools/evals/recordings/reference.json`
 - `tools/evals/scripts/certification-gate.d.mts`

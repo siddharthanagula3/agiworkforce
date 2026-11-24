@@ -49,7 +49,7 @@ const NON_DOC_MARKDOWN = [
   'scripts/__fixtures__/',
   'packages/client/client-runtime/src/plugins/__fixtures__/',
   'tools/skill-vetting/samples/',
-  'apps/cli/src/output_styles/',
+  'crates/agiworkforce-agent-core/assets/output_styles/',
   'apps/extension-vscode/media/walkthrough/',
   'apps/mobile/store-listing/',
   'apps/mobile/scripts/release/',

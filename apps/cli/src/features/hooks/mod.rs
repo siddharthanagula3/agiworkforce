@@ -8,6 +8,7 @@
 
 #[allow(clippy::module_inception)] // inner mod shares name with parent by design (migration shim)
 pub mod hooks;
+mod user_prompt;
 
 pub mod managed;
 

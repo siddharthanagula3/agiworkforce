@@ -178,8 +178,12 @@ export function buildSurfaces() {
     },
     {
       id: 'vscode',
-      label: 'VS Code extension (activation entry point)',
-      entries: existingFiles([absolute('apps/extension-vscode/src/extension.ts')]),
+      label: 'VS Code extension (activation and webview entry points)',
+      entries: existingFiles([
+        absolute('apps/extension-vscode/src/extension.ts'),
+        absolute('apps/extension-vscode/src/webview/render.ts'),
+        absolute('apps/extension-vscode/src/webview/dictationPage.ts'),
+      ]),
       productRoots: ['apps/extension-vscode/src'],
       aliases: { ...workspaceAliases },
     },

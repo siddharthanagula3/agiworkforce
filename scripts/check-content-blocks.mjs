@@ -67,6 +67,8 @@ export const NOT_BLOCK_KIND_READERS = Object.freeze({
     "Matches only text-delta and stop on agent events; the third match is a stop event's reason.reason === 'error'.",
   'apps/extension/src/features/side-panel/chat-state.ts':
     'An exhaustive switch deciding which events are safe to persist, not which block to render.',
+  'apps/extension/src/features/computer-use/browserTurnActivity.ts':
+    'Produces browser activity events and redacts typing fields before persistence. It never selects a message block to render.',
 });
 
 export const SEPARATE_VOCABULARIES = Object.freeze({

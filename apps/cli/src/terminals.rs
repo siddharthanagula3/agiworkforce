@@ -295,7 +295,9 @@ impl BackgroundCommand {
     pub(crate) fn developer_summary(
         &self,
     ) -> agiworkforce_protocol::workspace_terminal::BackgroundCommandSummary {
-        use agiworkforce_protocol::workspace_terminal::{BackgroundCommandState, BackgroundCommandSummary};
+        use agiworkforce_protocol::workspace_terminal::{
+            BackgroundCommandState, BackgroundCommandSummary,
+        };
         let (state, exit_code) = match self.state() {
             CommandState::Running => (BackgroundCommandState::Running, None),
             CommandState::Exited(code) => (BackgroundCommandState::Exited, code),

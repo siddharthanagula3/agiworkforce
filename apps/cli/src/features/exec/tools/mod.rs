@@ -2761,8 +2761,9 @@ async fn execute_notebook_edit(
         return Ok(ToolResult {
             tool_name: "notebook_edit".into(),
             success: false,
-            output: "Notebook path changed while this edit was pending. Open it again before editing."
-                .into(),
+            output:
+                "Notebook path changed while this edit was pending. Open it again before editing."
+                    .into(),
         });
     }
 

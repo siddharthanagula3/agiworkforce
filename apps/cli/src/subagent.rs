@@ -395,7 +395,10 @@ impl SubagentControl {
         tokio::time::timeout(ABANDONED_SETTLE_LIMIT, async {
             loop {
                 let finished = self.0.read().await.get(id).is_none_or(|entry| {
-                    entry.handle.as_ref().is_none_or(thread::JoinHandle::is_finished)
+                    entry
+                        .handle
+                        .as_ref()
+                        .is_none_or(thread::JoinHandle::is_finished)
                 });
                 if finished {
                     return;

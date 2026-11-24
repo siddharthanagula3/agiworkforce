@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: 19d609d84b3f40b32060dd8263f6509c5a4e1869bcda3132533efbd1696a6326 -->
+<!-- ui-gaps-csv-sha256: 30ba71585f4e0cca1e2c70105e9901f3ad17ad9e5fecbb1eab0708641308ef08 -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/registers/ui-gaps.csv` is the source of truth; this document is generated with
@@ -3003,7 +3003,7 @@ Completed. Keep normal settings entry points on agi-workforce.openSettings and t
 
 **Gap**
 
-First use now opens a four-step, keyboard-readable sidebar flow covering repository-scoped capabilities, the explicit foreground-editor versus hosted-Web task boundary, TODO-to-native-diff review, and autonomy/trust. Back is disabled on step one; Next, Skip, final completion, and replay are wired. Completion persists globally, while a contributed VS Code Getting Started walkthrough provides the extension-gallery entry point.
+First use now opens a four-step, keyboard-readable sidebar flow covering repository-scoped capabilities, the explicit foreground-editor versus hosted-Web task boundary, TODO-to-native-diff review, and autonomy/trust. Back is disabled on step one; Next, Skip, final completion, and replay are wired. Closing the intro puts keyboard focus on the current runtime recovery action or the composer when ready. Tab and Shift+Tab stay inside the intro. Completion persists globally, while a contributed VS Code Getting Started walkthrough provides the extension-gallery entry point.
 
 **Evidence**
 
