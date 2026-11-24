@@ -37,6 +37,61 @@ export function accountSecurityUndoPageHref(token: string): string {
   return `${ACCOUNT_SECURITY_UNDO_PAGE_PATH}#${encodeURIComponent(token)}`;
 }
 
+export const SESSION_TIMEOUT_OFF = 0;
+export const SESSION_TIMEOUT_OFF_KEY = 'session_timeout_off';
+export const SESSION_TIMEOUT_MIN_MINUTES = 15;
+export const SESSION_TIMEOUT_MAX_MINUTES = 1440;
+
+export const SESSION_TIMEOUT_MINUTES = [
+  SESSION_TIMEOUT_OFF,
+  15,
+  30,
+  60,
+  120,
+  240,
+  480,
+  SESSION_TIMEOUT_MAX_MINUTES,
+] as const;
+
+export function isSessionTimeoutMinutes(value: unknown): value is number {
+  return (
+    value === SESSION_TIMEOUT_OFF ||
+    (typeof value === 'number' &&
+      Number.isInteger(value) &&
+      value >= SESSION_TIMEOUT_MIN_MINUTES &&
+      value <= SESSION_TIMEOUT_MAX_MINUTES)
+  );
+}
+
+export function resolveSessionTimeout(settings: {
+  session_timeout?: unknown;
+  session_timeout_off?: unknown;
+}): number {
+  if (settings.session_timeout_off === true) return SESSION_TIMEOUT_OFF;
+  return isSessionTimeoutMinutes(settings.session_timeout)
+    ? settings.session_timeout
+    : SESSION_TIMEOUT_OFF;
+}
+
+export function sessionTimeoutSettingsPatch(minutes: number): {
+  session_timeout?: number;
+  session_timeout_off: boolean;
+} {
+  return minutes === SESSION_TIMEOUT_OFF
+    ? { session_timeout_off: true }
+    : { session_timeout: minutes, session_timeout_off: false };
+}
+
+export function formatSessionTimeout(minutes: number): string {
+  if (minutes === SESSION_TIMEOUT_OFF) return 'Never';
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  const hourText = hours === 1 ? '1 hour' : `${hours} hours`;
+  const minuteText = rest === 1 ? '1 minute' : `${rest} minutes`;
+  if (hours === 0) return minuteText;
+  return rest === 0 ? hourText : `${hourText} ${minuteText}`;
+}
+
 export const PASSKEY_REQUIRED_REASON = 'passkey_required';
 
 export const ACCOUNT_SECURITY_POLICY = {

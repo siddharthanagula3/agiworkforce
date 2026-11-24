@@ -21,6 +21,10 @@ import {
   FormMessage,
 } from '@shared/ui/Form';
 import { Save, Key, Eye, EyeOff } from 'lucide-react';
+import {
+  SESSION_TIMEOUT_MINUTES,
+  formatSessionTimeout,
+} from '@agiworkforce/cloud-contracts/account-security';
 import type {
   SecuritySettingsFormData,
   ChangePasswordFormData,
@@ -32,6 +36,11 @@ interface TwoFactorPanelProps {
   isUpdateSettingsPending: boolean;
   onSaveSecurity: (data: SecuritySettingsFormData) => void;
   passwordPanel: React.ReactNode;
+}
+
+function timeoutOptions(current: number): number[] {
+  const known: readonly number[] = SESSION_TIMEOUT_MINUTES;
+  return known.includes(current) ? [...known] : [...known, current].sort((a, b) => a - b);
 }
 
 export const TwoFactorPanel: React.FC<TwoFactorPanelProps> = ({
@@ -54,7 +63,7 @@ export const TwoFactorPanel: React.FC<TwoFactorPanelProps> = ({
             name="session_timeout"
             render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-foreground">Session Timeout</FormLabel>
+                <FormLabel className="text-foreground">Sign out after inactivity</FormLabel>
                 <Select
                   value={field.value.toString()}
                   onValueChange={(value) => field.onChange(parseInt(value))}
@@ -65,13 +74,17 @@ export const TwoFactorPanel: React.FC<TwoFactorPanelProps> = ({
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent className="border-border bg-popover">
-                    <SelectItem value="15">15 minutes</SelectItem>
-                    <SelectItem value="30">30 minutes</SelectItem>
-                    <SelectItem value="60">1 hour</SelectItem>
-                    <SelectItem value="240">4 hours</SelectItem>
-                    <SelectItem value="1440">24 hours</SelectItem>
+                    {timeoutOptions(field.value).map((minutes) => (
+                      <SelectItem key={minutes} value={minutes.toString()}>
+                        {formatSessionTimeout(minutes)}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
+                <FormDescription>
+                  Signs you out of this browser after this long without use. Never keeps you signed
+                  in until you sign out.
+                </FormDescription>
                 <FormMessage />
               </FormItem>
             )}

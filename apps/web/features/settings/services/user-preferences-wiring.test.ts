@@ -62,7 +62,7 @@ describe('settingsService · getSettings', () => {
     const result = await settingsService.getSettings();
 
     expect(result.data).toBeDefined();
-    expect(result.data.session_timeout).toBe(60);
+    expect(result.data.session_timeout).toBe(0);
     expect(result.error).toBeTruthy();
   });
 });
