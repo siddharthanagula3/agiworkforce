@@ -58,6 +58,7 @@ export {
   DEVELOPER_FILE_CHANGE_LABELS,
   DEVELOPER_FILE_CHANGES,
   DEVELOPER_SESSION_COMMANDS,
+  sessionTitleMatches,
   DEVELOPER_SESSION_MAX_FRAME_BYTES,
   GUARD_LIFTING_ENVIRONMENT,
   DEVELOPER_SESSION_EVENT_MESSAGE_KINDS,
@@ -98,9 +99,11 @@ export type {
   DeveloperRuntimeUnavailable,
   LocalDeveloperSession,
   DeveloperSessionCommand,
+  WorkspaceTerminalViewport,
   DeveloperSessionEvent,
   DeveloperSessionGroup,
   DeveloperSessionList,
+  DeveloperSessionListOptions,
   DeveloperSessionTranscript,
   DeveloperTurnFailure,
   DeveloperTurnOutcome,
@@ -138,6 +141,8 @@ export type {
 export {
   DEVELOPER_AGENT_MODES,
   DEVELOPER_AGENT_MODE_LABELS,
+  DEVELOPER_AUTO_MODE_DESCRIPTION,
+  DEVELOPER_ASK_MODE_DESCRIPTION,
   DEVELOPER_SESSION_PROTOCOL_VERSION,
   LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION,
   PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE,
@@ -573,6 +578,9 @@ export type {
 export {
   TERMINAL_MAX_COLUMNS,
   TERMINAL_MAX_ROWS,
+  WORKSPACE_TERMINAL_MAX_COLUMNS,
+  WORKSPACE_TERMINAL_MAX_ROWS,
+  WORKSPACE_TERMINAL_SCROLLBACK_LINES,
   TERMINAL_MIN_SIZE,
   TERMINAL_WRITE_LIMIT,
 } from './developer-sessions';

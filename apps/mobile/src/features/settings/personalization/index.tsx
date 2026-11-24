@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { View, ScrollView, TextInput, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import {
+  View,
+  ScrollView,
+  TextInput,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  useWindowDimensions,
+} from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -26,7 +34,7 @@ import {
 } from '@agiworkforce/types';
 import { SELECTABLE_LANGUAGES } from '@agiworkforce/i18n';
 import { useThemeColors } from '@/src/ui/theme';
-import { typeScale } from '@/src/ui/theme/tokens';
+import { spacing, STACKED_ROW_TEXT_SCALE, typeScale } from '@/src/ui/theme/tokens';
 import { useChatViewStore } from '@/stores/chat/chatViewStore';
 import {
   PERSONALIZATION_LENGTHS,
@@ -40,7 +48,7 @@ import {
 import { TraitLevelSheet } from './TraitLevelSheet';
 import {
   FIELD_BORDER_WIDTH,
-  MULTILINE_FIELD_MAX_HEIGHT,
+  personalizationFieldHeight,
   useFocusedFieldReveal,
   type FieldReveal,
   type MeasurableScrollView,
@@ -122,6 +130,7 @@ function LabeledInput({
   value,
   onChangeText,
   placeholder,
+  showExampleAtLargeSize,
   multiline,
   maxLength,
   helper,
@@ -132,6 +141,7 @@ function LabeledInput({
   value: string;
   onChangeText: (text: string) => void;
   placeholder?: string;
+  showExampleAtLargeSize?: boolean;
   multiline?: boolean;
   maxLength?: number;
   helper?: ReactNode;
@@ -139,6 +149,9 @@ function LabeledInput({
   reveal: FieldReveal;
 }) {
   const c = useThemeColors();
+  const { fontScale } = useWindowDimensions();
+  const largeText = fontScale >= STACKED_ROW_TEXT_SCALE;
+  const example = largeText && showExampleAtLargeSize && !value ? placeholder : undefined;
   const blockRef = useRef<View>(null);
   const inputRef = useRef<TextInput>(null);
   return (
@@ -146,24 +159,36 @@ function LabeledInput({
       <Text className="text-sm" style={{ color: c.textMuted }}>
         {label}
       </Text>
+      {example && (
+        <Text
+          accessible={false}
+          importantForAccessibility="no"
+          className="text-sm"
+          style={{ color: c.textMuted }}
+        >
+          {example}
+        </Text>
+      )}
       <TextInput
         ref={inputRef}
-        className={`px-4 rounded-xl text-[15px] ${multiline ? 'pt-3 pb-3 min-h-[100px]' : 'h-12'}`}
+        className="px-4 rounded-xl"
         style={{
           backgroundColor: c.surfaceElevated,
           borderWidth: FIELD_BORDER_WIDTH,
           borderColor: error ? c.agentError : c.border,
           color: c.textPrimary,
+          fontSize: typeScale.body,
           letterSpacing: 0,
-          maxHeight: multiline ? MULTILINE_FIELD_MAX_HEIGHT : undefined,
+          paddingVertical: spacing.md,
+          ...personalizationFieldHeight(fontScale, multiline === true, reveal.visibleInputHeight),
         }}
         onFocus={() => reveal.focusField(blockRef, inputRef)}
         onBlur={() => reveal.blurField(blockRef)}
         accessibilityLabel={label}
-        accessibilityHint={error ?? undefined}
+        accessibilityHint={error ?? example}
         value={value}
         onChangeText={onChangeText}
-        placeholder={placeholder}
+        placeholder={largeText ? undefined : placeholder}
         placeholderTextColor={c.textMuted}
         selectionColor={c.teal}
         multiline={multiline}
@@ -228,6 +253,7 @@ function TraitRow({
 export default function PersonalizationScreen() {
   const router = useRouter();
   const c = useThemeColors();
+  const { fontScale } = useWindowDimensions();
   const isCloud = useChatAppModeStore((s) => s.appMode) === 'cloud';
 
   const localPersonalization = useLocalSettingsStore((s) => s.personalization);
@@ -451,12 +477,13 @@ export default function PersonalizationScreen() {
     <SafeAreaView className="flex-1" style={{ backgroundColor: c.surfaceBase }}>
       <ScreenHeader
         title={isCloud ? 'Cloud Personalization' : 'Personalization'}
+        stackTitle={fontScale >= STACKED_ROW_TEXT_SCALE}
         onBack={handleBack}
         trailing={
           <Pressable
             onPress={handleSave}
             disabled={!canSave}
-            className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-lg"
+            className="min-h-11 flex-row items-center gap-1.5 px-3 py-1.5 rounded-lg"
             style={({ pressed }) => ({
               backgroundColor: pressed ? c.surfaceHover : c.transparent,
             })}
@@ -519,6 +546,7 @@ export default function PersonalizationScreen() {
                 setOccupation(value);
               }}
               placeholder="e.g. Founder & Engineer"
+              showExampleAtLargeSize
               maxLength={PERSONALIZATION_OCCUPATION_MAX_LENGTH}
             />
             <LabeledInput
@@ -530,6 +558,7 @@ export default function PersonalizationScreen() {
                 setAboutYou(value.slice(0, MAX_ABOUT_YOU_CHARS));
               }}
               placeholder="Interests, values or background to keep in mind"
+              showExampleAtLargeSize
               multiline
             />
             <LabeledInput
@@ -541,6 +570,7 @@ export default function PersonalizationScreen() {
                 setInstructions(value);
               }}
               placeholder="e.g. I prefer direct, technical answers..."
+              showExampleAtLargeSize
               multiline
               helper={
                 <>

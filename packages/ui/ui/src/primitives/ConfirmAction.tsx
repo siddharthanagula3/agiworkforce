@@ -22,6 +22,7 @@ export interface ConfirmActionRequest {
   destructive?: boolean;
   onConfirm: () => unknown | Promise<unknown>;
   onCancel?: () => void;
+  getRestoreTarget?: () => HTMLElement | null;
 }
 
 interface PendingConfirm extends ConfirmActionRequest {
@@ -95,7 +96,7 @@ export function useConfirmAction(): {
         close(pending.key);
       }}
     >
-      <AlertDialogContent opener={openerRef.current}>
+      <AlertDialogContent opener={openerRef.current} getRestoreTarget={pending.getRestoreTarget}>
         <AlertDialogHeader>
           <AlertDialogTitle>{pending.title}</AlertDialogTitle>
           <AlertDialogDescription>{pending.description}</AlertDialogDescription>

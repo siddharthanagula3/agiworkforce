@@ -85,6 +85,7 @@ jest.mock('../lib/mmkv', () => {
 import { createManagedChatIdempotencyKey } from '@agiworkforce/utils/managed-chat-idempotency';
 import { storage } from '../lib/mmkv';
 import { streamChat, type StreamCallbacks } from '../services/streaming';
+import { StreamConnectionLostError } from '../services/streamConnectionLost';
 import {
   __resetCloudAccountSessionForTests,
   activateCloudAccount,
@@ -171,6 +172,56 @@ describe('a Cloud question whose run the server has started', () => {
     finish();
     await sent;
     expect(inFlightTurnFor(CONV_ID, question!.id)).toBeNull();
+  });
+
+  it('keeps a queued operation recoverable if the connection drops before the answer', async () => {
+    const identity = {
+      questionId: '0190a000-0000-7000-8000-000000000084',
+      assistantMessageId: '0190a000-0000-7000-8000-000000000085',
+    };
+    mockStreamChat.mockImplementationOnce(async (_body, callbacks: StreamCallbacks) => {
+      callbacks.onError(new StreamConnectionLostError());
+    });
+
+    await expect(
+      useChatExecutionStore
+        .getState()
+        .sendMessage(CONV_ID, 'saved question', CLOUD_MODEL, undefined, {
+          offlineReplayIdentity: identity,
+        }),
+    ).resolves.toBe(true);
+
+    expect(rows().map((row) => row.id)).toEqual([identity.questionId]);
+    expect(inFlightTurnFor(CONV_ID, identity.questionId)).toEqual({
+      conversationId: CONV_ID,
+      questionId: identity.questionId,
+      operationId: identity.assistantMessageId,
+    });
+    expect(useChatExecutionStore.getState().error).toBeNull();
+  });
+
+  it('leaves a visible partial reply in the conversation after a queued connection loss', async () => {
+    const identity = {
+      questionId: '0190a000-0000-7000-8000-000000000086',
+      assistantMessageId: '0190a000-0000-7000-8000-000000000087',
+    };
+    mockStreamChat.mockImplementationOnce(async (_body, callbacks: StreamCallbacks) => {
+      callbacks.onDelta({ content: 'The visible beginning of an answer.' });
+      callbacks.onError(new StreamConnectionLostError());
+    });
+
+    await expect(
+      useChatExecutionStore
+        .getState()
+        .sendMessage(CONV_ID, 'saved question', CLOUD_MODEL, undefined, {
+          offlineReplayIdentity: identity,
+        }),
+    ).resolves.toBe(true);
+
+    expect(rows().find((row) => row.id === identity.assistantMessageId)).toMatchObject({
+      content: 'The visible beginning of an answer.',
+      isStreaming: false,
+    });
   });
 
   it('keeps the run on the phone while the answer is still streaming', async () => {

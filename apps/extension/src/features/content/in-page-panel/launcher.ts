@@ -4,12 +4,13 @@
  * Renders a 48px circular FAB anchored bottom-right. Hides on scroll-down,
  * reappears on scroll-up (Headroom-style).
  *
- * Uses Shadow DOM (`mode:'open'`) so page CSS cannot leak into the launcher.
+ * Uses a closed shadow tree so page CSS cannot leak into the launcher.
  *
  * @module inPagePanel/launcher
  */
 
 import { getExtensionTokensCssAuto } from '../../../tokens';
+import { renderPageBrandMark } from '../../../assets/icons';
 
 interface LauncherPosition {
   bottom: number;
@@ -24,7 +25,7 @@ export function buildLauncherStyles(): string {
     :host { display:block; }
     .agi-launcher-btn {
       width:48px; height:48px;
-      background:var(--agi-ext-primary);
+      background:var(--agi-ext-surface);
       border-radius:50%;
       border:1px solid var(--agi-ext-border-control);
       cursor:pointer;
@@ -32,14 +33,11 @@ export function buildLauncherStyles(): string {
       box-shadow:0 8px 24px var(--agi-ext-modal-shadow);
       pointer-events:all;
       transition:background 0.18s,transform 0.18s,box-shadow 0.18s;
-      color:var(--agi-ext-on-primary);
-      font-size:20px;
-      line-height:1;
       user-select:none;
       -webkit-user-select:none;
     }
     .agi-launcher-btn:hover {
-      background:var(--agi-ext-primary-hover);
+      background:var(--agi-ext-hover);
       transform:scale(1.08);
       box-shadow:0 10px 30px var(--agi-ext-modal-shadow);
     }
@@ -48,6 +46,7 @@ export function buildLauncherStyles(): string {
       outline:2px solid var(--agi-ext-focus);
       outline-offset:3px;
     }
+    .agi-brand-mark { width:28px; height:28px; display:block; }
     .agi-tooltip {
       position:absolute;
       right:56px; bottom:10px;
@@ -85,7 +84,7 @@ export function setImportantStyles(host: HTMLElement, styles: Record<string, str
  * @param onEscape Called when Escape is pressed while focus is inside the launcher.
  */
 export function createLauncher(
-  onOpen: () => void,
+  onOpen: (pointer: boolean) => void,
   onEscape: () => void,
 ): {
   host: HTMLElement;
@@ -114,13 +113,13 @@ export function createLauncher(
   button.className = 'agi-launcher-btn';
   button.setAttribute('aria-label', 'Open AGI');
   button.setAttribute('type', 'button');
-  button.textContent = 'A';
+  button.appendChild(renderPageBrandMark());
 
   const tooltip = document.createElement('div');
   tooltip.className = 'agi-tooltip';
   tooltip.textContent = 'Ask AGI';
 
-  button.addEventListener('click', onOpen);
+  button.addEventListener('click', (event) => onOpen(event.detail > 0));
   host.addEventListener('keydown', (event: KeyboardEvent) => {
     if (event.key === 'Escape') onEscape();
   });

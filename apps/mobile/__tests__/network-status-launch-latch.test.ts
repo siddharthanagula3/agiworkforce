@@ -35,6 +35,10 @@ jest.mock('@react-native-community/netinfo', () => ({
 jest.mock('@/stores/chatStore', () => ({
   useChatStore: (select: (state: typeof mockChatState) => unknown) => select(mockChatState),
 }));
+jest.mock('@/stores/chat/chatExecutionStore', () => ({
+  hasActiveConversationSend: () => false,
+  useChatExecutionStore: { subscribe: () => () => undefined },
+}));
 jest.mock('@/services/offlineQueue', () => ({
   offlineQueue: {
     processQueue: (send: (entry: QueuedMessage) => Promise<void>, isReady: () => boolean) =>

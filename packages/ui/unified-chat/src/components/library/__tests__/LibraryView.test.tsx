@@ -1191,6 +1191,33 @@ describe('shared LibraryView', () => {
       expect(await screen.findByTestId('artifact-renderer')).toBeTruthy();
     });
 
+    it('switches from the current filter to open an artifact linked in the mounted library', async () => {
+      const transport = artifactTransport('<p>linked</p>', {
+        listPage: vi.fn(async (params: URLSearchParams) =>
+          pageOf(params.get('surface') === 'artifact' ? [ARTIFACT_ITEM] : [])(),
+        ),
+      });
+      const { rerender } = render(<LibraryView transport={transport} initialSurface="artifact" />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Open dashboard.html' }));
+      await screen.findByTestId('artifact-renderer');
+      fireEvent.click(screen.getByRole('tab', { name: 'Images' }));
+      await waitFor(() => expect(lastParams(transport).get('kind')).toBe('image'));
+
+      rerender(
+        <LibraryView
+          transport={transport}
+          initialSurface="artifact"
+          initialItemId="asset-artifact"
+          initialQuery="dashboard.html"
+        />,
+      );
+
+      expect(await screen.findByTestId('artifact-renderer')).toBeTruthy();
+      expect(screen.getByRole('tab', { name: 'Artifacts' }).getAttribute('aria-selected')).toBe(
+        'true',
+      );
+    });
+
     it('opens nothing for a deep link naming an item the page does not hold', async () => {
       const transport = makeTransport({ listPage: pageOf([{ ...ITEM, previewable: true }]) });
       render(<LibraryView transport={transport} initialItemId="asset-missing" />);

@@ -326,12 +326,11 @@ import {
   resolveIndexedSelector,
   scanForInjection,
   INJECTION_PATTERNS,
-  getFieldValue,
+  verifyTypedField,
   registerActiveTab,
   unregisterActiveTab,
   ensureOnDetachListener,
   type as typeIntoPage,
-  REDACTED_FIELD_PLACEHOLDER,
 } from '../src/features/computer-use/cdpDriver';
 import {
   acquireDebugger,
@@ -607,7 +606,7 @@ describe('P1-2: index-based targeting', () => {
 });
 
 describe('P1-3: post-action verification', () => {
-  it.each(['', 'A'])(
+  it.each(['', 'synthetic-stored-code-482913'])(
     'does not confirm rejected typing when a readonly field retains %j',
     async (initialValue) => {
       const input = document.querySelector<HTMLInputElement>('input[name="email"]')!;
@@ -626,11 +625,12 @@ describe('P1-3: post-action verification', () => {
               expression.endsWith(')(document)'))
           ) {
             try {
+              // llm-guardrail-allow: executes repository-owned browser code inside this isolated test fixture.
+              const value = new Function('document', `return ${expression}`)(document);
               callback({
                 result: {
-                  type: 'string',
-                  // llm-guardrail-allow: executes repository-owned browser code inside this isolated test fixture.
-                  value: new Function('document', `return ${expression}`)(document),
+                  type: typeof value,
+                  value,
                 },
               });
             } catch (error) {
@@ -670,6 +670,11 @@ describe('P1-3: post-action verification', () => {
         expect.any(Function),
       );
       expect(input.value).toBe(initialValue);
+      const typingCall = onProgress.mock.calls
+        .map(([step]) => step)
+        .find((step) => step.kind === 'tool_call' && step.toolName === 'type');
+      expect(typingCall).toBeDefined();
+      expect(typingCall).not.toHaveProperty('toolArgs');
       expect(onProgress).toHaveBeenCalledWith(
         expect.objectContaining({
           kind: 'tool_result',
@@ -684,78 +689,37 @@ describe('P1-3: post-action verification', () => {
       const result = onProgress.mock.calls
         .map(([step]) => step)
         .find((step) => step.kind === 'tool_result' && step.toolName === 'type');
-      expect(result.toolResult).toContain('WARNING: field [2] value is');
-      expect(result.toolResult).toContain('Element may not have accepted input.');
+      expect(result.toolResult).toContain('Field [2] did not retain the requested input.');
+      expect(result.toolResult).not.toContain('Ada');
+      if (initialValue) expect(result.toolResult).not.toContain(initialValue);
+      const request = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body));
+      const response = request.messages.find(
+        (message: { role: string }) => message.role === 'tool',
+      );
+      expect(response?.content).toContain(result.toolResult);
+      expect(response?.content).not.toContain('Ada');
+      if (initialValue) expect(response?.content).not.toContain(initialValue);
     },
   );
 
-  it('getFieldValue returns the committed field value', async () => {
-    document.querySelector<HTMLInputElement>('input[name="email"]')!.value = 'typed-value';
-    const value = await getFieldValue(42, 'input[name="email"]');
-    expect(value).toBe('typed-value');
+  it('checks exact replacement and append without returning the field value', async () => {
+    document.querySelector<HTMLInputElement>('input[name="email"]')!.value = 'before-code-482913';
+    expect(await verifyTypedField(42, 'input[name="email"]', '482913', false)).toBe(true);
+    expect(await verifyTypedField(42, 'input[name="email"]', '482913', true)).toBe(false);
+    expect(await verifyTypedField(42, 'input[name="email"]', '', false)).toBe(false);
+    expect(await verifyTypedField(42, 'input[name="email"]', 'before-code-482913', true)).toBe(
+      true,
+    );
+    expect(await verifyTypedField(42, '#does-not-exist', 'anything', true)).toBeNull();
   });
 
-  it('getFieldValue returns null when element not found', async () => {
+  it('rejects text returned by the browser instead of a verification result', async () => {
     chromeMock.debugger.sendCommand.mockImplementation(
       withInspection((_t: unknown, method: string, _p: unknown, cb: (r: unknown) => void) => {
-        if (method === 'Runtime.evaluate') {
-          cb({ result: { type: 'undefined', value: null } });
-        } else {
-          cb({});
-        }
+        cb(method === 'Runtime.evaluate' ? { result: { type: 'string', value: '482913' } } : {});
       }),
     );
-    const value = await getFieldValue(42, '#does-not-exist');
-    expect(value).toBeNull();
-  });
-
-  it('getFieldValue Runtime.evaluate expression substitutes the placeholder for password/hidden types, not el.value', async () => {
-    let capturedExpr = '';
-    chromeMock.debugger.sendCommand.mockImplementation(
-      withInspection((_t: unknown, method: string, params: unknown, cb: (r: unknown) => void) => {
-        if (method === 'Runtime.evaluate') {
-          const p = params as { expression?: string } | undefined;
-          capturedExpr = p?.expression ?? '';
-          cb({ result: { type: 'string', value: REDACTED_FIELD_PLACEHOLDER } });
-          return;
-        }
-        cb({});
-      }),
-    );
-    await getFieldValue(42, 'input[type="password"]');
-    expect(capturedExpr).toContain('password');
-    expect(capturedExpr).toContain('hidden');
-    expect(capturedExpr).toContain(REDACTED_FIELD_PLACEHOLDER);
-  });
-
-  it('getFieldValue returns the placeholder as-is for a password field (no double-redaction mangling)', async () => {
-    chromeMock.debugger.sendCommand.mockImplementation(
-      withInspection((_t: unknown, method: string, _p: unknown, cb: (r: unknown) => void) => {
-        if (method === 'Runtime.evaluate') {
-          cb({ result: { type: 'string', value: REDACTED_FIELD_PLACEHOLDER } });
-          return;
-        }
-        cb({});
-      }),
-    );
-    const value = await getFieldValue(42, 'input[type="password"]');
-    expect(value).toBe(REDACTED_FIELD_PLACEHOLDER);
-  });
-
-  it('getFieldValue redacts secret-shaped text in an ordinary (non-password) field value', async () => {
-    const rawAwsKey = 'AKIAABCDEFGHIJKLMNOP';
-    chromeMock.debugger.sendCommand.mockImplementation(
-      withInspection((_t: unknown, method: string, _p: unknown, cb: (r: unknown) => void) => {
-        if (method === 'Runtime.evaluate') {
-          cb({ result: { type: 'string', value: `my key is ${rawAwsKey}` } });
-          return;
-        }
-        cb({});
-      }),
-    );
-    const value = await getFieldValue(42, 'input[name="notes"]');
-    expect(value).not.toContain(rawAwsKey);
-    expect(value).toContain('[REDACTED_AWS_KEY]');
+    expect(await verifyTypedField(42, 'input[name="email"]', '482913', true)).toBeNull();
   });
 
   it('navigate tool result contains "verified: actual URL"', async () => {

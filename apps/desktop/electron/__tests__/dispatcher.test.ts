@@ -195,7 +195,6 @@ vi.mock('../runtime/workspaceStore', () => ({
   grantRoot: vi.fn(),
   revokeRoot,
   worktreeRootIds: (id: string) => (id === root.id ? [`${root.id}::worktree-1`] : []),
-  setRootGit: vi.fn(),
   admitWorktreeRoot: vi.fn(),
   forgetWorktreeRoot: vi.fn(),
   WorkspaceGrantRefused: class extends Error {},
@@ -371,6 +370,7 @@ const listDeveloperSessions = vi.fn(async (includeRoot: (candidate: WorkspaceRoo
   groups: [root].filter(includeRoot).map((candidate) => ({ rootId: candidate.id })),
 }));
 const readDeveloperSession = vi.fn(async () => ({ session: {}, messages: [], truncated: false }));
+const lookupDeveloperSession = vi.fn(async () => null);
 const archiveDeveloperThread = vi.fn(async () => true);
 const takeOverDeveloperThread = vi.fn(async () => ({ id: 't-1' }));
 const MCP_LAUNCH = {
@@ -446,11 +446,13 @@ const setDeveloperMcpServerEnabled = vi.fn(async () => ({ name: 'files', enabled
 const compactDeveloperThread = vi.fn(async () => ({ threadId: 't-1', compacted: true }));
 const openDeveloperTerminal = vi.fn(async () => ({ terminalId: 'term-1' }));
 const writeDeveloperTerminal = vi.fn(async () => true);
+const scrollDeveloperTerminal = vi.fn(() => true);
 const setDeveloperSkillConsent = vi.fn(async () => true);
 vi.mock('../runtime/developerSessionService', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   syncDeveloperAccounts,
   listDeveloperSessions,
+  lookupDeveloperSession,
   readDeveloperSession,
   archiveDeveloperThread,
   takeOverDeveloperThread,
@@ -468,6 +470,7 @@ vi.mock('../runtime/developerSessionService', async (importOriginal) => ({
   setDeveloperMcpServerEnabled,
   openDeveloperTerminal,
   writeDeveloperTerminal,
+  scrollDeveloperTerminal,
   readPendingApproval,
   readWorktreeSetupScript,
   runDeveloperWorktreeSetup,
@@ -833,6 +836,18 @@ describe('dispatch, policy and clipboard', () => {
     const response = await dispatch(window, 'shell_policy_write', { policy });
     expect(response).toEqual({ ok: true, value: policy });
     expect(showMessageBox).not.toHaveBeenCalled();
+  });
+
+  it('reports a policy save failure through the desktop bridge', async () => {
+    const { StoreWriteError } = await import('../runtime/atomicStoreFile');
+    const message = 'Could not save command permissions. Try again.';
+    writeShellPolicy.mockImplementationOnce(() => {
+      throw new StoreWriteError(message);
+    });
+    const response = await dispatch(window, 'shell_policy_write', {
+      policy: { allow: [], deny: ['git'] },
+    });
+    expect(response).toMatchObject({ ok: false, error: { code: 'io-error', message } });
   });
 
   it('takes a program off the allowed list without asking', async () => {
@@ -1323,6 +1338,23 @@ describe('coding session history', () => {
     expect(requestPermission).not.toHaveBeenCalled();
   });
 
+  it('only looks up a linked session after command access is granted without prompting', async () => {
+    const args = { rootId: root.id, threadId: 't-1' };
+    getPermissionState.mockReturnValue('prompt');
+    expect(await dispatch(window, 'developer_session_lookup', args)).toMatchObject({
+      ok: false,
+      error: { code: 'permission-denied' },
+    });
+    expect(lookupDeveloperSession).not.toHaveBeenCalled();
+    getPermissionState.mockReturnValue('granted');
+    expect(await dispatch(window, 'developer_session_lookup', args)).toEqual({
+      ok: true,
+      value: null,
+    });
+    expect(lookupDeveloperSession).toHaveBeenCalledExactlyOnceWith(root.id, 't-1');
+    expect(requestPermission).not.toHaveBeenCalled();
+  });
+
   it('lists a folder that holds no grant at all with its sessions withheld, so it never vanishes', async () => {
     getPermissionState.mockReturnValue('prompt');
     expect(await dispatch(window, 'developer_session_list', {})).toEqual({
@@ -1344,7 +1376,11 @@ describe('coding session history', () => {
 
     getPermissionState.mockReturnValue('denied');
     expect(await dispatch(window, 'developer_session_list', {})).toMatchObject({
-      value: { groups: [{ rootId: root.id, sessions: [], sessionsWithheld: true }] },
+      value: {
+        groups: [
+          { rootId: root.id, sessions: [], sessionsWithheld: true, commandAccessRefused: true },
+        ],
+      },
     });
 
     getPermissionState.mockImplementation(((capability: string) =>
@@ -4023,7 +4059,13 @@ describe('the terminal the user types into', () => {
   );
 
   it('is out of reach of every step an agent can ask the desktop to take', () => {
-    expect(TERMINAL_COMMANDS).toHaveLength(4);
+    expect(TERMINAL_COMMANDS).toEqual([
+      'developer_terminal_open',
+      'developer_terminal_write',
+      'developer_terminal_resize',
+      'developer_terminal_scroll',
+      'developer_terminal_close',
+    ]);
     const agentCommands = new Set(DEVICE_STEP_TOOLS.map(deviceStepCommand));
     for (const command of TERMINAL_COMMANDS) expect(agentCommands.has(command)).toBe(false);
   });
@@ -4050,7 +4092,7 @@ describe('the terminal the user types into', () => {
       rows: 30,
     });
     expect(opened).toEqual({ ok: true, value: { terminalId: 'term-1' } });
-    expect(openDeveloperTerminal).toHaveBeenCalledWith(root.id, 120, 30);
+    expect(openDeveloperTerminal).toHaveBeenCalledWith(root.id, 120, 30, expect.any(Function));
 
     const typed = await dispatch(window, 'developer_terminal_write', {
       rootId: root.id,

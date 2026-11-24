@@ -63,6 +63,7 @@ fn summary(session: &CodeSession) -> ThreadSummary {
         client: None,
         repository: session.repository_url.clone(),
         writer: None,
+        pinned: None,
         location: Some(ThreadLocation::Cloud),
     }
 }

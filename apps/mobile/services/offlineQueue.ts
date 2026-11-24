@@ -1,3 +1,4 @@
+import { isUuidV7, uuidv7 } from '@agiworkforce/utils/uuidv7';
 import { storage, whenMmkvReady } from '@/lib/mmkv';
 import {
   captureCloudAccountEpoch,
@@ -6,6 +7,11 @@ import {
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 
 export type OfflineQueueProvenance = { scope: 'local' } | { scope: 'cloud'; ownerId: string };
+
+export interface OfflineReplayIdentity {
+  questionId: string;
+  assistantMessageId: string;
+}
 
 export interface QueuedMessage {
   id: string;
@@ -16,8 +22,15 @@ export interface QueuedMessage {
   queuedAt: string;
   retryCount: number;
   provenance: OfflineQueueProvenance;
+  replayIdentity?: OfflineReplayIdentity;
   onSuccess?: () => void;
   onFailure?: (error: Error) => void;
+}
+
+export class OfflineQueueAdmissionError extends Error {
+  constructor(readonly reason: 'queue-full' | 'storage-unavailable') {
+    super(reason);
+  }
 }
 
 const MAX_RETRY_COUNT = 3;
@@ -39,6 +52,7 @@ interface PersistedQueueEntry {
   queuedAt: string;
   retryCount: number;
   provenance: OfflineQueueProvenance;
+  replayIdentity?: OfflineReplayIdentity;
 }
 
 function backoffDelay(retryCount: number): number {
@@ -47,6 +61,18 @@ function backoffDelay(retryCount: number): number {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isOfflineReplayIdentity(value: unknown): value is OfflineReplayIdentity {
+  if (typeof value !== 'object' || value === null) return false;
+  const { questionId, assistantMessageId } = value as Record<string, unknown>;
+  return (
+    typeof questionId === 'string' &&
+    typeof assistantMessageId === 'string' &&
+    isUuidV7(questionId) &&
+    isUuidV7(assistantMessageId) &&
+    questionId !== assistantMessageId
+  );
 }
 
 function isPersistedQueueEntry(value: unknown): value is PersistedQueueEntry {
@@ -63,6 +89,7 @@ function isPersistedQueueEntry(value: unknown): value is PersistedQueueEntry {
     entry.retryCount >= 0 &&
     entry.retryCount <= MAX_RETRY_COUNT &&
     isOfflineQueueProvenance(entry.provenance) &&
+    (entry.replayIdentity === undefined || isOfflineReplayIdentity(entry.replayIdentity)) &&
     (entry.skillName === undefined ||
       (entry.provenance.scope === 'cloud' && isQueuedSkillName(entry.skillName)))
   );
@@ -149,25 +176,60 @@ class OfflineMessageQueue {
     }
   }
 
-  private persistToStorage(): void {
-    this.notify();
+  private writeQueue(queue: readonly QueuedMessage[]): string {
+    const entries: PersistedQueueEntry[] = queue.map(
+      ({
+        id,
+        conversationId,
+        content,
+        model,
+        skillName,
+        queuedAt,
+        retryCount,
+        provenance,
+        replayIdentity,
+      }) => ({
+        id,
+        conversationId,
+        content,
+        model,
+        skillName,
+        queuedAt,
+        retryCount,
+        provenance,
+        replayIdentity,
+      }),
+    );
+    const serialized = JSON.stringify(entries);
+    storage.set(QUEUE_STORAGE_KEY, serialized);
+    return serialized;
+  }
+
+  private verifyQueueWrite(queue: readonly QueuedMessage[]): boolean {
     try {
-      const entries: PersistedQueueEntry[] = this.queue.map(
-        ({ id, conversationId, content, model, skillName, queuedAt, retryCount, provenance }) => ({
-          id,
-          conversationId,
-          content,
-          model,
-          skillName,
-          queuedAt,
-          retryCount,
-          provenance,
-        }),
-      );
-      storage.set(QUEUE_STORAGE_KEY, JSON.stringify(entries));
+      const serialized = this.writeQueue(queue);
+      return storage.getString(QUEUE_STORAGE_KEY) === serialized;
+    } catch {
+      return false;
+    }
+  }
+
+  private ensureReplayIdentity(entry: QueuedMessage): boolean {
+    if (entry.replayIdentity) return true;
+    const replayIdentity = { questionId: uuidv7(), assistantMessageId: uuidv7() };
+    const updated = this.queue.map((item) => (item === entry ? { ...item, replayIdentity } : item));
+    if (!this.verifyQueueWrite(updated)) return false;
+    entry.replayIdentity = replayIdentity;
+    return true;
+  }
+
+  private persistToStorage(): void {
+    try {
+      this.writeQueue(this.queue);
     } catch (err) {
       console.warn('[OfflineQueue] Failed to persist queue to MMKV:', err);
     }
+    this.notify();
   }
 
   restoreFromStorage(): void {
@@ -183,11 +245,13 @@ class OfflineMessageQueue {
       if (entries.length !== parsed.length) {
         storage.set(QUEUE_STORAGE_KEY, JSON.stringify(entries));
       }
+      const previousSize = this.queue.length;
       for (const entry of entries) {
         if (!this.queue.some((q) => q.id === entry.id)) {
           this.queue.push(entry);
         }
       }
+      if (this.queue.length !== previousSize) this.notify();
     } catch (err) {
       console.warn('[OfflineQueue] Corrupted queue data, resetting:', err);
       storage.delete(QUEUE_STORAGE_KEY);
@@ -201,7 +265,10 @@ class OfflineMessageQueue {
    * @param onFailure - Called if the message is dropped after exhausting retries.
    */
   enqueue(
-    msg: Omit<QueuedMessage, 'id' | 'queuedAt' | 'retryCount' | 'onSuccess' | 'onFailure'>,
+    msg: Omit<
+      QueuedMessage,
+      'id' | 'queuedAt' | 'retryCount' | 'replayIdentity' | 'onSuccess' | 'onFailure'
+    >,
     callbacks?: { onSuccess?: () => void; onFailure?: (error: Error) => void },
   ): QueuedMessage {
     const provenance = requireOfflineQueueProvenance(msg.provenance);
@@ -222,8 +289,7 @@ class OfflineMessageQueue {
     if (duplicate) return duplicate;
 
     if (this.queue.length >= MAX_QUEUE_SIZE) {
-      const oldest = this.queue.shift();
-      if (oldest) this.reportFailure(oldest, new Error('Queue full: oldest message dropped'));
+      throw new OfflineQueueAdmissionError('queue-full');
     }
 
     const entry: QueuedMessage = {
@@ -236,8 +302,12 @@ class OfflineMessageQueue {
       onFailure: callbacks?.onFailure,
     };
 
-    this.queue.push(entry);
-    this.persistToStorage();
+    const nextQueue = [...this.queue, entry];
+    if (!this.verifyQueueWrite(nextQueue)) {
+      throw new OfflineQueueAdmissionError('storage-unavailable');
+    }
+    this.queue = nextQueue;
+    this.notify();
     return entry;
   }
 
@@ -254,13 +324,14 @@ class OfflineMessageQueue {
   }
 
   async processQueue(
-    sendFn: (msg: QueuedMessage) => Promise<void>,
+    sendFn: (msg: QueuedMessage) => Promise<void | 'conversation-busy'>,
     isReady: () => boolean = () => true,
   ): Promise<void> {
     if (this.processor || this.queue.length === 0) return;
 
     const processor = { generation: this.generation };
     this.processor = processor;
+    const busyConversations = new Set<string>();
     const ownsQueue = () =>
       this.processor === processor && processor.generation === this.generation;
 
@@ -286,18 +357,23 @@ class OfflineMessageQueue {
         const currentMode = useChatAppModeStore.getState().appMode;
         const entry = this.queue.find(
           (queued) =>
+            !busyConversations.has(queued.conversationId) &&
             queued.provenance.scope === currentMode &&
             (queued.provenance.scope === 'local' || currentAccount !== null),
         );
-        if (!entry) break;
+        if (!entry || !this.ensureReplayIdentity(entry)) break;
         const account = entry.provenance.scope === 'cloud' ? captureCloudAccountEpoch() : null;
 
         try {
-          await sendFn(entry);
+          const outcome = await sendFn(entry);
           if (!ownsQueue()) break;
           if (!this.queue.includes(entry)) continue;
           if (entry.provenance.scope === 'cloud' && !isCloudAccountEpochCurrent(account)) {
             this.dropEntry(entry, new Error('Cloud account changed while replaying queued prompt'));
+            continue;
+          }
+          if (outcome === 'conversation-busy') {
+            busyConversations.add(entry.conversationId);
             continue;
           }
           this.queue = this.queue.filter((queued) => queued !== entry);
@@ -329,7 +405,10 @@ class OfflineMessageQueue {
         }
       }
     } finally {
-      if (this.processor === processor) this.processor = null;
+      if (this.processor === processor) {
+        this.processor = null;
+        if (busyConversations.size > 0) this.notify();
+      }
     }
   }
 

@@ -19,8 +19,10 @@ import {
 } from '../features/permissions/agentModeConsent';
 
 export type { ExtensionAgentEffort };
+export type ChatLocation = 'sidebar' | 'editor';
 export type ComposerFollowUpBehavior = 'queue' | 'steer';
 export type ComposerEnterBehavior = 'enter' | 'modifierIfMultiline' | 'modifier';
+export const DEFAULT_CONTEXT_WARNING_PERCENT = 90;
 const COMPOSER_ENTER_BEHAVIORS: readonly ComposerEnterBehavior[] = [
   'enter',
   'modifierIfMultiline',
@@ -32,8 +34,13 @@ export interface MutableConfigValues {
   cliPath: string;
   'composer.followUpBehavior': ComposerFollowUpBehavior;
   'composer.enterBehavior': ComposerEnterBehavior;
+  'composer.escapeStops': boolean;
+  'chat.focusView': boolean;
   contextLines: number;
   'editorContext.autoAttach': boolean;
+  'editorContext.attachOpenFile': boolean;
+  'editorContext.saveOpenFileBeforeSend': boolean;
+  'editorContext.attachSelection': boolean;
   respectGitIgnore: boolean;
   telemetryEnabled: boolean;
   hoverEnabled: boolean;
@@ -48,6 +55,9 @@ export interface MutableConfigValues {
   'agent.thinking': boolean;
   activateOnStartup: boolean;
   useTerminal: boolean;
+  'terminal.usePythonEnvironment': boolean;
+  chatLocation: ChatLocation;
+  'chat.lockEditorGroups': boolean;
 }
 
 export type MutableConfigKey = keyof MutableConfigValues;
@@ -78,10 +88,18 @@ export const SETTINGS_PANEL_SETTING_KEYS = [
   'agent.thinking',
   'composer.followUpBehavior',
   'composer.enterBehavior',
+  'composer.escapeStops',
+  'chat.focusView',
   'editorContext.autoAttach',
+  'editorContext.attachOpenFile',
+  'editorContext.saveOpenFileBeforeSend',
+  'editorContext.attachSelection',
   'respectGitIgnore',
   'activateOnStartup',
   'useTerminal',
+  'terminal.usePythonEnvironment',
+  'chatLocation',
+  'chat.lockEditorGroups',
 ] as const satisfies readonly MutableConfigKey[];
 
 export interface ExtensionSettingsSnapshot {
@@ -209,8 +227,19 @@ export const Config = {
   activateOnStartup(): boolean {
     return getUserScoped<boolean>('activateOnStartup', DEFAULTS.activateOnStartup);
   },
+  chatLocation(): ChatLocation {
+    return getUserScoped<ChatLocation>('chatLocation', 'sidebar') === 'editor'
+      ? 'editor'
+      : 'sidebar';
+  },
+  lockChatEditorGroups(): boolean {
+    return getUserScoped<boolean>('chat.lockEditorGroups', false);
+  },
   useTerminal(): boolean {
     return getUserScoped<boolean>('useTerminal', DEFAULTS.useTerminal);
+  },
+  pythonEnvironmentEnabled(): boolean {
+    return getUserScoped<boolean>('terminal.usePythonEnvironment', false);
   },
 
   hoverEnabled(): boolean {
@@ -253,8 +282,23 @@ export const Config = {
     const raw = get<string>('composer.enterBehavior', DEFAULTS.composerEnterBehavior);
     return COMPOSER_ENTER_BEHAVIORS.find((behavior) => behavior === raw) ?? 'enter';
   },
+  composerEscapeStops(): boolean {
+    return get<boolean>('composer.escapeStops', false);
+  },
+  focusView(): boolean {
+    return getUserScoped<boolean>('chat.focusView', false) === true;
+  },
   contextLines(): number {
     return get<number>('contextLines', DEFAULTS.contextLines);
+  },
+  contextWarningPercent(): number {
+    const percent = getUserScoped<number>(
+      'context.warningPercent',
+      DEFAULT_CONTEXT_WARNING_PERCENT,
+    );
+    return Number.isInteger(percent) && percent >= 0 && percent <= 100
+      ? percent
+      : DEFAULT_CONTEXT_WARNING_PERCENT;
   },
   editorContextAutoAttach(): boolean {
     return userChoiceNarrowedByWorkspace(
@@ -262,6 +306,15 @@ export const Config = {
       DEFAULTS.editorContextAutoAttach,
       false,
     );
+  },
+  editorContextAttachOpenFile(): boolean {
+    return userChoiceNarrowedByWorkspace('editorContext.attachOpenFile', true, false);
+  },
+  saveOpenFileBeforeSend(): boolean {
+    return getUserScoped<boolean>('editorContext.saveOpenFileBeforeSend', false);
+  },
+  editorContextAttachSelection(): boolean {
+    return userChoiceNarrowedByWorkspace('editorContext.attachSelection', true, false);
   },
   respectGitIgnore(): boolean {
     return userChoiceNarrowedByWorkspace('respectGitIgnore', DEFAULTS.respectGitIgnore, true);
@@ -272,6 +325,15 @@ export const Config = {
 
   telemetryEnabled(): boolean {
     return getUserScoped<boolean>('telemetryEnabled', DEFAULTS.telemetryEnabled);
+  },
+
+  archiveInactiveSessionsDays(): number {
+    const days = getUserScoped<number>('archiveInactiveSessionsDays', 0);
+    return Number.isSafeInteger(days) && days >= 0 && days <= 365 ? days : 0;
+  },
+
+  requireShellApproval(): boolean {
+    return getUserScoped<boolean>('agent.requireShellApproval', false) === true;
   },
 
   cliPath(): string {
@@ -289,8 +351,13 @@ export const Config = {
       cliPath: this.cliPath(),
       'composer.followUpBehavior': this.composerFollowUpBehavior(),
       'composer.enterBehavior': this.composerEnterBehavior(),
+      'composer.escapeStops': this.composerEscapeStops(),
+      'chat.focusView': this.focusView(),
       contextLines: this.contextLines(),
       'editorContext.autoAttach': this.editorContextAutoAttach(),
+      'editorContext.attachOpenFile': this.editorContextAttachOpenFile(),
+      'editorContext.saveOpenFileBeforeSend': this.saveOpenFileBeforeSend(),
+      'editorContext.attachSelection': this.editorContextAttachSelection(),
       respectGitIgnore: this.respectGitIgnore(),
       telemetryEnabled: this.telemetryEnabled(),
       hoverEnabled: this.hoverEnabled(),
@@ -305,6 +372,9 @@ export const Config = {
       'agent.thinking': this.agentThinking(),
       activateOnStartup: this.activateOnStartup(),
       useTerminal: this.useTerminal(),
+      'terminal.usePythonEnvironment': this.pythonEnvironmentEnabled(),
+      chatLocation: this.chatLocation(),
+      'chat.lockEditorGroups': this.lockChatEditorGroups(),
     };
     return {
       values: { ...values, currentTier, currentTierLabel: currentTierLabel(currentTier) },

@@ -5,6 +5,7 @@ const { URL } = require('node:url');
 
 function bootstrapOwnedNative(electron, environment, target, loadMain) {
   const { app, dialog, globalShortcut, shell } = electron;
+  const fixtureProfile = environment.AGI_OWNED_PROFILE;
   if (environment.AGI_OWNED_BROWSER_ONLY === '1') {
     shell.openExternal = async (url) => {
       fs.appendFileSync(
@@ -13,8 +14,9 @@ function bootstrapOwnedNative(electron, environment, target, loadMain) {
       );
     };
   }
-  app.setPath('userData', environment.AGI_OWNED_PROFILE);
-  app.setPath('logs', path.join(environment.AGI_OWNED_PROFILE, 'logs'));
+  app.setPath('appData', fixtureProfile);
+  app.setPath('userData', fixtureProfile);
+  app.setPath('logs', path.join(fixtureProfile, 'logs'));
   app.setAsDefaultProtocolClient = () => false;
   app.setLoginItemSettings = () => {};
   globalShortcut.register = () => false;
@@ -32,6 +34,17 @@ function bootstrapOwnedNative(electron, environment, target, loadMain) {
     return originalFetch(input, options);
   };
   loadMain(environment.AGI_OWNED_MAIN);
+  const userData = app.getPath('userData');
+  const relative = path.relative(fixtureProfile, userData);
+  if (path.isAbsolute(relative) || relative === '..' || relative.startsWith(`..${path.sep}`)) {
+    throw new Error('Desktop resolved its profile outside the owned acceptance directory.');
+  }
+  const stagedSettings = path.join(fixtureProfile, 'settings.json');
+  const activeSettings = path.join(userData, 'settings.json');
+  if (fs.existsSync(stagedSettings) && !fs.existsSync(activeSettings)) {
+    fs.mkdirSync(userData, { recursive: true });
+    fs.copyFileSync(stagedSettings, activeSettings, fs.constants.COPYFILE_EXCL);
+  }
 }
 
 module.exports = { bootstrapOwnedNative };

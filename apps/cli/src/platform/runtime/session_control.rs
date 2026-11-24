@@ -54,6 +54,10 @@ pub struct ManagedSessionSummary {
     pub repository: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub archived_at: Option<DateTime<Utc>>,
+    #[serde(skip)]
+    pub(crate) developer_turn_writer: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pinned: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fork: Option<ManagedSessionForkMetadata>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -111,6 +115,30 @@ impl ManagedSessionStore {
             .collect())
     }
 
+    pub fn list_active_for_resume(&self) -> Result<Vec<ManagedSessionSummary>> {
+        let mut sessions = self.list_active()?;
+        for session in &mut sessions {
+            session.pinned =
+                crate::sessions::session_is_pinned(&self.base_dir, &session.session_id)
+                    .unwrap_or_default()
+                    .then_some(true);
+        }
+        sessions.sort_by_key(|session| session.pinned != Some(true));
+        Ok(sessions)
+    }
+
+    pub(crate) fn set_pinned(
+        &self,
+        session: &ResolvedManagedSessionReference,
+        pinned: bool,
+    ) -> Result<()> {
+        let _guard = super::writer_lease::lock_arbiter(&session.path)?;
+        if !session.path.is_file() {
+            bail!("The session was removed before its pin could be changed");
+        }
+        crate::sessions::set_session_pinned(&self.base_dir, &session.summary.session_id, pinned)
+    }
+
     pub fn resolve(
         &self,
         reference: ManagedSessionReference,
@@ -146,14 +174,25 @@ impl ManagedSessionStore {
     }
 
     pub fn archive(&self, reference: ManagedSessionReference) -> Result<()> {
+        self.archive_before(reference, None).map(|_| ())
+    }
+
+    pub(crate) fn archive_before(
+        &self,
+        reference: ManagedSessionReference,
+        inactive_before: Option<DateTime<Utc>>,
+    ) -> Result<bool> {
         let resolved = self.resolve(reference)?;
         let mut session = load_session_from_path(&resolved.path)?;
-        if session.archived_at.is_none() {
-            session.archived_at = Some(Utc::now());
-            session.touch();
-            self.save(&session)?;
+        if session.archived_at.is_some()
+            || inactive_before.is_some_and(|cutoff| session.updated_at >= cutoff)
+        {
+            return Ok(false);
         }
-        Ok(())
+        session.archived_at = Some(Utc::now());
+        session.touch();
+        self.save(&session)?;
+        Ok(true)
     }
 
     pub fn unarchive(&self, reference: ManagedSessionReference) -> Result<()> {
@@ -222,6 +261,8 @@ impl ManagedSessionSummary {
             worktree_root: session.worktree_root.clone(),
             repository: session.repository.clone(),
             archived_at: session.archived_at,
+            developer_turn_writer: session.developer_turn_writer.clone(),
+            pinned: None,
             fork: session.fork.clone(),
             routing_authority: session
                 .routing_authority
@@ -639,7 +680,7 @@ pub fn managed_session_exists(session_id: impl AsRef<str>) -> Result<bool> {
 
 /// The managed sessions a listing offers, archived ones left out.
 pub fn list_active_managed_sessions() -> Result<Vec<ManagedSessionSummary>> {
-    ManagedSessionStore::user_config()?.list_active()
+    ManagedSessionStore::user_config()?.list_active_for_resume()
 }
 
 /// Return the newest managed session that is not archived, if one exists.
@@ -847,11 +888,13 @@ mod tests {
             worktree_root: None,
             repository: None,
             approvals: Vec::new(),
+            child_transcripts: Vec::new(),
             file_changes: Vec::new(),
             validations: Vec::new(),
             objective: None,
             architecture: None,
             archived_at: None,
+            developer_turn_writer: None,
             permission_mode: None,
             plan_mode: None,
             plan_approved: None,
@@ -886,11 +929,13 @@ mod tests {
             worktree_root: None,
             repository: None,
             approvals: Vec::new(),
+            child_transcripts: Vec::new(),
             file_changes: Vec::new(),
             validations: Vec::new(),
             objective: None,
             architecture: None,
             archived_at: None,
+            developer_turn_writer: None,
             permission_mode: None,
             plan_mode: None,
             plan_approved: None,
@@ -1046,6 +1091,48 @@ mod tests {
             after_unarchive.summary.archived_at.is_none(),
             "unarchive must clear archived_at"
         );
+    }
+
+    #[test]
+    fn resume_list_prefers_pins_without_changing_latest_or_archive_membership() {
+        let temp_dir = tempdir().unwrap();
+        let store = super::ManagedSessionStore::new(temp_dir.path().to_path_buf());
+        let now = Utc::now();
+        let older = ManagedSession::new("older-pinned", now - chrono::Duration::days(2));
+        let newer = ManagedSession::new("newer-unpinned", now);
+        store.save(&older).unwrap();
+        store.save(&newer).unwrap();
+        let reference = ManagedSessionReference::SessionId(older.session_id.clone());
+        let resolved = store.resolve(reference.clone()).unwrap();
+        store.set_pinned(&resolved, true).unwrap();
+
+        let sessions = store.list_active_for_resume().unwrap();
+        assert_eq!(sessions[0].session_id, older.session_id);
+        assert_eq!(sessions[0].pinned, Some(true));
+        assert_eq!(sessions[0].updated_at, older.updated_at);
+        assert_eq!(
+            store
+                .resolve(ManagedSessionReference::Latest)
+                .unwrap()
+                .summary
+                .session_id,
+            newer.session_id
+        );
+
+        store.archive(reference.clone()).unwrap();
+        assert_eq!(store.list_active_for_resume().unwrap().len(), 1);
+        store.unarchive(reference.clone()).unwrap();
+        assert_eq!(
+            store.list_active_for_resume().unwrap()[0].pinned,
+            Some(true)
+        );
+        let resolved = store.resolve(reference).unwrap();
+        store.set_pinned(&resolved, false).unwrap();
+        assert!(store
+            .list_active_for_resume()
+            .unwrap()
+            .iter()
+            .all(|row| row.pinned.is_none()));
     }
 
     #[test]

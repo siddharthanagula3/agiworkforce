@@ -111,6 +111,10 @@ import { deleteAsync } from 'expo-file-system/legacy';
 import { useChatStore } from '../stores/chatStore';
 import { useChatCloudMessageStore } from '../stores/chat/chatCloudMessageStore';
 import { managedCloudChat } from '../services/managedCloudChat';
+import {
+  activateCloudAccount,
+  invalidateCloudAccount,
+} from '../src/features/auth/services/cloudAccountSession';
 import { useSettingsStore } from '../stores/settingsStore';
 import { parseDocument } from '../services/docParser';
 import {
@@ -420,18 +424,22 @@ describe('deleting a chat that holds kept files', () => {
   });
 
   it('removes no kept file when a Cloud chat is deleted', async () => {
+    activateCloudAccount('attachment-deletion-test-account');
     const deleteRemote = jest
       .spyOn(managedCloudChat, 'deleteConversation')
       .mockResolvedValue(undefined);
     seed(false, [keptQuestion]);
     seedCloudChat([{ ...keptQuestion, id: 'msg-cloud', conversationId: CLOUD_ID }]);
 
-    await deleteChat(CLOUD_ID);
-
-    expect(useChatCloudMessageStore.getState().conversations).toEqual([]);
-    expect(mockRelease).not.toHaveBeenCalled();
-    expect(mockDeleteAsync).not.toHaveBeenCalled();
-    deleteRemote.mockRestore();
+    try {
+      await deleteChat(CLOUD_ID);
+      expect(useChatCloudMessageStore.getState().conversations).toEqual([]);
+      expect(mockRelease).not.toHaveBeenCalled();
+      expect(mockDeleteAsync).not.toHaveBeenCalled();
+    } finally {
+      invalidateCloudAccount();
+      deleteRemote.mockRestore();
+    }
   });
 
   it('still deletes the chat when its files cannot be removed', async () => {
@@ -439,7 +447,7 @@ describe('deleting a chat that holds kept files', () => {
     mockDeleteAsync.mockRejectedValueOnce(new Error('Permission denied'));
     seed(false, [keptQuestion]);
 
-    await expect(useChatStore.getState().deleteConversation(CONV_ID)).resolves.toBeUndefined();
+    await expect(useChatStore.getState().deleteConversation(CONV_ID)).resolves.toBe(true);
 
     expect(useChatStore.getState().conversations).toEqual([]);
     expect(useChatStore.getState().messages[CONV_ID]).toBeUndefined();

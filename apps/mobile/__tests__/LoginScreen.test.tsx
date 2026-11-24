@@ -1267,7 +1267,9 @@ describe('LoginScreen', () => {
     });
 
     it('asks for the typed age before the Terms and sends it when the server needs it', async () => {
-      const submitAge = jest.fn(async () => undefined);
+      const submitAge = jest.fn(async () => {
+        useAdultEligibilityStore.setState({ status: 'submitting' });
+      });
       const originalSubmit = useAdultEligibilityStore.getState().submitAge;
       useTermsAcceptanceStore.setState({
         userId: ownerId,
@@ -1293,6 +1295,9 @@ describe('LoginScreen', () => {
         fireEvent.press(screen.getByTestId('mobile-age-check-continue'));
 
         expect(submitAge).toHaveBeenCalledWith(ownerId, 34);
+        expect(screen.getByTestId('cloud-sign-in-completing')).toBeTruthy();
+        expect(screen.queryByTestId('mobile-terms-review')).toBeNull();
+        expect(screen.queryByTestId('mobile-age-check-input')).toBeNull();
         expect(useChatAppModeStore.getState().appMode).toBe('local');
       } finally {
         useAdultEligibilityStore.setState({ submitAge: originalSubmit });
@@ -1331,6 +1336,7 @@ describe('LoginScreen', () => {
         const screen = render(<LoginScreen />);
 
         expect(screen.getByText('AGI Cloud sign-in could not finish')).toBeTruthy();
+        expect(screen.queryByTestId('mobile-age-check-input')).toBeNull();
         fireEvent.press(screen.getByTestId('mobile-age-check-retry'));
         expect(verify).toHaveBeenCalledWith(ownerId);
         expect(useChatAppModeStore.getState().appMode).toBe('local');
@@ -1343,6 +1349,7 @@ describe('LoginScreen', () => {
   it('requires an explicit click before recording the current Terms for a signed-in account', () => {
     mockIsSignedIn = true;
     mockUserId = 'person-a';
+    useAdultEligibilityStore.setState({ userId: 'person-a', status: 'confirmed' });
     const accept = jest.fn();
     const originalAccept = useTermsAcceptanceStore.getState().accept;
     useTermsAcceptanceStore.setState({
@@ -1376,6 +1383,7 @@ describe('LoginScreen', () => {
   it('lets an account whose Cloud check failed log out from the failure screen', () => {
     mockIsSignedIn = true;
     mockUserId = 'person-a';
+    useAdultEligibilityStore.setState({ userId: 'person-a', status: 'confirmed' });
     const signOut = jest.fn(async () => undefined);
     const originalSignOut = useAuthStore.getState().signOut;
     useAuthStore.setState({ signOut });
@@ -1399,6 +1407,7 @@ describe('LoginScreen', () => {
   it('says so when logging out from the failure screen does not finish', async () => {
     mockIsSignedIn = true;
     mockUserId = 'person-a';
+    useAdultEligibilityStore.setState({ userId: 'person-a', status: 'confirmed' });
     const signOut = jest.fn(async () => {
       throw new Error('session removal failed');
     });
@@ -1444,6 +1453,7 @@ describe('LoginScreen', () => {
   it('requires a fresh confirmation when the account or Terms version changes', () => {
     mockIsSignedIn = true;
     mockUserId = 'person-a';
+    useAdultEligibilityStore.setState({ userId: 'person-a', status: 'confirmed' });
     const accept = jest.fn();
     const originalAccept = useTermsAcceptanceStore.getState().accept;
     useTermsAcceptanceStore.setState({
@@ -1462,6 +1472,7 @@ describe('LoginScreen', () => {
 
       mockUserId = 'person-b';
       act(() => {
+        useAdultEligibilityStore.setState({ userId: 'person-b', status: 'confirmed' });
         useTermsAcceptanceStore.setState({ userId: 'person-b', currentVersion: 'first-policy' });
         screen.rerender(<LoginScreen />);
       });

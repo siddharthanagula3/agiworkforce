@@ -197,6 +197,24 @@ describe('bound native selection editing', () => {
 });
 
 describe('contenteditable selections', () => {
+  it('rejects a rerender that replaces the selected nodes with identical markup', async () => {
+    document.body.innerHTML =
+      '<div id="editor" contenteditable="true" role="textbox" aria-label="Draft"><p>rough words</p><p>rough words</p></div>';
+    const editor = document.getElementById('editor')!;
+    const secondParagraph = editor.lastElementChild!;
+    const range = document.createRange();
+    range.selectNodeContents(secondParagraph.firstChild!);
+    window.getSelection()!.removeAllRanges();
+    window.getSelection()!.addRange(range);
+    const captured = captureEditableSelection(URL, 'rough words', OWNER);
+    secondParagraph.replaceChildren(document.createTextNode('rough words'));
+    await expect(
+      applyEditableSelection(captured.selection.id, URL, 'clear wording', OWNER),
+    ).rejects.toThrow('field changed');
+    expect(document.execCommand).not.toHaveBeenCalled();
+    expect(editor.innerHTML).toBe('<p>rough words</p><p>rough words</p>');
+  });
+
   it('uses a native editing command, verifies the result and guards editor Undo', async () => {
     document.body.innerHTML =
       '<div id="editor" contenteditable="true" role="textbox" aria-label="Draft">Before rough words after.</div>';

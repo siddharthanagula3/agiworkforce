@@ -39,6 +39,10 @@ import {
   NewCloudCodeSessionSheet,
   titleFromTask,
 } from '@/src/features/cloud-code/components/NewCloudCodeSessionSheet';
+import {
+  activateCloudAccount,
+  invalidateCloudAccount,
+} from '@/src/features/auth/services/cloudAccountSession';
 
 const repository = {
   installationId: 7,
@@ -63,6 +67,7 @@ describe('new cloud code session', () => {
   });
 
   afterEach(() => {
+    invalidateCloudAccount();
     jest.useRealTimers();
   });
 
@@ -132,6 +137,61 @@ describe('new cloud code session', () => {
 
     expect(onCreated).not.toHaveBeenCalled();
     expect(onCreatedInBackground).toHaveBeenCalledWith(session);
+  });
+
+  it('sends the task to the background action and closes the sheet when explicitly selected', async () => {
+    activateCloudAccount('fixture-account');
+    const session = { id: 'stay-session', state: 'ready' };
+    mockCloudCodeApi.create.mockResolvedValue({ session, terminalEntries: [] });
+    const onClose = jest.fn();
+    const onCreated = jest.fn();
+    const onSendAndStay = jest.fn();
+    const { getByTestId } = render(
+      <NewCloudCodeSessionSheet
+        visible
+        onClose={onClose}
+        onCreated={onCreated}
+        onSendAndStay={onSendAndStay}
+      />,
+    );
+
+    fireEvent.changeText(getByTestId('new-cloud-code-task'), 'Look over the README');
+    await act(async () => {
+      fireEvent.press(getByTestId('new-cloud-code-send-and-stay'));
+    });
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onSendAndStay).toHaveBeenCalledWith(session, 'Look over the README');
+    expect(onCreated).not.toHaveBeenCalled();
+  });
+
+  it('does not submit a created background task after the account changes', async () => {
+    activateCloudAccount('fixture-account');
+    let finishCreate!: (value: unknown) => void;
+    mockCloudCodeApi.create.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishCreate = resolve;
+      }),
+    );
+    const onSendAndStay = jest.fn();
+    const { getByTestId } = render(
+      <NewCloudCodeSessionSheet
+        visible
+        onClose={jest.fn()}
+        onCreated={jest.fn()}
+        onSendAndStay={onSendAndStay}
+      />,
+    );
+    fireEvent.changeText(getByTestId('new-cloud-code-task'), 'Look over the README');
+    await act(async () => {
+      fireEvent.press(getByTestId('new-cloud-code-send-and-stay'));
+    });
+    await act(async () => {
+      activateCloudAccount('another-fixture-account');
+      finishCreate({ session: { id: 'old-account-session', state: 'ready' } });
+    });
+
+    expect(onSendAndStay).not.toHaveBeenCalled();
   });
 
   it('does not start without a task', async () => {

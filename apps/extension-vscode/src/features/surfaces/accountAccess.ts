@@ -1,5 +1,9 @@
 import * as vscode from 'vscode';
-import { forgetSharedCredentialRefusal, getAccountToken } from '../../utils/api';
+import {
+  canBeginSharedAccountSignIn,
+  forgetSharedCredentialRefusal,
+  getAccountToken,
+} from '../../utils/api';
 import { signInToAgiCloud, tryOpenDeviceAuthorizationUrl } from '../account-auth/deviceAuth';
 import { type CliAccountStatus, type CliCapabilityAdapter } from './cliCapabilities';
 
@@ -9,20 +13,22 @@ export async function resolveAccountPresence(
   secrets: vscode.SecretStorage,
   adapter: CliCapabilityAdapter,
 ): Promise<{ signedIn: boolean; source: AccountTokenSource | 'none'; cli?: CliAccountStatus }> {
+  const stored = await getAccountToken(secrets);
+  if (stored) return { signedIn: true, source: 'extension' };
+  if (!(await canBeginSharedAccountSignIn(secrets))) return { signedIn: false, source: 'none' };
+
   const status = await adapter.accountStatus();
   if (status.status === 'ok' && status.value.signedIn) {
     return { signedIn: true, source: 'cli', cli: status.value };
   }
-  const stored = await getAccountToken(secrets);
-  return stored === undefined || stored === ''
-    ? { signedIn: false, source: 'none' }
-    : { signedIn: true, source: 'extension' };
+  return { signedIn: false, source: 'none' };
 }
 
 export async function signIn(
   secrets: vscode.SecretStorage,
   adapter: CliCapabilityAdapter,
 ): Promise<boolean> {
+  if (!(await canBeginSharedAccountSignIn(secrets))) return signInToAgiCloud(secrets);
   const challenge = await adapter.login();
   if (challenge.status !== 'ok') return signInToAgiCloud(secrets);
   const { loginId, verificationUrl, userCode } = challenge.value;
@@ -62,7 +68,13 @@ export async function signIn(
       }
       if (grant.value.outcome === 'completed') {
         forgetSharedCredentialRefusal();
-        await getAccountToken(secrets);
+        if (!(await getAccountToken(secrets))) {
+          const action = await vscode.window.showWarningMessage(
+            'The CLI signed in, but the editor could not confirm that session.',
+            'Sign in to the editor',
+          );
+          return action === 'Sign in to the editor' ? signInToAgiCloud(secrets) : false;
+        }
         vscode.window.showInformationMessage('Signed in to AGI Cloud.');
         return true;
       }

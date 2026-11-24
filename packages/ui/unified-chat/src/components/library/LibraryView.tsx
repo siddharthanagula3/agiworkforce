@@ -389,7 +389,8 @@ export function LibraryView({
 }: LibraryViewProps) {
   const { isSignedIn } = transport;
   const isAuthReady = transport.isAuthReady !== false;
-  const [tab, setTab] = useState<LibraryTab>(() => initialTab ?? initialTabFor(initialSurface));
+  const requestedTab = initialTab ?? initialTabFor(initialSurface);
+  const [tab, setTab] = useState<LibraryTab>(requestedTab);
   const [sort, setSort] = useState<LibrarySort>(LIBRARY_DEFAULT_SORT);
   const [viewMode, setViewMode] = useState<LibraryViewMode>('grid');
   const [searchInput, setSearchInput] = useState(initialQuery);
@@ -419,6 +420,7 @@ export function LibraryView({
   const [projectTarget, setProjectTarget] = useState<LibraryItem | null>(null);
   const requestSeq = useRef(0);
   const removalEpoch = useRef(0);
+  const openedInitialItemRef = useRef<string | null>(null);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => setViewMode(loadViewMode()), []);
@@ -431,7 +433,13 @@ export function LibraryView({
   useEffect(() => {
     setSearchInput(initialQuery);
     setQuery(initialQuery.trim());
-  }, [initialQuery]);
+  }, [initialItemId, initialQuery]);
+
+  useEffect(() => {
+    setTab(requestedTab);
+    if (initialItemId) setViewDeleted(false);
+    openedInitialItemRef.current = null;
+  }, [initialItemId, requestedTab]);
 
   useEffect(() => {
     const handle = setTimeout(() => setQuery(searchInput.trim()), SEARCH_INPUT_DEBOUNCE_MS);
@@ -804,14 +812,19 @@ export function LibraryView({
     [unavailableIds, openArtifactIds, artifactSources, loadArtifactSource],
   );
 
-  const openedInitialItemRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!initialItemId || openedInitialItemRef.current === initialItemId) return;
+    if (
+      !initialItemId ||
+      tab !== requestedTab ||
+      viewDeleted ||
+      openedInitialItemRef.current === initialItemId
+    )
+      return;
     const item = page.items.find((candidate) => candidate.id === initialItemId);
     if (!item) return;
     openedInitialItemRef.current = initialItemId;
-    openItem(item);
-  }, [initialItemId, page.items, openItem]);
+    if (!openArtifactIds.has(item.id)) openItem(item);
+  }, [initialItemId, tab, requestedTab, viewDeleted, page.items, openArtifactIds, openItem]);
 
   const uploadFiles = transport.uploadFiles;
   const handleUploadPicked = useCallback(
@@ -996,7 +1009,7 @@ export function LibraryView({
           <div
             role="tablist"
             aria-label="Filter the library"
-            className="-mx-1 flex max-w-full items-center gap-1 overflow-x-auto px-1"
+            className="flex max-w-full flex-wrap items-center gap-1"
           >
             {TABS.map((entry) => (
               <button
@@ -1007,8 +1020,8 @@ export function LibraryView({
                 onClick={() => setTab(entry.id)}
                 className={
                   tab === entry.id
-                    ? 'min-h-9 shrink-0 rounded-md bg-[var(--chat-surface-hover)] px-3 py-1.5 text-sm font-medium text-[var(--chat-text-primary)]'
-                    : 'min-h-9 shrink-0 rounded-md px-3 py-1.5 text-sm font-medium text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]'
+                    ? 'min-h-9 shrink-0 rounded-md bg-[var(--chat-surface-hover)] px-3 py-1.5 text-sm font-medium text-[var(--chat-text-primary)] pointer-coarse:min-h-11'
+                    : 'min-h-9 shrink-0 rounded-md px-3 py-1.5 text-sm font-medium text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] pointer-coarse:min-h-11'
                 }
               >
                 {entry.label}

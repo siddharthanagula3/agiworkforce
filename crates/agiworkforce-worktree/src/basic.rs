@@ -32,6 +32,34 @@ pub async fn enter_worktree(
     repo: &Path,
     opts: WorktreeOptions,
 ) -> Result<Worktree> {
+    add_worktree(runner, repo, opts, true).await
+}
+
+pub async fn checkout_existing_worktree(
+    runner: &dyn CommandRunner,
+    repo: &Path,
+    branch: String,
+    target: PathBuf,
+) -> Result<Worktree> {
+    add_worktree(
+        runner,
+        repo,
+        WorktreeOptions {
+            branch,
+            base: None,
+            target_dir: Some(target),
+        },
+        false,
+    )
+    .await
+}
+
+async fn add_worktree(
+    runner: &dyn CommandRunner,
+    repo: &Path,
+    opts: WorktreeOptions,
+    create_branch: bool,
+) -> Result<Worktree> {
     let workspace = Workspace::discover(runner, repo)
         .await?
         .ok_or_else(|| anyhow::anyhow!("{} is not inside a git working tree", repo.display()))?;
@@ -64,16 +92,17 @@ pub async fn enter_worktree(
     let pinned = workspace.runner(runner);
     verify_repository_config(&pinned, top, top, ConfigUse::CONTENT).await?;
     let mut cmd = git_command(top).await?;
-    cmd.arg("worktree")
-        .arg("add")
-        .arg("-b")
-        .arg(&opts.branch)
-        // End-of-options separator: everything after `--` is treated as a
-        // positional path/commit-ish, never a git option (argument injection).
-        .arg("--")
-        .arg(&target);
-    if let Some(base) = opts.base {
-        cmd.arg(base);
+    cmd.args(["worktree", "add"]);
+    if create_branch {
+        cmd.arg("-b").arg(&opts.branch);
+    }
+    cmd.arg("--").arg(&target);
+    if create_branch {
+        if let Some(base) = opts.base {
+            cmd.arg(base);
+        }
+    } else {
+        cmd.arg(&opts.branch);
     }
     let output = pinned
         .output(cmd, None, Some(GIT_TIMEOUT))

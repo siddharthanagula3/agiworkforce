@@ -2,12 +2,15 @@
 import React from 'react';
 import { fireEvent, render, within } from '@testing-library/react-native';
 
+let mockSystemModelStates: Record<string, string> = {};
+
 let lastModelPickerProps: { modelScope?: 'local' | 'cloud' | 'all' } | null = null;
 
 interface MockModelInstallState {
   jobs: Record<string, unknown>;
   installedModelIds: string[];
   readySystemModelIds: string[];
+  systemModelStates: Record<string, string>;
   hydrateInstalledModels: jest.Mock;
   statusForModel: () => { status: string };
 }
@@ -79,6 +82,7 @@ jest.mock('../src/features/model-picker/installStore', () => ({
       jobs: {},
       installedModelIds: [],
       readySystemModelIds: [],
+      systemModelStates: mockSystemModelStates,
       hydrateInstalledModels: jest.fn(),
       statusForModel: () => ({ status: 'ready' }),
     }),
@@ -98,6 +102,7 @@ const originalRefreshFreeQuotaCatalogue = useFreeQuotaCatalogueStore.getState().
 describe('Models screen', () => {
   beforeEach(() => {
     lastModelPickerProps = null;
+    mockSystemModelStates = {};
     useFreeQuotaCatalogueStore.setState({
       account: null,
       catalogue: null,
@@ -138,6 +143,18 @@ describe('Models screen', () => {
     expect(within(scroll).getByLabelText('Browse all models')).toBeTruthy();
     expect(within(scroll).queryByTestId('model-picker-sheet')).toBeNull();
     expect(getByTestId('model-picker-sheet')).toBeTruthy();
+  });
+
+  it('describes a failed system model as unavailable and does not select it', () => {
+    const model = LOCAL_MODEL_LIST.find((item) => (item.fileSizeBytes ?? 0) === 0)!;
+    mockSystemModelStates = { [model.id]: 'failed' };
+    useModelStore.setState({ recentModels: [model.id] });
+    const selected = useModelStore.getState().selectedModel;
+    const { getByLabelText, queryByLabelText } = render(<ModelsScreen />);
+
+    expect(queryByLabelText(`Select ${model.name}`)).toBeNull();
+    fireEvent.press(getByLabelText(`Browse models. ${model.name}, Unavailable on this device`));
+    expect(useModelStore.getState().selectedModel).toBe(selected);
   });
 
   it('opens the model picker in local scope when Cloud is locked', () => {

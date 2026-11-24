@@ -221,6 +221,7 @@ import { AgentActivityTracker } from '../agentNotifications';
 import { withdrawFolderPrompt } from '../quitGuard';
 import { detectShellSandbox, type ShellSandbox } from './shellSandbox';
 import { readShellPolicy, writeShellPolicy } from './shellPolicyStore';
+import { StoreWriteError } from './atomicStoreFile';
 import {
   TextEditRefused,
   WriteConflict,
@@ -283,6 +284,7 @@ import {
   openDeveloperTerminal,
   writeDeveloperTerminal,
   resizeDeveloperTerminal,
+  scrollDeveloperTerminal,
   closeDeveloperTerminal,
   addDeveloperMcpServer,
   developerMcpServerLogs,
@@ -310,6 +312,7 @@ import {
   listDeveloperPlugins,
   listDeveloperSessions,
   listDeveloperSkills,
+  lookupDeveloperSession,
   pinDeveloperWorktree,
   readDeveloperCheckpointDiff,
   readDeveloperMcpApproval,
@@ -879,6 +882,10 @@ const CAPABILITY_BY_COMMAND: Record<string, CommandRequirement> = {
     capability: 'shell.execute',
     reason: TERMINAL_REASON,
   },
+  developer_terminal_scroll: {
+    capability: 'shell.execute',
+    reason: TERMINAL_REASON,
+  },
   developer_terminal_close: {
     capability: 'shell.execute',
     reason: TERMINAL_REASON,
@@ -1142,7 +1149,7 @@ function stopScreenControl(): ReturnType<typeof stopComputerUse> {
  * sessions withheld, which is what offers the user the way to allow it.
  */
 async function listSessionsWithinGrants(
-  options: { includeArchived?: boolean; includeCloud?: boolean } = {},
+  options: NonNullable<Parameters<typeof listDeveloperSessions>[1]> = {},
 ): Promise<DeveloperSessionList> {
   const roots = listRoots();
   const listed = await listDeveloperSessions(
@@ -1162,6 +1169,9 @@ async function listSessionsWithinGrants(
           ...(unavailableReason ? { gitUnavailableReason: unavailableReason } : {}),
           sessions: [],
           sessionsWithheld: true,
+          ...(getPermissionState(AGENT_CAPABILITY, workspaceScope(root)) === 'denied'
+            ? { commandAccessRefused: true }
+            : {}),
         };
       }),
   );
@@ -2684,6 +2694,8 @@ async function execute(
       return readDeveloperModels(requireString(args, 'rootId'), args['refresh'] === true);
     case 'developer_session_list': {
       const includeArchived = args['includeArchived'] === true;
+      const titleQuery = optionalString(args, 'titleQuery', '').trim();
+      if (titleQuery) return listSessionsWithinGrants({ includeArchived, titleQuery });
       return archiveIdleSessions(
         await listSessionsWithinGrants({
           includeArchived,
@@ -2699,6 +2711,15 @@ async function execute(
     }
     case 'developer_sessions_allow':
       return true;
+    case 'developer_session_lookup': {
+      const rootId = requireString(args, 'rootId');
+      if (!hasSshEnvironment(rootId) && !agentAllowedIn(rootId)) {
+        throw new DeveloperAgentNotAllowedError(
+          'Allow commands in this folder to open the session.',
+        );
+      }
+      return lookupDeveloperSession(rootId, requireString(args, 'threadId'));
+    }
     case 'developer_session_read':
       noteClientCapabilities(window, args);
       return readDeveloperSession(requireString(args, 'rootId'), requireString(args, 'threadId'));
@@ -2791,6 +2812,28 @@ async function execute(
         requireString(args, 'rootId'),
         typeof args['cols'] === 'number' ? args['cols'] : 80,
         typeof args['rows'] === 'number' ? args['rows'] : 24,
+        (plan) =>
+          confirmInMain(
+            requirePaneWindow(window),
+            { group: 'workspace-terminal', key: plan.rootKey },
+            {
+              type: 'warning',
+              title: 'Open interactive terminal?',
+              message: 'Open a shell in the selected folder?',
+              detail: [
+                `Folder: ${visibleInDialog(plan.cwd)}`,
+                `Shell: ${visibleInDialog(plan.shell)}`,
+                `Sandbox: ${visibleInDialog(plan.sandbox)}`,
+                `Network: ${plan.networkAllowed ? 'Allowed' : 'Denied'}`,
+                '',
+                'The shell may run startup code. Commands you type run under this policy.',
+              ].join('\n'),
+              buttons: ['Keep closed', 'Open terminal'],
+              defaultId: 0,
+              cancelId: 0,
+              noLink: true,
+            },
+          ),
       );
     case 'developer_terminal_write':
       return writeDeveloperTerminal(
@@ -2804,6 +2847,12 @@ async function execute(
         requireString(args, 'terminalId'),
         typeof args['cols'] === 'number' ? args['cols'] : 80,
         typeof args['rows'] === 'number' ? args['rows'] : 24,
+      );
+    case 'developer_terminal_scroll':
+      return scrollDeveloperTerminal(
+        requireString(args, 'rootId'),
+        requireString(args, 'terminalId'),
+        typeof args['lines'] === 'number' ? args['lines'] : Number.NaN,
       );
     case 'developer_terminal_close':
       return closeDeveloperTerminal(
@@ -3116,7 +3165,8 @@ function toFailure(error: unknown): DesktopRuntimeResponse<never> {
     return runtimeFailure(SIMULATOR_REFUSAL_CODES[error.reason], error.message);
   }
   if (error instanceof InvalidArguments) return runtimeFailure('invalid-arguments', error.message);
-  if (error instanceof PermissionNotSaved) return runtimeFailure('io-error', error.message);
+  if (error instanceof PermissionNotSaved || error instanceof StoreWriteError)
+    return runtimeFailure('io-error', error.message);
   if (error instanceof TextEditRefused) return runtimeFailure('invalid-arguments', error.message);
   if (error instanceof WriteConflict) return runtimeFailure('conflict', error.message);
   if (error instanceof InvalidBrowserArguments) {
@@ -3237,6 +3287,7 @@ const UNGATED_COMMANDS: ReadonlySet<string> = new Set([
   'developer_model_list',
   'developer_runtime_status',
   'developer_session_list',
+  'developer_session_lookup',
   'developer_turn_interrupt',
   'developer_user_input_answer',
   'device_host_declaration',
@@ -3282,6 +3333,7 @@ export function commandGates(command: string): CommandGate[] {
 
 const SSH_SESSION_COMMANDS = new Set([
   'developer_model_list',
+  'developer_session_lookup',
   'developer_session_read',
   'developer_session_start',
   'developer_turn_start',

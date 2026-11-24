@@ -44,8 +44,7 @@ impl PromptHistory {
     }
 
     pub(crate) fn record(&mut self, prompt: &str) {
-        self.position = None;
-        self.draft.clear();
+        self.reset_navigation();
         if !matches!(self.entries.add(prompt), Ok(true)) {
             return;
         }
@@ -57,6 +56,11 @@ impl PromptHistory {
                 );
             }
         }
+    }
+
+    pub(crate) fn reset_navigation(&mut self) {
+        self.position = None;
+        self.draft.clear();
     }
 
     pub(crate) fn older(&mut self, current: &str) -> Option<String> {

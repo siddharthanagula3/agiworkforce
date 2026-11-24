@@ -1,4 +1,5 @@
 import { settingsSectionPath } from '@/features/settings/lib/web-settings-sections';
+import { sessionTitleMatches } from '@agiworkforce/local-runtime-contract';
 import {
   buildVsCodeCloudTaskHandoffUri,
   buildVsCodeDeveloperSessionHandoffUri,
@@ -14,10 +15,8 @@ import {
   type CloudCodeNetworkAccess,
   type CloudCodeSession,
   type CloudCodeSessionStatusFilter,
-  type CloudCodeTurnStepBound,
   PRODUCT_NAMES,
 } from '@agiworkforce/types';
-import { CLOUD_CODE_AGENT_TURN_BUDGET_MS } from '@/lib/services/cloud-code-turn-budget';
 
 export const CODE_ROUTES = {
   root: CLOUD_CODE_PAGE_ROUTE,
@@ -40,11 +39,12 @@ export function githubInstallHref(): string {
 
 export const CODE_CLI_SIGN_IN_COMMAND = 'agi login';
 
-export const CODE_RAIL_ITEM_IDS = ['artifacts', 'routines', 'computer'] as const;
+export const CODE_RAIL_ITEM_IDS = ['artifacts', 'plugins', 'routines', 'computer'] as const;
 export type CodeRailItemId = (typeof CODE_RAIL_ITEM_IDS)[number];
 
 export const CODE_RAIL_DEFAULT_PINS: Readonly<Record<CodeRailItemId, boolean>> = {
   artifacts: true,
+  plugins: true,
   routines: false,
   computer: false,
 };
@@ -99,10 +99,12 @@ export const CODE_COPY = {
   toCode: 'Code',
   newSession: 'New',
   artifacts: 'Artifacts',
+  search: 'Search',
+  plugins: 'Plugins',
   more: 'More',
-  routines: 'Routines',
+  routines: 'Scheduled',
   yourComputer: 'Your computer',
-  customizeSidebar: 'Customize sidebar',
+  customizeSidebar: 'Edit sidebar',
   customizeSidebarDescription: 'Choose which items appear in your sidebar.',
   customizeSidebarDone: 'Done',
   customizeSidebarClose: 'Close',
@@ -127,9 +129,17 @@ export const CODE_COPY = {
   greetingWithName: "What's up next, {name}?",
   greeting: "What's up next?",
   send: 'Start the task',
+  sendOptions: 'Send options',
+  sendAndStay: 'Send and stay here',
+  backgroundTaskStarted: 'Task started in the background.',
+  cloudBackgroundTaskSubmitted: 'Cloud task submitted.',
+  backgroundTaskNeedsApproval: 'Cloud task needs approval.',
+  backgroundTaskNeedsAttention: 'Cloud task needs attention.',
+  openBackgroundTask: 'Open task',
   stopTurn: CLOUD_CODE_SESSION_COPY.stopTurn,
   stoppingTurn: CLOUD_CODE_SESSION_COPY.stoppingTurn,
   startDictation: 'Start voice input',
+  dictationRequiresCloud: 'Voice input requires a supported Cloud session.',
   repositoryChip: 'Select repository',
   repositoryUrlLabel: 'Repository URL',
   repositoryUrlPlaceholder: 'https://github.com/owner/repository',
@@ -210,6 +220,7 @@ export const CODE_COPY = {
 
   collapseRail: 'Collapse the session list',
   expandRail: 'Expand the session list',
+  openSessionList: 'Open session list',
   filterMenu: 'Filter sessions',
   searchSessions: 'Search sessions',
   searchSessionsPlaceholder: 'Search sessions',
@@ -231,10 +242,6 @@ export const CODE_COPY = {
   modeMenu: 'Mode',
   planMode: 'Plan',
   planModeHint: 'Reads the code and proposes changes without making any',
-  turnStepsMenu: 'Steps per task',
-  turnStepsUnit: 'steps',
-  turnBudgetPrefix: 'A task also stops after',
-  turnBudgetUnit: 'minutes.',
   attachMenu: 'Add to this session',
   addConnectors: 'Add connectors',
   mcpServers: 'MCP servers',
@@ -395,6 +402,14 @@ export const CODE_COPY = {
   deleteNeedsClosed: 'Close or archive the session before deleting it.',
 
   changesNone: 'No changes to show',
+  changesFilter: 'Filter changed files',
+  changesNoMatch: 'No changed files match this filter.',
+  changesLineCount: (added: number, removed: number): string =>
+    `${added} added, ${removed} removed`,
+  changesAgainstHead: (revision: string): string => `Compared with HEAD ${revision}`,
+  changesNoCommit: 'This branch has no commit to compare with yet.',
+  changesDetachedHead: 'Detached HEAD',
+  changesDiffUnavailable: 'The file list is available. Git could not load the diff.',
   changesRefresh: 'Refresh the changes',
   changesLoading: 'Loading changes',
   changesDiffTruncated: 'The diff is too large to show in full.',
@@ -429,19 +444,6 @@ export const CODE_GOAL_COMMAND_DESCRIPTIONS: Record<CloudCodeGoalCommand, string
   '/review': 'Review the changes in this session for bugs',
   '/security-review': 'Check the changes in this session for security problems',
 };
-
-export const CODE_TURN_STEP_HINTS: Record<CloudCodeTurnStepBound, string> = {
-  12: 'Quick fixes and questions',
-  24: 'Most tasks',
-  48: 'Larger changes that take longer and use more',
-};
-
-export function turnBudgetNote(): string {
-  const minutes = Math.round(
-    CLOUD_CODE_AGENT_TURN_BUDGET_MS / (CODE_TIMING.msPerSecond * CODE_TIMING.secondsPerMinute),
-  );
-  return `${CODE_COPY.turnBudgetPrefix} ${minutes} ${CODE_COPY.turnBudgetUnit}`;
-}
 
 export const CODE_NETWORK_OPTIONS: ReadonlyArray<{
   id: CloudCodeNetworkAccess;
@@ -562,10 +564,7 @@ export const DEFAULT_CODE_FILTERS: CodeSessionFilters = {
   query: '',
 };
 
-export function sessionTitleMatches(title: string, query: string): boolean {
-  const needle = query.trim().toLocaleLowerCase();
-  return needle.length === 0 || title.toLocaleLowerCase().includes(needle);
-}
+export { sessionTitleMatches };
 
 export function filtersAreDefault(filters: CodeSessionFilters): boolean {
   return (

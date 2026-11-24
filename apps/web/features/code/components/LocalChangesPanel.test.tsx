@@ -35,6 +35,46 @@ const CHANGES: WorkingTreeChanges = {
   folderPrefix: '',
 };
 
+const PATCH = [
+  'diff --git a/src/app.ts b/src/app.ts',
+  '--- a/src/app.ts',
+  '+++ b/src/app.ts',
+  '@@ -1 +1,2 @@',
+  '-old',
+  '+new',
+  '+second',
+].join('\n');
+
+it('shows the comparison base and counts, and filters the file list by path', async () => {
+  readDeveloperSessionChanges.mockResolvedValue({
+    ...CHANGES,
+    diff: PATCH,
+    comparison: { branch: 'topic', revision: '0123456789abcdef' },
+  });
+  renderPanel();
+  const changedFile = await screen.findByRole('button', { name: 'Modified src/app.ts' });
+  expect(changedFile).toHaveAccessibleDescription('2 added, 1 removed');
+  expect(screen.getByText('topic')).toBeInTheDocument();
+  expect(screen.getByText('Compared with HEAD 0123456')).toBeInTheDocument();
+
+  const filter = screen.getByRole('searchbox', { name: 'Filter changed files' });
+  await userEvent.type(filter, 'UTIL');
+  expect(changedFile).not.toBeInTheDocument();
+  expect(screen.getByText('src/util.ts')).toBeInTheDocument();
+  await userEvent.type(filter, ' unmatched');
+  expect(screen.getByRole('status')).toHaveTextContent('No changed files match this filter.');
+  await userEvent.clear(filter);
+  expect(screen.getByRole('button', { name: 'Modified src/app.ts' })).toBeInTheDocument();
+});
+
+it('labels a truncated patch without presenting partial counts as totals', async () => {
+  readDeveloperSessionChanges.mockResolvedValue({ ...CHANGES, diff: PATCH, diffTruncated: true });
+  renderPanel();
+  const changedFile = await screen.findByRole('button', { name: 'Modified src/app.ts' });
+  expect(changedFile).not.toHaveAccessibleDescription();
+  expect(screen.getByRole('status')).toHaveTextContent('The diff is too large to show in full.');
+});
+
 function onDisk(path: string, text: string, sha256: string): FileTextContent {
   return { path, text, sizeBytes: text.length, modifiedAtMs: 1, truncated: false, sha256 };
 }

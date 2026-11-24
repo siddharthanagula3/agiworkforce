@@ -18,6 +18,7 @@ import {
 } from 'expo-media-library/legacy';
 import { localDeviceManagedFile, type FileLineage, type ManagedFile } from '@agiworkforce/types';
 import { codeFileFor } from '@agiworkforce/unified-chat/code-file-name';
+import { appendFilenameExtension } from '@agiworkforce/unified-chat/filename';
 import { API_URL } from '@/lib/constants';
 import { guardedFetch } from '@/lib/egressGuard';
 import { getAuthHeaders } from '@/services/authSession';
@@ -91,7 +92,7 @@ function exportedFile(uri: string, fileName: string, lineage: Partial<FileLineag
 
 function exportFileName(title: string, extension: string): string {
   const name = nativeFileName(title);
-  return extension ? nativeFileName(`${name}.${extension}`) : name;
+  return extension ? nativeFileName(appendFilenameExtension(name, extension)) : name;
 }
 
 function markdownToHtml(content: string, title: string): string {

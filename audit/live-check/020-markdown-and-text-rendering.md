@@ -8,7 +8,6 @@ nothing is left.
 
 | Item | Surface | What would settle it |
 | --- | --- | --- |
-| S20.07: Task lists. | vscode | device |
 | S20.13: Autolinks. | cli | The cited anchor (Tag::Link) fires for [text](url) and <url> links, not for a bare https://... which pulldown-cmark without a GFM autolink option emits as plain Text; the product does nothing to make it clickable (no OSC 8, no styling), and the note admits "bare URLs print verbatim". Under R-j-style native behaviour that is settled only on a device, not done. |
 | S20.26: Text selection across rendered blocks. | cli | device |
 | S20.29: Right-to-left content. | mobile | device |

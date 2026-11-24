@@ -172,7 +172,7 @@ vi.mock('../src/features/cloud-bridge/freeTrialClient', async (importOriginal) =
     > => ({
       subscriptionTier: 'pro',
       subscriptionStatus: 'active',
-      modelIds: account.modelIds,
+      modelIds: [actual.FREE_TRIAL_MODEL],
       allowedAutoModes: [],
       usage: parseManagedUsageSummaryResponse({
         plan_tier: 'pro',
@@ -333,6 +333,77 @@ describe('reopening the side panel after a closed-panel turn finished', () => {
     );
     expect(sendButton().getAttribute('data-mode')).toBe('send');
   });
+});
+
+it('clears an interrupted Stop after reading the saved run without cancelling it again', async () => {
+  document.getElementById('sp-new-chat-btn')!.click();
+  const runId = '54cc328e-5bf8-4937-aae7-57afcf5c00c9';
+  const runPath = `/api/llm/v1/chat/completions/runs/${runId}`;
+  const entry = await saveActiveConversation(account.owner, [
+    { role: 'user', content: 'A stopped task', timestamp: 2_001, runtime: 'managed-cloud' },
+    {
+      role: 'assistant',
+      content: 'The partial reply',
+      timestamp: 2_002,
+      runtime: 'managed-cloud',
+      streamCancellation: 'pending',
+      cloudAgentRun: { runId, runPath, lastSequence: 0 },
+    },
+  ]);
+  const time = '2026-11-24T15:00:00.000Z';
+  const fetchMock = vi.mocked(globalThis.fetch);
+  const previousFetch = fetchMock.getMockImplementation()!;
+  let statusReads = 0;
+  fetchMock.mockImplementation(async (input, init) => {
+    if (String(input).includes(`${runPath}?`)) {
+      expect(init?.method ?? 'GET').toBe('GET');
+      statusReads += 1;
+      return new Response(
+        JSON.stringify({
+          run: {
+            id: runId,
+            userId: OWNER.accountId,
+            requestId: 'stop-1',
+            conversationId: null,
+            originSurface: 'chrome',
+            workMode: 'chat',
+            state: 'cancelled',
+            provider: 'openai',
+            model: 'fixture-model',
+            lastEventSequence: 2,
+            cancellationRequestedAt: time,
+            completedAt: time,
+            createdAt: time,
+            updatedAt: time,
+          },
+          events: [],
+          nextAfterSequence: 2,
+        }),
+      );
+    }
+    return previousFetch(input, init);
+  });
+  try {
+    chromeMock.runtime.sendMessage.mockClear();
+    account.owner = { ...OWNER, authIncarnation: 'session-cancellation-reopened' };
+    account.onChange!();
+
+    await vi.waitFor(async () => {
+      const saved = await getConversation(account.owner, entry!.id);
+      expect(saved?.messages.at(-1)?.cloudAgentRun?.state).toBe('cancelled');
+      expect(saved?.messages.at(-1)?.streamCancellation).toBeUndefined();
+    });
+    expect(transcriptText()).toContain('The partial reply');
+    expect(transcriptText()).not.toContain('Cancellation was interrupted');
+    expect(statusReads).toBe(1);
+    expect(chromeMock.runtime.sendMessage.mock.calls).not.toEqual(
+      expect.arrayContaining([
+        expect.arrayContaining([expect.objectContaining({ type: 'CANCEL_STREAM' })]),
+      ]),
+    );
+  } finally {
+    fetchMock.mockImplementation(previousFetch);
+  }
 });
 
 describe('reopening the side panel while a reply waits on a browser step', () => {

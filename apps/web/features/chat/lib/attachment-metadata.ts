@@ -58,7 +58,8 @@ export function carriesPictureMetadata(file: File): boolean {
  * sent carrying whatever was in it.
  */
 export async function prepareChatAttachment(file: File): Promise<PreparedChatAttachment> {
-  if (!carriesPictureMetadata(file)) return { status: 'ready', file };
+  const mimeType = resolveChatAttachmentMimeType(file.name, file.type);
+  if (!mimeType || !isChatImageMimeType(mimeType)) return { status: 'ready', file };
 
   let bytes: Uint8Array;
   try {
@@ -72,7 +73,7 @@ export async function prepareChatAttachment(file: File): Promise<PreparedChatAtt
 
   return {
     status: 'ready',
-    file: new File([result.bytes], file.name, { type: file.type }),
+    file: new File([result.bytes], file.name, { type: mimeType, lastModified: file.lastModified }),
   };
 }
 

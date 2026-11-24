@@ -1,3 +1,5 @@
+import type { AgentEventApprovalRiskLevel } from './generated/protocol/AgentEventApprovalRiskLevel';
+
 export const REMOTE_CODE_PROTOCOL_VERSION = 1;
 
 export const REMOTE_CODE_REQUEST_ACTIONS = [
@@ -35,6 +37,8 @@ export const REMOTE_CODE_LIMITS = {
   testRuns: 10,
   testOutputLength: 3_000,
   queuedGuidance: 3,
+  confirmedGuidance: 16,
+  rejectedGuidance: 8,
   pendingQuestions: 20,
   pendingApprovals: 20,
   sessions: 30,
@@ -70,6 +74,7 @@ export interface RemoteCodeSessionSummary {
   origin?: RemoteCodeSessionOrigin;
   /** A cloud Code session listed beside the local ones; it is read-only from the phone. */
   location?: 'cloud';
+  pinned?: true;
 }
 
 export const REMOTE_CODE_SESSION_ORIGINS = ['cli', 'vscode', 'desktop'] as const;
@@ -132,6 +137,10 @@ export interface RemoteCodePendingApproval {
   requestId: string;
   summary: string;
   detail: string;
+  kind?: string;
+  riskLevel?: AgentEventApprovalRiskLevel;
+  reversible?: boolean;
+  truncated?: boolean;
 }
 
 export interface RemoteCodePendingQuestion {
@@ -166,6 +175,14 @@ export interface RemoteCodeSessionsEvent {
   syncedAt: string;
 }
 
+export type RemoteCodeGuidanceRejectionReason = 'start-failed' | 'queue-full';
+
+export interface RemoteCodeGuidanceRejection {
+  requestId: string;
+  text: string;
+  reason: RemoteCodeGuidanceRejectionReason;
+}
+
 export interface RemoteCodeSessionSnapshot {
   action: 'code.session.snapshot';
   version: typeof REMOTE_CODE_PROTOCOL_VERSION;
@@ -180,6 +197,8 @@ export interface RemoteCodeSessionSnapshot {
   pendingQuestions: RemoteCodePendingQuestion[];
   fileChanges: RemoteCodeFileChange[];
   queuedGuidance: string[];
+  confirmedGuidanceIds?: string[];
+  rejectedGuidance?: RemoteCodeGuidanceRejection[];
   tools: RemoteCodeToolRecord[];
   thinking?: RemoteCodeThinking[];
   /** Sub-tasks of the session still queued or running when the computer read it. */
@@ -245,8 +264,21 @@ export type RemoteCodeLiveEvent =
     }
   | { type: 'diff'; diff: RemoteCodeDiff }
   | { type: 'test-run'; testRun: RemoteCodeTestRun }
-  | { type: 'guidance-queued'; queuedGuidance: string[] }
-  | { type: 'guidance-delivered'; turnId: string; queuedGuidance: string[]; text?: string }
+  | { type: 'guidance-queued'; queuedGuidance: string[]; requestIds?: string[] }
+  | {
+      type: 'guidance-delivered';
+      turnId: string;
+      queuedGuidance: string[];
+      requestIds?: string[];
+      text?: string;
+    }
+  | {
+      type: 'guidance-rejected';
+      reason: RemoteCodeGuidanceRejectionReason;
+      rejectedGuidance: string[];
+      queuedGuidance: string[];
+      requestIds?: string[];
+    }
   | { type: 'runtime-stopped'; message: string };
 
 export interface RemoteCodeSessionEvent {
@@ -518,6 +550,10 @@ export function fitRemoteSnapshot(snapshot: RemoteCodeSessionSnapshot): RemoteCo
     messages: [...snapshot.messages],
     fileChanges: [...snapshot.fileChanges],
     tools: [...snapshot.tools],
+    ...(snapshot.confirmedGuidanceIds
+      ? { confirmedGuidanceIds: [...snapshot.confirmedGuidanceIds] }
+      : {}),
+    ...(snapshot.rejectedGuidance ? { rejectedGuidance: [...snapshot.rejectedGuidance] } : {}),
     ...(snapshot.thinking ? { thinking: [...snapshot.thinking] } : {}),
   };
   const size = () => JSON.stringify(fitted).length;
@@ -537,8 +573,14 @@ export function fitRemoteSnapshot(snapshot: RemoteCodeSessionSnapshot): RemoteCo
   while (size() > REMOTE_CODE_LIMITS.payloadBytes && fitted.fileChanges.length > 0) {
     fitted.fileChanges.shift();
   }
+  while (size() > REMOTE_CODE_LIMITS.payloadBytes && fitted.rejectedGuidance?.length) {
+    fitted.rejectedGuidance.shift();
+  }
   if (size() > REMOTE_CODE_LIMITS.payloadBytes) {
     fitted.partialResponse = '';
+  }
+  while (size() > REMOTE_CODE_LIMITS.payloadBytes && fitted.confirmedGuidanceIds?.length) {
+    fitted.confirmedGuidanceIds.shift();
   }
   return fitted;
 }
@@ -629,7 +671,21 @@ function parseApproval(value: unknown): RemoteCodePendingApproval | null {
   const summary = text(value['summary'], REMOTE_CODE_LIMITS.messageLength);
   const detail = text(value['detail'], REMOTE_CODE_LIMITS.messageLength);
   if (!turnId || !requestId || summary === null || detail === null) return null;
-  return { turnId, requestId, summary, detail };
+  const kind = boundedId(value['kind']);
+  const riskLevel = value['riskLevel'];
+  const reversible = value['reversible'];
+  const truncated = value['truncated'];
+  if (truncated !== undefined && typeof truncated !== 'boolean') return null;
+  return {
+    turnId,
+    requestId,
+    summary,
+    detail,
+    ...(kind && /^[A-Za-z0-9_-]+$/.test(kind) && { kind }),
+    ...((riskLevel === 'low' || riskLevel === 'medium' || riskLevel === 'high') && { riskLevel }),
+    ...(typeof reversible === 'boolean' && { reversible }),
+    ...(typeof truncated === 'boolean' && { truncated }),
+  };
 }
 
 function parseRoot(value: unknown): RemoteCodeRoot | null {
@@ -712,6 +768,22 @@ function guidanceList(value: unknown): string[] | null {
   );
 }
 
+function guidanceRequestIds(value: unknown): { requestIds?: string[] } | null {
+  if (value === undefined) return {};
+  const ids = list(value, REMOTE_CODE_LIMITS.queuedGuidance, boundedId);
+  return ids && ids.length > 0 ? { requestIds: ids } : null;
+}
+
+function parseGuidanceRejection(value: unknown): RemoteCodeGuidanceRejection | null {
+  if (!isRecord(value)) return null;
+  const requestId = boundedId(value['requestId']);
+  const message = text(value['text'], REMOTE_CODE_LIMITS.guidanceLength);
+  const reason = value['reason'];
+  return requestId && message?.trim() && (reason === 'start-failed' || reason === 'queue-full')
+    ? { requestId, text: message, reason }
+    : null;
+}
+
 function hostBase(payload: unknown, action: RemoteCodeHostAction): Record<string, unknown> | null {
   if (!isRecord(payload)) return null;
   if (payload['action'] !== action || payload['version'] !== REMOTE_CODE_PROTOCOL_VERSION) {
@@ -756,7 +828,11 @@ export function parseRemoteCodeSessions(payload: unknown): RemoteCodeSessionsEve
       model,
       updatedAt,
       ...(origin ? { origin } : {}),
-      ...(entry['location'] === 'cloud' ? { location: 'cloud' as const } : {}),
+      ...(entry['location'] === 'cloud'
+        ? { location: 'cloud' as const }
+        : entry['pinned'] === true
+          ? { pinned: true as const }
+          : {}),
     };
   });
   const unavailable = list(base['unavailable'], 50, (entry) => {
@@ -805,6 +881,16 @@ export function parseRemoteCodeSnapshot(payload: unknown): RemoteCodeSessionSnap
   );
   const fileChanges = list(base['fileChanges'], REMOTE_CODE_LIMITS.fileChanges, parseFileChange);
   const queuedGuidance = guidanceList(base['queuedGuidance']);
+  const confirmedGuidanceIds = optionalList(
+    base['confirmedGuidanceIds'],
+    REMOTE_CODE_LIMITS.confirmedGuidance,
+    boundedId,
+  );
+  const rejectedGuidance = optionalList(
+    base['rejectedGuidance'],
+    REMOTE_CODE_LIMITS.rejectedGuidance,
+    parseGuidanceRejection,
+  );
   const tools = optionalList(base['tools'], REMOTE_CODE_LIMITS.tools, parseToolRecord);
   const thinking = optionalList(base['thinking'], REMOTE_CODE_LIMITS.thinkingTurns, parseThinking);
   const runningTasks = base['runningTasks'] === undefined ? 0 : count(base['runningTasks']);
@@ -821,6 +907,8 @@ export function parseRemoteCodeSnapshot(payload: unknown): RemoteCodeSessionSnap
     !pendingQuestions ||
     !fileChanges ||
     !queuedGuidance ||
+    !confirmedGuidanceIds ||
+    !rejectedGuidance ||
     !tools ||
     !thinking ||
     typeof runningTasks !== 'number' ||
@@ -843,6 +931,8 @@ export function parseRemoteCodeSnapshot(payload: unknown): RemoteCodeSessionSnap
     pendingQuestions,
     fileChanges,
     queuedGuidance,
+    ...(confirmedGuidanceIds.length > 0 ? { confirmedGuidanceIds } : {}),
+    ...(rejectedGuidance.length > 0 ? { rejectedGuidance } : {}),
     tools,
     ...(thinking.length > 0 ? { thinking } : {}),
     ...(runningTasks > 0 ? { runningTasks } : {}),
@@ -1000,21 +1090,40 @@ function parseLiveEvent(value: unknown): RemoteCodeLiveEvent | null {
     }
     case 'guidance-queued': {
       const queuedGuidance = guidanceList(value['queuedGuidance']);
-      return queuedGuidance ? { type: 'guidance-queued', queuedGuidance } : null;
+      const requests = guidanceRequestIds(value['requestIds']);
+      return queuedGuidance && requests
+        ? { type: 'guidance-queued', queuedGuidance, ...requests }
+        : null;
     }
     case 'guidance-delivered': {
       const queuedGuidance = guidanceList(value['queuedGuidance']);
+      const requests = guidanceRequestIds(value['requestIds']);
       const delivered =
         value['text'] === undefined
           ? undefined
           : text(value['text'], REMOTE_CODE_LIMITS.historyMessageLength);
-      return turnId && queuedGuidance && delivered !== null
+      return turnId && queuedGuidance && requests && delivered !== null
         ? {
             type: 'guidance-delivered',
             turnId,
             queuedGuidance,
+            ...requests,
             ...(delivered === undefined ? {} : { text: delivered }),
           }
+        : null;
+    }
+    case 'guidance-rejected': {
+      const reason = value['reason'];
+      const rejectedGuidance = guidanceList(value['rejectedGuidance']);
+      const queuedGuidance = guidanceList(value['queuedGuidance']);
+      const requests = guidanceRequestIds(value['requestIds']);
+      return (reason === 'start-failed' || reason === 'queue-full') &&
+        rejectedGuidance &&
+        rejectedGuidance.length > 0 &&
+        queuedGuidance &&
+        requests &&
+        (!requests.requestIds || requests.requestIds.length === rejectedGuidance.length)
+        ? { type: 'guidance-rejected', reason, rejectedGuidance, queuedGuidance, ...requests }
         : null;
     }
     case 'runtime-stopped': {

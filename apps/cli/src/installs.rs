@@ -479,7 +479,7 @@ pub(crate) fn set_plugin_enabled(name: &str, enabled: bool) -> Result<String> {
 }
 
 /// An installed plugin's directory name and its declared settings.
-pub(crate) fn plugin_settings(name: &str) -> Result<(String, PluginSettings)> {
+pub(crate) fn plugin_settings(name: &str) -> Result<(String, String, PluginSettings)> {
     let mut manager = plugins::PluginsManager::new();
     manager.load_all(std::env::current_dir().ok().as_deref())?;
     let plugin = manager
@@ -490,13 +490,17 @@ pub(crate) fn plugin_settings(name: &str) -> Result<(String, PluginSettings)> {
     let settings = plugins::load_manifest_for(&plugin.root)
         .map(|(manifest, _)| manifest.user_config)
         .unwrap_or_default();
-    Ok((plugin.config_name.clone(), settings))
+    let key = plugin_settings_store::storage_key(
+        &plugin.config_name,
+        plugin.from_project_dir.then_some(plugin.root.as_path()),
+    );
+    Ok((plugin.config_name.clone(), key, settings))
 }
 
 /// Set `KEY=VALUE` pairs and clear `unset` keys of an installed plugin's
 /// settings, then describe every setting.
 pub(crate) fn configure_plugin(name: &str, pairs: &[String], unset: &[String]) -> Result<String> {
-    let (plugin, settings) = plugin_settings(name)?;
+    let (plugin, storage_key, settings) = plugin_settings(name)?;
     if settings.is_empty() {
         return Ok(format!("Plugin '{name}' has no settings."));
     }
@@ -509,7 +513,7 @@ pub(crate) fn configure_plugin(name: &str, pairs: &[String], unset: &[String]) -
         })
     };
     for key in unset {
-        plugin_settings_store::clear_value(&plugin, key, setting_for(key)?)?;
+        plugin_settings_store::clear_value(&storage_key, key, setting_for(key)?)?;
     }
     for pair in pairs {
         let (key, raw) = pair
@@ -518,10 +522,11 @@ pub(crate) fn configure_plugin(name: &str, pairs: &[String], unset: &[String]) -
         let key = key.trim();
         let setting = setting_for(key)?;
         let value = plugin_settings_store::parse_value(setting, raw).map_err(anyhow::Error::msg)?;
-        plugin_settings_store::save_value(&plugin, key, setting, &value)?;
+        plugin_settings_store::save_value(&storage_key, key, setting, &value)?;
     }
     Ok(describe_plugin_settings(
         &plugin,
+        &storage_key,
         &settings,
         !(pairs.is_empty() && unset.is_empty()),
     ))
@@ -529,10 +534,11 @@ pub(crate) fn configure_plugin(name: &str, pairs: &[String], unset: &[String]) -
 
 pub(crate) fn describe_plugin_settings(
     plugin: &str,
+    storage_key: &str,
     settings: &PluginSettings,
     changed: bool,
 ) -> String {
-    let values = plugin_settings_store::current_values(plugin, settings);
+    let values = plugin_settings_store::current_values(storage_key, settings);
     let mut lines = vec![format!("Settings for plugin '{plugin}':")];
     lines.extend(
         plugin_settings_store::describe(settings, &values)

@@ -297,6 +297,7 @@ export function ModelPickerSheet({
   const installJobs = useModelInstallStore((s) => s.jobs);
   const installedModelIds = useModelInstallStore((s) => s.installedModelIds);
   const readySystemModelIds = useModelInstallStore((s) => s.readySystemModelIds);
+  const tier2Available = useModelInstallStore((s) => s.tier2Available);
   const hydrateInstalledModels = useModelInstallStore((s) => s.hydrateInstalledModels);
   const prepareModel = useModelInstallStore((s) => s.prepareModel);
   const allowCellularDownloads = useModelInstallStore((s) => s.allowCellularDownloads);
@@ -632,10 +633,12 @@ export function ModelPickerSheet({
       placement: { nested?: boolean; trailing?: React.ReactNode; effort?: Effort } = {},
     ) => {
       const installStatus =
-        installJobs[model.id] ??
-        (installedModelIds.includes(model.id) || readySystemModelIds.includes(model.id)
-          ? { status: 'ready' as const, progress: 1 }
-          : statusForModel(model));
+        tier2Available === false
+          ? statusForModel(model)
+          : (installJobs[model.id] ??
+            (installedModelIds.includes(model.id) || readySystemModelIds.includes(model.id)
+              ? { status: 'ready' as const, progress: 1 }
+              : statusForModel(model)));
 
       return (
         <ModelRow
@@ -671,6 +674,7 @@ export function ModelPickerSheet({
       readySystemModelIds,
       rowSelectedModel,
       statusForModel,
+      tier2Available,
       thinkingEnabledPerModel,
       toggleFavorite,
       toggleThinkingForModel,

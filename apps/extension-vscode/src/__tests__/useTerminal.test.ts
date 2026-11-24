@@ -134,7 +134,13 @@ describe('the Use terminal setting', () => {
 
   it('shows the terminal already running instead of starting a second CLI in it', async () => {
     setUseTerminal(true);
-    const running = { name: 'AGI', exitStatus: undefined, show: vi.fn(), sendText: vi.fn() };
+    const running = {
+      name: 'AGI',
+      creationOptions: { cwd: vscode.Uri.file('/repo') },
+      exitStatus: undefined,
+      show: vi.fn(),
+      sendText: vi.fn(),
+    };
     (vscode.window as { terminals: unknown[] }).terminals = [running];
 
     await handlers.get('agi-workforce.chat')?.();
@@ -142,6 +148,25 @@ describe('the Use terminal setting', () => {
     expect(running.show).toHaveBeenCalled();
     expect(running.sendText).not.toHaveBeenCalled();
     expect(terminals).toHaveLength(0);
+  });
+
+  it('does not reuse an AGI terminal belonging to another workspace', async () => {
+    setUseTerminal(true);
+    const other = {
+      name: 'AGI',
+      creationOptions: { cwd: vscode.Uri.file('/other') },
+      exitStatus: undefined,
+      show: vi.fn(),
+    };
+    (vscode.window as { terminals: unknown[] }).terminals = [other];
+
+    await handlers.get('agi-workforce.chat')?.();
+
+    expect(other.show).not.toHaveBeenCalled();
+    expect(vscode.window.createTerminal).toHaveBeenCalledWith({
+      name: 'AGI',
+      cwd: vscode.Uri.file('/repo'),
+    });
   });
 
   it('resumes the session the native chat is holding rather than starting another', async () => {

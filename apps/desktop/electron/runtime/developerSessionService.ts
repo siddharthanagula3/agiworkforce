@@ -32,6 +32,7 @@ import type {
   DeveloperSessionEvent,
   DeveloperSessionGroup,
   DeveloperSessionList,
+  DeveloperSessionListOptions,
   DeveloperSessionStartRequest,
   DeveloperSessionTranscript,
   DeveloperThreadDeleteRequest,
@@ -47,6 +48,7 @@ import type {
   DeveloperWorktreeSetupScript,
   StartedDeveloperSession,
   WorkspaceRoot,
+  WorkspaceTerminalViewport,
 } from '@agiworkforce/local-runtime-contract';
 import type {
   AgentEventApprovalRiskLevel,
@@ -63,6 +65,9 @@ import type {
   SkillSummary,
   DeveloperSessionSource,
   DeveloperSessionTrustMode,
+  TerminalPlan,
+  TerminalReadResponse,
+  TerminalSummary,
   McpApprovalNetwork,
   McpApprovalSandbox,
   ThreadCompactResponse,
@@ -91,12 +96,17 @@ import {
   developerReviewDecision,
   normalizeDeveloperAgentMode,
   parseWorktreeRootId,
+  sessionTitleMatches,
   worktreeRootId,
   TERMINAL_MAX_COLUMNS,
   TERMINAL_MAX_ROWS,
   TERMINAL_MIN_SIZE,
   TERMINAL_WRITE_LIMIT,
+  WORKSPACE_TERMINAL_MAX_COLUMNS,
+  WORKSPACE_TERMINAL_MAX_ROWS,
+  WORKSPACE_TERMINAL_SCROLLBACK_LINES,
 } from '@agiworkforce/local-runtime-contract';
+import { workspaceTerminalFrame } from './workspaceTerminalFrame';
 import type { DeveloperSessionActivity } from '@agiworkforce/utils/remote-control';
 import {
   DEVELOPER_SESSION_PROTOCOL_VERSION as PROTOCOL_VERSION,
@@ -148,7 +158,7 @@ const DOWNLOAD_HINT =
   'Install the AGI CLI with curl -fsSL https://agiworkforce.com/install.sh | bash, or set its path under Settings.';
 const UNTRUSTED_FOLDER = /Current project is not trusted/;
 const UNTRUSTED_FOLDER_HINT =
-  'The AGI CLI chosen under Settings keeps its own folder trust. Run agi init once in this folder, or clear the CLI path under Settings to use the CLI that comes with this app.';
+  'Open it with agi in a terminal and review the directory trust prompt, then try again in Desktop.';
 const RETRY_HINT =
   'Try again. If it keeps failing, choose Help > Copy Diagnostics and send that to support.';
 
@@ -251,6 +261,7 @@ export interface DeveloperTerminalEvent {
   terminalId: string;
   data?: string;
   exitCode?: number | null;
+  viewport?: WorkspaceTerminalViewport;
 }
 
 let emit: DeveloperSessionEmitter = () => undefined;
@@ -263,6 +274,19 @@ let answersUserInput: (rootId: string, threadId: string) => boolean = () => true
 let worktreesRoot: () => string = () => '';
 let terminalEmit: (event: DeveloperTerminalEvent) => void = () => undefined;
 const terminalRoots = new Map<string, string>();
+const workspaceTerminals = new Map<string, WorkspaceTerminal>();
+const WORKSPACE_TERMINAL_POLL_MS = 150;
+interface WorkspaceTerminal {
+  server: RunningServer;
+  rootKey: string;
+  revision?: number;
+  requestedScrollback: number;
+  renderedRevision?: number;
+  viewport?: WorkspaceTerminalViewport;
+  sequence: number;
+  writeTail: Promise<void>;
+  inputFailed: boolean;
+}
 let accountSyncError: string | null = null;
 let accountSyncChain: Promise<void> = Promise.resolve();
 let cachedStatus: { binary: string; status: DeveloperRuntimeStatus } | null = null;
@@ -282,8 +306,10 @@ interface AdvertisedCapabilities {
   threadRename: boolean;
   threadUnarchive: boolean;
   threadPin: boolean;
+  threadTitleSearch: boolean;
   mcpLogs: boolean;
   terminals: boolean;
+  workspaceTerminal: boolean;
   mcp: boolean;
   mcpSetEnabled: boolean;
 }
@@ -484,7 +510,7 @@ const CAPABILITY_FROM_HANDSHAKE: Record<
   thread_pin: (cli) => cli.threadPin,
   mcp_servers: (cli) => cli.mcp,
   mcp_logs: (cli) => cli.mcpLogs,
-  terminals: (cli) => cli.terminals,
+  terminals: (cli) => cli.terminals || cli.workspaceTerminal,
 };
 
 /**
@@ -647,6 +673,13 @@ function closeServer(server: RunningServer, error: Error, announce = true): void
   if (server.closed) return;
   server.closed = true;
   server.stopReason = error.message;
+  for (const id of server.terminals) {
+    if (workspaceTerminals.get(id)?.server === server) workspaceTerminals.delete(id);
+    if (terminalRoots.get(id) !== server.root.id) continue;
+    terminalRoots.delete(id);
+    terminalEmit({ rootId: server.root.id, terminalId: id, exitCode: null });
+  }
+  server.terminals.clear();
   stopProcess(server);
   for (const pending of server.pending.values()) {
     clearTimeout(pending.timer);
@@ -1325,6 +1358,7 @@ async function handshake(server: RunningServer, binary: string): Promise<void> {
   server.features = {
     maxTurns: capabilities['maxTurns'] === true,
     memory: capabilities['memory'] === true,
+    terminalPty: capabilities['terminals'] === true || capabilities['workspaceTerminal'] === true,
   };
   server.advertised = {
     binary,
@@ -1342,8 +1376,10 @@ async function handshake(server: RunningServer, binary: string): Promise<void> {
     threadRename: capabilities['threadRename'] === true,
     threadUnarchive: capabilities['threadUnarchive'] === true,
     threadPin: capabilities['threadPin'] === true,
+    threadTitleSearch: capabilities['threadTitleSearch'] === true,
     mcpLogs: capabilities['mcpLogs'] === true,
     terminals: capabilities['terminals'] === true,
+    workspaceTerminal: capabilities['workspaceTerminal'] === true,
     mcp: capabilities['mcp'] === true,
     mcpSetEnabled: capabilities['mcpSetEnabled'] === true,
   };
@@ -1477,9 +1513,14 @@ async function launchServer(root: WorkspaceRoot, allowed: () => boolean): Promis
     const detail = server.stderrTail.trim();
     closeServer(
       server,
-      new Error(
-        `The AGI CLI exited (${signal ?? String(code ?? 'unknown')})${detail === '' ? '' : `: ${detail}`}`,
-      ),
+      !remote && source !== 'bundled' && UNTRUSTED_FOLDER.test(detail)
+        ? new DeveloperRuntimeUnavailableError(
+            'The selected AGI CLI has not trusted this workspace.',
+            UNTRUSTED_FOLDER_HINT,
+          )
+        : new Error(
+            `The AGI CLI exited (${signal ?? String(code ?? 'unknown')})${detail === '' ? '' : `: ${detail}`}`,
+          ),
     );
     confirmProcessExit(server);
   });
@@ -1707,17 +1748,19 @@ function requireSession(rootId: string, raw: unknown): LocalDeveloperSession {
 
 async function listForRoot(
   root: WorkspaceRoot,
-  includeCloud: boolean,
-  includeArchived = false,
+  options: DeveloperSessionListOptions & { includeCloud?: boolean },
 ): Promise<DeveloperSessionGroup[]> {
   const remote = hasSshEnvironment(root.id);
+  const titleQuery = options.titleQuery?.trim();
   const { git, unavailableReason } = remote
     ? {
         git: null,
         unavailableReason:
           'SSH file changes are reviewed through agent output and transcript diffs. The host file editor and PTY are unavailable.',
       }
-    : await readWorkspaceGit(root);
+    : titleQuery
+      ? { git: null, unavailableReason: null }
+      : await readWorkspaceGit(root);
   const group: DeveloperSessionGroup = {
     rootId: root.id,
     name: root.name,
@@ -1730,21 +1773,46 @@ async function listForRoot(
 
   try {
     const server = await readyServer(root);
-    const result = await request(server, 'thread/list', {
+    const nativeSearch = !remote && titleQuery && server.advertised?.threadTitleSearch === true;
+    const pages = sessionPages(server, {
       cwd: root.path,
-      ...(includeCloud ? { includeCloud } : {}),
-      ...(includeArchived ? { includeArchived } : {}),
+      ...(!titleQuery && options.includeCloud ? { includeCloud: true } : {}),
+      ...(options.includeArchived ? { includeArchived: true } : {}),
+      ...(nativeSearch ? { titleQuery } : {}),
     });
-    const threads = isRecord(result) ? result['threads'] : null;
-    if (Array.isArray(threads)) {
-      group.sessions = threads
+    let pageSize: number | undefined;
+    for await (const threads of pages) {
+      pageSize ??= threads.length;
+      const matching = threads
         .map((thread) => toSession(root.id, thread))
-        .filter((session): session is LocalDeveloperSession => session !== null)
-        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+        .filter((session): session is LocalDeveloperSession => session !== null);
+      group.sessions.push(
+        ...(titleQuery
+          ? matching.filter(
+              (session) =>
+                session.location !== 'cloud' && sessionTitleMatches(session.title, titleQuery),
+            )
+          : matching),
+      );
+      if (!titleQuery || nativeSearch || group.sessions.length >= pageSize) break;
     }
-    const awaiting = remote ? [] : await serversAwaitingApproval(server);
+    group.sessions.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    if (titleQuery && pageSize !== undefined) group.sessions = group.sessions.slice(0, pageSize);
+    const awaiting = remote || titleQuery ? [] : await serversAwaitingApproval(server);
     if (awaiting.length > 0) group.mcpAwaitingApproval = awaiting;
-    if (!remote) worktrees = await worktreeGroups(root, server, group);
+    if (!remote) {
+      worktrees = await worktreeGroups(root, server, group);
+      if (titleQuery) {
+        for (const worktree of worktrees) {
+          worktree.sessions = worktree.sessions.filter(
+            (session) =>
+              (options.includeArchived ||
+                (session.status !== 'archived' && session.archivedAt === undefined)) &&
+              sessionTitleMatches(session.title, titleQuery),
+          );
+        }
+      }
+    }
   } catch (error) {
     group.unavailable = unavailableFrom(error);
     return [group];
@@ -1800,16 +1868,179 @@ function terminalSize(cols: number, rows: number): { cols: number; rows: number 
   return { cols: clamp(cols, TERMINAL_MAX_COLUMNS), rows: clamp(rows, TERMINAL_MAX_ROWS) };
 }
 
+function workspaceTerminalSize(cols: number, rows: number): { columns: number; rows: number } {
+  const size = terminalSize(cols, rows);
+  return {
+    columns: Math.min(size.cols, WORKSPACE_TERMINAL_MAX_COLUMNS),
+    rows: Math.min(size.rows, WORKSPACE_TERMINAL_MAX_ROWS),
+  };
+}
+
+function workspaceTerminalSummary(
+  value: unknown,
+  rootKey: string,
+  terminalId: string,
+): TerminalSummary {
+  if (
+    !isRecord(value) ||
+    !isRecord(value['plan']) ||
+    value['plan']['rootKey'] !== rootKey ||
+    value['plan']['terminalId'] !== terminalId
+  ) {
+    throw new Error('The AGI CLI returned a different terminal.');
+  }
+  return value as unknown as TerminalSummary;
+}
+
+function finishWorkspaceTerminal(
+  terminalId: string,
+  terminal: WorkspaceTerminal,
+  exitCode: number | null,
+): void {
+  if (workspaceTerminals.get(terminalId) !== terminal) return;
+  workspaceTerminals.delete(terminalId);
+  terminalRoots.delete(terminalId);
+  settle(terminal.server, () => terminal.server.terminals.delete(terminalId));
+  terminalEmit({ rootId: terminal.server.root.id, terminalId, exitCode });
+}
+
+async function pollWorkspaceTerminal(
+  terminalId: string,
+  terminal: WorkspaceTerminal,
+): Promise<void> {
+  if (workspaceTerminals.get(terminalId) !== terminal) return;
+  const scrollback = terminal.requestedScrollback;
+  try {
+    const result = (await request(terminal.server, 'terminal/read', {
+      rootKey: terminal.rootKey,
+      terminalId,
+      scrollback,
+      afterRevision:
+        scrollback === terminal.viewport?.scrollback ? terminal.renderedRevision : undefined,
+    })) as TerminalReadResponse;
+    if (workspaceTerminals.get(terminalId) !== terminal) return;
+    const summary = workspaceTerminalSummary(result.terminal, terminal.rootKey, terminalId);
+    const revision = Number(summary.revision);
+    if (!Number.isSafeInteger(revision) || revision < (terminal.revision ?? 0)) {
+      throw new Error('The terminal screen revision could not be confirmed.');
+    }
+    terminal.revision = revision;
+    if (result.screen && scrollback === terminal.requestedScrollback) {
+      const { screen } = result;
+      const data = workspaceTerminalFrame(screen, terminal.viewport?.alternateScreen);
+      terminal.viewport = {
+        scrollback: screen.scrollback,
+        scrollbackLength: screen.scrollbackLen,
+        alternateScreen: screen.alternateScreen,
+      };
+      terminal.requestedScrollback = screen.scrollback;
+      terminal.renderedRevision = revision;
+      terminalEmit({
+        rootId: terminal.server.root.id,
+        terminalId,
+        data,
+        viewport: terminal.viewport,
+      });
+    }
+    if (summary.state === 'exited' || summary.state === 'stopped') {
+      finishWorkspaceTerminal(terminalId, terminal, summary.exitCode ?? null);
+      return;
+    }
+  } catch {
+    if (workspaceTerminals.get(terminalId) !== terminal) return;
+    if (!terminal.inputFailed) {
+      terminal.inputFailed = true;
+      terminalEmit({
+        rootId: terminal.server.root.id,
+        terminalId,
+        data: '\r\nThe terminal screen could not be read. Close this terminal to stop it.\r\n',
+      });
+    }
+    return;
+  }
+  setTimeout(
+    () => void pollWorkspaceTerminal(terminalId, terminal),
+    WORKSPACE_TERMINAL_POLL_MS,
+  ).unref();
+}
+
+async function openWorkspaceTerminal(
+  server: RunningServer,
+  cols: number,
+  rows: number,
+  confirm: ((plan: TerminalPlan) => Promise<boolean>) | undefined,
+): Promise<{ terminalId: string }> {
+  const identity = await request(server, 'workspace/identity', {});
+  const rootKey = isRecord(identity) ? readString(identity, 'rootKey') : null;
+  if (!rootKey || !confirm) throw new Error('The terminal needs review in its desktop window.');
+  const value = await request(server, 'terminal/plan', {
+    rootKey,
+    size: workspaceTerminalSize(cols, rows),
+  });
+  const terminalId = isRecord(value) ? readString(value, 'terminalId') : null;
+  if (
+    !isRecord(value) ||
+    !terminalId ||
+    value['rootKey'] !== rootKey ||
+    terminalRoots.has(terminalId)
+  ) {
+    throw new Error('The AGI CLI returned a different terminal plan.');
+  }
+  const params = { rootKey, terminalId };
+  try {
+    if (
+      value['cwd'] !== server.root.path ||
+      typeof value['shell'] !== 'string' ||
+      typeof value['sandbox'] !== 'string' ||
+      typeof value['networkAllowed'] !== 'boolean'
+    ) {
+      throw new Error('The AGI CLI did not return a terminal plan for this folder.');
+    }
+    if (!(await confirm(value as unknown as TerminalPlan))) {
+      throw new Error('The interactive terminal was left closed.');
+    }
+    const summary = workspaceTerminalSummary(
+      await request(server, 'terminal/start', params),
+      rootKey,
+      terminalId,
+    );
+    if (summary.state !== 'running') throw new Error('The interactive terminal did not start.');
+    const sequence = Number(summary.nextInputSequence);
+    if (!Number.isSafeInteger(sequence) || sequence < 0) {
+      throw new Error('The AGI CLI did not confirm where terminal input begins.');
+    }
+    const terminal = {
+      server,
+      rootKey,
+      sequence,
+      writeTail: Promise.resolve(),
+      inputFailed: false,
+      requestedScrollback: 0,
+    };
+    workspaceTerminals.set(terminalId, terminal);
+    terminalRoots.set(terminalId, server.root.id);
+    server.terminals.add(terminalId);
+    void pollWorkspaceTerminal(terminalId, terminal);
+    return { terminalId };
+  } catch (error) {
+    await requestOrNull(server, 'terminal/close', params);
+    throw error;
+  }
+}
+
 export async function openDeveloperTerminal(
   rootId: string,
   cols: number,
   rows: number,
+  confirm?: (plan: TerminalPlan) => Promise<boolean>,
 ): Promise<{ terminalId: string }> {
   const root = await resolveRoot(rootId);
   if (hasSshEnvironment(rootId)) {
     throw new DeveloperRuntimeUnavailableError('Terminals open only for folders on this computer.');
   }
   const server = await readyServer(root);
+  if (server.advertised?.workspaceTerminal)
+    return openWorkspaceTerminal(server, cols, rows, confirm);
   requireAdvertised(server, 'terminals');
   const result = await request(server, 'terminal/open', {
     cwd: root.path,
@@ -1834,7 +2065,44 @@ export async function writeDeveloperTerminal(
   terminalId: string,
   data: string,
 ): Promise<boolean> {
-  if (data.length > TERMINAL_WRITE_LIMIT) throw new Error('That is too much to type at once.');
+  if (Buffer.byteLength(data) > TERMINAL_WRITE_LIMIT)
+    throw new Error('That is too much to type at once.');
+  const terminal = workspaceTerminals.get(terminalId);
+  if (terminal?.server.root.id === rootId) {
+    const pending = terminal.writeTail.then(async () => {
+      if (workspaceTerminals.get(terminalId) !== terminal || terminal.inputFailed)
+        throw new Error('Terminal input is paused. Close this terminal before typing again.');
+      try {
+        terminal.requestedScrollback = 0;
+        const summary = workspaceTerminalSummary(
+          await request(terminal.server, 'terminal/write', {
+            rootKey: terminal.rootKey,
+            terminalId,
+            sequence: terminal.sequence,
+            text: data,
+          }),
+          terminal.rootKey,
+          terminalId,
+        );
+        const next = Number(summary.nextInputSequence);
+        if (next !== terminal.sequence + 1 || summary.state !== 'running' || summary.error) {
+          throw new Error('Terminal input was not confirmed.');
+        }
+        terminal.sequence = next;
+      } catch (error) {
+        terminal.inputFailed = true;
+        terminalEmit({
+          rootId,
+          terminalId,
+          data: '\r\nTerminal input could not be confirmed. Close this terminal before typing again.\r\n',
+        });
+        throw error;
+      }
+    });
+    terminal.writeTail = pending.catch(() => undefined);
+    await pending;
+    return true;
+  }
   await request(await terminalServer(rootId, terminalId), 'terminal/write', { terminalId, data });
   return true;
 }
@@ -1845,6 +2113,15 @@ export async function resizeDeveloperTerminal(
   cols: number,
   rows: number,
 ): Promise<boolean> {
+  const terminal = workspaceTerminals.get(terminalId);
+  if (terminal?.server.root.id === rootId) {
+    await request(terminal.server, 'terminal/resize', {
+      rootKey: terminal.rootKey,
+      terminalId,
+      size: workspaceTerminalSize(cols, rows),
+    });
+    return true;
+  }
   await request(await terminalServer(rootId, terminalId), 'terminal/resize', {
     terminalId,
     ...terminalSize(cols, rows),
@@ -1852,8 +2129,48 @@ export async function resizeDeveloperTerminal(
   return true;
 }
 
+export function scrollDeveloperTerminal(
+  rootId: string,
+  terminalId: string,
+  lines: number,
+): boolean {
+  const terminal = workspaceTerminals.get(terminalId);
+  if (
+    !terminal ||
+    terminal.server.root.id !== rootId ||
+    !Number.isSafeInteger(lines) ||
+    terminal.viewport?.alternateScreen
+  )
+    return false;
+  const available = Math.min(
+    WORKSPACE_TERMINAL_SCROLLBACK_LINES,
+    terminal.viewport?.scrollbackLength ?? 0,
+  );
+  terminal.requestedScrollback = Math.min(
+    available,
+    Math.max(0, terminal.requestedScrollback + lines),
+  );
+  return true;
+}
+
 export async function closeDeveloperTerminal(rootId: string, terminalId: string): Promise<boolean> {
   if (terminalRoots.get(terminalId) !== rootId) return true;
+  const terminal = workspaceTerminals.get(terminalId);
+  if (terminal) {
+    const summary = workspaceTerminalSummary(
+      await request(terminal.server, 'terminal/close', {
+        rootKey: terminal.rootKey,
+        terminalId,
+      }),
+      terminal.rootKey,
+      terminalId,
+    );
+    if (summary.state !== 'stopped' && summary.state !== 'exited') {
+      throw new Error('The terminal was not confirmed closed.');
+    }
+    finishWorkspaceTerminal(terminalId, terminal, summary.exitCode ?? null);
+    return true;
+  }
   terminalRoots.delete(terminalId);
   const server = await readyServer(await resolveRoot(rootId));
   await requestOrNull(server, 'terminal/close', { terminalId });
@@ -2229,16 +2546,54 @@ export async function readDeveloperModels(
 
 export async function listDeveloperSessions(
   includeRoot: (root: WorkspaceRoot) => boolean = () => true,
-  options: { includeCloud?: boolean; includeArchived?: boolean } = {},
+  options: DeveloperSessionListOptions & { includeCloud?: boolean } = {},
 ): Promise<DeveloperSessionList> {
   const groups = await Promise.all(
     [...listRoots(), ...listSshRoots()]
       .filter(includeRoot)
-      .map((root) =>
-        listForRoot(root, options.includeCloud === true, options.includeArchived === true),
-      ),
+      .map((root) => listForRoot(root, options)),
   );
   return { groups: groups.flat() };
+}
+
+async function* sessionPages(server: RunningServer, params: Record<string, unknown>) {
+  const seen = new Set<string>();
+  let cursor: string | null = null;
+  do {
+    const result = await request(server, 'thread/list', {
+      ...params,
+      ...(cursor ? { cursor } : {}),
+    });
+    if (!isRecord(result) || !Array.isArray(result['threads'])) {
+      throw new DeveloperRuntimeUnavailableError('The session list could not be read.', RETRY_HINT);
+    }
+    yield result['threads'] as unknown[];
+    cursor = readString(result, 'nextCursor');
+    if (cursor) {
+      if (seen.has(cursor)) {
+        throw new DeveloperRuntimeUnavailableError(
+          'The session list stopped advancing.',
+          RETRY_HINT,
+        );
+      }
+      seen.add(cursor);
+    }
+  } while (cursor);
+}
+
+export async function lookupDeveloperSession(
+  rootId: string,
+  threadId: string,
+): Promise<LocalDeveloperSession | null> {
+  const root = await resolveRoot(rootId);
+  const server = await readyServer(root);
+  for await (const threads of sessionPages(server, { cwd: root.path, includeArchived: true })) {
+    const match = threads.find(
+      (thread) => isRecord(thread) && thread['id'] === threadId && thread['location'] !== 'cloud',
+    );
+    if (match) return toSession(rootId, match);
+  }
+  return null;
 }
 
 /**

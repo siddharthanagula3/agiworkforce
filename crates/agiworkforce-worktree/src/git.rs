@@ -695,7 +695,7 @@ pub(crate) fn prepare_user_config_blocking() {
 /// a checkout this crate makes holds LFS pointer files rather than their
 /// content, and a snapshot stores a tracked LFS file's working-tree content
 /// as a plain blob.
-pub(crate) async fn git_command(dir: &Path) -> std::io::Result<Command> {
+pub async fn git_command(dir: &Path) -> std::io::Result<Command> {
     prepare_user_config().await;
     configured_git_command(dir)
 }

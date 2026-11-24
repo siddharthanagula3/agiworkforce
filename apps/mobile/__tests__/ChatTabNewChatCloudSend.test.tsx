@@ -199,9 +199,18 @@ jest.mock('lucide-react-native', () => {
   );
 });
 
+let mockInstalledModelIds: string[] = [];
+let mockTier2Available: boolean | null = null;
+
 jest.mock('@/src/features/model-picker/installStore', () => ({
   useModelInstallStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({ installedModelIds: [], readySystemModelIds: [], jobs: {} }),
+    selector({
+      installedModelIds: mockInstalledModelIds,
+      readySystemModelIds: [],
+      jobs: {},
+      tier2Available: mockTier2Available,
+      statusForModel: () => ({ status: 'unavailable' }),
+    }),
   readyLocalModelIdOr: (fallback: string) => fallback,
   pickReadyLocalModelId: () => null,
 }));
@@ -262,6 +271,8 @@ describe('Chat tab new chat Cloud send', () => {
     mockChatInputOnOpenVoiceMode = undefined;
     mockLiveVoiceReason = undefined;
     mockIsOnline = true;
+    mockInstalledModelIds = [];
+    mockTier2Available = null;
     mockResolveVideoRequest.mockReturnValue({ status: 'not_requested' });
     mockResolveImageRequest.mockReturnValue({ status: 'not_requested' });
     mockCreateConversation.mockResolvedValue('conv-1');
@@ -356,6 +367,25 @@ describe('Chat tab new chat Cloud send', () => {
     expect(alertSpy).toHaveBeenCalledWith(
       "You're offline",
       expect.stringContaining('Your message is still in the composer'),
+    );
+  });
+
+  it('keeps the Local draft when no catalog model can run on this device', async () => {
+    mockTier2Available = false;
+    useChatAppModeStore.setState({ appMode: 'local' });
+    useModelStore.setState({ selectedModel: DEFAULT_LOCAL_MODEL_ID, selectedProvider: 'local' });
+
+    const { getByRole } = render(<ChatTabScreen />);
+    expect(getByRole('button', { name: 'No compatible local models' })).toBeTruthy();
+    const accepted = await mockChatInputOnSend?.('keep my local draft');
+
+    expect(accepted).toBe(false);
+    expect(mockCreateConversation).not.toHaveBeenCalled();
+    expect(mockSendMessage).not.toHaveBeenCalled();
+    expect(alertSpy).toHaveBeenCalledWith(
+      'No compatible local models',
+      expect.stringContaining('Your draft stays on this device'),
+      expect.any(Array),
     );
   });
 
@@ -623,13 +653,20 @@ describe('Chat tab new chat Cloud send', () => {
       expect(mockDiscardUnsentConversation).not.toHaveBeenCalled();
     };
 
-    it('creates and opens nothing for a text message when sharing is declined', async () => {
+    it('reports a declined send for a message with a file and opens nothing', async () => {
       declineSharing();
 
       render(<ChatTabScreen />);
-      const accepted = await mockChatInputOnSend?.('hello');
+      const accepted = await mockChatInputOnSend?.('hello', [
+        {
+          id: 'photo',
+          uri: 'file:///fixture.jpg',
+          mimeType: 'image/jpeg',
+          fileName: 'fixture.jpg',
+        },
+      ]);
 
-      expect(accepted).toBe(false);
+      expect(accepted).toBe('declined');
       expectNothingStarted();
       expect(alertSpy).not.toHaveBeenCalled();
     });
@@ -652,7 +689,7 @@ describe('Chat tab new chat Cloud send', () => {
       render(<ChatTabScreen />);
       const accepted = await mockChatInputOnSend?.('a red fox');
 
-      expect(accepted).toBe(false);
+      expect(accepted).toBe('declined');
       expect(mockFreeImageOfferFor).toHaveBeenCalledTimes(1);
       expectNothingStarted();
     });
@@ -674,7 +711,7 @@ describe('Chat tab new chat Cloud send', () => {
         render(<ChatTabScreen />);
         const accepted = await mockChatInputOnSend?.('a paper boat');
 
-        expect(accepted).toBe(false);
+        expect(accepted).toBe('declined');
         expectNothingStarted();
       },
     );
@@ -727,6 +764,7 @@ describe('Chat tab new chat Cloud send', () => {
     });
 
     it('never asks for a Local Mode message', async () => {
+      mockInstalledModelIds = [DEFAULT_LOCAL_MODEL_ID];
       useChatAppModeStore.setState({ appMode: 'local' });
       useModelStore.setState({ selectedModel: DEFAULT_LOCAL_MODEL_ID, selectedProvider: 'local' });
       mockSendMessage.mockResolvedValueOnce(true);

@@ -33,13 +33,19 @@ import {
   answerCodeApproval,
   answerCodeQuestion,
   attachCodeSession,
+  createCodeRequestId,
   detachCodeSession,
   interruptCodeTurn,
   requestCodeTranscript,
   steerCodeSession,
 } from '../remote-code/service';
 import {
+  EMPTY_REMOTE_CODE_DRAFT,
+  beginCodeDraftSend,
+  finishCodeDraftSend,
   remoteCodeThreadKey,
+  removeRejectedCodeGuidance,
+  updateCodeDraft,
   useRemoteCodePreferences,
   useRemoteCodeStore,
 } from '../remote-code/store';
@@ -108,16 +114,17 @@ export function CodeSessionView({
   const colors = useThemeColors();
   const router = useRouter();
   const keyboard = useKeyboardSafeComposer('screen');
-  const thread = useRemoteCodeStore(
-    (state) => state.threads[remoteCodeThreadKey(rootId, threadId)] ?? null,
-  );
+  const threadKey = remoteCodeThreadKey(rootId, threadId);
+  const thread = useRemoteCodeStore((state) => state.threads[threadKey] ?? null);
   const summary = useRemoteCodeStore((state) =>
     state.sessions.find((session) => session.rootId === rootId && session.threadId === threadId),
   );
   const steer = useRemoteCodePreferences((state) => state.followUpBehavior === 'steer');
-  const [draft, setDraft] = useState('');
-  const [sending, setSending] = useState(false);
-  const [sendError, setSendError] = useState<string | null>(null);
+  const draftState = useRemoteCodeStore(
+    (state) => state.drafts[threadKey] ?? EMPTY_REMOTE_CODE_DRAFT,
+  );
+  const draft = draftState.text;
+  const setDraft = (text: string) => updateCodeDraft(threadKey, text);
   const [changesOpen, setChangesOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [awayFromLatest, setAwayFromLatest] = useState(false);
@@ -226,10 +233,12 @@ export function CodeSessionView({
   }
 
   const running = thread.activeTurnId !== null;
+  const showStoppedTurn = !running && thread.status === 'failed' && summary?.location !== 'cloud';
   const trimmed = draft.trim();
   const empty = trimmed.length === 0;
   const stopInSendSlot = running && empty;
-  const canSend = !sending && !empty && trimmed.length <= REMOTE_CODE_LIMITS.guidanceLength;
+  const canSend =
+    !draftState.attempt && !empty && trimmed.length <= REMOTE_CODE_LIMITS.guidanceLength;
   const waiting = thread.pendingApprovals.length + thread.pendingQuestions.length > 0;
   const orderedApprovals =
     focusApprovalId === undefined
@@ -245,18 +254,19 @@ export function CodeSessionView({
   const earliest = thread.transcript?.messages[0]?.index;
 
   const handleSend = async () => {
-    if (!canSend) return;
-    const text = trimmed;
-    setDraft('');
-    setSendError(null);
-    setSending(true);
+    const id = createCodeRequestId();
+    if (!id) return;
+    const pending = beginCodeDraftSend(threadKey, id);
+    if (!pending) return;
     nearBottom.current = true;
-    const sent = await steerCodeSession(rootId, threadId, text, running && steer);
-    if (!sent) {
-      setDraft((current) => (current.trim() ? current : text));
-      setSendError(COPY.sendFailed);
-    }
-    setSending(false);
+    const sent = await steerCodeSession(
+      rootId,
+      threadId,
+      pending.text,
+      running && steer,
+      pending.requestId,
+    ).catch(() => false);
+    if (!sent) finishCodeDraftSend(threadKey, pending.requestId, 'not-sent');
   };
 
   const handleStop = () => {
@@ -334,6 +344,32 @@ export function CodeSessionView({
             <TimelineRow key={item.key} item={item} />
           ))}
 
+          {thread.rejectedGuidance.map((message, index) => (
+            <View key={message.requestId ?? index}>
+              <CloudCodeTaskBubble text={message.text} />
+              <Text
+                accessibilityLiveRegion="polite"
+                style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}
+              >
+                {message.reason === 'queue-full' ? COPY.followUpQueueFull : COPY.followUpRejected}
+              </Text>
+              <PressableBox
+                accessibilityRole="button"
+                accessibilityHint={empty ? undefined : COPY.restoreDraftNeedsEmptyComposer}
+                disabled={!empty}
+                onPress={() => {
+                  setDraft(message.text);
+                  removeRejectedCodeGuidance(rootId, threadId, message);
+                }}
+                style={{ minHeight: 44, alignSelf: 'flex-start', justifyContent: 'center' }}
+              >
+                <Text style={{ color: empty ? colors.textPrimary : colors.textMuted }}>
+                  {COPY.restoreDraft}
+                </Text>
+              </PressableBox>
+            </View>
+          ))}
+
           {thread.hostMessage ? (
             <Text
               accessibilityRole="alert"
@@ -341,6 +377,13 @@ export function CodeSessionView({
               style={{ color: colors.agentError, fontSize: typeScale.footnote, lineHeight: 19 }}
             >
               {thread.hostMessage}
+            </Text>
+          ) : showStoppedTurn ? (
+            <Text
+              accessibilityLiveRegion="polite"
+              style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}
+            >
+              {COPY.storedTurnStopped}
             </Text>
           ) : null}
 
@@ -459,7 +502,15 @@ export function CodeSessionView({
           onChangeText={setDraft}
           onPrimary={stopInSendSlot ? handleStop : () => void handleSend()}
         />
-        {sendError ? (
+        {draftState.attempt ? (
+          <Text
+            accessibilityLiveRegion="polite"
+            style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}
+          >
+            {COPY.awaitingComputer}
+          </Text>
+        ) : null}
+        {draftState.sendFailure ? (
           <Text
             accessibilityRole="alert"
             style={{
@@ -468,7 +519,7 @@ export function CodeSessionView({
               paddingHorizontal: 16,
             }}
           >
-            {sendError}
+            {draftState.sendFailure === 'not-sent' ? COPY.sendFailed : COPY.sendUnconfirmed}
           </Text>
         ) : null}
       </View>

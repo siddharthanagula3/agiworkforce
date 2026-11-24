@@ -259,6 +259,13 @@ pub(crate) fn record_approval_note(note: String) {
     let _ = APPROVAL_REPLIES.try_with(|replies| replies.borrow_mut().notes.push(note));
 }
 
+pub(crate) fn recorded_question_answer() -> Option<String> {
+    APPROVAL_REPLIES
+        .try_with(|replies| replies.borrow().notes.last().cloned())
+        .ok()
+        .flatten()
+}
+
 pub(crate) fn record_approved_edit(content: String) {
     let _ = APPROVAL_REPLIES.try_with(|replies| replies.borrow_mut().edit = Some(content));
 }
@@ -325,6 +332,7 @@ pub(crate) fn terminal_questions_allowed() -> bool {
 #[derive(Clone)]
 pub struct ToolExecOptions {
     pub require_confirmation: bool,
+    pub require_shell_approval: bool,
     pub auto_approve_safe: bool,
     /// `acceptEdits`: a file edit runs without asking. Shell commands still ask.
     pub auto_approve_edits: bool,
@@ -801,9 +809,13 @@ async fn execute_tool_with_scoped_permissions(
         }
     }
 
-    if opts.require_confirmation
+    let shell_prompt = opts.require_shell_approval
+        && matches!(canonical_name, "run_command" | "powershell")
+        && !permission_commands.is_empty();
+    if (opts.require_confirmation || shell_prompt)
         && !approved_this_call
-        && (pending_input.is_some()
+        && (shell_prompt
+            || pending_input.is_some()
             || permission_commands.iter().any(|command| {
                 if canonical_name == "powershell" {
                     permissions.asks_before_powershell(command)
@@ -814,6 +826,8 @@ async fn execute_tool_with_scoped_permissions(
     {
         let summary = if pending_input.is_some() {
             "Allow sending input to this running command?".into()
+        } else if shell_prompt {
+            "This turn requires approval before running shell commands.".into()
         } else {
             format!("Saved permissions require approval for `{canonical_name}`")
         };
@@ -849,7 +863,12 @@ async fn execute_tool_with_scoped_permissions(
             return Ok(ToolResult {
                 tool_name: canonical_name.into(),
                 success: false,
-                output: "Command was not approved under its saved Ask rule and did not run.".into(),
+                output: if shell_prompt {
+                    "Command was not approved and did not run."
+                } else {
+                    "Command was not approved under its saved Ask rule and did not run."
+                }
+                .into(),
             });
         }
         require_confirm = false;
@@ -1934,7 +1953,10 @@ fn approval_request_tool(kind: &ApprovalRequestKind) -> (&'static str, serde_jso
         }
         ApprovalRequestKind::Question { question, options } => (
             "ask_user",
-            serde_json::json!({ "question": question, "options": options }),
+            serde_json::json!({
+                "question": question,
+                "options": options.iter().map(|option| &option.label).collect::<Vec<_>>(),
+            }),
         ),
         ApprovalRequestKind::Hook { hook_name } => {
             ("hook", serde_json::json!({ "hook": hook_name }))
@@ -2631,7 +2653,7 @@ async fn execute_notebook_edit(
         }
     };
 
-    let validated_path = match common::validate_file_path(path) {
+    let validated_path = match common::validate_file_write_path(path) {
         Ok(path) => path,
         Err(reason) => {
             return Ok(ToolResult {
@@ -2690,13 +2712,23 @@ async fn execute_notebook_edit(
         None => None,
     };
 
-    if let Err(message) = crate::file_state::ensure_previously_read_and_fresh(&validated_path) {
-        return Ok(ToolResult {
-            tool_name: "notebook_edit".into(),
-            success: false,
-            output: message,
-        });
-    }
+    let basis = match crate::file_state::read_fresh_for_edit(&validated_path) {
+        Ok(Some(basis)) => basis,
+        Ok(None) => {
+            return Ok(ToolResult {
+                tool_name: "notebook_edit".into(),
+                success: false,
+                output: "Notebook file does not exist.".into(),
+            });
+        }
+        Err(message) => {
+            return Ok(ToolResult {
+                tool_name: "notebook_edit".into(),
+                success: false,
+                output: message,
+            });
+        }
+    };
 
     print_tool_status(
         "notebook_edit",
@@ -2725,6 +2757,15 @@ async fn execute_notebook_edit(
         }
     }
 
+    if common::validate_file_write_path(path).as_ref() != Ok(&validated_path) {
+        return Ok(ToolResult {
+            tool_name: "notebook_edit".into(),
+            success: false,
+            output: "Notebook path changed while this edit was pending. Open it again before editing."
+                .into(),
+        });
+    }
+
     let request = crate::notebook_edit::NotebookEditRequest {
         path: validated_path.to_string_lossy().into_owned(),
         mode: edit_mode,
@@ -2734,7 +2775,10 @@ async fn execute_notebook_edit(
         content: args.get("content").cloned(),
     };
 
-    let result = tokio::task::spawn_blocking(move || crate::notebook_edit::apply(&request)).await;
+    let result = tokio::task::spawn_blocking(move || {
+        crate::notebook_edit::apply_with_basis(&request, Some(&basis))
+    })
+    .await;
     match result {
         Ok(Ok(output)) => {
             if let Ok(content) = std::fs::read_to_string(&validated_path) {
@@ -2752,7 +2796,7 @@ async fn execute_notebook_edit(
         Ok(Err(e)) => Ok(ToolResult {
             tool_name: "notebook_edit".into(),
             success: false,
-            output: format!("Notebook edit failed: {}", e),
+            output: format!("Notebook edit failed: {e:#}"),
         }),
         Err(e) => Ok(ToolResult {
             tool_name: "notebook_edit".into(),
@@ -2816,6 +2860,7 @@ mod tests {
             additional_workspace_roots: Vec::new(),
             tool_search_catalog: None,
             require_confirmation: true,
+            require_shell_approval: false,
             auto_approve_safe,
             auto_approve_edits: false,
             quiet: true,
@@ -3221,6 +3266,7 @@ mod tests {
             additional_workspace_roots: Vec::new(),
             tool_search_catalog: None,
             require_confirmation: false,
+            require_shell_approval: false,
             auto_approve_safe: true,
             auto_approve_edits: false,
             quiet: true,
@@ -3275,6 +3321,7 @@ reason = "regression test"
             additional_workspace_roots: Vec::new(),
             tool_search_catalog: None,
             require_confirmation: false,
+            require_shell_approval: false,
             auto_approve_safe: true,
             auto_approve_edits: false,
             quiet: true,
@@ -3302,6 +3349,7 @@ reason = "regression test"
             additional_workspace_roots: Vec::new(),
             tool_search_catalog: None,
             require_confirmation: true,
+            require_shell_approval: false,
             auto_approve_safe: true,
             auto_approve_edits: false,
             quiet: true,
@@ -3353,6 +3401,7 @@ decision = "ask"
             additional_workspace_roots: Vec::new(),
             tool_search_catalog: None,
             require_confirmation: false,
+            require_shell_approval: false,
             auto_approve_safe: true,
             auto_approve_edits: false,
             quiet: true,
@@ -3411,6 +3460,7 @@ decision = "ask"
             additional_workspace_roots: Vec::new(),
             tool_search_catalog: None,
             require_confirmation: false,
+            require_shell_approval: false,
             auto_approve_safe: true,
             auto_approve_edits: false,
             quiet: true,
@@ -3450,6 +3500,7 @@ decision = "ask"
             additional_workspace_roots: Vec::new(),
             tool_search_catalog: None,
             require_confirmation: true,
+            require_shell_approval: false,
             auto_approve_safe: true,
             auto_approve_edits: true,
             quiet: true,
@@ -3688,6 +3739,7 @@ decision = "ask"
             let opts = ToolExecOptions {
                 additional_workspace_roots: Vec::new(),
                 require_confirmation: true,
+                require_shell_approval: false,
                 auto_approve_safe: true,
                 auto_approve_edits: !policy_allow && !saved_allow,
                 quiet: true,
@@ -3746,6 +3798,7 @@ decision = "ask"
             let opts = ToolExecOptions {
                 additional_workspace_roots: Vec::new(),
                 require_confirmation: true,
+                require_shell_approval: false,
                 auto_approve_safe: true,
                 auto_approve_edits: true,
                 quiet: true,
@@ -3798,6 +3851,7 @@ decision = "ask"
             let opts = ToolExecOptions {
                 additional_workspace_roots: Vec::new(),
                 require_confirmation: !bypass,
+                require_shell_approval: false,
                 auto_approve_safe: true,
                 auto_approve_edits: true,
                 quiet: true,
@@ -3872,6 +3926,7 @@ decision = "ask"
             let opts = ToolExecOptions {
                 additional_workspace_roots: Vec::new(),
                 require_confirmation: true,
+                require_shell_approval: false,
                 auto_approve_safe: true,
                 auto_approve_edits: true,
                 quiet: true,
@@ -3922,6 +3977,7 @@ decision = "ask"
             let opts = ToolExecOptions {
                 additional_workspace_roots: Vec::new(),
                 require_confirmation: true,
+                require_shell_approval: false,
                 auto_approve_safe: true,
                 auto_approve_edits: true,
                 quiet: true,
@@ -4004,6 +4060,7 @@ decision = "ask"
         let opts = ToolExecOptions {
             additional_workspace_roots: Vec::new(),
             require_confirmation: false,
+            require_shell_approval: false,
             auto_approve_safe: true,
             auto_approve_edits: true,
             quiet: true,
@@ -4080,6 +4137,7 @@ decision = "ask"
         let opts = ToolExecOptions {
             additional_workspace_roots: Vec::new(),
             require_confirmation: true,
+            require_shell_approval: false,
             auto_approve_safe: false,
             auto_approve_edits: false,
             quiet: true,
@@ -4196,6 +4254,7 @@ decision = "ask"
         let opts = ToolExecOptions {
             additional_workspace_roots: Vec::new(),
             require_confirmation: true,
+            require_shell_approval: false,
             auto_approve_safe: false,
             auto_approve_edits: false,
             quiet: true,
@@ -4255,6 +4314,7 @@ decision = "ask"
         let opts = ToolExecOptions {
             additional_workspace_roots: Vec::new(),
             require_confirmation: true,
+            require_shell_approval: false,
             auto_approve_safe: true,
             auto_approve_edits: true,
             quiet: true,
@@ -4356,6 +4416,7 @@ decision = "ask"
                 additional_workspace_roots: Vec::new(),
                 tool_search_catalog: None,
                 require_confirmation: false,
+                require_shell_approval: false,
                 auto_approve_safe: true,
                 auto_approve_edits: true,
                 quiet: true,
@@ -4411,6 +4472,7 @@ decision = "deny"
             additional_workspace_roots: Vec::new(),
             tool_search_catalog: None,
             require_confirmation: false,
+            require_shell_approval: false,
             auto_approve_safe: true,
             auto_approve_edits: false,
             quiet: true,
@@ -4527,6 +4589,7 @@ decision = "deny"
             additional_workspace_roots: Vec::new(),
             tool_search_catalog: None,
             require_confirmation: false,
+            require_shell_approval: false,
             auto_approve_safe: true,
             auto_approve_edits: true,
             quiet: true,
@@ -4579,6 +4642,7 @@ decision = "deny"
             additional_workspace_roots: Vec::new(),
             tool_search_catalog: None,
             require_confirmation: false,
+            require_shell_approval: false,
             auto_approve_safe: true,
             auto_approve_edits: false,
             quiet: true,
@@ -4673,6 +4737,7 @@ decision = "deny"
             additional_workspace_roots: Vec::new(),
             tool_search_catalog: None,
             require_confirmation: false,
+            require_shell_approval: false,
             auto_approve_safe: false,
             auto_approve_edits: false,
             quiet: true,
@@ -4817,6 +4882,7 @@ decision = "deny"
             additional_workspace_roots: Vec::new(),
             tool_search_catalog: None,
             require_confirmation: false,
+            require_shell_approval: false,
             auto_approve_safe: true,
             auto_approve_edits: false,
             quiet: true,
@@ -4890,6 +4956,7 @@ decision = "deny"
         let opts = ToolExecOptions {
             additional_workspace_roots: Vec::new(),
             require_confirmation: true,
+            require_shell_approval: false,
             auto_approve_safe: false,
             auto_approve_edits: false,
             quiet: true,

@@ -55,6 +55,11 @@ export const DEVELOPER_AGENT_MODE_LABELS: Record<DeveloperAgentMode, string> = {
   bypass: 'Bypass permissions',
 };
 
+export const DEVELOPER_AUTO_MODE_DESCRIPTION =
+  'Automatically applies ordinary workspace edits and runs commands classified as safe. Other commands and protected changes require approval or are blocked.';
+export const DEVELOPER_ASK_MODE_DESCRIPTION =
+  'Asks before file edits and commands that need approval. Read-only actions and allowed commands can run without prompting.';
+
 /**
  * Read a posture out of any surface's own spelling. Separators and case are
  * ignored. An unknown word returns null rather than a default, so a vocabulary

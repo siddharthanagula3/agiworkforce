@@ -199,8 +199,52 @@ describe('rendered Markdown code-block actions', () => {
     expect(sent?.payload?.text).not.toContain('my half-typed question');
   });
 
-  it('keeps Review changes only on the latest reply, the one whose changes it can show', () => {
-    executeWebviewScript(vi.fn());
+  it('restores one review link on the last saved reply for a turn', () => {
+    const postMessage = vi.fn();
+    executeWebviewScript(postMessage);
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: {
+          type: 'conversationLoaded',
+          payload: {
+            trustMode: 'local',
+            messages: [
+              { role: 'assistant', text: 'Starting the edit.', turnId: 'edited' },
+              { role: 'assistant', text: 'The file is updated.', turnId: 'edited' },
+              { role: 'assistant', text: 'Here is an explanation.', turnId: 'explained' },
+            ],
+          },
+        },
+      }),
+    );
+
+    const publish = () =>
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            type: 'reviewableTurns',
+            payload: { turns: [{ turnId: 'edited', changedFiles: 2 }] },
+          },
+        }),
+      );
+    publish();
+    publish();
+
+    const links = document.querySelectorAll<HTMLButtonElement>('.turn-changes__review');
+    expect(links).toHaveLength(1);
+    expect(links[0]?.closest('.message')?.textContent).toContain('The file is updated.');
+    links[0]?.click();
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'reviewTurnChanges',
+        payload: { turnId: 'edited' },
+      }),
+    );
+  });
+
+  it('opens the saved changes for the specific reply selected', () => {
+    const postMessage = vi.fn();
+    executeWebviewScript(postMessage);
     const reply = (turnId: string): void => {
       window.dispatchEvent(new MessageEvent('message', { data: { type: 'turnResumed' } }));
       window.dispatchEvent(
@@ -216,9 +260,15 @@ describe('rendered Markdown code-block actions', () => {
     reply('turn-1');
     reply('turn-2');
 
-    const reviews = document.querySelectorAll('.turn-changes__review');
-    expect(reviews).toHaveLength(1);
-    expect(reviews[0]?.closest('.turn-changes')?.getAttribute('data-turn-id')).toBe('turn-2');
+    const reviews = document.querySelectorAll<HTMLButtonElement>('.turn-changes__review');
+    expect(reviews).toHaveLength(2);
+    reviews[0]?.click();
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'reviewTurnChanges',
+        payload: { turnId: 'turn-1' },
+      }),
+    );
     expect(document.querySelectorAll('.turn-changes')).toHaveLength(2);
   });
 });

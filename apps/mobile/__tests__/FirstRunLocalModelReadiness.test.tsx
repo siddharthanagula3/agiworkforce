@@ -1,11 +1,20 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
-import { StyleSheet } from 'react-native';
+import { Alert, StyleSheet } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { READING_COLUMN_MAX_WIDTH } from '@/src/shared/layout/contentColumn';
 
 const mockReplace = jest.fn();
 const mockPush = jest.fn();
+const mockCreateConversation = jest.fn();
+const mockSendMessage = jest.fn();
+const mockResolveLocalModelRef = jest.fn();
+let mockComposerSend: (text: string) => Promise<unknown>;
+jest.mock('@/src/features/model-picker/localModelRuntime', () => ({
+  ...jest.requireActual('@/src/features/model-picker/localModelRuntime'),
+  resolveLocalModelRef: () => mockResolveLocalModelRef(),
+}));
+
 jest.mock('@clerk/expo', () => ({ useUser: () => ({ user: null }) }));
 
 jest.mock('expo-router', () => ({
@@ -154,8 +163,8 @@ jest.mock('@/stores/chatStore', () => ({
   useChatStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
       loadConversations: jest.fn(),
-      createConversation: jest.fn(),
-      sendMessage: jest.fn(),
+      createConversation: mockCreateConversation,
+      sendMessage: mockSendMessage,
       beginImageGeneration: jest.fn(),
       completeImageGeneration: jest.fn(),
       failImageGeneration: jest.fn(),
@@ -181,9 +190,10 @@ jest.mock('@/src/features/chat/components/ChatInput', () => {
   const { View } = require('react-native');
   return {
     ChatInput: ReactRuntime.forwardRef(function MockChatInput(
-      _props: Record<string, unknown>,
+      props: { onSend: (text: string) => Promise<unknown> },
       ref: React.Ref<unknown>,
     ) {
+      mockComposerSend = props.onSend;
       ReactRuntime.useImperativeHandle(ref, () => ({ addAttachments: jest.fn() }));
       return <View testID="chat-input" />;
     }),
@@ -224,7 +234,12 @@ jest.mock('expo-document-picker', () => ({
 
 import OnboardingScreen from '../app/(public)/onboarding';
 import ChatTabScreen from '../app/(app)/(tabs)/chat';
-import { getDefaultModel, getSystemModelForTier1Runtime } from '@agiworkforce/local-llm';
+import {
+  detectCapabilities,
+  getDefaultModel,
+  getSystemModelForTier1Runtime,
+} from '@agiworkforce/local-llm';
+import { storage } from '../lib/mmkv';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { isSelectableLocalCatalogModel } from '../src/features/model-picker/service';
 
@@ -283,6 +298,31 @@ describe('onboarding on a tier-1 (Apple Intelligence) device', () => {
   });
 });
 
+it('lets a new Local user defer the model download', async () => {
+  jest.mocked(detectCapabilities).mockResolvedValueOnce({
+    totalRAMMB: 4096,
+    tier1Available: false,
+    tier1Runtime: null,
+    tier1Status: 'unavailable',
+    tier2Available: true,
+    tier3Available: true,
+    osVersion: '14.0',
+    thermalThrottled: false,
+  });
+  const { getByTestId } = render(<OnboardingScreen />);
+  await act(async () => {
+    fireEvent.press(getByTestId('hero-start-chatting-btn'));
+    await Promise.resolve();
+  });
+  await skipAboutYou(getByTestId);
+  await waitFor(() => expect(getByTestId('device-tier-skip-btn')).toBeTruthy());
+
+  fireEvent.press(getByTestId('device-tier-skip-btn'));
+
+  expect(storage.set).toHaveBeenCalledWith('onboarding-done', 'true');
+  expect(mockReplace).toHaveBeenCalledWith({ pathname: '/(app)' });
+});
+
 describe('chat tab download banner', () => {
   it('hides the download when the detected system model is ready', () => {
     mockReadySystemModelIds = [SYSTEM_RUNTIME_MODEL.id];
@@ -308,6 +348,53 @@ describe('chat tab download banner', () => {
       alignSelf: 'center',
       marginTop: 16,
     });
+  });
+
+  it('keeps the first draft when there is no runnable model and opens model setup on request', async () => {
+    mockResolveLocalModelRef.mockRejectedValueOnce(new Error('Model is not downloaded'));
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    try {
+      render(<ChatTabScreen />);
+
+      await act(async () => {
+        expect(await mockComposerSend('Keep this draft')).toBe(false);
+      });
+      expect(mockCreateConversation).not.toHaveBeenCalled();
+      expect(mockSendMessage).not.toHaveBeenCalled();
+      const [title, detail, buttons] = alert.mock.calls.at(-1) ?? [];
+      expect(title).toBe('Download a model to chat');
+      expect(detail).toContain('Your draft stays here');
+      expect(mockPush).not.toHaveBeenCalled();
+      buttons?.find((button) => button.text === 'Open Models')?.onPress?.();
+      expect(mockPush).toHaveBeenCalledWith('/(app)/models');
+    } finally {
+      alert.mockRestore();
+    }
+  });
+
+  it('starts the draft when the runtime confirms readiness before the model list updates', async () => {
+    mockResolveLocalModelRef.mockResolvedValueOnce({ modelId: DOWNLOADABLE_MODEL.id });
+    mockCreateConversation.mockResolvedValueOnce('local-ready');
+    mockSendMessage.mockImplementationOnce((_id, _text, _model, _attachments, options) => {
+      options.onAccepted();
+      return Promise.resolve(true);
+    });
+    render(<ChatTabScreen />);
+
+    await act(async () => {
+      expect(await mockComposerSend('Use the ready model')).toEqual({
+        openedConversationId: 'local-ready',
+      });
+    });
+
+    expect(mockCreateConversation).toHaveBeenCalledWith('Use the ready model');
+    expect(mockSendMessage).toHaveBeenCalledWith(
+      'local-ready',
+      'Use the ready model',
+      DOWNLOADABLE_MODEL.id,
+      undefined,
+      expect.objectContaining({ onAccepted: expect.any(Function) }),
+    );
   });
 
   it('hides the banner once a picker-selectable model is installed', () => {

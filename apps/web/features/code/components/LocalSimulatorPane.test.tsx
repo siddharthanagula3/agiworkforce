@@ -351,6 +351,24 @@ describe('the live screen', () => {
     expect(readSimulatorFrame).toHaveBeenCalledTimes(1);
   });
 
+  it('pauses frame reads while collapsed and resumes without booting again', async () => {
+    useFakeClock();
+    const { rerender } = render(pane());
+    await settle();
+    expect(readSimulatorFrame).toHaveBeenCalledTimes(1);
+
+    rerender(pane({ visible: false }));
+    expect(screen.queryByRole('img', { name: FRAME_ALT })).toBeNull();
+    await advance(5000);
+    expect(readSimulatorFrame).toHaveBeenCalledTimes(1);
+
+    rerender(pane());
+    await settle();
+    expect(screen.getByRole('img', { name: FRAME_ALT })).toBeVisible();
+    expect(readSimulatorFrame).toHaveBeenCalledTimes(2);
+    expect(bootSimulator).not.toHaveBeenCalled();
+  });
+
   it('stops while a capture is being marked up and resumes after', async () => {
     useFakeClock();
     render(pane({ onAttachImage: vi.fn() }));

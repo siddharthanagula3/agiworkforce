@@ -149,6 +149,29 @@ export const Code2 = svg(
 
 const svgParser = typeof DOMParser !== 'undefined' ? new DOMParser() : null;
 
+let embeddedMark: Promise<ImageBitmap | null> | undefined;
+
+export function renderPageBrandMark(): HTMLCanvasElement {
+  const mark = document.createElement('canvas');
+  mark.className = 'agi-brand-mark';
+  mark.setAttribute('aria-hidden', 'true');
+  mark.width = mark.height = 32;
+  if (typeof createImageBitmap === 'function') {
+    // A page can block image URLs, so draw the bundled mark without loading a DOM image.
+    embeddedMark ??= Promise.resolve()
+      .then(() => {
+        const data = atob(inlineLoadingMark.split(',')[1] ?? '');
+        const bytes = Uint8Array.from(data, (character) => character.charCodeAt(0));
+        return createImageBitmap(new Blob([bytes], { type: 'image/png' }));
+      })
+      .catch(() => null);
+    void embeddedMark.then((bitmap) => {
+      if (bitmap) mark.getContext('2d')?.drawImage(bitmap, 0, 0, mark.width, mark.height);
+    });
+  }
+  return mark;
+}
+
 export function renderIcon(svgString: string, size: number, extraClass?: string): HTMLElement {
   const wrapper = document.createElement('span');
   wrapper.className = `agi-icon${extraClass ? ' ' + extraClass : ''}`;

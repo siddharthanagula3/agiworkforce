@@ -37,6 +37,7 @@ export function SessionComposerField({
 }) {
   const colors = useThemeColors();
   const voiceAllowed = useCapability('canUseVoice');
+  const showPrimary = primaryState === 'streaming' || value.trim().length > 0;
   const latestValue = useRef(value);
   latestValue.current = value;
 
@@ -108,14 +109,17 @@ export function SessionComposerField({
           />
         </View>
       ) : null}
-      <View style={{ paddingBottom: 2 }}>
-        <SendButton
-          state={primaryState}
-          disabled={primaryDisabled}
-          onPress={onPrimary}
-          accessibilityLabel={primaryLabel}
-        />
-      </View>
+      {showPrimary ? (
+        <View style={{ paddingBottom: 2 }}>
+          <SendButton
+            state={primaryState}
+            disabled={primaryDisabled}
+            stopPending={primaryState === 'streaming' && primaryDisabled}
+            onPress={onPrimary}
+            accessibilityLabel={primaryLabel}
+          />
+        </View>
+      ) : null}
     </View>
   );
 }

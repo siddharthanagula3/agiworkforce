@@ -1,15 +1,5 @@
 import { app, powerMonitor, powerSaveBlocker, type BrowserWindow } from 'electron';
-import {
-  closeSync,
-  existsSync,
-  fsyncSync,
-  openSync,
-  realpathSync,
-  renameSync,
-  statSync,
-  unlinkSync,
-  writeFileSync,
-} from 'node:fs';
+import { existsSync, realpathSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import {
@@ -37,6 +27,7 @@ import {
 } from './developerSessionService';
 import { askNativeQuestion } from './nativeQuestions';
 import { shownValue } from './dialogText';
+import { replaceStoreFile } from './atomicStoreFile';
 
 const MAX_STORE_BYTES = 2 * 1024 * 1024;
 let engine: LocalRoutineEngine | null = null;
@@ -70,19 +61,7 @@ function save(routines: readonly LocalRoutine[]): void {
     throw new LocalRoutineCapacityError(
       'The local routine store is full. Remove old routines before adding more.',
     );
-  const temporary = `${storePath()}.${randomUUID()}.tmp`;
-  let descriptor: number | undefined;
-  try {
-    descriptor = openSync(temporary, 'wx', 0o600);
-    writeFileSync(descriptor, text, 'utf8');
-    fsyncSync(descriptor);
-    closeSync(descriptor);
-    descriptor = undefined;
-    renameSync(temporary, storePath());
-  } finally {
-    if (descriptor !== undefined) closeSync(descriptor);
-    if (existsSync(temporary)) unlinkSync(temporary);
-  }
+  replaceStoreFile(storePath(), text);
 }
 async function ownedEngine(): Promise<LocalRoutineEngine> {
   if (engine) return engine;

@@ -908,6 +908,97 @@ describe('developer session runtime', () => {
     ).toBe(false);
   });
 
+  it('requires review, then drives the workspace terminal with ordered input and screen snapshots', async () => {
+    const plan = {
+      terminalId: 'terminal-1',
+      rootKey: 'workspace-1',
+      cwd: root.path,
+      shell: '/bin/sh',
+      sandbox: 'contained',
+      networkAllowed: false,
+      size: { columns: 80, rows: 24 },
+    };
+    const summary = { plan, state: 'running', revision: 1, nextInputSequence: 1 };
+    const { service, children, terminalEvents } = await loadService((method, params) => {
+      if (method === 'initialize') {
+        return {
+          ...HANDSHAKE,
+          capabilities: { ...HANDSHAKE.capabilities, workspaceTerminal: true },
+        };
+      }
+      if (method === 'workspace/identity') return { rootKey: plan.rootKey, cwd: plan.cwd };
+      if (method === 'terminal/plan') return plan;
+      if (method === 'terminal/start') return summary;
+      if (method === 'terminal/read') {
+        return {
+          terminal: summary,
+          screen: {
+            cells: [
+              [
+                {
+                  width: 1,
+                  text: 'a\u001b]52;invalid',
+                  style: { foreground: { kind: 'default' }, background: { kind: 'default' } },
+                },
+              ],
+            ],
+            cursorRow: 0,
+            cursorColumn: 1,
+            scrollback: Number(params.scrollback),
+            scrollbackLen: 40,
+            alternateScreen: false,
+          },
+        };
+      }
+      if (method === 'terminal/write')
+        return { ...summary, nextInputSequence: Number(params.sequence) + 1 };
+      if (method === 'terminal/resize') return summary;
+      if (method === 'terminal/close') return { ...summary, state: 'stopped' };
+      return defaultResponder(method);
+    });
+    const sent = (method: string) =>
+      children.flatMap((child) => child.written).filter((entry) => entry.method === method);
+    const accept = vi.fn(async () => {
+      expect(sent('terminal/start')).toHaveLength(0);
+      return true;
+    });
+    await expect(service.openDeveloperTerminal(root.id, 80, 24, async () => false)).rejects.toThrow(
+      'left closed',
+    );
+    expect(sent('terminal/start')).toHaveLength(0);
+    await expect(service.openDeveloperTerminal(root.id, 80, 24, accept)).resolves.toEqual({
+      terminalId: plan.terminalId,
+    });
+    expect(accept).toHaveBeenCalledWith(plan);
+    await vi.waitFor(() => expect(terminalEvents[0]?.data).toContain('a'));
+    expect(terminalEvents[0]?.data).not.toContain('\u001b]52');
+    expect((await service.readDeveloperRuntimeStatus()).capabilities).toContain('terminals');
+    expect(service.scrollDeveloperTerminal('wrong-root', plan.terminalId, 10)).toBe(false);
+    expect(service.scrollDeveloperTerminal(root.id, plan.terminalId, 10)).toBe(true);
+    await vi.waitFor(() => {
+      expect(terminalEvents.at(-1)?.viewport?.scrollback).toBe(10);
+      expect(sent('terminal/read').at(-1)?.params).not.toHaveProperty('afterRevision');
+    });
+    await Promise.all([
+      service.writeDeveloperTerminal(root.id, plan.terminalId, 'pwd\r'),
+      service.writeDeveloperTerminal(root.id, plan.terminalId, '\u0003'),
+    ]);
+    expect(sent('terminal/write').map((entry) => entry.params)).toEqual([
+      { rootKey: plan.rootKey, terminalId: plan.terminalId, sequence: 1, text: 'pwd\r' },
+      { rootKey: plan.rootKey, terminalId: plan.terminalId, sequence: 2, text: '\u0003' },
+    ]);
+    await service.resizeDeveloperTerminal(root.id, plan.terminalId, 800, 80);
+    expect(sent('terminal/resize')[0]?.params).toEqual({
+      rootKey: plan.rootKey,
+      terminalId: plan.terminalId,
+      size: { columns: 160, rows: 60 },
+    });
+    await service.closeDeveloperTerminal(root.id, plan.terminalId);
+    await expect(service.writeDeveloperTerminal(root.id, plan.terminalId, 'z')).rejects.toThrow(
+      'closed',
+    );
+  });
+
   it('asks for a CLI update before pinning on one that cannot pin', async () => {
     const { service, children } = await loadService();
     await expect(service.pinDeveloperThread(root.id, thread.id, true)).rejects.toThrow(/Update/);
@@ -928,6 +1019,68 @@ describe('developer session runtime', () => {
       archivedAt: 1_700_000_000_000,
     });
   });
+
+  it('finds an archived session on a later page without reading its transcript', async () => {
+    const { service, children } = await loadService((method, params) => {
+      if (method !== 'thread/list') return defaultResponder(method);
+      return params['cursor'] === 'next'
+        ? { threads: [{ ...thread, status: 'archived' }] }
+        : { threads: [{ ...thread, location: 'cloud' }], nextCursor: 'next' };
+    });
+    expect(await service.lookupDeveloperSession(root.id, thread.id)).toMatchObject({
+      rootId: root.id,
+      id: thread.id,
+      status: 'archived',
+    });
+    expect(
+      children.flatMap((child) => child.written).filter(({ method }) => method === 'thread/list'),
+    ).toEqual([
+      { method: 'thread/list', params: { cwd: root.path, includeArchived: true } },
+      { method: 'thread/list', params: { cwd: root.path, includeArchived: true, cursor: 'next' } },
+    ]);
+    expect(
+      children.flatMap((child) => child.written).some(({ method }) => method === 'thread/read'),
+    ).toBe(false);
+  });
+
+  it('refuses to call a session missing when the CLI repeats a cursor', async () => {
+    const { service } = await loadService((method) =>
+      method === 'thread/list' ? { threads: [], nextCursor: 'next' } : defaultResponder(method),
+    );
+    await expect(service.lookupDeveloperSession(root.id, thread.id)).rejects.toThrow(
+      'The session list stopped advancing.',
+    );
+  });
+
+  it.each([true, false])(
+    'searches all local titles with native title search available: %s',
+    async (native) => {
+      const { service, children } = await loadService((method, params) => {
+        if (method === 'initialize' && native) {
+          return {
+            ...HANDSHAKE,
+            capabilities: { ...HANDSHAKE.capabilities, threadTitleSearch: true },
+          };
+        }
+        if (method === 'thread/list') {
+          return native || params['cursor'] === 'next'
+            ? { threads: [{ ...thread, title: 'Older build notes' }] }
+            : { threads: [thread], nextCursor: 'next' };
+        }
+        return defaultResponder(method);
+      });
+      const list = await service.listDeveloperSessions(undefined, { titleQuery: 'BUILD' });
+      expect(list.groups[0]?.sessions.map(({ title }) => title)).toEqual(['Older build notes']);
+      const requests = children
+        .flatMap(({ written }) => written)
+        .filter(({ method }) => method === 'thread/list');
+      expect(requests.map(({ params }) => params)).toEqual(
+        native
+          ? [{ cwd: root.path, titleQuery: 'BUILD' }]
+          : [{ cwd: root.path }, { cwd: root.path, cursor: 'next' }],
+      );
+    },
+  );
 
   it('names the program writing a session when the CLI refuses a turn for it', async () => {
     const { service } = await loadService((method) =>
@@ -1295,6 +1448,23 @@ describe('developer session runtime', () => {
     expect(list.groups[0]?.unavailable?.hint).toContain('Update the AGI CLI');
   });
 
+  it('reports a configured CLI refusing repository trust without forwarding raw stderr', async () => {
+    const { service, children } = await loadService(() => undefined);
+    const result = service.startDeveloperSession(root.id);
+    const rejected = expect(result).rejects.toMatchObject({
+      name: 'DeveloperRuntimeUnavailableError',
+      message: 'The selected AGI CLI has not trusted this workspace.',
+      hint: expect.stringContaining('review the directory trust prompt'),
+    });
+    await vi.waitFor(() => expect(children[0]?.written[0]?.method).toBe('initialize'));
+    children[0]?.stderr.emit(
+      'data',
+      'Error: Current project is not trusted. Run `agi` interactively and accept the directory trust prompt.\n',
+    );
+    children[0]?.emit('exit', 1, null);
+    await rejected;
+  });
+
   it('ends the process of a CLI it refused at the handshake, so a retry does not leave one running', async () => {
     const older = versionBelowFloor();
     const { service, children, spawn } = await loadService((method) =>
@@ -1430,12 +1600,13 @@ describe('developer session runtime', () => {
   it.each([
     [
       'Error: Current project is not trusted. Run `agi` interactively and accept the directory trust prompt.',
-      'agi init',
+      'The selected AGI CLI has not trusted this workspace.',
+      'review the directory trust prompt',
     ],
-    ['Error: the configuration file is malformed', 'Copy Diagnostics'],
+    ['Error: the configuration file is malformed', 'The AGI CLI exited (1)', 'Copy Diagnostics'],
   ])(
     'explains a CLI that started and then stopped without telling the user to install it (%s)',
-    async (stderr, hintText) => {
+    async (stderr, messageText, hintText) => {
       vi.resetModules();
       const service = await import('../runtime/developerSessionService');
       service.configureDeveloperSessions({
@@ -1461,7 +1632,7 @@ describe('developer session runtime', () => {
 
       const list: DeveloperSessionList = await service.listDeveloperSessions();
 
-      expect(list.groups[0]?.unavailable?.message).toContain('The AGI CLI exited (1)');
+      expect(list.groups[0]?.unavailable?.message).toContain(messageText);
       expect(list.groups[0]?.unavailable?.hint).toContain(hintText);
       expect(list.groups[0]?.unavailable?.hint).not.toContain('install.sh');
     },
@@ -1498,7 +1669,7 @@ describe('developer session runtime', () => {
       defaultAgentMode: 'auto',
       defaultReasoningEffort: 'high',
       managedSignedIn: true,
-      features: { maxTurns: false, memory: false },
+      features: { maxTurns: false, memory: false, terminalPty: false },
     });
   });
 
@@ -1542,7 +1713,7 @@ describe('developer session runtime', () => {
       defaultAgentMode: null,
       defaultReasoningEffort: null,
       managedSignedIn: false,
-      features: { maxTurns: false, memory: false },
+      features: { maxTurns: false, memory: false, terminalPty: false },
     });
   });
 

@@ -25,6 +25,7 @@ jest.mock('@/src/features/voice/components/VoiceInputButton', () => ({
 
 jest.mock('../../remote-code/service', () => ({
   attachCodeSession: jest.fn(async () => true),
+  createCodeRequestId: () => 'phone-follow-up',
   detachCodeSession: jest.fn(async () => true),
   steerCodeSession: jest.fn(async () => true),
   interruptCodeTurn: jest.fn(async () => true),
@@ -109,6 +110,209 @@ beforeEach(() => {
 });
 
 describe('CodeSessionView', () => {
+  it('keeps an unsent draft after the session screen is reopened', () => {
+    openSession(idle);
+    const view = renderSession();
+    fireEvent.changeText(screen.getByLabelText('Message for this session'), 'Unsent text');
+    view.unmount();
+
+    renderSession();
+    expect(screen.getByLabelText('Message for this session')).toHaveProp('value', 'Unsent text');
+    expect(mockService.steerCodeSession).not.toHaveBeenCalled();
+  });
+
+  it('keeps an in-flight send scoped across reopen and preserves edits made before it settles', async () => {
+    let accepted!: (value: boolean) => void;
+    (mockService.steerCodeSession as jest.Mock).mockReturnValueOnce(
+      new Promise<boolean>((resolve) => {
+        accepted = resolve;
+      }),
+    );
+    openSession(idle);
+    const view = renderSession();
+    fireEvent.changeText(screen.getByLabelText('Message for this session'), 'Original text');
+    fireEvent.press(screen.getByLabelText('Send to this session'));
+    view.unmount();
+
+    renderSession();
+    expect(screen.getByLabelText('Message for this session')).toHaveProp('value', 'Original text');
+    fireEvent.changeText(screen.getByLabelText('Message for this session'), 'A separate draft');
+    const waiting = screen.queryByLabelText('Send to this session');
+    if (waiting) fireEvent.press(waiting);
+    expect(mockService.steerCodeSession).toHaveBeenCalledTimes(1);
+    await act(async () => accepted(true));
+    liveEvent({
+      type: 'guidance-delivered',
+      turnId: 'turn-2',
+      requestIds: ['phone-follow-up'],
+      queuedGuidance: [],
+    });
+    expect(screen.getByLabelText('Message for this session')).toHaveProp(
+      'value',
+      'A separate draft',
+    );
+  });
+
+  it('lets a rejected follow-up be restored without overwriting a newer draft', async () => {
+    renderSession();
+    openSession(idle);
+    const input = screen.getByLabelText('Message for this session');
+    fireEvent.changeText(input, 'Keep this exact follow-up.');
+    await act(async () => fireEvent.press(screen.getByLabelText('Send to this session')));
+    fireEvent.changeText(input, 'My newer draft');
+    liveEvent({
+      type: 'guidance-rejected',
+      reason: 'start-failed',
+      requestIds: ['phone-follow-up'],
+      rejectedGuidance: ['Keep this exact follow-up.'],
+      queuedGuidance: [],
+    });
+    openSession(idle);
+
+    expect(screen.getByText('Your computer could not start this follow-up.')).toBeTruthy();
+    expect(screen.getByText('Keep this exact follow-up.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Restore draft' })).toBeDisabled();
+    expect(input).toHaveProp('value', 'My newer draft');
+
+    fireEvent.changeText(input, '');
+    fireEvent.press(screen.getByRole('button', { name: 'Restore draft' }));
+    expect(input).toHaveProp('value', 'Keep this exact follow-up.');
+    expect(screen.queryByRole('button', { name: 'Restore draft' })).toBeNull();
+  });
+
+  it('explains an interrupted saved session until its computer starts the follow-up', async () => {
+    renderSession();
+    openSession({ ...idle, status: 'failed' });
+
+    expect(screen.getByText('make retries back off')).toBeTruthy();
+    const notice = 'The previous turn stopped early. You can continue here.';
+    expect(screen.getByText(notice)).toBeTruthy();
+
+    fireEvent.changeText(screen.getByLabelText('Message for this session'), 'Continue the fix');
+    fireEvent.press(screen.getByLabelText('Send to this session'));
+    await waitFor(() =>
+      expect(mockService.steerCodeSession).toHaveBeenCalledWith(
+        'root-1',
+        'thread-1',
+        'Continue the fix',
+        false,
+        'phone-follow-up',
+      ),
+    );
+    expect(screen.getByText(notice)).toBeTruthy();
+
+    liveEvent({ type: 'turn-started', turnId: 'turn-2' });
+    expect(screen.queryByText(notice)).toBeNull();
+  });
+
+  it('keeps the draft until the computer reports the outcome for that request', async () => {
+    renderSession();
+    openSession(idle);
+    const field = screen.getByLabelText('Message for this session');
+    fireEvent.changeText(field, 'Wait for the computer');
+    await act(async () => fireEvent.press(screen.getByLabelText('Send to this session')));
+
+    expect(field).toHaveProp('value', 'Wait for the computer');
+    expect(screen.getByText('Waiting for your computer to accept the follow-up…')).toBeTruthy();
+    liveEvent({ type: 'guidance-queued', queuedGuidance: ['Wait for the computer'] });
+    expect(field).toHaveProp('value', 'Wait for the computer');
+    liveEvent({
+      type: 'guidance-queued',
+      requestIds: ['other-request'],
+      queuedGuidance: ['same text'],
+    });
+    expect(field).toHaveProp('value', 'Wait for the computer');
+    liveEvent({
+      type: 'guidance-queued',
+      requestIds: ['phone-follow-up'],
+      queuedGuidance: ['Wait for the computer'],
+    });
+    expect(field).toHaveProp('value', '');
+  });
+
+  it('keeps the message when the computer never confirms the follow-up', async () => {
+    jest.useFakeTimers();
+    try {
+      renderSession();
+      openSession(idle);
+      const field = screen.getByLabelText('Message for this session');
+      fireEvent.changeText(field, 'Keep this draft');
+      await act(async () => fireEvent.press(screen.getByLabelText('Send to this session')));
+      act(() => jest.advanceTimersByTime(30_000));
+      expect(field).toHaveProp('value', 'Keep this draft');
+      expect(
+        screen.getByText('Delivery is unconfirmed. Check the conversation before sending again.'),
+      ).toBeTruthy();
+
+      openSession({ ...idle, confirmedGuidanceIds: ['unrelated-follow-up'] });
+      expect(field).toHaveProp('value', 'Keep this draft');
+      openSession({ ...idle, confirmedGuidanceIds: ['phone-follow-up'] });
+      expect(field).toHaveProp('value', '');
+      expect(screen.queryByText(/Delivery is unconfirmed/)).toBeNull();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('keeps a newer edit when a reopened snapshot confirms the original follow-up', async () => {
+    renderSession();
+    openSession(idle);
+    const field = screen.getByLabelText('Message for this session');
+    fireEvent.changeText(field, 'First follow-up');
+    await act(async () => fireEvent.press(screen.getByLabelText('Send to this session')));
+    fireEvent.changeText(field, 'New draft');
+
+    openSession({ ...idle, confirmedGuidanceIds: ['phone-follow-up'] });
+
+    expect(field).toHaveProp('value', 'New draft');
+    expect(screen.queryByText(/Waiting for your computer/)).toBeNull();
+  });
+
+  it('restores a refusal missed while detached and keeps it dismissed after replay', async () => {
+    openSession(idle);
+    const view = renderSession();
+    const input = screen.getByLabelText('Message for this session');
+    fireEvent.changeText(input, 'Keep this follow-up');
+    await act(async () => fireEvent.press(screen.getByLabelText('Send to this session')));
+    view.unmount();
+
+    const refusal = {
+      requestId: 'phone-follow-up',
+      text: 'Keep this follow-up',
+      reason: 'start-failed',
+    };
+    openSession({ ...idle, rejectedGuidance: [refusal] });
+    renderSession();
+    expect(screen.queryByText(/Waiting for your computer/)).toBeNull();
+    expect(screen.getByText('Your computer could not start this follow-up.')).toBeTruthy();
+    openSession({ ...idle, rejectedGuidance: [refusal] });
+    expect(screen.getAllByRole('button', { name: 'Restore draft' })).toHaveLength(1);
+
+    fireEvent.press(screen.getByRole('button', { name: 'Restore draft' }));
+    openSession({ ...idle, rejectedGuidance: [refusal] });
+    liveEvent({
+      type: 'guidance-rejected',
+      reason: 'start-failed',
+      requestIds: [refusal.requestId],
+      rejectedGuidance: [refusal.text],
+      queuedGuidance: [],
+    });
+    expect(screen.queryByRole('button', { name: 'Restore draft' })).toBeNull();
+    expect(screen.getByLabelText('Message for this session')).toHaveProp('value', refusal.text);
+    expect(mockService.steerCodeSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the computer’s own message when it reports a live runtime stop', () => {
+    renderSession();
+    openSession(idle);
+    liveEvent({ type: 'runtime-stopped', message: 'The runtime on the computer stopped.' });
+
+    expect(screen.getByRole('alert')).toHaveTextContent('The runtime on the computer stopped.');
+    expect(
+      screen.queryByText('The previous turn stopped early. You can continue here.'),
+    ).toBeNull();
+  });
+
   it('attaches on open and detaches on close', () => {
     const view = renderSession();
     expect(mockService.attachCodeSession).toHaveBeenCalledWith('root-1', 'thread-1');
@@ -258,6 +462,41 @@ describe('CodeSessionView', () => {
     );
   });
 
+  it.each(['snapshot', 'live event'])(
+    'offers only Deny for a cut approval from a %s',
+    async (source) => {
+      const approval = {
+        turnId: 'turn-1',
+        requestId: 'ap-cut',
+        summary: 'Run project checks',
+        detail: 'pnpm test',
+        kind: 'Exec',
+        riskLevel: 'high',
+        truncated: true,
+      };
+      renderSession();
+      if (source === 'snapshot') {
+        openSession({ pendingApprovals: [approval] });
+      } else {
+        openSession({ pendingApprovals: [] });
+        liveEvent({ type: 'approval-requested', ...approval });
+      }
+
+      expect(await screen.findByText('Command · High risk')).toBeOnTheScreen();
+      expect(screen.getByText('The full request is unavailable on this phone.')).toBeOnTheScreen();
+      expect(screen.queryByRole('button', { name: 'Approve Run project checks' })).toBeNull();
+      expect(mockService.answerCodeApproval).not.toHaveBeenCalled();
+      fireEvent.press(screen.getByRole('button', { name: 'Deny Run project checks' }));
+      expect(mockService.answerCodeApproval).toHaveBeenCalledWith(
+        'root-1',
+        'thread-1',
+        'turn-1',
+        'ap-cut',
+        false,
+      );
+    },
+  );
+
   it('sends a question from an older computer to be answered there', async () => {
     renderSession();
     openSession({
@@ -374,6 +613,7 @@ describe('CodeSessionView', () => {
           'thread-1',
           'use the retry helper',
           interrupt,
+          'phone-follow-up',
         ),
       );
       expect(mockService.interruptCodeTurn).not.toHaveBeenCalled();
@@ -395,6 +635,7 @@ describe('CodeSessionView', () => {
         'thread-1',
         'now add a test',
         false,
+        'phone-follow-up',
       ),
     );
     expect(

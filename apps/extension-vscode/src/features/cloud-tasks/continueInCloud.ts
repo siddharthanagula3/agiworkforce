@@ -7,8 +7,11 @@ import {
   cloudCodeStopReasonIsFailure,
   modelDisplayNameById,
   PRODUCT_NAMES,
+  resolveCloudCodeAgentModel,
 } from '@agiworkforce/types';
+import type { CloudUtilityModel } from '../../core/cloudModelBoundary';
 import type { WorkspaceCloudSource } from '../context-handoff';
+import { modelDisplayLabel } from '../model-picker/modelConstants';
 import { describeCloudRunFailure } from './cloudRunApproval';
 import { OPEN_CLOUD_CODE_SESSION_COMMAND } from './cloudCodeSessions';
 import { t, tPlural } from '../../l10n';
@@ -31,14 +34,22 @@ export function describeCloudSourceRefusal(source: WorkspaceCloudSource | null):
   return null;
 }
 
+interface CloudContinuationModel {
+  id: string;
+  localDefault?: string;
+}
+
 export function describeCloudContinuationReview(
   source: WorkspaceCloudSource & { branch: string },
-  modelId: string,
+  model: CloudContinuationModel,
 ): { message: string; detail: string } {
   const lines = [
     t('cloud.repository', { repository: source.repository }),
     t('cloud.branch', { branch: source.branch, upstream: source.upstream ?? 'GitHub' }),
-    t('cloud.model', { model: modelDisplayNameById(modelId) ?? modelId }),
+    t('cloud.model', { model: modelDisplayNameById(model.id) ?? model.id }),
+    ...(model.localDefault
+      ? [t('cloud.localDefault', { model: modelDisplayLabel(model.localDefault) })]
+      : []),
     t('cloud.network'),
     '',
     t('cloud.whatMoves'),
@@ -74,8 +85,9 @@ function validateCloudTask(value: string): string | null {
 
 export interface ContinueInCloudHost {
   readSource: () => Promise<WorkspaceCloudSource | null>;
-  resolveApi: () => Promise<CloudCodeApi | null>;
-  modelId: () => string;
+  resolveApi: () => Promise<Pick<CloudCodeApi, 'create' | 'startAgentTurn'> | null>;
+  configuredModel: () => CloudUtilityModel;
+  planTier: () => string;
 }
 
 export async function continueInCloud(host: ContinueInCloudHost): Promise<void> {
@@ -103,8 +115,15 @@ export async function continueInCloud(host: ContinueInCloudHost): Promise<void> 
   )?.trim();
   if (!goal) return;
 
-  const modelId = host.modelId();
-  const review = describeCloudContinuationReview({ ...source, branch: source.branch }, modelId);
+  const configured = host.configuredModel();
+  const model: CloudContinuationModel = {
+    id: resolveCloudCodeAgentModel(
+      configured.route === 'cloud' ? configured.model : null,
+      host.planTier(),
+    ),
+    ...(configured.route === 'local' ? { localDefault: configured.model } : {}),
+  };
+  const review = describeCloudContinuationReview({ ...source, branch: source.branch }, model);
   const choice = await vscode.window.showInformationMessage(
     review.message,
     { modal: true, detail: review.detail },
@@ -142,7 +161,7 @@ export async function continueInCloud(host: ContinueInCloudHost): Promise<void> 
         location: vscode.ProgressLocation.Notification,
         title: `${PRODUCT_NAMES.code}: the cloud session is working`,
       },
-      () => api.startAgentTurn(sessionId, { goal, model: modelId, idempotencyKey: randomUUID() }),
+      () => api.startAgentTurn(sessionId, { goal, model: model.id, idempotencyKey: randomUUID() }),
     );
     const label = CLOUD_CODE_STOP_REASON_LABELS[turn.stopReason];
     const shown = cloudCodeStopReasonIsFailure(turn.stopReason)

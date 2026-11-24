@@ -50,6 +50,7 @@ export function ChangedFile({
       <button
         type="button"
         className={styles['fileRow']}
+        aria-label={`${state} ${path}`}
         aria-expanded={expanded}
         aria-controls={regionId}
         onClick={() => setExpanded((open) => !open)}

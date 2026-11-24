@@ -22,7 +22,8 @@ function ThemeContextBridge({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (typeof document === 'undefined') return;
     document.documentElement.setAttribute('data-theme', actualTheme);
-  }, [actualTheme]);
+    document.documentElement.setAttribute('data-theme-preference', theme);
+  }, [actualTheme, theme]);
 
   const applyTheme = useRef(setNextTheme);
   applyTheme.current = setNextTheme;

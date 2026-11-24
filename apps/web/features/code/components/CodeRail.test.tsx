@@ -110,9 +110,12 @@ describe('CodeRail account footer', () => {
     );
 
     const footer = screen.getByTestId('code-rail-account-footer');
+    const scroll = screen.getByTestId('code-rail-session-scroll');
     expect(
       within(footer).getByRole('button', { name: 'Account menu for Ada' }),
     ).toBeInTheDocument();
+    expect(scroll).toContainElement(screen.getByRole('button', { name: 'Refactor billing' }));
+    expect(scroll.nextElementSibling).toBe(footer);
   });
 
   it('renders no footer outside the shell', () => {

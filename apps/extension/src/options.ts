@@ -24,7 +24,11 @@ import {
 } from './features/cloud-bridge/freeTrialClient';
 import { createApprovalHistorySection } from './features/options/approval-history-section';
 import { platformRequestHeaders } from './platformHeaders';
-import { isClerkExtensionAuthConfigured, openClerkSignIn } from './features/cloud-bridge/clerkAuth';
+import {
+  isClerkExtensionAuthConfigured,
+  openClerkSignIn,
+  watchSyncHostSession,
+} from './features/cloud-bridge/clerkAuth';
 import { beginOptionsAccountRefresh } from './features/options/account-state';
 import {
   normalizeApprovedSiteOrigin,
@@ -1712,6 +1716,7 @@ function buildPage(): void {
       logoutBtn.disabled = true;
       try {
         const { webSessionEnded, profileCleared } = await signOutOfAccount();
+        shortcutsSection?.accountChanged();
         renderAccountRow(false);
         if (!webSessionEnded && !profileCleared) {
           accountStatus.textContent =
@@ -2013,6 +2018,8 @@ function buildPage(): void {
   const schedules = buildSchedulesSection();
   shortcutsSection = createShortcutsSection(browserShortcutsDependencies(schedules));
   page.appendChild(shortcutsSection.element);
+  const stopWatchingShortcuts = watchSyncHostSession(() => shortcutsSection?.accountChanged());
+  window.addEventListener('pagehide', stopWatchingShortcuts, { once: true });
 
   const helpSection = el('section', { class: 'opt-section', id: 'opt-help' });
   const helpHeader = el('div', { class: 'opt-section-header' });

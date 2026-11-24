@@ -420,16 +420,24 @@ export function LibraryScreen({
 
   const handleDeletePreview = useCallback(() => {
     const asset = previewImage;
-    if (!asset) return;
-    handleCloseImage();
+    const scope = previewImageScopeRef.current;
+    if (!asset || scope?.scope !== 'cloud' || !isAccountScopedUiStateOwned(scope)) return;
     void (async () => {
       try {
-        if (asset.conversationId) {
-          await useChatStore.getState().deleteConversation(asset.conversationId);
-        }
+        if (
+          asset.conversationId &&
+          !(await useChatStore.getState().deleteConversation(asset.conversationId, scope.account))
+        )
+          return;
+        if (!isAccountScopedUiStateOwned(scope)) return;
         await library.removeAsset(asset.id);
+        if (scope === previewImageScopeRef.current && isAccountScopedUiStateOwned(scope)) {
+          handleCloseImage();
+        }
       } catch {
-        Alert.alert('Delete failed', 'The image could not be deleted. Try again.');
+        if (isAccountScopedUiStateOwned(scope)) {
+          Alert.alert('Delete failed', 'The image could not be deleted. Try again.');
+        }
       }
     })();
   }, [handleCloseImage, library, previewImage]);

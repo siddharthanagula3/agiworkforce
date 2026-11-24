@@ -1,7 +1,5 @@
 'use client';
 
-import { LocalRoutinesSection } from './LocalRoutinesSection';
-
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { toUserMessageWithStatus } from '@agiworkforce/unified-chat';
@@ -592,19 +590,45 @@ export function SchedulesPage({
   };
 
   const focusedScheduleRef = useRef<string | null>(null);
+  const focusScheduleListed = schedules.some((schedule) => schedule.id === focusScheduleId);
+  useEffect(() => {
+    focusedScheduleRef.current = null;
+    if (!focusScheduleId) return;
+    setStatusFilter('all');
+    setProjectFilter('all');
+    setSearchQuery('');
+  }, [focusScheduleId]);
+
+  useEffect(() => {
+    if (!focusScheduleId || listStatus !== 'success' || focusScheduleListed || scope) return;
+    if (deletedScheduleIds.current.has(focusScheduleId)) return;
+    const controller = new AbortController();
+    void api
+      .getSchedule(focusScheduleId, controller.signal)
+      .then((schedule) => {
+        if (controller.signal.aborted || deletedScheduleIds.current.has(schedule.id)) return;
+        setSchedules((current) => uniqueSchedules(current, [schedule]));
+      })
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted) {
+          toast.error(errorMessage(error, 'That schedule could not be opened.'));
+        }
+      });
+    return () => controller.abort();
+  }, [api, focusScheduleId, focusScheduleListed, listStatus, scope]);
+
   useEffect(() => {
     if (!focusScheduleId || listStatus !== 'success') return;
     if (focusedScheduleRef.current === focusScheduleId) return;
     const target = schedules.find((schedule) => schedule.id === focusScheduleId);
-    if (!target) return;
+    const card = document.getElementById(scheduleCardElementId(focusScheduleId));
+    if (!target || !card) return;
     focusedScheduleRef.current = focusScheduleId;
     setExpandedHistoryId(target.id);
     void loadHistory(target);
-    document
-      .getElementById(scheduleCardElementId(target.id))
-      ?.scrollIntoView({ block: 'start', behavior: 'auto' });
+    card.scrollIntoView({ block: 'start', behavior: 'auto' });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- loadHistory is rebuilt every render; the ref makes this run once per focused id
-  }, [focusScheduleId, listStatus, schedules]);
+  }, [focusScheduleId, listStatus, schedules, statusFilter, projectFilter, searchQuery]);
 
   const runNow = async (schedule: ScheduleTask) => {
     setOperation(schedule.id, 'run');
@@ -920,18 +944,9 @@ export function SchedulesPage({
       ? 'All'
       : (projectFilters.find((filter) => filter.id === projectFilter)?.label ?? 'All');
 
-  const Root = scope ? 'section' : 'main';
-
   return (
-    <Root className={scope ? undefined : 'min-h-full bg-background text-foreground'}>
-      <div
-        className={
-          scope
-            ? 'flex w-full flex-col gap-6'
-            : 'mx-auto flex w-full max-w-[68rem] flex-col gap-8 px-8 py-12 max-md:px-4 max-md:pt-6'
-        }
-      >
-        {!scope && <LocalRoutinesSection />}
+    <section>
+      <div className={scope ? 'flex w-full flex-col gap-6' : 'flex w-full flex-col gap-8'}>
         <header
           className={
             scope
@@ -1555,7 +1570,7 @@ export function SchedulesPage({
         </DialogContent>
       </Dialog>
       {confirmDialog}
-    </Root>
+    </section>
   );
 }
 

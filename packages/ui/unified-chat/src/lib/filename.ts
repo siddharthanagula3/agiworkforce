@@ -10,6 +10,16 @@ const TRAVERSAL_SEGMENT = /^\.+$/u;
 const LAST_CONTROL_CODE = 0x1f;
 const DELETE_CODE = 0x7f;
 
+export function trimFilenameStem(stem: string): string {
+  let end = stem.length;
+  while (end > 0 && /[.\s]/u.test(stem.charAt(end - 1))) end -= 1;
+  return stem.slice(0, end) || FALLBACK_FILENAME;
+}
+
+export function appendFilenameExtension(stem: string, extension: string): string {
+  return `${trimFilenameStem(stem)}.${extension}`;
+}
+
 function isHighSurrogate(code: number): boolean {
   return code >= 0xd800 && code <= 0xdbff;
 }

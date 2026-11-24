@@ -12,6 +12,7 @@ import {
   type RemoteCodeDiff,
   type RemoteCodeFileChange,
   type RemoteCodeIndexedMessage,
+  type RemoteCodeGuidanceRejectionReason,
   type RemoteCodePendingApproval,
   type RemoteCodePendingQuestion,
   type RemoteCodeRoot,
@@ -34,6 +35,30 @@ export interface RemoteCodeSessionStart {
   error: string | null;
 }
 
+export interface RejectedCodeGuidance {
+  requestId?: string;
+  text: string;
+  reason: RemoteCodeGuidanceRejectionReason;
+}
+
+interface RemoteCodeDraft {
+  text: string;
+  attempt: { requestId: string; timer: ReturnType<typeof setTimeout> } | null;
+  unconfirmedRequestId: string | null;
+  editedDuringSend: boolean;
+  sendFailure: 'not-sent' | 'unconfirmed' | null;
+}
+
+const GUIDANCE_RESULT_TIMEOUT_MS = 30_000;
+
+export const EMPTY_REMOTE_CODE_DRAFT: Readonly<RemoteCodeDraft> = {
+  text: '',
+  attempt: null,
+  unconfirmedRequestId: null,
+  editedDuringSend: false,
+  sendFailure: null,
+};
+
 export interface RemoteCodeThread {
   rootId: string;
   threadId: string;
@@ -53,6 +78,8 @@ export interface RemoteCodeThread {
   runningTasks: number;
   transcript: RemoteCodeTranscript | null;
   queuedGuidance: string[];
+  rejectedGuidance: RejectedCodeGuidance[];
+  dismissedGuidanceIds: string[];
   hostMessage: string | null;
   syncedAt: string;
 }
@@ -64,6 +91,7 @@ interface RemoteCodeState {
   sessionsSyncedAt: string | null;
   threads: Record<string, RemoteCodeThread>;
   starts: Record<string, RemoteCodeSessionStart>;
+  drafts: Record<string, RemoteCodeDraft>;
   reset: () => void;
 }
 
@@ -100,14 +128,18 @@ export function remoteCodeThreadKey(rootId: string, threadId: string): string {
   return JSON.stringify([rootId, threadId]);
 }
 
-export const useRemoteCodeStore = create<RemoteCodeState>((set) => ({
+export const useRemoteCodeStore = create<RemoteCodeState>((set, get) => ({
   sessions: [],
   unavailable: [],
   roots: [],
   sessionsSyncedAt: null,
   threads: {},
   starts: {},
-  reset: () =>
+  drafts: {},
+  reset: () => {
+    for (const draft of Object.values(get().drafts)) {
+      if (draft.attempt) clearTimeout(draft.attempt.timer);
+    }
     set({
       sessions: [],
       unavailable: [],
@@ -115,8 +147,79 @@ export const useRemoteCodeStore = create<RemoteCodeState>((set) => ({
       sessionsSyncedAt: null,
       threads: {},
       starts: {},
-    }),
+      drafts: {},
+    });
+  },
 }));
+
+function saveCodeDraft(key: string, draft: RemoteCodeDraft): void {
+  useRemoteCodeStore.setState((state) => {
+    const drafts = { ...state.drafts };
+    if (draft.text.length > 0 || draft.attempt || draft.unconfirmedRequestId || draft.sendFailure)
+      drafts[key] = draft;
+    else delete drafts[key];
+    return { drafts };
+  });
+}
+
+export function updateCodeDraft(key: string, text: string): void {
+  const draft = useRemoteCodeStore.getState().drafts[key] ?? EMPTY_REMOTE_CODE_DRAFT;
+  if (draft.text === text) return;
+  saveCodeDraft(key, {
+    ...draft,
+    text,
+    editedDuringSend: draft.attempt !== null || draft.unconfirmedRequestId !== null,
+    sendFailure: null,
+  });
+}
+
+export function beginCodeDraftSend(
+  key: string,
+  requestId: string,
+): { requestId: string; text: string } | null {
+  const draft = useRemoteCodeStore.getState().drafts[key];
+  if (!draft || draft.attempt) return null;
+  const text = draft.text.trim();
+  if (!text || text.length > REMOTE_CODE_LIMITS.guidanceLength) return null;
+  const timer = setTimeout(
+    () => finishCodeDraftSend(key, requestId, 'unconfirmed'),
+    GUIDANCE_RESULT_TIMEOUT_MS,
+  );
+  saveCodeDraft(key, {
+    ...draft,
+    attempt: { requestId, timer },
+    unconfirmedRequestId: null,
+    editedDuringSend: false,
+    sendFailure: null,
+  });
+  return { requestId, text };
+}
+
+export function finishCodeDraftSend(
+  key: string,
+  requestId: string,
+  outcome: 'settled' | 'not-sent' | 'unconfirmed',
+): void {
+  const draft = useRemoteCodeStore.getState().drafts[key];
+  if (!draft) return;
+  if (draft.attempt?.requestId === requestId) clearTimeout(draft.attempt.timer);
+  else if (outcome !== 'settled' || draft.unconfirmedRequestId !== requestId) return;
+  saveCodeDraft(key, {
+    ...EMPTY_REMOTE_CODE_DRAFT,
+    text: outcome === 'settled' && !draft.editedDuringSend ? '' : draft.text,
+    unconfirmedRequestId: outcome === 'unconfirmed' ? requestId : null,
+    editedDuringSend: outcome === 'unconfirmed' && draft.editedDuringSend,
+    sendFailure: outcome === 'settled' ? null : outcome,
+  });
+}
+
+function confirmCodeDraft(key: string, confirmedIds: readonly string[] | undefined): void {
+  const draft = useRemoteCodeStore.getState().drafts[key];
+  const requestId = draft?.attempt?.requestId ?? draft?.unconfirmedRequestId;
+  if (requestId && confirmedIds?.includes(requestId)) {
+    finishCodeDraftSend(key, requestId, 'settled');
+  }
+}
 
 export const REMOTE_FOLLOW_UP_BEHAVIORS = ['queue', 'steer'] as const;
 
@@ -203,6 +306,40 @@ function updateThread(
   });
 }
 
+export function removeRejectedCodeGuidance(
+  rootId: string,
+  threadId: string,
+  message: RejectedCodeGuidance,
+): void {
+  updateThread(rootId, threadId, (thread) => ({
+    ...thread,
+    rejectedGuidance: thread.rejectedGuidance.filter((item) => item !== message),
+    dismissedGuidanceIds: message.requestId
+      ? [...thread.dismissedGuidanceIds, message.requestId].slice(
+          -REMOTE_CODE_LIMITS.historyMessages,
+        )
+      : thread.dismissedGuidanceIds,
+  }));
+}
+
+function mergeRejectedGuidance(
+  thread: RemoteCodeThread | undefined,
+  incoming: readonly RejectedCodeGuidance[],
+): RejectedCodeGuidance[] {
+  const current = thread?.rejectedGuidance ?? [];
+  const seen = new Set([
+    ...(thread?.dismissedGuidanceIds ?? []),
+    ...current.flatMap(({ requestId }) => (requestId ? [requestId] : [])),
+  ]);
+  const unseen = incoming.filter(({ requestId }) => {
+    if (!requestId) return true;
+    if (seen.has(requestId)) return false;
+    seen.add(requestId);
+    return true;
+  });
+  return [...current, ...unseen].slice(-REMOTE_CODE_LIMITS.transcriptMessages);
+}
+
 function appendMessage(
   thread: RemoteCodeThread,
   message: RemoteCodeTranscriptEntry,
@@ -231,6 +368,11 @@ export function ingestRemoteCodeSnapshot(payload: unknown): boolean {
   const parsed = parseRemoteCodeSnapshot(payload);
   if (!parsed) return false;
   const key = remoteCodeThreadKey(parsed.rootId, parsed.threadId);
+  confirmCodeDraft(key, parsed.confirmedGuidanceIds);
+  confirmCodeDraft(
+    key,
+    parsed.rejectedGuidance?.map(({ requestId }) => requestId),
+  );
   useRemoteCodeStore.setState((state) => ({
     threads: {
       ...state.threads,
@@ -259,6 +401,8 @@ export function ingestRemoteCodeSnapshot(payload: unknown): boolean {
         runningTasks: parsed.runningTasks ?? 0,
         transcript: state.threads[key]?.transcript ?? null,
         queuedGuidance: parsed.queuedGuidance,
+        rejectedGuidance: mergeRejectedGuidance(state.threads[key], parsed.rejectedGuidance ?? []),
+        dismissedGuidanceIds: state.threads[key]?.dismissedGuidanceIds ?? [],
         hostMessage: null,
         syncedAt: parsed.syncedAt,
       },
@@ -271,6 +415,13 @@ export function ingestRemoteCodeEvent(payload: unknown): boolean {
   const parsed = parseRemoteCodeEvent(payload);
   if (!parsed) return false;
   const { event } = parsed;
+  if (
+    event.type === 'guidance-queued' ||
+    event.type === 'guidance-delivered' ||
+    event.type === 'guidance-rejected'
+  ) {
+    confirmCodeDraft(remoteCodeThreadKey(parsed.rootId, parsed.threadId), event.requestIds);
+  }
   updateThread(parsed.rootId, parsed.threadId, (thread) => {
     switch (event.type) {
       case 'turn-started':
@@ -320,22 +471,19 @@ export function ingestRemoteCodeEvent(payload: unknown): boolean {
               : tool,
           ),
         };
-      case 'approval-requested':
+      case 'approval-requested': {
+        const { type, ...approval } = event;
         return {
           ...thread,
           status: 'awaiting_approval',
           pendingApprovals: upsertByKey(
             thread.pendingApprovals,
-            {
-              turnId: event.turnId,
-              requestId: event.requestId,
-              summary: event.summary,
-              detail: event.detail,
-            },
+            approval,
             (approval) => approval.requestId,
             REMOTE_CODE_LIMITS.pendingApprovals,
           ),
         };
+      }
       case 'approval-answered': {
         const pendingApprovals = thread.pendingApprovals.filter(
           (approval) => approval.requestId !== event.requestId,
@@ -433,6 +581,18 @@ export function ingestRemoteCodeEvent(payload: unknown): boolean {
         };
       case 'guidance-queued':
         return { ...thread, queuedGuidance: event.queuedGuidance };
+      case 'guidance-rejected':
+        return {
+          ...thread,
+          queuedGuidance: event.queuedGuidance,
+          rejectedGuidance: mergeRejectedGuidance(
+            thread,
+            event.rejectedGuidance.map((text, index) => {
+              const id = event.requestIds?.[index];
+              return { text, reason: event.reason, ...(id ? { requestId: id } : {}) };
+            }),
+          ),
+        };
       case 'guidance-delivered':
         return {
           ...thread,

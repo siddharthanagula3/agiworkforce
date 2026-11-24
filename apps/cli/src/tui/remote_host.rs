@@ -315,7 +315,9 @@ impl TuiRemoteHost {
             reversible: Some(risk.reversible),
             proposed_content: None,
             always_allow_saved: false,
+            requires_explicit_decision: request.requires_explicit_decision,
             proposed_execpolicy_amendment: None,
+            question: None,
         };
         self.live().pending.push((request.id, snapshot.clone()));
         self.emit(
@@ -329,6 +331,7 @@ impl TuiRemoteHost {
                 "detail": snapshot.detail,
                 "riskLevel": snapshot.risk_level,
                 "reversible": snapshot.reversible,
+                "requiresExplicitDecision": snapshot.requires_explicit_decision,
             }),
         );
     }

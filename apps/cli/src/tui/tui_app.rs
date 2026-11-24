@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::io::{self, Stdout};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -42,6 +43,8 @@ const MODE_BANNER_TTL: Duration = Duration::from_secs(2);
 /// How long a first Ctrl-C keeps the session armed for exit.
 const EXIT_CONFIRM_WINDOW: Duration = Duration::from_secs(2);
 const REWIND_CONFIRM_WINDOW: Duration = EXIT_CONFIRM_WINDOW;
+
+type ComposerDraftScope = (String, &'static str, String);
 
 /// How long a transient status-line notice stays on screen. Matched to
 /// [`EXIT_CONFIRM_WINDOW`] so the "press again to exit" hint disappears exactly
@@ -602,6 +605,7 @@ struct TuiApp {
     /// Byte offset of the `@` the open mention popup is completing.
     mention_anchor: Option<usize>,
     prompt_history: super::prompt_history::PromptHistory,
+    parked_drafts: HashMap<ComposerDraftScope, String>,
     composer_undo: super::composer_edits::ComposerUndo,
     pasted_texts: super::composer_edits::PastedTexts,
     queued_prompts: Vec<String>,
@@ -800,6 +804,7 @@ impl TuiApp {
             mention_candidates: None,
             mention_anchor: None,
             prompt_history: super::prompt_history::PromptHistory::load(),
+            parked_drafts: HashMap::new(),
             composer_undo: Default::default(),
             pasted_texts: Default::default(),
             queued_prompts: Vec::new(),
@@ -1114,6 +1119,41 @@ impl TuiApp {
     ) {
         self.overlay_scroll = 0;
         self.active_overlay = Some(view);
+    }
+
+    fn composer_draft_scope(&self) -> ComposerDraftScope {
+        let authority = self.session.current_routing_authority();
+        (
+            self.session.runtime_session_id.clone(),
+            authority.privacy_mode.label(),
+            authority.provider,
+        )
+    }
+
+    fn park_composer(&mut self, scope: ComposerDraftScope) {
+        if self.input.is_empty() {
+            return;
+        }
+        self.parked_drafts
+            .insert(scope, self.pasted_texts.expand(&self.input));
+        self.input.clear();
+        self.cursor = 0;
+        self.exit_armed_at = None;
+        self.rewind_armed_at = None;
+        self.prompt_history.reset_navigation();
+        self.status_notice = Some((
+            "cleared the composer · Up brings it back".to_string(),
+            Instant::now(),
+        ));
+    }
+
+    fn take_parked_draft(&mut self) -> Option<String> {
+        if !self.input.is_empty() {
+            return None;
+        }
+        let draft = self.parked_drafts.remove(&self.composer_draft_scope())?;
+        self.status_notice = None;
+        Some(draft)
     }
 
     /// Route a key to the active overlay. Returns the action the overlay asked
@@ -2242,7 +2282,7 @@ impl StartPanel {
     }
 }
 
-/// Rows for the start screen: the newest earlier sessions that ran in `cwd`,
+/// Rows for the start screen: pinned and recent earlier sessions that ran in `cwd`,
 /// each as how long ago it was last used and its title. The session this
 /// screen belongs to is not one of them. Both clocks are milliseconds, the
 /// unit the session store records.
@@ -2252,7 +2292,7 @@ fn recent_session_rows(
     current: Option<&str>,
     now_millis: i64,
 ) -> Vec<String> {
-    sessions
+    let mut visible: Vec<_> = sessions
         .iter()
         .filter(|session| {
             session.cwd == cwd
@@ -2260,6 +2300,10 @@ fn recent_session_rows(
                 && !session.archived
                 && current != Some(session.id.as_str())
         })
+        .collect();
+    visible.sort_by_key(|session| !session.pinned);
+    visible
+        .into_iter()
         .take(START_PANEL_RECENT_SESSIONS)
         .map(|session| {
             format!(
@@ -3891,10 +3935,7 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
         .matches(crate::keybindings::KeybindingAction::Quit, key)
     {
         if !app.input.is_empty() {
-            app.input.clear();
-            app.cursor = 0;
-            app.exit_armed_at = None;
-            app.status_notice = Some(("cleared the composer".to_string(), Instant::now()));
+            app.park_composer(app.composer_draft_scope());
             return InputAction::None;
         }
         if app
@@ -3918,15 +3959,7 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
     }
     if key.code == KeyCode::Esc && key.modifiers.is_empty() {
         if !app.input.is_empty() {
-            let draft = app.pasted_texts.expand(&app.input);
-            app.prompt_history.record(&draft);
-            app.input.clear();
-            app.cursor = 0;
-            app.rewind_armed_at = None;
-            app.status_notice = Some((
-                "cleared the composer · Up brings it back".to_string(),
-                Instant::now(),
-            ));
+            app.park_composer(app.composer_draft_scope());
             return InputAction::None;
         }
         if app
@@ -3981,10 +4014,7 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
             app.status_notice = Some((notice, Instant::now()));
             return InputAction::None;
         }
-        app.input.clear();
-        app.cursor = 0;
-        app.exit_armed_at = None;
-        app.status_notice = Some(("cleared the composer".to_string(), Instant::now()));
+        app.park_composer(app.composer_draft_scope());
         return InputAction::None;
     }
     if app
@@ -4149,7 +4179,10 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
         KeyCode::Up => {
             if composer_move_up(app) {
                 InputAction::None
-            } else if let Some(prompt) = app.prompt_history.older(&app.input) {
+            } else if let Some(prompt) = app
+                .take_parked_draft()
+                .or_else(|| app.prompt_history.older(&app.input))
+            {
                 app.input = prompt;
                 app.cursor = app.input.len();
                 InputAction::None
@@ -4274,14 +4307,15 @@ fn open_session_picker(app: &mut TuiApp, filter: &str) {
                 .map(|summary| SessionEntry {
                     id: summary.session_id.clone(),
                     label: format!(
-                        "{}  {}  {}{}",
-                        &summary.session_id[..summary.session_id.len().min(8)],
+                        "{}{}  {}  {}{}",
+                        crate::output::session_pin_label(summary.pinned.unwrap_or_default()),
+                        summary.session_id.chars().take(8).collect::<String>(),
                         summary.updated_at.format("%Y-%m-%d %H:%M"),
                         crate::output::format_message_count(summary.message_count as i64),
                         summary
                             .title
                             .as_deref()
-                            .map(|title| format!("  {title}"))
+                            .map(|title| format!("  {}", sanitize_terminal_text(title)))
                             .unwrap_or_default(),
                     ),
                 })
@@ -4311,6 +4345,7 @@ fn open_session_picker(app: &mut TuiApp, filter: &str) {
 fn resume_session(reference: &str, app: &mut TuiApp) {
     use crate::platform::runtime::session_control as sessions;
 
+    let previous_scope = app.composer_draft_scope();
     let text = match sessions::resolve_managed_session_reference(reference) {
         Ok(resolved) => {
             match crate::runtime::session::ManagedSession::load_from_path(&resolved.path) {
@@ -4319,6 +4354,16 @@ fn resume_session(reference: &str, app: &mut TuiApp) {
                     let count = managed.messages.len();
                     match app.session.load_managed_conversation_keeping_mode(managed, resolved.path) {
                     Ok(saved_mode) => {
+                        let scope = app.composer_draft_scope();
+                        if previous_scope != scope {
+                            app.park_composer(previous_scope);
+                            app.prompt_history.reset_navigation();
+                            app.composer_undo.reset();
+                            app.pasted_texts.clear();
+                            app.status_notice = app.parked_drafts.contains_key(&scope).then(|| {
+                                ("draft available · Up restores it".to_string(), Instant::now())
+                            });
+                        }
                         app.session.turn_count = app
                             .session
                             .messages
@@ -7095,10 +7140,6 @@ pub async fn run(
         let _ = tokio::time::timeout(std::time::Duration::from_secs(3), link.task).await;
     }
 
-    // A turn cancelled with Esc/Ctrl-C reconciles history in memory but never
-    // reaches the end-of-turn persist, so quitting straight after a cancel
-    // leaves the file ending on a lone user message and `agi resume` reopens it
-    // with two user turns in a row. This is a no-op when persistence is off.
     if let Err(error) = app.session.persist_managed_session() {
         tracing::warn!("failed to persist the session on exit: {error:#}");
     }
@@ -7234,6 +7275,10 @@ async fn run_event_loop(
             .then(|| std::mem::take(&mut app.queued_prompts).join("\n\n"));
         if queued.is_some() || event::poll(super::motion::FRAME_INTERVAL)? {
             let before = (app.input.clone(), app.cursor);
+            let overlay_scope = app
+                .active_overlay
+                .is_some()
+                .then(|| app.composer_draft_scope());
             let action = match queued {
                 Some(text) => InputAction::SendMessage(text),
                 None => match read_input_event()? {
@@ -7245,7 +7290,9 @@ async fn run_event_loop(
                     _ => InputAction::None,
                 },
             };
-            if !matches!(action, InputAction::SendMessage(_)) {
+            if !matches!(action, InputAction::SendMessage(_))
+                && overlay_scope.is_none_or(|scope| scope == app.composer_draft_scope())
+            {
                 app.composer_undo.observe(before, &app.input);
             }
 
@@ -7793,6 +7840,7 @@ async fn run_event_loop(
                                     additional_workspace_roots: Vec::new(),
                                     tool_search_catalog: None,
                                     require_confirmation: false,
+                                    require_shell_approval: false,
                                     auto_approve_safe: true,
                                     auto_approve_edits: false,
                                     quiet: true,
@@ -8078,22 +8126,17 @@ async fn send_message_with_prompt(
     transcript_text: &str,
     user_text: &str,
 ) -> Result<()> {
-    let hooks_cfg = app.session.hooks_config().clone();
-    crate::hooks::run_hooks(
-        &hooks_cfg,
-        crate::hooks::HookEvent::UserPromptSubmit,
-        &crate::hooks::HookInput {
-            event: "UserPromptSubmit".to_string(),
-            session_id: Some(app.session.runtime_session_id.clone()),
-            model: Some(app.session.model.clone()),
-            tool_name: None,
-            tool_args: None,
-            tool_output: None,
-            message: Some(user_text.to_string()),
-            tool_execution: None,
-        },
+    if let Err(reason) = crate::hooks::check_user_prompt(
+        app.session.hooks_config(),
+        &app.session.runtime_session_id,
+        &app.session.model,
+        user_text,
     )
-    .await;
+    .await
+    {
+        crate::tui::push_tui_notice(reason);
+        return Ok(());
+    }
 
     reload_changed_session(app);
     let context: Vec<String> = std::mem::take(&mut app.turn_context)
@@ -8274,8 +8317,10 @@ async fn send_message_with_prompt(
                             options,
                         } = &req.kind
                         {
+                            let labels: Vec<_> =
+                                options.iter().map(|option| option.label.clone()).collect();
                             let answer =
-                                run_tui_question_modal(terminal, &approval_ctx, question, options)?;
+                                run_tui_question_modal(terminal, &approval_ctx, question, &labels)?;
                             terminal.clear()?;
                             let decision = if answer.is_some() {
                                 crate::tui::approval_broker::ApprovalDecision::AllowOnce
@@ -8674,6 +8719,7 @@ async fn send_message_with_prompt(
             commit_turn_entries(&mut app.chat_messages, &turn_entries);
             render(terminal, app)?;
             app.session.cancel_turn(&partial).await;
+            let save_result = app.session.persist_managed_session();
             crate::cloud::product_analytics::record(
                 &app.config,
                 app.session.privacy_mode,
@@ -8684,6 +8730,16 @@ async fn send_message_with_prompt(
                 role: ChatRole::System,
                 text: "⊘ Stopped".to_string(),
             });
+            if let Err(error) = save_result {
+                tracing::warn!("failed to persist the cancelled turn: {error:#}");
+                app.chat_messages.push(ChatMessage {
+                    role: ChatRole::Error,
+                    text: format!(
+                        "Could not save the stopped turn: {}",
+                        crate::errors::terminal_text(&error)
+                    ),
+                });
+            }
             app.sync_stats();
             return_queued_prompts_to_composer(app);
         }
@@ -9644,6 +9700,7 @@ mod tests {
                 additional_workspace_roots: Vec::new(),
                 tool_search_catalog: None,
                 require_confirmation: true,
+                require_shell_approval: false,
                 auto_approve_safe: false,
                 auto_approve_edits: false,
                 quiet: true,
@@ -9706,6 +9763,7 @@ mod tests {
                 additional_workspace_roots: Vec::new(),
                 tool_search_catalog: None,
                 require_confirmation: true,
+                require_shell_approval: false,
                 auto_approve_safe: false,
                 auto_approve_edits: false,
                 quiet: true,
@@ -9807,6 +9865,7 @@ mod tests {
                 additional_workspace_roots: Vec::new(),
                 tool_search_catalog: None,
                 require_confirmation: true,
+                require_shell_approval: false,
                 auto_approve_safe: false,
                 auto_approve_edits: false,
                 quiet: true,
@@ -10815,6 +10874,49 @@ mod tests {
 
         handle_key_event(&mut app, make_key(KeyCode::Up));
         assert_eq!(app.input, pasted);
+    }
+
+    #[test]
+    fn a_cleared_draft_is_recalled_only_in_its_session() {
+        let directory = tempfile::tempdir().expect("session fixtures");
+        let first = directory.path().join("first.json");
+        let second = directory.path().join("second.json");
+        let mut app = minimal_app();
+        app.prompt_history = super::super::prompt_history::PromptHistory::in_memory();
+        for (id, path) in [("first-session", &first), ("second-session", &second)] {
+            saved_session(&app, id, crate::cli_options::PermissionMode::Default)
+                .save_to_path(path)
+                .expect("save fixture");
+        }
+
+        resume_session(first.to_str().expect("fixture path"), &mut app);
+        app.input = "Unsent text for the first session".to_string();
+        app.cursor = app.input.len();
+        handle_key_event(&mut app, make_key(KeyCode::Esc));
+        resume_session(second.to_str().expect("fixture path"), &mut app);
+        assert!(matches!(
+            handle_key_event(&mut app, make_key(KeyCode::Up)),
+            InputAction::ScrollUp
+        ));
+        assert!(app.input.is_empty());
+
+        resume_session(first.to_str().expect("fixture path"), &mut app);
+        handle_key_event(&mut app, make_key(KeyCode::Up));
+        assert_eq!(app.input, "Unsent text for the first session");
+    }
+
+    #[test]
+    fn clearing_the_composer_with_ctrl_c_keeps_its_draft_recoverable() {
+        let mut app = minimal_app();
+        app.prompt_history = super::super::prompt_history::PromptHistory::in_memory();
+        app.input = "Keep this draft".to_string();
+        app.cursor = app.input.len();
+        let clear = KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL);
+
+        handle_key_event(&mut app, clear);
+        assert!(app.input.is_empty());
+        handle_key_event(&mut app, make_key(KeyCode::Up));
+        assert_eq!(app.input, "Keep this draft");
     }
 
     /// Regression: Esc on the `/history` listing fell straight through to the
@@ -13315,9 +13417,10 @@ mod tests {
                 total_tokens: 0,
                 message_count: messages,
                 archived: false,
+                pinned: false,
             }
         };
-        let sessions = vec![
+        let mut sessions = vec![
             session("a", "/work/app", "newest here", 30_000, 4),
             session("b", "/work/other", "another folder", 40_000, 4),
             session("c", "/work/app", "empty session", 50_000, 0),
@@ -13339,6 +13442,15 @@ mod tests {
                 "1d ago  (untitled)".to_string(),
             ],
             "the session the screen belongs to is not recent activity"
+        );
+        sessions[3].pinned = true;
+        assert_eq!(
+            recent_session_rows(&sessions, "/work/app", None, 10_000_000),
+            vec![
+                "2h ago  [Pinned] two hours back".to_string(),
+                "just now  newest here".to_string(),
+                "1d ago  (untitled)".to_string(),
+            ]
         );
     }
 

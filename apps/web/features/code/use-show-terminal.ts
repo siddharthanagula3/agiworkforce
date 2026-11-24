@@ -3,17 +3,23 @@
 import { useEffect, useRef } from 'react';
 import { getHostBridge } from '@agiworkforce/local-runtime-contract';
 import { onAppCommand } from '@shared/lib/app-commands';
+import { safePlatform } from '@shared/utils/browser-utils';
+import { isLocalTerminalShortcut } from './local-code';
 
 /**
- * Keeps View > Show Terminal in step with a terminal pane this page owns.
- * The item stays disabled until a pane is mounted, and the menu command
- * uses the same toggle the pane's own button uses.
+ * A parent rendering a terminal-owning child must leave the child's native menu state alone.
  */
-export function useShowTerminal(available: boolean, open: boolean, toggle: () => void): void {
+export function useShowTerminal(
+  available: boolean,
+  open: boolean,
+  toggle: () => void,
+  ownsTerminal = true,
+): void {
   const toggleRef = useRef(toggle);
   toggleRef.current = toggle;
 
   useEffect(() => {
+    if (!ownsTerminal) return undefined;
     const host = getHostBridge();
     if (!available) {
       host?.setTerminalState?.({ available: false, open: false });
@@ -23,10 +29,21 @@ export function useShowTerminal(available: boolean, open: boolean, toggle: () =>
     return () => {
       host?.setTerminalState?.({ available: false, open: false });
     };
-  }, [available, open]);
+  }, [available, open, ownsTerminal]);
 
   useEffect(() => {
-    if (!available) return undefined;
-    return onAppCommand('toggle-terminal', () => toggleRef.current());
-  }, [available]);
+    if (!ownsTerminal || !available) return undefined;
+    const unsubscribe = onAppCommand('toggle-terminal', () => toggleRef.current());
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || !isLocalTerminalShortcut(event, safePlatform.isMac())) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (!event.repeat) toggleRef.current();
+    };
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => {
+      unsubscribe();
+      window.removeEventListener('keydown', onKeyDown, true);
+    };
+  }, [available, ownsTerminal]);
 }

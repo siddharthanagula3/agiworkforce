@@ -309,8 +309,15 @@ describe('the worker connects to AGI Desktop only once pairing has succeeded', (
     expect(autoConnect.indexOf('await revokeMismatchedDesktopPairing()')).toBeLessThan(
       autoConnect.indexOf('storageUtils.getItem<boolean>(DESKTOP_PAIRED_KEY, false)'),
     );
-    expect(initialize).toContain('watchSyncHostSession(');
-    expect(background).toContain('await releaseDataOfOtherAccounts(clerkRead);');
+    expect(initialize).toMatch(
+      /watchSyncHostSession\(\(\) => \{\s*void reconcileAccountOwnedTools\(\);/,
+    );
+    expect(background).toContain('await reconcileAccountOwnedTools(clerkRead);');
+    const reconcile = background.slice(
+      background.indexOf('async function reconcileAccountOwnedTools('),
+      background.indexOf('async function releaseDesktopPairing('),
+    );
+    expect(reconcile).toContain('await releaseDesktopPairingOfOtherAccount(signedInAccountId);');
   });
 
   it('stops the maintenance pass re-arming its alarm for an unpaired profile', () => {

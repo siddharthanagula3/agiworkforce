@@ -5,9 +5,10 @@ import {
   loadingScreenUrl,
   offlineScreen,
   retryUrlAfterFailedLoad,
+  serviceUnavailableScreen,
   shellScreenUrl,
 } from '../shellScreens';
-import { defineShellInkGlobals, shellTokens as tokens } from './shellTokenGlobals';
+import { defineShellInkGlobals, shellSymbolUrl, shellTokens as tokens } from './shellTokenGlobals';
 
 beforeAll(defineShellInkGlobals);
 
@@ -33,8 +34,7 @@ describe('the page the shell draws when it cannot show the app', () => {
   it('never blames the reader for our own outage', () => {
     const unreachable = offlineScreen(-102);
     expect(unreachable.heading).toBe(`Can't reach ${PRODUCT_BRAND}`);
-    expect(unreachable.body).toContain('nothing is wrong with your account');
-    expect(unreachable.body).not.toContain('offline');
+    expect(unreachable.body).toBe('The service did not respond. Try again in a moment.');
   });
 
   it('carries a support reference instead of the engine own words', () => {
@@ -127,12 +127,21 @@ describe('the page the shell draws when it cannot show the app', () => {
       expect(decode(url)).not.toMatch(/agiHost|ipcRenderer|electron/iu);
     }
   });
+
+  it('embeds the current AGI symbol even when recovery cannot reach the service', () => {
+    for (const url of [
+      shellScreenUrl(serviceUnavailableScreen(503), 'https://agiworkforce.com/chat'),
+      loadingScreenUrl(),
+    ]) {
+      expect(decode(url)).toContain(`<img src="${shellSymbolUrl}" width="40" height="40" alt="">`);
+    }
+  });
 });
 
 describe('the loading state', () => {
   it('says one thing in one line, in the shell palette, and can be dragged', () => {
     const html = decode(loadingScreenUrl());
-    expect(html).toContain(`<h1>Loading ${PRODUCT_BRAND}</h1>`);
+    expect(html).toContain(`<h1>Opening ${PRODUCT_NAMES.desktop}</h1>`);
     expect(html).toContain(`<title>${PRODUCT_NAMES.desktop}</title>`);
     expect(html).toContain('-webkit-app-region:drag');
     expect(html).toContain(`--ground:${tokens.pageBackgroundDark}`);

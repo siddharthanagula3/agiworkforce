@@ -9,6 +9,7 @@ import {
 import type { InteractiveCard } from '@agiworkforce/types';
 import {
   buildInteractiveCardEl,
+  buildBrowserTurnControls,
   buildBubbleWithTools,
   refreshAgentActivityClocks,
   resetReadAloud,
@@ -47,6 +48,33 @@ beforeEach(() => {
   };
 });
 afterEach(() => vi.restoreAllMocks());
+
+it('keeps completed browser screenshots navigable without jumping away from an older frame', () => {
+  const controls = buildBrowserTurnControls({
+    onTakeOver: async () => true,
+    onHandBack: async () => true,
+  });
+  const shot = (payload: string) =>
+    controls.setScreenshot('data:image/jpeg;base64,' + payload, payload);
+  const gallery = controls.screenshotGallery;
+  const back = gallery.querySelector<HTMLButtonElement>('[aria-label="Previous screenshot"]')!;
+  const forward = gallery.querySelector<HTMLButtonElement>('[aria-label="Next screenshot"]')!;
+  shot('AAAA');
+  shot('BBBB');
+  back.click();
+  shot('CCCC');
+  shot('CCCC');
+  controls.setRunning(false);
+  expect(gallery.hidden).toBe(false);
+  expect(gallery.textContent).toContain('Screenshot 1 of 3');
+  expect(back.disabled).toBe(true);
+  forward.click();
+  expect(gallery.querySelector('img')?.src).toContain('BBBB');
+  forward.click();
+  expect(forward.disabled).toBe(true);
+  expect(controls.screenshotForStep('BBBB')?.querySelector('img')?.alt).toBe('Screenshot 2 of 3');
+  expect(controls.screenshotForStep('missing')).toBeNull();
+});
 
 function msg(overrides: Partial<SidePanelChatMessage> = {}): SidePanelChatMessage {
   return { id: 'm1', role: 'user', content: 'hello world', timestamp: 0, ...overrides };
@@ -189,6 +217,28 @@ describe('side-panel buildBubbleWithTools (real render)', () => {
       expect(summary?.textContent).toContain(label);
       expect(icon?.querySelector(iconSelector)).not.toBeNull();
       expect(icon?.querySelector('img.agi-loading-mark') !== null).toBe(usesLoader);
+    },
+  );
+
+  it.each([
+    ['partial', 'failed', '1 failed attempt'],
+    ['cancelled', 'cancelled', 'Outcome unverified'],
+  ] as const)(
+    'distinguishes a %s browser task from the effect of an individual click',
+    (run, step, label) => {
+      const browserActivity = activity(run);
+      browserActivity.entries.push({
+        kind: 'tool',
+        id: 'action',
+        toolCallId: 'click-1',
+        name: 'click',
+        category: 'computer-use',
+        summary: 'Clicking',
+        status: step,
+        startedAtMs: 1000,
+      });
+      const node = buildBubbleWithTools(msg({ role: 'assistant', content: '', browserActivity }));
+      expect(node.textContent).toContain(label);
     },
   );
 

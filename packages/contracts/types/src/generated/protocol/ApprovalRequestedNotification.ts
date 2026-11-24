@@ -14,6 +14,7 @@ export type ApprovalRequestedNotification = {
   reversible: boolean | null;
   proposedContent: string | null;
   alwaysAllowSaved: boolean;
+  requiresExplicitDecision?: boolean;
   proposedExecpolicyAmendment: ExecPolicyAmendment | null;
   editable: boolean;
   question: JsonValue | null;

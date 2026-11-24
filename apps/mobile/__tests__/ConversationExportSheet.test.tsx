@@ -60,7 +60,8 @@ jest.mock('@/lib/clipboard', () => ({
 
 import { ConversationExportSheet } from '@/src/features/chat/components/ConversationExportSheet';
 import type { ChatMessage } from '@/types/chat';
-import { sitsInColumn } from '../test-utils/sheetColumn';
+import { insetHasPanelBackground, sitsInColumn } from '../test-utils/sheetColumn';
+import { lightColors } from '@/src/ui/theme/tokens';
 
 const messages: ChatMessage[] = [
   {
@@ -221,6 +222,8 @@ describe('ConversationExportSheet', () => {
       <ConversationExportSheet visible onClose={jest.fn()} messages={messages} title="Chat" />,
     );
 
-    expect(sitsInColumn(getByText('Export Conversation'), 'reading')).toBe(true);
+    const title = getByText('Export Conversation');
+    expect(sitsInColumn(title, 'reading')).toBe(true);
+    expect(insetHasPanelBackground(title, lightColors.surfaceElevated)).toBe(true);
   });
 });

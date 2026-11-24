@@ -1,4 +1,8 @@
 import { AppState } from 'react-native';
+import {
+  isCloudAccountEpochCurrent,
+  type CloudAccountEpoch,
+} from '@/src/features/auth/services/cloudAccountSession';
 
 import { notificationAllowedOnceReadable } from './notificationGate';
 
@@ -9,17 +13,22 @@ function appIsInForeground(): boolean {
   return AppState.currentState === 'active';
 }
 
-export async function announceReplyReadyInBackground(conversationId: string): Promise<boolean> {
+export async function announceReplyReadyInBackground(
+  conversationId: string,
+  account: CloudAccountEpoch | null = null,
+): Promise<boolean> {
   if (appIsInForeground()) return false;
   try {
     if (!(await notificationAllowedOnceReadable('chat_message'))) return false;
     if (appIsInForeground()) return false;
     const { scheduleLocalNotification } = await import('./notifications');
+    if (account && !isCloudAccountEpochCurrent(account)) return false;
     await scheduleLocalNotification({
       title: REPLY_READY_TITLE,
       body: REPLY_READY_BODY,
       type: 'chat_message',
       conversationId,
+      account,
     });
     return true;
   } catch (error) {

@@ -209,13 +209,23 @@ describe('native browser task completion context', () => {
       lease,
       computerUseRuns,
       undefined,
-    ) as () => Promise<unknown>;
+    ) as (result: { cappedAtMaxSteps: boolean; finalMessage: string }) => Promise<unknown>;
     return { run, computerUseRuns, lease, assertComputerUseOwnership, url };
   }
 
+  it('reports a step-limit failure without committing a completed task context', async () => {
+    const h = completion();
+    await expect(
+      h.run({ cappedAtMaxSteps: true, finalMessage: 'Reached test step limit.' }),
+    ).rejects.toThrow('Reached test step limit.');
+    expect(executeScript).not.toHaveBeenCalled();
+  });
+
   it('captures the committed task tab document before releasing its lease', async () => {
     const h = completion();
-    await expect(h.run()).resolves.toEqual({
+    await expect(
+      h.run({ cappedAtMaxSteps: false, finalMessage: 'Task completed.' }),
+    ).resolves.toEqual({
       tabId: 18,
       windowId: 3,
       url: h.url,
@@ -232,7 +242,9 @@ describe('native browser task completion context', () => {
       h.computerUseRuns.cancel('user_stopped', h.lease.runId);
       return [{ documentId: 'task-document', result: h.url }];
     });
-    await expect(h.run()).rejects.toThrow();
+    await expect(
+      h.run({ cappedAtMaxSteps: false, finalMessage: 'Task completed.' }),
+    ).rejects.toThrow();
     expect(h.assertComputerUseOwnership).toHaveBeenCalledTimes(1);
   });
 
@@ -244,7 +256,9 @@ describe('native browser task completion context', () => {
       url: 'https://example.test/unrelated',
       status: 'complete',
     });
-    await expect(h.run()).rejects.toThrow('page changed');
+    await expect(
+      h.run({ cappedAtMaxSteps: false, finalMessage: 'Task completed.' }),
+    ).rejects.toThrow('page changed');
     expect(executeScript).not.toHaveBeenCalled();
   });
 });

@@ -49,7 +49,9 @@ export function AccountAgeCheck({ userId, onContinueLocal, onSignOut }: AccountA
       return;
     }
     setEntryError(null);
-    void useAdultEligibilityStore.getState().submitAge(userId, Number(ageText.trim()));
+    const age = Number(ageText.trim());
+    setAgeText('');
+    void useAdultEligibilityStore.getState().submitAge(userId, age);
   };
 
   return (

@@ -145,7 +145,7 @@ describe('what may be restored as the opening route', () => {
   it('sends a route the server no longer resolves back to a new chat', () => {
     expect(shouldFallBackToRoot(404)).toBe(true);
     expect(shouldFallBackToRoot(403)).toBe(true);
-    expect(shouldFallBackToRoot(500)).toBe(true);
+    expect(shouldFallBackToRoot(500)).toBe(false);
     expect(shouldFallBackToRoot(200)).toBe(false);
     expect(shouldFallBackToRoot(undefined)).toBe(false);
     expect(isRestorableRoute(NEW_CHAT_ROUTE)).toBe(true);

@@ -15,14 +15,16 @@ use agiworkforce_protocol::developer_session::{
     AppServerClientInfo, AppServerNotification, ApprovalRequestedNotification,
     ApprovalResponseParams, CheckpointDiffResponse, CheckpointListResponse,
     CheckpointSectionsParams, CheckpointSectionsResponse, CheckpointTurnParams,
-    ContextInstructionsParams, ContextInstructionsResponse, DeveloperAgentMode,
-    DeveloperApprovalOutcome, DeveloperMessage, DeveloperReasoningEffort, DeveloperRoutingProfile,
-    DeveloperRoutingTaskType, DeveloperSessionApproval, DeveloperSessionHandoff,
-    DeveloperSessionSource, DeveloperSessionTrustMode, DeveloperSessionWriter,
-    DeveloperSessionWriterChange, GitPullRequestParams, GitPullRequestPlanParams,
-    GitPullRequestPlanResponse, GitPullRequestResponse, HandoffAdmission, HandoffAdmissionContext,
-    HandoffEnvironment, HandoffLastTurn, HandoffLocalResource, HandoffRefusal, HandoffTurnState,
-    HookAddParams, HookListResponse, HookRemoveParams, HostModelSummary, LocalModelListResponse,
+    ChildTaskStopParams, ChildTaskStopResponse, ChildTaskTranscriptParams,
+    ChildTaskTranscriptResponse, ContextInstructionsParams, ContextInstructionsResponse,
+    DeveloperAgentMode, DeveloperApprovalOutcome, DeveloperChildTaskState, DeveloperMessage,
+    DeveloperReasoningEffort, DeveloperRoutingProfile, DeveloperRoutingTaskType,
+    DeveloperSessionApproval, DeveloperSessionHandoff, DeveloperSessionSource,
+    DeveloperSessionTrustMode, DeveloperSessionWriter, DeveloperSessionWriterChange,
+    GitPullRequestParams, GitPullRequestPlanParams, GitPullRequestPlanResponse,
+    GitPullRequestResponse, HandoffAdmission, HandoffAdmissionContext, HandoffEnvironment,
+    HandoffLastTurn, HandoffLocalResource, HandoffRefusal, HandoffTurnState, HookAddParams,
+    HookListResponse, HookRemoveParams, HostModelSummary, LocalModelListResponse,
     LocalModelProvider, LocalModelSummary, ManagedWorktreeCreateParams,
     ManagedWorktreeListResponse, ManagedWorktreeSummary, McpAddParams, McpApprovalGrantParams,
     McpApprovalReadParams, McpApprovalRequest, McpAuthRequiredNotification, McpLoginParams,
@@ -32,28 +34,31 @@ use agiworkforce_protocol::developer_session::{
     PendingApprovalSnapshot, PendingUserInputSnapshot, PermissionRulesResponse,
     PermissionsAddParams, PermissionsListResponse, PermissionsRemoveParams, PlanDecideParams,
     PlanDecision, PluginInstallParams, PluginListResponse, PluginRemoveParams,
-    PluginSetEnabledParams, PluginUpdateResponse, ProviderParams, ProviderSetKeyParams,
+    PluginSetEnabledParams, PluginSettingSetParams, PluginSettingsReadParams,
+    PluginSettingsResponse, PluginUpdateResponse, ProviderParams, ProviderSetKeyParams,
     ProvidersListResponse, RewindSkippedFile, SettingsReadResponse, SettingsWriteParams,
     SkillConsentParams, SkillConsentResponse, SkillInstallParams, SkillListResponse,
     SkillRemoveParams, SkillSetEnabledParams, SlashCommandListResponse, SlashCommandRunParams,
-    SlashCommandRunResponse, ThreadCheckpoint, ThreadCheckpointsResponse, ThreadCompactParams,
-    ThreadCompactResponse, ThreadDeleteParams, ThreadDeleteResponse, ThreadForkParams,
-    ThreadHandoffAcceptParams, ThreadHandoffParams, ThreadIdParams, ThreadListParams,
-    ThreadListResponse, ThreadPlanNotification, ThreadReadResponse, ThreadReconnectResponse,
+    SlashCommandRunResponse, ThreadArchiveInactiveParams, ThreadArchiveInactiveResponse,
+    ThreadCheckpoint, ThreadCheckpointsResponse, ThreadCompactParams, ThreadCompactResponse,
+    ThreadDeleteParams, ThreadDeleteResponse, ThreadForkParams, ThreadHandoffAcceptParams,
+    ThreadHandoffParams, ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadPinParams,
+    ThreadPinResponse, ThreadPlanNotification, ThreadReadResponse, ThreadReconnectResponse,
     ThreadRenameParams, ThreadRenameResponse, ThreadRevertParams, ThreadRevertResponse,
     ThreadRewindParams, ThreadRewindResponse, ThreadRewindRestore, ThreadSearchHit,
     ThreadSearchParams, ThreadSearchResponse, ThreadSideQuestionDelta, ThreadSideQuestionParams,
     ThreadSideQuestionResponse, ThreadStartParams, ThreadStatus, ThreadSummary,
     ThreadWriterChangedNotification, ThreadWriterConflictData, TrustListResponse,
-    TrustRevokeParams, TurnEndedNotification, TurnFailure, TurnFailureCode, TurnInterruptParams,
-    TurnModelNotification, TurnOutputDeltaNotification, TurnStartParams, TurnStartedNotification,
-    TurnStatus, TurnSteerParams, TurnSummary, UserInputRequestedParams, UserInputResponseParams,
-    WorktreeApplyParams, WorktreeApplyResponse, WorktreeArchive, WorktreeCleanupFailure,
-    WorktreeCreateParams, WorktreeCreateResponse, WorktreeIdParams, WorktreeKeepParams,
-    WorktreeKeepResponse, WorktreeListResponse, WorktreePinParams, WorktreeRefusedFile,
-    WorktreeRemoveParams, WorktreeSetupFinishedNotification, WorktreeSetupRunParams,
-    WorktreeSummary, THREAD_SEARCH_DEFAULT_LIMIT, THREAD_SEARCH_MAX_LIMIT,
-    THREAD_SEARCH_QUERY_MAX_CHARS, THREAD_TITLE_MAX_CHARS,
+    TrustRevokeParams, TurnChildTaskNotification, TurnEndedNotification, TurnFailure,
+    TurnFailureCode, TurnInterruptParams, TurnModelNotification, TurnOutputDeltaNotification,
+    TurnStartParams, TurnStartedNotification, TurnStatus, TurnSteerParams, TurnSummary,
+    UserInputRequestedParams, UserInputResponseParams, WorktreeApplyParams, WorktreeApplyResponse,
+    WorktreeArchive, WorktreeCleanupFailure, WorktreeCreateParams, WorktreeCreateResponse,
+    WorktreeIdParams, WorktreeKeepParams, WorktreeKeepResponse, WorktreeListResponse,
+    WorktreePinParams, WorktreeRefusedFile, WorktreeRemoveParams,
+    WorktreeSetupFinishedNotification, WorktreeSetupRunParams, WorktreeSummary,
+    THREAD_SEARCH_DEFAULT_LIMIT, THREAD_SEARCH_MAX_LIMIT, THREAD_SEARCH_QUERY_MAX_CHARS,
+    THREAD_TITLE_MAX_CHARS,
 };
 use agiworkforce_protocol::instruction_settings::*;
 use agiworkforce_protocol::protocol::{
@@ -94,7 +99,7 @@ use crate::platform::policy::{PolicyDecision, PolicyEngine};
 use crate::runtime::change_reason::ChangeReason;
 use crate::runtime::session::{
     ManagedSession, ManagedSessionApprovalOutcome, ManagedSessionAutoRouting,
-    ManagedSessionFileChangeKind, SessionFingerprint,
+    ManagedSessionFileChangeKind, SessionFingerprint, MAX_APPROVAL_NOTE_CHARS,
 };
 use crate::runtime::session_activity::SharedSessionActivity;
 use crate::runtime::session_control::{
@@ -111,6 +116,7 @@ mod context_occupancy;
 
 const DEFAULT_THREAD_LIMIT: usize = 50;
 const MAX_THREAD_LIMIT: usize = 100;
+const UNTITLED_THREAD_TITLE: &str = "Untitled developer session";
 const APPROVAL_TIMEOUT_SECONDS: u64 = 600;
 // Backstop for a hung discovery pipeline only. Must exceed the per-server
 // `McpTimeouts.initialize` (30s): a single stalled server is skipped by its
@@ -144,7 +150,6 @@ const SUBAGENT_SPAWN_TOOLS: [&str; 2] = ["task", "agent"];
 /// Ceiling on turns running at once across every thread this host owns.
 const MAX_CONCURRENT_RUNNING_TURNS: usize = 8;
 const MAX_PROPOSED_CONTENT_BYTES: usize = 1_000_000;
-const MAX_APPROVAL_NOTE_CHARS: usize = 4_000;
 
 const MAX_REMEMBERED_CLIENT_TURNS_PER_THREAD: usize = 32;
 const MAX_CLIENT_TURN_ID_CHARS: usize = 128;
@@ -257,6 +262,26 @@ struct RunningTurn {
     partial: Arc<StdMutex<PartialOutput>>,
     event_sequence: Arc<StdMutex<u64>>,
     process_owner: crate::process_tree::ProcessTreeOwner,
+    child_tasks: Arc<StdMutex<ActiveChildTasks>>,
+    prompt_hooks: Option<Arc<PromptHooks>>,
+}
+
+struct PromptHooks {
+    config: crate::hooks::HooksConfig,
+    session_id: String,
+    model: String,
+}
+
+impl PromptHooks {
+    async fn check(&self, text: &str) -> Result<(), String> {
+        crate::hooks::check_user_prompt(&self.config, &self.session_id, &self.model, text).await
+    }
+}
+
+#[derive(Default)]
+struct ActiveChildTasks {
+    control: Option<crate::subagent::SubagentControl>,
+    running: std::collections::HashSet<String>,
 }
 
 /// Output streamed so far, and how many deltas carried it, under one lock so a
@@ -1036,6 +1061,7 @@ impl CliDeveloperSessionHost {
             code_drafts: cfg!(unix),
             workspace_file_recovery_browser: cfg!(unix),
             workspace_terminal: cfg!(unix),
+            background_commands: true,
             worktrees: true,
             models: true,
             account: true,
@@ -1069,8 +1095,11 @@ impl CliDeveloperSessionHost {
             reconnect: true,
             writer_lease: true,
             thread_unarchive: true,
+            thread_pin: true,
             thread_search: true,
+            thread_title_search: true,
             fork_at_message: true,
+            fork_and_rewind: self.worktree_checkout.is_none(),
             prompt_commands: true,
             max_turns: true,
             memory: true,
@@ -1097,6 +1126,8 @@ impl CliDeveloperSessionHost {
             managed_worktrees: true,
             side_question: true,
             thread_rename: true,
+            inactive_thread_archive: true,
+            require_shell_approval: true,
             reasoning_effort_ladder: true,
             mcp_set_enabled: true,
         }
@@ -1443,6 +1474,21 @@ impl CliDeveloperSessionHost {
         self.validate_session_workspace(&session)
     }
 
+    async fn owned_background_command(
+        &self,
+        params: BackgroundCommandIdParams,
+    ) -> Result<Arc<crate::terminals::BackgroundCommand>, DeveloperSessionHostError> {
+        if !self.sessions.lock().await.contains_key(&params.thread_id) {
+            self.validate_thread_ownership(&params.thread_id).await?;
+        }
+        crate::terminals::scope_owner(params.thread_id, async {
+            crate::terminals::find_owned(&params.command_id).ok_or_else(|| {
+                DeveloperSessionHostError::not_found("This chat has no matching background command")
+            })
+        })
+        .await
+    }
+
     async fn validate_execution_thread(
         &self,
         thread_id: &str,
@@ -1465,7 +1511,11 @@ impl CliDeveloperSessionHost {
                 .any(|question| question.thread_id == thread_id)
     }
 
-    async fn status_for(&self, summary: &ManagedSessionSummary) -> ThreadStatus {
+    async fn status_for(
+        &self,
+        summary: &ManagedSessionSummary,
+        writer: Option<&WriterLease>,
+    ) -> ThreadStatus {
         if summary.archived_at.is_some() {
             return ThreadStatus::Archived;
         }
@@ -1479,6 +1529,16 @@ impl CliDeveloperSessionHost {
             .contains_key(&summary.session_id)
         {
             return ThreadStatus::Running;
+        }
+        if let Some(owner) = summary.developer_turn_writer.as_deref() {
+            if writer.is_some_and(|lease| {
+                lease.holder_id == owner
+                    && lease.holder_id != self.writer.id
+                    && !lease.is_stale(chrono::Utc::now())
+            }) {
+                return ThreadStatus::Running;
+            }
+            return ThreadStatus::Failed;
         }
         ThreadStatus::Idle
     }
@@ -1498,6 +1558,7 @@ impl CliDeveloperSessionHost {
     }
 
     async fn thread_summary(&self, summary: ManagedSessionSummary) -> ThreadSummary {
+        let writer = writer_lease::read(&summary.path);
         let compatible_authority = summary.routing_authority.as_ref().filter(|authority| {
             summary.model.as_deref().is_some_and(|model| {
                 crate::agent::resolve_persisted_session_provider(
@@ -1552,8 +1613,9 @@ impl CliDeveloperSessionHost {
             id: summary.session_id.clone(),
             title: summary
                 .title
-                .clone()
-                .unwrap_or_else(|| "Untitled developer session".to_string()),
+                .as_deref()
+                .unwrap_or(UNTITLED_THREAD_TITLE)
+                .to_string(),
             model: projected_model,
             cwd: summary
                 .workspace_root
@@ -1564,7 +1626,10 @@ impl CliDeveloperSessionHost {
             created_at: summary.created_at.to_rfc3339(),
             updated_at: summary.updated_at.to_rfc3339(),
             created_by: source_from_stored(summary.created_by.as_deref()),
-            status: self.status_for(&summary).await,
+            status: self.status_for(&summary, writer.as_ref()).await,
+            pinned: crate::sessions::session_is_pinned(self.store.base_dir(), &summary.session_id)
+                .unwrap_or_default()
+                .then_some(true),
             git_branch: summary.git_branch.clone(),
             worktree_root: summary
                 .worktree_root
@@ -1572,8 +1637,7 @@ impl CliDeveloperSessionHost {
                 .map(|path| path.display().to_string()),
             client: summary.client.clone(),
             repository: summary.repository.clone(),
-            writer: writer_lease::read(&summary.path)
-                .map(|lease| writer_summary(self.writer, lease)),
+            writer: writer.map(|lease| writer_summary(self.writer, lease)),
             location: None,
         }
     }
@@ -1846,6 +1910,21 @@ impl CliDeveloperSessionHost {
 
     fn emit(&self, method: &str, params: impl serde::Serialize) {
         if let Ok(notification) = AppServerNotification::new(method, params) {
+            let _ = self.notifications.send(notification);
+        }
+    }
+
+    fn emit_thread_archived(&self, thread_id: String) {
+        self.emit(
+            method::THREAD_ARCHIVED,
+            serde_json::json!({ "threadId": thread_id.clone() }),
+        );
+        if let Ok(notification) = task_state_notification(
+            thread_id,
+            AgentTaskState::Archived,
+            None,
+            Some("Thread archived.".to_string()),
+        ) {
             let _ = self.notifications.send(notification);
         }
     }
@@ -2404,6 +2483,44 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         let _admission = self.admit_request().await?;
         self.workspace_terminals.close(params).await
     }
+    async fn background_command_list(
+        &self,
+        params: ThreadIdParams,
+    ) -> Result<BackgroundCommandListResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        self.validate_thread_ownership(&params.thread_id).await?;
+        let mut commands = crate::terminals::scope_owner(params.thread_id, async {
+            crate::terminals::list_owned()
+        })
+        .await;
+        commands.sort_by_key(|command| std::cmp::Reverse(command.started_at));
+        Ok(BackgroundCommandListResponse {
+            commands: commands
+                .iter()
+                .map(|command| command.developer_summary())
+                .collect(),
+        })
+    }
+
+    async fn background_command_read(
+        &self,
+        params: BackgroundCommandIdParams,
+    ) -> Result<BackgroundCommandReadResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        let command = self.owned_background_command(params).await?;
+        Ok(command.developer_snapshot())
+    }
+
+    async fn background_command_stop(
+        &self,
+        params: BackgroundCommandIdParams,
+    ) -> Result<BackgroundCommandReadResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        let command = self.owned_background_command(params).await?;
+        crate::terminals::stop(&command).await;
+        Ok(command.developer_snapshot())
+    }
+
     async fn workspace_files_list(
         &self,
         params: WorkspaceDirectoryParams,
@@ -2743,16 +2860,39 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
     ) -> Result<ThreadListResponse, DeveloperSessionHostError> {
         let _admission = self.admit_request().await?;
         self.validate_requested_cwd(params.cwd.as_deref())?;
+        let query = params.title_query.as_deref().map(str::trim);
+        if query.is_some_and(|query| {
+            query.contains('\0') || query.chars().count() > THREAD_SEARCH_QUERY_MAX_CHARS
+        }) {
+            return Err(DeveloperSessionHostError::invalid_request(format!(
+                "A session title query can contain up to {THREAD_SEARCH_QUERY_MAX_CHARS} characters"
+            )));
+        }
+        let needle = query
+            .filter(|query| !query.is_empty())
+            .map(threads::lowered);
         let store = self.store.clone();
-        let mut summaries = tokio::task::spawn_blocking(move || store.list())
-            .await
-            .map_err(internal_error)?
-            .map_err(internal_error)?;
-        summaries.retain(|summary| {
-            let workspace_matches =
-                summary.workspace_root.as_deref() == Some(self.workspace_root.as_path());
-            (params.include_archived || summary.archived_at.is_none()) && workspace_matches
-        });
+        let workspace_root = self.workspace_root.clone();
+        let include_archived = params.include_archived;
+        let mut summaries = tokio::task::spawn_blocking(move || {
+            let mut summaries = store.list()?;
+            summaries.retain(|summary| {
+                (include_archived || summary.archived_at.is_none())
+                    && summary.workspace_root.as_deref() == Some(workspace_root.as_path())
+                    && needle.as_ref().is_none_or(|needle| {
+                        threads::lowered(summary.title.as_deref().unwrap_or(UNTITLED_THREAD_TITLE))
+                            .contains(needle)
+                    })
+            });
+            summaries.sort_by_cached_key(|summary| {
+                !crate::sessions::session_is_pinned(store.base_dir(), &summary.session_id)
+                    .unwrap_or_default()
+            });
+            Ok::<_, anyhow::Error>(summaries)
+        })
+        .await
+        .map_err(internal_error)?
+        .map_err(internal_error)?;
         let mut waiting = HashSet::new();
         for summary in &summaries {
             if self.needs_input(&summary.session_id).await {
@@ -2790,7 +2930,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         for summary in selected {
             threads.push(self.thread_summary(summary).await);
         }
-        if params.include_cloud && params.cursor.is_none() {
+        if params.include_cloud && params.cursor.is_none() && params.title_query.is_none() {
             threads.extend(super::cloud_threads::list(&self.workspace_root).await);
         }
         Ok(ThreadListResponse {
@@ -2808,6 +2948,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             return Err(super::cloud_threads::turn_refusal());
         }
         self.adopt_account_conversation(&params.thread_id).await;
+        let _thread_files = self.thread_files(&params.thread_id).lock_owned().await;
         let (path, fingerprint, managed) = self.read_session_file(&params.thread_id).await?;
         let summary = ManagedSessionSummary::from_session(&managed, path.clone());
         self.cache_agent(path, fingerprint, managed).await?;
@@ -2862,6 +3003,8 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             .filter(|(_, message)| threads::is_transcript_message(message))
             .collect();
         let eligible_count = transcript.len();
+        let (approvals, question_history_bytes) = approval_records(&session.approvals);
+        let transcript_budget = TRANSCRIPT_JSON_BUDGET.saturating_sub(question_history_bytes);
         let mut messages_newest_first = Vec::new();
         let mut serialized_bytes = 2usize; // JSON array brackets.
         let mut transcript_truncated = false;
@@ -2885,7 +3028,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             if serialized_bytes
                 .checked_add(separator_bytes)
                 .and_then(|total| total.checked_add(projected_bytes))
-                .is_none_or(|total| total > TRANSCRIPT_JSON_BUDGET)
+                .is_none_or(|total| total > transcript_budget)
             {
                 transcript_truncated = true;
                 continue;
@@ -2907,13 +3050,13 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                     .collect::<Vec<_>>()
                     .into_iter()
                     .rev()
-                    .map(agiworkforce_protocol::developer_session::DeveloperChildTask::from)
+                    .map(|task| session.developer_child_task(task))
                     .collect(),
             ),
             thread: self.resolved_summary(resolved).await,
             messages: messages_newest_first,
             transcript_truncated,
-            approvals: session.approvals.iter().map(approval_record).collect(),
+            approvals,
             file_changes: session
                 .file_changes
                 .iter()
@@ -3267,9 +3410,23 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         let store = self.store.clone();
         let thread_id = params.thread_id;
         let id_for_event = thread_id.clone();
+        let (path, writer_guard) = tokio::task::spawn_blocking({
+            let store = store.clone();
+            let thread_id = thread_id.clone();
+            move || {
+                let path = resolve_execution_session(&store, &thread_id)
+                    .map_err(not_found_error)?
+                    .path;
+                let guard = writer_lease::lock_arbiter(&path).map_err(internal_error)?;
+                Ok::<_, DeveloperSessionHostError>((path, guard))
+            }
+        })
+        .await
+        .map_err(internal_error)??;
+        self.refuse_foreign_writer(&thread_id, &path, "archived")?;
         tokio::task::spawn_blocking(move || {
-            let resolved = resolve_execution_session(&store, &thread_id)?;
-            store.archive(ManagedSessionReference::Path(resolved.path))
+            let _writer_guard = writer_guard;
+            store.archive(ManagedSessionReference::Path(path))
         })
         .await
         .map_err(internal_error)?
@@ -3287,19 +3444,73 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 ));
             }
         }
-        self.emit(
-            method::THREAD_ARCHIVED,
-            serde_json::json!({ "threadId": id_for_event.clone() }),
-        );
-        if let Ok(notification) = task_state_notification(
-            id_for_event,
-            AgentTaskState::Archived,
-            None,
-            Some("Thread archived.".to_string()),
-        ) {
-            let _ = self.notifications.send(notification);
-        }
+        self.emit_thread_archived(id_for_event);
         Ok(())
+    }
+
+    async fn archive_inactive_thread(
+        &self,
+        params: ThreadArchiveInactiveParams,
+    ) -> Result<ThreadArchiveInactiveResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        let cutoff = chrono::DateTime::parse_from_rfc3339(&params.inactive_before)
+            .map_err(invalid_request)?
+            .with_timezone(&chrono::Utc);
+        if cutoff > chrono::Utc::now() {
+            return Err(DeveloperSessionHostError::invalid_request(
+                "The inactive-session cutoff cannot be in the future.",
+            ));
+        }
+        let thread_id = params.thread_id;
+        self.validate_execution_thread(&thread_id).await?;
+        let _thread_files = self.thread_files(&thread_id).lock_owned().await;
+        let loaded = self.sessions.lock().await.contains_key(&thread_id);
+        let running = self.running_turns.lock().await.contains_key(&thread_id);
+        if loaded || running || self.needs_input(&thread_id).await {
+            return Ok(ThreadArchiveInactiveResponse { archived: false });
+        }
+        let store = self.store.clone();
+        let id_for_event = thread_id.clone();
+        let archived = tokio::task::spawn_blocking(move || {
+            let resolved = resolve_execution_session(&store, &thread_id)?;
+            let _writer_guard = writer_lease::lock_arbiter(&resolved.path)?;
+            if crate::sessions::session_is_pinned(store.base_dir(), &thread_id)?
+                || writer_lease::read(&resolved.path)
+                    .is_some_and(|lease| !lease.is_stale(chrono::Utc::now()))
+            {
+                return Ok(false);
+            }
+            store.archive_before(ManagedSessionReference::Path(resolved.path), Some(cutoff))
+        })
+        .await
+        .map_err(internal_error)?
+        .map_err(not_found_error)?;
+        if archived {
+            self.emit_thread_archived(id_for_event);
+        }
+        Ok(ThreadArchiveInactiveResponse { archived })
+    }
+
+    async fn pin_thread(
+        &self,
+        params: ThreadPinParams,
+    ) -> Result<ThreadPinResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        self.validate_execution_thread(&params.thread_id).await?;
+        let _thread_files = self.thread_files(&params.thread_id).lock_owned().await;
+        let store = self.store.clone();
+        tokio::task::spawn_blocking(move || {
+            let resolved =
+                resolve_execution_session(&store, &params.thread_id).map_err(not_found_error)?;
+            store
+                .set_pinned(&resolved, params.pinned)
+                .map_err(internal_error)?;
+            Ok(ThreadPinResponse {
+                pinned: params.pinned,
+            })
+        })
+        .await
+        .map_err(internal_error)?
     }
 
     async fn unarchive_thread(
@@ -3493,10 +3704,24 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
     ) -> Result<ThreadRewindResponse, DeveloperSessionHostError> {
         let _admission = self.admit_request().await?;
         self.validate_execution_thread(&params.thread_id).await?;
-        let mode = match params.restore.unwrap_or(ThreadRewindRestore::Both) {
+        let restore = params.restore.unwrap_or(ThreadRewindRestore::Both);
+        let fork = restore == ThreadRewindRestore::ForkAndCode;
+        if fork && self.worktree_checkout.is_some() {
+            return Err(DeveloperSessionHostError::conflict(
+                "This session owns its worktree. Fork a session in the original folder instead.",
+            ));
+        }
+        if fork && (params.checkpoint_index.is_none() || params.message_index.is_some()) {
+            return Err(DeveloperSessionHostError::invalid_request(
+                "Fork and rewind requires a checkpoint index",
+            ));
+        }
+        let mode = match restore {
             ThreadRewindRestore::Both => crate::agent::RewindMode::CodeAndConversation,
             ThreadRewindRestore::Conversation => crate::agent::RewindMode::Conversation,
-            ThreadRewindRestore::Code => crate::agent::RewindMode::Code,
+            ThreadRewindRestore::Code | ThreadRewindRestore::ForkAndCode => {
+                crate::agent::RewindMode::Code
+            }
         };
         // Restoring files touches the workspace every thread of this host
         // edits, so it waits out a revert or stage and refuses while a turn in
@@ -3527,8 +3752,18 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             .await?;
         self.refresh_from_disk(&params.thread_id, &session, taken_over)
             .await?;
-        let (outcome, persisted) = {
+        let (outcome, persisted, forked_id) = {
             let mut agent = session.lock().await;
+            let forked_id = if let Some(index) = params.checkpoint_index.filter(|_| fork) {
+                let mut branch = agent
+                    .forked_at_checkpoint(index as usize, session_path)
+                    .map_err(invalid_request)?;
+                branch.title = clean_title(branch.title.map(|title| format!("{title} (fork)")));
+                self.store.save(&branch).map_err(internal_error)?;
+                Some(branch.session_id)
+            } else {
+                None
+            };
             let outcome = match (params.checkpoint_index, params.message_index) {
                 (Some(index), None) => agent.rewind_to(index as usize, mode),
                 (None, Some(index)) => agent.rewind_to_message(index as usize, mode),
@@ -3544,7 +3779,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             } else {
                 Ok(())
             };
-            (outcome, persisted)
+            (outcome, persisted, forked_id)
         };
         drop(running_turns);
         persisted.map_err(internal_error)?;
@@ -3555,17 +3790,27 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 .map(|path| path.display().to_string())
                 .collect::<Vec<_>>()
         };
+        let thread = self
+            .resume_thread_summary(forked_id.as_deref().unwrap_or(&params.thread_id))
+            .await?;
+        let conversation_restored = forked_id.is_some() || outcome.conversation_restored;
+        if forked_id.is_some() {
+            self.emit(
+                method::THREAD_FORKED,
+                serde_json::json!({ "thread": thread }),
+            );
+        }
         self.emit(
             method::THREAD_REWOUND,
             serde_json::json!({
-                "threadId": params.thread_id,
-                "conversationRestored": outcome.conversation_restored,
+                "threadId": thread.id,
+                "conversationRestored": conversation_restored,
             }),
         );
         Ok(ThreadRewindResponse {
-            thread: self.resume_thread_summary(&params.thread_id).await?,
+            thread,
             prompt: outcome.prompt,
-            conversation_restored: outcome.conversation_restored,
+            conversation_restored,
             restored_files: display(files.restored),
             removed_files: display(files.removed),
             skipped_files: files
@@ -3833,6 +4078,11 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         if super::cloud_threads::cloud_session_id(&params.thread_id).is_some() {
             return Err(super::cloud_threads::turn_refusal());
         }
+        if params.require_shell_approval && params.agent_mode == Some(DeveloperAgentMode::Bypass) {
+            return Err(DeveloperSessionHostError::invalid_request(
+                "Shell approval cannot be combined with Bypass permissions.",
+            ));
+        }
         self.validate_execution_thread(&params.thread_id).await?;
         self.validate_requested_cwd(params.cwd.as_deref())?;
         let context_files =
@@ -3842,6 +4092,9 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         let max_turns = validated_max_turns(params.max_turns)?;
         let session = self.load_execution_agent(&params.thread_id).await?;
         self.claim_worktree(&params.thread_id).await?;
+        let hooks_config = tokio::task::spawn_blocking(crate::hooks::load_hooks_or_default)
+            .await
+            .map_err(internal_error)?;
         // Claim exclusive start ownership before touching the shared agent.
         // Keeping this guard through session setup prevents a losing concurrent
         // request from changing the model, controls, messages, or attachments.
@@ -3982,6 +4235,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                     keep_thread_mode(&mut agent);
                 }
                 apply_agent_controls(&mut agent, params.agent_mode, params.reasoning_effort)?;
+                agent.require_shell_approval = params.require_shell_approval;
                 if params.allowed_tools.is_some() || params.disallowed_tools.is_some() {
                     let allowed = validated_tool_filter(params.allowed_tools.as_deref())?
                         .or_else(|| agent.allowed_tools.clone())
@@ -4019,18 +4273,29 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                     }
                 }
                 agent.validate_privacy_boundary().map_err(invalid_request)?;
+                if agent
+                    .managed_session
+                    .as_ref()
+                    .is_some_and(|session| session.developer_turn_writer.is_some())
+                {
+                    agent.finalize_cancelled_turn("");
+                }
+                agent
+                    .persist_developer_turn_writer(Some(self.writer.id.clone()))
+                    .map_err(internal_error)?;
                 Ok(())
             })();
             if let Err(error) = setup_result {
                 snapshot.restore(&mut agent);
                 return Err(error);
             }
+            agent.hooks_config = hooks_config;
             self.apply_subagent_boundary_policy(&mut agent);
         }
 
-        let turn_model = {
+        let (turn_model, prompt_hooks) = {
             let agent = session.lock().await;
-            TurnModelNotification {
+            let model = TurnModelNotification {
                 thread_id: params.thread_id.clone(),
                 turn_id: String::new(),
                 model: agent.model.clone(),
@@ -4041,7 +4306,13 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                     .map(|state| state.selection.clone()),
                 fallback_from: None,
                 fallback_reason: None,
-            }
+            };
+            let hooks = Arc::new(PromptHooks {
+                config: agent.hooks_config().clone(),
+                session_id: agent.runtime_session_id.clone(),
+                model: model.model.clone(),
+            });
+            (model, hooks)
         };
         let thread_id = params.thread_id;
         let turn_id = Uuid::new_v4().to_string();
@@ -4073,6 +4344,9 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         let task_workspace_files = self.workspace_files.clone();
         let task_session_path = session_path;
         let task_activity = activity;
+        let child_tasks = Arc::new(StdMutex::new(ActiveChildTasks::default()));
+        let task_child_tasks = child_tasks.clone();
+        let task_prompt_hooks = prompt_hooks.clone();
         let process_owner = crate::process_tree::ProcessTreeOwner::new();
         let handle = tokio::spawn(crate::process_tree::scope(process_owner, async move {
             let _lease_heartbeat = AbortOnDrop(tokio::spawn(renew_writer_lease(
@@ -4092,7 +4366,6 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 .await;
                 return;
             }
-            let mut next_input = Some(prepared);
             let mut finishing = None;
             let mut final_status = TurnStatus::Completed;
             let mut final_error: Option<String> = None;
@@ -4102,6 +4375,8 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             let mut cumulative_input_tokens = 0u32;
             let mut managed_request_ids: Vec<String> = Vec::new();
             let mut cumulative_output_tokens = 0u32;
+            let mut cumulative_cache_read_tokens = 0u32;
+            let mut cumulative_cache_write_tokens = 0u32;
             let mut unsent_steers = 0u32;
 
             // A route that cannot start is refused before any work is announced,
@@ -4116,11 +4391,24 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                         .err()
                 }
             };
+            let route_block = match route_block {
+                Some(error) => Some((format!("{error:#}"), classify_turn_failure(&error))),
+                None => task_prompt_hooks
+                    .check(&prepared.text)
+                    .await
+                    .err()
+                    .map(|reason| {
+                        let failure =
+                            TurnFailure::new(TurnFailureCode::InvalidRequest, reason.clone());
+                        (reason, failure)
+                    }),
+            };
+            let mut next_input = Some(prepared);
             let work_started = route_block.is_none();
-            if let Some(error) = route_block {
+            if let Some((error, failure)) = route_block {
                 final_status = TurnStatus::Failed;
-                final_error = Some(format!("{error:#}"));
-                final_failure = Some(classify_turn_failure(&error));
+                final_error = Some(error);
+                final_failure = Some(failure);
                 next_input = None;
                 finishing = Some(hold_for_finish(&task_thread_files, &task_workspace_files).await);
                 unsent_steers = close_running_turn_claim(
@@ -4191,6 +4479,37 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                     task_event_sequence.clone(),
                 )));
                 withhold_subagent_tools(&task_workspace_root, &mut agent);
+                agent.on_child_task = Some({
+                    let notifications = task_notifications.clone();
+                    let thread_id = task_thread_id.clone();
+                    let turn_id = task_turn_id.clone();
+                    let children = task_child_tasks.clone();
+                    crate::agent::ChildTaskSink(Arc::new(move |task, control| {
+                        let can_stop =
+                            task.state == DeveloperChildTaskState::Running && control.is_some();
+                        {
+                            let mut active =
+                                children.lock().unwrap_or_else(|error| error.into_inner());
+                            if can_stop {
+                                active.control = control;
+                                active.running.insert(task.id.clone());
+                            } else {
+                                active.running.remove(&task.id);
+                            }
+                        }
+                        let params = TurnChildTaskNotification {
+                            thread_id: thread_id.clone(),
+                            turn_id: turn_id.clone(),
+                            task,
+                            can_stop,
+                        };
+                        if let Ok(event) =
+                            AppServerNotification::new(method::TURN_CHILD_TASK, &params)
+                        {
+                            let _ = notifications.send(event);
+                        }
+                    }))
+                });
                 agent.on_user_input = task_answers_user_input.then(|| {
                     UserInputSink(user_input_callback(
                         task_thread_id.clone(),
@@ -4264,6 +4583,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 }
                 agent.on_tool_approval = None;
                 agent.on_tool_event = None;
+                agent.on_child_task = None;
                 agent.on_continuation_chunk = None;
                 agent.on_fallback = None;
                 agent.on_steer = None;
@@ -4297,6 +4617,10 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                             cumulative_input_tokens.saturating_add(turn.input_tokens);
                         cumulative_output_tokens =
                             cumulative_output_tokens.saturating_add(turn.output_tokens);
+                        cumulative_cache_read_tokens =
+                            cumulative_cache_read_tokens.saturating_add(turn.cache_read_tokens);
+                        cumulative_cache_write_tokens = cumulative_cache_write_tokens
+                            .saturating_add(turn.cache_creation_tokens);
                         managed_request_ids.extend(turn.managed_request_ids);
                     }
                     Err(error) => {
@@ -4331,7 +4655,15 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 }
             }
 
-            leave_bypass(&mut *task_session.lock().await);
+            {
+                let mut agent = task_session.lock().await;
+                leave_bypass(&mut agent);
+                if let Err(error) = agent.persist_developer_turn_writer(None) {
+                    final_status = TurnStatus::Failed;
+                    final_error = Some(format!("Could not save the turn outcome: {error:#}"));
+                    final_failure = Some(classify_turn_failure(&error));
+                }
+            }
             let context_tokens = context_occupancy::context_tokens_after_turn(
                 &*task_session.lock().await,
                 task_config.default.max_tokens as usize,
@@ -4488,6 +4820,8 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                     response: last_response,
                     input_tokens: cumulative_input_tokens,
                     output_tokens: cumulative_output_tokens,
+                    cache_read_tokens: cumulative_cache_read_tokens,
+                    cache_write_tokens: cumulative_cache_write_tokens,
                     error: final_error,
                     failure: final_failure,
                     managed_request_ids,
@@ -4507,6 +4841,8 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 partial,
                 event_sequence,
                 process_owner,
+                child_tasks,
+                prompt_hooks: Some(prompt_hooks),
             },
         );
         if let Some(client_turn_id) = client_turn_id.as_deref() {
@@ -4575,6 +4911,23 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         let turn_id = params
             .expected_turn_id
             .unwrap_or_else(|| turn.turn_id.clone());
+        let prompt_hooks = turn.prompt_hooks.clone();
+        let owner = turn.process_owner;
+        drop(running);
+        if let Some(hooks) = prompt_hooks {
+            crate::process_tree::scope(owner, hooks.check(&prepared.text))
+                .await
+                .map_err(invalid_request)?;
+        }
+        let running = self.running_turns.lock().await;
+        if !running
+            .get(&params.thread_id)
+            .is_some_and(|turn| turn.turn_id == turn_id)
+        {
+            return Err(DeveloperSessionHostError::conflict(
+                "The turn finished before this follow-up could be queued",
+            ));
+        }
         let mut steering = self.steering.lock().await;
         let queue = steering.entry(params.thread_id.clone()).or_default();
         if queue.len() >= MAX_STEER_QUEUE_DEPTH {
@@ -4594,6 +4947,73 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             thread_id: params.thread_id,
             status: TurnStatus::Running,
         })
+    }
+
+    async fn read_child_task_transcript(
+        &self,
+        params: ChildTaskTranscriptParams,
+    ) -> Result<ChildTaskTranscriptResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        let (_, _, session) = self.read_session_file(&params.thread_id).await?;
+        let task = session
+            .code_session()
+            .tasks
+            .into_iter()
+            .find(|task| {
+                task.id.as_str() == params.task_id && task.session_id.as_str() == params.thread_id
+            })
+            .ok_or_else(|| {
+                DeveloperSessionHostError::not_found("This chat has no matching subagent")
+            })?;
+        let transcript = session
+            .child_transcripts
+            .into_iter()
+            .find(|transcript| transcript.task_id == params.task_id)
+            .ok_or_else(|| {
+                DeveloperSessionHostError::not_found("This subagent has no saved transcript")
+            })?;
+        Ok(ChildTaskTranscriptResponse {
+            title: task.title.chars().take(200).collect(),
+            lines: transcript.lines,
+            truncated: transcript.truncated,
+        })
+    }
+
+    async fn stop_child_task(
+        &self,
+        params: ChildTaskStopParams,
+    ) -> Result<ChildTaskStopResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        let control = {
+            let turns = self.running_turns.lock().await;
+            let turn = turns
+                .get(&params.thread_id)
+                .filter(|turn| turn.turn_id == params.turn_id)
+                .ok_or_else(|| {
+                    DeveloperSessionHostError::not_found("The parent turn is no longer running")
+                })?;
+            let active = turn
+                .child_tasks
+                .lock()
+                .unwrap_or_else(|error| error.into_inner());
+            active
+                .control
+                .as_ref()
+                .filter(|_| active.running.contains(&params.task_id))
+                .cloned()
+                .ok_or_else(|| {
+                    DeveloperSessionHostError::not_found("No running subagent matches this task")
+                })?
+        };
+        control
+            .cancel(&params.task_id)
+            .await
+            .map_err(invalid_request)?;
+        let stopped_at = control
+            .wait_for_exit(&params.task_id)
+            .await
+            .then(|| chrono::Utc::now().to_rfc3339());
+        Ok(ChildTaskStopResponse { stopped_at })
     }
 
     async fn interrupt_turn(
@@ -4682,6 +5102,9 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             let mut session = session.lock().await;
             session.cancel_turn(&partial).await;
             leave_bypass(&mut session);
+            if let Some(managed) = session.managed_session.as_mut() {
+                managed.developer_turn_writer = None;
+            }
             persist_error = session.persist_managed_session().err();
         }
         // Released only now: a turn another client starts on this thread must
@@ -4728,6 +5151,18 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         if pending.thread_id != params.thread_id || pending.turn_id != params.turn_id {
             return Err(DeveloperSessionHostError::invalid_request(
                 "Approval response thread or turn does not match the pending request",
+            ));
+        }
+        if pending.snapshot.requires_explicit_decision
+            && matches!(
+                &params.decision,
+                ReviewDecision::ApprovedForSession
+                    | ReviewDecision::AlwaysAllow
+                    | ReviewDecision::ApprovedExecpolicyAmendment { .. }
+            )
+        {
+            return Err(DeveloperSessionHostError::invalid_request(
+                "This request requires a one-time decision.",
             ));
         }
         // "Always allow" for a command saves the rule this host proposed with
@@ -4919,12 +5354,43 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         Ok(surfaces::list_plugins(&self.workspace_root))
     }
 
+    async fn read_plugin_settings(
+        &self,
+        params: PluginSettingsReadParams,
+    ) -> Result<PluginSettingsResponse, DeveloperSessionHostError> {
+        let _guard = self.admit_request().await?;
+        tokio::task::spawn_blocking(move || surfaces::read_plugin_settings(&params.id))
+            .await
+            .map_err(internal_error)?
+    }
+
+    async fn set_plugin_setting(
+        &self,
+        params: PluginSettingSetParams,
+    ) -> Result<PluginSettingsResponse, DeveloperSessionHostError> {
+        let _guard = self.admit_request().await?;
+        let settings = tokio::task::spawn_blocking(move || surfaces::set_plugin_setting(params))
+            .await
+            .map_err(internal_error)??;
+        self.emit(method::PLUGINS_CHANGED, serde_json::json!({}));
+        self.reload_integrations().await;
+        Ok(settings)
+    }
+
     async fn set_plugin_enabled(
         &self,
         params: PluginSetEnabledParams,
     ) -> Result<PluginListResponse, DeveloperSessionHostError> {
         let _guard = self.admit_request().await?;
-        surfaces::set_plugin_enabled(&self.workspace_root, &params.id, params.enabled)
+        let workspace_root = self.workspace_root.clone();
+        let listed = tokio::task::spawn_blocking(move || {
+            surfaces::set_plugin_enabled(&workspace_root, &params.id, params.enabled)
+        })
+        .await
+        .map_err(internal_error)??;
+        self.emit(method::PLUGINS_CHANGED, serde_json::json!({}));
+        self.reload_integrations().await;
+        Ok(listed)
     }
 
     async fn list_mcp_servers(
@@ -5995,6 +6461,9 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             };
             let mut session = session.lock().await;
             session.cancel_turn(&partial).await;
+            if let Some(managed) = session.managed_session.as_mut() {
+                managed.developer_turn_writer = None;
+            }
             if let Err(error) = session.persist_managed_session() {
                 first_persist_error.get_or_insert(error);
             }
@@ -6265,6 +6734,34 @@ fn validated_client_turn_id(
     Ok(Some(client_turn_id))
 }
 
+fn approval_records(
+    approvals: &[crate::runtime::session::ManagedSessionApproval],
+) -> (Vec<DeveloperSessionApproval>, usize) {
+    const QUESTION_HISTORY_JSON_BUDGET: usize = 128 * 1024;
+    const QUESTION_ANSWER_JSON_FIELD_BYTES: usize = b",\"questionAnswer\":".len();
+    let mut remaining = QUESTION_HISTORY_JSON_BUDGET;
+    let mut records: Vec<_> = approvals
+        .iter()
+        .rev()
+        .map(|approval| {
+            let mut record = approval_record(approval);
+            let encoded = approval
+                .question_answer
+                .as_ref()
+                .and_then(|answer| serde_json::to_vec(answer).ok());
+            if let Some(budget) = encoded.and_then(|answer| {
+                remaining.checked_sub(answer.len() + QUESTION_ANSWER_JSON_FIELD_BYTES)
+            }) {
+                remaining = budget;
+                record.question_answer.clone_from(&approval.question_answer);
+            }
+            record
+        })
+        .collect();
+    records.reverse();
+    (records, QUESTION_HISTORY_JSON_BUDGET - remaining)
+}
+
 fn approval_record(
     approval: &crate::runtime::session::ManagedSessionApproval,
 ) -> DeveloperSessionApproval {
@@ -6282,6 +6779,7 @@ fn approval_record(
         },
         requested_at: approval.requested_at.to_rfc3339(),
         decided_at: approval.decided_at.to_rfc3339(),
+        question_answer: None,
     }
 }
 
@@ -6383,16 +6881,28 @@ fn approval_callback(
                 ApprovalRequestKind::Exec { command } => Some(command.clone()),
                 _ => None,
             };
-            let question = match &request.kind {
-                ApprovalRequestKind::Question { question, options } => Some(serde_json::json!({
-                    "question": question,
-                    "options": options,
-                })),
-                _ => None,
-            };
+            let question =
+                if let ApprovalRequestKind::Question { question, options } = &request.kind {
+                    let details: Vec<_> = options
+                        .iter()
+                        .filter(|option| option.description.is_some() || option.preview.is_some())
+                        .cloned()
+                        .collect();
+                    Some(agiworkforce_protocol::developer_session::ApprovalQuestion {
+                        question: question.clone(),
+                        options: options.iter().map(|option| option.label.clone()).collect(),
+                        option_details: (!details.is_empty()).then_some(details),
+                    })
+                } else {
+                    None
+                };
             let snapshot = PendingApprovalSnapshot {
                 request_id: request_id.clone(),
-                kind: format!("{:?}", request.kind),
+                kind: if question.is_some() {
+                    "Question".into()
+                } else {
+                    format!("{:?}", request.kind)
+                },
                 summary: request.summary.clone(),
                 detail: request.shown_detail().join("\n"),
                 risk_level: Some(risk.level),
@@ -6401,11 +6911,18 @@ fn approval_callback(
                     .proposal
                     .clone()
                     .filter(|content| content.len() <= MAX_PROPOSED_CONTENT_BYTES),
-                always_allow_saved: request.saves_always_allow,
-                proposed_execpolicy_amendment: exec_command
-                    .as_deref()
-                    .and_then(crate::features::exec::exec_policy::proposed_allow_prefix)
-                    .map(ExecPolicyAmendment::new),
+                requires_explicit_decision: request.requires_explicit_decision,
+                always_allow_saved: request.saves_always_allow
+                    && !request.requires_explicit_decision,
+                proposed_execpolicy_amendment: if request.requires_explicit_decision {
+                    None
+                } else {
+                    exec_command
+                        .as_deref()
+                        .and_then(crate::features::exec::exec_policy::proposed_allow_prefix)
+                        .map(ExecPolicyAmendment::new)
+                },
+                question,
             };
             let (sender, receiver) = oneshot::channel();
             pending.lock().await.insert(
@@ -6442,7 +6959,7 @@ fn approval_callback(
                     thread_id.clone(),
                     turn_id.clone(),
                     snapshot,
-                    question.clone(),
+                    None,
                 ),
             ) {
                 let _ = notifications.send(notification);
@@ -7907,6 +8424,8 @@ mod tests {
                 partial: Arc::new(StdMutex::new(PartialOutput::default())),
                 event_sequence: Arc::new(StdMutex::new(0)),
                 process_owner: crate::process_tree::ProcessTreeOwner::new(),
+                child_tasks: Default::default(),
+                prompt_hooks: None,
             },
         );
 
@@ -7961,6 +8480,8 @@ mod tests {
                 partial: Arc::new(StdMutex::new(PartialOutput::default())),
                 event_sequence: Arc::new(StdMutex::new(0)),
                 process_owner: crate::process_tree::ProcessTreeOwner::new(),
+                child_tasks: Default::default(),
+                prompt_hooks: None,
             },
         );
 
@@ -8152,6 +8673,8 @@ mod tests {
                 partial: Arc::new(StdMutex::new(PartialOutput::default())),
                 event_sequence: Arc::new(StdMutex::new(0)),
                 process_owner: crate::process_tree::ProcessTreeOwner::new(),
+                child_tasks: Default::default(),
+                prompt_hooks: None,
             },
         );
 
@@ -8322,6 +8845,7 @@ mod tests {
                 routing_task_type: None,
                 cwd: None,
                 agent_mode: None,
+                require_shell_approval: false,
                 reasoning_effort: None,
                 context_files: None,
                 client_turn_id: None,
@@ -9522,6 +10046,7 @@ mod tests {
                 routing_task_type: Some(DeveloperRoutingTaskType::Reasoning),
                 cwd: Some(workspace.path().display().to_string()),
                 agent_mode: None,
+                require_shell_approval: false,
                 reasoning_effort: None,
                 context_files: None,
                 client_turn_id: None,
@@ -9692,6 +10217,7 @@ mod tests {
                 routing_task_type: None,
                 cwd: Some(workspace.path().display().to_string()),
                 agent_mode: None,
+                require_shell_approval: false,
                 reasoning_effort: None,
                 context_files: None,
                 client_turn_id: None,
@@ -10024,7 +10550,9 @@ mod tests {
                     reversible: Some(false),
                     proposed_content: None,
                     always_allow_saved: proposed.is_some(),
+                    requires_explicit_decision: false,
                     proposed_execpolicy_amendment: proposed.map(ExecPolicyAmendment::new),
+                    question: None,
                 },
                 exec_command: Some(command.to_string()),
                 responder,
@@ -10235,6 +10763,8 @@ mod tests {
                 partial,
                 event_sequence: Arc::new(StdMutex::new(0)),
                 process_owner,
+                child_tasks: Default::default(),
+                prompt_hooks: None,
             },
         );
         let mut notifications = host.subscribe();
@@ -10392,6 +10922,8 @@ mod tests {
                 partial: Arc::new(StdMutex::new(PartialOutput::default())),
                 event_sequence: Arc::new(StdMutex::new(0)),
                 process_owner,
+                child_tasks: Default::default(),
+                prompt_hooks: None,
             },
         );
         host.interrupt_turn(TurnInterruptParams { thread_id, turn_id })
@@ -10483,6 +11015,8 @@ mod tests {
                 partial: Arc::new(StdMutex::new(PartialOutput::default())),
                 event_sequence: Arc::new(StdMutex::new(0)),
                 process_owner,
+                child_tasks: Default::default(),
+                prompt_hooks: None,
             },
         );
 
@@ -10563,6 +11097,8 @@ mod tests {
                 partial: Arc::new(StdMutex::new(PartialOutput::default())),
                 event_sequence: Arc::new(StdMutex::new(0)),
                 process_owner,
+                child_tasks: Default::default(),
+                prompt_hooks: None,
             },
         );
 
@@ -10619,6 +11155,8 @@ mod tests {
                 partial: Arc::new(StdMutex::new(PartialOutput::default())),
                 event_sequence: Arc::new(StdMutex::new(0)),
                 process_owner: crate::process_tree::ProcessTreeOwner::new(),
+                child_tasks: Default::default(),
+                prompt_hooks: None,
             },
         );
 
@@ -11080,6 +11618,7 @@ mod tests {
                 additional_workspace_roots: Vec::new(),
                 tool_search_catalog: None,
                 require_confirmation: false,
+                require_shell_approval: false,
                 auto_approve_safe: false,
                 auto_approve_edits: false,
                 quiet: true,
@@ -11129,6 +11668,7 @@ mod tests {
                 additional_workspace_roots: Vec::new(),
                 tool_search_catalog: None,
                 require_confirmation: false,
+                require_shell_approval: false,
                 auto_approve_safe: false,
                 auto_approve_edits: false,
                 quiet: true,
@@ -11546,6 +12086,8 @@ mod tests {
                         partial: Arc::new(StdMutex::new(PartialOutput::default())),
                         event_sequence: Arc::new(StdMutex::new(0)),
                         process_owner: crate::process_tree::ProcessTreeOwner::new(),
+                        child_tasks: Default::default(),
+                        prompt_hooks: None,
                     },
                 );
             }
@@ -11559,6 +12101,7 @@ mod tests {
                 routing_task_type: None,
                 cwd: Some(workspace.path().display().to_string()),
                 agent_mode: None,
+                require_shell_approval: false,
                 reasoning_effort: None,
                 context_files: None,
                 client_turn_id: None,
@@ -11646,6 +12189,8 @@ mod tests {
                 partial: Arc::new(StdMutex::new(PartialOutput::default())),
                 event_sequence: Arc::new(StdMutex::new(0)),
                 process_owner,
+                child_tasks: Default::default(),
+                prompt_hooks: None,
             },
         );
 
@@ -11681,6 +12226,8 @@ mod tests {
                 partial: Arc::new(StdMutex::new(PartialOutput::default())),
                 event_sequence: Arc::new(StdMutex::new(0)),
                 process_owner,
+                child_tasks: Default::default(),
+                prompt_hooks: None,
             },
         );
 
@@ -11923,6 +12470,167 @@ mod tests {
         .expect("write lease");
     }
 
+    #[tokio::test]
+    async fn inactive_archive_rechecks_age_and_skips_a_live_writer() {
+        let workspace = tempdir().expect("workspace");
+        let store = tempdir().expect("store");
+        let (host, thread) = managed_thread(workspace.path(), store.path()).await;
+        host.release_writer_quietly(&thread.id).await;
+        host.sessions.lock().await.remove(&thread.id);
+        let path = host.persisted_session_path(&thread.id).await.expect("path");
+        let cutoff = chrono::Utc::now() - chrono::Duration::days(1);
+        let params = ThreadArchiveInactiveParams {
+            thread_id: thread.id.clone(),
+            inactive_before: cutoff.to_rfc3339(),
+        };
+
+        assert!(
+            !host
+                .archive_inactive_thread(params.clone())
+                .await
+                .unwrap()
+                .archived
+        );
+
+        let mut saved = host.stored_session(&thread.id).await.expect("session");
+        saved.updated_at = cutoff - chrono::Duration::days(1);
+        saved.created_at = saved.updated_at;
+        saved.save_to_path(&path).expect("old session");
+        write_lease(
+            &path,
+            &foreign_lease(std::process::id(), chrono::Duration::minutes(2)),
+        );
+        assert!(
+            !host
+                .archive_inactive_thread(params.clone())
+                .await
+                .unwrap()
+                .archived
+        );
+
+        write_lease(
+            &path,
+            &foreign_lease(std::process::id(), -chrono::Duration::seconds(1)),
+        );
+        assert!(
+            host.archive_inactive_thread(params.clone())
+                .await
+                .unwrap()
+                .archived
+        );
+        assert!(host
+            .stored_session(&thread.id)
+            .await
+            .unwrap()
+            .archived_at
+            .is_some());
+        assert!(!host.archive_inactive_thread(params).await.unwrap().archived);
+    }
+
+    #[tokio::test]
+    async fn pinned_thread_survives_reopening_and_is_exempt_from_inactive_archive() {
+        let workspace = tempdir().expect("workspace");
+        let store = tempdir().expect("store");
+        let (host, thread) = managed_thread(workspace.path(), store.path()).await;
+        host.release_writer_quietly(&thread.id).await;
+        let path = host.persisted_session_path(&thread.id).await.unwrap();
+        let cutoff = chrono::Utc::now() - chrono::Duration::days(1);
+        let mut saved = host.stored_session(&thread.id).await.unwrap();
+        saved.updated_at = cutoff - chrono::Duration::days(1);
+        saved.created_at = saved.updated_at;
+        saved.save_to_path(&path).unwrap();
+        let transcript = std::fs::read(&path).unwrap();
+
+        assert!(host.capabilities().thread_pin);
+        let pin = ThreadPinParams {
+            thread_id: thread.id.clone(),
+            pinned: true,
+        };
+        assert!(host.pin_thread(pin.clone()).await.unwrap().pinned);
+        let conn = crate::sessions::open_db_in(store.path()).unwrap();
+        crate::sessions::sync_session_metadata(&conn, &thread.id, "", "", "", &[]).unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), transcript);
+        drop(host);
+
+        let (reopened, newer) = managed_thread(workspace.path(), store.path()).await;
+        let first_page = ThreadListParams {
+            limit: Some(1),
+            ..Default::default()
+        };
+        let list = reopened.list_threads(first_page.clone()).await.unwrap();
+        assert_eq!(list.threads[0].id, thread.id);
+        assert_eq!(list.threads[0].pinned, Some(true));
+        assert_eq!(list.threads[0].updated_at, saved.updated_at.to_rfc3339());
+        let archive = ThreadArchiveInactiveParams {
+            thread_id: thread.id.clone(),
+            inactive_before: cutoff.to_rfc3339(),
+        };
+        assert!(
+            !reopened
+                .archive_inactive_thread(archive.clone())
+                .await
+                .unwrap()
+                .archived
+        );
+
+        let unpin = ThreadPinParams {
+            pinned: false,
+            ..pin
+        };
+        assert!(!reopened.pin_thread(unpin).await.unwrap().pinned);
+        let list = reopened.list_threads(first_page).await.unwrap();
+        assert_eq!(list.threads[0].id, newer.id);
+        assert!(
+            reopened
+                .archive_inactive_thread(archive)
+                .await
+                .unwrap()
+                .archived
+        );
+    }
+
+    #[tokio::test]
+    async fn title_search_filters_before_paging_and_respects_the_archive_filter() {
+        let workspace = tempdir().unwrap();
+        let store = tempdir().unwrap();
+        let (host, older) = managed_thread(workspace.path(), store.path()).await;
+        let mut saved = host.stored_session(&older.id).await.unwrap();
+        saved.title = Some("Earlier build notes".to_string());
+        saved.created_at -= chrono::Duration::days(2);
+        saved.updated_at = saved.created_at;
+        saved.archived_at = Some(chrono::Utc::now());
+        saved
+            .save_to_path(&host.persisted_session_path(&older.id).await.unwrap())
+            .unwrap();
+        let (reopened, newer) = managed_thread(workspace.path(), store.path()).await;
+
+        let list = ThreadListParams {
+            limit: Some(1),
+            ..Default::default()
+        };
+        assert_eq!(
+            reopened.list_threads(list.clone()).await.unwrap().threads[0].id,
+            newer.id
+        );
+        let search = ThreadListParams {
+            title_query: Some(" BUILD ".into()),
+            ..list
+        };
+        assert!(reopened
+            .list_threads(search.clone())
+            .await
+            .unwrap()
+            .threads
+            .is_empty());
+        let search = ThreadListParams {
+            include_archived: true,
+            ..search
+        };
+        let response = reopened.list_threads(search).await.unwrap();
+        assert_eq!(response.threads[0].id, older.id);
+        assert_eq!(response.threads[0].status, ThreadStatus::Archived);
+    }
+
     fn drain_method(
         receiver: &mut broadcast::Receiver<AppServerNotification>,
         method: &str,
@@ -11951,6 +12659,39 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn unfinished_turn_reports_failure_only_when_its_writer_is_gone() {
+        let workspace = tempdir().expect("workspace");
+        let store = tempdir().expect("store");
+        let (host, thread) = managed_thread(workspace.path(), store.path()).await;
+        let session_path = host.persisted_session_path(&thread.id).await.expect("path");
+        let writer = WriterIdentity {
+            id: "other-editor".into(),
+            label: "Other editor".into(),
+        };
+        let mut session = ManagedSession::load_from_path(&session_path).expect("load");
+        session.developer_turn_writer = Some(writer.id.clone());
+        session
+            .save_to_path(&session_path)
+            .expect("persist turn owner");
+        writer_lease::take_over(&session_path, &writer).expect("live owner");
+
+        let read = || {
+            host.read_thread(ThreadIdParams {
+                thread_id: thread.id.clone(),
+            })
+        };
+        assert_eq!(
+            read().await.expect("read live turn").thread.status,
+            ThreadStatus::Running
+        );
+        writer_lease::release(&session_path, &writer).expect("remove turn owner");
+        assert_eq!(
+            read().await.expect("read abandoned turn").thread.status,
+            ThreadStatus::Failed
+        );
+    }
+
+    #[tokio::test]
     async fn a_live_writer_elsewhere_refuses_a_turn_until_the_user_takes_the_thread_over() {
         let workspace = tempdir().expect("workspace");
         let store = tempdir().expect("store");
@@ -11973,6 +12714,7 @@ mod tests {
                 routing_task_type: None,
                 cwd: None,
                 agent_mode: None,
+                require_shell_approval: false,
                 reasoning_effort: None,
                 context_files: None,
                 client_turn_id: None,
@@ -12006,6 +12748,23 @@ mod tests {
             deleted.code(),
             agiworkforce_protocol::developer_session::THREAD_WRITER_CONFLICT_ERROR_CODE
         );
+
+        let archived = host
+            .archive_thread(ThreadIdParams {
+                thread_id: thread.id.clone(),
+            })
+            .await
+            .expect_err("a thread another process is writing cannot be archived");
+        assert_eq!(
+            archived.code(),
+            agiworkforce_protocol::developer_session::THREAD_WRITER_CONFLICT_ERROR_CODE
+        );
+        assert!(host
+            .stored_session(&thread.id)
+            .await
+            .expect("session stays available")
+            .archived_at
+            .is_none());
 
         let reverted = host
             .revert_thread(ThreadRevertParams {
@@ -12096,6 +12855,8 @@ mod tests {
                 partial: Arc::new(StdMutex::new(PartialOutput::default())),
                 event_sequence: Arc::new(StdMutex::new(0)),
                 process_owner: crate::process_tree::ProcessTreeOwner::new(),
+                child_tasks: Default::default(),
+                prompt_hooks: None,
             },
         );
         remember_client_turn(
@@ -12111,6 +12872,7 @@ mod tests {
             routing_task_type: None,
             cwd: None,
             agent_mode: None,
+            require_shell_approval: false,
             reasoning_effort: None,
             context_files: None,
             client_turn_id: client_turn_id.map(str::to_string),
@@ -12186,6 +12948,8 @@ mod tests {
                 })),
                 event_sequence: Arc::new(StdMutex::new(9)),
                 process_owner: crate::process_tree::ProcessTreeOwner::new(),
+                child_tasks: Default::default(),
+                prompt_hooks: None,
             },
         );
         let (responder, _decision) = oneshot::channel();
@@ -12203,7 +12967,9 @@ mod tests {
                     reversible: Some(false),
                     proposed_content: None,
                     always_allow_saved: false,
+                    requires_explicit_decision: false,
                     proposed_execpolicy_amendment: None,
+                    question: None,
                 },
                 exec_command: Some("cargo test".to_string()),
                 responder,
@@ -12271,6 +13037,8 @@ mod tests {
                 partial: Arc::new(StdMutex::new(PartialOutput::default())),
                 event_sequence: Arc::new(StdMutex::new(0)),
                 process_owner: crate::process_tree::ProcessTreeOwner::new(),
+                child_tasks: Default::default(),
+                prompt_hooks: None,
             },
         );
         assert_eq!(
@@ -12411,6 +13179,8 @@ mod tests {
             partial: Arc::new(StdMutex::new(PartialOutput::default())),
             event_sequence: Arc::new(StdMutex::new(0)),
             process_owner: crate::process_tree::ProcessTreeOwner::new(),
+            child_tasks: Default::default(),
+            prompt_hooks: None,
         }
     }
 
@@ -12422,6 +13192,7 @@ mod tests {
             routing_task_type: None,
             cwd: None,
             agent_mode: None,
+            require_shell_approval: false,
             reasoning_effort: None,
             context_files: None,
             client_turn_id: None,
@@ -12448,6 +13219,7 @@ mod tests {
                 routing_task_type: None,
                 cwd: None,
                 agent_mode: None,
+                require_shell_approval: false,
                 reasoning_effort: None,
                 context_files: None,
                 client_turn_id: None,
@@ -12770,6 +13542,7 @@ mod tests {
                 outcome: ManagedSessionApprovalOutcome::AllowSession,
                 requested_at: now,
                 decided_at: now,
+                question_answer: None,
             });
         session
             .file_changes

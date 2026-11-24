@@ -49,13 +49,11 @@ describe('/auth/chrome-extension page', () => {
     authState.isSignedIn = true;
   });
 
-  it('confirms the synced web session and says the side panel picks it up on return', () => {
+  it('confirms web sign-in and returns the user to the side panel', () => {
     render(<ChromeExtensionAuthCompletePage />);
 
-    expect(screen.getByRole('heading', { name: 'Chrome is connected.' })).toBeInTheDocument();
-    expect(screen.getByRole('status')).toHaveTextContent('session is ready');
-    expect(screen.getByText(/side panel picks up your account/i)).toBeInTheDocument();
-    expect(screen.queryByText(/close and reopen/i)).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Signed in to AGI Cloud.' })).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Return to the AGI side panel');
     expect(screen.getByTestId('header')).toHaveAttribute('data-minimal', 'true');
   });
 

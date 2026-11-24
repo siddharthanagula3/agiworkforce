@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { CSSProperties, ReactNode } from 'react';
+import { ProjectWindow } from '../FeatureScenes';
 import {
   Button,
   ButtonRow,
@@ -22,7 +23,6 @@ import {
   SURFACES,
   SURFACES_SECTION,
   SURFACE_STATE_LABEL,
-  WEB_SHOT,
   WORK,
 } from './landing-content';
 import './landing.css';
@@ -221,16 +221,7 @@ export function LandingPage() {
             />
             <div className="agi-home-surfaces">
               <MotionReveal className="agi-home-surfaces-web">
-                <Window url={WEB_SHOT.url}>
-                  <ProductFrame
-                    src={WEB_SHOT.dark}
-                    srcLight={WEB_SHOT.light}
-                    alt={WEB_SHOT.alt}
-                    width={WEB_SHOT.width}
-                    height={WEB_SHOT.height}
-                    sizes={WIDE_FRAME_SIZES}
-                  />
-                </Window>
+                <ProjectWindow />
               </MotionReveal>
               <div className="agi-home-surfaces-side">
                 <MotionReveal delay={REVEAL_STEP_S}>

@@ -15,12 +15,11 @@ import styles from '../CloudCodePage.module.css';
 
 const ROW_GLYPH_SIZE = 16;
 
-export interface CodeRailItem {
+export type CodeRailItem = {
   id: CodeRailItemId;
-  href: string;
   label: string;
   glyph: Icon;
-}
+} & ({ href: string; settings?: never } | { href?: never; settings: string });
 
 export interface CodeCustomizeSidebarModalProps {
   open: boolean;

@@ -21,6 +21,7 @@ export type ThreadSummary = {
   updatedAt: string;
   createdBy: DeveloperSessionSource;
   status: ThreadStatus;
+  pinned?: boolean;
   /**
    * Checked-out branch as the host last persisted it. Listing never
    * recomputes it, so a long list costs no git invocations.

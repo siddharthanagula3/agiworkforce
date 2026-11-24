@@ -22,8 +22,10 @@ mod runner;
 pub mod snapshot;
 
 pub use basic::{
-    enter_worktree, exit_worktree, list_worktree_entries, list_worktrees, Worktree, WorktreeOptions,
+    checkout_existing_worktree, enter_worktree, exit_worktree, list_worktree_entries,
+    list_worktrees, Worktree, WorktreeOptions,
 };
+pub use git::git_command as repository_git_command;
 pub use git::{
     add_sandbox_writable_roots, host_git, host_git_async, host_git_config_dir, host_git_hardening,
     host_git_keeping_hooks_async, host_git_output_blocking, host_git_path, host_path,

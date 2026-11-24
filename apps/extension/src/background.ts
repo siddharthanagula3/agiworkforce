@@ -1,3 +1,4 @@
+import { replayRecordedPages } from './features/shortcuts/recordedPages';
 import { parseTaskTabScope, type TaskTabScope } from './features/browser-tools/taskTabScope';
 import {
   isPageDocumentId,
@@ -63,7 +64,8 @@ import {
   loadShortcuts,
   handleSaveShortcut,
   handleListShortcuts,
-  releaseRecordingsOfOtherAccounts,
+  claimUnownedRecordings,
+  isRecording,
   handleDeleteShortcut,
   handleUpdateShortcut,
   planShortcutReplay,
@@ -75,6 +77,7 @@ import {
 import {
   appendRecordedAction,
   beginRecordingSession,
+  resumeRecordingOrigin,
   discardAllRecordingSessions,
   discardRecordingSession,
   endRecordingSession,
@@ -1011,8 +1014,15 @@ function broadcastComputerUseForCurrentRun(
 const AGENT_INPUT_ECHO_MS = 750;
 
 function watchComputerUseUserInput(tabId: number, watching: boolean): void {
+  const lease = computerUseRuns.getActive();
   void chrome.tabs
-    .sendMessage(tabId, { type: 'AGI_CU_WATCH_INPUT', watching })
+    .sendMessage(tabId, {
+      type: 'AGI_CU_WATCH_INPUT',
+      watching,
+      ...(watching && lease?.tabId === tabId
+        ? { runId: lease.runId, paused: Boolean(lease.takeover) }
+        : {}),
+    })
     .catch(() => undefined);
 }
 
@@ -1059,6 +1069,7 @@ function handComputerUseTabToUser(lease: ComputerUseRunLease, reason: string): P
     `${reason.trim()} ${t('cuTakeoverLimit', [USER_TAKEOVER_MAX_MINUTES])}`,
   );
   endTakeoverAfterLimit(lease, takeover);
+  watchComputerUseUserInput(lease.tabId, true);
   broadcastComputerUseForCurrentRun(lease, {
     type: 'AGI_CU_STATE',
     status: 'paused',
@@ -1520,14 +1531,17 @@ async function revokeMismatchedDesktopPairing(
   return releaseDesktopPairingOfOtherAccount(signedInAccountId);
 }
 
-/** Pairing and recordings belong to the account that made them. */
-async function releaseDataOfOtherAccounts(
+function shortcutAccount(): Promise<string | null | undefined> {
+  return isClerkExtensionAuthConfigured() ? definitiveSignedInAccount() : Promise.resolve(null);
+}
+
+async function reconcileAccountOwnedTools(
   clerkRead?: Promise<ManagedCloudAuthContext | null>,
 ): Promise<void> {
   const signedInAccountId = await definitiveSignedInAccount(clerkRead);
   if (signedInAccountId === undefined) return;
   await releaseDesktopPairingOfOtherAccount(signedInAccountId);
-  await releaseRecordingsOfOtherAccounts(signedInAccountId);
+  if (signedInAccountId !== null) await claimUnownedRecordings(signedInAccountId);
 }
 
 /**
@@ -1757,7 +1771,7 @@ function initialize(): void {
     });
   }
   watchSyncHostSession(() => {
-    void releaseDataOfOtherAccounts();
+    void reconcileAccountOwnedTools();
   });
   void shouldAutoConnectToDesktop().then((autoConnect) => {
     if (!autoConnect) return;
@@ -2581,8 +2595,9 @@ async function handleReplayShortcut(
       error: 'The shortcut model selection is invalid.',
     } as ExtensionResponse;
   }
-  await releaseDataOfOtherAccounts();
-  const shortcuts = await loadShortcuts();
+  const accountId = await shortcutAccount();
+  if (accountId) await claimUnownedRecordings(accountId);
+  const shortcuts = await loadShortcuts(accountId);
   const shortcut = shortcuts.find((s) => s.id === message.shortcutId);
   if (!shortcut) {
     return { success: false, error: 'Shortcut not found' } as ExtensionResponse;
@@ -2592,17 +2607,9 @@ async function handleReplayShortcut(
     shortcut.createdByOrigin !== ORIGIN_EXTENSION_PAGE &&
     !isOriginApprovedForAutomation(shortcut.createdByOrigin)
   ) {
-    logger.warn('Auto-deleting shortcut whose origin is no longer allowlisted', {
-      shortcutId: shortcut.id,
-      createdByOrigin: shortcut.createdByOrigin,
-    });
-    await handleDeleteShortcut({
-      type: 'DELETE_SHORTCUT',
-      shortcutId: shortcut.id,
-    } as DeleteShortcutMessage);
     return {
       success: false,
-      error: 'Shortcut origin is no longer on your allowlist; the shortcut was removed.',
+      error: 'The original site is no longer approved. The shortcut is still saved.',
     } as ExtensionResponse;
   }
   const plan = planShortcutReplay(shortcut);
@@ -2688,8 +2695,11 @@ async function handleReplayShortcut(
       error: `${new URL(replayOrigin).host} is not approved for browser automation. Approve the site, then run this workflow again.`,
     } as ExtensionResponse;
   }
+  if (isRecording(shortcut) && (await shortcutAccount()) !== accountId) {
+    return { success: false, error: 'The account changed before the recording could run.' };
+  }
   const taskId = `replay_${Date.now()}`;
-  const result = await forwardToContentScript(targetTab.id, {
+  const result = await forwardShortcutSteps(targetTab.id, {
     type: 'RUN_PAGE_ACTIONS',
     tabId: targetTab.id,
     taskId,
@@ -2749,7 +2759,9 @@ async function assertScheduledTaskSourceAuthority(
   try {
     // A direct prompt takes precedence over a shortcut, as in scheduledTaskManagedPrompt.
     if (!directPrompt && task.shortcutId) {
-      shortcut = (await loadShortcuts()).find((candidate) => candidate.id === task.shortcutId);
+      shortcut = (await loadShortcuts(await shortcutAccount())).find(
+        (candidate) => candidate.id === task.shortcutId,
+      );
     }
   } catch {
     throw new ScheduledTaskSourceUnavailableError('The scheduled shortcut could not be read.');
@@ -3991,15 +4003,22 @@ async function executeScheduledTask(
     }
     let result: unknown;
     if (task.shortcutId) {
+      const accountId = await shortcutAccount();
       result = await replayScheduledShortcut(task, {
         isCurrent: () => scheduledTaskExecutions.isCurrent(lease),
-        loadShortcuts,
+        loadShortcuts: () => loadShortcuts(accountId),
         queryActiveTab: async () =>
           (await chrome.tabs.query({ active: true, currentWindow: true }))[0],
         getTab: (tabId) => chrome.tabs.get(tabId),
         loadPolicy: loadScheduledSitePolicyInput,
         liveGrantedOrigins: oneTimeGrantedOrigins,
-        forward: forwardToContentScript,
+        forward: async (tabId, message) => {
+          if ((await shortcutAccount()) !== accountId)
+            throw new ScheduledShortcutReplayCancelledError();
+          return forwardShortcutSteps(tabId, message, () => {
+            if (!scheduledTaskExecutions.isCurrent(lease)) throw new ScheduledTaskCancelledError();
+          });
+        },
       });
     }
 
@@ -5013,7 +5032,7 @@ async function handleMessageAsync(
     }
     case 'GET_CLOUD_AUTH_TOKEN': {
       const clerkRead = getFreshClerkAuthContext(message.refresh);
-      await releaseDataOfOtherAccounts(clerkRead);
+      await reconcileAccountOwnedTools(clerkRead);
       const candidate = await getManagedCloudAuthContext(message.refresh, clerkRead);
       const context = candidate && !isRetiredManagedCloudOwner(candidate.owner) ? candidate : null;
       cancelComputerUseIfAuthChanged(context?.owner ?? null);
@@ -5048,7 +5067,7 @@ async function handleMessageAsync(
       await invalidateManagedCloudOwner(previousOwner, true);
       await releaseDesktopPairing('The signed-in account changed.', false);
       await discardAllRecordingSessions();
-      await releaseDataOfOtherAccounts();
+      await reconcileAccountOwnedTools();
       return { success: true } as ExtensionResponse;
     }
 
@@ -5106,6 +5125,25 @@ async function handleMessageAsync(
     }
 
     case 'TAB_READY': {
+      if (sender.tab?.id !== undefined && sender.frameId === 0 && sender.url && sender.documentId) {
+        const id = sender.tab.id;
+        const session = await readRecordingSession(id);
+        if (
+          session?.followPages &&
+          session.state === 'recording' &&
+          !(await recordingRefusal(sender.url))
+        ) {
+          const origin = new URL(sender.url).origin;
+          const resumed = await resumeRecordingOrigin(id, origin);
+          if (resumed)
+            return {
+              success: true,
+              ready: true,
+              recordingOrigin: origin,
+              captureValues: resumed.captureValues === true,
+            } as ExtensionResponse;
+        }
+      }
       return { success: true, ready: true } as ExtensionResponse;
     }
 
@@ -5676,6 +5714,7 @@ async function handleMessageAsync(
         tabId,
         sender.url,
         (message as RecordingActionMessage).action,
+        (message as RecordingActionMessage).targetDescription,
       );
       return { success: true, recording } as ExtensionResponse;
     }
@@ -5848,20 +5887,22 @@ async function handleMessageAsync(
     }
 
     case 'SAVE_SHORTCUT':
-      return handleSaveShortcut(
-        message as SaveShortcutMessage,
-        (await definitiveSignedInAccount()) ?? null,
-      );
+      return handleSaveShortcut(message as SaveShortcutMessage, await shortcutAccount());
 
-    case 'LIST_SHORTCUTS':
-      await releaseDataOfOtherAccounts();
-      return handleListShortcuts();
+    case 'LIST_SHORTCUTS': {
+      const accountId = await shortcutAccount();
+      if (accountId) await claimUnownedRecordings(accountId);
+      const result = await handleListShortcuts(accountId);
+      return accountId !== undefined && (await shortcutAccount()) !== accountId
+        ? handleListShortcuts()
+        : result;
+    }
 
     case 'DELETE_SHORTCUT':
-      return handleDeleteShortcut(message as DeleteShortcutMessage);
+      return handleDeleteShortcut(message as DeleteShortcutMessage, await shortcutAccount());
 
     case 'UPDATE_SHORTCUT':
-      return handleUpdateShortcut(message as UpdateShortcutMessage);
+      return handleUpdateShortcut(message as UpdateShortcutMessage, await shortcutAccount());
 
     case 'REPLAY_SHORTCUT':
       return handleReplayShortcut(message as ReplayShortcutMessage);
@@ -6451,6 +6492,7 @@ async function handleMessageAsync(
       ): Promise<boolean> => {
         const needsApproval = await actionNeedsApproval({
           alwaysAsk: requirement.alwaysAsk,
+          reason: requirement.reason,
           crucial: asksInAutoMode(requirement),
           mode: permissionMode,
           allowedForTask: allowedForTask.has(toolName),
@@ -6657,6 +6699,7 @@ async function handleMessageAsync(
       computerUseGuidance.set(lease.runId, guidanceQueue);
       const completion = runAgentLoop(cuGoal, cuTabId, {
         unattended: permissionMode === 'yolo',
+        captureReviewFrames: true,
         model: computerUseModel,
         fallbackAfterProviderRejection,
         ...(cuMsg.pageContext ? { pageContext: cuMsg.pageContext } : {}),
@@ -6691,7 +6734,12 @@ async function handleMessageAsync(
         },
         onActionPoint: (point) => {
           void chrome.tabs
-            .sendMessage(cuTabId, { type: 'AGI_CU_SHOW_ACTION', x: point.x, y: point.y })
+            .sendMessage(lease.tabId, {
+              type: 'AGI_CU_SHOW_ACTION',
+              runId: lease.runId,
+              x: point.x,
+              y: point.y,
+            })
             .catch(() => undefined);
         },
         requestTakeover: (reason) => {
@@ -6713,7 +6761,8 @@ async function handleMessageAsync(
         onUsageUpdate: (usage) => {
           broadcastComputerUseForCurrentRun(lease, { type: 'AGI_CU_USAGE', usage });
         },
-      }).then(async () => {
+      }).then(async (result) => {
+        if (result.cappedAtMaxSteps) throw new Error(result.finalMessage);
         await callerTask?.assertAuthority();
         await assertComputerUseOwnership(lease);
         if (!lease.tabIntentUrl) throw new Error('The completed task has no verified page.');
@@ -6943,6 +6992,26 @@ async function handleMessageAsync(
 
     case 'AGI_CU_USER_INPUT': {
       const lease = computerUseRuns.getActive();
+      if (message.command !== undefined) {
+        if (
+          !lease ||
+          message.runId !== lease.runId ||
+          sender?.frameId !== 0 ||
+          sender.tab?.id !== lease.tabId
+        )
+          return {
+            success: false,
+            error: 'The page no longer owns this browser run.',
+          } as ExtensionResponse;
+        if (message.command === 'stop') {
+          computerUseStartGeneration += 1;
+          cancelActiveComputerUseRun('user_stopped', lease.runId);
+          watchComputerUseUserInput(lease.tabId, false);
+        } else if (message.command === 'takeover' && !lease.takeover) {
+          void handComputerUseTabToUser(lease, t('cuTakeoverByUserReason')).catch(() => undefined);
+        }
+        return { success: true } as ExtensionResponse;
+      }
       if (
         lease &&
         sender?.tab?.id === lease.tabId &&
@@ -7065,6 +7134,7 @@ async function handleMessageAsync(
       }
       computerUseRuns.commitTabIntent(lease, handedBackUrl);
       computerUseRuns.endTakeover(lease);
+      watchComputerUseUserInput(lease.tabId, true);
       void chrome.tabs.update(lease.tabId, { active: true }).catch(() => undefined);
       broadcastComputerUseForCurrentRun(lease, { type: 'AGI_CU_STATE', status: 'running' });
       return {
@@ -7213,7 +7283,8 @@ async function handleGetAccessibilityTree(tabId: number): Promise<ExtensionRespo
  */
 async function recordingRefusal(url: string | undefined): Promise<string | null> {
   const origin = normalizeShortcutStartUrl(url);
-  if (!origin) return 'Only a web page can be recorded.';
+  if (!origin || isExtensionAccountOrigin(origin))
+    return 'Only an eligible website can be recorded.';
   if (await isUserBlockedSite(origin)) return 'Recording is disabled for this blocked site.';
   await siteAllowlistReady;
   if (!isOriginApprovedForAutomation(origin))
@@ -7231,7 +7302,15 @@ async function handleRecordingMessage(
     const refusal = await recordingRefusal(tab?.url);
     if (refusal) return { success: false, error: refusal };
     const expectedOrigin = normalizeShortcutStartUrl(tab?.url);
-    if (!expectedOrigin || !(await beginRecordingSession(tabId, expectedOrigin)))
+    if (
+      !expectedOrigin ||
+      !(await beginRecordingSession(
+        tabId,
+        expectedOrigin,
+        message.followPages === true,
+        message.captureValues === true,
+      ))
+    )
       return { success: false, error: 'Only a web page can be recorded.' } as ExtensionResponse;
     const started = await forwardToContentScript(tabId, { ...message, expectedOrigin });
     if (!started?.success) await discardRecordingSession(tabId);
@@ -7252,7 +7331,11 @@ async function handleRecordingMessage(
   let current = session;
   if (session.state === 'recording') {
     const page = (await forwardToContentScript(tabId, message)) as { recording?: unknown };
-    if (page?.recording !== true)
+    if (
+      page?.recording !== true &&
+      (!session.followPages ||
+        (await recordingRefusal((await chrome.tabs.get(tabId).catch(() => null))?.url)))
+    )
       current = (await endRecordingSession(tabId, 'navigated')) ?? session;
   }
   return {
@@ -7261,6 +7344,22 @@ async function handleRecordingMessage(
     actions: current.actions,
     ...(current.state === 'navigated' ? { stoppedBy: 'navigation' } : {}),
   } as ExtensionResponse;
+}
+
+async function forwardShortcutSteps(
+  tabId: number,
+  message: ExtensionMessage,
+  assertCurrent: () => void = () => undefined,
+): Promise<ExtensionResponse> {
+  if (message.type !== 'RUN_PAGE_ACTIONS' || !message.actions.some((action) => action.recordedPage))
+    return forwardToContentScript(tabId, message);
+  return replayRecordedPages(
+    message,
+    async () => (await chrome.tabs.get(tabId)).url,
+    async (url) => !(await recordingRefusal(url)),
+    (part) => forwardToContentScript(tabId, part),
+    assertCurrent,
+  );
 }
 
 async function forwardToContentScript(
@@ -7409,7 +7508,7 @@ function handleContextMenuClick(
     void openAssistantPanel({ tabId: tab.id, windowId: tab.windowId }).catch(() => {});
     void (async () => {
       try {
-        if ((info.frameId ?? 0) !== 0) throw new Error(t('spRewriteFrameUnsupported'));
+        if (info.pageUrl && tab.url !== info.pageUrl) throw new Error(t('spRewriteSelectAgain'));
         const credential = await getManagedCloudAuthContext();
         if (!credential || isRetiredManagedCloudOwner(credential.owner))
           throw new Error(t('spRewriteSignIn'));
@@ -7418,6 +7517,7 @@ function handleContextMenuClick(
           info.selectionText ?? '',
           credential.owner,
           () => !isRetiredManagedCloudOwner(credential.owner),
+          info.frameId ? { id: info.frameId, url: info.frameUrl } : undefined,
         );
         if (pendingEditableCaptures.get(tab.id!) !== captureId) return;
         await chrome.storage.session.set({
@@ -7460,6 +7560,7 @@ function handleContextMenuClick(
           type: 'ask-selection',
           text: info.selectionText,
           url: info.pageUrl ?? tab.url ?? '',
+          ...(info.frameUrl ? { frameUrl: info.frameUrl } : {}),
           ...pendingChatWindowStamp(tab),
           timestamp: Date.now(),
         },
@@ -7510,7 +7611,8 @@ function handleContextMenuClick(
         agi_pending_chat: {
           type: 'explain',
           text: info.selectionText,
-          url: info.pageUrl ?? '',
+          url: info.pageUrl ?? tab.url ?? '',
+          ...(info.frameUrl ? { frameUrl: info.frameUrl } : {}),
           ...pendingChatWindowStamp(tab),
           timestamp: Date.now(),
         },
@@ -7525,7 +7627,8 @@ function handleContextMenuClick(
         agi_pending_chat: {
           type: 'translate',
           text: info.selectionText,
-          url: info.pageUrl ?? '',
+          url: info.pageUrl ?? tab.url ?? '',
+          ...(info.frameUrl ? { frameUrl: info.frameUrl } : {}),
           ...pendingChatWindowStamp(tab),
           timestamp: Date.now(),
         },

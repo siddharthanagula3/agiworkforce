@@ -206,6 +206,7 @@ describe('SettingsPanel local capabilities', () => {
     });
 
     expect(call).toHaveBeenCalledWith('mcpSetEnabled', 'context7', false);
+    expect(posted).toContainEqual({ type: 'settings.capability.saved', message: 'Turned off.' });
     expect(lastCapabilities()?.mcp.status).toBe('ready');
     expect(posted.some((message) => message.type === 'settings.error')).toBe(false);
   });
@@ -244,10 +245,12 @@ describe('SettingsPanel local capabilities', () => {
 
     await handler!({ type: 'settings.command', command: 'showSkills' });
     await handler!({ type: 'settings.command', command: 'showPlugins' });
+    await handler!({ type: 'settings.command', command: 'showHooks' });
     await handler!({ type: 'settings.mcp.details', name: 'context7' });
 
     expect(vscode.commands.executeCommand).toHaveBeenCalledWith('agi-workforce.showSkills');
     expect(vscode.commands.executeCommand).toHaveBeenCalledWith('agi-workforce.showPlugins');
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith('agi-workforce.showHooks');
     expect(call).toHaveBeenCalledWith('mcpInspect', 'context7');
     expect(details.show).toHaveBeenCalledWith({ name: 'context7' });
   });

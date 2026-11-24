@@ -23,7 +23,10 @@ export const TAB_CONTEXT_PICKER_CSS = `
   .sp-tab-picker-actions button:focus-visible, .sp-tab-picker-row input:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
 `;
 
-function ordinaryTab(tab: chrome.tabs.Tab, cleanup = false): BrowserContextTabReference | null {
+export function toBrowserContextTab(
+  tab: chrome.tabs.Tab,
+  cleanup = false,
+): BrowserContextTabReference | null {
   if (!Number.isSafeInteger(tab.id) || !Number.isSafeInteger(tab.windowId) || !tab.url) return null;
   try {
     const url = new URL(tab.url);
@@ -51,8 +54,9 @@ export function chooseBrowserContextTabs(
   maxTabs: number,
   requestAccess: (urls: readonly string[]) => Promise<boolean>,
   signal?: AbortSignal,
+  attachedTabs: readonly BrowserContextTabReference[] = [],
 ): Promise<readonly BrowserContextTabReference[] | null> {
-  return chooseBrowserTabs(isCurrent, maxTabs, requestAccess, signal, false);
+  return chooseBrowserTabs(isCurrent, maxTabs, requestAccess, signal, false, attachedTabs);
 }
 
 export function chooseTabsToClose(
@@ -68,6 +72,7 @@ async function chooseBrowserTabs(
   requestAccess: (urls: readonly string[]) => Promise<boolean>,
   signal: AbortSignal | undefined,
   cleanup: boolean,
+  attachedTabs: readonly BrowserContextTabReference[] = [],
 ): Promise<readonly BrowserContextTabReference[] | null> {
   if (signal?.aborted || !isCurrent() || !Number.isSafeInteger(maxTabs) || maxTabs <= 0)
     return null;
@@ -86,7 +91,7 @@ async function chooseBrowserTabs(
   const description = document.createElement('p');
   description.textContent = cleanup
     ? `Choose up to ${maxTabs} unused tabs to close. Closing can discard unsaved edits. Active and pinned tabs are kept. Page contents stay in Chrome.`
-    : `Choose up to ${maxTabs} tabs from this window. Only the selected pages are sent as context when you send your message. Browser actions still require site permissions.`;
+    : `Choose up to ${maxTabs} ${attachedTabs.length ? 'more tabs' : 'tabs'} from this window. Only the selected pages are sent as context when you send your message. Browser actions still require site permissions.`;
   const status = document.createElement('p');
   status.setAttribute('role', 'status');
   status.setAttribute('aria-live', 'polite');
@@ -109,7 +114,9 @@ async function chooseBrowserTabs(
   document.body.append(overlay);
   cancel.focus();
   const selected = new Map<number, BrowserContextTabReference>();
+  const attachedTabIds = new Set(attachedTabs.map(({ tabId }) => tabId));
   let closed = false;
+  let pendingAccess: Promise<boolean> | undefined;
   const result = new Promise<readonly BrowserContextTabReference[] | null>((resolve) => {
     const finish = (value: readonly BrowserContextTabReference[] | null): void => {
       if (closed) return;
@@ -118,7 +125,9 @@ async function chooseBrowserTabs(
       document.removeEventListener('keydown', onKeyDown, true);
       overlay.remove();
       if (initialFocus?.isConnected) initialFocus.focus();
-      resolve(value);
+      const settle = () => resolve(value);
+      if (pendingAccess) void pendingAccess.then(settle, settle);
+      else settle();
     };
     const onAbort = (): void => finish(null);
     signal?.addEventListener('abort', onAbort, { once: true });
@@ -148,18 +157,27 @@ async function chooseBrowserTabs(
       if (event.target === overlay) finish(null);
     });
     attach.addEventListener('click', async () => {
+      if (pendingAccess) return;
       if (!isCurrent() || selected.size === 0 || selected.size > maxTabs) {
         finish(null);
         return;
       }
       const tabs = [...selected.values()];
-      if (!cleanup && JSON.stringify(tabs).length > MANAGED_CLOUD_CHAT_MAX_METADATA_LENGTH) {
+      if (
+        !cleanup &&
+        JSON.stringify([...attachedTabs, ...tabs]).length > MANAGED_CLOUD_CHAT_MAX_METADATA_LENGTH
+      ) {
         status.textContent = 'These tab details exceed the context budget. Choose fewer tabs.';
         return;
       }
+      const checkboxes = list.querySelectorAll<HTMLInputElement>('input:not(:disabled)');
+      if (document.activeElement === attach) cancel.focus();
       attach.disabled = true;
+      for (const checkbox of checkboxes) checkbox.disabled = true;
+      if (!cleanup) status.textContent = 'Waiting for page access…';
       try {
-        const granted = await requestAccess(tabs.map((tab) => tab.url));
+        pendingAccess = requestAccess(tabs.map((tab) => tab.url));
+        const granted = await pendingAccess;
         if (closed) return;
         if (!isCurrent()) {
           finish(null);
@@ -168,12 +186,16 @@ async function chooseBrowserTabs(
         if (granted) finish(tabs);
         else {
           status.textContent = 'Page access was declined. You can choose other tabs or cancel.';
-          attach.disabled = false;
         }
       } catch {
         if (closed) return;
         status.textContent = 'Page access could not be granted. Try again or cancel.';
-        attach.disabled = false;
+      } finally {
+        pendingAccess = undefined;
+        if (!closed) {
+          attach.disabled = false;
+          for (const checkbox of checkboxes) checkbox.disabled = false;
+        }
       }
     });
   });
@@ -187,12 +209,14 @@ async function chooseBrowserTabs(
       }
       const candidates = tabs
         .filter((tab) => !cleanup || (!tab.active && !tab.pinned && !tab.pendingUrl))
-        .map((tab) => ordinaryTab(tab, cleanup))
+        .map((tab) => toBrowserContextTab(tab, cleanup))
         .filter((tab): tab is BrowserContextTabReference => tab !== null);
       status.textContent = candidates.length
         ? cleanup
           ? 'Select the tabs you have finished using.'
-          : 'Choose the pages to include.'
+          : candidates.some(({ tabId }) => !attachedTabIds.has(tabId))
+            ? 'Choose the pages to include.'
+            : 'All readable tabs in this window are already attached.'
         : cleanup
           ? 'No inactive, unpinned tabs are available to close.'
           : 'No readable website tabs are open in this window.';
@@ -201,6 +225,9 @@ async function chooseBrowserTabs(
         row.className = 'sp-tab-picker-row';
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
+        const alreadyAttached = attachedTabIds.has(tab.tabId);
+        checkbox.checked = alreadyAttached;
+        checkbox.disabled = alreadyAttached;
         const copy = document.createElement('span');
         copy.className = 'sp-tab-picker-row-copy';
         const title = document.createElement('span');
@@ -211,6 +238,12 @@ async function chooseBrowserTabs(
         const url = new URL(tab.url);
         origin.textContent = url.protocol === 'chrome-extension:' ? 'Extension page' : url.origin;
         copy.append(title, origin);
+        if (alreadyAttached) {
+          const attached = document.createElement('span');
+          attached.className = 'sp-tab-picker-row-origin';
+          attached.textContent = 'Already attached';
+          copy.append(attached);
+        }
         row.append(checkbox, copy);
         list.append(row);
         checkbox.addEventListener('change', () => {

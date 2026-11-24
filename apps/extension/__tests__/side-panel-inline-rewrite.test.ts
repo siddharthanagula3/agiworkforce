@@ -69,7 +69,7 @@ function setup(allowed = true) {
     t: text,
     pageChipLabel: () => 'example.com',
     isUserBlockedSite: async () => false,
-    readPageDocument,
+    readEditableSelectionDocument: readPageDocument,
     editableRewrites,
     canAdmitComposerMessage: () => allowed,
     updateAttachmentPreview: vi.fn(),

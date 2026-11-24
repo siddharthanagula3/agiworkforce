@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { HostBridge } from '@agiworkforce/local-runtime-contract';
+import type { HostBridge, HostUpdateAvailability } from '@agiworkforce/local-runtime-contract';
 import { DesktopUpdateRow } from '../components/DesktopUpdateRow';
 import { hostBridgeStub } from '@/test/host-bridge-stub';
 import { PRODUCT_NAMES } from '@agiworkforce/types';
@@ -99,17 +99,30 @@ describe('DesktopUpdateRow', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('shows the running version and reports that it is current', async () => {
-    installHost();
-    render(<DesktopUpdateRow />);
-    expect(screen.getByText(/1\.2\.0/u)).toBeInTheDocument();
+  it.each([
+    [undefined, 'No installer is published for this update channel.'],
+    ['1.1.0', 'No newer version is available.'],
+    ['1.2.0', 'This is the latest version.'],
+  ])(
+    'reports the update status when the published version is %j',
+    async (latestVersion, status) => {
+      installHost({
+        checkForUpdate: async () => ({
+          available: false,
+          currentVersion: '1.2.0',
+          version: latestVersion ?? '1.2.0',
+          ...(latestVersion ? { latestVersion } : {}),
+          downloadUrl: latestVersion ? 'https://agiworkforce.com/api/download' : '',
+        }),
+      });
+      render(<DesktopUpdateRow />);
+      expect(screen.getByText(/1\.2\.0/u)).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Check for updates' }));
-    await waitFor(() => {
-      expect(screen.getByRole('status')).toHaveTextContent('This is the latest version.');
-    });
-    expect(screen.queryByRole('button', { name: 'Download installer' })).toBeNull();
-  });
+      await userEvent.click(screen.getByRole('button', { name: 'Check for updates' }));
+      expect(await screen.findByRole('status')).toHaveTextContent(status);
+      expect(screen.queryByRole('button', { name: 'Download installer' })).toBeNull();
+    },
+  );
 
   it('offers the installer when a newer version is published', async () => {
     const openUpdateInstaller = vi.fn().mockResolvedValue(undefined);
@@ -235,6 +248,68 @@ describe('DesktopUpdateRow', () => {
     expect(screen.queryByRole('button', { name: 'Download installer' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Relaunch to update' })).toBeNull();
     expect(screen.queryByText(/^Last checked /u)).toBeNull();
+  });
+
+  it('offers a relaunch when the download finishes without requiring another check', async () => {
+    let emit: Parameters<HostBridge['onRuntimeEvent']>[0] | undefined;
+    const unsubscribe = vi.fn();
+    const checkForUpdate = vi.fn(async () => ({
+      available: true,
+      currentVersion: '1.2.0',
+      version: '1.3.0',
+      downloadUrl: '',
+      downloading: true,
+    }));
+    installHost({
+      checkForUpdate,
+      restartToUpdate: vi.fn(),
+      onRuntimeEvent: (listener) => {
+        emit = listener;
+        return unsubscribe;
+      },
+    });
+    const { unmount } = render(<DesktopUpdateRow />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Check for updates' }));
+    expect(screen.getByRole('status')).toHaveTextContent('An update is downloading.');
+    expect(emit).toBeDefined();
+    act(() => emit?.({ kind: 'update-ready', version: '1.3.0' }));
+    expect(screen.getByRole('status')).toHaveTextContent('Version 1.3.0 is ready.');
+    expect(screen.getByRole('button', { name: 'Relaunch to update' })).toBeEnabled();
+    expect(checkForUpdate).toHaveBeenCalledTimes(1);
+    unmount();
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the staged update visible when an older update check completes later', async () => {
+    let emit: Parameters<HostBridge['onRuntimeEvent']>[0] | undefined;
+    let complete!: (value: HostUpdateAvailability) => void;
+    const check = new Promise<HostUpdateAvailability>((resolve) => {
+      complete = resolve;
+    });
+    installHost({
+      checkForUpdate: () => check,
+      restartToUpdate: vi.fn(),
+      onRuntimeEvent: (listener) => {
+        emit = listener;
+        return () => undefined;
+      },
+    });
+    render(<DesktopUpdateRow />);
+    await userEvent.click(screen.getByRole('button', { name: 'Check for updates' }));
+
+    act(() => emit?.({ kind: 'update-ready', version: '' }));
+    await act(async () =>
+      complete({
+        available: false,
+        currentVersion: '1.2.0',
+        version: '1.2.0',
+        downloadUrl: '',
+      }),
+    );
+
+    expect(screen.getByRole('status')).toHaveTextContent('An update is ready.');
+    expect(screen.getByRole('button', { name: 'Relaunch to update' })).toBeEnabled();
   });
 
   it('reports a failed check without claiming the app is current', async () => {

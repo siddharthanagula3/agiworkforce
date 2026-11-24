@@ -16,7 +16,8 @@ use agiworkforce_protocol::developer_session::{
     McpServerToolsResponse, McpToolSummary, MemoryAddParams, MemoryAddResponse, MemoryScope,
     PermissionRule, PermissionRuleDecision, PermissionRuleKind, PermissionRulesResponse,
     PermissionsAddParams, PermissionsListResponse, PluginInstallParams, PluginListResponse,
-    PluginRemoveParams, PluginScope, PluginSummary, PluginUpdateResponse, ProviderKeySummary,
+    PluginRemoveParams, PluginScope, PluginSettingSetParams, PluginSettingSummary,
+    PluginSettingsResponse, PluginSummary, PluginUpdateResponse, ProviderKeySummary,
     ProvidersListResponse, SavedPermission, SavedPermissionDecision, SavedPermissionKind,
     SettingsReadResponse, SettingsWriteParams, SkillCatalogScope, SkillConsentParams,
     SkillConsentResponse, SkillInstallParams, SkillListResponse, SkillRemoveParams, SkillSummary,
@@ -220,6 +221,10 @@ pub fn list_plugins(workspace_root: &Path) -> PluginListResponse {
             },
             path: display(&plugin.root),
             format: plugin.format.map(|format| format.short_tag().to_string()),
+            configurable: (!plugin.from_project_dir
+                && crate::plugins::load_manifest_for(&plugin.root)
+                    .is_some_and(|(manifest, _)| !manifest.user_config.is_empty()))
+                .then_some(true),
             id: plugin.config_name.clone(),
         })
         .collect();
@@ -243,6 +248,73 @@ pub fn set_plugin_enabled(
     }
     crate::plugins::set_plugin_enabled(id, enabled).map_err(internal)?;
     Ok(list_plugins(workspace_root))
+}
+
+fn personal_plugin_settings(
+    id: &str,
+) -> Result<crate::features::plugins::settings::PluginSettings, DeveloperSessionHostError> {
+    let mut manager = PluginsManager::new();
+    manager.load_all(None).map_err(internal)?;
+    let plugin = manager
+        .plugins()
+        .iter()
+        .find(|plugin| plugin.config_name == id)
+        .ok_or_else(|| DeveloperSessionHostError::not_found("No matching personal plugin"))?;
+    crate::plugins::load_manifest_for(&plugin.root)
+        .map(|(manifest, _)| manifest.user_config)
+        .ok_or_else(|| invalid("The plugin manifest could not be read"))
+}
+
+pub fn read_plugin_settings(id: &str) -> Result<PluginSettingsResponse, DeveloperSessionHostError> {
+    use crate::features::plugins::settings;
+
+    let declared = personal_plugin_settings(id)?;
+    let current = settings::current_values(id, &declared);
+    Ok(PluginSettingsResponse {
+        settings: declared
+            .into_iter()
+            .map(|(key, setting)| PluginSettingSummary {
+                configured: current.contains_key(&key),
+                key,
+                title: setting.title,
+                description: setting.description,
+                required: setting.required,
+                sensitive: setting.sensitive,
+                multiple: setting.multiple,
+                options: if setting.sensitive {
+                    Vec::new()
+                } else {
+                    setting.options
+                },
+            })
+            .collect(),
+    })
+}
+
+pub fn set_plugin_setting(
+    params: PluginSettingSetParams,
+) -> Result<PluginSettingsResponse, DeveloperSessionHostError> {
+    use crate::features::plugins::settings;
+
+    let declared = personal_plugin_settings(&params.id)?;
+    let setting = declared
+        .get(&params.key)
+        .ok_or_else(|| invalid("This plugin setting is no longer declared"))?;
+    let value = settings::parse_value(setting, &params.value).map_err(|reason| {
+        if setting.sensitive {
+            invalid("Enter a valid value for this sensitive setting")
+        } else {
+            invalid(reason)
+        }
+    })?;
+    settings::save_value(&params.id, &params.key, setting, &value).map_err(|error| {
+        if setting.sensitive {
+            internal("Could not save the sensitive plugin setting to the credential store")
+        } else {
+            internal(error)
+        }
+    })?;
+    read_plugin_settings(&params.id)
 }
 
 // ---------------------------------------------------------------------------

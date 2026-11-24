@@ -209,6 +209,7 @@ async fn call_cli_tool(params: Option<&Value>) -> Result<Value, RpcError> {
     let opts = crate::tools::ToolExecOptions {
         additional_workspace_roots: Vec::new(),
         require_confirmation: false,
+        require_shell_approval: false,
         auto_approve_safe: false,
         auto_approve_edits: false,
         quiet: true,

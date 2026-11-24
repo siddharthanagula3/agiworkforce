@@ -329,7 +329,7 @@ beforeEach(async () => {
   account.signedIn = true;
   account.uploadsAllowed = true;
   account.ready = true;
-  account.modelIds = [];
+  account.modelIds = [getRoutingSlotModel('vision_fast')];
   chromeMock.screenshotError = '';
   chromeMock.deferScreenshots = false;
   chromeMock.screenshotReplies = [];
@@ -502,6 +502,24 @@ async function refreshAccount(): Promise<void> {
 }
 
 describe('attachment account and capability admission', () => {
+  it('blocks the composer until Retry finds an available model', async () => {
+    account.modelIds = [];
+    account.onChange!();
+    const action = document.getElementById('sp-cloud-gate-action') as HTMLButtonElement;
+    await settled(() => {
+      expect((document.getElementById('sp-input') as HTMLTextAreaElement).disabled).toBe(true);
+      expect(document.getElementById('sp-cloud-gate-message')!.textContent).toBe(
+        catalogMessage('spGateUnavailable', []),
+      );
+      expect(action.hidden).toBe(false);
+      expect(action.textContent).toBe(catalogMessage('spGateRetry', []));
+    });
+
+    account.modelIds = [getRoutingSlotModel('vision_fast')];
+    action.click();
+    await expectReadyAccount();
+  });
+
   it('refuses file intake when the signed-in account denies uploads', async () => {
     account.uploadsAllowed = false;
     account.onChange!();
@@ -620,18 +638,17 @@ describe('image intake stays with its admitted account epoch', () => {
 
     async function selectAdmittedModel(): Promise<void> {
       account.modelIds = [getRoutingSlotModel('general_fast')];
+      const label = getManagedModelBadgeLabel(account.modelIds[0]!);
       account.onChange!();
       let option!: HTMLButtonElement;
       await settled(() => {
         option = Array.from(
           document.querySelectorAll<HTMLButtonElement>('#sp-model-dropdown [role="menuitemradio"]'),
-        ).find((button) => button.getAttribute('aria-checked') === 'false')!;
+        ).find((button) => button.textContent?.includes(label))!;
         expect(option).toBeDefined();
       });
       option.click();
-      expect(document.getElementById('sp-model-badge')!.textContent).toBe(
-        getManagedModelBadgeLabel(account.modelIds[0]!),
-      );
+      expect(document.getElementById('sp-model-badge')!.textContent).toBe(label);
     }
 
     it('model selection releases the obsolete capture lease and preserves completed images', async () => {
@@ -653,7 +670,7 @@ describe('image intake stays with its admitted account epoch', () => {
       await selectAdmittedModel();
       chromeMock.deferScreenshots = true;
       (document.getElementById('sp-attach-screenshot-item') as HTMLButtonElement).click();
-      account.modelIds = [];
+      account.modelIds = [getRoutingSlotModel('vision_fast')];
       account.onChange!();
       await settled(() =>
         expect(document.getElementById('sp-model-badge')!.textContent).toBe(

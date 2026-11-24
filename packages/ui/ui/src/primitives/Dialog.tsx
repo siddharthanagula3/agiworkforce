@@ -88,9 +88,14 @@ function DialogContent({
       onCloseAutoFocus?.(event);
       if (event.defaultPrevented) return;
       const opener = openerRef.current;
-      if (opener && document.contains(opener)) {
+      const target = opener?.isConnected
+        ? opener
+        : opener?.id
+          ? document.getElementById(opener.id)
+          : null;
+      if (target) {
         event.preventDefault();
-        opener.focus();
+        target.focus();
       }
     },
     [onCloseAutoFocus],

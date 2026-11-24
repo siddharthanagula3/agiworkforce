@@ -30,9 +30,11 @@ interface CapturedChatRequest {
 
 export interface LocalModelFixtureState {
   chatRequests: number;
+  closedResponses: number;
   controlReleaseRequests: number;
   doneSent: boolean;
   errors: string[];
+  firstDeltaWrites: number;
   firstDeltaSent: boolean;
   holdAfterFirstDeltaMs: number;
   holdReleased: boolean;
@@ -41,6 +43,7 @@ export interface LocalModelFixtureState {
   modelRequests: number;
   ollamaProbeRequests: number;
   responseClosed: boolean;
+  secondDeltaWrites: number;
   secondDeltaSent: boolean;
   streamCompleted: boolean;
 }
@@ -172,9 +175,11 @@ export async function startLocalModelFixture(
   const controlToken = randomBytes(24).toString('hex');
   const state: LocalModelFixtureState = {
     chatRequests: 0,
+    closedResponses: 0,
     controlReleaseRequests: 0,
     doneSent: false,
     errors: [],
+    firstDeltaWrites: 0,
     firstDeltaSent: false,
     holdAfterFirstDeltaMs,
     holdReleased: holdAfterFirstDeltaMs === 0,
@@ -183,25 +188,33 @@ export async function startLocalModelFixture(
     modelRequests: 0,
     ollamaProbeRequests: 0,
     responseClosed: false,
+    secondDeltaWrites: 0,
     secondDeltaSent: false,
     streamCompleted: false,
   };
   let releaseRequested = false;
-  let releaseCurrentHold: (() => void) | undefined;
+  const activeHolds = new Set<() => void>();
   let baseUrl = '';
+
+  const releaseHolds = (): void => {
+    releaseRequested = true;
+    for (const release of activeHolds) release();
+  };
 
   const waitAfterFirstDelta = async (): Promise<void> => {
     if (holdAfterFirstDeltaMs === 0 || releaseRequested) {
       state.holdReleased = true;
       return;
     }
-    await Promise.race([
-      new Promise<void>((resolve) => {
-        releaseCurrentHold = resolve;
-      }),
-      new Promise<void>((resolve) => setTimeout(resolve, holdAfterFirstDeltaMs)),
-    ]);
-    releaseCurrentHold = undefined;
+    await new Promise<void>((resolve) => {
+      const release = () => {
+        clearTimeout(timer);
+        activeHolds.delete(release);
+        resolve();
+      };
+      const timer = setTimeout(release, holdAfterFirstDeltaMs);
+      activeHolds.add(release);
+    });
     state.holdReleased = true;
   };
 
@@ -223,8 +236,7 @@ export async function startLocalModelFixture(
       }
       if (request.method === 'POST' && requestUrl.pathname === '/__agi_e2e/release') {
         state.controlReleaseRequests += 1;
-        releaseRequested = true;
-        releaseCurrentHold?.();
+        releaseHolds();
         respondJson(response, 200, { released: true });
         return;
       }
@@ -288,6 +300,7 @@ export async function startLocalModelFixture(
 
         response.once('close', () => {
           state.responseClosed = true;
+          state.closedResponses += 1;
         });
         response.writeHead(200, {
           'cache-control': 'no-cache, no-store',
@@ -306,7 +319,9 @@ export async function startLocalModelFixture(
           })}\n\n`,
         );
         state.firstDeltaSent = true;
+        state.firstDeltaWrites += 1;
         await waitAfterFirstDelta();
+        if (response.destroyed) return;
         response.write(
           `data: ${JSON.stringify({
             choices: [
@@ -319,6 +334,7 @@ export async function startLocalModelFixture(
           })}\n\n`,
         );
         state.secondDeltaSent = true;
+        state.secondDeltaWrites += 1;
         response.write(
           `data: ${JSON.stringify({
             choices: [{ delta: {}, finish_reason: 'stop', index: 0 }],
@@ -351,8 +367,7 @@ export async function startLocalModelFixture(
   return {
     baseUrl: providerBaseUrl,
     close: async () => {
-      releaseRequested = true;
-      releaseCurrentHold?.();
+      releaseHolds();
       await closeServer(server);
     },
     configToml,

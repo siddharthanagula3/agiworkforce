@@ -75,6 +75,36 @@ describe('VSCODE-05, sanitizeHtml (command: URI and javascript: stripping in web
     expect(anchor?.getAttribute('rel')).toBe('noopener noreferrer');
   });
 
+  it('typesets inline and display math without interpreting math examples inside code', () => {
+    const doc = parse(
+      [
+        String.raw`Inline \(x^2 + y^2\) and ` + '`$literal$`.',
+        '',
+        String.raw`\[\frac{1}{2}\]`,
+      ].join('\n'),
+    );
+    expect(
+      doc.querySelector('p [data-math="inline"] math msup'),
+      doc.body.innerHTML,
+    ).not.toBeNull();
+    expect(doc.querySelector('[data-math="display"] math mfrac')).not.toBeNull();
+    expect(doc.querySelector('code')?.textContent).toBe('$literal$');
+  });
+
+  it('keeps invalid math readable and math-generated elements free of outgoing links', () => {
+    const doc = parse(String.raw`Invalid $\noSuchCommand{x}$ and $\href{https://example.com}{x}$.`);
+    expect(doc.body.textContent).toContain(String.raw`$\noSuchCommand{x}$`);
+    expect(doc.querySelector('[data-math] a, [data-math] [href]')).toBeNull();
+  });
+
+  it('renders assistant task lists as read-only checkbox states', () => {
+    const doc = parse('- [x] Review the diff\n- [ ] Run the checks');
+    const boxes = Array.from(doc.querySelectorAll('li[data-task-item] [role="checkbox"]'));
+    expect(boxes.map((box) => box.getAttribute('aria-checked'))).toEqual(['true', 'false']);
+    expect(boxes.every((box) => box.getAttribute('aria-disabled') === 'true')).toBe(true);
+    expect(doc.body.textContent).toContain('Run the checks');
+  });
+
   it('keeps code-block actions as buttons that cannot submit', () => {
     const buttons = parse('```ts\nconst x = 1;\n```').querySelectorAll('button');
 

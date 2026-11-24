@@ -157,15 +157,13 @@ export async function checkDesktopCloudUpdate(
         : `${PRODUCT_NAMES.desktop} could not reach the update service. Check your connection and try again.`,
     );
   }
-  // A 404 from this endpoint is the honest answer to "is there a newer
-  // build?" before any release has been published: the route looks for a
-  // tagged GitHub release carrying a signed .dmg and says "No cloud desktop
-  // release is published" when it finds none. That is not a failure, and
-  // throwing on it put an unhandled 'agi:check-update' error in the log on
-  // every single launch. Every other status still throws, because those do
-  // mean the check itself did not work.
   if (response.status === 404) {
-    return { available: false, currentVersion, version: currentVersion, downloadUrl: '' };
+    const body = (await response.json().catch(() => null)) as {
+      error?: { code?: unknown };
+    } | null;
+    if (body?.error?.code === 'NOT_FOUND') {
+      return { available: false, currentVersion, version: currentVersion, downloadUrl: '' };
+    }
   }
   if (!response.ok) {
     throw new Error(
@@ -235,14 +233,20 @@ export function desktopUpdatePrompt(
     };
   }
   if (!outcome.available && !outcome.readyToInstall && !outcome.downloading) {
+    const latest = outcome.latestVersion;
+    const isLatest = latest !== undefined && latest === outcome.currentVersion;
     return {
       type: 'info',
-      title: `${PRODUCT_NAMES.desktop} is up to date`,
-      message: `You have the latest ${PRODUCT_NAMES.desktop} version.`,
+      title: isLatest ? `${PRODUCT_NAMES.desktop} is up to date` : 'No update available',
+      message: isLatest
+        ? `You have the latest ${PRODUCT_NAMES.desktop} version.`
+        : latest === undefined && outcome.downloadUrl === ''
+          ? 'No installer is published for this update channel.'
+          : 'No newer version is available.',
       detail:
-        outcome.version === outcome.currentVersion
-          ? `Installed: ${outcome.currentVersion}\nNo newer version is available.`
-          : `Installed: ${outcome.currentVersion}\nLatest published: ${outcome.version}`,
+        latest === undefined
+          ? `Installed: ${outcome.currentVersion}`
+          : `Installed: ${outcome.currentVersion}\nLatest published: ${latest}`,
       buttons: ['OK'],
       downloadButton: null,
       restartButton: null,

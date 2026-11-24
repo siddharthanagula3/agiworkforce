@@ -1,5 +1,13 @@
 import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type SetStateAction,
+} from 'react';
 import {
   Keyboard,
   KeyboardAvoidingView,
@@ -15,7 +23,6 @@ import { useRouter } from 'expo-router';
 import { ArrowLeft, ExternalLink, GitBranch, X } from 'lucide-react-native';
 import {
   CLOUD_CODE_DEFAULT_TURN_MODE,
-  CLOUD_CODE_DEFAULT_TURN_STEPS,
   CLOUD_CODE_SESSION_COPY,
   CLOUD_CODE_SESSION_STATE_LABELS,
   CLOUD_CODE_SESSION_STATUS_FILTER_LABELS,
@@ -23,14 +30,18 @@ import {
   resolveCloudCodeAgentModel,
   type CloudCodeSession,
   type CloudCodeTurnMode,
-  type CloudCodeTurnStepBound,
 } from '@agiworkforce/types';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 import { useTierStore } from '@/src/features/billing/store';
+import {
+  captureCloudAccountEpoch,
+  isCloudAccountEpochCurrent,
+} from '@/src/features/auth/services/cloudAccountSession';
 import { useKeyboardSafeComposer } from '@/src/features/chat/chrome/keyboardSafeComposer';
+import { getDraft, setDraft as persistDraft } from '@/src/features/chat/draftStore';
 import { getManagedDisplayName } from '@/src/features/model-picker/service';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useCodePreferences } from '@/src/features/settings/code/store';
@@ -155,7 +166,6 @@ function Notice({
 
   return (
     <View
-      accessibilityRole={error ? 'alert' : undefined}
       style={{
         marginHorizontal: inline ? 0 : 12,
         borderRadius: 14,
@@ -172,6 +182,9 @@ function Notice({
       }}
     >
       <Text
+        accessible={error ? true : undefined}
+        accessibilityRole={error ? 'alert' : undefined}
+        accessibilityLiveRegion={error ? 'polite' : undefined}
         selectable
         style={{
           flex: 1,
@@ -214,10 +227,12 @@ function CenteredState({ children }: { children: ReactNode }) {
 
 function SessionView({
   sessionId,
+  accountKey,
   initialGoal,
   onBack,
 }: {
   sessionId: string;
+  accountKey: string;
   initialGoal?: string;
   onBack: () => void;
 }) {
@@ -230,11 +245,10 @@ function SessionView({
     [selectedModel, tier],
   );
   const view = useCloudCodeSession(sessionId, agentModel);
-  const { send } = view;
+  const { hasRefusedSend, recoverRefusedSend, send } = view;
   const [changesOpen, setChangesOpen] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [turnMode, setTurnMode] = useState<CloudCodeTurnMode>(CLOUD_CODE_DEFAULT_TURN_MODE);
-  const [turnSteps, setTurnSteps] = useState<CloudCodeTurnStepBound>(CLOUD_CODE_DEFAULT_TURN_STEPS);
   const finishedTurns = useMemo(
     () => view.transcript.filter((item) => item.kind === 'reply').length,
     [view.transcript],
@@ -255,14 +269,46 @@ function SessionView({
   const openChanges = useCallback(() => setChangesOpen(true), []);
   const turnControls = view.session?.runtimeId === null;
   const turnOptions = useMemo<CloudCodeTurnOptions>(
-    () => (turnControls ? { maxSteps: turnSteps, mode: turnMode } : {}),
-    [turnControls, turnMode, turnSteps],
+    () => (turnControls ? { mode: turnMode } : {}),
+    [turnControls, turnMode],
   );
-  const [draft, setDraft] = useState('');
+  const draftKey = `cloud-code:${sessionId}`;
+  const [draftAccount] = useState(() => {
+    const account = captureCloudAccountEpoch();
+    return account?.ownerId === accountKey ? account : null;
+  });
+  const [draft, publishDraft] = useState(() =>
+    draftAccount ? getDraft(draftKey, { scope: 'cloud', ownerId: draftAccount.ownerId }) : '',
+  );
+  const draftText = useRef(draft);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  const setDraft = useCallback(
+    (update: SetStateAction<string>) => {
+      if (!mounted.current || (draftAccount && !isCloudAccountEpochCurrent(draftAccount))) return;
+      const text = typeof update === 'function' ? update(draftText.current) : update;
+      draftText.current = text;
+      publishDraft(text);
+      if (draftAccount)
+        persistDraft(draftKey, text, { scope: 'cloud', ownerId: draftAccount.ownerId });
+    },
+    [draftAccount, draftKey],
+  );
   const scrollRef = useRef<ScrollView>(null);
   const nearBottom = useRef(true);
   const initialGoalSent = useRef(false);
   const router = useRouter();
+
+  useEffect(() => {
+    if (!hasRefusedSend) return;
+    const goal = recoverRefusedSend();
+    if (goal) setDraft((current) => cloudCodeRestoreRefusedGoal(current, goal));
+  }, [hasRefusedSend, recoverRefusedSend, setDraft]);
 
   useEffect(() => {
     const goal = initialGoal?.trim();
@@ -273,7 +319,7 @@ function SessionView({
     void send(goal, turnOptions).then((sent) => {
       if (!sent) setDraft((current) => cloudCodeRestoreRefusedGoal(current, goal));
     });
-  }, [initialGoal, router, send, turnOptions, view.session?.state, view.status]);
+  }, [initialGoal, router, send, setDraft, turnOptions, view.session?.state, view.status]);
 
   useEffect(() => {
     if (
@@ -296,12 +342,13 @@ function SessionView({
   }, []);
 
   const handleSend = useCallback(async () => {
-    const goal = draft.trim();
+    const goal = draftText.current.trim();
     if (!goal) return;
     setDraft('');
     nearBottom.current = true;
     keyboardDismissBaseline.current = dismissKeyboardAfterSend ? latestTaskId : undefined;
     const sent = await send(goal, turnOptions);
+    if (!mounted.current || (draftAccount && !isCloudAccountEpochCurrent(draftAccount))) return;
     if (!sent) {
       keyboardDismissBaseline.current = undefined;
       setDraft((current) => cloudCodeRestoreRefusedGoal(current, goal));
@@ -311,7 +358,7 @@ function SessionView({
       keyboardDismissBaseline.current = undefined;
       Keyboard.dismiss();
     }
-  }, [dismissKeyboardAfterSend, draft, latestTaskId, send, turnOptions]);
+  }, [dismissKeyboardAfterSend, draftAccount, latestTaskId, send, setDraft, turnOptions]);
 
   const session = view.session;
   const pullRequestLabel = session ? cloudCodePullRequestLabel(session) : null;
@@ -396,9 +443,7 @@ function SessionView({
           model={agentModel}
           turnControls={turnControls}
           mode={turnMode}
-          steps={turnSteps}
           onModeChange={setTurnMode}
-          onStepsChange={setTurnSteps}
           onClose={() => setOptionsOpen(false)}
         />
 
@@ -559,7 +604,11 @@ export function CloudCodeSessionScreen({
 
   if (!access.ready) {
     return (
-      <CloudCodeGate signedIn={access.signedIn} onBack={handleBack} onContinue={access.activate} />
+      <CloudCodeGate
+        signedIn={access.signedIn}
+        onBack={access.returnToChat}
+        onContinue={access.activate}
+      />
     );
   }
 
@@ -567,6 +616,7 @@ export function CloudCodeSessionScreen({
     <SessionView
       key={`${access.accountKey}:${sessionId}`}
       sessionId={sessionId}
+      accountKey={access.accountKey}
       initialGoal={initialGoal}
       onBack={handleBack}
     />

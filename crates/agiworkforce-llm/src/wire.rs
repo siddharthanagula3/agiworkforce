@@ -30,6 +30,9 @@ pub enum ContentBlock {
         data_b64: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         asset_id: Option<String>,
+        /// A local estimate retained with the session, outside provider payloads.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        context_tokens: Option<usize>,
     },
     #[serde(rename = "tool_use")]
     ToolUse {
@@ -214,12 +217,14 @@ mod tests {
             mime: "application/pdf".to_string(),
             data_b64: String::new(),
             asset_id: Some("asset".to_string()),
+            context_tokens: Some(4000),
         };
         let json = serde_json::to_string(&block).expect("serialize");
         assert!(matches!(
             serde_json::from_str::<ContentBlock>(&json).expect("load"),
             ContentBlock::Document {
                 asset_id: Some(_),
+                context_tokens: Some(4000),
                 ..
             }
         ));

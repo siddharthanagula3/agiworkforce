@@ -1,4 +1,9 @@
 import {
+  MAX_REVIEW_FRAMES,
+  isReviewImage,
+  type BrowserReviewFrame,
+} from '../computer-use/reviewFrames';
+import {
   finishAgentActivityLocally,
   type AgentActivityArtifactEntry,
   type AgentActivityEntry,
@@ -110,6 +115,7 @@ export interface BubbleInteractionOptions {
   onRespondToCard?: (cardId: string, payload: InteractiveCardResponsePayload) => void;
   artifacts?: MessageArtifactsBinding;
   browserControls?: HTMLElement | null;
+  screenshotForStep?: (toolCallId: string) => HTMLElement | null;
   editableAction?: HTMLElement | null;
 }
 
@@ -723,14 +729,24 @@ function appendAnswerExtras(
   const produced = answerFiles(msg.generatedFiles, msg.agentActivity);
   const files = buildAnswerFiles(produced, options.fileAccess);
   if (files) wrapper.appendChild(files);
-  if (msg.videoTaskId && !msg.error && !produced.some((file) => file.key === msg.videoTaskId)) {
+  if (
+    (msg.videoTaskId || msg.videoStartId) &&
+    !msg.error &&
+    !produced.some((file) => file.key === msg.videoTaskId)
+  ) {
     const progress = el('div', {
       class: 'sp-video-progress',
       id: `sp-video-progress-${msg.id}`,
       role: 'status',
     });
     progress.appendChild(renderIcon(Loader2, 14));
-    progress.appendChild(el('span', { class: 'sp-video-progress__label' }, t('spVideoCreating')));
+    progress.appendChild(
+      el(
+        'span',
+        { class: 'sp-video-progress__label' },
+        msg.videoTaskId ? t('spVideoCreating') : t('spVideoStarting'),
+      ),
+    );
     wrapper.appendChild(progress);
   }
   const cards = buildInteractiveCardStack(msg, options, false);
@@ -1094,7 +1110,15 @@ function buildAgentActivityStep(
   row.appendChild(renderIcon(icon, 14, 'sp-agent-step__icon'));
   row.appendChild(el('span', { class: 'sp-agent-step__summary' }, activityEntrySummary(entry)));
   if (status === 'cancelled' || status === 'failed') {
-    row.appendChild(el('span', { class: 'sp-agent-step__elapsed' }, agentTaskStateLabel(status)));
+    row.appendChild(
+      el(
+        'span',
+        { class: 'sp-agent-step__elapsed' },
+        status === 'cancelled' && entry.kind === 'tool' && entry.category === 'computer-use'
+          ? t('spBrowserOutcomeUnverified')
+          : agentTaskStateLabel(status),
+      ),
+    );
   }
   if (entry.kind === 'tool' && entry.elapsedMs !== undefined) {
     row.appendChild(
@@ -1103,6 +1127,8 @@ function buildAgentActivityStep(
   }
   if (hasDetails) row.appendChild(renderIcon(ChevronRight, 11));
   step.appendChild(row);
+  const frame = entry.kind === 'tool' ? options.screenshotForStep?.(entry.toolCallId) : null;
+  if (frame) step.appendChild(frame);
 
   if (hasDetails) {
     const detail = el('div', { class: 'sp-agent-step__detail' });
@@ -1139,8 +1165,16 @@ function activityStatusLabel(activity: AgentActivityState, elapsedLabel: string)
   switch (activity.status) {
     case 'completed':
       return t('spActivityWorkedFor', [elapsedLabel]);
-    case 'partial':
-      return t('spActivityFinishedWithErrors', [elapsedLabel]);
+    case 'partial': {
+      const failedBrowserSteps = tools.filter(
+        (entry) => entry.category === 'computer-use' && entry.status === 'failed',
+      ).length;
+      return failedBrowserSteps
+        ? t('spActivityWorkedFor', [elapsedLabel]) +
+            ' · ' +
+            tPlural('spBrowserFailedAttempts', failedBrowserSteps)
+        : t('spActivityFinishedWithErrors', [elapsedLabel]);
+    }
     case 'failed':
       return t('spActivityFailedAfter', [elapsedLabel]);
     case 'cancelled':
@@ -1487,7 +1521,10 @@ export interface BrowserTurnControls {
   cards: HTMLElement;
   setRunning(running: boolean): void;
   setPaused(reason: string | null): void;
-  setScreenshot(dataUrl: string): void;
+  setScreenshot(dataUrl: string, toolCallId?: string): void;
+  screenshotForStep(toolCallId: string): HTMLElement | null;
+  screenshotGallery: HTMLElement;
+  readonly screenshots: readonly BrowserReviewFrame[];
   setError(message: string): void;
   focusPrimary(): void;
 }
@@ -1513,6 +1550,36 @@ export function buildBrowserTurnControls(handlers: {
   error.className = 'sp-browser-turn__error';
   error.setAttribute('role', 'alert');
   const shot = document.createElement('div');
+  const frames: BrowserReviewFrame[] = [];
+  let selected = 0;
+  const preview = el('div');
+  const previous = el('button', { type: 'button', 'aria-label': t('spPreviousScreenshot') }, '‹');
+  const next = el('button', { type: 'button', 'aria-label': t('spNextScreenshot') }, '›');
+  const position = el('span', { 'aria-live': 'polite' });
+  const navigation = el('div', { class: 'sp-browser-frames-nav' }, previous, position, next);
+  shot.className = 'sp-browser-frames';
+  shot.hidden = true;
+  shot.append(preview, navigation);
+  const showFrame = () => {
+    const label = t('spScreenshotPosition', [String(selected + 1), String(frames.length)]);
+    position.textContent = label;
+    const img = el('img', { src: frames[selected]!.dataUrl, alt: label });
+    preview.replaceChildren(buildImageViewerButton(img, 'sp-cu-screenshot'));
+    previous.disabled = selected === 0;
+    next.disabled = selected === frames.length - 1;
+  };
+  previous.onclick = () => {
+    if (selected > 0) {
+      selected--;
+      showFrame();
+    }
+  };
+  next.onclick = () => {
+    if (selected + 1 < frames.length) {
+      selected++;
+      showFrame();
+    }
+  };
   bar.append(notice, toggle);
   element.append(bar, error, cards, shot);
   let paused = false;
@@ -1536,12 +1603,13 @@ export function buildBrowserTurnControls(handlers: {
   return {
     element,
     cards,
+    screenshotGallery: shot,
+    screenshots: frames,
     setRunning(running) {
       bar.hidden = !running;
       if (!running) {
         paused = false;
         notice.textContent = '';
-        shot.replaceChildren();
         render();
       }
     },
@@ -1551,13 +1619,26 @@ export function buildBrowserTurnControls(handlers: {
       render();
       if (paused) toggle.focus();
     },
-    setScreenshot(dataUrl) {
-      if (!/^data:image\/(?:png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(dataUrl)) return;
-      const img = document.createElement('img');
-      img.src = dataUrl;
-      img.alt = t('spBrowserScreenshotAlt');
-      img.loading = 'lazy';
-      shot.replaceChildren(buildImageViewerButton(img, 'sp-cu-screenshot'));
+    screenshotForStep(toolCallId) {
+      const index = frames.findIndex((frame) => frame.toolCallId === toolCallId);
+      if (index < 0) return null;
+      const label = t('spScreenshotPosition', [String(index + 1), String(frames.length)]);
+      return buildImageViewerButton(
+        el('img', { src: frames[index]!.dataUrl, alt: label, loading: 'lazy' }),
+        'sp-cu-screenshot',
+      );
+    },
+    setScreenshot(dataUrl, toolCallId) {
+      if (!isReviewImage(dataUrl) || frames[frames.length - 1]?.dataUrl === dataUrl) return;
+      const followLatest = !frames.length || selected === frames.length - 1;
+      frames.push({ dataUrl, toolCallId });
+      if (frames.length > MAX_REVIEW_FRAMES) {
+        frames.shift();
+        selected = Math.max(0, selected - 1);
+      }
+      if (followLatest) selected = frames.length - 1;
+      shot.hidden = false;
+      showFrame();
     },
     setError(message) {
       error.textContent = message;

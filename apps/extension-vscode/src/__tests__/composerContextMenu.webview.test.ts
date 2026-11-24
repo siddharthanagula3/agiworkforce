@@ -165,13 +165,17 @@ describe('composer context menu', () => {
     executeWebviewScript();
     window.dispatchEvent(
       new MessageEvent('message', {
-        data: { type: 'contextAttached', payload: { id: 'att-4', name: 'src/app.ts:12-20' } },
+        data: {
+          type: 'contextAttached',
+          payload: { id: 'att-4', name: 'src/app.ts:12-20', truncatedAt: 40000 },
+        },
       }),
     );
 
     const chip = document.querySelector('#attachmentStrip .attachment-chip');
     expect(chip?.getAttribute('data-attachment-id')).toBe('att-4');
     expect(chip?.querySelector('.attachment-chip__name')?.textContent).toBe('src/app.ts:12-20');
+    expect(chip?.querySelector('.attachment-chip__size')?.textContent).toBe('Truncated');
 
     postedMessages = [];
     chip?.querySelector<HTMLButtonElement>('.attachment-chip__remove')?.click();

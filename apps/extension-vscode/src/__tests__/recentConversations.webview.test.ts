@@ -71,14 +71,13 @@ describe('VS Code sidebar recent-chats block', () => {
     expect(document.querySelector('.recent-chats')).toBeNull();
   });
 
-  it('renders one row per conversation above the empty-state mark', () => {
+  it('renders one row per conversation under the start prompt', () => {
     boot();
     deliverRecents(THREE_RECENTS, 9);
 
     const block = document.querySelector('.recent-chats');
     expect(block).not.toBeNull();
-    expect(block?.previousElementSibling).toBeNull();
-    expect(block?.nextElementSibling?.classList.contains('empty-state-mark')).toBe(true);
+    expect(block?.previousElementSibling?.id).toBe('emptyStateCopy');
 
     const rows = Array.from(document.querySelectorAll('.recent-chat-row'));
     expect(rows).toHaveLength(3);
@@ -92,10 +91,28 @@ describe('VS Code sidebar recent-chats block', () => {
       '2h ago',
       '3d ago',
     ]);
-    expect(document.querySelector('.recent-chats-title')?.textContent).toBe('Sessions');
+    expect(document.querySelector('.recent-chats-title')?.textContent).toBe('Recent chats');
     expect(document.querySelector('.recent-chats-all')?.textContent).toBe('View all (9)');
     expect(document.querySelector('.recent-chats-all')?.getAttribute('aria-label')).toBe(
       'View all 9 sessions',
+    );
+  });
+
+  it('keeps a suggested skill and recent chats visible when the recent list refreshes', () => {
+    boot();
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: {
+          type: 'startSuggestions',
+          payload: { projects: [], skills: [{ name: 'Review a change' }], connectors: [] },
+        },
+      }),
+    );
+    deliverRecents(THREE_RECENTS, 3);
+
+    expect(document.querySelector('.start-suggestions')?.textContent).toContain('Review a change');
+    expect(document.querySelector('.recent-chats')?.textContent).toContain(
+      'Fix the diff decorations',
     );
   });
 
@@ -143,7 +160,7 @@ describe('VS Code sidebar recent-chats block', () => {
     deliverRecents([], 0);
 
     expect(document.querySelector('.recent-chats')).toBeNull();
-    expect(document.querySelector('.empty-state-mark')).not.toBeNull();
+    expect(document.querySelector('#emptyStateHeadline')).not.toBeNull();
   });
 
   it('restores the block onto the empty state rebuilt by New Chat', () => {

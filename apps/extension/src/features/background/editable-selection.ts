@@ -3,9 +3,13 @@ import { readAdminSitePolicy, readUserSiteAllowlist } from '../site-policy/store
 import { t } from '../../i18n';
 import { readUserSiteBlocklist } from '../site-policy/userBlocklist';
 import { normalizeApprovedSiteOrigin } from '../options/site-allowlist';
-import { readPageDocument, sendPageDocumentMessage } from '../browser-tools/documentBridge';
+import { sendPageDocumentMessage } from '../browser-tools/documentBridge';
 import type { ManagedCloudOwner } from '../cloud-bridge/managedCloudAuthority';
-import type { EditableSelectionTarget } from '../browser-tools/editableTarget';
+import {
+  parseEditableSelectionFrame,
+  readEditableSelectionDocument,
+  type EditableSelectionTarget,
+} from '../browser-tools/editableTarget';
 import type {
   ApplyEditableSelectionMessage,
   UndoEditableSelectionMessage,
@@ -38,6 +42,7 @@ export async function captureEditableTarget(
   selectedText: string,
   owner: ManagedCloudOwner,
   ownerIsCurrent: () => boolean,
+  clickedFrame?: { id: number; url: string | undefined },
 ): Promise<EditableSelectionTarget> {
   if (
     !Number.isSafeInteger(tab.id) ||
@@ -47,11 +52,20 @@ export async function captureEditableTarget(
   )
     throw new Error('Select ordinary text in a field and try again.');
   await assertInlineSite(tab.url);
-  const reference = await readPageDocument(tab.id!, tab.url);
+  const frame = parseEditableSelectionFrame(clickedFrame, tab.url);
+  if (clickedFrame && !frame) throw new Error(t('spRewriteFrameUnsupported'));
+  const source = { tabId: tab.id!, url: tab.url, ...(frame ? { frame } : {}) };
+  const reference = await readEditableSelectionDocument(source);
   if (!ownerIsCurrent()) throw new Error('The signed-in account changed. Select the text again.');
   const response = (await sendPageDocumentMessage(
     reference,
-    { type: 'CAPTURE_EDITABLE_SELECTION', pageUrl: tab.url, selectedText, owner },
+    {
+      type: 'CAPTURE_EDITABLE_SELECTION',
+      pageUrl: reference.url,
+      selectedText,
+      owner,
+      ...(frame ? { topUrl: tab.url } : {}),
+    },
     true,
   )) as EditableSelectionResponse;
   if (
@@ -62,12 +76,11 @@ export async function captureEditableTarget(
     typeof response.selection.label !== 'string'
   )
     throw new Error(response?.error ?? 'This editor does not expose a supported selection.');
-  await readPageDocument(tab.id!, tab.url, reference.documentId);
+  await readEditableSelectionDocument({ ...source, documentId: reference.documentId });
   if (!ownerIsCurrent()) throw new Error('The signed-in account changed. Select the text again.');
   return {
     id: response.selection.id,
-    tabId: tab.id!,
-    url: tab.url,
+    ...source,
     documentId: reference.documentId,
     label: response.selection.label,
     selectedText,
@@ -94,11 +107,19 @@ export async function executeEditableTarget(
   if (tab.url !== message.pageUrl)
     throw new Error('The source page changed. Select the text again.');
   await assertInlineSite(message.pageUrl);
-  const reference = await readPageDocument(message.tabId, message.pageUrl, message.documentId);
+  const frame = parseEditableSelectionFrame(message.frame, message.pageUrl);
+  if (message.frame !== undefined && !frame) throw new Error(t('spRewriteFrameUnsupported'));
+  const reference = await readEditableSelectionDocument({
+    tabId: message.tabId,
+    url: message.pageUrl,
+    documentId: message.documentId,
+    ...(frame ? { frame } : {}),
+  });
   if (!ownerIsCurrent()) throw new Error('The signed-in account changed. Select the text again.');
   const common = {
     tabId: message.tabId,
-    pageUrl: message.pageUrl,
+    pageUrl: reference.url,
+    ...(frame ? { topUrl: message.pageUrl } : {}),
     documentId: message.documentId,
     selectionId: message.selectionId,
     owner: message.owner,

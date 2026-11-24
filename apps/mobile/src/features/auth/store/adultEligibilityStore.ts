@@ -34,7 +34,8 @@ export function isAdultEligibilityAnswerPending(
   return (
     eligibility.userId !== userId ||
     eligibility.status === 'idle' ||
-    eligibility.status === 'checking'
+    eligibility.status === 'checking' ||
+    eligibility.status === 'submitting'
   );
 }
 
@@ -56,6 +57,10 @@ export function adultEligibilityNeedsAnswer(
       eligibility.status === 'ineligible' ||
       eligibility.status === 'error')
   );
+}
+
+export function useAccountAgeConfirmed(userId: string | null | undefined): boolean {
+  return useAdultEligibilityStore((state) => isAdultEligibilityConfirmed(state, userId));
 }
 
 type Outcome = Exclude<AdultEligibilityCheckStatus, 'idle' | 'checking' | 'submitting'>;
@@ -137,9 +142,7 @@ export const useAdultEligibilityStore = create<AdultEligibilityState>()((set, ge
       try {
         settle(userId, generation, await report({ kind: 'declared_age', age }));
       } catch (error) {
-        if (get().userId !== userId || requestGeneration !== generation) return;
-        console.warn('[eligibility] age report failed, Cloud stays closed', error);
-        set({ status: 'age_required', error: ADULT_ELIGIBILITY_CHECK_FAILED_MESSAGE });
+        fail(userId, generation, error);
       }
     },
 

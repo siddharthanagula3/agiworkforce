@@ -16,6 +16,7 @@ function renderWithPersistedTheme(
     runScripts: 'dangerously',
     beforeParse(window) {
       window.localStorage.setItem('theme', theme);
+      Object.assign(window, { matchMedia: () => ({ matches: true }) });
       if (host) Object.assign(window, { agiHost: host });
     },
   });
@@ -36,7 +37,14 @@ describe('theme-init.js', () => {
 
     expect(root).toHaveClass('light');
     expect(root).toHaveAttribute('data-theme', 'light');
+    expect(root).toHaveAttribute('data-theme-preference', 'light');
     expect(root.style.colorScheme).toBe('light');
+  });
+
+  it('keeps the system preference apart from the palette before hydration', () => {
+    const root = renderWithPersistedTheme('system').window.document.documentElement;
+    expect(root).toHaveAttribute('data-theme', 'dark');
+    expect(root).toHaveAttribute('data-theme-preference', 'system');
   });
 
   it.each(['light', 'dark', 'not-a-theme', 'Light', ' '])(

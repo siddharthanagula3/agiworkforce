@@ -213,6 +213,10 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     return this._stateManager.activeThreadId();
   }
 
+  protectsThreadFromArchive(id: string): boolean {
+    return this._stateManager.protectsThreadFromArchive(id);
+  }
+
   public releaseForTerminal(): Promise<void> {
     return this._stateManager.releaseForTerminal();
   }

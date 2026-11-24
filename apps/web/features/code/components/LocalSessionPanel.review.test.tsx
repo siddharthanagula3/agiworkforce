@@ -295,7 +295,8 @@ describe('LocalSessionPanel review pane', () => {
     expect(screen.queryByRole('button', { name: 'Side panel' })).not.toBeInTheDocument();
   });
 
-  it('keeps the folder controls in a worktree, which its folder grant covers', () => {
+  it('keeps the folder controls in a worktree, which its folder grant covers', async () => {
+    const user = userEvent.setup();
     render(
       <LocalSessionPanel
         session={{ ...session, rootId: 'root-1::worktree::0a1b2c3d' }}
@@ -307,8 +308,10 @@ describe('LocalSessionPanel review pane', () => {
     );
 
     expect(screen.getByRole('button', { name: 'Review changes' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Open in VS Code' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Run tests' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Terminal panel' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Session actions' }));
+    expect(await screen.findByRole('menuitem', { name: 'Open in VS Code' })).toBeInTheDocument();
   });
 
   it('refreshes the list and hands over the ref that holds the removed work before closing', async () => {

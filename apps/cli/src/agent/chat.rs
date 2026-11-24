@@ -1006,7 +1006,9 @@ impl AgentSession {
                 }
             }
             self.messages = result.messages.clone();
-            self.context_usage_anchor = None;
+            if !result.after.provider_anchored {
+                self.context_usage_anchor = None;
+            }
         }
     }
 
@@ -2575,6 +2577,7 @@ impl TurnHostAdapter<'_> {
                 additional_workspace_roots: self.session.additional_context_dirs(),
                 tool_search_catalog: self.tool_search_catalog_for(&call.name),
                 require_confirmation: !self.session.skips_approval(),
+                require_shell_approval: self.session.require_shell_approval,
                 auto_approve_safe: self.session.auto_approve_safe,
                 auto_approve_edits: self
                     .session
@@ -3063,9 +3066,12 @@ impl TurnHost for TurnHostAdapter<'_> {
                 if let Err(persist_error) = self.session.settle_child_task(
                     &child_id,
                     &crate::subagent::SubagentStatus::Failed(format!("{error:#}")),
+                    Vec::new(),
                 ) {
                     narrate!("Failed to persist child failure: {persist_error:#}");
                 }
+            } else {
+                self.session.publish_child_task(&child_id);
             }
 
             hooks::run_hooks(
@@ -3101,10 +3107,14 @@ impl TurnHost for TurnHostAdapter<'_> {
 
         let mut child_persistence_failures = std::collections::HashSet::new();
         if !task_spawn_results.is_empty() {
-            if let Some(ref mgr) = self.session.subagent_manager {
+            if let Some(mgr) = self.session.subagent_manager.as_ref() {
                 let outcomes = mgr.wait_all().await;
                 for (id, status) in outcomes {
-                    if let Err(error) = self.session.settle_child_task(&id, &status) {
+                    let transcript = match self.session.subagent_manager.as_ref() {
+                        Some(manager) => manager.get_transcript(&id).await,
+                        None => Vec::new(),
+                    };
+                    if let Err(error) = self.session.settle_child_task(&id, &status, transcript) {
                         narrate!("Failed to persist child outcome {id}: {error:#}");
                         child_persistence_failures.insert(id);
                     }
@@ -3214,6 +3224,7 @@ impl TurnHost for TurnHostAdapter<'_> {
             additional_workspace_roots: self.session.additional_context_dirs(),
             tool_search_catalog: self.tool_search_catalog_for(&prepared.name),
             require_confirmation: !self.session.skips_approval(),
+            require_shell_approval: self.session.require_shell_approval,
             auto_approve_safe: self.session.auto_approve_safe,
             auto_approve_edits: self
                 .session
@@ -3714,6 +3725,7 @@ async fn settle_document(
         mime,
         data_b64,
         asset_id,
+        context_tokens,
     } = block
     else {
         return None;
@@ -3730,7 +3742,8 @@ async fn settle_document(
         *block = ContentBlock::Text { text };
         return None;
     }
-    if data_b64.is_empty() || (native_pdf && mime == "application/pdf") {
+    let keep_native = native_pdf && mime == "application/pdf";
+    if data_b64.is_empty() || (keep_native && context_tokens.is_some()) {
         return None;
     }
     let (name, mime) = (name.clone(), mime.clone());
@@ -3740,8 +3753,25 @@ async fn settle_document(
         };
         return Some(format!("{name} could not be attached."));
     };
+    let can_upload = upload && managed && crate::cloud::attachments::managed_accepts(&name, &mime);
+    if mime == "application/pdf" && context_tokens.is_none() && (keep_native || can_upload) {
+        *context_tokens = Some(
+            crate::documents::extract_isolated(
+                bytes.clone(),
+                crate::documents::DocumentKind::Pdf,
+                None,
+            )
+            .await
+            .ok()
+            .and_then(|document| document.pdf_context_tokens)
+            .unwrap_or(agiworkforce_agent_core::context::UNMEASURED_DOCUMENT_TOKENS),
+        );
+    }
+    if keep_native {
+        return None;
+    }
     let mut notice = None;
-    if upload && managed && crate::cloud::attachments::managed_accepts(&name, &mime) {
+    if can_upload {
         match crate::cloud::attachments::upload_chat_attachment(
             privacy,
             &name,
@@ -3757,6 +3787,7 @@ async fn settle_document(
                     mime,
                     data_b64: String::new(),
                     asset_id: Some(id),
+                    context_tokens: *context_tokens,
                 };
                 return None;
             }

@@ -6,6 +6,7 @@ const mockCloudCodeApi = {
   listBranches: jest.fn(),
   create: jest.fn(),
 };
+let mockFolders: { rootId: string; name: string; branch: string }[] = [];
 
 jest.mock('@/src/features/cloud-code/service', () => ({
   get cloudCodeApi() {
@@ -29,6 +30,9 @@ jest.mock('react-native-webrtc', () => ({
 jest.mock('@/src/features/companion/remote-code/service', () => ({
   listCodeSessions: jest.fn(),
   startCodeSession: jest.fn(),
+}));
+jest.mock('@/src/features/cloud-code/components/useComputerCodeSessions', () => ({
+  useComputerCodeSessions: () => ({ folders: mockFolders, computerName: 'Test Mac' }),
 }));
 jest.mock('@/lib/mmkv', () => ({
   whenMmkvReady: jest.fn((callback) => callback()),
@@ -66,6 +70,7 @@ describe('new cloud session network access', () => {
   beforeEach(() => {
     jest.useFakeTimers();
     jest.clearAllMocks();
+    mockFolders = [];
     mockCloudCodeApi.listRepositories.mockResolvedValue({
       repositories: [],
       installationCount: 0,
@@ -93,6 +98,29 @@ describe('new cloud session network access', () => {
     expect(mockCloudCodeApi.create).toHaveBeenCalledWith(
       expect.objectContaining({ networkAccess: 'none' }),
     );
+  });
+
+  it('keeps the paired-computer choice when its folders disappear', () => {
+    mockFolders = [{ rootId: 'root-1', name: 'My project', branch: 'main' }];
+    const sheet = () => (
+      <NewCloudCodeSessionSheet
+        visible
+        onClose={jest.fn()}
+        onCreated={jest.fn()}
+        onSendAndStay={jest.fn()}
+        onStartedOnComputer={jest.fn()}
+      />
+    );
+    const screen = render(sheet());
+    fireEvent.press(screen.getByTestId('new-code-session-on-computer'));
+    fireEvent.changeText(screen.getByTestId('new-cloud-code-task'), 'Inspect local files');
+
+    mockFolders = [];
+    screen.rerender(sheet());
+    expect(screen.getByText('No folders are available on the paired computer.')).toBeTruthy();
+    expect(screen.getByTestId('new-cloud-code-start')).toBeDisabled();
+    expect(screen.queryByTestId('new-cloud-code-send-and-stay')).toBeNull();
+    expect(mockCloudCodeApi.create).not.toHaveBeenCalled();
   });
 
   it('follows a default changed while the sheet stays mounted', async () => {

@@ -27,6 +27,7 @@ function asks(
   const requirement = approvalRequirement(input);
   return actionNeedsApproval({
     alwaysAsk: requirement.alwaysAsk,
+    reason: requirement.reason,
     crucial: asksInAutoMode(requirement),
     mode,
     allowedForTask: false,
@@ -167,8 +168,20 @@ describe('Auto acts without asking and stops for crucial actions', () => {
       expect(approvalRequirement(input)).toMatchObject({ alwaysAsk: true, reason });
       expect(isCrucialAction(approvalRequirement(input))).toBe(true);
       await expect(asks('auto', input)).resolves.toBe(true);
+      await expect(asks('yolo', input, true)).resolves.toBe(true);
     },
   );
+
+  it('admits an ordinary dropdown unattended only on an approved site', async () => {
+    const input = {
+      toolName: 'select_option',
+      args: { index: 2, matchBy: 'label', option: 'Afternoon' },
+      pageUrl: PAGE,
+      targetSignature: 'select|||slot|Delivery window',
+    };
+    await expect(asks('yolo', input, true)).resolves.toBe(false);
+    await expect(asks('yolo', input, false)).resolves.toBe(true);
+  });
 
   it('asks before entering a password or card number and before a download', async () => {
     await expect(

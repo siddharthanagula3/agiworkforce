@@ -19,6 +19,7 @@
 
 import { isImeComposingKey } from '@agiworkforce/unified-chat/ime-composition';
 import { sanitizePageText } from '../../../background/policy';
+import { trackComposerPointerFocus } from '../../../lib/composer-focus';
 import { isDomSmallEnoughToRead } from '../../../dom-helpers';
 import type { InPagePromptOutcome, InPagePromptResponse } from '../../../types';
 import {
@@ -43,6 +44,7 @@ import {
   Search,
   Settings,
   renderIcon,
+  renderPageBrandMark,
 } from '../../../assets/icons';
 
 interface PanelElements {
@@ -74,7 +76,7 @@ function buildPanelDOM(shadow: ShadowRoot): PanelElements {
 
   const logo = document.createElement('span');
   logo.className = 'agi-logo';
-  logo.textContent = 'AGI';
+  logo.appendChild(renderPageBrandMark());
 
   const providerLabel = document.createElement('span');
   providerLabel.className = 'agi-provider-pill';
@@ -136,6 +138,7 @@ function buildPanelDOM(shadow: ShadowRoot): PanelElements {
   textarea.setAttribute('placeholder', 'Ask one question about this page…');
   textarea.setAttribute('aria-label', 'Page assistant prompt');
   textarea.setAttribute('aria-describedby', disclosure.id);
+  trackComposerPointerFocus(textarea);
 
   const submitBtn = document.createElement('button');
   submitBtn.className = 'agi-submit-btn';
@@ -435,7 +438,7 @@ export function createPanel(): {
   host: HTMLElement;
   open: () => void;
   close: () => void;
-  toggle: () => void;
+  toggle: (pointer?: boolean) => void;
   destroy: () => void;
   setReturnFocus: (element: HTMLElement | null) => void;
 } {
@@ -596,7 +599,12 @@ export function createPanel(): {
 
   withdrawFromPage(false);
 
-  function open(): void {
+  function focusComposer(pointer: boolean): void {
+    if (pointer) els.textarea.setAttribute('data-pointer-focus', '');
+    els.textarea.focus();
+  }
+
+  function open(pointer = false): void {
     if (isOpen) return;
     isOpen = true;
     if (hideTimer !== null) {
@@ -608,7 +616,7 @@ export function createPanel(): {
     els.panel.removeAttribute('aria-hidden');
     els.panel.classList.add('open');
     refreshContext();
-    els.textarea.focus();
+    focusComposer(pointer);
   }
 
   function closePanel(restoreFocus = true): void {
@@ -626,21 +634,21 @@ export function createPanel(): {
     closePanel(true);
   }
 
-  function toggle(): void {
+  function toggle(pointer = false): void {
     if (isOpen) close();
-    else open();
+    else open(pointer);
   }
 
   els.closeBtn.addEventListener('click', close);
 
-  els.newBtn.addEventListener('click', () => {
+  els.newBtn.addEventListener('click', (event) => {
     if (requestInFlight) return;
     els.responseArea.textContent = '';
     els.textarea.value = '';
     autoResizeTextarea(els.textarea);
     syncComposerState();
     rebuildChips();
-    els.textarea.focus();
+    focusComposer(event.detail > 0);
   });
 
   function openSidePanel(): void {

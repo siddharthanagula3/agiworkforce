@@ -112,9 +112,15 @@ interface WebAppShellProps {
    * navigation, which would otherwise render as a second sidebar beside it.
    */
   rail?: boolean;
+  onToggleSidebar?: () => void;
 }
 
-export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppShellProps) {
+export function WebAppShell({
+  children,
+  narrowHeaderSlot,
+  rail = true,
+  onToggleSidebar,
+}: WebAppShellProps) {
   const router = useGuardedRouter();
   const pathname = usePathname();
   const { openSettings } = useSettingsModal();
@@ -450,12 +456,11 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
     [openAfterMobileNavClose],
   );
 
-  // A surface with no rail leaves Cmd/Ctrl+B unclaimed.
   useKeyboardShortcuts({
     onNewChat: handleNewChat,
     onSearch: handleOpenSearch,
     onShowShortcuts: handleShowShortcuts,
-    onToggleSidebar: rail ? handleToggleSidebar : undefined,
+    onToggleSidebar: rail ? handleToggleSidebar : onToggleSidebar,
   });
 
   const hiddenNavIds = useSettingsStore((state) => state.hiddenNavIds) ?? EMPTY_NAV_IDS;

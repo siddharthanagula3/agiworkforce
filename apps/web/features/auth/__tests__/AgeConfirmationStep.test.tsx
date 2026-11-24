@@ -80,7 +80,8 @@ describe('AgeConfirmationStep', () => {
     render(<AgeConfirmationStep footer={<p>Footer content</p>} />);
 
     expect(screen.getByRole('heading', { name: 'Confirm your age' })).toBeInTheDocument();
-    expect(screen.getAllByText(ACCOUNT_AGE_REQUIREMENT_NOTICE).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(ACCOUNT_AGE_REQUIREMENT_NOTICE)).toHaveLength(1);
+    expect(ageField()).toHaveAccessibleDescription(ACCOUNT_AGE_REQUIREMENT_NOTICE);
     expect(ageField()).toHaveValue('');
     expect(ageField()).not.toHaveAttribute('name');
     expect(screen.getByRole('link', { name: 'Age requirements' })).toHaveAttribute(

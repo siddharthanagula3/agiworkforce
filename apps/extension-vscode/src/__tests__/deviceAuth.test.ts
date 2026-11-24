@@ -20,6 +20,7 @@ const ACCOUNT_TOKEN_KEY = 'agiWorkforce.accountToken';
 const ACCOUNT_TOKEN_EXPIRES_AT_KEY = 'agiWorkforce.accountTokenExpiresAt';
 const ACCOUNT_TOKEN_EXPIRED_KEY = 'agiWorkforce.accountTokenExpired';
 const ACCOUNT_REFRESH_TOKEN_KEY = 'agiWorkforce.accountRefreshToken';
+const SHARED_ACCOUNT_SESSION_KEY = 'agiWorkforce.sharedAccountSession';
 
 /// A SecretStorage double that records every write, so a test can assert both
 /// that the credential went here and that nothing else ever saw it.
@@ -497,7 +498,7 @@ describe('VS Code AGI Cloud credential storage', () => {
         ACCOUNT_REFRESH_TOKEN_KEY,
       ]),
     );
-    expect(secrets.entries.size).toBe(0);
+    expect([...secrets.entries]).toEqual([[SHARED_ACCOUNT_SESSION_KEY, 'disabled']]);
     await expect(getAccountToken(secrets)).resolves.toBeUndefined();
   });
 
@@ -513,7 +514,7 @@ describe('VS Code AGI Cloud credential storage', () => {
       {},
       expect.objectContaining({ Authorization: 'Bearer signed-developer-token' }),
     );
-    expect(secrets.entries.size).toBe(0);
+    expect([...secrets.entries]).toEqual([[SHARED_ACCOUNT_SESSION_KEY, 'disabled']]);
   });
 
   it('keeps localhost device-account revocation on the configured web API at port 3000', async () => {
@@ -535,7 +536,7 @@ describe('VS Code AGI Cloud credential storage', () => {
       {},
       expect.objectContaining({ Authorization: 'Bearer synthetic-local-device-token' }),
     );
-    expect(secrets.entries.size).toBe(0);
+    expect([...secrets.entries]).toEqual([[SHARED_ACCOUNT_SESSION_KEY, 'disabled']]);
   });
 
   it('sends the production revocation transport only to the configured private loopback server', async () => {
@@ -564,11 +565,24 @@ describe('VS Code AGI Cloud credential storage', () => {
       expect(received).toEqual([
         { path: '/api/auth/logout', authorization: 'Bearer synthetic-local-device-token' },
       ]);
-      expect(secrets.entries.size).toBe(0);
+      expect([...secrets.entries]).toEqual([[SHARED_ACCOUNT_SESSION_KEY, 'disabled']]);
     } finally {
       await new Promise<void>((resolve, reject) =>
         server.close((error) => (error ? reject(error) : resolve())),
       );
     }
+  });
+
+  it('signs out locally without revoking the CLI session when its credential was borrowed', async () => {
+    const secrets = createSecretStorage();
+    await secrets.store(
+      SHARED_ACCOUNT_SESSION_KEY,
+      JSON.stringify({ ownerId: 'cli-user', token: 'borrowed-cli-token' }),
+    );
+    const post = vi.fn<DeviceAuthPost>();
+
+    await expect(signOutOfAgiCloud(secrets, post)).resolves.toBe(true);
+    expect(post).not.toHaveBeenCalled();
+    expect([...secrets.entries]).toEqual([[SHARED_ACCOUNT_SESSION_KEY, 'disabled']]);
   });
 });

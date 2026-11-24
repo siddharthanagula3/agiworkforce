@@ -140,6 +140,135 @@ beforeEach(() => {
 });
 
 describe('remote control of a developer session', () => {
+  it('replays missed guidance refusals only in the same pairing', async () => {
+    deps.startTurn = vi.fn().mockRejectedValueOnce(new Error('Host-only diagnostic'));
+    const controller = createCodeRemoteController(deps);
+    const target = { rootId: 'root-1', threadId: 'thread-1' };
+    const attach = () => controller.handleControl('code.session.attach', request('attach', target));
+    const snapshot = () =>
+      [...sent].reverse().find(({ action }) => action === 'code.session.snapshot')?.payload;
+    await attach();
+    controller.detach();
+    await controller.handleControl(
+      'code.session.steer',
+      request('follow-up', { ...target, requestId: 'missed-refusal', text: 'Preserve this draft' }),
+    );
+    expect(lastEvent('guidance-rejected')).toBeUndefined();
+
+    await attach();
+    expect(parseRemoteCodeSnapshot(snapshot())?.rejectedGuidance).toEqual([
+      { requestId: 'missed-refusal', text: 'Preserve this draft', reason: 'start-failed' },
+    ]);
+    expect(deps.startTurn).toHaveBeenCalledOnce();
+
+    controller.forget();
+    await attach();
+    expect(parseRemoteCodeSnapshot(snapshot())?.rejectedGuidance).toBeUndefined();
+  });
+
+  it('replays a missed follow-up confirmation within the same pairing', async () => {
+    const controller = createCodeRemoteController(deps);
+    const target = { rootId: 'root-1', threadId: 'thread-1' };
+    const attach = () => controller.handleControl('code.session.attach', request('attach', target));
+    const snapshot = () =>
+      [...sent].reverse().find(({ action }) => action === 'code.session.snapshot')?.payload;
+    await attach();
+    controller.detach();
+    await controller.handleControl(
+      'code.session.steer',
+      request('follow-up', { ...target, requestId: 'missed-follow-up', text: 'Check the build' }),
+    );
+    expect(lastEvent('guidance-delivered')).toBeUndefined();
+
+    await attach();
+    expect(snapshot()?.['confirmedGuidanceIds']).toEqual(['missed-follow-up']);
+    expect(deps.startTurn).toHaveBeenCalledOnce();
+
+    controller.forget();
+    await attach();
+    expect(snapshot()?.['confirmedGuidanceIds']).toEqual([]);
+  });
+
+  it('returns a refused follow-up to the same phone without exposing the runtime error', async () => {
+    deps.startTurn = vi.fn().mockRejectedValueOnce(new Error('Host-only diagnostic'));
+    const controller = createCodeRemoteController(deps);
+    const target = { rootId: 'root-1', threadId: 'thread-1' };
+    await controller.handleControl('code.session.attach', request('attach', target));
+    await controller.handleControl(
+      'code.session.steer',
+      request('follow-up', { ...target, requestId: 'refused', text: 'Preserve this follow-up' }),
+    );
+
+    expect(lastEvent('guidance-rejected')).toEqual({
+      type: 'guidance-rejected',
+      reason: 'start-failed',
+      rejectedGuidance: ['Preserve this follow-up'],
+      queuedGuidance: [],
+      requestIds: ['refused'],
+    });
+    expect(lastEvent('guidance-delivered')).toBeUndefined();
+  });
+
+  it('keeps later guidance separate while a start request is still pending', async () => {
+    let rejectStart!: (reason: Error) => void;
+    vi.mocked(deps.startTurn).mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          rejectStart = reject;
+        }),
+    );
+    const controller = createCodeRemoteController(deps);
+    const target = { rootId: 'root-1', threadId: 'thread-1' };
+    await controller.handleControl('code.session.attach', request('attach', target));
+    const first = controller.handleControl(
+      'code.session.steer',
+      request('first', { ...target, text: 'First follow-up' }),
+    );
+    await vi.waitFor(() => expect(deps.startTurn).toHaveBeenCalledOnce());
+    await controller.handleControl(
+      'code.session.steer',
+      request('later', { ...target, text: 'Later follow-up' }),
+    );
+    expect(deps.startTurn).toHaveBeenCalledOnce();
+    rejectStart(new Error('The first start was refused'));
+    await first;
+
+    expect(lastEvent('guidance-rejected')).toMatchObject({
+      rejectedGuidance: ['First follow-up'],
+      queuedGuidance: ['Later follow-up'],
+    });
+    expect(lastEvent('guidance-delivered')).toMatchObject({ text: 'Later follow-up' });
+  });
+
+  it('attaches with the persisted failure and starts a phone follow-up in the same session', async () => {
+    const previous = activity();
+    deps.readActivity = vi.fn(async () => ({
+      ...previous,
+      transcript: {
+        ...previous.transcript,
+        session: session({ status: 'failed' }),
+      },
+    }));
+    const controller = createCodeRemoteController(deps);
+    const target = { rootId: 'root-1', threadId: 'thread-1' };
+    await controller.handleControl('code.session.attach', request('attach', target));
+
+    const snapshot = sent.find((entry) => entry.action === 'code.session.snapshot');
+    expect(parseRemoteCodeSnapshot(snapshot?.payload)).toMatchObject({
+      ...target,
+      status: 'failed',
+      activeTurnId: null,
+      messages: expect.arrayContaining([{ role: 'user', text: 'make retries back off' }]),
+    });
+
+    await controller.handleControl(
+      'code.session.steer',
+      request('follow-up', { ...target, text: 'Continue the fix' }),
+    );
+    expect(deps.startTurn).toHaveBeenCalledWith({ ...target, text: 'Continue the fix' });
+    expect(lastEvent('guidance-delivered')).toMatchObject({ turnId: 'turn-guided' });
+  });
+
   it('lists every session the host serves and names folders it cannot open', async () => {
     const controller = createCodeRemoteController(deps);
     expect(await controller.handleControl('code.sessions.list', request('list'))).toBe(true);
@@ -185,6 +314,30 @@ describe('remote control of a developer session', () => {
       action: 'code.sessions',
       payload: { sessions: [{ threadId: 'cloud:5f1c', location: 'cloud' }] },
     });
+  });
+
+  it('includes an older pinned session when the paired session list reaches its limit', async () => {
+    deps.listSessions = vi.fn(async (): Promise<DeveloperSessionList> => ({
+      groups: [
+        {
+          rootId: 'root-1',
+          name: 'api',
+          path: '/work/api',
+          branch: 'main',
+          sessions: [
+            ...Array.from({ length: REMOTE_CODE_LIMITS.sessions }, (_, index) =>
+              session({ id: `recent-${index}` }),
+            ),
+            session({ id: 'pinned', updatedAt: new Date(NOW - 1_000).toISOString(), pinned: true }),
+          ],
+        },
+      ],
+    }));
+    await createCodeRemoteController(deps).handleControl('code.sessions.list', request('list'));
+
+    const parsed = parseRemoteCodeSessions(sent[0]?.payload);
+    expect(parsed?.sessions).toHaveLength(REMOTE_CODE_LIMITS.sessions);
+    expect(parsed?.sessions[0]).toMatchObject({ threadId: 'pinned', pinned: true });
   });
 
   it('attaches with the transcript, generated files and a diff for each modified file', async () => {

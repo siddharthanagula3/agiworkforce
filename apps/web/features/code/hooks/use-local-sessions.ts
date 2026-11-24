@@ -8,6 +8,7 @@ import {
   type DeveloperRuntimeModels,
   type LocalDeveloperSession,
   type DeveloperSessionGroup,
+  type WorkspaceRoot,
   type WorkspaceRootKind,
 } from '@agiworkforce/local-runtime-contract';
 import type { WorktreeCleanupFailure } from '@agiworkforce/types/protocol';
@@ -50,6 +51,7 @@ export interface LocalSessionsState {
   supported: boolean;
   /** The shell can start a session in a new worktree; an older one only in the folder. */
   worktrees: boolean;
+  terminalPty: boolean;
   groups: DeveloperSessionGroup[];
   loading: boolean;
   /**
@@ -63,7 +65,7 @@ export interface LocalSessionsState {
   error: string | null;
   unavailable: string | null;
   refresh: () => void;
-  addFolder: (kind?: WorkspaceRootKind) => Promise<void>;
+  addFolder: (kind?: WorkspaceRootKind) => Promise<WorkspaceRoot | null>;
   /** The folder whose permission prompt is up, by root id. */
   allowing: string | null;
   /** Why a folder still lists no sessions after the user was asked, by root id. */
@@ -80,6 +82,7 @@ export interface LocalSessionsState {
     rootId: string,
     model?: string,
     placement?: LocalPlacement,
+    onFailure?: (message: string) => void,
   ) => Promise<LocalDeveloperSession | null>;
   /** The folder's models with the account's plan applied. */
   modelsFor: (rootId: string) => DeveloperRuntimeModels | null;
@@ -97,10 +100,13 @@ export interface LocalSessionsState {
   setShowArchived: (show: boolean) => void;
   /** What the CLI here can do to a listed session. */
   sessionActions: { rename: boolean; unarchive: boolean; pin: boolean };
-  /** Why the last rename, pin, archive or restore failed. */
+  /** Why the last pin, archive or restore failed. */
   actionError: string | null;
-  renameSession: (session: LocalDeveloperSession, title: string) => Promise<boolean>;
-  setSessionArchived: (session: LocalDeveloperSession, archived: boolean) => Promise<void>;
+  renameSession: (
+    session: LocalDeveloperSession,
+    title: string,
+  ) => Promise<{ renamed: LocalDeveloperSession } | { error: string }>;
+  setSessionArchived: (session: LocalDeveloperSession, archived: boolean) => Promise<boolean>;
   setSessionPinned: (session: LocalDeveloperSession, pinned: boolean) => Promise<void>;
 }
 
@@ -124,6 +130,7 @@ export function useLocalSessions(planTier: string | null = null): LocalSessionsS
   const [settled, setSettled] = useState(false);
   const [adding, setAdding] = useState(false);
   const [allowing, setAllowing] = useState<string | null>(null);
+  const allowRequest = useRef(false);
   const [allowRefusals, setAllowRefusals] = useState<Record<string, string>>({});
   const [reviewingMcp, setReviewingMcp] = useState<string | null>(null);
   const [mcpRefusals, setMcpRefusals] = useState<Record<string, string>>({});
@@ -172,6 +179,17 @@ export function useLocalSessions(planTier: string | null = null): LocalSessionsS
     if (!supported) return;
     return onWorkspaceChanged(refresh);
   }, [supported, refresh]);
+
+  useEffect(
+    () =>
+      host?.onRuntimeEvent?.((event) => {
+        if (event.kind !== 'permission-changed' || event.capability !== 'shell.execute') return;
+        const group = groupsRef.current.find((entry) => entry.path === event.scope.target);
+        if (group) setAllowRefusals(({ [group.rootId]: _cleared, ...rest }) => rest);
+        refresh();
+      }),
+    [host, refresh],
+  );
 
   useEffect(() => {
     if (!supported) return;
@@ -269,10 +287,14 @@ export function useLocalSessions(planTier: string | null = null): LocalSessionsS
       setAdding(true);
       setError(null);
       try {
-        await pickWorkspaceRoot(kind);
+        const root = await pickWorkspaceRoot(kind);
         refresh();
+        return root;
       } catch (cause: unknown) {
-        setError(toUserMessage(cause, LOCAL_CODE_COPY.startFailed));
+        if (!(cause instanceof DesktopRuntimeError && cause.code === 'cancelled')) {
+          setError(toUserMessage(cause, LOCAL_CODE_COPY.startFailed));
+        }
+        return null;
       } finally {
         setAdding(false);
       }
@@ -282,6 +304,8 @@ export function useLocalSessions(planTier: string | null = null): LocalSessionsS
 
   const allowSessions = useCallback(
     async (rootId: string) => {
+      if (allowRequest.current) return;
+      allowRequest.current = true;
       setAllowing(rootId);
       try {
         await allowDeveloperSessions(rootId);
@@ -296,7 +320,9 @@ export function useLocalSessions(planTier: string | null = null): LocalSessionsS
             ? LOCAL_CODE_COPY.sessionsRefused
             : toUserMessage(cause, LOCAL_CODE_COPY.allowSessionsFailed),
         }));
+        if (refused) refresh();
       } finally {
+        allowRequest.current = false;
         setAllowing(null);
       }
     },
@@ -341,17 +367,22 @@ export function useLocalSessions(planTier: string | null = null): LocalSessionsS
   );
 
   const startSession = useCallback(
-    async (rootId: string, model?: string, placement: LocalPlacement = 'local') => {
+    async (
+      rootId: string,
+      model?: string,
+      placement: LocalPlacement = 'local',
+      onFailure: (message: string) => void = setError,
+    ) => {
       setError(null);
       const group = groups.find((candidate) => candidate.rootId === rootId);
       const runtime = modelsFor(rootId);
       const chosen = model ?? planStartingModelId(runtime, group?.sessions ?? [], planTier);
       if (chosen === null) {
         if (runtime === null) {
-          setError(LOCAL_CODE_COPY.modelsUnread);
+          onFailure(LOCAL_CODE_COPY.modelsUnread);
           setModelsReadKey((key) => key + 1);
         } else {
-          setError(localCloudModelsPlanLine());
+          onFailure(localCloudModelsPlanLine());
         }
         return null;
       }
@@ -367,7 +398,11 @@ export function useLocalSessions(planTier: string | null = null): LocalSessionsS
         refresh();
         return session;
       } catch (cause: unknown) {
-        setError(toUserMessage(cause, LOCAL_CODE_COPY.startFailed));
+        onFailure(
+          cause instanceof DesktopRuntimeError && cause.code === 'permission-denied'
+            ? LOCAL_CODE_COPY.startCommandAccessDenied
+            : toUserMessage(cause, LOCAL_CODE_COPY.startFailed),
+        );
         return null;
       }
     },
@@ -375,39 +410,53 @@ export function useLocalSessions(planTier: string | null = null): LocalSessionsS
   );
 
   const act = useCallback(
-    async (work: () => Promise<unknown>, failure: string): Promise<boolean> => {
+    async <T>(work: () => Promise<T>, failure: string): Promise<T | null> => {
       setActionError(null);
       try {
-        await work();
+        const result = await work();
         refresh();
-        return true;
+        return result;
       } catch (cause: unknown) {
         setActionError(toUserMessage(cause, failure));
-        return false;
+        return null;
       }
     },
     [refresh],
   );
 
   const renameSession = useCallback(
-    (session: LocalDeveloperSession, title: string) =>
-      act(
-        () => renameDeveloperThread(session.rootId, session.id, title),
-        LOCAL_CODE_COPY.renameFailed,
-      ),
-    [act],
+    async (session: LocalDeveloperSession, title: string) => {
+      setActionError(null);
+      try {
+        const renamed = await renameDeveloperThread(session.rootId, session.id, title);
+        setGroups((current) =>
+          current.map((group) =>
+            group.rootId === renamed.rootId
+              ? {
+                  ...group,
+                  sessions: group.sessions.map((row) => (row.id === renamed.id ? renamed : row)),
+                }
+              : group,
+          ),
+        );
+        refresh();
+        return { renamed };
+      } catch (cause: unknown) {
+        return { error: toUserMessage(cause, LOCAL_CODE_COPY.renameFailed) };
+      }
+    },
+    [refresh],
   );
 
   const setSessionArchived = useCallback(
-    async (session: LocalDeveloperSession, archived: boolean) => {
-      await act(
+    async (session: LocalDeveloperSession, archived: boolean) =>
+      (await act(
         () =>
           archived
             ? archiveDeveloperThread(session.rootId, session.id)
             : unarchiveDeveloperThread(session.rootId, session.id),
         archived ? LOCAL_CODE_COPY.archiveFailed : LOCAL_CODE_COPY.restoreFailed,
-      );
-    },
+      )) === true,
     [act],
   );
 
@@ -440,6 +489,7 @@ export function useLocalSessions(planTier: string | null = null): LocalSessionsS
   return {
     supported,
     worktrees,
+    terminalPty: capabilities.has('terminals'),
     groups,
     modelsFor,
     modelsStale,

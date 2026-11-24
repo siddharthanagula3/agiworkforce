@@ -4,6 +4,18 @@ import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 let userData: string;
+const beforeRename = vi.hoisted(() => vi.fn<(target: string) => void>());
+
+vi.mock('node:fs', async (importOriginal) => {
+  const fs = await importOriginal<typeof import('node:fs')>();
+  return {
+    ...fs,
+    renameSync: (...args: Parameters<typeof fs.renameSync>) => {
+      beforeRename(String(args[1]));
+      fs.renameSync(...args);
+    },
+  };
+});
 
 vi.mock('electron', () => ({ app: { getPath: () => userData } }));
 
@@ -71,5 +83,24 @@ describe('shell policy store', () => {
       allow: ['node'],
       deny: ['curl'],
     });
+  });
+
+  it('leaves the previous rules active if the new policy cannot be saved', async () => {
+    const { readShellPolicy, writeShellPolicy } = await freshStore();
+    const previous = writeShellPolicy({ allow: ['git'], deny: ['curl'] });
+    const original = readFileSync(storeFile(), 'utf8');
+    let valueBeforeReplacement: string | undefined;
+    beforeRename.mockImplementationOnce((target) => {
+      valueBeforeReplacement = readFileSync(target, 'utf8');
+      throw new Error('simulated rename failure');
+    });
+
+    const next = { allow: [], deny: ['git', 'curl'] };
+    expect(() => writeShellPolicy(next)).toThrow('Could not save command permissions.');
+    expect(valueBeforeReplacement).toBe(original);
+    expect(readShellPolicy()).toEqual(previous);
+    expect((await freshStore()).readShellPolicy()).toEqual(previous);
+    expect((await fs.readdir(userData)).filter((entry) => entry.endsWith('.tmp'))).toEqual([]);
+    expect((await freshStore()).writeShellPolicy(next)).toEqual(next);
   });
 });

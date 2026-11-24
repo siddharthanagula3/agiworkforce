@@ -449,6 +449,7 @@ pub fn grant_for_process(root: &Path, consent_at_ms: i64) -> Result<()> {
     if consent_at_ms < 0 || decided_at > chrono::Utc::now() {
         bail!("Native workspace consent cannot have a future decision time");
     }
+    identity::ensure_machine_id()?;
     let mut grant = ProcessTrustGrant::new(canonical, &registry, registry_stamp(&config_dir));
     if let Some(revoked_at) = grant
         .decision
@@ -605,7 +606,7 @@ pub fn grant(root: &Path) -> Result<TrustStatus> {
     let scope = crate::project_scope::resolve_project_scope(root);
     let identity = identity::workspace_identity(&scope);
     let actor = identity::current_actor();
-    let machine = identity::current_machine();
+    let machine = identity::ensure_machine_id()?;
     ProjectRegistry::update(&config_dir, |registry| {
         registry.trust(&scope, &identity.key, &actor, &machine)
     })?;

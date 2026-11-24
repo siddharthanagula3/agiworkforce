@@ -136,7 +136,6 @@ export interface VoiceInputAPI {
 export function setupVoiceInput(
   micBtn: HTMLButtonElement,
   inputEl: HTMLTextAreaElement,
-  autoResize: (el: HTMLTextAreaElement) => void,
   onError: (message: string) => void,
   notice: MicrophoneNotice,
 ): VoiceInputAPI {
@@ -222,7 +221,6 @@ export function setupVoiceInput(
       if (transcript) {
         receivedTranscript = true;
         appendComposerText(inputEl, transcript);
-        autoResize(inputEl);
       }
     };
 

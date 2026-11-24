@@ -1,3 +1,4 @@
+import type { OfflineReplayIdentity } from '@/services/offlineQueue';
 import { Alert, AppState } from 'react-native';
 import { create } from 'zustand';
 import { TIMEOUTS } from '@/lib/constants';
@@ -85,7 +86,11 @@ import {
   toolCallList,
 } from '@/src/features/chat/utils/toolCallAccumulator';
 import { getRemoteChatDisabledReason, RemoteChatDisabledError } from '@/services/remoteChatGate';
-import { CloudProviderConsentRequiredError, ensureCloudSendConsent } from '@/services/llmGate';
+import {
+  CloudProviderConsentDeclinedError,
+  CloudProviderConsentRequiredError,
+  ensureCloudSendConsent,
+} from '@/services/llmGate';
 import {
   PHONE_STEP_DECLINED,
   readPhoneDeviceStep,
@@ -274,6 +279,7 @@ import {
 } from '@/src/features/chat/inFlightTurnRecovery';
 import {
   forgetInFlightTurnRun,
+  inFlightTurnFor,
   recordInFlightTurnRun,
   recordInFlightTurnSend,
 } from '@/src/features/chat/inFlightTurnRun';
@@ -316,6 +322,10 @@ export interface SendMessageOptions {
   skillTools?: SkillTurnTools;
   searchRequested?: boolean;
   onAccepted?: () => void;
+  onConsentDeclined?: () => void;
+  /** Leave an offline prompt in persistent storage if this conversation is busy. */
+  onOfflineReplayBusy?: () => void;
+  offlineReplayIdentity?: OfflineReplayIdentity;
   /**
    * Regenerate: answer this existing question again. No second question is
    * written, and the new answer becomes a sibling of the one already there.
@@ -450,6 +460,11 @@ export const LOCAL_NO_MODEL_MESSAGE =
   'Local Mode is active, but no on-device model is ready yet. Open Models to download or select a local model.';
 
 const abortControllers = new Map<string, AbortController>();
+
+export function hasActiveConversationSend(conversationId: string): boolean {
+  return abortControllers.has(conversationId);
+}
+
 const MAX_ABORT_CONTROLLERS = 50;
 const MAX_DEFERRED_SENDS = 5;
 const CLOUD_CONVERSATION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -2176,6 +2191,12 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
   clearProviderConsentError: () => set({ providerConsentError: null }),
 
   sendMessage: async (conversationId, content, model, attachments, options) => {
+    const postponeOfflineReplayIfBusy = () => {
+      if (!options?.onOfflineReplayBusy || !hasActiveConversationSend(conversationId)) return false;
+      options.onOfflineReplayBusy();
+      return true;
+    };
+    if (postponeOfflineReplayIfBusy()) return false;
     if (options?.retryOfMessageId === undefined) modelShownAtBannerSwitch.delete(conversationId);
     let failureRetry: SendErrorRetry | null = null;
     const set = failureScopedSet(conversationId, () => failureRetry);
@@ -2225,6 +2246,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     let uploadedAttachments: MessageAttachment[] | undefined;
     const msgStore = getConversationMessageStore(conversationId);
     const conversation = msgStore.getState().conversations.find((c) => c.id === conversationId);
+    const offlineReplay = options?.offlineReplayIdentity;
     const temporaryConversation = isConversationTemporary(conversation);
     const cloudUnlocked = useWaitlistStore.getState().cloudUnlocked;
     const remoteDisabledReason = getRemoteChatDisabledReason(undefined, { cloudUnlocked });
@@ -2285,6 +2307,34 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       executionMode !== 'cloud' ||
       (turnCloudExecutionGeneration === cloudExecutionGeneration &&
         isCloudAccountEpochCurrent(cloudAccountEpoch));
+    const reconcileRecordedReplay = (): boolean | undefined => {
+      if (!offlineReplay || !isTurnAccountCurrent()) return;
+      const rows = msgStore.getState().messages[conversationId] ?? [];
+      const question = rows.find((row) => row.id === offlineReplay.questionId);
+      if (!question) return;
+      if (question.role !== 'user' || question.content !== content) return false;
+
+      const hasReply = rows.some(
+        (row) =>
+          row.role === 'assistant' &&
+          (row.id === offlineReplay.assistantMessageId || row.parentId === question.id) &&
+          (hasVisibleText(row.content) ||
+            Boolean(row.artifacts?.length || row.interactiveCards?.length)),
+      );
+      if (!hasReply && !inFlightTurnFor(conversationId, question.id)) {
+        failureRetry = { kind: 'regenerate', messageId: question.id };
+        set({
+          error: 'This saved message has no confirmed reply. You can retry it here.',
+          paywallError: null,
+          ...streamingFlags(),
+        });
+      }
+      options?.onAccepted?.();
+      return true;
+    };
+    const recordedReplay = reconcileRecordedReplay();
+    if (recordedReplay !== undefined) return recordedReplay;
+
     if (__DEV__) {
       labelMobileSession({
         id: conversationId,
@@ -2328,6 +2378,9 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         await ensureCloudSendConsent();
       } catch (error) {
         if (!(error instanceof CloudProviderConsentRequiredError)) throw error;
+        if (error instanceof CloudProviderConsentDeclinedError && isTurnAccountCurrent()) {
+          options?.onConsentDeclined?.();
+        }
         set({ error: null, paywallError: null, ...streamingFlags() });
         return false;
       }
@@ -2554,7 +2607,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       regenerateAnchor || resumesCardTurn
         ? undefined
         : {
-            id: newMessageId(),
+            id: offlineReplay?.questionId ?? newMessageId(),
             conversationId,
             role: 'user',
             content,
@@ -2595,7 +2648,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           ? userMessage.id
           : undefined;
 
-    const assistantMessageId = newMessageId();
+    const assistantMessageId = offlineReplay?.assistantMessageId ?? newMessageId();
     const assistantMessage: ChatMessage = {
       id: assistantMessageId,
       conversationId,
@@ -2855,6 +2908,10 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       if (!isTurnAccountCurrent()) return false;
     }
 
+    if (postponeOfflineReplayIfBusy()) return false;
+    const recordedDuringPreflight = reconcileRecordedReplay();
+    if (recordedDuringPreflight !== undefined) return recordedDuringPreflight;
+
     msgStore.setState((state) => {
       const existing = state.messages[conversationId] ?? [];
       return {
@@ -2975,6 +3032,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       );
     };
 
+    let preserveOfflineRecovery = false;
     try {
       if (shouldUseLocalRuntime) {
         const localMessages: LocalLlmMessage[] = ensureLocalSystemPrompt(
@@ -3864,7 +3922,8 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
 
             if (turnStreamError === undefined && finalContent.trim()) {
               captureCompletedLocalMemory();
-              if (!cloudAgentRun) void announceReplyReadyInBackground(conversationId);
+              if (!cloudAgentRun)
+                void announceReplyReadyInBackground(conversationId, cloudAccountEpoch);
             }
           },
 
@@ -3999,6 +4058,49 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               console.warn(`[chat-stream] onError ${error?.name}: ${error?.message}`);
             }
             const connectionLost = error instanceof StreamConnectionLostError;
+            const answer = msgs.find((row) => row.id === assistantMessageId);
+            if (
+              offlineReplay &&
+              userMessage &&
+              connectionLost &&
+              inFlightTurnFor(conversationId, userMessage.id) &&
+              !answer?.reasoning?.trim() &&
+              turnPendingApprovals.length === 0 &&
+              turnPendingInputs.length === 0 &&
+              turnProducedNothing({
+                content: currentContent,
+                toolCallCount: toolCallList(toolAcc).length,
+                generatedFileCount: turnGeneratedFiles.length,
+                interactiveCardCount: turnInteractiveCards.length,
+                hasResearchRun: Boolean(
+                  turnResearch ||
+                  agentActivity ||
+                  turnAgiWorkPlan ||
+                  turnCodeExecutionResult ||
+                  turnFinishReason,
+                ),
+                hasStreamError: turnStreamError !== undefined,
+              })
+            ) {
+              preserveOfflineRecovery = true;
+              currentMsgStore.setState((state) => ({
+                messages: {
+                  ...state.messages,
+                  [conversationId]: msgs.filter((row) => row.id !== assistantMessageId),
+                },
+              }));
+              if (assistantParentId !== undefined) {
+                moveLeafOffRemovedRow(conversationId, msgs, assistantMessageId);
+              }
+              set({
+                ...streamingFlags(),
+                streamingContent: '',
+                streamingReasoning: '',
+                error: null,
+                failureCode: null,
+              });
+              return;
+            }
             const httpFailureMessage =
               error instanceof ApiHttpError ? (freeUsageLimitMessage(error) ?? error.message) : '';
             const failure =
@@ -4193,7 +4295,9 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       });
       return true;
     } finally {
-      if (userMessage) forgetInFlightTurnRun(conversationId, userMessage.id);
+      if (userMessage && !preserveOfflineRecovery) {
+        forgetInFlightTurnRun(conversationId, userMessage.id);
+      }
       if (!shouldUseLocalRuntime || ownsLocalTurn()) {
         thinkingStartTimes.delete(conversationId);
         thinkingEndTimes.delete(conversationId);

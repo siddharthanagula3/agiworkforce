@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::sync::Arc;
 
 use agiworkforce_app_server::DeveloperSessionHost;
@@ -21,6 +21,8 @@ const DELTA_LENGTH: usize = 2_000;
 const FILE_CHANGES: usize = 60;
 const DIFF_LENGTH: usize = 8_000;
 const QUEUED_GUIDANCE: usize = 3;
+const CONFIRMED_GUIDANCE: usize = 16;
+const REJECTED_GUIDANCE: usize = 8;
 const SESSIONS: u32 = 30;
 const TOOLS: usize = 20;
 const TOOL_OUTPUT_LENGTH: usize = 1_500;
@@ -122,13 +124,21 @@ fn clipped_for_approval(value: &str, instead: &str) -> (String, bool) {
     let redacted = crate::secret_redaction::redact_tool_output(
         &crate::terminal_text::show_remaining_approval_controls(value),
     );
-    let length = redacted.chars().count();
-    if length <= MESSAGE_LENGTH {
+    if redacted.encode_utf16().count() <= MESSAGE_LENGTH {
         return (redacted, false);
     }
+    let length = redacted.chars().count();
     let note =
         |hidden: usize| format!("\n[{hidden} more characters are not shown here. {instead}]");
-    let kept = MESSAGE_LENGTH.saturating_sub(note(length).chars().count());
+    let available_units = MESSAGE_LENGTH.saturating_sub(note(length).encode_utf16().count());
+    let mut used_units = 0;
+    let kept = redacted
+        .chars()
+        .take_while(|character| {
+            used_units += character.len_utf16();
+            used_units <= available_units
+        })
+        .count();
     (
         format!("{}{}", clip_head(&redacted, kept), note(length - kept)),
         true,
@@ -156,7 +166,38 @@ struct ThreadState {
     partial_response: String,
     pending_approvals: BTreeMap<String, PendingApproval>,
     tools: Vec<Value>,
-    queued_guidance: Vec<String>,
+    queued_guidance: Vec<QueuedGuidance>,
+    started_guidance_ids: VecDeque<String>,
+    rejected_guidance: Vec<RejectedGuidance>,
+}
+
+struct QueuedGuidance {
+    request_id: String,
+    text: String,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RejectedGuidance {
+    request_id: String,
+    text: String,
+    reason: &'static str,
+}
+
+impl ThreadState {
+    fn record_rejected_guidance(&mut self, attempted: &[QueuedGuidance], reason: &'static str) {
+        self.rejected_guidance
+            .extend(attempted.iter().map(|entry| RejectedGuidance {
+                request_id: entry.request_id.clone(),
+                text: entry.text.clone(),
+                reason,
+            }));
+        let excess = self
+            .rejected_guidance
+            .len()
+            .saturating_sub(REJECTED_GUIDANCE);
+        self.rejected_guidance.drain(..excess);
+    }
 }
 
 struct DispatchedTask {
@@ -247,7 +288,13 @@ fn user_text(text: &str) -> Value {
 
 fn fit_payload(payload: &mut Value) {
     let size = |value: &Value| value.to_string().len();
-    for field in ["tools", "messages", "fileChanges"] {
+    for field in [
+        "tools",
+        "messages",
+        "fileChanges",
+        "rejectedGuidance",
+        "confirmedGuidanceIds",
+    ] {
         while size(payload) > PAYLOAD_BYTES {
             let Some(list) = payload.get_mut(field).and_then(Value::as_array_mut) else {
                 break;
@@ -404,6 +451,8 @@ impl<H: DeveloperSessionHost> CodeHost<H> {
                 }
                 if thread.location == Some(ThreadLocation::Cloud) {
                     summary["location"] = json!("cloud");
+                } else if thread.pinned == Some(true) {
+                    summary["pinned"] = json!(true);
                 }
                 summary
             })
@@ -542,7 +591,12 @@ impl<H: DeveloperSessionHost> CodeHost<H> {
             "messages": messages,
             "pendingApprovals": pending,
             "fileChanges": file_changes,
-            "queuedGuidance": state.queued_guidance,
+            "queuedGuidance": state.queued_guidance.iter().map(|entry| &entry.text).collect::<Vec<_>>(),
+            "confirmedGuidanceIds": state.started_guidance_ids.iter()
+                .chain(state.queued_guidance.iter().map(|entry| &entry.request_id))
+                .skip((state.started_guidance_ids.len() + state.queued_guidance.len()).saturating_sub(CONFIRMED_GUIDANCE))
+                .collect::<Vec<_>>(),
+            "rejectedGuidance": state.rejected_guidance,
             "tools": state.tools,
             "syncedAt": now_iso(),
         });
@@ -655,25 +709,47 @@ impl<H: DeveloperSessionHost> CodeHost<H> {
         if state.active_turn_id.is_some() || state.queued_guidance.is_empty() {
             return Vec::new();
         }
-        let text = state.queued_guidance.join("\n\n");
-        state.queued_guidance.clear();
+        let attempted = std::mem::take(&mut state.queued_guidance);
+        let messages: Vec<&str> = attempted.iter().map(|entry| entry.text.as_str()).collect();
+        let request_ids: Vec<&str> = attempted
+            .iter()
+            .map(|entry| entry.request_id.as_str())
+            .collect();
+        let text = messages.join("\n\n");
         match self.start_turn(thread_id, &text).await {
             Ok(turn_id) => {
                 if let Some(state) = self.threads.get_mut(thread_id) {
                     state.active_turn_id.get_or_insert(turn_id.clone());
+                    state
+                        .started_guidance_ids
+                        .extend(request_ids.iter().map(|id| id.to_string()));
+                    let excess = state
+                        .started_guidance_ids
+                        .len()
+                        .saturating_sub(CONFIRMED_GUIDANCE);
+                    state.started_guidance_ids.drain(..excess);
                 }
                 self.event(
                     thread_id,
-                    json!({ "type": "guidance-delivered", "turnId": turn_id, "queuedGuidance": [] }),
+                    json!({ "type": "guidance-delivered", "turnId": turn_id, "queuedGuidance": [], "requestIds": request_ids }),
                 )
                 .into_iter()
                 .collect()
             }
             Err(error) => {
                 tracing::warn!("[remote-control] guidance could not start a turn: {error}");
+                if let Some(state) = self.threads.get_mut(thread_id) {
+                    state.record_rejected_guidance(&attempted, "start-failed");
+                }
                 self.event(
                     thread_id,
-                    json!({ "type": "runtime-stopped", "message": RUNTIME_STOPPED }),
+                    json!({
+                        "type": "guidance-rejected",
+                        "reason": "start-failed",
+                        "rejectedGuidance": messages,
+                        "queuedGuidance": [],
+                        "requestIds": request_ids,
+                    }),
                 )
                 .into_iter()
                 .collect()
@@ -963,23 +1039,54 @@ impl<H: DeveloperSessionHost> CodeHost<H> {
                 let Some(text) = payload.get("text").and_then(Value::as_str).map(str::trim) else {
                     return Vec::new();
                 };
-                if text.is_empty() || text.chars().count() > GUIDANCE_LENGTH {
+                if text.is_empty() || text.encode_utf16().count() > GUIDANCE_LENGTH {
                     return Vec::new();
                 }
                 let interrupt = payload.get("interrupt").and_then(Value::as_bool) == Some(true);
                 let state = self.threads.entry(thread_id.clone()).or_default();
                 if state.queued_guidance.len() >= QUEUED_GUIDANCE {
-                    state.queued_guidance.remove(0);
+                    state.record_rejected_guidance(
+                        &[QueuedGuidance {
+                            request_id: request_id.clone(),
+                            text: text.to_string(),
+                        }],
+                        "queue-full",
+                    );
+                    let queued = state
+                        .queued_guidance
+                        .iter()
+                        .map(|entry| entry.text.clone())
+                        .collect::<Vec<_>>();
+                    return self
+                        .event(
+                            &thread_id,
+                            json!({
+                                "type": "guidance-rejected",
+                                "reason": "queue-full",
+                                "rejectedGuidance": [text],
+                                "queuedGuidance": queued,
+                                "requestIds": [request_id],
+                            }),
+                        )
+                        .into_iter()
+                        .collect();
                 }
-                state.queued_guidance.push(text.to_string());
+                state.queued_guidance.push(QueuedGuidance {
+                    request_id: request_id.clone(),
+                    text: text.to_string(),
+                });
                 let Some(active) = state.active_turn_id.clone() else {
                     return self.deliver_guidance(&thread_id).await;
                 };
-                let queued = state.queued_guidance.clone();
+                let queued = state
+                    .queued_guidance
+                    .iter()
+                    .map(|entry| entry.text.clone())
+                    .collect::<Vec<_>>();
                 let out = self
                     .event(
                         &thread_id,
-                        json!({ "type": "guidance-queued", "queuedGuidance": queued }),
+                        json!({ "type": "guidance-queued", "queuedGuidance": queued, "requestIds": [request_id] }),
                     )
                     .into_iter()
                     .collect();
@@ -1345,6 +1452,8 @@ mod tests {
 
     struct IdleAfterAbsence {
         running: Mutex<Option<String>>,
+        saved_status: ThreadStatus,
+        refuse_start: bool,
         reconnect_fails: Mutex<bool>,
         started: Mutex<Vec<String>>,
         answered: Mutex<Vec<String>>,
@@ -1355,6 +1464,8 @@ mod tests {
         fn running(turn_id: &str) -> Arc<Self> {
             Arc::new(Self {
                 running: Mutex::new(Some(turn_id.to_string())),
+                saved_status: ThreadStatus::Idle,
+                refuse_start: false,
                 reconnect_fails: Mutex::new(false),
                 started: Mutex::new(Vec::new()),
                 answered: Mutex::new(Vec::new()),
@@ -1396,6 +1507,7 @@ mod tests {
             updated_at: "2026-11-09T00:00:00Z".to_string(),
             created_by: DeveloperSessionSource::Cli,
             status: ThreadStatus::Idle,
+            pinned: None,
             location: None,
         }
     }
@@ -1418,8 +1530,10 @@ mod tests {
             &self,
             _params: ThreadListParams,
         ) -> Result<ThreadListResponse, DeveloperSessionHostError> {
+            let mut managed = summary(THREAD);
+            managed.pinned = Some(true);
             Ok(ThreadListResponse {
-                threads: vec![summary(LOCAL_THREAD), summary(THREAD)],
+                threads: vec![summary(LOCAL_THREAD), managed],
                 next_cursor: None,
             })
         }
@@ -1443,9 +1557,11 @@ mod tests {
             &self,
             params: ThreadIdParams,
         ) -> Result<ThreadReadResponse, DeveloperSessionHostError> {
+            let mut thread = summary(&params.thread_id);
+            thread.status = self.saved_status;
             Ok(ThreadReadResponse {
                 child_tasks: None,
-                thread: summary(&params.thread_id),
+                thread,
                 messages: ["user", "assistant"]
                     .into_iter()
                     .map(|role| DeveloperMessage {
@@ -1516,6 +1632,9 @@ mod tests {
             &self,
             params: TurnStartParams,
         ) -> Result<TurnSummary, DeveloperSessionHostError> {
+            if self.refuse_start {
+                return Err(DeveloperSessionHostError::internal("host-only diagnostic"));
+            }
             let mut started = self.started.lock().expect("started");
             started.push(
                 serde_json::to_value(&params).expect("params")["input"][0]["text"]
@@ -1597,6 +1716,83 @@ mod tests {
             "folder".to_string(),
             "/work".to_string(),
         )
+    }
+
+    #[tokio::test]
+    async fn an_interrupted_session_sends_failed_status_and_accepts_a_phone_follow_up() {
+        let mut host = IdleAfterAbsence::running("turn-previous");
+        host.finish_unseen();
+        Arc::get_mut(&mut host)
+            .expect("exclusive fixture")
+            .saved_status = ThreadStatus::Failed;
+        let mut code = headless_code_host(&host);
+
+        let attached = code
+            .handle_control("code.session.attach", &control("attach", json!({})))
+            .await;
+        let snapshot = snapshot_of(&attached);
+        assert_eq!(snapshot["status"], "failed");
+        assert_eq!(snapshot["activeTurnId"], Value::Null);
+        assert_eq!(snapshot["messages"][0]["text"], "user text in thread-1");
+
+        let followed_up = code
+            .handle_control(
+                "code.session.steer",
+                &control("continue", json!({ "text": "Continue the fix" })),
+            )
+            .await;
+        assert_eq!(host.started(), vec!["Continue the fix"]);
+        assert_eq!(followed_up[0].1["threadId"], THREAD);
+        assert_eq!(followed_up[0].1["event"]["type"], "guidance-delivered");
+        code.reset();
+        let reopened = code
+            .handle_control("code.session.attach", &control("reopen", json!({})))
+            .await;
+        assert_eq!(
+            snapshot_of(&reopened)["confirmedGuidanceIds"],
+            json!(["continue"])
+        );
+        assert_eq!(host.started(), vec!["Continue the fix"]);
+    }
+
+    #[tokio::test]
+    async fn a_refused_follow_up_returns_the_unsent_message_to_the_phone() {
+        let mut host = IdleAfterAbsence::running("turn-previous");
+        host.finish_unseen();
+        Arc::get_mut(&mut host)
+            .expect("exclusive fixture")
+            .refuse_start = true;
+        let mut code = headless_code_host(&host);
+        code.handle_control("code.session.attach", &control("attach", json!({})))
+            .await;
+
+        let follow_up = code
+            .handle_control(
+                "code.session.steer",
+                &control("continue", json!({ "text": "Keep this follow-up" })),
+            )
+            .await;
+        assert_eq!(
+            follow_up[0].1["event"],
+            json!({
+                "type": "guidance-rejected",
+                "reason": "start-failed",
+                "rejectedGuidance": ["Keep this follow-up"],
+                "queuedGuidance": [],
+                "requestIds": ["continue"],
+            })
+        );
+        assert!(host.started().is_empty());
+        code.reset();
+        let reopened = code
+            .handle_control("code.session.attach", &control("reopen", json!({})))
+            .await;
+        assert_eq!(
+            snapshot_of(&reopened)["rejectedGuidance"],
+            json!([{
+                "requestId": "continue", "text": "Keep this follow-up", "reason": "start-failed",
+            }])
+        );
     }
 
     #[tokio::test]
@@ -1873,7 +2069,12 @@ mod tests {
         let mut code = code_host(&host);
         code.handle_control("code.session.attach", &control("r1", json!({})))
             .await;
-        let command = format!("echo {}", "\u{e9}\u{65e5}".repeat(2_500));
+        let command = format!(
+            "echo {}",
+            "\u{e9}\u{65e5}\u{1f680}".repeat(MESSAGE_LENGTH / 3 - 10)
+        );
+        assert!(command.chars().count() < MESSAGE_LENGTH);
+        assert!(command.encode_utf16().count() > MESSAGE_LENGTH);
         let request = command_request(&command);
 
         let out = code
@@ -1882,8 +2083,8 @@ mod tests {
         let event = requested_event(&out);
         assert_eq!(event["truncated"], true);
         let detail = event["detail"].as_str().expect("detail");
-        assert!(detail.chars().count() <= MESSAGE_LENGTH);
-        assert!(detail.contains("\u{e9}\u{65e5}\u{e9}\u{65e5}"));
+        assert!(detail.encode_utf16().count() <= MESSAGE_LENGTH);
+        assert!(detail.contains("\u{e9}\u{65e5}\u{1f680}"));
     }
 
     #[tokio::test]
@@ -2164,6 +2365,7 @@ mod tests {
             .filter_map(|session| session["threadId"].as_str())
             .collect();
         assert_eq!(listed, vec![THREAD]);
+        assert_eq!(out[0].1["sessions"][0]["pinned"], json!(true));
         assert!(!out[0].1.to_string().contains(LOCAL_THREAD));
     }
 

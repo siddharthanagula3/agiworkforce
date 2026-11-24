@@ -1,3 +1,4 @@
+import { initMmkvEncryption, storage } from '@/lib/mmkv';
 import { offlineQueue, type QueuedMessage } from '../services/offlineQueue';
 
 function makeMsg(
@@ -17,6 +18,10 @@ async function flushMicrotasks(): Promise<void> {
     await Promise.resolve();
   }
 }
+
+beforeAll(async () => {
+  await initMmkvEncryption();
+});
 
 beforeEach(() => {
   offlineQueue.clear();
@@ -88,6 +93,45 @@ describe('processQueue, success path', () => {
     await processPromise;
 
     expect(sendFn).toHaveBeenCalledTimes(2);
+    expect(offlineQueue.getQueueSize()).toBe(0);
+  });
+
+  it('keeps busy conversations saved without spending retries or blocking other conversations', async () => {
+    const first = offlineQueue.enqueue(makeMsg({ conversationId: 'busy', content: 'first' }));
+    const second = offlineQueue.enqueue(makeMsg({ conversationId: 'busy', content: 'second' }));
+    const other = offlineQueue.enqueue(makeMsg({ conversationId: 'idle' }));
+    const send = jest.fn(async (message: QueuedMessage) =>
+      message.conversationId === 'busy' ? ('conversation-busy' as const) : undefined,
+    );
+
+    await offlineQueue.processQueue(send);
+
+    expect(send.mock.calls.map(([message]) => message.id)).toEqual([first.id, other.id]);
+    expect(offlineQueue.getQueue()).toEqual([first, second]);
+    expect(first.retryCount).toBe(0);
+    expect(second.retryCount).toBe(0);
+  });
+
+  it('persists the replay identity before dispatch and reuses it after restoration', async () => {
+    offlineQueue.enqueue(makeMsg({ content: 'durable prompt' }));
+    const first = jest.fn(async (entry: QueuedMessage) => {
+      const saved = JSON.parse(storage.getString('offline_queue_v1') ?? '[]')[0];
+      expect(entry.replayIdentity?.questionId).toBeDefined();
+      expect(entry.replayIdentity?.assistantMessageId).not.toBe(entry.replayIdentity?.questionId);
+      expect(saved.replayIdentity).toEqual(entry.replayIdentity);
+      return 'conversation-busy' as const;
+    });
+
+    await offlineQueue.processQueue(first);
+    const beforeRestart = storage.getString('offline_queue_v1')!;
+    const identity = offlineQueue.getQueue()[0]?.replayIdentity;
+    offlineQueue.clear();
+    storage.set('offline_queue_v1', beforeRestart);
+    offlineQueue.restoreFromStorage();
+    const replay = jest.fn().mockResolvedValue(undefined);
+    await offlineQueue.processQueue(replay);
+
+    expect(replay).toHaveBeenCalledWith(expect.objectContaining({ replayIdentity: identity }));
     expect(offlineQueue.getQueueSize()).toBe(0);
   });
 

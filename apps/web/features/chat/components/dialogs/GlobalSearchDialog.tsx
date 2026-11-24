@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { isImeComposingKey } from '@agiworkforce/ui/ime-composition';
 import { SEARCH_INPUT_DEBOUNCE_MS } from '@agiworkforce/utils';
+import { localSessionPath, sessionTitleMatches } from '@agiworkforce/local-runtime-contract';
 import {
   Badge,
   Dialog,
@@ -56,6 +57,11 @@ import { safePlatform } from '@shared/utils/browser-utils';
 import { findShortcutDoc, formatShortcutKeys } from '../../hooks/use-keyboard-shortcuts';
 import { format } from 'date-fns';
 import { memoWhenClosed } from '@shared/lib/memo-when-closed';
+import { listDeveloperSessions, useDesktopHost } from '@/features/desktop-host';
+import {
+  GLOBAL_SEARCH_CATEGORIES,
+  type GlobalSearchCategory,
+} from '../../lib/global-search-categories';
 
 interface GlobalSearchDialogProps {
   open: boolean;
@@ -63,6 +69,9 @@ interface GlobalSearchDialogProps {
 }
 
 const EMPTY_SHORTCUT_IDS: string[] = [];
+const LOCAL_CODE_CATEGORY = { id: 'local-code', label: 'Local Code' } as const;
+const SEARCH_RESULT_LIMIT = 50;
+type SearchCategory = GlobalSearchCategory | typeof LOCAL_CODE_CATEGORY.id;
 
 const FOOTER_KEY_CLASS =
   'rounded-compact border border-border bg-muted px-1.5 py-0.5 text-xs font-semibold text-foreground';
@@ -75,6 +84,7 @@ const RESULT_TYPE_LABELS: Partial<Record<SearchResult['type'], string>> = {
   research_report: 'Report',
   developer_session: 'Code session',
   project_knowledge: 'Project source',
+  schedule: 'Scheduled',
 };
 
 function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps) {
@@ -99,10 +109,17 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
   }, [open]);
 
   const router = useRouter();
+  const desktopHost = useDesktopHost();
   const { user } = useAuthStore();
   const disabledShortcutIds =
     useSettingsStore((state) => state.disabledShortcutIds) ?? EMPTY_SHORTCUT_IDS;
   const [query, setQuery] = useState('');
+  const [category, setCategory] = useState<SearchCategory>('all');
+  const localCode = category === LOCAL_CODE_CATEGORY.id;
+  const categories = desktopHost
+    ? [...GLOBAL_SEARCH_CATEGORIES, LOCAL_CODE_CATEGORY]
+    : GLOBAL_SEARCH_CATEGORIES;
+  const canFilterConversations = category === 'all' || category === 'sessions';
   const [results, setResults] = useState<SearchResult[]>([]);
   const [stats, setStats] = useState<SearchStats | null>(null);
   const [isSearching, setIsSearching] = useState(false);
@@ -142,10 +159,10 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
   }, [user?.id]);
 
   useEffect(() => {
-    if (open && user?.id) {
+    if (open && !localCode && user?.id) {
       loadSearchHistory();
     }
-  }, [open, user?.id, loadSearchHistory]);
+  }, [open, localCode, user?.id, loadSearchHistory]);
 
   const { confirm: confirmClearHistory, dialog: clearHistoryDialog } = useConfirmAction();
 
@@ -183,7 +200,7 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
   }, []);
 
   const handleSearch = useCallback(async () => {
-    if (!user?.id || !query.trim()) return;
+    if (!open || !query.trim() || (localCode ? !desktopHost : !user?.id)) return;
 
     searchAbortRef.current?.abort();
     const controller = new AbortController();
@@ -194,13 +211,57 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
     setShowSuggestions(false);
 
     try {
+      if (category === LOCAL_CODE_CATEGORY.id) {
+        const { groups } = await listDeveloperSessions({ titleQuery: query.trim() });
+        if (searchAbortRef.current !== controller || controller.signal.aborted) return;
+        const matches = groups.flatMap((group) =>
+          group.sessions
+            .filter(
+              (session) =>
+                session.location !== 'cloud' &&
+                session.status !== 'archived' &&
+                session.archivedAt === undefined &&
+                sessionTitleMatches(session.title, query),
+            )
+            .map((session) => ({ session, folder: group.name })),
+        );
+        if (
+          matches.length === 0 &&
+          groups.some((group) => group.unavailable || group.worktreesUnavailable)
+        ) {
+          setResults([]);
+          setSearchFailed(true);
+          return;
+        }
+        matches.sort((a, b) => b.session.updatedAt.localeCompare(a.session.updatedAt));
+        setResults(
+          matches.slice(0, SEARCH_RESULT_LIMIT).map(({ session, folder }) => ({
+            type: 'developer_session',
+            href: localSessionPath(session.rootId, session.id),
+            sessionId: session.id,
+            sessionTitle: session.title,
+            content: folder,
+            matchedText: folder,
+            createdAt: new Date(session.createdAt),
+            updatedAt: new Date(session.updatedAt),
+          })),
+        );
+        return;
+      }
+
+      if (!user?.id) return;
       const filters: SearchFilters = {
         query: query.trim(),
-        role: roleFilter === 'all' ? undefined : roleFilter,
-        startDate,
-        endDate,
-        includeArchived,
-        limit: 50,
+        category,
+        ...(canFilterConversations
+          ? {
+              role: roleFilter === 'all' ? undefined : roleFilter,
+              startDate,
+              endDate,
+              includeArchived,
+            }
+          : {}),
+        limit: SEARCH_RESULT_LIMIT,
       };
 
       const searchResults = await globalSearchService.search(user.id, filters, {
@@ -218,7 +279,19 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
     } finally {
       if (searchAbortRef.current === controller) setIsSearching(false);
     }
-  }, [user?.id, query, roleFilter, startDate, endDate, includeArchived]);
+  }, [
+    open,
+    localCode,
+    desktopHost,
+    user?.id,
+    query,
+    category,
+    canFilterConversations,
+    roleFilter,
+    startDate,
+    endDate,
+    includeArchived,
+  ]);
 
   useEffect(() => {
     if (!query.trim() || query.length < 2) {
@@ -241,8 +314,9 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
       if (searchTimeoutRef.current) {
         clearTimeout(searchTimeoutRef.current);
       }
+      if (localCode) searchAbortRef.current?.abort();
     };
-  }, [query, roleFilter, startDate, endDate, includeArchived, handleSearch]);
+  }, [query, roleFilter, startDate, endDate, includeArchived, handleSearch, localCode]);
 
   useEffect(() => {
     if (!open) {
@@ -263,7 +337,9 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
 
   const handleResultClick = (result: SearchResult) => {
     onOpenChange(false);
-    router.push(globalSearchResultHref(result, query));
+    const href = globalSearchResultHref(result, query);
+    if (localCode) window.location.assign(href);
+    else router.push(href);
   };
 
   const handleClearFilters = () => {
@@ -271,6 +347,24 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
     setStartDate(undefined);
     setEndDate(undefined);
     setIncludeArchived(false);
+  };
+
+  const handleCategoryChange = (next: SearchCategory) => {
+    if (next === category) return;
+    searchAbortRef.current?.abort();
+    searchAbortRef.current = null;
+    setCategory(next);
+    setResults([]);
+    setStats(null);
+    setSearchFailed(false);
+    if (localCode || next === LOCAL_CODE_CATEGORY.id) {
+      setQuery('');
+      setIsSearching(false);
+      setShowSuggestions(true);
+      searchInputRef.current?.focus();
+    } else {
+      setIsSearching(Boolean(user?.id) && query.trim().length >= 2);
+    }
   };
 
   const handleClear = () => {
@@ -379,13 +473,13 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
           <DialogHeader className="border-b px-6 pb-4 pt-6">
             <DialogTitle className="flex items-center gap-2">
               <Search className="h-5 w-5" />
-              Search Conversations
+              Search
             </DialogTitle>
             {/* a11y: gives Radix DialogContent an aria-describedby target and
                 describes the dialog for assistive tech (silences the Radix
                 "Missing Description" warning). */}
             <DialogDescription className="sr-only">
-              Search across your conversations and messages.
+              Search sessions, Code, artifacts, projects, and schedules.
             </DialogDescription>
           </DialogHeader>
 
@@ -395,8 +489,12 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
                 <Search className="absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   ref={searchInputRef}
-                  aria-label="Search messages and conversations"
-                  placeholder="Search messages and conversations..."
+                  aria-label={
+                    localCode ? 'Search Local Code session titles' : 'Search your workspace'
+                  }
+                  placeholder={
+                    localCode ? 'Search Local Code session titles' : 'Search your workspace'
+                  }
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   onKeyDown={(event) => {
@@ -419,26 +517,43 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
                   </Button>
                 )}
               </div>
-              <Button
-                variant={showFilters ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setShowFilters(!showFilters)}
-                className="relative"
-              >
-                <Filter className="me-2 h-4 w-4" />
-                Filters
-                {activeFilterCount > 0 && (
-                  <Badge
-                    variant="destructive"
-                    className="absolute -end-2 -top-2 flex h-5 w-5 items-center justify-center p-0 text-xs"
-                  >
-                    {activeFilterCount}
-                  </Badge>
-                )}
-              </Button>
+              {canFilterConversations && (
+                <Button
+                  variant={showFilters ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setShowFilters(!showFilters)}
+                  className="relative"
+                >
+                  <Filter className="me-2 h-4 w-4" />
+                  Filters
+                  {activeFilterCount > 0 && (
+                    <Badge
+                      variant="destructive"
+                      className="absolute -end-2 -top-2 flex h-5 w-5 items-center justify-center p-0 text-xs"
+                    >
+                      {activeFilterCount}
+                    </Badge>
+                  )}
+                </Button>
+              )}
             </div>
 
-            {showFilters && (
+            <div role="group" aria-label="Search category" className="mt-3 flex flex-wrap gap-1">
+              {categories.map((option) => (
+                <Button
+                  key={option.id}
+                  type="button"
+                  variant={category === option.id ? 'secondary' : 'ghost'}
+                  size="sm"
+                  aria-pressed={category === option.id}
+                  onClick={() => handleCategoryChange(option.id)}
+                >
+                  {option.label}
+                </Button>
+              ))}
+            </div>
+
+            {canFilterConversations && showFilters && (
               <div className="mt-4 space-y-4 rounded-lg border bg-background p-4">
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                   <div className="space-y-2">
@@ -536,19 +651,25 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
 
           {stats && (
             <div className="border-b bg-muted/20 px-6 py-2 text-xs text-muted-foreground">
-              Found {stats.totalResults} results ({stats.sessionMatches} conversations,{' '}
-              {stats.messageMatches} messages
-              {stats.projectMatches > 0 ? `, ${stats.projectMatches} projects` : ''}
-              {stats.fileMatches > 0 ? `, ${stats.fileMatches} files` : ''}) in {stats.searchTime}ms
+              Found {stats.totalResults} results
+              {canFilterConversations && (
+                <>
+                  {' '}
+                  ({stats.sessionMatches} conversations, {stats.messageMatches} messages
+                  {stats.projectMatches > 0 ? `, ${stats.projectMatches} projects` : ''}
+                  {stats.fileMatches > 0 ? `, ${stats.fileMatches} files` : ''}
+                  {stats.scheduleMatches ? `, ${stats.scheduleMatches} schedules` : ''})
+                </>
+              )}
             </div>
           )}
 
           <ScrollArea className="flex-1 max-h-[400px] px-6 py-4">
             {isSearching ? (
               <div className="flex items-center justify-center py-12">
-                <Spinner aria-label="Searching messages and conversations…" />
+                <Spinner aria-label="Searching workspace…" />
               </div>
-            ) : results.length === 0 && !query.trim() && showSuggestions ? (
+            ) : results.length === 0 && !query.trim() && showSuggestions && !localCode ? (
               <div className="space-y-6">
                 {recentSearches.length > 0 && (
                   <div>
@@ -653,7 +774,9 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
                 <Search className="mb-3 h-12 w-12 text-muted-foreground opacity-30" />
                 <p className="text-sm text-muted-foreground">No results found</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Try different keywords or clear filters
+                  {localCode
+                    ? 'Try a different session title'
+                    : 'Try different keywords or clear filters'}
                 </p>
               </div>
             ) : results.length === 0 ? (
@@ -665,11 +788,11 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
               <div className="space-y-2">
                 {results.map((result) => (
                   <button
-                    key={`search-result-${result.type}-${result.sessionId}-${result.messageId || result.matchedText.slice(0, 20)}`}
+                    key={`search-result-${result.type}-${result.href ?? result.sessionId}-${result.messageId || result.matchedText.slice(0, 20)}`}
                     onClick={() => handleResultClick(result)}
                     className="group w-full rounded-lg border p-3 text-start transition-colors hover:bg-accent"
                   >
-                    <div className="mb-2 flex items-start justify-between gap-2">
+                    <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                       <div className="flex min-w-0 flex-1 items-center gap-2">
                         {result.type === 'project' ? (
                           <FolderOpen className="h-4 w-4 shrink-0 text-primary" />
@@ -679,6 +802,8 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
                           <Telescope className="h-4 w-4 shrink-0 text-primary" />
                         ) : result.type === 'developer_session' ? (
                           <SquareTerminal className="h-4 w-4 shrink-0 text-primary" />
+                        ) : result.type === 'schedule' ? (
+                          <Clock className="h-4 w-4 shrink-0 text-primary" />
                         ) : result.type === 'file' || result.type === 'project_knowledge' ? (
                           <FileText className="h-4 w-4 shrink-0 text-primary" />
                         ) : result.type === 'session' ? (
@@ -686,7 +811,9 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
                         ) : (
                           getRoleIcon(result.role || 'assistant')
                         )}
-                        <span className="truncate text-sm font-medium">{result.sessionTitle}</span>
+                        <span className="line-clamp-2 break-words text-sm font-medium">
+                          {result.sessionTitle}
+                        </span>
                       </div>
                       <div className="flex shrink-0 items-center gap-1">
                         <Clock className="h-3 w-3 text-muted-foreground" />
@@ -708,7 +835,9 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
 
                     <div className="mt-2 flex items-center gap-2">
                       <Badge variant="outline" className="px-1.5 py-0 text-caption">
-                        {RESULT_TYPE_LABELS[result.type] ?? result.role}
+                        {localCode
+                          ? LOCAL_CODE_CATEGORY.label
+                          : (RESULT_TYPE_LABELS[result.type] ?? result.role)}
                       </Badge>
                     </div>
                   </button>

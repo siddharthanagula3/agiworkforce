@@ -26,6 +26,10 @@ export function createDomElementReader(rules: readonly DomAutocompleteRule[] = [
     'passcode',
   ]);
 
+  const sensitiveLabelPhrases =
+    /\b(?:social security|national insurance number|security code|verification code|one time code|one time password|recovery code|api key|private key|account number|routing number|tax id|date of birth)\b/u;
+  const maxAssociatedLabels = 16;
+
   function isInput(element: Element): element is HTMLInputElement {
     const view = element.ownerDocument.defaultView;
     return Boolean(view && element instanceof view.HTMLInputElement);
@@ -55,6 +59,17 @@ export function createDomElementReader(rules: readonly DomAutocompleteRule[] = [
     return ['textbox', 'searchbox', 'combobox'].includes(element.getAttribute('role') ?? '');
   }
 
+  function hasSensitiveLabel(text: string): boolean {
+    const words = text
+      .replace(/([a-z])([A-Z])/gu, '$1 $2')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/gu, ' ');
+    return (
+      sensitiveLabelPhrases.test(words) ||
+      words.split(' ').some((token) => sensitiveNameTokens.has(token))
+    );
+  }
+
   function isSensitiveField(element: Element): boolean {
     if (isInput(element) && element.type === 'password') return true;
     if (
@@ -64,13 +79,24 @@ export function createDomElementReader(rules: readonly DomAutocompleteRule[] = [
         .some((token) => /^(cc-.+|current-password|new-password|one-time-code)$/u.test(token))
     )
       return true;
-    return ['name', 'id', 'aria-label', 'placeholder', 'data-testid']
+    const names = ['name', 'id', 'aria-label', 'placeholder', 'data-testid']
       .map((attribute) => element.getAttribute(attribute) ?? '')
-      .join(' ')
-      .replace(/([a-z])([A-Z])/gu, '$1 $2')
-      .toLowerCase()
-      .split(/[^a-z0-9]+/u)
-      .some((token) => token !== '' && sensitiveNameTokens.has(token));
+      .join(' ');
+    if (hasSensitiveLabel(names)) return true;
+    if (!isTextEntry(element)) return false;
+    if (hasSensitiveLabel(ariaLabelReferenceText(element))) return true;
+    if (hasSensitiveLabel(element.getAttribute('title') ?? '')) return true;
+
+    if (isInput(element) || isTextArea(element) || isSelect(element)) {
+      const labels = element.labels;
+      for (let index = 0; index < Math.min(labels?.length ?? 0, maxAssociatedLabels); index += 1) {
+        const label = labels?.[index];
+        if (label && hasSensitiveLabel(labelTextWithoutControls(label))) return true;
+      }
+      return false;
+    }
+    const wrappingLabel = element.closest('label');
+    return Boolean(wrappingLabel && hasSensitiveLabel(labelTextWithoutControls(wrappingLabel)));
   }
 
   function ruleFor(element: Element) {
@@ -213,37 +239,49 @@ export function createDomElementReader(rules: readonly DomAutocompleteRule[] = [
     return value.length > maxCharacters ? `${value.slice(0, maxCharacters - 1)}…` : value;
   }
 
+  function ariaLabelReferenceText(element: Element): string {
+    const root = element.getRootNode() as Document | ShadowRoot;
+    const references = element.getAttribute('aria-labelledby') ?? '';
+    const texts: string[] = [];
+    let inspected = 0;
+    for (const match of references.matchAll(/\S+/gu)) {
+      if (inspected++ >= maxAssociatedLabels) break;
+      const id = match[0];
+      const label =
+        (typeof root.getElementById === 'function' ? root.getElementById(id) : null) ??
+        element.ownerDocument.getElementById(id);
+      if (label && label !== element && !label.contains(element)) {
+        texts.push(label.textContent ?? '');
+      }
+    }
+    return texts.join(' ');
+  }
+
+  function formLabelText(label: Element, element: Element): string {
+    const questionSelector = ruleFor(element)?.questionSelector;
+    const question = questionSelector ? label.querySelector(questionSelector) : null;
+    if (question && !question.contains(element) && question.textContent?.trim())
+      return question.textContent.trim();
+    return labelTextWithoutControls(label);
+  }
+
+  function labelTextWithoutControls(label: Element): string {
+    const clone = label.cloneNode(true) as Element;
+    clone
+      .querySelectorAll('input, textarea, select, [contenteditable], [role="textbox"]')
+      .forEach((field) => field.remove());
+    return clone.textContent ?? '';
+  }
+
   function labelFor(element: Element): string {
     const aria = element.getAttribute('aria-label');
     if (aria) return aria;
-    const labelledBy = element.getAttribute('aria-labelledby');
-    if (labelledBy) {
-      const root = element.getRootNode() as Document | ShadowRoot;
-      const text = labelledBy
-        .split(/\s+/u)
-        .map(
-          (id) =>
-            (typeof root.getElementById === 'function' ? root.getElementById(id) : null) ??
-            element.ownerDocument.getElementById(id),
-        )
-        .filter((label) => label !== null && label !== element && !label.contains(element))
-        .map((label) => label!.textContent ?? '')
-        .join(' ');
-      if (text.trim()) return text;
-    }
+    const referencedLabel = ariaLabelReferenceText(element);
+    if (referencedLabel.trim()) return referencedLabel;
     if (isInput(element) || isTextArea(element) || isSelect(element)) {
       const label = element.labels?.[0];
-      if (label) {
-        const questionSelector = ruleFor(element)?.questionSelector;
-        const question = questionSelector ? label.querySelector(questionSelector) : null;
-        if (question && !question.contains(element) && question.textContent?.trim())
-          return question.textContent.trim();
-        const clone = label.cloneNode(true) as HTMLElement;
-        clone
-          .querySelectorAll('input, textarea, select, [contenteditable]')
-          .forEach((field) => field.remove());
-        if (clone.textContent?.trim()) return clone.textContent;
-      }
+      const text = label ? formLabelText(label, element) : '';
+      if (text.trim()) return text;
     }
     const title = element.getAttribute('title');
     if (title) return title;

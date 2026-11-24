@@ -13,6 +13,7 @@ export type AppServerCapabilities = {
   codeDrafts?: boolean;
   workspaceFileRecoveryBrowser?: boolean;
   workspaceTerminal?: boolean;
+  backgroundCommands?: boolean;
   worktrees: boolean;
   models: boolean;
   /**
@@ -61,8 +62,11 @@ export type AppServerCapabilities = {
    */
   writerLease?: boolean;
   threadUnarchive?: boolean;
+  threadPin?: boolean;
   threadSearch?: boolean;
+  threadTitleSearch?: boolean;
   forkAtMessage?: boolean;
+  forkAndRewind?: boolean;
   promptCommands?: boolean;
   maxTurns?: boolean;
   memory?: boolean;
@@ -121,6 +125,8 @@ export type AppServerCapabilities = {
    */
   sideQuestion?: boolean;
   threadRename?: boolean;
+  inactiveThreadArchive?: boolean;
+  requireShellApproval?: boolean;
   /**
    * `reasoningEffort` takes every [`DeveloperReasoningEffort`] level. A
    * host without it accepts only low, medium, high and max, and answers

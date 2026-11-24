@@ -296,7 +296,7 @@ interface MessageState {
     sourceConversationId: string,
     options?: ForkConversationOptions,
   ) => Promise<string>;
-  deleteConversation: (id: string) => Promise<void>;
+  deleteConversation: (id: string, cloudAccount?: CloudAccountEpoch) => Promise<boolean>;
   /** Removes a chat created for a first message that was never sent. */
   discardUnsentConversation: (id: string) => Promise<void>;
   loadMessages: (conversationId: string) => Promise<void>;
@@ -700,45 +700,37 @@ export const useChatMessageStore = create<MessageState>()(
         return forkId;
       },
 
-      deleteConversation: async (id) => {
-        const localConversation = get().conversations.find((c) => c.id === id);
+      deleteConversation: async (id, cloudAccount) => {
+        if (cloudAccount && !isCloudAccountEpochCurrent(cloudAccount)) return false;
+        const localConversation = cloudAccount
+          ? undefined
+          : get().conversations.find((c) => c.id === id);
         if (!localConversation) {
           const cloudStore = getCloudStore();
           const cloudConversation = cloudStore.getState().conversations.find((c) => c.id === id);
-          const needsRemoteDelete =
-            cloudConversation !== undefined && shouldSyncConversationRemote(cloudConversation);
-
-          // Remove first. deleteCloudConversationWithRetry backs off across
-          // three attempts, so waiting for it left the row on screen for the
-          // best part of a second after the user tapped Delete, which reads as
-          // the tap not registering.
-          const removedIndex = cloudStore.getState().conversations.findIndex((c) => c.id === id);
-          const removedMessages = cloudStore.getState().messages[id];
+          if (!cloudConversation && !cloudAccount) return false;
+          if (!cloudConversation || shouldSyncConversationRemote(cloudConversation)) {
+            const account = cloudAccount ?? captureCloudAccountEpoch();
+            if (!account) return false;
+            const deleted = await deleteCloudConversationWithRetry(id, account);
+            if (!isCloudAccountEpochCurrent(account)) return false;
+            if (!deleted) {
+              Alert.alert(
+                'Could not delete chat',
+                'Cloud did not confirm the deletion. Check your connection and try again.',
+              );
+              return false;
+            }
+          }
           cloudStore.getState().removeCloudConversation(id);
-          const previousConversationId = get().currentConversationId;
           set((state) => ({
             currentConversationId:
-              state.currentConversationId === id ? null : state.currentConversationId,
+              state.currentConversationId === id &&
+              !state.conversations.some((conversation) => conversation.id === id)
+                ? null
+                : state.currentConversationId,
           }));
-
-          if (!needsRemoteDelete || !cloudConversation) return;
-
-          const deleted = await deleteCloudConversationWithRetry(id);
-          if (deleted) return;
-
-          // Put the conversation back where it was and say so, rather than
-          // leaving the user believing it is gone until the next sync.
-          cloudStore
-            .getState()
-            .restoreCloudConversation(cloudConversation, removedIndex, removedMessages);
-          if (previousConversationId === id) {
-            set({ currentConversationId: id });
-          }
-          Alert.alert(
-            'Could not delete conversation',
-            'We could not delete this conversation from the cloud, so it has been restored. Check your connection and try again.',
-          );
-          return;
+          return true;
         }
         const deletedMessages = get().messages[id] ?? [];
         set((state) => {
@@ -756,6 +748,7 @@ export const useChatMessageStore = create<MessageState>()(
         }).catch((error: unknown) => {
           console.warn('[chatMessageStore] Could not remove the files of a deleted chat:', error);
         });
+        return true;
       },
 
       discardUnsentConversation: async (id) => {
@@ -766,12 +759,13 @@ export const useChatMessageStore = create<MessageState>()(
         const cloudStore = getCloudStore();
         const cloudConversation = cloudStore.getState().conversations.find((c) => c.id === id);
         if (!cloudConversation || (cloudStore.getState().messages[id] ?? []).length > 0) return;
+        const account = captureCloudAccountEpoch();
         cloudStore.getState().removeCloudConversation(id);
         set((state) =>
           state.currentConversationId === id ? { currentConversationId: null } : state,
         );
-        if (shouldSyncConversationRemote(cloudConversation)) {
-          await deleteCloudConversationWithRetry(id);
+        if (account && shouldSyncConversationRemote(cloudConversation)) {
+          await deleteCloudConversationWithRetry(id, account);
         }
       },
 
@@ -1144,19 +1138,20 @@ export const useChatMessageStore = create<MessageState>()(
       },
 
       enqueueOfflineMessage: (conversationId, content, model, queueId) => {
-        const userMessage: ChatMessage = {
-          id: generateMessageId(),
-          conversationId,
-          role: 'user',
-          content,
-          createdAt: new Date().toISOString(),
-          model,
-          isQueued: true,
-          offlineQueueId: queueId,
-        };
         const ownerStore = getConversationMessageStore(conversationId);
         ownerStore.setState((state) => {
           const existing = state.messages[conversationId] ?? [];
+          if (existing.some((message) => message.offlineQueueId === queueId)) return state;
+          const userMessage: ChatMessage = {
+            id: generateMessageId(),
+            conversationId,
+            role: 'user',
+            content,
+            createdAt: new Date().toISOString(),
+            model,
+            isQueued: true,
+            offlineQueueId: queueId,
+          };
           return {
             messages: { ...state.messages, [conversationId]: [...existing, userMessage] },
           };
@@ -1841,20 +1836,33 @@ function httpStatusFromError(error: unknown): number | null {
   return match ? Number(match[1]) : null;
 }
 
-async function deleteCloudConversationWithRetry(id: string, maxAttempts = 3): Promise<boolean> {
-  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    try {
-      await managedCloudChat.deleteConversation(id);
-      return true;
-    } catch (error) {
-      const status = httpStatusFromError(error);
-      if (status === 404) return true;
-      if (status !== null && status >= 400 && status < 500) return false;
-      if (attempt >= maxAttempts) return false;
-      await new Promise((resolve) => setTimeout(resolve, 300 * attempt));
+async function deleteCloudConversationWithRetry(
+  id: string,
+  account: CloudAccountEpoch,
+): Promise<boolean> {
+  const controller = new AbortController();
+  const stop = subscribeCloudAccountEpochChange(() => controller.abort());
+  const maxAttempts = 3;
+  try {
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      if (!isCloudAccountEpochCurrent(account)) return false;
+      try {
+        await managedCloudChat.deleteConversation(id, { signal: controller.signal });
+        return isCloudAccountEpochCurrent(account);
+      } catch (error) {
+        if (!isCloudAccountEpochCurrent(account)) return false;
+        const status = httpStatusFromError(error);
+        if (status === 404) return true;
+        if (status !== null && status >= 400 && status < 500) return false;
+        if (attempt < maxAttempts) {
+          await new Promise((resolve) => setTimeout(resolve, 300 * attempt));
+        }
+      }
     }
+    return false;
+  } finally {
+    stop();
   }
-  return false;
 }
 
 function captureArtifactsForLoadedMessages(

@@ -1,3 +1,4 @@
+import { renderIcon, Settings } from '../../assets/icons';
 import { t } from '../../i18n';
 import { agiWebUrl } from '../../lib/webOrigin';
 import { DATA_HANDLING_DISCLOSURES } from '../privacy/dataHandling';
@@ -38,24 +39,12 @@ export function buildWelcomePage(dependencies: WelcomeDependencies): WelcomePage
   header.appendChild(el('p', { class: 'wl-lead' }, t('welcomeLead')));
   element.appendChild(header);
 
-  const signIn = card('wl-signin', t('welcomeSignInTitle'));
   const signInStatus = el('p', { class: 'wl-text', role: 'status', 'aria-live': 'polite' });
   const signInButton = el(
     'button',
-    { class: 'wl-btn wl-btn-secondary', type: 'button' },
+    { class: 'wl-btn', type: 'button', id: 'wl-login' },
     t('welcomeSignInAction'),
   );
-  signIn.body.append(
-    el('p', { class: 'wl-text' }, t('welcomeSignInBody')),
-    signInStatus,
-    signInButton,
-  );
-  element.appendChild(signIn.section);
-
-  const renderSignedIn = (signedIn: boolean): void => {
-    signInButton.hidden = signedIn;
-    signInStatus.textContent = signedIn ? t('welcomeSignedIn') : '';
-  };
   signInButton.addEventListener('click', () => {
     signInButton.disabled = true;
     void dependencies
@@ -72,10 +61,12 @@ export function buildWelcomePage(dependencies: WelcomeDependencies): WelcomePage
   });
   const pin = card('wl-pin', t('welcomePinTitle'));
   const pinStatus = el('p', { class: 'wl-text', role: 'status', 'aria-live': 'polite' });
-  pin.body.append(el('p', { class: 'wl-text' }, t('welcomePinBody')), pinStatus);
+  const pinInstructions = el('p', { class: 'wl-text' }, t('welcomePinBody'));
+  pin.body.append(pinInstructions, pinStatus);
   element.appendChild(pin.section);
 
-  const scope = el('div', { class: 'wl-columns' });
+  const scope = el('details', { class: 'wl-scope' });
+  scope.appendChild(el('summary', {}, t('welcomeScope')));
   const can = card('wl-can', t('welcomeCanTitle'));
   can.body.appendChild(list([t('welcomeCan1'), t('welcomeCan2'), t('welcomeCan3')]));
   const cannot = card('wl-cannot', t('welcomeCannotTitle'));
@@ -106,25 +97,41 @@ export function buildWelcomePage(dependencies: WelcomeDependencies): WelcomePage
   }
   element.appendChild(data.section);
 
-  const start = card('wl-start', t('welcomeTryTitle'));
   const startStatus = el('p', { class: 'wl-text', role: 'status', 'aria-live': 'polite' });
   const startButton = el(
     'button',
-    { class: 'wl-btn wl-btn-primary', type: 'button' },
+    { class: 'wl-btn', type: 'button', id: 'wl-open' },
     t('welcomeTryAction'),
   );
   const settingsButton = el(
     'button',
-    { class: 'wl-btn wl-btn-secondary', type: 'button' },
+    { class: 'wl-settings', type: 'button' },
+    renderIcon(Settings, 16),
     t('welcomeSettings'),
   );
-  start.body.append(
-    el('p', { class: 'wl-text' }, t('welcomeTryBody')),
-    startStatus,
-    el('div', { class: 'wl-actions' }, startButton, settingsButton),
+  const bar = el(
+    'nav',
+    { class: 'wl-bar' },
+    el('img', {
+      src: '../icons/agi-symbol.png',
+      width: '32',
+      height: '32',
+      alt: t('welcomeTitle'),
+    }),
+    settingsButton,
   );
-  element.appendChild(start.section);
-
+  element.prepend(bar);
+  header.append(
+    el('div', { class: 'wl-actions' }, signInButton, startButton),
+    signInStatus,
+    startStatus,
+  );
+  const renderSignedIn = (signedIn: boolean): void => {
+    signInButton.hidden = signedIn;
+    signInButton.classList.toggle('wl-btn-primary', !signedIn);
+    startButton.classList.toggle('wl-btn-primary', signedIn);
+    signInStatus.textContent = signedIn ? t('welcomeSignedIn') : '';
+  };
   startButton.addEventListener('click', () => {
     dependencies.acknowledge();
     startButton.disabled = true;
@@ -148,6 +155,7 @@ export function buildWelcomePage(dependencies: WelcomeDependencies): WelcomePage
       dependencies.isPinned().catch(() => null),
     ]).then(([signedIn, pinned]) => {
       renderSignedIn(signedIn);
+      pinInstructions.hidden = pinned === true;
       pinStatus.textContent = pinned === true ? t('welcomePinned') : '';
     });
   window.addEventListener('focus', () => {

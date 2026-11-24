@@ -152,6 +152,46 @@ describe('native browser input', () => {
     ]);
   });
 
+  it('taps with a stationary touch contact and no mouse dispatch', async () => {
+    await driver.click(42, { x: 10, y: 20 }, undefined, { pointerType: 'touch' });
+    expect(calls('Input.dispatchTouchEvent')).toEqual([
+      { type: 'touchStart', touchPoints: [{ x: 10, y: 20, id: 0 }] },
+      { type: 'touchEnd', touchPoints: [] },
+    ]);
+    expect(calls('Input.dispatchMouseEvent')).toEqual([]);
+  });
+
+  it('resolves an indexed native range drag from its rendered thumb', async () => {
+    state.signature = 'input||range|volume|Volume';
+    await driver.getPageContent(42);
+    state.sendCommand.mockImplementation((target, method, params, callback) => {
+      if (method === 'DOM.describeNode') {
+        callback({
+          node: {
+            shadowRoots: [
+              {
+                shadowRootType: 'user-agent',
+                children: [{ backendNodeId: 9, attributes: ['id', 'thumb'] }],
+              },
+            ],
+          },
+        });
+      } else if (method === 'DOM.getBoxModel' && params['backendNodeId'] === 9) {
+        callback({ model: { content: [24, 12, 40, 12, 40, 28, 24, 28] } });
+      } else if (
+        method === 'Runtime.callFunctionOn' &&
+        String(params['functionDeclaration']).includes('.pointForElement(this,')
+      ) {
+        expect(params['functionDeclaration']).toContain('{"x":32,"y":20}');
+        callback({ result: { type: 'object', value: { x: 32, y: 20 } } });
+      } else reply(target, method, params, callback);
+    });
+    await driver.drag(42, { index: 1 }, { x: 95, y: 20 });
+    expect(calls('Input.dispatchMouseEvent')).toContainEqual(
+      expect.objectContaining({ type: 'mousePressed', x: 32, y: 20 }),
+    );
+  });
+
   it('sends both clicks of a double right click with native click counts', async () => {
     await driver.click(42, { x: 10, y: 20 }, undefined, { button: 'right', clickCount: 2 });
     expect(calls('Input.dispatchMouseEvent')).toEqual([
@@ -205,6 +245,19 @@ describe('native browser input', () => {
       windowsVirtualKeyCode: 65,
       modifiers: 12,
     });
+  });
+
+  it.each([
+    ['ArrowDown', 'moveToEndOfDocument'],
+    ['ArrowUp', 'moveToBeginningOfDocument'],
+  ])('sends the native macOS document movement command for Meta+%s', async (key, command) => {
+    await driver.pressKey(42, key, ['Meta']);
+    expect(calls('Input.dispatchKeyEvent')[0]).toMatchObject({
+      type: 'rawKeyDown',
+      modifiers: 4,
+      commands: [command],
+    });
+    expect(calls('Input.dispatchKeyEvent')[1]).not.toHaveProperty('commands');
   });
 
   it('refuses unknown keys and duplicate modifiers before dispatch', async () => {

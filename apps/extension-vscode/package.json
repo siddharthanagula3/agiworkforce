@@ -97,6 +97,10 @@
         "icon": "$(settings-gear)"
       },
       {
+        "command": "agi-workforce.toggleFocusView",
+        "title": "Code: Toggle Focus View"
+      },
+      {
         "command": "agi-workforce.openAgentConfig",
         "title": "Code: Open Agent Configuration",
         "icon": "$(file-code)"
@@ -188,8 +192,8 @@
       },
       {
         "command": "agi-workforce.deleteConversation",
-        "title": "Code: Delete Conversation",
-        "icon": "$(trash)"
+        "title": "Code: Archive Conversation",
+        "icon": "$(archive)"
       },
       {
         "command": "agi-workforce.permanentlyDeleteConversation",
@@ -763,6 +767,11 @@
         "icon": "$(extensions)"
       },
       {
+        "command": "agi-workforce.browsePluginMarketplace",
+        "title": "Code: Browse AGI Cloud Marketplace",
+        "icon": "$(globe)"
+      },
+      {
         "command": "agi-workforce.showMcpServers",
         "title": "Code: Show MCP Servers",
         "icon": "$(server)"
@@ -1204,6 +1213,14 @@
           "default": "auto",
           "description": "Default LLM model. Run 'Code: Select Model' (cmd+shift+m) to pick from currently available providers."
         },
+        "agiWorkforce.archiveInactiveSessionsDays": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 365,
+          "scope": "machine",
+          "description": "Archive closed Local sessions after this many inactive days. Set to 0 to keep the feature off. Unread and grouped sessions stay in the Local list. Requires a CLI that supports inactivity checks."
+        },
         "agiWorkforce.cliPath": {
           "type": "string",
           "default": "agi",
@@ -1238,6 +1255,17 @@
           "default": "enter",
           "description": "Which key sends a prompt from the composer."
         },
+        "agiWorkforce.composer.escapeStops": {
+          "type": "boolean",
+          "default": false,
+          "description": "Stop the active response when Escape is pressed in the composer and no menu is open."
+        },
+        "agiWorkforce.chat.focusView": {
+          "type": "boolean",
+          "scope": "application",
+          "default": false,
+          "description": "Keep tool activity collapsed until you open it. Plans, approvals, and questions stay visible."
+        },
         "agiWorkforce.contextLines": {
           "type": "number",
           "default": 50,
@@ -1245,11 +1273,37 @@
           "maximum": 500,
           "description": "Number of surrounding lines to include as context"
         },
+        "agiWorkforce.context.warningPercent": {
+          "type": "integer",
+          "scope": "application",
+          "default": 90,
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Warn when chat context reaches this percentage of the model’s context window. Set to 0 to turn off the warning."
+        },
         "agiWorkforce.editorContext.autoAttach": {
           "type": "boolean",
           "default": true,
           "scope": "resource",
           "description": "Attach the active editor file, the current selection and that file's problems to each chat turn. Every attachment shows as a removable chip in the composer before you send. A workspace setting can turn this off, but only your user setting turns it on."
+        },
+        "agiWorkforce.editorContext.attachOpenFile": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "description": "Automatically attach the open file when automatic editor context is on. A workspace can turn this off, but it cannot override a user opt-out."
+        },
+        "agiWorkforce.editorContext.saveOpenFileBeforeSend": {
+          "type": "boolean",
+          "default": false,
+          "scope": "application",
+          "description": "Save the attached open text file before sending a chat turn to the local developer runtime."
+        },
+        "agiWorkforce.editorContext.attachSelection": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "description": "Automatically attach selected text as a separate context item when automatic editor context is on. A workspace can turn this off, but it cannot override a user opt-out."
         },
         "agiWorkforce.respectGitIgnore": {
           "type": "boolean",
@@ -1348,14 +1402,20 @@
             "bypass"
           ],
           "enumDescriptions": [
-            "Ask before edits and commands.",
-            "Read and edit files without asking; running commands and changing git hooks or MCP settings still ask first.",
+            "Ask before file edits and commands that need approval.",
+            "Apply ordinary workspace edits and run commands classified as safe without prompting.",
             "Propose a plan before making edits.",
             "Skip approval prompts for workspace/additional-directory, terminal, network-capable command, and configured MCP tool access. Selecting this requires a modal risk confirmation."
           ],
           "default": "auto",
           "scope": "application",
-          "description": "Default agent mode for new conversations. 'ask' confirms writes and commands, 'auto' reads and edits files without asking while running commands and changing git hooks or MCP settings still ask first, 'plan' proposes a plan before any edits, and 'bypass' skips all approval prompts only after explicit risk confirmation. A repository cannot set this: it is a user setting that also applies in remote windows, and Bypass Permissions is confirmed per workspace."
+          "description": "Default agent mode for new conversations. Ask prompts for edits and commands that need approval. Auto also applies ordinary workspace edits without prompting. Plan proposes changes for review, and Bypass permissions requires explicit confirmation. This is a user setting."
+        },
+        "agiWorkforce.agent.requireShellApproval": {
+          "type": "boolean",
+          "default": false,
+          "scope": "application",
+          "description": "Ask before every shell command in new turns, including commands classified as safe. Ordinary edits still run automatically in Auto. Bypass permissions remains an explicit exception. Requires a compatible AGI CLI."
         },
         "agiWorkforce.agent.effort": {
           "type": "string",
@@ -1370,7 +1430,7 @@
           ],
           "default": "medium",
           "scope": "application",
-          "description": "Reasoning effort for providers that support it (Anthropic, OpenAI, Google). Ignored when provider does not support an explicit effort axis. A user setting, so a repository cannot raise it, and it also applies in remote windows."
+          "description": "Default reasoning effort for models that support it. A choice made in the chat composer is remembered for that model and takes precedence over this default."
         },
         "agiWorkforce.agent.thinking": {
           "type": "boolean",
@@ -1385,10 +1445,32 @@
             "usesOnlineServices"
           ]
         },
+        "agiWorkforce.chatLocation": {
+          "type": "string",
+          "enum": [
+            "sidebar",
+            "editor"
+          ],
+          "default": "sidebar",
+          "scope": "application",
+          "description": "Where Code: Open Chat opens graphical chat. Use terminal takes precedence when enabled."
+        },
+        "agiWorkforce.chat.lockEditorGroups": {
+          "type": "boolean",
+          "default": false,
+          "scope": "application",
+          "description": "Open AGI Chat tabs in a dedicated editor group and lock it so files open in another group."
+        },
         "agiWorkforce.useTerminal": {
           "type": "boolean",
           "default": false,
           "description": "Launch the AGI CLI in the integrated terminal instead of the native UI when you run Code: Open Chat."
+        },
+        "agiWorkforce.terminal.usePythonEnvironment": {
+          "type": "boolean",
+          "default": false,
+          "scope": "application",
+          "description": "Activate the workspace's selected Python environment in new AGI terminals through the Python Environments extension."
         }
       }
     },

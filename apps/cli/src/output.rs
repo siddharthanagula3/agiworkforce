@@ -863,6 +863,14 @@ pub fn print_session_cost(
 // Status display
 // ---------------------------------------------------------------------------
 
+pub(crate) fn session_pin_label(pinned: bool) -> &'static str {
+    if pinned {
+        "[Pinned] "
+    } else {
+        ""
+    }
+}
+
 /// Pluralise a message count for a listing row, so a single-message session
 /// never reads "1 msgs".
 pub fn format_message_count(count: i64) -> String {

@@ -48,6 +48,17 @@ pub struct PluginSetting {
 
 pub type PluginSettings = BTreeMap<String, PluginSetting>;
 
+pub(crate) fn storage_key(plugin: &str, workspace_plugin: Option<&Path>) -> String {
+    use sha2::{Digest, Sha256};
+
+    let Some(root) = workspace_plugin else {
+        return plugin.to_owned();
+    };
+    let root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+    let digest = Sha256::digest(root.as_os_str().as_encoded_bytes());
+    format!("workspace:{}:{plugin}", crate::hex::encode(&digest))
+}
+
 fn settings_path() -> Result<PathBuf> {
     Ok(crate::config::CliConfig::config_dir()?.join(SETTINGS_FILE))
 }
@@ -361,6 +372,18 @@ mod tests {
 
     fn setting(json: &str) -> PluginSetting {
         serde_json::from_str(json).unwrap()
+    }
+
+    #[test]
+    fn identically_named_plugins_keep_separate_settings_by_scope() {
+        let first = tempfile::tempdir().unwrap();
+        let second = tempfile::tempdir().unwrap();
+        let personal = storage_key("reviewer", None);
+        let project = storage_key("reviewer", Some(first.path()));
+        assert_eq!(personal, "reviewer");
+        assert_ne!(project, personal);
+        assert_ne!(project, storage_key("reviewer", Some(second.path())));
+        assert_eq!(project, storage_key("reviewer", Some(&first.path().join("."))));
     }
 
     #[test]

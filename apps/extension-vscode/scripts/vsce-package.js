@@ -22,6 +22,7 @@ function loadVsceWithCompat() {
 const PACKAGED_RUNTIME_OUTPUT_ALLOWLIST = Object.freeze([
   'out/extension.js',
   'out/webview/render.js',
+  'out/webview/dictation.js',
   'out/codicons/codicon.css',
   'out/codicons/codicon.ttf',
 ]);

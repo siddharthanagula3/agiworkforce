@@ -11,6 +11,7 @@ import {
   chatImageTooLargeMessage,
   chatLargeFileKindMaxBytes,
   isSupportedChatAttachment,
+  resolveChatAttachmentMimeType,
 } from '@/lib/chat-attachment-policy';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import {
@@ -73,7 +74,9 @@ export interface UseAttachmentsReturn {
 }
 
 function classifyFile(file: File): AttachmentPreviewType {
-  return file.type.startsWith('image/') ? 'image' : 'document';
+  return resolveChatAttachmentMimeType(file.name, file.type)?.startsWith('image/')
+    ? 'image'
+    : 'document';
 }
 
 function formatFileSize(bytes: number): string {
@@ -401,18 +404,19 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
           });
           continue;
         }
-        if (!isSupportedChatAttachment(file.name, file.type)) {
+        const mimeType = resolveChatAttachmentMimeType(file.name, file.type);
+        if (!mimeType || !isSupportedChatAttachment(file.name, mimeType)) {
           issues.push({ file, reason: 'unsupported' });
           continue;
         }
-        if (classifyFile(file) === 'image' && file.size > maxImageSize) {
+        if (mimeType.startsWith('image/') && file.size > maxImageSize) {
           issues.push({ file, reason: 'image_too_large' });
           continue;
         }
         const inline = file.size <= MAX_FILE_SIZE_BYTES;
         if (offer && !inline) {
           const kindMaxBytes =
-            chatLargeFileKindMaxBytes(file.name, file.type) ?? MAX_FILE_SIZE_BYTES;
+            chatLargeFileKindMaxBytes(file.name, mimeType) ?? MAX_FILE_SIZE_BYTES;
           if (file.size > kindMaxBytes) {
             issues.push({ file, reason: 'kind_too_large', limitBytes: kindMaxBytes });
             continue;

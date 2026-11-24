@@ -42,8 +42,6 @@ import {
   type NeutralInputCommand,
 } from './debuggerSession';
 
-export const REDACTED_FIELD_PLACEHOLDER = '[redacted password]';
-
 import {
   ELEMENT_LIST_HEADING,
   PAGE_CONTENT_FENCE_BEGIN,
@@ -681,6 +679,7 @@ async function targetToCoords(
         signal,
         indexed.signature || undefined,
         reveal,
+        tool === 'drag-start' && /^input\|[^|]*\|range\|/i.test(indexed.signature),
       ),
     );
   }
@@ -1117,6 +1116,7 @@ async function selectorToCoords(
   signal?: AbortSignal,
   expectedSignature?: string,
   reveal = true,
+  useRangeThumb = false,
 ): Promise<{ x: number; y: number }> {
   const page = await sendCommand<CdpObjectResult>(
     tabId,
@@ -1145,10 +1145,48 @@ async function selectorToCoords(
   }
   if (reveal) await sendCommand(tabId, 'DOM.scrollIntoViewIfNeeded', { objectId }, signal);
   const inspectPoint = async (): Promise<CdpObjectResult> => {
+    let boxTarget: { objectId: string } | { backendNodeId: number } = { objectId };
+    if (useRangeThumb) {
+      interface RenderedNode {
+        backendNodeId: number;
+        attributes?: string[];
+        children?: RenderedNode[];
+        shadowRoots?: (RenderedNode & { shadowRootType: string })[];
+      }
+      const { node } = await sendCommand<{ node: RenderedNode }>(
+        tabId,
+        'DOM.describeNode',
+        {
+          objectId,
+          depth: 4,
+          pierce: true,
+        },
+        signal,
+      );
+      const pending = [
+        ...(node.shadowRoots?.find((root) => root.shadowRootType === 'user-agent')?.children ?? []),
+      ];
+      let thumb: RenderedNode | undefined;
+      while (pending.length && !thumb) {
+        const child = pending.pop()!;
+        if (
+          child.attributes?.some(
+            (key, i, attrs) => i % 2 === 0 && key === 'id' && attrs[i + 1] === 'thumb',
+          )
+        )
+          thumb = child;
+        else pending.push(...(child.children ?? []));
+      }
+      if (!thumb)
+        throw new Error(
+          'The native slider thumb could not be located. Inspect the current screenshot before dragging.',
+        );
+      boxTarget = { backendNodeId: thumb.backendNodeId };
+    }
     const boxModel = await sendCommand<{ model: CdpBoxModel }>(
       tabId,
       'DOM.getBoxModel',
-      { objectId },
+      boxTarget,
       signal,
     );
     const [x1, y1, x2, , , y3] = boxModel.model.content;
@@ -1412,6 +1450,7 @@ export async function click(
   options: {
     button?: BrowserMouseButton;
     clickCount?: 1 | 2;
+    pointerType?: 'mouse' | 'touch';
     expectedSignature?: string | null;
   } = {},
 ): Promise<ActionPoint> {
@@ -1420,23 +1459,27 @@ export async function click(
     async () => {
       let point = await targetToCoords(tabId, target, signal, 'click');
       const { x, y } = point;
-      await dispatchMouseClick(tabId, x, y, signal, {
-        ...options,
-        beforePress: async () => {
-          if (
-            options.expectedSignature &&
-            (await getTargetSignature(tabId, target, signal)) !== options.expectedSignature
-          ) {
-            throw new Error(
-              'The click target changed after approval. Read the page again before clicking.',
-            );
-          }
-          point = await targetToCoords(tabId, target, signal, 'click');
-          if ((options.button ?? 'left') !== 'right')
-            await assertKnownActivationDestination(tabId, point, null, signal);
-          return point;
-        },
-      });
+      const beforePress = async () => {
+        if (
+          options.expectedSignature &&
+          (await getTargetSignature(tabId, target, signal)) !== options.expectedSignature
+        ) {
+          throw new Error(
+            'The click target changed after approval. Read the page again before clicking.',
+          );
+        }
+        point = await targetToCoords(tabId, target, signal, 'click');
+        if ((options.button ?? 'left') !== 'right')
+          await assertKnownActivationDestination(tabId, point, null, signal);
+        return point;
+      };
+      if (options.pointerType === 'touch') {
+        if ((options.button ?? 'left') !== 'left' || (options.clickCount ?? 1) !== 1)
+          throw new Error('A touch tap requires a single primary activation.');
+        await dispatchTouchGesture(tabId, await beforePress(), null, signal);
+      } else {
+        await dispatchMouseClick(tabId, x, y, signal, { ...options, beforePress });
+      }
       return point;
     },
     signal,
@@ -1882,12 +1925,17 @@ export async function pressKey(
   const mask = modifiers.reduce((value, modifier) => value | KEY_MODIFIERS[modifier], 0);
   const { text, ...keyboard } = definition;
   const typingText = modifiers.some((modifier) => modifier !== 'Shift') ? undefined : text;
-  const commands =
-    key.toLowerCase() === 'a' &&
-    mask === KEY_MODIFIERS['Meta'] &&
-    (await chrome.runtime.getPlatformInfo()).os === 'mac'
-      ? ['selectAll']
+  const metaCommands: Readonly<Record<string, string>> = {
+    a: 'selectAll',
+    ArrowUp: 'moveToBeginningOfDocument',
+    ArrowDown: 'moveToEndOfDocument',
+  };
+  const macCommand =
+    mask === KEY_MODIFIERS['Meta']
+      ? metaCommands[key.length === 1 ? key.toLowerCase() : key]
       : undefined;
+  const commands =
+    macCommand && (await chrome.runtime.getPlatformInfo()).os === 'mac' ? [macCommand] : undefined;
   return withDebugger(
     tabId,
     async () => {
@@ -1981,9 +2029,9 @@ export async function drag(
   return withDebugger(
     tabId,
     async () => {
-      await targetToCoords(tabId, start, signal, 'drag');
+      await targetToCoords(tabId, start, signal, 'drag-start');
       await targetToCoords(tabId, end, signal, 'drag');
-      const from = await targetToCoords(tabId, start, signal, 'drag', false);
+      const from = await targetToCoords(tabId, start, signal, 'drag-start', false);
       const to = await targetToCoords(tabId, end, signal, 'drag', false);
       const fence = await captureHeldInputFence(tabId, false, signal);
       let pressed = false;
@@ -2060,6 +2108,54 @@ export async function drag(
   );
 }
 
+async function dispatchTouchGesture(
+  tabId: number,
+  start: ActionPoint,
+  end: ActionPoint | null,
+  signal?: AbortSignal,
+): Promise<void> {
+  const fence = await captureHeldInputFence(tabId, false, signal);
+  let started = false;
+  try {
+    await sendCommand(
+      tabId,
+      'Input.dispatchTouchEvent',
+      {
+        type: 'touchStart',
+        touchPoints: [{ ...start, id: 0 }],
+      },
+      signal,
+      () => {
+        started = true;
+      },
+    );
+    for (let step = 1; end && step <= POINTER_GESTURE_STEPS; step++) {
+      await sendCommand(
+        tabId,
+        'Input.dispatchTouchEvent',
+        {
+          type: 'touchMove',
+          touchPoints: [{ ...gesturePoint(start, end, step), id: 0 }],
+        },
+        signal,
+      );
+      await waitForPollInterval(POINTER_GESTURE_FRAME_MS, signal);
+    }
+    await sendCommand(
+      tabId,
+      'Input.dispatchTouchEvent',
+      { type: 'touchEnd', touchPoints: [] },
+      signal,
+      () => {
+        started = false;
+      },
+    );
+  } catch (error) {
+    if (started) await neutralizeHeldInput(tabId, fence, { kind: 'touchCancel' }, error, signal);
+    throw error;
+  }
+}
+
 export async function swipe(
   tabId: number,
   start: { x: number; y: number },
@@ -2075,47 +2171,7 @@ export async function swipe(
     async () => {
       await validateViewportPoint(tabId, start, signal);
       await validateViewportPoint(tabId, end, signal);
-      const fence = await captureHeldInputFence(tabId, false, signal);
-      let started = false;
-      try {
-        await sendCommand(
-          tabId,
-          'Input.dispatchTouchEvent',
-          {
-            type: 'touchStart',
-            touchPoints: [{ ...start, id: 0 }],
-          },
-          signal,
-          () => {
-            started = true;
-          },
-        );
-        for (let step = 1; step <= POINTER_GESTURE_STEPS; step++) {
-          await sendCommand(
-            tabId,
-            'Input.dispatchTouchEvent',
-            {
-              type: 'touchMove',
-              touchPoints: [{ ...gesturePoint(start, end, step), id: 0 }],
-            },
-            signal,
-          );
-          await waitForPollInterval(POINTER_GESTURE_FRAME_MS, signal);
-        }
-        await sendCommand(
-          tabId,
-          'Input.dispatchTouchEvent',
-          { type: 'touchEnd', touchPoints: [] },
-          signal,
-          () => {
-            started = false;
-          },
-        );
-      } catch (error) {
-        if (started)
-          await neutralizeHeldInput(tabId, fence, { kind: 'touchCancel' }, error, signal);
-        throw error;
-      }
+      await dispatchTouchGesture(tabId, start, end, signal);
     },
     signal,
   );
@@ -2418,8 +2474,22 @@ export async function readInteractionState(
         let hash = 2166136261;
         const positions = Array.from(document.querySelectorAll('[style], [aria-valuenow]')).slice(0, 1000).map(node => (node.getAttribute('style') || '') + '|' + (node.getAttribute('aria-valuenow') || '')).join('|');
         for (const character of text + field + positions + JSON.stringify(control)) hash = Math.imul(hash ^ character.charCodeAt(0), 16777619);
+        let selection = el && 'selectionStart' in el ? [el.selectionStart, el.selectionEnd] : null;
+        if (el?.isContentEditable) {
+          const current = el.ownerDocument.getSelection();
+          const endpoint = (node, offset) => {
+            if (!node || !el.contains(node)) return null;
+            const path = [];
+            while (node !== el) {
+              path.unshift(Array.prototype.indexOf.call(node.parentNode.childNodes, node));
+              node = node.parentNode;
+            }
+            return [path, offset];
+          };
+          if (current) selection = [endpoint(current.anchorNode, current.anchorOffset), endpoint(current.focusNode, current.focusOffset)];
+        }
         return JSON.stringify({ url: location.href, focus: el ? ${ELEMENT_SIGNATURE_JS}(el) : null, control, hash: hash >>> 0,
-          x: Math.round(scrollX), y: Math.round(scrollY), selection: el && 'selectionStart' in el ? [el.selectionStart, el.selectionEnd] : null,
+          x: Math.round(scrollX), y: Math.round(scrollY), selection,
           elements: document.querySelectorAll('*').length });
       })()`,
           returnByValue: true,
@@ -2552,6 +2622,14 @@ export async function getPageContent(tabId: number, signal?: AbortSignal): Promi
 
         lines.push('');
         lines.push(${toScriptLiteral(PAGE_CONTENT_FENCE_BEGIN)});
+        const statuses = inspected.elements.filter(node =>
+          node.matches('output,[role="status"],[role="alert"]') &&
+          node.checkVisibility({opacityProperty:true, visibilityProperty:true}) &&
+          !node.closest('[aria-hidden="true"],[inert]')).slice(0, 8);
+        for (const node of statuses) {
+          const value = (node.innerText || '').trim().slice(0, 160);
+          if (value) lines.push('Visible status ' + JSON.stringify(reader.labelFor(node) || node.id || node.localName) + ': ' + JSON.stringify(value));
+        }
         const bodyText = (document.body?.innerText || '').replace(/\\s+/g, ' ').trim();
         const remaining = MAX - lines.join('\\n').length - 50;
         if (remaining > 0) {
@@ -2799,11 +2877,13 @@ export async function reload(tabId: number, signal?: AbortSignal): Promise<void>
   );
 }
 
-export async function getFieldValue(
+export async function verifyTypedField(
   tabId: number,
   selector: string,
+  expected: string,
+  replace: boolean,
   signal?: AbortSignal,
-): Promise<string | null> {
+): Promise<boolean | null> {
   return withDebugger(
     tabId,
     async () => {
@@ -2814,36 +2894,39 @@ export async function getFieldValue(
           expression: `(() => {
         const el = ${buildIndexedElementExpression(selector)};
         if (!el) return null;
+        const expected = ${toScriptLiteral(expected)};
+        const matches = (value) => {
+          if (typeof value !== 'string') return null;
+          return ${replace ? 'value === expected' : 'expected.length > 0 && value.includes(expected)'};
+        };
         let inputType = null;
         try {
           inputType = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'type')?.get?.call(el);
         } catch { inputType = null; }
         if (typeof inputType === 'string') {
           const t = inputType.toLowerCase();
-          if (t === 'password' || t === 'hidden') return ${toScriptLiteral(REDACTED_FIELD_PLACEHOLDER)};
+          if (t === 'password' || t === 'hidden') return null;
           try {
-            return Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.get?.call(el) ?? null;
+            return matches(Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.get?.call(el));
           } catch { return null; }
         }
         if (el.localName === 'input') return null;
         for (const constructor of [HTMLTextAreaElement, HTMLSelectElement]) {
           try {
             const value = Object.getOwnPropertyDescriptor(constructor.prototype, 'value')?.get?.call(el);
-            if (typeof value === 'string') return value;
+            if (typeof value === 'string') return matches(value);
           } catch { continue; }
         }
         if (el.localName === 'textarea' || el.localName === 'select') return null;
-        return el.textContent?.trim() ?? null;
+        return matches(el.textContent?.trim());
       })()`,
           returnByValue: true,
         },
         signal,
       );
       if (evalResult.exceptionDetails) return null;
-      const val = evalResult.result.value;
-      if (typeof val !== 'string') return null;
-      if (val === REDACTED_FIELD_PLACEHOLDER) return val;
-      return sanitizePageText(val);
+      const value = evalResult.result.value;
+      return typeof value === 'boolean' ? value : null;
     },
     signal,
   );

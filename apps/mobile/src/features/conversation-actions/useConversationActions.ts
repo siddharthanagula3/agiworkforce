@@ -304,8 +304,12 @@ export function useConversationActions(): ConversationActions {
                   text: 'Delete',
                   style: 'destructive',
                   onPress: guard(() => {
-                    void deleteConversation(conversationId);
-                    options.onDeleted?.();
+                    if (isCloudConversation) showToast('Deleting chat…');
+                    void deleteConversation(conversationId).then((deleted) => {
+                      if (!deleted || !isAccountScopedUiStateOwned(ownership)) return;
+                      if (isCloudConversation) showToast('Chat deleted');
+                      options.onDeleted?.();
+                    });
                   }),
                 },
               ],

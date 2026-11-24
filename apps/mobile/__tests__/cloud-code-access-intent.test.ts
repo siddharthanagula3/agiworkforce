@@ -1,12 +1,13 @@
 import { renderHook } from '@testing-library/react-native';
 
 const mockPush = jest.fn();
+const mockReplace = jest.fn();
 const mockSetAppMode = jest.fn();
 let mockCloudUnlocked = false;
 let mockAppMode = 'local';
 
 jest.mock('expo-router', () => ({
-  useRouter: () => ({ push: mockPush }),
+  useRouter: () => ({ push: mockPush, replace: mockReplace }),
 }));
 
 jest.mock('@/src/features/chat/store/appModeStore', () => ({
@@ -60,5 +61,14 @@ describe('Cloud code access gate', () => {
 
     expect(mockSetAppMode).toHaveBeenCalledWith('cloud');
     expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it('returns directly to Chat when the Code gate was opened by a deep link', () => {
+    const { result } = renderHook(() => useCloudCodeAccess());
+
+    result.current.returnToChat();
+
+    expect(mockReplace).toHaveBeenCalledWith('/(app)/(tabs)/chat');
+    expect(mockSetAppMode).not.toHaveBeenCalled();
   });
 });

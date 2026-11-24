@@ -49,6 +49,8 @@ import { Config } from '../platform/config';
 import * as accountAccess from '../features/surfaces/accountAccess';
 import * as proposedChangeReview from '../features/permissions/proposedChangeReview';
 import * as tierResolver from '../integrations/tierResolver';
+import * as dictationCapture from '../features/sidebar-webview/dictationCapturePage';
+import * as dictationClient from '../features/sidebar-webview/dictationClient';
 
 function completeTurnFor(harness: { emit(event: LocalRuntimeEvent): void }): Promise<void> {
   harness.emit({
@@ -81,6 +83,7 @@ function threadSummary(overrides: Partial<ThreadSummary> = {}): ThreadSummary {
 
 function makeHarness(
   options: {
+    context?: vscode.ExtensionContext;
     approvalFailure?: Error;
     startTurn?: Promise<{ id: string }>;
     localModels?: Array<{ id: string; provider: 'ollama' | 'lmstudio' }>;
@@ -161,7 +164,7 @@ function makeHarness(
   const pool = {
     forWorkspace: vi.fn(() => runtime as unknown as LocalRuntimeClient),
   } as unknown as LocalRuntimePool;
-  const context = new vscode.ExtensionContext();
+  const context = options.context ?? new vscode.ExtensionContext();
   const posted: ExtToWebviewMessage[] = [];
   const conversationTreeProvider =
     options.resolvedConversation === undefined
@@ -982,6 +985,32 @@ describe('ChatStateManager local turn lifecycle', () => {
     );
   });
 
+  it('shows an interrupted session after its writer disappears with no new transcript bytes', async () => {
+    const stored = {
+      thread: threadSummary({ id: 'history-1', status: 'idle' }),
+      messages: [{ role: 'user', text: 'Inspect this workspace' }],
+      transcriptTruncated: false,
+    } satisfies ThreadReadResponse;
+    const harness = makeHarness({ resolvedConversation: stored });
+    await expect(harness.manager.resumeConversation('history-1')).resolves.toBe(true);
+    harness.runtime.readThread.mockResolvedValueOnce({
+      ...stored,
+      thread: { ...stored.thread, status: 'failed' },
+    });
+
+    await harness.manager.syncStoredTranscript();
+
+    const refresh = harness.posted.find((message) => message.type === 'transcriptRefreshed');
+    expect(refresh).toMatchObject({
+      payload: {
+        conversation: {
+          stoppedTurnNotice: 'The previous turn stopped early. You can continue here.',
+        },
+      },
+    });
+    expect(refresh?.payload).not.toHaveProperty('notice');
+  });
+
   it.each(['idle', 'failed'] as const)(
     'resumes a %s runtime session into live chat, replays it after ready, and appends on the same id',
     async (status) => {
@@ -1015,6 +1044,9 @@ describe('ChatStateManager local turn lifecycle', () => {
             { role: 'assistant', text: 'I found the owner module.' },
           ],
           transcriptTruncated: false,
+          ...(status === 'failed'
+            ? { stoppedTurnNotice: 'The previous turn stopped early. You can continue here.' }
+            : {}),
         },
       });
 
@@ -2449,6 +2481,37 @@ describe('ChatStateManager local turn lifecycle', () => {
     );
   });
 
+  it('attaches the selected text to the draft and withholds an ignored file', async () => {
+    const harness = makeHarness();
+    const root = await realContextWorkspace(harness);
+    await fs.writeFile(path.join(root, '.gitignore'), 'ignored.txt\n');
+    await fs.writeFile(path.join(root, 'ignored.txt'), 'ignored fixture text');
+    const included = vscode.Uri.file(path.join(root, 'src/mentioned.ts'));
+    const excluded = vscode.Uri.file(path.join(root, 'ignored.txt'));
+    vi.mocked(vscode.window.showOpenDialog).mockResolvedValueOnce([included, excluded]);
+    vi.mocked(vscode.workspace.asRelativePath).mockReturnValueOnce('src/mentioned.ts');
+    vi.mocked(vscode.workspace.fs.readFile).mockResolvedValueOnce(
+      new TextEncoder().encode('attached text'),
+    );
+
+    await harness.manager.handleMessage({ type: 'openFilePicker' });
+
+    expect(harness.posted.filter(({ type }) => type === 'contextAttached')).toEqual([
+      {
+        type: 'contextAttached',
+        payload: { id: 'att-1', name: expect.stringContaining('mentioned.ts') },
+      },
+    ]);
+    expect(vscode.workspace.fs.readFile).toHaveBeenCalledExactlyOnceWith(included);
+    expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
+      'This file is withheld by the workspace context policy.',
+    );
+    expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith(
+      'agi-workforce.addToContext',
+      included,
+    );
+  });
+
   it('passes the trusted discovered provider with a selected local model', async () => {
     const harness = makeHarness({
       localModels: [{ id: SYNTHETIC_LOCAL_MODEL_ID, provider: 'ollama' }],
@@ -2543,7 +2606,7 @@ describe('ChatStateManager local turn lifecycle', () => {
     await send;
   });
 
-  it('sends the effort a later settings change chose, not the earlier composer pick', async () => {
+  it('keeps a model choice when the default effort changes and uses the new default on other models', async () => {
     const harness = makeHarness();
     harness.runtime.offers.mockImplementation(
       async (capability: string) => capability === 'reasoningEffortLadder',
@@ -2563,15 +2626,25 @@ describe('ChatStateManager local turn lifecycle', () => {
 
     expect(harness.posted.filter((message) => message.type === 'effortChanged').at(-1)).toEqual({
       type: 'effortChanged',
-      payload: expect.objectContaining({ effort: 'low' }),
+      payload: expect.objectContaining({ effort: 'high' }),
     });
+    const other = buildGroupedQuickPickItems('byok').find(
+      (entry) => entry.label.includes('Auto ·') && !entry.disabled,
+    )?.modelId;
+    expect(other).toBeTruthy();
+    await harness.manager.selectModel(other!);
+    expect(
+      harness.posted.filter((message) => message.type === 'effortChanged').at(-1)?.payload.effort,
+    ).toBe('low');
+    await harness.manager.handleMessage({ type: 'setEffort', payload: { effort: 'medium' } });
+    await harness.manager.selectModel('auto');
     const send = harness.manager.handleMessage({
       type: 'sendMessage',
-      payload: { text: 'Think less' },
+      payload: { text: 'Review this' },
     });
     await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
     expect(harness.runtime.startTurn).toHaveBeenCalledWith(
-      expect.objectContaining({ reasoningEffort: 'low' }),
+      expect.objectContaining({ reasoningEffort: 'high' }),
     );
     harness.emit({
       type: 'turn_completed',
@@ -2583,6 +2656,10 @@ describe('ChatStateManager local turn lifecycle', () => {
       outputTokens: 1,
     });
     await send;
+    await harness.manager.selectModel(other!);
+    expect(
+      harness.posted.filter((message) => message.type === 'effortChanged').at(-1)?.payload.effort,
+    ).toBe('medium');
     effortSpy.mockRestore();
   });
 
@@ -4079,6 +4156,257 @@ describe('ChatStateManager local turn lifecycle', () => {
     await send;
   });
 
+  it('applies the selected CLI style to the next turn without changing its mode', async () => {
+    const harness = makeHarness();
+    vi.mocked(vscode.window.showQuickPick).mockImplementationOnce(
+      async (items) =>
+        (await items).find(
+          (entry) => typeof entry !== 'string' && entry.label === 'Concise',
+        ) as never,
+    );
+    await harness.manager.handleMessage({ type: 'openOutputStyles' });
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Inspect the workspace' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    expect(harness.runtime.startTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentMode: 'auto',
+        input: expect.arrayContaining([
+          expect.objectContaining({
+            text: expect.stringMatching(
+              /User-selected response style[\s\S]*## Output style: concise/,
+            ),
+          }),
+        ]),
+      }),
+    );
+    await completeTurnFor(harness);
+    await send;
+  });
+
+  it('uses a one-message effort override without changing the model preference', async () => {
+    const harness = makeHarness();
+    await harness.manager.handleMessage({ type: 'setEffort', payload: { effort: 'low' } });
+    vi.mocked(vscode.window.showQuickPick).mockImplementationOnce(
+      async (items) =>
+        (await items).find((item) => typeof item !== 'string' && item.label === 'High') as never,
+    );
+    await harness.manager.handleMessage({ type: 'openNextEffort' });
+    expect(harness.posted).toContainEqual({ type: 'nextEffort', payload: { label: 'High' } });
+    for (const [index, reasoningEffort] of ['high', 'low'].entries()) {
+      const send = harness.manager.handleMessage({
+        type: 'sendMessage',
+        payload: { text: `Review message ${index + 1}` },
+      });
+      await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledTimes(index + 1));
+      expect(harness.runtime.startTurn).toHaveBeenLastCalledWith(
+        expect.objectContaining({ reasoningEffort }),
+      );
+      await completeTurnFor(harness);
+      await send;
+    }
+    expect(harness.posted).toContainEqual({ type: 'nextEffort', payload: {} });
+  });
+
+  it('starts Edit automatically with the strict shell flag and remembers it for the session', async () => {
+    const harness = makeHarness();
+    await harness.manager.handleMessage({
+      type: 'setMode',
+      payload: { mode: 'auto', editAutomatically: true },
+    });
+    expect(harness.posted).toContainEqual({
+      type: 'modeChanged',
+      payload: { mode: 'auto', editAutomatically: true },
+    });
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Update the local file' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    expect(harness.runtime.startTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentMode: 'auto',
+        requireShellApproval: true,
+      }),
+    );
+    expect(harness.context.workspaceState.get('agiWorkforce.editAutomaticallyThreads')).toEqual([
+      'thread-1',
+    ]);
+    await completeTurnFor(harness);
+    await send;
+    await harness.manager.handleMessage({ type: 'setMode', payload: { mode: 'auto' } });
+    expect(harness.context.workspaceState.get('agiWorkforce.editAutomaticallyThreads')).toEqual([]);
+  });
+
+  it('saves multiple named styles and retains the selected style for a new chat manager', async () => {
+    const harness = makeHarness();
+    await harness.context.globalState.update('agiWorkforce.customOutputStyle', 'Keep prior style.');
+    const choose = (label: string) =>
+      vi
+        .mocked(vscode.window.showQuickPick)
+        .mockImplementationOnce(
+          async (items) =>
+            (await items).find(
+              (entry) => typeof entry !== 'string' && entry.label === label,
+            ) as never,
+        );
+    choose('New custom style…');
+    choose('New custom style…');
+    vi.mocked(vscode.window.showInputBox)
+      .mockResolvedValueOnce('Quick review')
+      .mockResolvedValueOnce('Use a numbered summary.')
+      .mockResolvedValueOnce('Release notes')
+      .mockResolvedValueOnce('Lead with changes users can verify.');
+    await harness.manager.handleMessage({ type: 'openOutputStyles' });
+    await harness.manager.handleMessage({ type: 'openOutputStyles' });
+
+    choose('Edit a custom style…');
+    choose('Quick review');
+    vi.mocked(vscode.window.showInputBox).mockResolvedValueOnce(undefined);
+    await harness.manager.handleMessage({ type: 'openOutputStyles' });
+    expect(vscode.window.showInputBox).toHaveBeenLastCalledWith(
+      expect.objectContaining({ value: 'Use a numbered summary.' }),
+    );
+    expect(harness.context.globalState.get('agiWorkforce.outputStyles')).toMatchObject({
+      selectedId: 'custom:release notes',
+      custom: [
+        { label: 'Custom', instructions: 'Keep prior style.' },
+        { label: 'Quick review', instructions: 'Use a numbered summary.' },
+        { label: 'Release notes', instructions: 'Lead with changes users can verify.' },
+      ],
+    });
+    const reopened = makeHarness({ context: harness.context });
+    const send = reopened.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Inspect workspace changes' },
+    });
+    await vi.waitFor(() => expect(reopened.runtime.startTurn).toHaveBeenCalledOnce());
+    expect(reopened.runtime.startTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.arrayContaining([
+          expect.objectContaining({
+            text: expect.stringContaining('Lead with changes users can verify.'),
+          }),
+        ]),
+      }),
+    );
+    await completeTurnFor(reopened);
+    await send;
+  });
+
+  it('offers Auto draft dictation before a turn and sends signed-out users to sign-in', async () => {
+    const harness = makeHarness();
+    const token = vi.spyOn(api, 'getAccountToken').mockResolvedValue(undefined);
+    try {
+      await harness.manager.handleMessage({ type: 'ready' });
+      expect(harness.posted).toContainEqual({
+        type: 'dictationAvailability',
+        payload: { enabled: true },
+      });
+      await harness.manager.handleMessage({ type: 'startDictation', payload: { id: 1 } });
+      expect(harness.posted).toContainEqual({
+        type: 'dictationResult',
+        payload: { id: 1, error: expect.stringContaining('Sign in'), needsSignIn: true },
+      });
+      expect(harness.runtime.startThread).not.toHaveBeenCalled();
+    } finally {
+      token.mockRestore();
+    }
+  });
+
+  it.each([false, true])(
+    'checks the initial draft before dictation upload (edited: %s)',
+    async (edited) => {
+      const harness = makeHarness();
+      const token = vi.spyOn(api, 'getAccountToken').mockResolvedValue('fixture-token');
+      let finish!: (value: { mimeType: 'audio/webm'; base64: string; language?: string }) => void;
+      const open = vi.spyOn(dictationCapture, 'openDictationCapturePage').mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            finish = resolve;
+          }),
+      );
+      const transcribe = vi
+        .spyOn(dictationClient, 'transcribeDictation')
+        .mockResolvedValue('Fixture transcript');
+      try {
+        const binding = { instance: 'fixture', revision: 0, attachments: 0 };
+        await harness.manager.handleMessage({ type: 'composerState', payload: binding });
+        const dictation = harness.manager.handleMessage({
+          type: 'startDictation',
+          payload: { id: 2 },
+        });
+        await vi.waitFor(() => expect(open).toHaveBeenCalledOnce());
+        if (edited)
+          await harness.manager.handleMessage({
+            type: 'composerState',
+            payload: { ...binding, revision: 1 },
+          });
+        finish({ mimeType: 'audio/webm', base64: 'AAAA', language: 'fr' });
+        await dictation;
+        if (edited) {
+          expect(transcribe).not.toHaveBeenCalled();
+          expect(
+            harness.context.globalState.get(dictationClient.DICTATION_LANGUAGE_KEY),
+          ).toBeUndefined();
+        } else {
+          expect(transcribe).toHaveBeenCalledOnce();
+          expect(harness.posted).toContainEqual({
+            type: 'dictationResult',
+            payload: { id: 2, text: 'Fixture transcript' },
+          });
+          expect(harness.context.globalState.get(dictationClient.DICTATION_LANGUAGE_KEY)).toBe(
+            'fr',
+          );
+        }
+        expect(harness.runtime.startThread).not.toHaveBeenCalled();
+      } finally {
+        token.mockRestore();
+        open.mockRestore();
+        transcribe.mockRestore();
+      }
+    },
+  );
+
+  it('refuses dictation in an established BYOK chat', async () => {
+    const harness = makeHarness();
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Start a BYOK chat' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    await completeTurnFor(harness);
+    await send;
+    await harness.manager.handleMessage({ type: 'startDictation', payload: { id: 2 } });
+    expect(harness.posted).toContainEqual({
+      type: 'dictationResult',
+      payload: { id: 2, error: expect.stringContaining('Managed Cloud') },
+    });
+  });
+
+  it('starts the first turn while the usage meter request is still pending', async () => {
+    const harness = makeHarness();
+    let release!: () => void;
+    const meter = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    vi.spyOn(harness.manager, 'pushUsageMeter').mockReturnValueOnce(meter);
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Review this workspace' },
+    });
+    try {
+      await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+      expect(harness.manager.pushUsageMeter).toHaveBeenCalled();
+      await completeTurnFor(harness);
+      await send;
+    } finally {
+      release();
+    }
+  });
+
   it('stops before turn dispatch when cancellation arrives during thread startup', async () => {
     const harness = makeHarness();
     let resolveThread!: (thread: ThreadSummary) => void;
@@ -4166,6 +4494,7 @@ describe('ChatStateManager local turn lifecycle', () => {
     harness: ReturnType<typeof makeHarness>,
     requestId: string,
     kind: string,
+    requiresExplicitDecision?: boolean,
   ): void {
     harness.emit({
       type: 'approval_requested',
@@ -4173,10 +4502,41 @@ describe('ChatStateManager local turn lifecycle', () => {
       turnId: 'turn-1',
       requestId,
       kind,
+      requiresExplicitDecision,
       summary: 'Allow?',
       detail: kind,
     });
   }
+
+  it('requires a new shell decision even after a session approval was remembered', async () => {
+    const harness = makeHarness();
+    const turn = await runApprovalTurn(harness);
+    const kind = 'Exec { command: "echo check" }';
+    requestApproval(harness, 'first', kind);
+    await vi.waitFor(() =>
+      expect(harness.posted).toContainEqual(
+        expect.objectContaining({
+          type: 'approvalRequested',
+          payload: expect.objectContaining({ requestId: 'first' }),
+        }),
+      ),
+    );
+    await harness.manager.handleMessage({
+      type: 'respondToApproval',
+      payload: { requestId: 'first', decision: 'session' },
+    });
+    requestApproval(harness, 'explicit', kind, true);
+    await vi.waitFor(() =>
+      expect(harness.posted).toContainEqual(
+        expect.objectContaining({
+          type: 'approvalRequested',
+          payload: expect.objectContaining({ requestId: 'explicit', sessionScopeOffered: false }),
+        }),
+      ),
+    );
+    expect(harness.runtime.respondToApproval).toHaveBeenCalledOnce();
+    await turn.finish();
+  });
 
   it('asks again for a push to another branch after one push was allowed for the session', async () => {
     const harness = makeHarness();
@@ -6028,6 +6388,331 @@ describe('ChatStateManager composer-bound conversation navigation', () => {
     return { ...harness, forkThread, rewindThread, listCheckpoints };
   }
 
+  it('toggles a reply bookmark without storing the response in workspace settings', async () => {
+    const harness = await navigationHarness();
+    const action = {
+      type: 'messageAction',
+      payload: {
+        action: 'bookmarkAnswer',
+        text: 'First answer',
+        occurrence: 0,
+        messageIndex: 1,
+        bookmarkButtonId: 7,
+      },
+    } as const;
+
+    await harness.manager.handleMessage(action);
+    const bookmarks = harness.context.workspaceState.get<Array<Record<string, unknown>>>(
+      'agiWorkforce.replyBookmarks',
+    );
+    expect(bookmarks).toEqual([
+      expect.objectContaining({
+        threadId: 'navigation-source',
+        index: 1,
+        digest: expect.any(String),
+      }),
+    ]);
+    expect(JSON.stringify(bookmarks)).not.toContain('First answer');
+    expect(harness.posted).toContainEqual({
+      type: 'replyBookmarkChanged',
+      payload: {
+        epoch: harness.manager.conversationEpoch(),
+        index: 1,
+        buttonId: 7,
+        bookmarked: true,
+      },
+    });
+    const epoch = harness.manager.conversationEpoch();
+    vi.mocked(vscode.window.showQuickPick).mockImplementationOnce(
+      async (items) => (await items)[0] as never,
+    );
+    await harness.manager.handleMessage({ type: 'openReplyBookmarks' });
+    expect(vscode.workspace.openTextDocument).toHaveBeenCalledWith({
+      language: 'markdown',
+      content: 'First answer',
+    });
+    expect(harness.runtime.resumeThread).not.toHaveBeenCalled();
+    expect(harness.manager.conversationEpoch()).toBe(epoch);
+
+    await harness.manager.resumeConversation('navigation-source');
+    expect(harness.posted).toContainEqual(
+      expect.objectContaining({
+        type: 'conversationLoaded',
+        payload: expect.objectContaining({
+          messages: expect.arrayContaining([
+            expect.objectContaining({ text: 'First answer', index: 1, bookmarked: true }),
+          ]),
+        }),
+      }),
+    );
+    await harness.manager.handleMessage(action);
+    expect(harness.context.workspaceState.get('agiWorkforce.replyBookmarks')).toEqual([]);
+    expect(harness.posted).toContainEqual({
+      type: 'replyBookmarkChanged',
+      payload: {
+        epoch: harness.manager.conversationEpoch(),
+        index: 1,
+        buttonId: 7,
+        bookmarked: false,
+      },
+    });
+  });
+
+  it('previews a bookmark from another conversation without replacing the active one', async () => {
+    const harness = await navigationHarness();
+    await harness.manager.handleMessage({
+      type: 'messageAction',
+      payload: { action: 'bookmarkAnswer', text: 'First answer', occurrence: 0 },
+    });
+    await harness.manager.resumeConversation('different-conversation');
+    const epoch = harness.manager.conversationEpoch();
+    harness.runtime.resumeThread.mockClear();
+    harness.posted.length = 0;
+    vi.mocked(vscode.window.showQuickPick).mockImplementationOnce(
+      async (items) => (await items)[0] as never,
+    );
+    await harness.manager.handleMessage({ type: 'openReplyBookmarks' });
+    expect(harness.conversationTreeProvider!.resolveThread).toHaveBeenLastCalledWith(
+      'navigation-source',
+      { includeArchived: true },
+    );
+    expect(vscode.workspace.openTextDocument).toHaveBeenCalledWith({
+      language: 'markdown',
+      content: 'First answer',
+    });
+    expect(harness.runtime.resumeThread).not.toHaveBeenCalled();
+    expect(harness.manager.activeThreadId()).toBe('different-conversation');
+    expect(harness.manager.conversationEpoch()).toBe(epoch);
+    expect(harness.posted.some(({ type }) => type === 'conversationLoaded')).toBe(false);
+  });
+
+  it('keeps the existing bookmarks when the list is full', async () => {
+    const harness = await navigationHarness();
+    const saved = Array.from({ length: 100 }, (_, index) => ({
+      threadId: 'saved-session',
+      index,
+      title: 'Earlier bookmarks',
+      digest: String(index),
+    }));
+    await harness.context.workspaceState.update('agiWorkforce.replyBookmarks', saved);
+    await harness.manager.handleMessage({
+      type: 'messageAction',
+      payload: { action: 'bookmarkAnswer', text: 'First answer', occurrence: 0 },
+    });
+    expect(harness.context.workspaceState.get('agiWorkforce.replyBookmarks')).toEqual(saved);
+    expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
+      expect.stringContaining('bookmark list is full'),
+    );
+  });
+
+  it('persists unread markers for listed sessions and clears one after the user opens it', async () => {
+    const harness = await navigationHarness();
+    Object.assign(harness.conversationTreeProvider!, {
+      listThreads: vi.fn().mockResolvedValue({
+        items: [threadSummary({ id: 'navigation-source' })],
+        failures: [],
+      }),
+    });
+    await harness.manager.handleMessage({ type: 'requestSessions', payload: { source: 'local' } });
+    await harness.manager.handleMessage({
+      type: 'setSessionUnread',
+      payload: { id: 'navigation-source', unread: true },
+    });
+    await harness.manager.handleMessage({
+      type: 'setSessionUnread',
+      payload: { id: 'unlisted-session', unread: true },
+    });
+    expect(harness.context.workspaceState.get('agiWorkforce.unreadSessions')).toEqual([
+      'navigation-source',
+    ]);
+    await harness.manager.handleMessage({ type: 'requestSessions', payload: { source: 'local' } });
+    expect(harness.posted.at(-1)).toMatchObject({
+      type: 'sessionsList',
+      payload: { rows: [{ id: 'navigation-source', unread: true }] },
+    });
+    await harness.manager.handleMessage({
+      type: 'openSessionRow',
+      payload: { id: 'navigation-source', source: 'local' },
+    });
+    expect(harness.context.workspaceState.get('agiWorkforce.unreadSessions')).toEqual([]);
+    expect(harness.posted.at(-1)).toMatchObject({
+      type: 'sessionUnreadChanged',
+      payload: { id: 'navigation-source', unread: false },
+    });
+  });
+
+  it('pins only an eligible Local row and returns the Pin or Unpin order from the runtime', async () => {
+    const harness = await navigationHarness();
+    let pinned = true;
+    const setThreadPinned = vi.fn(async (_id: string, value: boolean) => {
+      pinned = value;
+      return true;
+    });
+    Object.assign(harness.conversationTreeProvider!, {
+      setThreadPinned,
+      listThreads: vi.fn(async () => ({
+        items: [
+          threadSummary({ id: 'recent', updatedAt: '2026-11-24T15:00:00Z' }),
+          threadSummary({ id: 'older', updatedAt: '2026-11-20T15:00:00Z', pinned }),
+        ],
+        failures: [],
+        pinSupportedIds: new Set(['older']),
+      })),
+    });
+    await harness.manager.handleMessage({ type: 'requestSessions', payload: { source: 'local' } });
+    expect(harness.posted.at(-1)).toMatchObject({
+      type: 'sessionsList',
+      payload: { rows: [{ id: 'older', pinned: true, canPin: true }, { id: 'recent' }] },
+    });
+    await harness.manager.handleMessage({
+      type: 'setSessionPinned',
+      payload: { id: 'recent', pinned: true },
+    });
+    await harness.manager.handleMessage({
+      type: 'setSessionPinned',
+      payload: { id: 'unlisted', pinned: true },
+    });
+    await harness.manager.handleMessage({
+      type: 'setSessionPinned',
+      payload: { id: 'older', pinned: false },
+    });
+    expect(setThreadPinned).toHaveBeenCalledExactlyOnceWith('older', false);
+    expect(harness.posted.at(-1)).toMatchObject({
+      type: 'sessionsList',
+      payload: { rows: [{ id: 'recent' }, { id: 'older', canPin: true }] },
+    });
+  });
+
+  it('moves a whole selection into a named group and rejects a selection with an unlisted session', async () => {
+    const harness = await navigationHarness();
+    Object.assign(harness.conversationTreeProvider!, {
+      listThreads: vi.fn().mockResolvedValue({
+        items: [
+          threadSummary({ id: 'navigation-source' }),
+          threadSummary({ id: 'second-session' }),
+        ],
+        failures: [],
+      }),
+    });
+    const choose = (label: string) =>
+      vi
+        .mocked(vscode.window.showQuickPick)
+        .mockImplementationOnce(
+          async (items) =>
+            (await items).find((item) => typeof item !== 'string' && item.label === label) as never,
+        );
+    await harness.manager.handleMessage({ type: 'requestSessions', payload: { source: 'local' } });
+    await harness.manager.handleMessage({
+      type: 'chooseSessionGroup',
+      payload: { ids: ['navigation-source', 'not-listed'] },
+    });
+    expect(vscode.window.showQuickPick).not.toHaveBeenCalled();
+    choose('New session group…');
+    vi.mocked(vscode.window.showInputBox).mockResolvedValueOnce('Release work');
+    await harness.manager.handleMessage({
+      type: 'chooseSessionGroup',
+      payload: { ids: ['navigation-source', 'second-session'] },
+    });
+    const payload = harness.posted.at(-1);
+    expect(payload).toMatchObject({
+      type: 'sessionGroupChanged',
+      payload: {
+        ids: ['navigation-source', 'second-session'],
+        groupId: expect.any(String),
+        groups: [{ id: expect.any(String), name: 'Release work' }],
+      },
+    });
+    if (payload?.type !== 'sessionGroupChanged') throw new Error('Expected group change');
+    const { groupId } = payload.payload;
+
+    await harness.manager.handleMessage({ type: 'requestSessions', payload: { source: 'local' } });
+    expect(harness.posted.at(-1)).toMatchObject({
+      type: 'sessionsList',
+      payload: {
+        rows: [
+          { id: 'navigation-source', groupId },
+          { id: 'second-session', groupId },
+        ],
+      },
+    });
+    choose('Remove from group');
+    await harness.manager.handleMessage({
+      type: 'chooseSessionGroup',
+      payload: { id: 'navigation-source' },
+    });
+    await harness.manager.handleMessage({ type: 'requestSessions', payload: { source: 'local' } });
+    expect(harness.posted.at(-1)).toMatchObject({
+      type: 'sessionsList',
+      payload: {
+        groups: [{ id: groupId, name: 'Release work' }],
+        rows: [{ id: 'navigation-source' }, { id: 'second-session', groupId }],
+      },
+    });
+  });
+
+  it('renames, reorders and removes groups without changing their sessions', async () => {
+    const harness = await navigationHarness();
+    const key = 'agiWorkforce.sessionGroups';
+    const assignments = [{ sessionId: 'navigation-source', groupId: 'one' }];
+    await harness.context.workspaceState.update(key, {
+      groups: [
+        { id: 'one', name: 'Release' },
+        { id: 'two', name: 'Research' },
+      ],
+      assignments,
+    });
+    const choose = (label: string) =>
+      vi
+        .mocked(vscode.window.showQuickPick)
+        .mockImplementationOnce(
+          async (items) =>
+            (await items).find((item) => typeof item !== 'string' && item.label === label) as never,
+        );
+    choose('Release');
+    choose('Rename group');
+    vi.mocked(vscode.window.showInputBox).mockResolvedValueOnce('Release QA');
+    await harness.manager.handleMessage({ type: 'manageSessionGroups' });
+    expect(harness.context.workspaceState.get(key)).toEqual({
+      groups: [
+        { id: 'one', name: 'Release QA' },
+        { id: 'two', name: 'Research' },
+      ],
+      assignments,
+    });
+
+    choose('Release QA');
+    choose('Move group down');
+    await harness.manager.handleMessage({ type: 'manageSessionGroups' });
+    const reordered = {
+      groups: [
+        { id: 'two', name: 'Research' },
+        { id: 'one', name: 'Release QA' },
+      ],
+      assignments,
+    };
+    expect(harness.context.workspaceState.get(key)).toEqual(reordered);
+
+    choose('Release QA');
+    choose('Delete group…');
+    vi.mocked(vscode.window.showWarningMessage).mockResolvedValueOnce(undefined);
+    await harness.manager.handleMessage({ type: 'manageSessionGroups' });
+    expect(harness.context.workspaceState.get(key)).toEqual(reordered);
+
+    choose('Release QA');
+    choose('Delete group…');
+    vi.mocked(vscode.window.showWarningMessage).mockResolvedValueOnce('Delete group' as never);
+    await harness.manager.handleMessage({ type: 'manageSessionGroups' });
+    expect(harness.context.workspaceState.get(key)).toEqual({
+      groups: [{ id: 'two', name: 'Research' }],
+      assignments: [],
+    });
+    expect(harness.manager.activeThreadId()).toBe('navigation-source');
+    expect(harness.posted.at(-1)).toMatchObject({
+      type: 'sessionGroupsChanged',
+      payload: { groups: [{ id: 'two', name: 'Research' }] },
+    });
+  });
+
   function navigate(
     harness: Awaited<ReturnType<typeof navigationHarness>>,
     action: 'branch' | 'resend' | 'checkpoint',
@@ -6049,6 +6734,48 @@ describe('ChatStateManager composer-bound conversation navigation', () => {
       payload: { action, text: 'Continue here', occurrence: 0, composer: { ...composer } },
     });
   }
+
+  it('opens the new fork returned by checkpoint recovery and restores the prompt as a draft', async () => {
+    const harness = await navigationHarness();
+    harness.runtime.offers.mockImplementation(
+      async (capability) => capability === 'checkpoints' || capability === 'forkAndRewind',
+    );
+    const listed = await harness.listCheckpoints();
+    harness.listCheckpoints.mockResolvedValueOnce({
+      checkpoints: [{ ...listed.checkpoints[0], trackedFiles: 1 }],
+    });
+    vi.mocked(vscode.window.showQuickPick)
+      .mockImplementationOnce(async (items) => (await items)[0] as never)
+      .mockImplementationOnce(
+        async (items) =>
+          (await items).find(
+            (item: { label: string }) => item.label === 'Fork conversation and rewind code',
+          ) as never,
+      );
+    vi.mocked(vscode.window.showWarningMessage).mockResolvedValueOnce('Fork and rewind' as never);
+    harness.rewindThread.mockResolvedValueOnce({
+      ...rewindOutcome,
+      thread: threadSummary({ id: 'navigation-fork' }),
+    });
+
+    await harness.manager.showCheckpoints();
+
+    expect(harness.rewindThread).toHaveBeenCalledWith({
+      threadId: 'navigation-source',
+      checkpointIndex: 0,
+      restore: 'fork_and_code',
+    });
+    expect(harness.manager.activeThreadId()).toBe('navigation-fork');
+    expect(harness.posted).toContainEqual({
+      type: 'composerDraft',
+      payload: {
+        text: 'Continue here',
+        references: [],
+        submit: false,
+        expectedComposer: { ...composer, epoch: expect.any(Number) },
+      },
+    });
+  });
 
   it.each(['branch', 'resend', 'checkpoint'] as const)(
     'keeps a newer resume authoritative after delayed %s finishes',

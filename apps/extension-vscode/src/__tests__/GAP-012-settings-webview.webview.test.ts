@@ -154,7 +154,7 @@ describe('settings webview', () => {
           doc.querySelector<HTMLElement>(`.nav-button[data-section="${section}"]`)?.textContent,
       ),
     ).toEqual([
-      'Session',
+      'General',
       'Runtime',
       'Instructions & editor',
       'Usage & billing',

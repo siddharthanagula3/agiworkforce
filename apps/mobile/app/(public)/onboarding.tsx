@@ -81,18 +81,15 @@ const DOWNLOAD_FAILED_MESSAGE = 'Download failed. You can try again or continue 
 type DeviceTierInfo = {
   tier: LocalRuntimeTier;
   tier1Runtime: DeviceCapabilities['tier1Runtime'];
+  tier2Available: boolean | null;
   deviceName: string;
   ramGB: number;
   osVersion: string;
 };
 
-function tierFromCapabilities(
-  totalRAMMB: number,
-  tier1Available: boolean,
-  tier2Available: boolean,
-): LocalRuntimeTier {
+function tierFromCapabilities(tier1Available: boolean, tier2Available: boolean): LocalRuntimeTier {
   if (tier1Available) return 1;
-  if (tier2Available || totalRAMMB >= 3000) return 2;
+  if (tier2Available) return 2;
   return 3;
 }
 
@@ -149,6 +146,7 @@ export default function OnboardingScreen() {
   const [deviceInfo, setDeviceInfo] = useState<DeviceTierInfo>({
     tier: 2,
     tier1Runtime: null,
+    tier2Available: null,
     deviceName: 'Your device',
     ramGB: 4,
     osVersion: 'Unknown',
@@ -156,6 +154,8 @@ export default function OnboardingScreen() {
   const [recommendedModel, setRecommendedModel] = useState<RecommendedModel>(() =>
     pickRecommendedModel(2),
   );
+  const modelUnavailable =
+    deviceInfo.tier2Available === false && Boolean(recommendedModel.executorchPreset);
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [downloadSpeedMBs, setDownloadSpeedMBs] = useState(0);
   const [downloadError, setDownloadError] = useState<string | null>(null);
@@ -195,11 +195,7 @@ export default function OnboardingScreen() {
       .then((caps) => {
         if (!isMounted) return;
 
-        const tier = tierFromCapabilities(
-          caps.totalRAMMB,
-          caps.tier1Available,
-          caps.tier2Available,
-        );
+        const tier = tierFromCapabilities(caps.tier1Available, caps.tier2Available);
         const ramGB = Math.max(1, Math.round(caps.totalRAMMB / 1024));
         const deviceName =
           Constants.platform?.ios?.model ??
@@ -208,7 +204,14 @@ export default function OnboardingScreen() {
           'Your device';
         const osVersion = caps.osVersion || (Constants.platform?.ios?.systemVersion ?? 'Unknown');
 
-        setDeviceInfo({ tier, tier1Runtime: caps.tier1Runtime, deviceName, ramGB, osVersion });
+        setDeviceInfo({
+          tier,
+          tier1Runtime: caps.tier1Runtime,
+          tier2Available: caps.tier2Available,
+          deviceName,
+          ramGB,
+          osVersion,
+        });
         setRecommendedModel(pickRecommendedModel(tier, caps.tier1Runtime));
       })
       .catch(() => {
@@ -324,6 +327,7 @@ export default function OnboardingScreen() {
 
   const handleStartDownload = useCallback(
     (cellularEnabled = false) => {
+      if (modelUnavailable) return;
       // The choice made here is the persisted policy every later download reads.
       useModelInstallStore.getState().setAllowCellularDownloads(cellularEnabled);
       if (!recommendedModel.needsDownload) {
@@ -389,7 +393,7 @@ export default function OnboardingScreen() {
 
       setDownloadError('This model cannot be downloaded yet. Pick a different model to continue.');
     },
-    [recommendedModel, finishOnboarding],
+    [recommendedModel, finishOnboarding, modelUnavailable],
   );
 
   const canRetryDownload = Boolean(
@@ -435,8 +439,10 @@ export default function OnboardingScreen() {
             primaryButtonTextColor={primaryButtonTextColor}
             deviceInfo={deviceInfo}
             model={recommendedModel}
+            modelUnavailable={modelUnavailable}
             onDownload={handleStartDownload}
             onPickModel={handlePickModel}
+            onSkip={handleSkipToChat}
             onContinueToCloud={handleContinueToCloud}
           />
         )}
@@ -659,21 +665,27 @@ function DeviceTierScreen({
   primaryButtonTextColor,
   deviceInfo,
   model,
+  modelUnavailable,
   onDownload,
   onPickModel,
+  onSkip,
   onContinueToCloud,
 }: {
   colors: ColorScheme;
   primaryButtonTextColor: string;
   deviceInfo: DeviceTierInfo;
   model: RecommendedModel;
+  modelUnavailable: boolean;
   onDownload: (cellularEnabled: boolean) => void;
   onPickModel: () => void;
+  onSkip: () => void;
   onContinueToCloud: () => void;
 }) {
-  const deviceSummary = model.needsDownload
-    ? 'Download one local model to start private chats on this device.'
-    : 'A built-in local model is ready to use.';
+  const deviceSummary = modelUnavailable
+    ? `${model.displayName} is unavailable on this device.`
+    : model.needsDownload
+      ? 'Download one local model to start private chats on this device.'
+      : 'A local model is ready to use on this device.';
   const [cellularEnabled, setCellularEnabled] = useState(false);
 
   return (
@@ -693,39 +705,43 @@ function DeviceTierScreen({
 
       <Text style={[styles.tierSubhead, { color: colors.textMuted }]}>{deviceSummary}</Text>
 
-      <View
-        style={[
-          styles.modelCard,
-          {
-            backgroundColor: colors.surfaceElevated,
-            borderColor: colors.border,
-          },
-        ]}
-      >
-        <View style={styles.modelCardHeader}>
-          <Text style={[styles.modelName, { color: colors.textPrimary }]}>{model.displayName}</Text>
-          <View style={[styles.tierBadge, { backgroundColor: colors.accentSurface }]}>
-            <Text style={[styles.tierBadgeText, { color: colors.teal }]}>Recommended</Text>
+      {!modelUnavailable && (
+        <View
+          style={[
+            styles.modelCard,
+            {
+              backgroundColor: colors.surfaceElevated,
+              borderColor: colors.border,
+            },
+          ]}
+        >
+          <View style={styles.modelCardHeader}>
+            <Text style={[styles.modelName, { color: colors.textPrimary }]}>
+              {model.displayName}
+            </Text>
+            <View style={[styles.tierBadge, { backgroundColor: colors.accentSurface }]}>
+              <Text style={[styles.tierBadgeText, { color: colors.teal }]}>Recommended</Text>
+            </View>
           </View>
+
+          {model.needsDownload ? (
+            <>
+              <Text style={[styles.modelDetail, { color: colors.textMuted }]}>
+                {formatAttachmentSize(model.fileSizeBytes)} download · Wi-Fi recommended
+              </Text>
+              <Text style={[styles.modelDetail, { color: colors.textMuted }]}>
+                Download time depends on your connection.
+              </Text>
+            </>
+          ) : (
+            <Text style={[styles.modelDetail, { color: colors.textMuted }]}>
+              Already on your device · Zero download
+            </Text>
+          )}
         </View>
+      )}
 
-        {model.needsDownload ? (
-          <>
-            <Text style={[styles.modelDetail, { color: colors.textMuted }]}>
-              {formatAttachmentSize(model.fileSizeBytes)} download · Wi-Fi recommended
-            </Text>
-            <Text style={[styles.modelDetail, { color: colors.textMuted }]}>
-              Download time depends on your connection.
-            </Text>
-          </>
-        ) : (
-          <Text style={[styles.modelDetail, { color: colors.textMuted }]}>
-            Already on your device · Zero download
-          </Text>
-        )}
-      </View>
-
-      {model.needsDownload && (
+      {!modelUnavailable && model.needsDownload && (
         <PressableBox
           testID="device-tier-cellular-toggle"
           onPress={() => setCellularEnabled((v) => !v)}
@@ -741,29 +757,44 @@ function DeviceTierScreen({
         </PressableBox>
       )}
 
-      <PressableBox
-        testID="device-tier-download-btn"
-        onPress={() => onDownload(cellularEnabled)}
-        accessibilityRole="button"
-        accessibilityLabel={model.needsDownload ? 'Download model' : 'Continue'}
-        style={[styles.ctaBtn, { backgroundColor: colors.teal, marginTop: 24 }]}
-      >
-        <Text style={[styles.ctaBtnText, { color: primaryButtonTextColor }]}>
-          {model.needsDownload ? `Download ${model.displayName}` : 'Continue'}
-        </Text>
-      </PressableBox>
+      {!modelUnavailable && (
+        <PressableBox
+          testID="device-tier-download-btn"
+          onPress={() => onDownload(cellularEnabled)}
+          accessibilityRole="button"
+          accessibilityLabel={model.needsDownload ? 'Download model' : 'Continue'}
+          style={[styles.ctaBtn, { backgroundColor: colors.teal, marginTop: 24 }]}
+        >
+          <Text style={[styles.ctaBtnText, { color: primaryButtonTextColor }]}>
+            {model.needsDownload ? `Download ${model.displayName}` : 'Continue'}
+          </Text>
+        </PressableBox>
+      )}
 
       <PressableBox
         testID="device-tier-pick-model-btn"
         accessibilityRole="button"
-        accessibilityLabel="Pick a different model"
+        accessibilityLabel={modelUnavailable ? 'Browse local models' : 'Pick a different model'}
         onPress={onPickModel}
         style={styles.secondaryBtn}
       >
         <Text style={[styles.secondaryBtnText, { color: colors.textSecondary }]}>
-          Pick a different model
+          {modelUnavailable ? 'Browse local models' : 'Pick a different model'}
         </Text>
       </PressableBox>
+
+      {modelUnavailable || model.needsDownload ? (
+        <PressableBox
+          testID="device-tier-skip-btn"
+          accessibilityRole="button"
+          onPress={onSkip}
+          style={styles.secondaryBtn}
+        >
+          <Text style={[styles.secondaryBtnText, { color: colors.textSecondary }]}>
+            {modelUnavailable ? 'Continue without a local model' : 'Continue without downloading'}
+          </Text>
+        </PressableBox>
+      ) : null}
 
       {/* Cloud path, reach catalog-selected hosted models + cloud tools/web
           search without downloading a local model. Sign-in is the entitlement. */}

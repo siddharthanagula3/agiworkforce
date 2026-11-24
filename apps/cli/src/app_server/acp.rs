@@ -1358,6 +1358,7 @@ mod tests {
             updated_at: "2026-10-22T00:00:00Z".to_string(),
             created_by: DeveloperSessionSource::Cli,
             status: ThreadStatus::Idle,
+            pinned: None,
             location: None,
         }
     }

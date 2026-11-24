@@ -40,6 +40,7 @@ export interface ShortcutsSectionDependencies {
 export interface ShortcutsSection {
   element: HTMLElement;
   setActive(active: boolean): void;
+  accountChanged(): void;
   refresh(): Promise<void>;
 }
 
@@ -82,6 +83,8 @@ export function createShortcutsSection(
   };
 
   let saved: SavedShortcutRow[] = [];
+  let active = false;
+  let readGeneration = 0;
   const promptShortcuts = (): PromptShortcut[] => promptShortcutsFromSaved(saved);
 
   const toolbar = el('div', { class: 'opt-row' });
@@ -411,15 +414,17 @@ export function createShortcutsSection(
   };
 
   const refresh = async (): Promise<void> => {
+    const generation = ++readGeneration;
     try {
       const response = await send<SuccessResponse & { shortcuts?: SavedShortcutRow[] }>({
         type: 'LIST_SHORTCUTS',
       });
+      if (generation !== readGeneration) return;
       if (!response?.success) throw new Error('list failed');
       saved = response.shortcuts ?? [];
       renderList();
     } catch {
-      announce(t('spWorkflowLoadFailed'), true);
+      if (generation === readGeneration) announce(t('spWorkflowLoadFailed'), true);
     }
   };
 
@@ -437,7 +442,14 @@ export function createShortcutsSection(
   return {
     element,
     refresh,
-    setActive(active: boolean): void {
+    accountChanged(): void {
+      readGeneration += 1;
+      saved = [];
+      renderList();
+      if (active) void refresh();
+    },
+    setActive(visible: boolean): void {
+      active = visible;
       dependencies.schedules?.setActive(active);
       if (active) void refresh();
     },
@@ -478,6 +490,15 @@ function buildRecordingRows(
   const capture = el('input', { type: 'checkbox', id: 'opt-record-capture' });
   captureRow.append(capture, el('span', { class: 'opt-row-hint' }, t('optRecordCaptureValues')));
   wrap.appendChild(captureRow);
+  const follow = el('input', { type: 'checkbox', id: 'opt-record-follow' });
+  wrap.appendChild(
+    el(
+      'label',
+      { class: 'opt-row opt-record-capture' },
+      follow,
+      el('span', { class: 'opt-row-hint' }, t('optRecordFollowPages')),
+    ),
+  );
 
   const saveBox = el('form', { class: 'opt-shortcut-form', id: 'opt-record-save' });
   saveBox.hidden = true;
@@ -560,7 +581,11 @@ function buildRecordingRows(
             announce(t('spRecordingPrivacySaveFailed'), true);
             return;
           }
-          const response = await send<SuccessResponse>({ type: 'START_RECORDING', tabId: tab.id });
+          const response = await send<SuccessResponse>({
+            type: 'START_RECORDING',
+            tabId: tab.id,
+            ...(follow.checked ? { followPages: true, captureValues: capture.checked } : {}),
+          });
           if (!response?.success) {
             announce(response?.error ?? t('optRecordStartFailed'), true);
             return;

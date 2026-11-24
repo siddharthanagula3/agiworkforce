@@ -1,4 +1,5 @@
 import { spreadsheetSafeExport } from './tabular';
+import { trimFilenameStem } from './filename';
 import type { Artifact } from './types';
 
 // keep in step with ArtifactRenderer.getFileExtension: the two resolvers must name the
@@ -21,7 +22,9 @@ function artifactDownloadExtension(artifact: Artifact): string {
 }
 
 function artifactDownloadFileName(artifact: Artifact): string {
-  const slug = (artifact.title ?? 'artifact').replace(/\s+/g, '-').toLowerCase();
+  const slug = trimFilenameStem(artifact.title ?? 'artifact')
+    .replace(/\s+/g, '-')
+    .toLowerCase();
   return `${slug}.${artifactDownloadExtension(artifact)}`;
 }
 

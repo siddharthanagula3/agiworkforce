@@ -23,6 +23,22 @@ const SYNTHETIC_RUNTIME_MODEL_ID = 'fixture-runtime-model';
 // exercised against the shape the CLI documents rather than a hand-written
 // object per test.
 const V8_RESULTS = {
+  'checkpoint/list': {
+    threadId: 'thread-1',
+    available: true,
+    turns: [
+      { turnId: 'edited', finishedAt: '2026-11-23T00:00:00Z', files: [{ path: 'src/changed.ts' }] },
+      { turnId: 'no-edits', finishedAt: '2026-11-23T00:01:00Z', files: [] },
+      { turnId: 'unfinished', files: [{ path: 'src/pending.ts' }] },
+    ],
+  },
+  'checkpoint/diff': {
+    threadId: 'thread-1',
+    turnId: 'turn-1',
+    index: 1,
+    files: [],
+  },
+  'thread/archiveInactive': { archived: false },
   'account/status': {
     signedIn: true,
     email: 'developer@example.com',
@@ -201,6 +217,7 @@ function fakeRuntime(
     trustMode?: string;
     createdBy?: string;
     threadStatus?: string;
+    threadPin?: boolean;
     childTasks?: unknown;
   } = {},
 ): {
@@ -228,6 +245,11 @@ function fakeRuntime(
       requests.push(request);
       const method = request.method;
       if (typeof method === 'string' && options.ignoreMethods?.includes(method) === true) continue;
+      if (method === 'thread/pin') {
+        const { pinned } = request.params as { pinned: boolean };
+        stdout.write(`${JSON.stringify({ jsonrpc: '2.0', id: request.id, result: { pinned } })}\n`);
+        continue;
+      }
       const result =
         method === 'initialize'
           ? options.legacyInitialize === true
@@ -252,6 +274,7 @@ function fakeRuntime(
                   checkpoints: false,
                   worktrees: false,
                   models: true,
+                  ...(options.threadPin ? { threadPin: true } : {}),
                 },
                 ...options.initializeExtra,
               }
@@ -820,6 +843,31 @@ describe('LocalRuntimeClient', () => {
     await client.dispose();
   });
 
+  it('uses the runtime pin capability for both pinning and unpinning', async () => {
+    const runtime = fakeRuntime(8, { threadPin: true });
+    const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
+      cliPath: 'agi',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      spawn: runtime.spawn,
+    });
+    try {
+      await client.setThreadPinned({ threadId: 'thread-1', pinned: true });
+      await client.setThreadPinned({ threadId: 'thread-1', pinned: false });
+      expect(
+        runtime.requests
+          .filter(({ method }) => method === 'thread/pin')
+          .map(({ params }) => params),
+      ).toEqual([
+        { threadId: 'thread-1', pinned: true },
+        { threadId: 'thread-1', pinned: false },
+      ]);
+    } finally {
+      await client.dispose();
+    }
+  });
+
   it('carries the measured context apart from the turn’s summed tokens, and nothing from an older CLI', async () => {
     const runtime = fakeRuntime();
     const client = new LocalRuntimeClient({
@@ -1329,6 +1377,62 @@ describe('LocalRuntimeClient', () => {
     await olderClient.dispose();
   });
 
+  it('lists only completed checkpoints with changes for the requested session', async () => {
+    const runtime = fakeRuntime(8, {
+      initializeExtra: {
+        capabilities: {
+          threads: true,
+          turns: true,
+          streaming: true,
+          approvals: true,
+          tools: true,
+          mcp: true,
+          checkpoints: true,
+          worktrees: false,
+          models: true,
+        },
+      },
+    });
+    const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
+      cliPath: 'agi',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      spawn: runtime.spawn,
+    });
+    try {
+      await expect(client.listReviewableTurnFiles('thread-1')).resolves.toEqual(
+        new Map([['edited', ['src/changed.ts']]]),
+      );
+      await expect(client.listReviewableTurnFiles('other-thread')).rejects.toThrow(
+        'The CLI returned saved changes for a different session.',
+      );
+    } finally {
+      await client.dispose();
+    }
+  });
+
+  it('rejects a saved diff returned for a different turn', async () => {
+    const runtime = fakeRuntime();
+    const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
+      cliPath: 'agi',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      spawn: runtime.spawn,
+    });
+    try {
+      await expect(client.readTurnCheckpointDiff('thread-1', 'turn-1')).resolves.toEqual(
+        V8_RESULTS['checkpoint/diff'],
+      );
+      await expect(client.readTurnCheckpointDiff('thread-1', 'turn-2')).rejects.toThrow(
+        'The CLI returned a checkpoint for a different turn.',
+      );
+    } finally {
+      await client.dispose();
+    }
+  });
+
   it('reads and archives runtime-owned thread history', async () => {
     const runtime = fakeRuntime();
     const client = new LocalRuntimeClient({
@@ -1353,6 +1457,94 @@ describe('LocalRuntimeClient', () => {
       'thread/archive',
     ]);
     await client.dispose();
+  });
+
+  it('uses the inactivity-aware RPC only when the host advertises it', async () => {
+    const params = { threadId: 'thread-1', inactiveBefore: '2026-11-01T00:00:00Z' };
+    const older = fakeRuntime();
+    const newer = fakeRuntime(8, {
+      initializeExtra: {
+        capabilities: {
+          threads: true,
+          turns: true,
+          streaming: true,
+          approvals: true,
+          tools: true,
+          mcp: true,
+          checkpoints: true,
+          worktrees: true,
+          models: true,
+          inactiveThreadArchive: true,
+        },
+      },
+    });
+    for (const [runtime, expected] of [
+      [older, undefined],
+      [newer, { archived: false }],
+    ] as const) {
+      const client = new LocalRuntimeClient({
+        workspaceTrusted: () => true,
+        cliPath: 'agi',
+        cwd: '/workspace',
+        clientVersion: '0.3.0',
+        spawn: runtime.spawn,
+      });
+      expect(await client.archiveInactiveThread(params)).toEqual(expected);
+      await client.dispose();
+    }
+    expect(older.requests.map(({ method }) => method)).toEqual(['initialize', 'shutdown']);
+    expect(newer.requests.map(({ method }) => method)).toEqual([
+      'initialize',
+      'thread/archiveInactive',
+      'shutdown',
+    ]);
+    expect(newer.requests[1]?.params).toEqual(params);
+  });
+
+  it('passes shell approval to new turns and refuses older hosts without starting the turn', async () => {
+    const capable = fakeRuntime(8, {
+      initializeExtra: {
+        capabilities: {
+          threads: true,
+          turns: true,
+          streaming: true,
+          approvals: true,
+          tools: true,
+          mcp: true,
+          checkpoints: true,
+          worktrees: true,
+          models: true,
+          requireShellApproval: true,
+        },
+      },
+    });
+    const older = fakeRuntime();
+    const turn = { threadId: 'thread-1', input: [], agentMode: 'auto' } as const;
+    const clientFor = (runtime: typeof older) =>
+      new LocalRuntimeClient({
+        workspaceTrusted: () => true,
+        cliPath: 'agi',
+        cwd: '/workspace',
+        clientVersion: '0.3.0',
+        requireShellApproval: () => true,
+        spawn: runtime.spawn,
+      });
+    const newerClient = clientFor(capable);
+    const olderClient = clientFor(older);
+    try {
+      await newerClient.startTurn({ ...turn, input: [] });
+      expect(capable.requests.at(-1)).toMatchObject({
+        method: 'turn/start',
+        params: { requireShellApproval: true },
+      });
+      await expect(olderClient.startTurn({ ...turn, input: [] })).rejects.toThrow(
+        'Update the AGI CLI to require approval for every shell command.',
+      );
+      expect(older.requests.map(({ method }) => method)).toEqual(['initialize']);
+    } finally {
+      await newerClient.dispose();
+      await olderClient.dispose();
+    }
   });
 
   it('keeps the subagent tasks a thread read reports, and drops a malformed list', async () => {

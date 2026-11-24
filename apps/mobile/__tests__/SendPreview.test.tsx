@@ -1,8 +1,11 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 
 import React from 'react';
-import { render, fireEvent } from '@testing-library/react-native';
+import { render, fireEvent, within } from '@testing-library/react-native';
+import { Dimensions, StyleSheet, View } from 'react-native';
 import { summarizeSendPreview, type SendPreviewPresentation } from '@agiworkforce/types';
+import { TextScaleContext } from '@/components/ui/textScale';
+import { STACKED_ROW_TEXT_SCALE } from '@/src/ui/theme/tokens';
 
 jest.mock('@/src/ui/theme', () => {
   const actual = jest.requireActual('@/src/ui/theme/tokens');
@@ -12,12 +15,9 @@ jest.mock('@/src/ui/theme', () => {
   };
 });
 
-jest.mock('@/components/ui/Text', () => {
-  const RN = require('react-native');
-  const Text = (props: Record<string, unknown>) => <RN.Text {...props} />;
-  Text.displayName = 'Text';
-  return { Text };
-});
+jest.mock('@/src/features/settings/code/useCodeAppearance', () => ({
+  useCodeFontFamily: () => undefined,
+}));
 
 jest.mock('lucide-react-native', () => {
   const RN = require('react-native');
@@ -110,6 +110,41 @@ describe('Mobile SendPreview', () => {
     fireEvent.press(getByText(/Hide details/i));
     expect(queryByTestId('send-preview-details')).toBeNull();
   });
+
+  it.each(['card', 'compact'] as const)(
+    'keeps the destination and details readable at large text sizes in the %s preview',
+    (variant) => {
+      const sourceSessionLabel = 'A source conversation with a title that needs room to wrap';
+      const { getByText, getByTestId } = render(
+        <TextScaleContext.Provider value={STACKED_ROW_TEXT_SCALE}>
+          <SendPreview
+            defaultExpanded
+            variant={variant}
+            presentation={{ ...localPresentation(), sourceSessionLabel }}
+          />
+        </TextScaleContext.Provider>,
+      );
+
+      expect(getByText('Stays on this device').props.numberOfLines).toBeUndefined();
+      if (variant === 'compact') {
+        const viewport = StyleSheet.flatten(getByTestId('send-preview-scroll').props.style);
+        expect(viewport.maxHeight).toBeLessThan(Dimensions.get('window').height / 2);
+      }
+      const details = getByTestId('send-preview-details');
+      expect(getByText(sourceSessionLabel).props.numberOfLines).toBeUndefined();
+      const sourceRow = within(details)
+        .UNSAFE_getAllByType(View)
+        .find(
+          (row) =>
+            StyleSheet.flatten(row.props.style)?.flexDirection === 'column' &&
+            within(row).queryByText(sourceSessionLabel) !== null,
+        );
+      expect(sourceRow).toBeDefined();
+
+      const disclaimer = StyleSheet.flatten(getByText(/nothing is uploaded/i).props.style);
+      expect(disclaimer.lineHeight).toBeGreaterThan(disclaimer.fontSize * 1.2);
+    },
+  );
 
   it('omits the expand toggle when no extra details exist', () => {
     const presentation = summarizeSendPreview({ providerMode: 'Local' });

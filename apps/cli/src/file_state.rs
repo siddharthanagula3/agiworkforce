@@ -75,8 +75,12 @@ pub fn too_large_to_edit_message(len: u64) -> String {
 }
 
 pub fn ensure_previously_read_and_fresh(path: &Path) -> std::result::Result<(), String> {
+    read_fresh_for_edit(path).map(|_| ())
+}
+
+pub(crate) fn read_fresh_for_edit(path: &Path) -> std::result::Result<Option<String>, String> {
     if !path.exists() {
-        return Ok(());
+        return Ok(None);
     }
 
     let key = path
@@ -99,7 +103,7 @@ pub fn ensure_previously_read_and_fresh(path: &Path) -> std::result::Result<(), 
         return Err(STALE_READ_MESSAGE.to_string());
     }
 
-    Ok(())
+    Ok(Some(current))
 }
 
 fn record_file_state(path: &Path, content: &str) {

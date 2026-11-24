@@ -124,9 +124,23 @@ describe('desktop cloud update contract', () => {
     expect(result.available).toBe(false);
     expect(result.currentVersion).toBe('1.2.0');
     expect(result.latestVersion).toBeUndefined();
-    expect(desktopUpdatePrompt(result).detail).toBe(
-      'Installed: 1.2.0\nNo newer version is available.',
-    );
+    expect(desktopUpdatePrompt(result)).toMatchObject({
+      title: 'No update available',
+      message: 'No installer is published for this update channel.',
+      detail: 'Installed: 1.2.0',
+      downloadButton: null,
+    });
+  });
+
+  it('distinguishes a build newer than the published release from the published version', async () => {
+    const fetchMock = vi.fn(async () => releaseResponse('1.2.0'));
+    const result = await checkDesktopCloudUpdate('1.3.0', 'arm64', fetchMock as typeof fetch);
+    expect(desktopUpdatePrompt(result)).toMatchObject({
+      title: 'No update available',
+      message: 'No newer version is available.',
+      detail: 'Installed: 1.3.0\nLatest published: 1.2.0',
+      downloadButton: null,
+    });
   });
 
   it('sends the complete desktop handshake to the update feed', async () => {
@@ -153,11 +167,15 @@ describe('desktop cloud update contract', () => {
 
   it('treats an unavailable or malformed release response as an error, not up to date', async () => {
     const unavailable = vi.fn(async () => new Response(null, { status: 503 }));
+    const missingEndpoint = vi.fn(async () => new Response('Not found', { status: 404 }));
     const malformed = vi.fn(async () => Response.json({ version: '1.3.0' }));
 
     await expect(
       checkDesktopCloudUpdate('1.2.0', 'arm64', unavailable as typeof fetch),
     ).rejects.toThrow(/unavailable \(503\)/i);
+    await expect(
+      checkDesktopCloudUpdate('1.2.0', 'arm64', missingEndpoint as typeof fetch),
+    ).rejects.toThrow(/unavailable \(404\)/i);
     await expect(
       checkDesktopCloudUpdate('1.2.0', 'arm64', malformed as typeof fetch),
     ).rejects.toThrow(/incomplete release metadata/i);

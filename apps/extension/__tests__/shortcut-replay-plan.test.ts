@@ -93,12 +93,15 @@ describe('recorded shortcut save binding', () => {
   });
 
   it('persists only the canonical origin for a recorded page workflow', async () => {
-    const result = await handleSaveShortcut({
-      type: 'SAVE_SHORTCUT',
-      name: 'Bound recording',
-      actions: [action],
-      startUrl: 'https://app.example.test/private/path?token=secret#step',
-    });
+    const result = await handleSaveShortcut(
+      {
+        type: 'SAVE_SHORTCUT',
+        name: 'Bound recording',
+        actions: [action],
+        startUrl: 'https://app.example.test/private/path?token=secret#step',
+      },
+      null,
+    );
 
     expect(result.success).toBe(true);
     const stored = chromeMock.storage.local.set.mock.calls[0]?.[0] as {
@@ -134,7 +137,9 @@ function promptReplayHarness(recorded = false, approvedOrigins: readonly string[
     validateShortcutReplayTarget,
     normalizeShortcutStartUrl,
     forwardToContentScript,
-    releaseDataOfOtherAccounts: vi.fn(async () => undefined),
+    shortcutAccount: vi.fn(async () => null as string | null),
+    claimUnownedRecordings: vi.fn(async () => undefined),
+    isRecording: (shortcut: { actions: unknown[] }) => shortcut.actions.length > 0,
     loadShortcuts: async () => [
       {
         id: 'prompt-1',
@@ -159,8 +164,13 @@ function promptReplayHarness(recorded = false, approvedOrigins: readonly string[
     handleChatMessage,
     chrome: { runtime: { id: 'extension-fixture' }, tabs },
   };
+  const forward = program.statements.find(
+    (node) => ts.isFunctionDeclaration(node) && node.name?.text === 'forwardShortcutSteps',
+  );
+  if (!forward) throw new Error('Recorded replay forwarding is missing.');
   const compiled = ts.transpileModule(
-    `${declaration.getText(program)};return handleReplayShortcut;`,
+    `${forward.getText(program)}
+${declaration.getText(program)};return handleReplayShortcut;`,
     { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } },
   ).outputText;
   // llm-guardrail-allow: executes the checked-in replay controller with isolated delivery and chat transport.
@@ -172,15 +182,18 @@ function promptReplayHarness(recorded = false, approvedOrigins: readonly string[
     run,
     tabs,
     forwardToContentScript,
-    releaseDataOfOtherAccounts: dependencies.releaseDataOfOtherAccounts,
+    shortcutAccount: dependencies.shortcutAccount,
   };
 }
 
 describe('recorded replay account authority', () => {
-  it('releases another account recordings before it looks the shortcut up', async () => {
+  it('stops replay if the account changes before the recording can run', async () => {
     const h = promptReplayHarness(true);
-    await h.run({ type: 'REPLAY_SHORTCUT', shortcutId: 'missing' });
-    expect(h.releaseDataOfOtherAccounts).toHaveBeenCalledTimes(1);
+    h.shortcutAccount.mockResolvedValueOnce('account-a').mockResolvedValueOnce('account-b');
+    await expect(
+      h.run({ type: 'REPLAY_SHORTCUT', shortcutId: 'prompt-1', tabId: 7 }),
+    ).resolves.toMatchObject({ success: false });
+    expect(h.forwardToContentScript).not.toHaveBeenCalled();
   });
 });
 

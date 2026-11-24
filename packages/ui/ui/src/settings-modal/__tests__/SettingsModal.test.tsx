@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, it, expect, vi, type MockInstance } from 'vitest';
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { CreditCard, Settings2 } from 'lucide-react';
 import {
   NAV_GROUP_LABEL_TESTID,
@@ -1527,5 +1527,38 @@ describe('SettingsModal on a phone', () => {
 
     expect(strip.scrollLeft).toBe(600 - (390 - 90) / 2);
     expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it('reveals the active entry when the settings strip narrows', () => {
+    const callbacks = new Map<Element, () => void>();
+    vi.stubGlobal(
+      'ResizeObserver',
+      class ResizeObserver {
+        constructor(private readonly callback: () => void) {}
+        observe(node: Element) {
+          callbacks.set(node, this.callback);
+        }
+        disconnect() {}
+      },
+    );
+    try {
+      const { unmount } = renderModal({
+        activeSection: 'plugins',
+        navGroups: SETTINGS_NAV_GROUPS_WEB,
+      });
+      const strip = screen.getByTestId('settings-nav-scroll-region');
+      Object.defineProperty(strip, 'scrollWidth', { configurable: true, value: 1200 });
+      Object.defineProperty(strip, 'clientWidth', { configurable: true, value: 320 });
+      strip.getBoundingClientRect = () => ({ left: 0, width: 320 }) as DOMRect;
+      const plugins = within(strip).getByRole('button', { name: /Plugins/ });
+      plugins.getBoundingClientRect = () => ({ left: 850, width: 105 }) as DOMRect;
+
+      act(() => callbacks.get(strip)?.());
+
+      expect(strip.scrollLeft).toBe(850 - (320 - 105) / 2);
+      unmount();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

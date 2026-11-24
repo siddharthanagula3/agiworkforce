@@ -12,6 +12,18 @@ export function sitsInColumn(node: ReactTestInstance | null, kind: ContentColumn
   return false;
 }
 
+export function insetHasPanelBackground(node: ReactTestInstance, backgroundColor: string): boolean {
+  let foundBottomInset = false;
+  for (let current: ReactTestInstance | null = node; current; current = current.parent) {
+    const edges = current.props.edges;
+    foundBottomInset ||= Array.isArray(edges) && edges.includes('bottom');
+    if (StyleSheet.flatten(current.props.style)?.backgroundColor === backgroundColor) {
+      return foundBottomInset;
+    }
+  }
+  return false;
+}
+
 export function insetAbove(node: ReactTestInstance | null): number | undefined {
   for (let current = node; current; current = current.parent) {
     const margin = StyleSheet.flatten(current.props.style)?.marginHorizontal;

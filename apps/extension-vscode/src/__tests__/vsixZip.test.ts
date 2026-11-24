@@ -1,11 +1,23 @@
 import * as fs from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { TextReader, Uint8ArrayWriter, ZipWriter } from '@zip.js/zip.js/index-native.js';
+import { fileURLToPath } from 'node:url';
+import {
+  TextReader,
+  Uint8ArrayReader,
+  Uint8ArrayWriter,
+  ZipWriter,
+} from '@zip.js/zip.js/index-native.js';
 import { afterEach, describe, expect, it } from 'vitest';
+import manifest from '../../package.json';
 
 const require = createRequire(import.meta.url);
+const extensionRoot = fileURLToPath(new URL('../..', import.meta.url));
+const { PACKAGED_RUNTIME_OUTPUT_ALLOWLIST } = require('../../scripts/vsce-package.js') as {
+  PACKAGED_RUNTIME_OUTPUT_ALLOWLIST: string[];
+};
 const {
   inspectVsixArchive,
 }: {
@@ -74,6 +86,38 @@ describe('portable VSIX ZIP inspection', () => {
     fs.writeFileSync(archivePath, archive);
 
     await expect(inspectVsixArchive(archivePath)).rejects.toThrow(/Invalid CRC32/u);
+  });
+
+  it('verifies the extension icon bytes against the current listing artwork', async () => {
+    const root = temporaryRoot();
+    const archivePath = path.join(root, `${manifest.name}-${manifest.version}.vsix`);
+    const artwork = fs.readFileSync(path.join(extensionRoot, manifest.icon));
+    for (const icon of [artwork, Buffer.from('old icon fixture')]) {
+      const writer = new ZipWriter(new Uint8ArrayWriter(), {
+        useUnicodeFileNames: true,
+        useWebWorkers: false,
+      });
+      await writer.add('extension.vsixmanifest', new TextReader('<PackageManifest />'));
+      await writer.add('extension/package.json', new TextReader(JSON.stringify(manifest)));
+      for (const file of [...PACKAGED_RUNTIME_OUTPUT_ALLOWLIST, 'readme.md', 'LICENSE.txt']) {
+        await writer.add(`extension/${file}`, new TextReader('fixture'));
+      }
+      await writer.add(`extension/${manifest.icon}`, new Uint8ArrayReader(icon));
+      fs.writeFileSync(archivePath, await writer.close());
+      const check = spawnSync(
+        process.execPath,
+        [path.join(extensionRoot, 'scripts/verify-vsix.mjs'), archivePath],
+        { encoding: 'utf8' },
+      );
+      if (icon === artwork) {
+        expect(check.status, check.stderr).toBe(0);
+      } else {
+        expect(check.status, check.stderr).toBe(1);
+        expect(check.stderr).toContain(
+          'packaged extension icon differs from the current AGI Code artwork',
+        );
+      }
+    }
   });
 
   // NOT COVERED HERE: the useCompressionStream bug fixed in scripts/vsix-zip.js.

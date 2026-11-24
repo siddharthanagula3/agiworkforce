@@ -68,6 +68,7 @@ electronFuses:
   grantFileProtocolExtraPrivileges: false
 
 mac:
+  icon: electron/resources/icon.icns
   category: public.app-category.productivity
   # Explicit arch marker on every artifact: the default x64 names omit it
   # ("AGI Desktop-1.0.0.dmg"), which breaks arch-aware selection in the

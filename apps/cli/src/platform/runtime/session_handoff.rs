@@ -124,8 +124,19 @@ pub fn developer_session_handoff(
     session: &ManagedSession,
     context: HandoffContext,
 ) -> DeveloperSessionHandoff {
-    let code = session.code.as_ref();
-    let git = code.and_then(|code| code.git.as_ref());
+    let derived_code;
+    let code = if let Some(recorded_code) = session.code.as_deref() {
+        recorded_code
+    } else {
+        derived_code = session.code_session();
+        &derived_code
+    };
+    let git = code.git.as_ref();
+    let trust_mode = if session.code.is_some() || session.require_routing_authority().is_ok() {
+        code.trust_mode
+    } else {
+        DeveloperSessionTrustMode::Unknown
+    };
     DeveloperSessionHandoff {
         protocol_version: DEVELOPER_SESSION_PROTOCOL_VERSION,
         thread_id: session.session_id.clone(),
@@ -154,12 +165,8 @@ pub fn developer_session_handoff(
         },
         posture: HandoffPosture {
             agent_mode: agent_mode_of(session.permission_mode),
-            trust_mode: code
-                .map(|code| code.trust_mode)
-                .unwrap_or(DeveloperSessionTrustMode::Unknown),
-            permission_profile_id: code
-                .map(|code| code.permission_profile_id.to_string())
-                .unwrap_or_default(),
+            trust_mode,
+            permission_profile_id: code.permission_profile_id.to_string(),
         },
         objective: session.working_state().objective.map(str::to_string),
         decisions: session.approvals.iter().map(decision).collect(),
@@ -189,8 +196,10 @@ pub fn developer_session_handoff(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::agent::PrivacyMode;
     use crate::features::plan::plan_mode::{Plan, PlanStep};
     use crate::models::Message;
+    use crate::runtime::session::ManagedSessionRoutingAuthority;
     use agiworkforce_protocol::agent_events::AgentEventApprovalRiskLevel;
     use agiworkforce_protocol::code_domain::{
         ChangeKind, CodeSession, RepositoryChange, RepositorySnapshot,
@@ -231,6 +240,7 @@ mod tests {
             outcome: ManagedSessionApprovalOutcome::AllowOnce,
             requested_at: now,
             decided_at: now,
+            question_answer: None,
         });
         session.file_changes.push(ManagedSessionFileChange {
             path: std::path::PathBuf::from("src/importer.rs"),
@@ -281,6 +291,52 @@ mod tests {
         );
         session.code = Some(Box::new(code));
         session
+    }
+
+    #[test]
+    fn a_session_without_a_code_snapshot_hands_off_its_recorded_routing_mode() {
+        for (privacy_mode, trust_mode) in [
+            (PrivacyMode::Local, DeveloperSessionTrustMode::Local),
+            (PrivacyMode::Byok, DeveloperSessionTrustMode::Byok),
+            (PrivacyMode::Managed, DeveloperSessionTrustMode::Managed),
+        ] {
+            let mut session = ManagedSession::new("ordinary-session", Utc::now());
+            session.permission_mode = Some(PermissionMode::AcceptEdits);
+            session.routing_authority = Some(ManagedSessionRoutingAuthority {
+                privacy_mode,
+                provider: "fixture-provider".into(),
+            });
+
+            assert!(session.code.is_none());
+            let handoff =
+                developer_session_handoff(&session, HandoffContext::to(HandoffEnvironment::Local));
+            assert_eq!(handoff.posture.trust_mode, trust_mode);
+            assert_eq!(
+                handoff.posture.permission_profile_id,
+                session.permission_profile().to_string()
+            );
+            assert!(handoff.accept(HandoffEnvironment::Local).is_ok());
+        }
+    }
+
+    #[test]
+    fn a_session_without_readable_routing_authority_keeps_unknown_posture() {
+        let mut session = ManagedSession::new("unknown-session", Utc::now());
+        let unknown = |session: &ManagedSession| {
+            let handoff =
+                developer_session_handoff(session, HandoffContext::to(HandoffEnvironment::Local));
+            assert_eq!(
+                handoff.posture.trust_mode,
+                DeveloperSessionTrustMode::Unknown
+            );
+            assert!(handoff.accept(HandoffEnvironment::Local).is_err());
+        };
+        unknown(&session);
+        session.routing_authority = Some(ManagedSessionRoutingAuthority {
+            privacy_mode: PrivacyMode::Managed,
+            provider: String::new(),
+        });
+        unknown(&session);
     }
 
     #[test]
@@ -404,7 +460,9 @@ mod tests {
             reversible: Some(false),
             proposed_content: None,
             always_allow_saved: false,
+            requires_explicit_decision: false,
             proposed_execpolicy_amendment: None,
+            question: None,
         }];
 
         let admitted = developer_session_handoff(&session, context)

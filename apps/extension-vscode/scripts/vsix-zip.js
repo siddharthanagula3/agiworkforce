@@ -150,6 +150,7 @@ async function inspectVsixArchive(vsixPath, options = {}) {
     }
     return {
       entries: entryNames,
+      contentsByName,
       packagedManifest: contentsByName.get('extension/package.json'),
       vsixManifest: contentsByName.get('extension.vsixmanifest'),
     };

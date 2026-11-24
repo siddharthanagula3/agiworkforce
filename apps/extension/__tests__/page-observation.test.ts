@@ -63,6 +63,22 @@ describe('live page observation', () => {
     expect(captured.text).not.toContain('"type":"file"');
   });
 
+  it('omits protected values identified through form labels and ARIA references', () => {
+    document.body.innerHTML = `
+      <label for="record">Social Security number</label><input id="record" value="PRIVATE_FIXTURE_A">
+      <label>Town<input id="town" value="Boston"></label>
+      <span id="hint">Verification</span><span id="detail">code</span>
+      <input aria-label="Profile data" aria-labelledby="hint detail" id="detail-box" value="PRIVATE_FIXTURE_B">
+      <div role="textbox" contenteditable aria-labelledby="hint detail">PRIVATE_FIXTURE_C</div>
+    `;
+    const captured = capturePageObservation(location.href);
+
+    expect(captured.success).toBe(true);
+    expect(captured.formSnapshotId).toBeDefined();
+    expect(captured.text).toContain('Boston');
+    expect(captured.text).not.toContain('PRIVATE_FIXTURE_');
+  });
+
   it('redacts secrets and bounds oversized form data', () => {
     document.body.innerHTML = '<label>Notes<textarea id="note"></textarea></label>';
     (document.getElementById('note') as HTMLTextAreaElement).value =

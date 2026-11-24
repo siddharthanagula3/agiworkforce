@@ -25,7 +25,8 @@ use agiworkforce_protocol::developer_session::{
     AccountStatusParams, AccountStatusResponse, AccountTokenResponse, AcknowledgedResponse,
     AppServerCapabilities, AppServerClientInfo, AppServerNotification, AppServerRequest,
     AppServerResponse, ApprovalResponseParams, CheckpointDiffResponse, CheckpointListResponse,
-    CheckpointSectionsParams, CheckpointSectionsResponse, CheckpointTurnParams,
+    CheckpointSectionsParams, CheckpointSectionsResponse, CheckpointTurnParams, ChildTaskStopParams,
+    ChildTaskStopResponse, ChildTaskTranscriptParams, ChildTaskTranscriptResponse,
     ContextInstructionsParams, ContextInstructionsResponse, DeveloperSessionHandoff,
     GitPullRequestParams, GitPullRequestPlanParams, GitPullRequestPlanResponse,
     GitPullRequestResponse, HandoffAdmission, HookAddParams, HookListResponse, HookRemoveParams,
@@ -36,14 +37,17 @@ use agiworkforce_protocol::developer_session::{
     McpServerToolsResponse, McpSetEnabledParams, MemoryAddParams, MemoryAddResponse,
     ModelListParams, PermissionRulesResponse, PermissionsAddParams, PermissionsListResponse,
     PermissionsRemoveParams, PlanDecideParams, PluginInstallParams, PluginListResponse,
-    PluginRemoveParams, PluginSetEnabledParams, PluginUpdateResponse,
+    PluginRemoveParams, PluginSetEnabledParams, PluginSettingSetParams, PluginSettingsReadParams,
+    PluginSettingsResponse, PluginUpdateResponse,
     ProtocolVersionUnsupportedData, ProviderParams, ProviderSetKeyParams, ProvidersListResponse,
     SettingsReadResponse, SettingsWriteParams, SkillConsentParams, SkillConsentResponse,
     SkillInstallParams, SkillListResponse, SkillRemoveParams, SkillSetEnabledParams,
     SlashCommandListResponse, SlashCommandRunParams, SlashCommandRunResponse,
-    ThreadCheckpointsResponse, ThreadCompactParams, ThreadCompactResponse, ThreadDeleteParams,
+    ThreadArchiveInactiveParams, ThreadArchiveInactiveResponse, ThreadCheckpointsResponse,
+    ThreadCompactParams, ThreadCompactResponse, ThreadDeleteParams,
     ThreadDeleteResponse, ThreadForkParams, ThreadHandoffAcceptParams, ThreadHandoffParams,
-    ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadReadResponse,
+    ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadPinParams, ThreadPinResponse,
+    ThreadReadResponse,
     ThreadReconnectResponse, ThreadRenameParams, ThreadRenameResponse, ThreadRevertParams,
     ThreadRevertResponse, ThreadRewindParams, ThreadRewindResponse, ThreadSearchParams,
     ThreadSearchResponse, ThreadSideQuestionParams, ThreadSideQuestionResponse, ThreadStartParams,
@@ -146,6 +150,27 @@ pub trait DeveloperSessionHost: Send + Sync {
         _: TerminalIdParams,
     ) -> Result<TerminalSummary, DeveloperSessionHostError> {
         Err(unsupported(method::TERMINAL_CLOSE))
+    }
+
+    async fn background_command_list(
+        &self,
+        _params: ThreadIdParams,
+    ) -> Result<BackgroundCommandListResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::BACKGROUND_COMMAND_LIST))
+    }
+
+    async fn background_command_read(
+        &self,
+        _params: BackgroundCommandIdParams,
+    ) -> Result<BackgroundCommandReadResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::BACKGROUND_COMMAND_READ))
+    }
+
+    async fn background_command_stop(
+        &self,
+        _params: BackgroundCommandIdParams,
+    ) -> Result<BackgroundCommandReadResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::BACKGROUND_COMMAND_STOP))
     }
     async fn workspace_files_list(
         &self,
@@ -564,11 +589,25 @@ pub trait DeveloperSessionHost: Send + Sync {
     async fn archive_thread(&self, params: ThreadIdParams)
         -> Result<(), DeveloperSessionHostError>;
 
+    async fn archive_inactive_thread(
+        &self,
+        _params: ThreadArchiveInactiveParams,
+    ) -> Result<ThreadArchiveInactiveResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::THREAD_ARCHIVE_INACTIVE))
+    }
+
     async fn unarchive_thread(
         &self,
         _params: ThreadIdParams,
     ) -> Result<(), DeveloperSessionHostError> {
         Err(unsupported(method::THREAD_UNARCHIVE))
+    }
+
+    async fn pin_thread(
+        &self,
+        _params: ThreadPinParams,
+    ) -> Result<ThreadPinResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::THREAD_PIN))
     }
 
     async fn search_threads(
@@ -665,6 +704,20 @@ pub trait DeveloperSessionHost: Send + Sync {
         &self,
         params: TurnInterruptParams,
     ) -> Result<(), DeveloperSessionHostError>;
+
+    async fn stop_child_task(
+        &self,
+        _params: ChildTaskStopParams,
+    ) -> Result<ChildTaskStopResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::CHILD_TASK_STOP))
+    }
+
+    async fn read_child_task_transcript(
+        &self,
+        _params: ChildTaskTranscriptParams,
+    ) -> Result<ChildTaskTranscriptResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::CHILD_TASK_TRANSCRIPT))
+    }
 
     async fn respond_to_approval(
         &self,
@@ -851,6 +904,20 @@ pub trait DeveloperSessionHost: Send + Sync {
         _params: PluginRemoveParams,
     ) -> Result<PluginUpdateResponse, DeveloperSessionHostError> {
         Err(unsupported(method::PLUGINS_UPDATE))
+    }
+
+    async fn read_plugin_settings(
+        &self,
+        _params: PluginSettingsReadParams,
+    ) -> Result<PluginSettingsResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::PLUGINS_SETTINGS_READ))
+    }
+
+    async fn set_plugin_setting(
+        &self,
+        _params: PluginSettingSetParams,
+    ) -> Result<PluginSettingsResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::PLUGINS_SETTINGS_SET))
     }
 
     async fn add_mcp_server(
@@ -1198,6 +1265,7 @@ pub const METHOD_EFFECTS: &[(&str, MethodEffect)] = &[
     (method::THREAD_HANDOFF, MethodEffect::ChangesState),
     (method::THREAD_HANDOFF_ACCEPT, MethodEffect::ChangesState),
     (method::THREAD_ARCHIVE, MethodEffect::ChangesState),
+    (method::THREAD_ARCHIVE_INACTIVE, MethodEffect::ChangesState),
     (method::THREAD_DELETE, MethodEffect::ChangesState),
     (method::WORKSPACE_IDENTITY, MethodEffect::ReadsForOwner),
     (method::WORKSPACE_FILES_LIST, MethodEffect::ReadsForOwner),
@@ -1231,6 +1299,9 @@ pub const METHOD_EFFECTS: &[(&str, MethodEffect)] = &[
     (method::TERMINAL_WRITE, MethodEffect::ChangesState),
     (method::TERMINAL_RESIZE, MethodEffect::ChangesState),
     (method::TERMINAL_CLOSE, MethodEffect::ChangesState),
+    (method::BACKGROUND_COMMAND_LIST, MethodEffect::ReadOnly),
+    (method::BACKGROUND_COMMAND_READ, MethodEffect::ReadOnly),
+    (method::BACKGROUND_COMMAND_STOP, MethodEffect::ChangesState),
     (method::THREAD_RECONNECT, MethodEffect::ReadOnly),
     (method::THREAD_WRITER_RELEASE, MethodEffect::ChangesState),
     (method::THREAD_WRITER_TAKEOVER, MethodEffect::ChangesState),
@@ -1245,6 +1316,9 @@ pub const METHOD_EFFECTS: &[(&str, MethodEffect)] = &[
     (method::TURN_FAILED, MethodEffect::Notification),
     (method::TURN_INTERRUPTED, MethodEffect::Notification),
     (method::TURN_AGENT_EVENT, MethodEffect::Notification),
+    (method::TURN_CHILD_TASK, MethodEffect::Notification),
+    (method::CHILD_TASK_STOP, MethodEffect::ChangesState),
+    (method::CHILD_TASK_TRANSCRIPT, MethodEffect::ReadOnly),
     (method::APPROVAL_REQUESTED, MethodEffect::Notification),
     (method::SERVER_WARNING, MethodEffect::Notification),
     (method::APPROVAL_RESPOND, MethodEffect::GrantsTrust),
@@ -1359,6 +1433,8 @@ pub const METHOD_EFFECTS: &[(&str, MethodEffect)] = &[
     (method::SKILLS_CONSENT, MethodEffect::GrantsTrust),
     (method::PLUGINS_LIST, MethodEffect::ReadOnly),
     (method::PLUGINS_SET_ENABLED, MethodEffect::GrantsTrust),
+    (method::PLUGINS_SETTINGS_READ, MethodEffect::ReadsForOwner),
+    (method::PLUGINS_SETTINGS_SET, MethodEffect::GrantsTrust),
     (method::MCP_LIST, MethodEffect::ReadOnly),
     (method::MCP_LOGIN, MethodEffect::ChangesState),
     (method::MCP_APPROVAL_READ, MethodEffect::ReadsForOwner),
@@ -1415,6 +1491,7 @@ pub const METHOD_EFFECTS: &[(&str, MethodEffect)] = &[
     (method::MEMORY_ADD, MethodEffect::ChangesState),
     (method::THREAD_REWIND, MethodEffect::ChangesState),
     (method::THREAD_UNARCHIVE, MethodEffect::ChangesState),
+    (method::THREAD_PIN, MethodEffect::ChangesState),
     (method::WORKTREE_CREATE, MethodEffect::ChangesState),
     (method::WORKTREE_REMOVE, MethodEffect::ChangesState),
     (method::HOOKS_ADD, MethodEffect::GrantsTrust),
@@ -1592,6 +1669,9 @@ pub fn runs_detached(method: &str) -> bool {
             | method::TERMINAL_WRITE
             | method::TERMINAL_RESIZE
             | method::TERMINAL_CLOSE
+            | method::BACKGROUND_COMMAND_LIST
+            | method::BACKGROUND_COMMAND_READ
+            | method::BACKGROUND_COMMAND_STOP
             | method::WORKSPACE_FILE_READ
             | method::WORKSPACE_FILE_WRITE
             | method::WORKSPACE_FILE_CREATE
@@ -2030,6 +2110,16 @@ impl DeveloperSessionProcessor {
                     .await
                     .map(|()| serde_json::to_value(AcknowledgedResponse { acknowledged: true }))
             }
+            method::THREAD_ARCHIVE_INACTIVE => {
+                let params = match parse_params::<ThreadArchiveInactiveParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .archive_inactive_thread(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
             method::THREAD_UNARCHIVE => {
                 let params = match parse_params::<ThreadIdParams>(&request) {
                     Ok(params) => params,
@@ -2039,6 +2129,13 @@ impl DeveloperSessionProcessor {
                     .unarchive_thread(params)
                     .await
                     .map(|()| serde_json::to_value(AcknowledgedResponse { acknowledged: true }))
+            }
+            method::THREAD_PIN => {
+                let params = match parse_params::<ThreadPinParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host.pin_thread(params).await.map(serde_json::to_value)
             }
             method::THREAD_SEARCH => {
                 let params = match parse_params::<ThreadSearchParams>(&request) {
@@ -2169,6 +2266,25 @@ impl DeveloperSessionProcessor {
                     .terminal_close(params)
                     .await
                     .map(serde_json::to_value)
+            }
+            method::BACKGROUND_COMMAND_LIST => {
+                let params = match parse_params::<ThreadIdParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host.background_command_list(params).await.map(serde_json::to_value)
+            }
+            method::BACKGROUND_COMMAND_READ | method::BACKGROUND_COMMAND_STOP => {
+                let params = match parse_params::<BackgroundCommandIdParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                let result = if request.method == method::BACKGROUND_COMMAND_READ {
+                    self.host.background_command_read(params).await
+                } else {
+                    self.host.background_command_stop(params).await
+                };
+                result.map(serde_json::to_value)
             }
             method::WORKSPACE_FILES_LIST => {
                 let params = match parse_params::<WorkspaceDirectoryParams>(&request) {
@@ -2359,6 +2475,23 @@ impl DeveloperSessionProcessor {
                     .interrupt_turn(params)
                     .await
                     .map(|()| serde_json::to_value(AcknowledgedResponse { acknowledged: true }))
+            }
+            method::CHILD_TASK_STOP => {
+                let params = match parse_params::<ChildTaskStopParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .stop_child_task(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::CHILD_TASK_TRANSCRIPT => {
+                let params = match parse_params::<ChildTaskTranscriptParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host.read_child_task_transcript(params).await.map(serde_json::to_value)
             }
             method::APPROVAL_RESPOND => {
                 let params = match parse_params::<ApprovalResponseParams>(&request) {
@@ -2897,6 +3030,26 @@ impl DeveloperSessionProcessor {
                 };
                 self.host
                     .set_plugin_enabled(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::PLUGINS_SETTINGS_READ => {
+                let params = match parse_params::<PluginSettingsReadParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .read_plugin_settings(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::PLUGINS_SETTINGS_SET => {
+                let params = match parse_params::<PluginSettingSetParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .set_plugin_setting(params)
                     .await
                     .map(serde_json::to_value)
             }

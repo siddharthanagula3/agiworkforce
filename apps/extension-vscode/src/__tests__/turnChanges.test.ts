@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
+import { resolvePathReferenceUri } from '../features/path-links';
 import { openTurnChanges, writtenFilePath } from '../features/sidebar-webview/turnChanges';
+
+vi.mock('../features/path-links', () => ({ resolvePathReferenceUri: vi.fn() }));
 
 describe('files a reply changed', () => {
   it('reads the path a write tool names, and nothing from other tools', () => {
@@ -16,12 +19,15 @@ describe('reviewing what a reply changed', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('opens one multi-file diff of every changed file against its last commit', async () => {
+    vi.mocked(resolvePathReferenceUri).mockImplementation(async ({ path }) =>
+      vscode.Uri.file(path),
+    );
     const toGitUri = vi.fn((uri: vscode.Uri, ref: string) =>
       vscode.Uri.parse(`git:${uri.path}?ref=${ref}`),
     );
     vi.mocked(vscode.extensions.getExtension).mockReturnValue({
       isActive: true,
-      exports: { getAPI: () => ({ toGitUri }) },
+      exports: { getAPI: () => ({ toGitUri, getRepository: () => ({}) }) },
     } as never);
 
     await openTurnChanges(['/repo/src/a.ts', '/repo/src/b.ts']);

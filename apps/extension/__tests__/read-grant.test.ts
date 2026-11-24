@@ -106,4 +106,117 @@ describe('Attach tabs picker', () => {
     expect(requestAccess).toHaveBeenCalledWith(['https://news.example/a']);
     expect(tabs?.map((tab) => tab.tabId)).toEqual([1]);
   });
+
+  it('shows an attached tab without asking for access to it again', async () => {
+    const existing = { tabId: 1, windowId: 3, url: 'https://news.example/a', title: 'News' };
+    vi.stubGlobal('chrome', {
+      tabs: {
+        query: vi.fn(async () => [
+          { ...existing, id: existing.tabId },
+          { id: 2, windowId: 3, url: 'https://docs.example/b', title: 'Docs' },
+        ]),
+      },
+    });
+    const requestAccess = vi.fn(async () => true).mockResolvedValueOnce(false);
+    const choice = chooseBrowserContextTabs(() => true, 1, requestAccess, undefined, [existing]);
+    const checkboxes = () => Array.from(document.querySelectorAll<HTMLInputElement>('input'));
+    await vi.waitFor(() => expect(checkboxes()).toHaveLength(2));
+    const [news, docs] = checkboxes();
+    expect(news!.checked).toBe(true);
+    expect(news!.disabled).toBe(true);
+    docs!.click();
+    const attach = [...document.querySelectorAll('button')].find(
+      (button) => button.textContent === 'Attach selected tabs',
+    )!;
+    attach.click();
+    await vi.waitFor(() => expect(attach.disabled).toBe(false));
+    expect(news!.disabled).toBe(true);
+    expect(docs!.checked).toBe(true);
+    attach.click();
+
+    expect(await choice).toMatchObject([{ tabId: 2 }]);
+    expect(requestAccess).toHaveBeenCalledTimes(2);
+    expect(requestAccess).toHaveBeenNthCalledWith(1, ['https://docs.example/b']);
+    expect(requestAccess).toHaveBeenNthCalledWith(2, ['https://docs.example/b']);
+  });
+
+  it('keeps the selected tabs fixed until the access request settles', async () => {
+    vi.stubGlobal('chrome', {
+      tabs: {
+        query: vi.fn(async () => [
+          { id: 1, windowId: 3, url: 'https://news.example/a', title: 'News' },
+          { id: 2, windowId: 3, url: 'https://docs.example/b', title: 'Docs' },
+        ]),
+      },
+    });
+    const access = Promise.withResolvers<boolean>();
+    const requestAccess = vi.fn(() => access.promise);
+    const choice = chooseBrowserContextTabs(() => true, 5, requestAccess);
+    const checkboxes = () => Array.from(document.querySelectorAll<HTMLInputElement>('input'));
+    await vi.waitFor(() => expect(checkboxes()).toHaveLength(2));
+    const [news, docs] = checkboxes();
+    const attach = [...document.querySelectorAll('button')].find(
+      (button) => button.textContent === 'Attach selected tabs',
+    )!;
+    news!.click();
+    attach.click();
+    docs!.click();
+    expect(docs!.checked).toBe(false);
+    expect(news!.disabled).toBe(true);
+    expect(attach.disabled).toBe(true);
+
+    access.resolve(false);
+    await vi.waitFor(() => expect(news!.disabled).toBe(false));
+    expect(news!.checked).toBe(true);
+    expect(attach.disabled).toBe(false);
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    expect(await choice).toBeNull();
+  });
+
+  it('dismisses the picker immediately and waits for pending access before returning cancellation', async () => {
+    vi.stubGlobal('chrome', {
+      tabs: {
+        query: vi.fn(async () => [
+          { id: 1, windowId: 3, url: 'https://news.example/a', title: 'News' },
+        ]),
+      },
+    });
+    const access = Promise.withResolvers<boolean>();
+    const state = permissionState();
+    const request = state.dependencies.request.getMockImplementation()!;
+    state.dependencies.request.mockImplementation(async (permissions) =>
+      (await access.promise) ? request(permissions) : false,
+    );
+    let grant: Awaited<ReturnType<typeof requestReadGrant>> | undefined;
+    const settled = vi.fn(async (selection) => {
+      await grant?.release();
+      return selection;
+    });
+    const choice = chooseBrowserContextTabs(
+      () => true,
+      5,
+      async (urls) => {
+        grant = await requestReadGrant(urls, state.dependencies);
+        return grant.granted;
+      },
+    ).then(settled);
+    await vi.waitFor(() => expect(document.querySelector('input')).not.toBeNull());
+    document.querySelector<HTMLInputElement>('input')!.click();
+    [...document.querySelectorAll('button')]
+      .find((button) => button.textContent === 'Attach selected tabs')!
+      .click();
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    expect(document.querySelector('.sp-tab-picker')).toBeNull();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(settled).not.toHaveBeenCalled();
+    access.resolve(true);
+    await choice;
+    expect(settled).toHaveBeenCalledExactlyOnceWith(null);
+    expect(state.dependencies.remove).toHaveBeenCalledExactlyOnceWith({
+      origins: ['https://news.example/*'],
+    });
+    expect(state.granted.size).toBe(0);
+    expect(state.transient.size).toBe(0);
+  });
 });

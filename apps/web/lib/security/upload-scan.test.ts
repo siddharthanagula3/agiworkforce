@@ -255,7 +255,7 @@ describe('scanUploadBytes, external scanner requirement', () => {
         leadsObject: true,
       });
       expect(result.ok).toBe(false);
-      expect(result.findings.map((finding) => finding.code)).toEqual(['external_scanner']);
+      expect(result.findings.map((finding) => finding.code)).toEqual(['scan_unavailable']);
     } finally {
       vi.unstubAllEnvs();
     }
@@ -272,6 +272,24 @@ describe('scanUploadBytes, external scanner requirement', () => {
       ).toBe(true);
     } finally {
       vi.unstubAllEnvs();
+    }
+  });
+
+  it('reports an unavailable scanner while keeping the upload blocked on timeout', async () => {
+    vi.stubEnv('UPLOAD_SCAN_WEBHOOK_URL', 'https://scanner.example.test/scan');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockRejectedValue(new DOMException('deadline exceeded', 'TimeoutError')),
+    );
+    try {
+      const result = await scanUploadBytes(utf8('ordinary text'), 'text/plain', {
+        leadsObject: true,
+      });
+      expect(result.ok).toBe(false);
+      expect(result.findings.map((finding) => finding.code)).toEqual(['scan_unavailable']);
+    } finally {
+      vi.unstubAllEnvs();
+      vi.unstubAllGlobals();
     }
   });
 
@@ -506,7 +524,7 @@ describe('external scanner requirement', () => {
       filename: 'a.txt',
     });
     expect(result.ok).toBe(false);
-    expect(result.findings.map((finding) => finding.code)).toContain('external_scanner');
+    expect(result.findings.map((finding) => finding.code)).toContain('scan_unavailable');
 
     vi.unstubAllEnvs();
   });

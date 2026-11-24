@@ -38,7 +38,8 @@ export async function applyLlmEdit(
   const lang = document.languageId;
   const codeBlock = extractCodeBlock(llmResponse, lang);
 
-  if (codeBlock === undefined || selection.isEmpty) {
+  // Cursor can acknowledge competing edits from the same document version.
+  if (codeBlock === undefined || selection.isEmpty || vscode.env.appName === 'Cursor') {
     await showLlmResultInNewTab(llmResponse, commandLabel);
     return undefined;
   }

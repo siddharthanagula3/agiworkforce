@@ -50,7 +50,12 @@ jest.mock('lucide-react-native', () => {
 let mockSignedIn = false;
 jest.mock('@/src/features/auth/store', () => ({
   useAuthStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({ isClerkSignedIn: mockSignedIn, signOutAllAccounts: jest.fn() }),
+    selector({
+      isClerkLoaded: true,
+      isClerkSignedIn: mockSignedIn,
+      clerkUserId: mockSignedIn ? ACCOUNT : null,
+      signOutAllAccounts: jest.fn(),
+    }),
 }));
 
 jest.mock('@/src/features/age-assurance', () => ({
@@ -126,7 +131,7 @@ function routeOnLaunch(
     isClerkLoaded: true,
     isClerkSignedIn: signedIn,
     onboardingDone: Boolean(mockStorage.get('onboarding-done')),
-    ageGateConfirmed: isAgeGateConfirmed(),
+    ageGateConfirmed: isAgeGateConfirmed(signedIn && cloudOpen()),
     signInOwedForEndedSession: false,
   };
   return resolveRootRedirect(input);
@@ -226,6 +231,20 @@ describe('upgrading from Android build 6 with a still-valid AGI Cloud session', 
     });
   });
 
+  it('reuses a current account decision when the device still has a legacy result', async () => {
+    mockGet.mockResolvedValueOnce(confirmed);
+    await act(() => useAdultEligibilityStore.getState().verify(ACCOUNT));
+    const screen = render(<AgeGateScreen />);
+
+    expect(screen.queryByTestId('age-gate-input')).toBeNull();
+    expect(routeOnLaunch(['(app)', '(tabs)', 'chat'], true)).toBeNull();
+    expect(routeOnLaunch(['(app)', '(tabs)', 'chat'], false)).toEqual({
+      pathname: '/(public)/age-gate',
+    });
+    expect(readAgeGateRecord()).toEqual(BUILD_6_ADULT_RESULT);
+    expect(mockPost).not.toHaveBeenCalled();
+  });
+
   it('reports the typed age after the answer and opens Cloud only on confirmed', async () => {
     await launchWithSession();
     const answer = deferred<unknown>();
@@ -278,7 +297,9 @@ describe('upgrading from Android build 6 with a still-valid AGI Cloud session', 
     await act(async () => undefined);
 
     expect(cloudOpen()).toBe(false);
-    expect(useAdultEligibilityStore.getState().status).toBe('age_required');
+    expect(useAdultEligibilityStore.getState()).toEqual(
+      expect.objectContaining({ status: 'error', error: expect.stringContaining('Retry') }),
+    );
   });
 
   it('refuses 17 and keeps both Cloud and Local Mode closed', async () => {

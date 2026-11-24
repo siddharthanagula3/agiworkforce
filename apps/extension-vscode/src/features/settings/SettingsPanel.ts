@@ -73,6 +73,7 @@ const DISCONNECTED_LOCAL_CAPABILITIES: SettingsLocalCapabilities = {
 const CAPABILITY_COMMANDS: Partial<Record<SettingsCommand, string>> = {
   showPlugins: 'agi-workforce.showPlugins',
   showSkills: 'agi-workforce.showSkills',
+  showHooks: 'agi-workforce.showHooks',
 };
 
 const EXTERNAL_DESTINATION_PATHS: Partial<Record<SettingsCommand, string>> = {
@@ -320,8 +321,9 @@ export class SettingsPanel {
     id: string,
     enabled: boolean,
   ): Promise<void> {
-    await this.runCapabilityAction((host) =>
-      setSettingsCapabilityEnabled(host.adapter, kind, id, enabled),
+    await this.runCapabilityAction(
+      (host) => setSettingsCapabilityEnabled(host.adapter, kind, id, enabled),
+      enabled ? 'Turned on.' : 'Turned off.',
     );
   }
 
@@ -329,6 +331,7 @@ export class SettingsPanel {
     action: (
       host: SettingsLocalCapabilityHost,
     ) => Promise<CliCapabilityResult<unknown> | undefined>,
+    successMessage?: string,
   ): Promise<void> {
     try {
       const outcome =
@@ -337,6 +340,8 @@ export class SettingsPanel {
           : await action(this.localCapabilities);
       if (outcome !== undefined && outcome.status !== 'ok') {
         await this.post({ type: 'settings.error', message: outcome.reason });
+      } else if (outcome?.status === 'ok' && successMessage !== undefined) {
+        await this.post({ type: 'settings.capability.saved', message: successMessage });
       }
     } catch (error) {
       await this.post({

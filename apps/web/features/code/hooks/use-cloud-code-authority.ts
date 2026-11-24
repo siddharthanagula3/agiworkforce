@@ -57,5 +57,22 @@ export function useCloudCodeAuthority(originalInjectedApi?: CloudCodeApi) {
     () => createOwnedCloudCodeApi(captureAuthority, originalInjectedApi),
     [captureAuthority, originalInjectedApi],
   );
-  return { api, capture };
+
+  const backgroundApi = useMemo(
+    () =>
+      createOwnedCloudCodeApi(() => {
+        const session = snapshot();
+        if (!session) throw new DOMException('Request owner changed', 'AbortError');
+        const authority = createRequestAuthority(session);
+        const unsubscribe = session.subscribe?.(() => authority.isCurrent());
+        const retire = authority.retire;
+        authority.retire = () => {
+          unsubscribe?.();
+          retire();
+        };
+        return authority;
+      }, originalInjectedApi),
+    [originalInjectedApi, snapshot],
+  );
+  return { api, backgroundApi, capture };
 }

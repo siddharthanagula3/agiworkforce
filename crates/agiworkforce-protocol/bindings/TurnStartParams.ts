@@ -12,6 +12,10 @@ export type TurnStartParams = {
   routingTaskType?: DeveloperRoutingTaskType;
   cwd?: string;
   agentMode?: DeveloperAgentMode;
+  /**
+   * Require a fresh approval for shell execution, even for a safe command.
+   */
+  requireShellApproval?: boolean;
   reasoningEffort?: DeveloperReasoningEffort;
   /**
    * Local text files explicitly selected by the client for this session.

@@ -131,10 +131,12 @@ AGI is for people 18 and over on every surface (since 2026-11-20). Implemented
 in `src/features/auth/services/ageGate.ts`, `src/features/auth/services/rootRouting.ts`,
 `src/features/age-assurance/ageAssurance.ts` and `app/(public)/age-gate.tsx`.
 
-**Where it fires.** Before anything else, on every path. `resolveRootRedirect`
-sends any launch to `/(public)/age-gate` until the device holds a current
-result, before onboarding, before Local Mode and before Cloud sign-in; only the
-legal pages stay readable. Account-free Local Mode is behind it too. Pinned by
+**Where it fires.** When the device has no current result, the app checks for
+a restored account with a current 18 and over decision. That decision covers
+the signed-in session. Account-free Local Mode requires a device result. A
+recorded device refusal still blocks entry and leaves legal pages accessible.
+Without a current result, the age screen comes before onboarding, Local Mode
+and Cloud sign-in. Pinned by
 `__tests__/age-gate-guards-cloud-not-local.test.ts` and `__tests__/root-routing.test.ts`.
 
 **What the reviewer sees.** If Play Age Signals is available, the app asks it
@@ -153,8 +155,7 @@ the device; no location permission, IP lookup or network call.
 
 **What it stores.** One MMKV record under `age-gate:v1`: the outcome, the
 threshold it was judged against, a timestamp and a region code; never the age.
-A result stored under the earlier rule (threshold 13 or 16) is not accepted,
-so a person upgrading from an earlier build is asked once more.
+A result stored under the earlier rule (threshold 13 or 16) is not accepted.
 
 **AGI Cloud.** For a signed-in account the app reads the server's decision on
 every launch and on every account change, and reports the device's evidence to

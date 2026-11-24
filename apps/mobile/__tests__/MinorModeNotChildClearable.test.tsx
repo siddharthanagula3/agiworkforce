@@ -48,7 +48,7 @@ jest.mock('lucide-react-native', () => {
 
 jest.mock('@/src/features/auth/store', () => ({
   useAuthStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({ isClerkSignedIn: false, signOut: jest.fn() }),
+    selector({ isClerkLoaded: true, isClerkSignedIn: false, signOut: jest.fn() }),
 }));
 
 jest.mock('../stores/settingsStore', () => ({

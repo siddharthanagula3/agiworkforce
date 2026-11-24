@@ -24,6 +24,7 @@ interface Pane {
   window: BrowserWindow;
   refusedHost: string | null;
   asking: boolean;
+  visibleRequested: boolean;
   consoleErrors: PreviewConsoleBuffer;
 }
 
@@ -210,7 +211,7 @@ async function navigate(pane: Pane, url: string): Promise<void> {
   }
   pane.refusedHost = null;
   if (pane.view.webContents.isDestroyed()) return;
-  pane.view.setVisible(true);
+  pane.view.setVisible(pane.visibleRequested);
   await pane.view.webContents.loadURL(url).catch(() => undefined);
   report(pane);
 }
@@ -314,6 +315,7 @@ export async function openBrowserPane(
       window,
       refusedHost: null,
       asking: false,
+      visibleRequested: false,
       consoleErrors: new PreviewConsoleBuffer(),
     };
     panes.set(window.id, pane);
@@ -324,6 +326,7 @@ export async function openBrowserPane(
       if (!created.view.webContents.isDestroyed()) created.view.webContents.close();
     });
   }
+  pane.visibleRequested = true;
   pane.view.setBounds(clampBounds(window, bounds));
   if (address !== null) {
     const url = browserPaneAddress(address);
@@ -368,7 +371,7 @@ export function stepBrowserPane(
     return stateOf(pane);
   }
   pane.refusedHost = null;
-  pane.view.setVisible(true);
+  pane.view.setVisible(pane.visibleRequested);
   if (step === 'back') history.goBack();
   if (step === 'forward') history.goForward();
   if (step === 'reload') contents.reload();
@@ -386,7 +389,10 @@ export function setBrowserPaneBounds(
 
 export function hideBrowserPane(window: BrowserWindow): BrowserPaneState {
   const pane = paneFor(window);
-  pane?.view.setVisible(false);
+  if (pane) {
+    pane.visibleRequested = false;
+    pane.view.setVisible(false);
+  }
   return stateOf(pane);
 }
 

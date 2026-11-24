@@ -134,7 +134,7 @@ vi.mock('../src/features/cloud-bridge/freeTrialClient', async (importOriginal) =
     > => ({
       subscriptionTier: account.tier,
       subscriptionStatus: 'active',
-      modelIds: [],
+      modelIds: [actual.FREE_TRIAL_MODEL],
       allowedAutoModes: [],
       usage: parseManagedUsageSummaryResponse({
         plan_tier: account.tier,
@@ -239,7 +239,13 @@ describe('a context-menu request made in another window', () => {
     expect(stored['agi_pending_chat']).toBeDefined();
   });
 
-  it('is handled by the side panel of the window it was made in', async () => {
+  it('prepares a draft in the source window without sending it', async () => {
+    Object.assign(chromeMock.tabs, {
+      get: vi.fn(async (tabId: number) => {
+        if (tabId !== PAGE_TAB.id) throw new Error('Unknown fixture tab');
+        return PAGE_TAB;
+      }),
+    });
     await deliverPendingChat({
       type: 'explain',
       text: 'text selected in this window',
@@ -249,8 +255,21 @@ describe('a context-menu request made in another window', () => {
       timestamp: Date.now(),
     });
 
-    await vi.waitFor(() => expect(chatMessages()).toHaveLength(1));
-    expect(String(chatMessages()[0]!['text'])).toContain('text selected in this window');
+    const input = byId('sp-input') as HTMLTextAreaElement;
+    await vi.waitFor(() =>
+      expect(input.value).toBe(catalogMessage('spExplainSelectionPrompt', [])),
+    );
+    const attachment = document.querySelector('.sp-attachment-selection');
+    expect(attachment?.textContent).toContain('text selected in this window');
+    expect(chatMessages()).toHaveLength(0);
+    await vi.waitFor(async () => {
+      const stored = await chromeMock.storage.session.get('agi_pending_chat');
+      expect(stored['agi_pending_chat']).toBeUndefined();
+    });
+
+    attachment!.querySelector<HTMLButtonElement>('.sp-attachment-remove')!.click();
+    input.value = '';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
   });
 
   describe('summarizing the page', () => {

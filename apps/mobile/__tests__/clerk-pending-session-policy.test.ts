@@ -146,7 +146,7 @@ describe('Clerk native pending-session policy', () => {
     const endEverySession = store.slice(store.indexOf('async function endEveryDeviceSession('));
     expect(endEverySession.indexOf('retireActiveCloudAccount(set);')).toBeGreaterThan(-1);
     expect(endEverySession.indexOf('retireActiveCloudAccount(set);')).toBeLessThan(
-      endEverySession.indexOf('await clearAuthSession();'),
+      endEverySession.indexOf('await endCapturedDeviceSessions(scope);'),
     );
 
     const signOut = store.slice(
@@ -156,7 +156,7 @@ describe('Clerk native pending-session policy', () => {
     expect(signOut.indexOf('await endEveryDeviceSession(set,')).toBeGreaterThan(-1);
     expect(signOut.indexOf('retireActiveCloudAccount(set);')).toBeGreaterThan(-1);
     expect(signOut.indexOf('retireActiveCloudAccount(set);')).toBeLessThan(
-      signOut.indexOf('await clearAuthSession();'),
+      signOut.indexOf('await endCapturedDeviceSessions(scope);'),
     );
 
     const signOutAllAccounts = store.slice(store.indexOf('signOutAllAccounts: async () => {'));

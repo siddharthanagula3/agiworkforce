@@ -239,14 +239,10 @@ describe('welcome page', () => {
   it('shows the sign-in button until the person is signed in', async () => {
     const signedOut = buildWelcomePage(deps());
     await signedOut.loaded;
-    expect(signedOut.element.querySelector<HTMLButtonElement>('.wl-btn-secondary')!.hidden).toBe(
-      false,
-    );
+    expect(signedOut.element.querySelector<HTMLButtonElement>('#wl-login')!.hidden).toBe(false);
     const signedIn = buildWelcomePage(deps({ isSignedIn: async () => true }));
     await signedIn.loaded;
-    expect(signedIn.element.querySelector<HTMLButtonElement>('.wl-btn-secondary')!.hidden).toBe(
-      true,
-    );
+    expect(signedIn.element.querySelector<HTMLButtonElement>('#wl-login')!.hidden).toBe(true);
     expect(signedIn.element.textContent).toContain('welcomeSignedIn');
   });
 
@@ -262,7 +258,7 @@ describe('welcome page', () => {
       }),
     );
     await page.loaded;
-    page.element.querySelector<HTMLButtonElement>('.wl-btn-primary')!.click();
+    page.element.querySelector<HTMLButtonElement>('#wl-open')!.click();
     await flush();
     expect(order).toEqual(['ack', 'open']);
     expect(page.element.textContent).toContain('welcomeTryFailed');

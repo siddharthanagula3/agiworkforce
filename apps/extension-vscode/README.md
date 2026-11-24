@@ -95,6 +95,17 @@ facts saved to your AGI account, shared with the AGI web app, CLI and mobile
 app. While `agiWorkforce.memory.enabled` is on, those facts are added to your
 turns as bounded, untrusted context; turn it off and nothing saved is sent.
 
+Set **Open chat in** to **Sidebar** or **Editor tab** to choose where the Open
+Chat command and its keyboard shortcut take you.
+
+Use **More → Output style** to select a preset or edit custom response instructions.
+The selection applies to future turns in the current panel. Custom text is saved
+in your VS Code profile for reuse.
+
+In an open Managed Cloud chat in a trusted local workspace, select the microphone
+button to open the recording page in your browser. After you stop recording,
+AGI Cloud returns the transcript to the composer. You can edit it before sending.
+
 ## Commands
 
 Every command is available from the Command Palette under **Code**.
@@ -117,25 +128,30 @@ The most used ones:
 
 ## Settings
 
-| Setting                                     | Default                               | What it does                                                                                     |
-| ------------------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `agiWorkforce.cliPath`                      | `agi`                                 | Executable used to start the local `app-server`. Changing it restarts running runtimes.          |
-| `agiWorkforce.model`                        | `auto`                                | Default model. `auto` routes each turn by task across the models your plan can reach.            |
-| `agiWorkforce.agent.mode`                   | `auto`                                | `ask`, `auto`, `plan`, or `bypass` for new conversations.                                        |
-| `agiWorkforce.agent.effort`                 | `medium`                              | Reasoning effort, from `none` to `max`, for providers with an explicit effort axis.              |
-| `agiWorkforce.agent.thinking`               | `false`                               | Extended thinking for cloud-backed editor utilities only.                                        |
-| `agiWorkforce.composer.followUpBehavior`    | `queue`                               | Whether a message sent mid-turn queues or steers. `Ctrl/Cmd+Enter` uses the other behavior once. |
-| `agiWorkforce.contextLines`                 | `50`                                  | Surrounding lines included as context.                                                           |
-| `agiWorkforce.hoverEnabled`                 | `false`                               | Quick actions when hovering an identifier.                                                       |
-| `agiWorkforce.codeLensEnabled`              | `false`                               | Action lenses above functions and classes.                                                       |
-| `agiWorkforce.autoApplyFixes`               | `false`                               | Apply suggested fixes without showing a diff first.                                              |
-| `agiWorkforce.inlineCompletions.enabled`    | `false`                               | Ghost-text completions. Sends surrounding code to AGI Cloud; sensitive files are excluded.       |
-| `agiWorkforce.inlineCompletions.debounceMs` | `300`                                 | Delay before requesting a completion.                                                            |
-| `agiWorkforce.inlineCompletions.maxLength`  | `500`                                 | Maximum completion length in characters.                                                         |
-| `agiWorkforce.memory.enabled`               | `true`                                | Add the memory facts saved to your AGI account to your turns.                                    |
-| `agiWorkforce.activateOnStartup`            | `false`                               | Start account and device background work when the window opens instead of on first use.          |
-| `agiWorkforce.apiEndpoint`                  | `https://agiworkforce.com/api/llm/v1` | API base URL for cloud-backed editor utilities.                                                  |
-| `agiWorkforce.telemetryEnabled`             | `false`                               | Product usage events, also subject to VS Code's own telemetry setting.                           |
+| Setting                                      | Default                               | What it does                                                                                     |
+| -------------------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `agiWorkforce.cliPath`                       | `agi`                                 | Executable used to start the local `app-server`. Changing it restarts running runtimes.          |
+| `agiWorkforce.model`                         | `auto`                                | Default model. `auto` routes each turn by task across the models your plan can reach.            |
+| `agiWorkforce.agent.mode`                    | `auto`                                | `ask`, `auto`, `plan`, or `bypass` for new conversations.                                        |
+| `agiWorkforce.agent.effort`                  | `medium`                              | Reasoning effort, from `none` to `max`, for providers with an explicit effort axis.              |
+| `agiWorkforce.agent.thinking`                | `false`                               | Extended thinking for cloud-backed editor utilities only.                                        |
+| `agiWorkforce.composer.followUpBehavior`     | `queue`                               | Whether a message sent mid-turn queues or steers. `Ctrl/Cmd+Enter` uses the other behavior once. |
+| `agiWorkforce.composer.escapeStops`          | `false`                               | Allow Escape in the composer to stop the active response.                                        |
+| `agiWorkforce.chat.focusView`                | `false`                               | Keep running tool activity collapsed. Toggle it from More actions or the Command Palette.        |
+| `agiWorkforce.contextLines`                  | `50`                                  | Surrounding lines included as context.                                                           |
+| `agiWorkforce.context.warningPercent`        | `90`                                  | Warn at this percentage of the context window. Use `0` to turn off the warning.                  |
+| `agiWorkforce.editorContext.attachOpenFile`  | `true`                                | Include the open file when automatic editor context is enabled.                                  |
+| `agiWorkforce.editorContext.attachSelection` | `true`                                | Include selected text as a separate attachment when automatic editor context is enabled.         |
+| `agiWorkforce.hoverEnabled`                  | `false`                               | Quick actions when hovering an identifier.                                                       |
+| `agiWorkforce.codeLensEnabled`               | `false`                               | Action lenses above functions and classes.                                                       |
+| `agiWorkforce.autoApplyFixes`                | `false`                               | Apply suggested fixes without showing a diff first.                                              |
+| `agiWorkforce.inlineCompletions.enabled`     | `false`                               | Ghost-text completions. Sends surrounding code to AGI Cloud; sensitive files are excluded.       |
+| `agiWorkforce.inlineCompletions.debounceMs`  | `300`                                 | Delay before requesting a completion.                                                            |
+| `agiWorkforce.inlineCompletions.maxLength`   | `500`                                 | Maximum completion length in characters.                                                         |
+| `agiWorkforce.memory.enabled`                | `true`                                | Add the memory facts saved to your AGI account to your turns.                                    |
+| `agiWorkforce.activateOnStartup`             | `false`                               | Start account and device background work when the window opens instead of on first use.          |
+| `agiWorkforce.apiEndpoint`                   | `https://agiworkforce.com/api/llm/v1` | API base URL for cloud-backed editor utilities.                                                  |
+| `agiWorkforce.telemetryEnabled`              | `false`                               | Product usage events, also subject to VS Code's own telemetry setting.                           |
 
 Memory, inline completions and auto-apply can only be turned on in your own
 user settings. A repository, folder, dev container or remote settings file can

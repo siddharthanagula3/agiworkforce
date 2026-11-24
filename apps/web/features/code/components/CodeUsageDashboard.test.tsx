@@ -86,6 +86,24 @@ describe('CodeUsageDashboard', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
+  it('loads the Code breakdown only after opening the collapsed usage control', async () => {
+    const user = userEvent.setup();
+    respond(history());
+    render(<CodeUsageDashboard planTier="pro" collapsed />);
+
+    const toggle = screen.getByRole('button', { name: 'Code usage' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('region', { name: 'Code usage' })).not.toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    await user.click(toggle);
+    expect(await screen.findByText('12')).toBeInTheDocument();
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await user.click(toggle);
+    expect(screen.queryByRole('region', { name: 'Code usage' })).not.toBeInTheDocument();
+  });
+
   it('asks the server for Code usage only and shows its totals for the last 30 days', async () => {
     respond(history());
     render(<CodeUsageDashboard planTier="pro" />);

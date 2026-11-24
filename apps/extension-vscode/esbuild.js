@@ -5,9 +5,24 @@ const path = require('path');
 const isWatch = process.argv.includes('--watch');
 const isProduction = process.argv.includes('--production');
 
+const rawMarkdown = {
+  name: 'raw-markdown',
+  setup(build) {
+    build.onResolve({ filter: /\.md\?raw$/ }, (args) => ({
+      path: path.resolve(args.resolveDir, args.path.slice(0, -4)),
+      namespace: 'raw-markdown',
+    }));
+    build.onLoad({ filter: /./, namespace: 'raw-markdown' }, async (args) => ({
+      contents: await fs.promises.readFile(args.path, 'utf8'),
+      loader: 'text',
+    }));
+  },
+};
+
 /** @type {import('esbuild').BuildOptions} */
 const buildOptions = {
   entryPoints: [path.join(__dirname, 'src', 'extension.ts')],
+  plugins: [rawMarkdown],
   bundle: true,
   outfile: path.join(__dirname, 'out', 'extension.js'),
   platform: 'node',
@@ -26,9 +41,12 @@ const buildOptions = {
 
 /** @type {import('esbuild').BuildOptions} */
 const webviewOptions = {
-  entryPoints: [path.join(__dirname, 'src', 'webview', 'render.ts')],
+  entryPoints: {
+    render: path.join(__dirname, 'src', 'webview', 'render.ts'),
+    dictation: path.join(__dirname, 'src', 'webview', 'dictationPage.ts'),
+  },
   bundle: true,
-  outfile: path.join(__dirname, 'out', 'webview', 'render.js'),
+  outdir: path.join(__dirname, 'out', 'webview'),
   platform: 'browser',
   target: 'es2020',
   format: 'iife',
@@ -67,6 +85,7 @@ async function build() {
         .map((entry) => path.join(testRoot, entry));
       await esbuild.build({
         entryPoints,
+        plugins: [rawMarkdown],
         outbase: testRoot,
         outdir: path.join(__dirname, 'out', 'test'),
         bundle: true,

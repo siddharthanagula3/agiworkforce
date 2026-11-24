@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { diffByPath, diffLineKind, parseUnifiedDiff } from './code-diff';
+import { diffByPath, diffLineCounts, diffLineKind, parseUnifiedDiff } from './code-diff';
 
 const TWO_FILES = [
   'diff --git a/apps/web/README.md b/apps/web/README.md',
@@ -75,4 +75,17 @@ describe('diffLineKind', () => {
     expect(diffLineKind('index 1111111..2222222 100644')).toBe('meta');
     expect(diffLineKind('diff --git a/one b/one')).toBe('meta');
   });
+});
+
+it('counts changed lines only in hunks, including content that resembles file headers', () => {
+  const body = [
+    '--- a/note',
+    '+++ b/note',
+    '@@ -1 +1,2 @@',
+    '--- a/note',
+    '+++ b/note',
+    '+new',
+  ].join('\n');
+  expect(diffLineCounts(body)).toEqual({ added: 2, removed: 1 });
+  expect(diffLineCounts('Binary files a/image.png and b/image.png differ')).toBeNull();
 });

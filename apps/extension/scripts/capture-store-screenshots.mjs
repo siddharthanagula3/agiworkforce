@@ -809,7 +809,7 @@ async function completeOnboarding(session) {
     await welcome.goto(`chrome-extension://${session.extensionId}/src/welcome.html`, {
       waitUntil: 'domcontentloaded',
     });
-    await welcome.locator('.wl-actions .wl-btn-primary').last().click();
+    await welcome.locator('#wl-open').click();
     await welcome.waitForFunction(
       async () =>
         Boolean(

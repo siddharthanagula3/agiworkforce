@@ -10,4 +10,5 @@ export type ThreadListParams = {
    * threads on the first page.
    */
   includeCloud?: boolean;
+  titleQuery?: string;
 };

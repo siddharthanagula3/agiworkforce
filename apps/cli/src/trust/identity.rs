@@ -1,5 +1,7 @@
 use std::path::{Path, PathBuf};
 
+use anyhow::{Context, Result};
+
 /// What a trust grant is keyed by. A remote-derived identity survives the
 /// checkout moving or being cloned again; a path identity is the fallback for a
 /// repository with no remote and for a plain directory.
@@ -160,9 +162,13 @@ fn device_id_file() -> Option<PathBuf> {
     if let Some(path) = crate::native_process_test_fixture::device_id_file() {
         return Some(path);
     }
-    crate::config::CliConfig::config_dir()
-        .ok()
-        .map(|dir| dir.join("device-id"))
+    crate::device_registry::install_id_path()
+}
+
+pub(super) fn ensure_machine_id() -> Result<String> {
+    let path = device_id_file().context("Could not locate the CLI device identity")?;
+    crate::device_registry::ensure_install_id(&path)
+        .context("Could not initialize the CLI device identity for workspace trust")
 }
 
 fn hostname() -> Option<String> {

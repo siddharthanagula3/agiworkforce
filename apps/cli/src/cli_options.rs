@@ -551,6 +551,7 @@ mod tests {
                 additional_workspace_roots: Vec::new(),
                 tool_search_catalog: None,
                 require_confirmation: !resolved.skip_permissions,
+                require_shell_approval: false,
                 auto_approve_safe: resolved.auto_approve_safe,
                 auto_approve_edits: resolved.mode.auto_approves_edits(),
                 quiet: true,
@@ -604,6 +605,32 @@ mod tests {
             }
             assert!(result.success, "{}", result.output);
             assert!(result.output.contains("auto-gate-cleared"));
+        }
+
+        #[tokio::test]
+        async fn shell_approval_prompts_for_a_safe_command_but_accepts_an_ordinary_edit() {
+            let workspace = tempfile::tempdir().expect("workspace");
+            let path = workspace.path().join("note.txt");
+            let (callback, seen) = answering(ApprovalDecision::Deny);
+            let mut options = auto_options(callback, Some(workspace.path().to_path_buf()));
+            options.require_shell_approval = true;
+            let write = ToolCall {
+                name: "write_file".into(),
+                args: HashMap::from([
+                    ("path".into(), path.display().to_string()),
+                    ("content".into(), "ordinary workspace edit".into()),
+                ]),
+            };
+            let written = execute_tool_with_opts(&write, &options).await.expect("write result");
+            assert!(written.success, "{}", written.output);
+            assert_eq!(std::fs::read_to_string(&path).unwrap(), "ordinary workspace edit");
+
+            let command = "echo safe-but-requires-approval";
+            assert_eq!(crate::safety::classify_command(command), crate::safety::CommandSafety::Safe);
+            let refused = execute_tool_with_opts(&shell(command), &options).await.expect("shell result");
+            assert!(!refused.success);
+            assert_eq!(exec_requests(&seen).len(), 1);
+            assert!(refused.output.contains("did not run"));
         }
 
         #[tokio::test]

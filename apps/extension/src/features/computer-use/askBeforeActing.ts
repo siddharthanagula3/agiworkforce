@@ -1,3 +1,5 @@
+import type { AlwaysAskReason } from './approvalPolicy';
+
 export const ASK_BEFORE_ACTING_KEY = 'agi_cu_ask_before_acting';
 
 export type BrowserPermissionMode = 'ask' | 'auto' | 'full' | 'yolo';
@@ -24,6 +26,7 @@ export function browserPermissionModeToStored(mode: BrowserPermissionMode): bool
 
 export interface ActionApprovalContext {
   alwaysAsk: boolean;
+  reason?: AlwaysAskReason;
   crucial: boolean;
   mode: BrowserPermissionMode;
   allowedForTask: boolean;
@@ -36,7 +39,10 @@ export interface ActionApprovalContext {
 // sites this task was given and stops only for a crucial action.
 export async function actionNeedsApproval(context: ActionApprovalContext): Promise<boolean> {
   if (context.mode === 'yolo') {
-    return context.alwaysAsk || !(await context.siteApproved().catch(() => false));
+    return (
+      (context.alwaysAsk && (context.reason !== 'selection' || context.crucial)) ||
+      !(await context.siteApproved().catch(() => false))
+    );
   }
   if (context.alwaysAsk && (context.mode !== 'auto' || context.crucial)) return true;
   if (context.allowedForTask || context.readsOnly) return false;

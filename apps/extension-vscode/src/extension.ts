@@ -29,15 +29,13 @@ import {
   SHOW_SESSION_ACTIVITY_COMMAND,
   showSessionReceipt,
 } from './features/sidebar-webview/sessionReceipt';
-import { resolveCloudCodeAgentModel, PRODUCT_NAMES } from '@agiworkforce/types';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
+import { cloudUtilityModel } from './core/cloudModelBoundary';
 import { resolveTierSync } from './integrations/tierResolver';
 import { Config, optOutSettingFor, resolveConfiguredCli } from './platform/config';
 import { initModelMetrics } from './features/model-picker/modelMetrics';
 import { startVscodeHeartbeat } from './features/device-registry';
-import {
-  normalizeConfiguredModelId,
-  normalizeSelectableConfiguredModelId,
-} from './features/model-picker/modelConstants';
+import { normalizeSelectableConfiguredModelId } from './features/model-picker/modelConstants';
 import { initSubsystemHealth, runBoot, recordFailure } from './core/subsystemHealth';
 import { validateAdvancedFeatureFlags } from './core/advancedFeatures';
 import { buildExtensionStatusBarText } from './core/statusBar';
@@ -50,6 +48,7 @@ import {
 import { setupCommands } from './core/commandSetup';
 import { announceExtensionUpdate, announceMissingNativeChat } from './core/hostNotices';
 import { markInUse, whenInUse } from './core/startupWork';
+import { registerSessionAutoArchive } from './features/trees/sessionAutoArchive';
 import { trackLastTextEditor } from './platform/lastTextEditor';
 import { activateProductAnalytics } from './features/analytics/productAnalytics';
 import { LocalRuntimeClient } from './integrations/localRuntimeClient';
@@ -130,6 +129,7 @@ export function activate(context: vscode.ExtensionContext): void {
         workspaceTrusted: () => vscode.workspace.isTrusted,
         memoryEnabled: () => Config.memoryEnabled(),
         bypassPermissionsAvailable: () => Config.agentMode() === 'bypass',
+        requireShellApproval: () => Config.requireShellApproval(),
         workspaceConsentAtMs: () => workspaceConsent.consentAtMs(cwd),
         cwd,
         clientVersion: getExtensionVersion(),
@@ -168,6 +168,17 @@ export function activate(context: vscode.ExtensionContext): void {
   }
   const sidebarProvider = chatState?.sidebarProvider;
   const conversationTreeProvider = chatState?.conversationTreeProvider;
+  if (sidebarProvider && conversationTreeProvider) {
+    context.subscriptions.push(
+      registerSessionAutoArchive(
+        context.workspaceState,
+        conversationTreeProvider,
+        (id) =>
+          sidebarProvider.protectsThreadFromArchive(id) ||
+          ChatEditorPanel.protectsThreadFromArchive(id),
+      ),
+    );
+  }
 
   const resolveChatTarget = (): ContextHandoffTarget | undefined => {
     const provider = chatState?.sidebarProvider;
@@ -257,11 +268,8 @@ export function activate(context: vscode.ExtensionContext): void {
             const code = await resolveCloudCodeApi(context.secrets);
             return code.status === 'ready' ? code.api : null;
           },
-          modelId: () =>
-            resolveCloudCodeAgentModel(
-              normalizeConfiguredModelId(Config.model()),
-              resolveTierSync(context),
-            ),
+          configuredModel: cloudUtilityModel,
+          planTier: () => resolveTierSync(context),
         }),
       ),
     );
@@ -481,6 +489,8 @@ export function activate(context: vscode.ExtensionContext): void {
 
       if (
         e.affectsConfiguration('agiWorkforce.editorContext.autoAttach') ||
+        e.affectsConfiguration('agiWorkforce.editorContext.attachOpenFile') ||
+        e.affectsConfiguration('agiWorkforce.editorContext.attachSelection') ||
         e.affectsConfiguration('agiWorkforce.respectGitIgnore') ||
         e.affectsConfiguration('search.useIgnoreFiles') ||
         e.affectsConfiguration('search.exclude') ||
@@ -491,7 +501,8 @@ export function activate(context: vscode.ExtensionContext): void {
 
       if (
         e.affectsConfiguration('agiWorkforce.composer.followUpBehavior') ||
-        e.affectsConfiguration('agiWorkforce.composer.enterBehavior')
+        e.affectsConfiguration('agiWorkforce.composer.enterBehavior') ||
+        e.affectsConfiguration('agiWorkforce.composer.escapeStops')
       ) {
         sidebarProvider?.pushFollowUpBehavior();
         ChatEditorPanel.pushFollowUpBehavior();

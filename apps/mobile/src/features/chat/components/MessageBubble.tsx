@@ -348,18 +348,17 @@ function MessageActionSheet({
         accessibilityRole="button"
         accessible={false}
       >
-        <SafeAreaView edges={['bottom']} style={contentColumn('reading')}>
-          <PressableBox
-            style={{
-              backgroundColor: colors.surfaceElevated,
-              borderTopLeftRadius: 20,
-              borderTopRightRadius: 20,
-              paddingTop: 8,
-              paddingBottom: 8,
-            }}
-            onPress={() => undefined}
-            accessible={false}
-          >
+        <PressableBox
+          style={{
+            ...contentColumn('reading'),
+            backgroundColor: colors.surfaceElevated,
+            borderTopLeftRadius: 20,
+            borderTopRightRadius: 20,
+          }}
+          onPress={() => undefined}
+          accessible={false}
+        >
+          <SafeAreaView edges={['bottom']} style={{ paddingVertical: 8 }}>
             {sentAt ? (
               <Text
                 testID="message-sent-at"
@@ -440,8 +439,8 @@ function MessageActionSheet({
                 Cancel
               </Text>
             </PressableBox>
-          </PressableBox>
-        </SafeAreaView>
+          </SafeAreaView>
+        </PressableBox>
       </PressableBox>
     </Modal>
   );

@@ -14,6 +14,8 @@ import {
   type PageContextSource,
 } from '../src/features/side-panel/chat-state';
 import { isRestrictedPageUrl } from '../src/features/side-panel/surface-policy';
+import { toBrowserContextTab } from '../src/features/side-panel/tabContext';
+import { normalizeApprovedSiteOrigin } from '../src/features/options/site-allowlist';
 import {
   boundPageText,
   MAX_PAGE_TEXT_CHARACTERS,
@@ -65,11 +67,17 @@ function linkedPageCapture(outcome: ManagedCloudPageReadResponse): Promise<PageC
 
 const intakeHandlers = new Map<string, ts.Node>();
 let attachPageHelper: ts.Node | undefined;
+let mentionGuard: ts.Node | undefined;
+let tabSnapshotBuilder: ts.Node | undefined;
 function findIntakeHandlers(node: ts.Node): void {
   if (ts.isFunctionDeclaration(node) && node.name?.text === 'attachPageCapture') {
     attachPageHelper = node;
   }
-  if (ts.isFunctionDeclaration(node) && node.name?.text === 'attachChosenTab') {
+  if (ts.isFunctionDeclaration(node) && node.name?.text === 'canAttachMentionedTab')
+    mentionGuard = node;
+  if (ts.isFunctionDeclaration(node) && node.name?.text === 'setBrowserTabSnapshots')
+    tabSnapshotBuilder = node;
+  if (ts.isFunctionDeclaration(node) && node.name?.text === 'attachMentionedTab') {
     intakeHandlers.set('tab', node);
   }
   if (
@@ -82,10 +90,14 @@ function findIntakeHandlers(node: ts.Node): void {
   ts.forEachChild(node, findIntakeHandlers);
 }
 findIntakeHandlers(program);
-if (intakeHandlers.size !== 2 || !attachPageHelper)
+if (intakeHandlers.size !== 2 || !attachPageHelper || !mentionGuard || !tabSnapshotBuilder)
   throw new Error('Production page intake handlers missing');
 
-function pendingPageIntake(kind: 'tab' | 'current', deferPermissionRecord = false) {
+function pendingPageIntake(
+  kind: 'tab' | 'current',
+  deferPermissionRecord = false,
+  deferPermissionRequest = false,
+) {
   let current = true;
   let resolve!: (result: PageContextCapture) => void;
   const capture = new Promise<PageContextCapture>((done) => {
@@ -96,9 +108,10 @@ function pendingPageIntake(kind: 'tab' | 'current', deferPermissionRecord = fals
   const intake = {};
   const intakes = new Set<unknown>();
   const context: {
+    isStreaming: boolean;
     pendingPageContext: string | null;
     pendingPageContextSource: PageContextSource | null;
-  } = { pendingPageContext: null, pendingPageContextSource: null };
+  } = { isStreaming: false, pendingPageContext: null, pendingPageContextSource: null };
   const finish = vi.fn(() => intakes.delete(intake));
   let releasePermissionRecord!: () => void;
   const permissionRecord = new Promise<void>((done) => {
@@ -107,10 +120,13 @@ function pendingPageIntake(kind: 'tab' | 'current', deferPermissionRecord = fals
   const recordPermission = vi.fn(async () => {
     if (deferPermissionRecord) await permissionRecord;
   });
-  const requestPermission = vi.fn(async () => true);
+  const permission = Promise.withResolvers<boolean>();
+  const requestPermission = vi.fn(async () => (deferPermissionRequest ? permission.promise : true));
   const forgetPermission = vi.fn(async () => []);
   const activePage = { tabId: 7, url: 'https://example.org/' };
   const contextButton = document.createElement('button');
+  const inputEl = document.createElement('textarea');
+  inputEl.value = 'Compare @page';
   const dependencies = {
     _ctx: context,
     contextBtn: contextButton,
@@ -119,10 +135,35 @@ function pendingPageIntake(kind: 'tab' | 'current', deferPermissionRecord = fals
     attachBtn: document.createElement('button'),
     activePageSource: activePage,
     capturePageContext: read,
-    readTabText: read,
-    chrome: { tabs: { query: async () => [{ id: 7, url: activePage.url }] } },
+    inputEl,
+    editableRewrites: { current: () => null },
+    pendingAttachmentCount: () => 0,
+    MANAGED_CHAT_MAX_ATTACHMENTS: 5,
+    MAX_PAGE_TEXT_CHARACTERS,
+    boundPageText,
+    requestReadGrant: async () => ({ granted: true, release }),
+    showSelectionNotice: vi.fn(),
+    sanitizePageText,
+    replaceComposerRange: (
+      input: HTMLTextAreaElement,
+      start: number,
+      end: number,
+      replacement: string,
+    ) => input.setRangeText(replacement, start, end),
+    clearPendingPageContext: () => {
+      context.pendingPageContext = null;
+      context.pendingPageContextSource = null;
+    },
+    chrome: {
+      tabs: {
+        query: async () => [
+          { id: activePage.tabId, url: activePage.url, windowId: 2, title: 'Current page' },
+        ],
+      },
+    },
     activePageQuery: async () => ({ active: true, currentWindow: true }),
-    webTabOrigin: (tab: { url: string }) => new URL(tab.url).origin,
+    toBrowserContextTab,
+    normalizeApprovedSiteOrigin,
     recordTransientHostPermission: recordPermission,
     requestBrowserControlHostPermission: requestPermission,
     originApprovedForBrowserControl: async () => false,
@@ -148,10 +189,12 @@ function pendingPageIntake(kind: 'tab' | 'current', deferPermissionRecord = fals
   const handler = intakeHandlers.get(kind)!;
   const compiled = ts.transpileModule(
     `let composerContextNotice = null;
+     let pendingBrowserContextTabs = [];
      const managedCloudChatState = 'ready';
+     ${tabSnapshotBuilder!.getText(program)}
      ${attachPageHelper!.getText(program)}
-     ${kind === 'tab' ? handler.getText(program) : ''}
-     const run = ${kind === 'tab' ? 'attachChosenTab' : handler.getText(program)};
+     ${kind === 'tab' ? mentionGuard!.getText(program) + '\n' + handler.getText(program) : ''}
+     const run = ${kind === 'tab' ? 'attachMentionedTab' : handler.getText(program)};
      return { run, notice: () => composerContextNotice };`,
     { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } },
   );
@@ -161,7 +204,10 @@ function pendingPageIntake(kind: 'tab' | 'current', deferPermissionRecord = fals
   ) as { run(...args: unknown[]): Promise<void>; notice(): string | null };
   const pending =
     kind === 'tab'
-      ? runtime.run({ id: 7, url: activePage.url }, Promise.resolve({ granted: true, release }))
+      ? runtime.run(
+          { tabId: 8, windowId: 2, url: 'https://example.com/', title: 'Chosen tab' },
+          { start: 8, end: inputEl.value.length },
+        )
       : runtime.run();
   return {
     pending,
@@ -171,11 +217,13 @@ function pendingPageIntake(kind: 'tab' | 'current', deferPermissionRecord = fals
     finish,
     recordPermission,
     requestPermission,
+    answerPermission: permission.resolve,
     forgetPermission,
     releasePermissionRecord,
     resolve,
     activePage,
     contextButton,
+    inputEl,
     notice: runtime.notice,
     retire: () => {
       current = false;
@@ -274,6 +322,8 @@ describe('production side panel page context capture', () => {
     expect(result.truncated).toBe(false);
     expect(result.source).toEqual({
       tabId: 17,
+      windowId: 1,
+      documentId: 'doc-17',
       url: 'https://acme.myworkdayjobs.com/en-US/careers',
     });
     expect(capture.executeScript.mock.calls[0]?.[0]).toMatchObject({
@@ -340,6 +390,15 @@ describe('production side panel page context capture', () => {
     });
     expect(capture.executeScript).not.toHaveBeenCalled();
   });
+
+  it('checks the bound document before asking it for fresh page text', async () => {
+    const capture = captureHarness();
+    await expect(
+      readTabObservation(17, 'https://acme.myworkdayjobs.com/en-US/careers', 'another-document'),
+    ).rejects.toThrow('The page changed');
+    expect(capture.executeScript).toHaveBeenCalledOnce();
+    expect(capture.capturedResults).toHaveLength(0);
+  });
 });
 
 describe('linked-page text sent to the model', () => {
@@ -392,8 +451,9 @@ describe.each(['tab', 'current'] as const)('%s page intake ownership', (kind) =>
     await vi.waitFor(() => expect(h.read).toHaveBeenCalledOnce());
     h.resolve(captured);
     await h.pending;
-    expect(h.context.pendingPageContext).toBe(captured.ok ? captured.text : null);
-    expect(h.context.pendingPageContextSource).toEqual(captured.ok ? captured.source : null);
+    expect(h.context.pendingPageContext).toContain(captured.text);
+    expect(h.context.pendingPageContextSource).toEqual(kind === 'current' ? captured.source : null);
+    if (kind === 'tab') expect(h.inputEl.value).toBe('Compare ');
     expect(h.finish).toHaveBeenCalledOnce();
     if (kind === 'tab') expect(h.release).toHaveBeenCalledOnce();
   });
@@ -406,6 +466,7 @@ describe.each(['tab', 'current'] as const)('%s page intake ownership', (kind) =>
     await h.pending;
     expect(h.context.pendingPageContext).toBeNull();
     expect(h.context.pendingPageContextSource).toBeNull();
+    if (kind === 'tab') expect(h.inputEl.value).toBe('Compare @page');
     expect(h.finish).toHaveBeenCalledOnce();
     if (kind === 'tab') expect(h.release).toHaveBeenCalledOnce();
   });
@@ -421,6 +482,50 @@ it('does not attach the former current page after switching to a protected page'
   expect(h.context.pendingPageContext).toBeNull();
   expect(h.contextButton.disabled).toBe(true);
   expect(h.notice()).toBe('The active page changed.');
+});
+
+it('does not read a different active tab after access was requested for the original page', async () => {
+  const h = pendingPageIntake('current', false, true);
+  await vi.waitFor(() => expect(h.read).toHaveBeenCalledOnce());
+  h.resolve({ ok: false, reason: 'Page permission is required.' });
+  await vi.waitFor(() => expect(h.requestPermission).toHaveBeenCalledWith('https://example.org'));
+  h.activePage.tabId = 8;
+  h.activePage.url = 'https://other.example/';
+  h.read.mockResolvedValueOnce({
+    ok: true,
+    text: 'Unchosen tab',
+    source: { tabId: 8, url: 'https://other.example/' },
+  });
+  h.answerPermission(true);
+  await h.pending;
+  expect(h.read).toHaveBeenCalledOnce();
+  expect(h.context.pendingPageContext).toBeNull();
+  expect(h.notice()).toBe('The active page changed.');
+  expect(h.forgetPermission).toHaveBeenCalledOnce();
+});
+
+it('requests and retries access for the captured tab when the page stays current', async () => {
+  const h = pendingPageIntake('current', false, true);
+  await vi.waitFor(() => expect(h.read).toHaveBeenCalledOnce());
+  h.resolve({ ok: false, reason: 'Page permission is required.' });
+  await vi.waitFor(() => expect(h.requestPermission).toHaveBeenCalledWith('https://example.org'));
+  h.read.mockResolvedValueOnce({
+    ok: true,
+    text: 'Original page',
+    source: { tabId: 7, url: 'https://example.org/' },
+  });
+  h.answerPermission(true);
+  await h.pending;
+  expect(h.read).toHaveBeenCalledTimes(2);
+  expect(h.read).toHaveBeenNthCalledWith(1, {
+    tabId: 7,
+    windowId: 2,
+    url: 'https://example.org/',
+    title: 'Current page',
+    currentPage: true,
+  });
+  expect(h.read.mock.calls[1]).toEqual(h.read.mock.calls[0]);
+  expect(h.context.pendingPageContext).toContain('Original page');
 });
 
 it('does not request site access after retirement while its permission record is pending', async () => {

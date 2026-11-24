@@ -41,25 +41,6 @@ fn mark_setup_complete() -> Result<()> {
 // ASCII art welcome
 // ─────────────────────────────────────────────────────────────────────────────
 
-fn multi_model_fallback_example() -> String {
-    let primary = model_catalog::default_model().to_string();
-    let fallback = model_catalog::fast_completion_model("openai");
-    let local = model_catalog::models_for("ollama")
-        .first()
-        .map(|m| m.id.clone());
-    fallback_example_arg(primary, fallback, local)
-}
-
-fn fallback_example_arg(primary: String, fallback: String, local: Option<String>) -> String {
-    let mut chain: Vec<String> = Vec::new();
-    for id in [Some(primary), Some(fallback), local].into_iter().flatten() {
-        if !chain.contains(&id) {
-            chain.push(id);
-        }
-    }
-    format!("-m {}", chain.join(","))
-}
-
 fn config_folder_label() -> String {
     crate::config::CliConfig::config_dir()
         .map(|dir| dir.display().to_string())
@@ -118,52 +99,11 @@ fn welcome_identity_lines(working_path: String) -> Vec<String> {
 }
 
 fn print_welcome_banner() {
-    let logo = r#"
-     _    ____ ___     ____ _     ___
-    / \  / ___|_ _|   / ___| |   |_ _|
-   / _ \| |  _ | |   | |   | |    | |
-  / ___ \ |_| || |   | |___| |___ | |
- /_/   \_\____|___|   \____|_____|___|
-    "#;
-
-    eprintln!("{}", ts::brand(logo));
+    eprintln!();
     for line in welcome_identity_lines(current_working_path()) {
         eprintln!("  {line}");
     }
-    eprintln!(
-        "\n  {}\n",
-        ts::muted("Multi-model AI agent in your terminal.")
-    );
-    eprintln!("  {}", ts::muted("What makes us different:"));
-    eprintln!(
-        "  {}  {}",
-        ts::accent("✦"),
-        ts::muted("Live cost HUD, see tokens, $, and context % in real time")
-    );
-    eprintln!(
-        "  {}  {}",
-        ts::accent("✦"),
-        ts::muted("JSON event stream, `--json-events` for CI / dashboards / automation")
-    );
-    eprintln!(
-        "  {}  {}",
-        ts::accent("✦"),
-        ts::muted(format!(
-            "Multi-model fallback, `{}`",
-            multi_model_fallback_example()
-        ))
-    );
-    eprintln!(
-        "  {}  {}\n",
-        ts::accent("✦"),
-        ts::muted("Session replay, `agi session fork <id> --at-turn N --as <name>`")
-    );
-    eprintln!(
-        "  {}\n",
-        ts::muted(
-            "Sign in with your preferred AI provider to get started,\n  or connect an API key for usage-based billing."
-        )
-    );
+    eprintln!();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -329,7 +269,7 @@ fn select_auth_provider() -> Result<AuthChoice> {
     ];
 
     let selection = dialoguer::Select::new()
-        .with_prompt("  Select login method")
+        .with_prompt("  Choose how to connect")
         .items(choices)
         .default(0)
         .interact()
@@ -1278,23 +1218,6 @@ mod tests {
         assert!(auto.contains("safe commands run"), "{auto}");
         assert!(auto.contains("unknown and dangerous ones ask"), "{auto}");
         assert!(!auto.contains("commands still ask"), "{auto}");
-    }
-
-    #[test]
-    fn the_fallback_example_never_repeats_a_model() {
-        let example = multi_model_fallback_example();
-        let ids: Vec<&str> = example.trim_start_matches("-m ").split(',').collect();
-        let mut seen = std::collections::HashSet::new();
-        assert!(ids.iter().all(|id| seen.insert(*id)), "{example}");
-        assert_eq!(
-            fallback_example_arg("a".into(), "b".into(), Some("b".into())),
-            "-m a,b"
-        );
-        assert_eq!(fallback_example_arg("a".into(), "a".into(), None), "-m a");
-        assert_eq!(
-            fallback_example_arg("a".into(), "b".into(), Some("c".into())),
-            "-m a,b,c"
-        );
     }
 
     #[test]

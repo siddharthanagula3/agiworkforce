@@ -112,11 +112,13 @@ function harness(stored: StoredSidePanelChatMessage) {
     messages: [message],
   };
   const resumeManagedCloudRun = vi.fn();
+  const reconcileStoredCancellation = vi.fn();
   const adoptClosedPanelTurn = vi.fn(() => Promise.resolve());
   const dependencies = {
     _ctx: context,
     sameManagedCloudOwner,
     resumeManagedCloudRun,
+    reconcileStoredCancellation,
     adoptClosedPanelTurn,
   };
   const compiled = ts.transpileModule(
@@ -127,7 +129,14 @@ function harness(stored: StoredSidePanelChatMessage) {
   const admit = new Function(...Object.keys(dependencies), compiled)(
     ...Object.values(dependencies),
   ) as (generation: number) => void;
-  return { context, message, resumeManagedCloudRun, adoptClosedPanelTurn, admit };
+  return {
+    context,
+    message,
+    resumeManagedCloudRun,
+    reconcileStoredCancellation,
+    adoptClosedPanelTurn,
+    admit,
+  };
 }
 
 describe('actual hydration to history-resume admission', () => {
@@ -182,7 +191,7 @@ describe('actual hydration to history-resume admission', () => {
   });
 
   it.each(['pending', 'unconfirmed'] as const)(
-    'keeps %s Stop behind retry-Stop instead of automatic replay',
+    'checks a saved %s Stop without replaying the reply',
     async (streamCancellation) => {
       const state = harness({
         role: 'assistant',
@@ -196,6 +205,12 @@ describe('actual hydration to history-resume admission', () => {
       state.admit(1);
       await Promise.resolve();
       expect(state.resumeManagedCloudRun).not.toHaveBeenCalled();
+      expect(state.reconcileStoredCancellation).toHaveBeenCalledWith(
+        1,
+        state.context.managedCloudOwner,
+        state.message,
+        state.message.cloudAgentRun,
+      );
       expect(state.message.streamCancellation).toBe('unconfirmed');
     },
   );

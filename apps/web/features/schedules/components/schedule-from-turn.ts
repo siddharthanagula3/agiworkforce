@@ -1,8 +1,9 @@
 'use client';
 
 import { createContext, useContext } from 'react';
+import { SCHEDULES_PATH } from '../lib/schedule-links';
 
-export const SCHEDULES_PATH = '/chat/schedules';
+export { SCHEDULES_PATH } from '../lib/schedule-links';
 export const SCHEDULE_PROMPT_QUERY_PARAM = 'fromPrompt';
 
 export interface ScheduleFromTurn {

@@ -276,3 +276,79 @@ describe('which backend a build talks to', () => {
     expect(android.releaseStatus).toBe('draft');
   });
 });
+
+describe('Android release build memory', () => {
+  it.each(['preview', 'production'])('generates the DEX merge memory budget for %s', (appEnv) => {
+    const config = JSON.parse(
+      execFileSync(
+        process.execPath,
+        [require.resolve('expo/bin/cli'), 'config', '--type', 'introspect', '--json'],
+        {
+          cwd: MOBILE_ROOT,
+          encoding: 'utf8',
+          env: {
+            ...process.env,
+            EXPO_NO_DOTENV: '1',
+            APP_ENV: appEnv,
+            EXPO_PUBLIC_APP_ENV: appEnv,
+            EXPO_PUBLIC_API_URL: 'https://agiworkforce.com',
+            EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: 'pk_live_Y2xlcmstY2kuaW52YWxpZCQ',
+          },
+        },
+      ),
+    ) as {
+      _internal: {
+        modResults: { android: { gradleProperties: Array<{ key?: string; value?: string }> } };
+      };
+    };
+    const properties = config._internal.modResults.android.gradleProperties;
+    const jvmArgs = properties.filter((property) => property.key === 'org.gradle.jvmargs');
+    expect(jvmArgs).toHaveLength(1);
+    expect(jvmArgs[0]?.value?.split(/\s+/u)).toEqual(
+      expect.arrayContaining(['-Xmx5g', '-XX:MaxMetaspaceSize=1024m']),
+    );
+    expect(properties.filter((property) => property.key === 'org.gradle.workers.max')).toEqual([
+      expect.objectContaining({ value: '3' }),
+    ]);
+  });
+});
+
+describe('Android activity configuration', () => {
+  it('handles text-size changes while keeping the other configuration handlers', () => {
+    const config = JSON.parse(
+      execFileSync(
+        process.execPath,
+        [require.resolve('expo/bin/cli'), 'config', '--type', 'introspect', '--json'],
+        {
+          cwd: MOBILE_ROOT,
+          encoding: 'utf8',
+          env: {
+            ...process.env,
+            EXPO_NO_DOTENV: '1',
+            APP_ENV: 'development',
+            EXPO_PUBLIC_APP_ENV: 'development',
+          },
+        },
+      ),
+    ) as {
+      _internal: {
+        modResults: {
+          android: {
+            manifest: {
+              manifest: {
+                application: Array<{ activity: Array<{ $: Record<string, string> }> }>;
+              };
+            };
+          };
+        };
+      };
+    };
+    const { application } = config._internal.modResults.android.manifest.manifest;
+    const main = application
+      .flatMap(({ activity }) => activity)
+      .find(({ $ }) => $['android:name']?.endsWith('.MainActivity'));
+    const changes = main?.$['android:configChanges']?.split('|');
+    expect(changes).toEqual(expect.arrayContaining(['fontScale', 'keyboardHidden', 'screenSize']));
+    expect(changes?.filter((change) => change === 'fontScale')).toHaveLength(1);
+  });
+});

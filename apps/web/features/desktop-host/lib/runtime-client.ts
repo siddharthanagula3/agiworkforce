@@ -28,6 +28,7 @@ import {
   type DispatchTaskReport,
   type PermissionDecision,
   type PermissionScope,
+  type WorkspaceTerminalViewport,
   type RefusableApplication,
   type SystemPermissionKind,
   type RemoteControlStartRequest,
@@ -51,6 +52,7 @@ import {
   type LocalDeveloperSession,
   type DeveloperSessionEvent,
   type DeveloperSessionList,
+  type DeveloperSessionListOptions,
   type DeveloperSessionStartRequest,
   type DeveloperSessionTranscript,
   type DeveloperThreadDeleteRequest,
@@ -669,11 +671,16 @@ export function listDeveloperModels(
 }
 
 export function listDeveloperSessions(
-  options: { includeArchived?: boolean } = {},
+  options: DeveloperSessionListOptions = {},
 ): Promise<DeveloperSessionList> {
-  return options.includeArchived
-    ? invoke<DeveloperSessionList>('developer_session_list', { includeArchived: true })
-    : invoke<DeveloperSessionList>('developer_session_list');
+  const args = {
+    ...(options.includeArchived ? { includeArchived: true } : {}),
+    ...(options.titleQuery ? { titleQuery: options.titleQuery } : {}),
+  };
+  return invoke<DeveloperSessionList>(
+    'developer_session_list',
+    Object.keys(args).length ? args : undefined,
+  );
 }
 
 /**
@@ -703,6 +710,13 @@ export function reviewDeveloperMcpServer(
 
 /** This page shows the agent's questions, so the shell leaves them for it to answer. */
 const PAGE_CLIENT_CAPABILITIES: DeveloperClientCapability[] = ['user_input'];
+
+export function lookupDeveloperSession(
+  rootId: string,
+  threadId: string,
+): Promise<LocalDeveloperSession | null> {
+  return invoke<LocalDeveloperSession | null>('developer_session_lookup', { rootId, threadId });
+}
 
 export function readDeveloperSession(
   rootId: string,
@@ -1020,6 +1034,7 @@ export interface DeveloperTerminalOutput {
   terminalId: string;
   data?: string;
   exitCode?: number | null;
+  viewport?: WorkspaceTerminalViewport;
 }
 
 export function openDeveloperTerminal(
@@ -1047,6 +1062,14 @@ export function resizeDeveloperTerminal(
   return invoke<boolean>('developer_terminal_resize', { rootId, terminalId, cols, rows });
 }
 
+export function scrollDeveloperTerminal(
+  rootId: string,
+  terminalId: string,
+  lines: number,
+): Promise<boolean> {
+  return invoke<boolean>('developer_terminal_scroll', { rootId, terminalId, lines });
+}
+
 export function closeDeveloperTerminal(rootId: string, terminalId: string): Promise<boolean> {
   return invoke<boolean>('developer_terminal_close', { rootId, terminalId });
 }
@@ -1063,6 +1086,7 @@ export function onDeveloperTerminal(
       terminalId: event.terminalId,
       ...(event.data === undefined ? {} : { data: event.data }),
       ...(event.exitCode === undefined ? {} : { exitCode: event.exitCode }),
+      ...(event.viewport === undefined ? {} : { viewport: event.viewport }),
     });
   });
 }

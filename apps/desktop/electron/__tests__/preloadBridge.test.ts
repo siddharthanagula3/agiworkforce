@@ -45,9 +45,16 @@ const HOSTED_PAGE = [
 ];
 
 const originalArgv = [...process.argv];
+const hostedOrigin = location.origin;
+const observers = vi.spyOn(MutationObserver.prototype, 'observe');
 
 async function loadPreload(extraArguments: string[]): Promise<Record<string, unknown>> {
-  process.argv = [...originalArgv, '--agi-app-version=1.8.0', ...extraArguments];
+  process.argv = [
+    ...originalArgv,
+    '--agi-app-version=1.8.0',
+    `--agi-app-origin=${hostedOrigin}`,
+    ...extraArguments,
+  ];
   exposed.clear();
   vi.resetModules();
   await import('../preload');
@@ -58,6 +65,8 @@ async function loadPreload(extraArguments: string[]): Promise<Record<string, unk
 
 afterEach(() => {
   process.argv = [...originalArgv];
+  for (const observer of observers.mock.contexts) observer.disconnect();
+  observers.mockClear();
 });
 
 describe('what the preload puts on the page', () => {
@@ -165,22 +174,51 @@ describe('the theme report', () => {
     invoke.mock.calls.filter(([channel]) => channel === ELECTRON_IPC_CHANNELS.rendererTheme);
 
   afterEach(() => {
+    document.documentElement.removeAttribute('data-theme');
+    document.documentElement.removeAttribute('data-theme-preference');
     vi.unstubAllGlobals();
   });
 
-  it('reports the page theme to main from the hosted app', async () => {
+  it('reports a resolved theme from an older hosted app', async () => {
+    document.documentElement.setAttribute('data-theme', 'dark');
     invoke.mockClear();
     await loadPreload([]);
 
-    expect(themeCalls()).toHaveLength(1);
+    expect(themeCalls()).toEqual([[ELECTRON_IPC_CHANNELS.rendererTheme, 'dark']]);
   });
 
-  it('makes no bridge call from a page the shell drew itself', async () => {
-    vi.stubGlobal('location', { protocol: 'data:' });
+  it('keeps the system preference when the resolved palette changes', async () => {
+    const root = document.documentElement;
+    root.setAttribute('data-theme-preference', 'system');
+    root.setAttribute('data-theme', 'dark');
+    invoke.mockClear();
+    await loadPreload([]);
+    root.setAttribute('data-theme', 'light');
+    await Promise.resolve();
+
+    expect(themeCalls()).toEqual([[ELECTRON_IPC_CHANNELS.rendererTheme, 'system']]);
+    root.setAttribute('data-theme-preference', 'light');
+    await vi.waitFor(() => expect(themeCalls()).toHaveLength(2));
+    expect(themeCalls()[1]).toEqual([ELECTRON_IPC_CHANNELS.rendererTheme, 'light']);
+  });
+
+  it.each(['null', 'https://signin.example.test'])(
+    'makes no theme bridge call from origin %s',
+    async (origin) => {
+      vi.stubGlobal('location', { origin });
+      document.documentElement.setAttribute('data-theme', 'dark');
+      invoke.mockClear();
+      await loadPreload([]);
+
+      expect(themeCalls()).toEqual([]);
+    },
+  );
+
+  it('waits for the hosted app to declare a theme', async () => {
     invoke.mockClear();
     await loadPreload([]);
 
-    expect(invoke).not.toHaveBeenCalled();
+    expect(themeCalls()).toEqual([]);
   });
 });
 

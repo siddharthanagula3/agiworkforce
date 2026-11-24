@@ -15,4 +15,5 @@ export type PluginSummary = {
    * Manifest dialect the plugin declared, when it declared one.
    */
   format?: string;
+  configurable?: boolean;
 };

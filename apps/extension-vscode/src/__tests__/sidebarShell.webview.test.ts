@@ -134,6 +134,19 @@ describe('the sidebar overflow menu', () => {
     expect((document.getElementById('composerStatusSignIn') as HTMLElement).hidden).toBe(true);
   });
 
+  it.each(['local', 'byok'])(
+    'hides the Cloud sign-in link in an established %s session',
+    (trustMode) => {
+      boot();
+      deliver({ type: 'accountStatus', payload: { status: 'signed-out' } });
+      deliver({ type: 'sessionBoundary', payload: { trustMode, provider: 'lmstudio' } });
+      deliver({ type: 'accountStatus', payload: { status: 'expired' } });
+      expect((document.getElementById('composerStatusSignIn') as HTMLElement).hidden).toBe(true);
+      deliver({ type: 'sessionBoundary', payload: { trustMode: 'managed' } });
+      expect((document.getElementById('composerStatusSignIn') as HTMLElement).hidden).toBe(false);
+    },
+  );
+
   it('keeps sign-in a quiet link in the status line, never a primary empty-state button', () => {
     const postMessage = boot();
 
@@ -191,7 +204,197 @@ describe('the sessions sheet', () => {
       Array.from(row?.querySelectorAll('.sessions-sheet-row-age') ?? []).map(
         (node) => node.textContent,
       ),
-    ).toEqual(['4m ago', 'Local']);
+    ).toEqual(['4m ago']);
+    expect(row?.querySelector('.sessions-sheet-row-meta')?.textContent).toBe('Local');
+  });
+
+  it('keeps already loaded sessions visible and retries an incomplete Local list', () => {
+    const postMessage = boot();
+    click('#sessionsBtn');
+    deliver({
+      type: 'sessionsList',
+      payload: {
+        source: 'local',
+        rows: [{ id: 'first', title: 'Already loaded', age: '1m ago', source: 'local' }],
+        unavailable: 'Some sessions in Project could not be listed.',
+        retryable: true,
+      },
+    });
+
+    expect(document.querySelector('.sessions-sheet-row-title')?.textContent).toBe('Already loaded');
+    expect(document.querySelector('#sessionsSheet .error-retry')?.textContent).toBe('Retry');
+    postMessage.mockClear();
+    click('#sessionsSheet .error-retry');
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'requestSessions', payload: { source: 'local' } }),
+    );
+    expect(document.activeElement?.id).toBe('sessionsTabLocal');
+  });
+
+  it('pins an older Local row and focuses its Unpin action after the list reorders', () => {
+    const postMessage = boot();
+    click('#sessionsBtn');
+    const recent = { id: 'new', title: 'Newer session', age: '1m ago', source: 'local' };
+    const older = {
+      id: 'old',
+      title: 'Older session',
+      age: '2d ago',
+      source: 'local',
+      canPin: true,
+    };
+    deliver({ type: 'sessionsList', payload: { source: 'local', rows: [recent, older] } });
+    const pin = document.querySelector<HTMLButtonElement>('[data-session-pin-id="old"]')!;
+    expect(pin.getAttribute('aria-label')).toBe('Pin session Older session');
+    expect(document.querySelector('[data-session-pin-id="new"]')).toBeNull();
+    pin.focus();
+    pin.click();
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'setSessionPinned',
+        payload: { id: 'old', pinned: true },
+      }),
+    );
+    deliver({
+      type: 'sessionsList',
+      payload: { source: 'local', rows: [{ ...older, pinned: true }, recent] },
+    });
+    const first = document.querySelector('.sessions-sheet-entry')!;
+    expect(first.querySelector('.sessions-sheet-row-title')?.textContent).toBe('Older session');
+    expect(first.querySelector('.sessions-sheet-row-meta')?.textContent).toContain('Pinned');
+    const unpin = first.querySelector<HTMLButtonElement>('[data-session-pin-id="old"]')!;
+    expect(unpin.getAttribute('aria-label')).toBe('Unpin session Older session');
+    expect(document.activeElement).toBe(unpin);
+    unpin.click();
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'setSessionPinned',
+        payload: { id: 'old', pinned: false },
+      }),
+    );
+  });
+
+  it('marks a local session unread and filters to unread sessions without opening the chat', () => {
+    const postMessage = boot();
+    click('#sessionsBtn');
+    deliver({
+      type: 'sessionsList',
+      payload: {
+        source: 'local',
+        rows: [
+          {
+            id: 'thread-a',
+            title: 'Keep for later',
+            age: '4m ago',
+            source: 'local',
+            sourceLabel: 'CLI',
+          },
+          {
+            id: 'thread-b',
+            title: 'Read already',
+            age: '5m ago',
+            source: 'local',
+            sourceLabel: 'CLI',
+          },
+        ],
+      },
+    });
+    click('[data-session-unread-id="thread-a"]');
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'setSessionUnread',
+        payload: { id: 'thread-a', unread: true },
+      }),
+    );
+    expect(postMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'openSessionRow' }),
+    );
+    deliver({ type: 'sessionUnreadChanged', payload: { id: 'thread-a', unread: true } });
+    click('#sessionsUnreadOnly');
+    expect(document.querySelector('.sessions-sheet-row-title')?.textContent).toBe('Keep for later');
+    expect(document.querySelectorAll('.sessions-sheet-row')).toHaveLength(1);
+    expect(document.querySelector('.sessions-sheet-row')?.getAttribute('data-unread')).toBe('true');
+    const mark = document.querySelector<HTMLButtonElement>('[data-session-unread-id="thread-a"]')!;
+    mark.focus();
+    mark.click();
+    deliver({ type: 'sessionUnreadChanged', payload: { id: 'thread-a', unread: false } });
+    expect(document.getElementById('sessionsSheetList')?.textContent).toBe('No unread sessions');
+    expect(document.activeElement?.id).toBe('sessionsUnreadOnly');
+  });
+
+  it('moves a row to a group and filters without opening the conversation', () => {
+    const post = boot();
+    click('#sessionsBtn');
+    deliver({
+      type: 'sessionsList',
+      payload: {
+        source: 'local',
+        rows: [
+          { id: 'a', title: 'Release chat', age: '1m ago', source: 'local', sourceLabel: 'CLI' },
+          { id: 'b', title: 'Other chat', age: '2m ago', source: 'local', sourceLabel: 'CLI' },
+        ],
+        groups: [],
+      },
+    });
+    click('[data-session-group-id="a"]');
+    expect(post).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'chooseSessionGroup', payload: { id: 'a' } }),
+    );
+    expect(post).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'openSessionRow' }));
+    deliver({
+      type: 'sessionGroupChanged',
+      payload: {
+        ids: ['a'],
+        groupId: 'release',
+        groups: [{ id: 'release', name: 'Release work' }],
+      },
+    });
+    const select = document.querySelector<HTMLSelectElement>('#sessionsGroupFilter')!;
+    expect(select.hidden).toBe(false);
+    select.value = 'release';
+    select.dispatchEvent(new Event('change'));
+    expect(document.querySelectorAll('.sessions-sheet-row')).toHaveLength(1);
+    expect(document.querySelector('.sessions-sheet-row-title')?.textContent).toBe('Release chat');
+    expect(document.querySelector('.sessions-sheet-row-group')?.textContent).toBe('Release work');
+    click('#manageSessionGroups');
+    expect(post).toHaveBeenCalledWith(expect.objectContaining({ type: 'manageSessionGroups' }));
+    deliver({ type: 'sessionGroupsChanged', payload: { groups: [] } });
+    expect(select.hidden).toBe(true);
+    expect(document.querySelectorAll('.sessions-sheet-row')).toHaveLength(2);
+    expect(document.querySelector('.sessions-sheet-row-group')).toBeNull();
+  });
+
+  it('selects several sessions and sends one move without opening any of them', () => {
+    const post = boot();
+    click('#sessionsBtn');
+    deliver({
+      type: 'sessionsList',
+      payload: {
+        source: 'local',
+        rows: [
+          { id: 'a', title: 'Release chat', age: '1m ago', source: 'local', sourceLabel: 'CLI' },
+          { id: 'b', title: 'QA chat', age: '2m ago', source: 'local', sourceLabel: 'CLI' },
+        ],
+      },
+    });
+    click('#selectSessions');
+    click('[data-session-selection-id="a"]');
+    click('[data-session-selection-id="b"]');
+    expect(document.getElementById('sessionsSelectionCount')?.textContent).toBe('2 selected');
+    click('#moveSelectedSessions');
+    expect(post).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'chooseSessionGroup', payload: { ids: ['a', 'b'] } }),
+    );
+    expect(post).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'openSessionRow' }));
+    deliver({
+      type: 'sessionGroupChanged',
+      payload: {
+        ids: ['a', 'b'],
+        groupId: 'release',
+        groups: [{ id: 'release', name: 'Release work' }],
+      },
+    });
+    expect(document.getElementById('sessionsBulkActions')?.hidden).toBe(true);
+    expect(document.querySelectorAll('.sessions-sheet-row-group')).toHaveLength(2);
   });
 
   it('stays reachable during a conversation and announces loading before rows arrive', () => {
@@ -528,13 +731,15 @@ describe('the composer command list', () => {
     });
 
     expect(log.querySelector('#emptyState')).not.toBeNull();
-    expect(log.textContent).toContain('Build with AGI');
+    expect(log.textContent).toContain('Start a conversation');
   });
 
-  it('states the trust boundary and the permission mode under the composer', () => {
+  it('shows the trust boundary in the header and permission mode in its control', () => {
     boot();
 
-    expect(document.getElementById('composerStatusMode')?.textContent).toBe('Auto');
+    expect(document.querySelector('#controlsSummary .controls-summary__label')?.textContent).toBe(
+      'Auto',
+    );
 
     deliver({
       type: 'conversationLoaded',
@@ -546,72 +751,6 @@ describe('the composer command list', () => {
       },
     });
 
-    expect(document.getElementById('composerStatusBoundary')?.textContent).toBe('Local');
-  });
-});
-
-describe('the terminal hint', () => {
-  beforeEach(() => {
-    document.head.innerHTML = '';
-    document.body.innerHTML = '';
-  });
-
-  afterEach(() => {
-    Reflect.deleteProperty(globalThis, 'acquireVsCodeApi');
-    vi.restoreAllMocks();
-  });
-
-  const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
-  const hint = (): HTMLElement => document.getElementById('terminalHint') as HTMLElement;
-
-  it('sits under the empty state and sends the person to Settings', () => {
-    const postMessage = boot();
-
-    expect(hint().hidden).toBe(false);
-    expect(hint().textContent).toContain('Prefer the terminal?');
-
-    click('#terminalHintSettings');
-
-    expect(postMessage).toHaveBeenCalledWith({ origin: 'chat', epoch: 0, type: 'openSettings' });
-  });
-
-  it('goes away once the chat has messages and returns with the empty state', async () => {
-    boot();
-
-    deliver({
-      type: 'conversationLoaded',
-      payload: {
-        threadId: 't2',
-        title: 'A replayed session',
-        trustMode: 'byok',
-        messages: [{ role: 'user', text: 'hello' }],
-      },
-    });
-    await settle();
-    expect(hint().hidden).toBe(true);
-
-    deliver({
-      type: 'conversationLoaded',
-      payload: { threadId: 't3', title: 'Nothing to replay', trustMode: 'byok', messages: [] },
-    });
-    await settle();
-    expect(hint().hidden).toBe(false);
-  });
-
-  it('stays dismissed after the close button, including when the empty state returns', async () => {
-    boot();
-
-    expect(document.getElementById('terminalHintDismiss')?.getAttribute('aria-label')).toBe(
-      'Dismiss the terminal hint',
-    );
-    click('#terminalHintDismiss');
-    expect(hint().hidden).toBe(true);
-
-    deliver({
-      type: 'conversationLoaded',
-      payload: { threadId: 't3', title: 'Nothing to replay', trustMode: 'byok', messages: [] },
-    });
-    await settle();
-    expect(hint().hidden).toBe(true);
+    expect(document.getElementById('sessionBoundaryLabel')?.textContent).toBe('Local');
   });
 });

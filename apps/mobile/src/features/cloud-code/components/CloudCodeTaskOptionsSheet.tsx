@@ -4,13 +4,11 @@ import { Modal, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Check, ChevronRight, X } from 'lucide-react-native';
 import {
-  CLOUD_CODE_TURN_STEP_BOUNDS,
   formatUsageResetIn,
   getModelMetadataById,
   managedUsageBucketLabel,
   type CloudCodeSession,
   type CloudCodeTurnMode,
-  type CloudCodeTurnStepBound,
 } from '@agiworkforce/types';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
@@ -19,11 +17,7 @@ import { useCloudUsageStore } from '@/src/features/settings/cloud-usage/store';
 import { useThemeColors } from '@/src/ui/theme';
 import { dialogPadding, typeScale } from '@/src/ui/theme/tokens';
 import { PageSheetSafeArea } from '@/src/features/chat/components/ModalSafeArea';
-import {
-  CLOUD_CODE_OPTIONS_COPY as COPY,
-  CLOUD_CODE_TURN_MODE_OPTIONS,
-  CLOUD_CODE_TURN_STEP_HINTS,
-} from '../presentation';
+import { CLOUD_CODE_OPTIONS_COPY as COPY, CLOUD_CODE_TURN_MODE_OPTIONS } from '../presentation';
 
 const PERCENT = 100;
 const NEAR_LIMIT_PERCENT = 90;
@@ -133,9 +127,7 @@ export function CloudCodeTaskOptionsSheet({
   model,
   turnControls,
   mode,
-  steps,
   onModeChange,
-  onStepsChange,
   onClose,
 }: {
   visible: boolean;
@@ -143,9 +135,7 @@ export function CloudCodeTaskOptionsSheet({
   model: string;
   turnControls: boolean;
   mode: CloudCodeTurnMode;
-  steps: CloudCodeTurnStepBound;
   onModeChange: (mode: CloudCodeTurnMode) => void;
-  onStepsChange: (steps: CloudCodeTurnStepBound) => void;
   onClose: () => void;
 }) {
   const colors = useThemeColors();
@@ -200,34 +190,19 @@ export function CloudCodeTaskOptionsSheet({
           </View>
           <ScrollView contentContainerStyle={{ gap: 20, paddingBottom: 32 }}>
             {turnControls ? (
-              <>
-                <Section title={COPY.mode}>
-                  <View accessibilityRole="radiogroup">
-                    {CLOUD_CODE_TURN_MODE_OPTIONS.map((option) => (
-                      <Choice
-                        key={option.id}
-                        label={option.label}
-                        description={option.description}
-                        selected={mode === option.id}
-                        onPress={() => onModeChange(option.id)}
-                      />
-                    ))}
-                  </View>
-                </Section>
-                <Section title={COPY.steps}>
-                  <View accessibilityRole="radiogroup">
-                    {CLOUD_CODE_TURN_STEP_BOUNDS.map((bound) => (
-                      <Choice
-                        key={bound}
-                        label={`${bound} ${COPY.stepsUnit}`}
-                        description={CLOUD_CODE_TURN_STEP_HINTS[bound]}
-                        selected={steps === bound}
-                        onPress={() => onStepsChange(bound)}
-                      />
-                    ))}
-                  </View>
-                </Section>
-              </>
+              <Section title={COPY.mode}>
+                <View accessibilityRole="radiogroup">
+                  {CLOUD_CODE_TURN_MODE_OPTIONS.map((option) => (
+                    <Choice
+                      key={option.id}
+                      label={option.label}
+                      description={option.description}
+                      selected={mode === option.id}
+                      onPress={() => onModeChange(option.id)}
+                    />
+                  ))}
+                </View>
+              </Section>
             ) : (
               <Text
                 style={{ color: colors.textMuted, fontSize: typeScale.footnote, lineHeight: 19 }}

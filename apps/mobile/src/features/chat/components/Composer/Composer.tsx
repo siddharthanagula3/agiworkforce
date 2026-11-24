@@ -1,10 +1,17 @@
 import type { SendPreviewInput, WorkUsageRecovery } from '@agiworkforce/types';
-import { ChatInput, type ChatInputHandle } from '@/src/features/chat/components/ChatInput';
+import {
+  ChatInput,
+  type ChatInputHandle,
+  type ComposerSendOutcome,
+} from '@/src/features/chat/components/ChatInput';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 import type { DraftProvenance } from '@/src/features/chat/draftStore';
 
 interface ComposerProps {
-  onSend: (text: string, attachments?: Attachment[]) => void | boolean | Promise<void | boolean>;
+  onSend: (
+    text: string,
+    attachments?: Attachment[],
+  ) => ComposerSendOutcome | Promise<ComposerSendOutcome>;
   isStreaming?: boolean;
   onStop?: () => void;
   onOpenModelPicker?: () => void;

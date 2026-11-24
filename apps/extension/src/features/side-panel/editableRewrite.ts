@@ -162,6 +162,7 @@ export class EditableRewriteController {
         documentId: entry.target.documentId,
         selectionId: entry.target.id,
         owner: entry.target.owner,
+        ...(entry.target.frame ? { frame: entry.target.frame } : {}),
       };
       const response = await this.dependencies.send(
         mode === 'insert'

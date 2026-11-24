@@ -29,9 +29,10 @@ interface EditableSnapshot {
   signature: string;
   original: string;
   originalHtml?: string;
+  originalDomText?: string;
   start: number;
   end: number;
-  range?: Range;
+  richSelection?: { range: Range; boundaries: StaticRangeInit };
   selectedText: string;
   phase: 'selected' | 'used' | 'inserted' | 'restored';
   after?: string;
@@ -68,6 +69,7 @@ function assertOrdinaryEditor(element: HTMLElement): void {
   if (
     !element.isConnected ||
     !isVisible(element) ||
+    (window.top !== window && element instanceof HTMLInputElement) ||
     isSensitiveField(element) ||
     element.closest(
       '[aria-disabled="true"], [aria-readonly="true"], button, a[href], [role="button"]',
@@ -154,6 +156,7 @@ export function captureEditableSelection(
     throw new Error('This editor is too large for a bound insertion. Copy the draft instead.');
   let start: number;
   let end: number;
+  let originalDomText: string | undefined;
   if (native(element)) {
     if (element.selectionStart === null || element.selectionEnd === null)
       throw new Error('This field does not expose its selection. Copy the draft instead.');
@@ -175,16 +178,17 @@ export function captureEditableSelection(
       );
     start = original.indexOf(selectedText);
     if (start !== original.lastIndexOf(selectedText)) {
-      if (original !== element.textContent)
+      if (range.toString() !== selectedText)
         throw new Error('This editor has an ambiguous selection. Copy the draft instead.');
       const before = document.createRange();
       before.selectNodeContents(element);
       before.setEnd(range.startContainer, range.startOffset);
       start = before.toString().length;
+      if (original !== element.textContent) originalDomText = element.textContent ?? '';
     }
     end = start + selectedText.length;
   }
-  if (start < 0 || end <= start || original.slice(start, end) !== selectedText)
+  if (start < 0 || end <= start || (originalDomText ?? original).slice(start, end) !== selectedText)
     throw new Error('The selection changed. Select it again.');
   const id = crypto.randomUUID();
   latest = {
@@ -194,7 +198,21 @@ export function captureEditableSelection(
     element,
     signature: pageElementSignature(element),
     original,
-    ...(range ? { range, originalHtml: element.innerHTML } : {}),
+    ...(originalDomText === undefined ? {} : { originalDomText }),
+    ...(range
+      ? {
+          richSelection: {
+            range,
+            boundaries: {
+              startContainer: range.startContainer,
+              startOffset: range.startOffset,
+              endContainer: range.endContainer,
+              endOffset: range.endOffset,
+            },
+          },
+          originalHtml: element.innerHTML,
+        }
+      : {}),
     start,
     end,
     selectedText,
@@ -232,14 +250,23 @@ function requireSnapshot(
 }
 
 function unchanged(snapshot: EditableSnapshot): boolean {
+  const { richSelection, element } = snapshot;
+  if (richSelection) {
+    const { range, boundaries } = richSelection;
+    if (
+      range.startContainer !== boundaries.startContainer ||
+      range.startOffset !== boundaries.startOffset ||
+      range.endContainer !== boundaries.endContainer ||
+      range.endOffset !== boundaries.endOffset ||
+      !element.contains(range.startContainer) ||
+      !element.contains(range.endContainer)
+    )
+      return false;
+  }
   return (
-    textOf(snapshot.element) === snapshot.original &&
-    (snapshot.originalHtml === undefined || snapshot.element.innerHTML === snapshot.originalHtml) &&
-    (!snapshot.range ||
-      (snapshot.range.startContainer.isConnected &&
-        snapshot.range.endContainer.isConnected &&
-        snapshot.element.contains(snapshot.range.startContainer) &&
-        snapshot.element.contains(snapshot.range.endContainer)))
+    element.isConnected &&
+    textOf(element) === snapshot.original &&
+    (snapshot.originalHtml === undefined || element.innerHTML === snapshot.originalHtml)
   );
 }
 
@@ -262,8 +289,8 @@ export async function applyEditableSelection(
       'This draft cannot be inserted automatically. Copy it and edit the field yourself.',
     );
   const element = snapshot.element;
-  const expected =
-    snapshot.original.slice(0, snapshot.start) + value + snapshot.original.slice(snapshot.end);
+  const baseline = snapshot.originalDomText ?? snapshot.original;
+  const expected = baseline.slice(0, snapshot.start) + value + baseline.slice(snapshot.end);
   if (native(element)) {
     const clone = element.cloneNode(false) as HTMLInputElement | HTMLTextAreaElement;
     clone.value = expected;
@@ -285,7 +312,7 @@ export async function applyEditableSelection(
   else {
     const selection = window.getSelection();
     selection?.removeAllRanges();
-    selection?.addRange(snapshot.range!);
+    selection?.addRange(snapshot.richSelection!.range);
   }
   const beforeRevision = revision;
   let inserted = false;
@@ -303,10 +330,12 @@ export async function applyEditableSelection(
   if (latest !== snapshot || location.href !== expectedUrl || !element.isConnected)
     throw new Error('The editor changed during insertion. Check the page before continuing.');
   const after = textOf(element);
-  const verified =
-    pageElementSignature(element) === snapshot.signature &&
-    (after === expected ||
-      (expected === '' && after.trim() === '' && !element.textContent?.trim()));
+  const textMatches =
+    snapshot.originalDomText === undefined
+      ? after === expected ||
+        (expected === '' && after.trim() === '' && !element.textContent?.trim())
+      : element.textContent === expected && (after !== snapshot.original || expected === baseline);
+  const verified = pageElementSignature(element) === snapshot.signature && textMatches;
   const applied =
     after !== snapshot.original ||
     (!native(element) && element.innerHTML !== snapshot.originalHtml);

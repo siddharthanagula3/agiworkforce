@@ -6,7 +6,7 @@ import type {
 import type { BrowserPairingState } from './browser-bridge';
 import type { BrowserPaneState } from './browser-pane';
 import type { ComputerUseStatus } from './computer-use';
-import type { DeveloperSessionEvent } from './developer-sessions';
+import type { DeveloperSessionEvent, WorkspaceTerminalViewport } from './developer-sessions';
 import type { RemoteControlState } from './remote-control';
 import type { SimulatorStatus } from './simulator';
 import type { DesktopCapability, PermissionScope } from './capabilities';
@@ -135,4 +135,5 @@ export type DesktopRuntimeEvent =
       terminalId: string;
       data?: string;
       exitCode?: number | null;
+      viewport?: WorkspaceTerminalViewport;
     };

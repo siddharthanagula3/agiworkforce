@@ -696,6 +696,7 @@ export async function executeChromeManagedChat(
 
   const routing = resolveChromeManagedChatRoute({
     selection,
+    admittedModelKeys: new Set(access.modelIds),
     text: request.text,
     subscriptionTier: access.subscriptionTier,
     history: (request.conversationHistory ?? []).map((message) => ({ ...message })),

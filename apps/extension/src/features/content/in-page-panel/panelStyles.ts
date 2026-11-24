@@ -42,12 +42,9 @@ export function buildPanelStyles(): string {
     }
 
     .agi-logo {
-      font-size:15px; font-weight:700;
-      letter-spacing:0;
-      flex:1;
-      min-width:28px;
-      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+      flex:1; min-width:28px; display:flex; align-items:center;
     }
+    .agi-brand-mark { width:24px; height:24px; display:block; }
 
     .agi-provider-pill {
       font-size:inherit; font-weight:600;
@@ -211,11 +208,10 @@ export function buildPanelStyles(): string {
       background:var(--agi-ext-surface); outline:none;
       min-height:40px; max-height:120px;
       line-height:1.5;
-      transition:border-color 0.15s,box-shadow 0.15s;
     }
-    .agi-textarea:focus-visible {
-      border-color:var(--agi-ext-focus);
-      box-shadow:0 0 0 3px color-mix(in srgb, var(--agi-ext-focus) 20%, transparent);
+    .agi-textarea:focus-visible:not([data-pointer-focus]) {
+      outline:2px solid var(--agi-ext-text);
+      outline-offset:2px;
     }
     .agi-textarea::placeholder { color:var(--agi-ext-text-placeholder); opacity:1; }
 
@@ -280,6 +276,7 @@ export function buildPanelStyles(): string {
       .agi-panel, .agi-action-chip, .agi-composer, .agi-disclosure,
       .agi-textarea, .agi-access-state, .agi-state-action,
       .agi-open-side-panel { forced-color-adjust:auto; }
+      .agi-textarea:focus-visible:not([data-pointer-focus]) { outline-color:Highlight; }
       .agi-provider-pill { color:CanvasText; border-color:CanvasText; }
       .agi-submit-btn { background:Highlight; color:HighlightText; }
       .agi-response-area .agi-thinking { background:Highlight; }

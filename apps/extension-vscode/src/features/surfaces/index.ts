@@ -1,17 +1,14 @@
 import { PRODUCT_NAMES } from '@agiworkforce/types';
+import type { ContextInstructionsResponse } from '@agiworkforce/types/protocol';
+import * as path from 'node:path';
 import * as vscode from 'vscode';
 import {
   composeSurfaceSections,
-  showCapabilityQuickPick,
   showSurfaceQuickPick,
   type SurfaceRowAction,
   type SurfaceTitleAction,
 } from './treeQuickPick';
-import {
-  CLI_CAPABILITY_REQUIREMENT,
-  CliCapabilityAdapter,
-  type CliCapability,
-} from './cliCapabilities';
+import type { CliCapabilityAdapter } from './cliCapabilities';
 
 export {
   buildSurfaceRows,
@@ -357,37 +354,33 @@ export function openContextSurface(provider: TreeSource): Promise<void> {
   });
 }
 
-const CAPABILITY_TITLES: Record<string, { title: string; placeholder: string; empty: string }> = {
-  instructions: {
-    title: `${PRODUCT_NAMES.code}, Instructions`,
-    placeholder: 'Instruction files the AGI CLI loads…',
-    empty: 'The CLI loads no instruction files in this workspace',
-  },
-};
-
-export async function openCapabilitySurface(
-  adapter: CliCapabilityAdapter,
-  capability: Extract<CliCapability, 'instructions'>,
-): Promise<void> {
-  const copy = CAPABILITY_TITLES[capability];
-  if (copy === undefined) return;
-  const result = await adapter.listEntries(capability);
-  if (result.status === 'ok') {
-    await showCapabilityQuickPick({
-      title: copy.title,
-      placeholder: copy.placeholder,
-      rows: result.value,
-      emptyLabel: copy.empty,
-    });
+export async function openInstructionsSurface(adapter: CliCapabilityAdapter): Promise<void> {
+  const result = await adapter.call<ContextInstructionsResponse>('instructions');
+  if (result.status !== 'ok') {
+    void vscode.window.showWarningMessage(result.reason);
     return;
   }
-  await showCapabilityQuickPick({
-    title: copy.title,
-    placeholder: copy.placeholder,
-    rows: [],
-    emptyLabel:
-      result.status === 'unavailable' && result.reason === CLI_CAPABILITY_REQUIREMENT
-        ? `${CLI_CAPABILITY_REQUIREMENT} to list ${copy.title.split(', ')[1]?.toLowerCase() ?? capability}`
-        : result.reason,
-  });
+  const files = result.value.files.filter((file) => path.isAbsolute(file.path));
+  if (files.length === 0) {
+    void vscode.window.showInformationMessage(
+      'The CLI loads no instruction files in this workspace.',
+    );
+    return;
+  }
+  const picked = await vscode.window.showQuickPick(
+    files.map((file) => ({ label: path.basename(file.path), description: file.path, file })),
+    {
+      title: `${PRODUCT_NAMES.code}, Instructions`,
+      placeHolder: result.value.truncated
+        ? 'Select a file. Some files exceeded the instruction budget.'
+        : 'Select an instruction file to open',
+      matchOnDescription: true,
+    },
+  );
+  if (picked === undefined) return;
+  try {
+    await vscode.window.showTextDocument(vscode.Uri.file(picked.file.path));
+  } catch {
+    void vscode.window.showWarningMessage(`Could not open ${picked.file.path}.`);
+  }
 }

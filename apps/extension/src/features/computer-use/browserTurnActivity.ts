@@ -18,6 +18,14 @@ const READ_ONLY_STEP_TOOLS: ReadonlySet<string> = new Set([
 
 export type BrowserRunState = 'running' | 'paused' | 'completed' | 'cancelled' | 'failed';
 
+export function redactBrowserTypingActivity(event: AgentEvent): AgentEvent {
+  if (event.type === 'tool-execution-start' && event.name === 'type')
+    return { ...event, summary: t('spBrowserStepTyping'), input: null };
+  if (event.type === 'tool-execution-end' && event.name === 'type')
+    return { ...event, output: null };
+  return event;
+}
+
 export function browserActivityTurnId(messageId: string): string {
   return `browser:${messageId}`;
 }
@@ -57,7 +65,9 @@ export function describeBrowserStep(toolName: string, args: Record<string, unkno
     case 'screenshot':
       return t('spBrowserStepScreenshot');
     case 'click':
-      return t('spBrowserStepClicking');
+      return args['pointerType'] === 'touch'
+        ? t('spBrowserStepTapping')
+        : t('spBrowserStepClicking');
     case 'type':
       return t('spBrowserStepTyping');
     case 'select_option':
@@ -67,9 +77,11 @@ export function describeBrowserStep(toolName: string, args: Record<string, unkno
     case 'scroll':
       return t('spBrowserStepScrolling');
     case 'hover':
-    case 'drag':
-    case 'swipe':
       return t('spBrowserStepPointing');
+    case 'drag':
+      return t('spBrowserStepDragging');
+    case 'swipe':
+      return t('spBrowserStepSwiping');
     case 'navigate':
     case 'open_tab':
       return t('spBrowserStepOpening', [hostOf(args['url']) || t('spBrowserStepAPage')]);
@@ -106,6 +118,7 @@ function boundedOutput(text: string): string {
  */
 export class BrowserRunActivityTranslator {
   private callCount = 0;
+  lastScreenshotCallId?: string;
   private readonly pending = new Map<string, string[]>();
 
   constructor(private readonly runId: string) {}
@@ -131,16 +144,20 @@ export class BrowserRunActivityTranslator {
     const queue = this.pending.get(name) ?? [];
     const toolCallId = queue.shift() ?? `${this.runId}:${(this.callCount += 1)}`;
     this.pending.set(name, queue);
+    if (name === 'screenshot' && step.kind === 'tool_result')
+      this.lastScreenshotCallId = toolCallId;
     const outcome = step.actionOutcome?.status;
     const failed = step.kind !== 'tool_result' || outcome === 'refused' || outcome === 'failed';
     const output =
-      step.kind === 'injection_blocked'
-        ? t('spBrowserStepInjectionBlocked')
-        : step.kind === 'error'
-          ? boundedOutput(step.errorMessage ?? '')
-          : READ_ONLY_STEP_TOOLS.has(name)
-            ? t('spBrowserStepDone')
-            : boundedOutput(step.toolResult ?? '');
+      name === 'type'
+        ? null
+        : step.kind === 'injection_blocked'
+          ? t('spBrowserStepInjectionBlocked')
+          : step.kind === 'error'
+            ? boundedOutput(step.errorMessage ?? '')
+            : READ_ONLY_STEP_TOOLS.has(name)
+              ? t('spBrowserStepDone')
+              : boundedOutput(step.toolResult ?? '');
     return [{ type: 'tool-execution-end', toolCallId, name, output, isError: failed }];
   }
 

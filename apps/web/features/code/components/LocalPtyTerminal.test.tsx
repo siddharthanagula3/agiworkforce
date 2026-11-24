@@ -23,6 +23,7 @@ class FakeTerminal {
   loadAddon(): void {}
   open(): void {}
   focus(): void {}
+  attachCustomKeyEventHandler(): void {}
   dispose = vi.fn();
   write(text: string): void {
     this.written.push(text);

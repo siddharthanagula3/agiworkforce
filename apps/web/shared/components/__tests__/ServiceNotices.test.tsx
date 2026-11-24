@@ -45,7 +45,9 @@ async function refetchFeed(client: QueryClient) {
 }
 
 async function dismiss(message: string) {
-  const card = (await screen.findByText(message)).parentElement!;
+  const card = (await screen.findByText(message)).closest<HTMLElement>(
+    '[role="alert"], [role="status"]',
+  )!;
   fireEvent.click(within(card).getByRole('button', { name: 'Dismiss this notice' }));
   await waitFor(() => expect(screen.queryByText(message)).toBeNull());
 }
@@ -102,11 +104,13 @@ describe('ServiceNotices', () => {
     const billingSurface = renderNotices('billing');
     const productSurface = renderNotices('product');
 
-    const productIncident = (await within(productSurface.container).findByText(PRODUCT_INCIDENT))
-      .parentElement!;
+    const productIncident = (
+      await within(productSurface.container).findByText(PRODUCT_INCIDENT)
+    ).closest<HTMLElement>('[role="alert"]')!;
     fireEvent.click(within(productIncident).getByRole('button', { name: 'Dismiss this notice' }));
-    const billingIncident = (await within(billingSurface.container).findByText(BILLING_INCIDENT))
-      .parentElement!;
+    const billingIncident = (
+      await within(billingSurface.container).findByText(BILLING_INCIDENT)
+    ).closest<HTMLElement>('[role="alert"]')!;
     fireEvent.click(within(billingIncident).getByRole('button', { name: 'Dismiss this notice' }));
     cleanup();
 

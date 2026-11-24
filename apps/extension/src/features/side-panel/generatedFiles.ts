@@ -1,6 +1,7 @@
 import type { GeneratedFileWire } from '@agiworkforce/cloud-contracts';
 import type { AgentActivityState } from '@agiworkforce/client-runtime';
 import { formatBytes } from '@agiworkforce/utils/format';
+import { appendFilenameExtension } from '@agiworkforce/unified-chat/filename';
 import {
   renderIcon,
   Download,
@@ -176,7 +177,7 @@ export function saveBlob(name: string, blob: Blob): void {
 export function savedFileName(name: string, blobType: string): string {
   if (/\.[a-z0-9]{1,8}$/i.test(name)) return name;
   const extension = SAVED_FILE_EXTENSION[blobType.toLowerCase()];
-  return extension ? `${name}.${extension}` : name;
+  return extension ? appendFilenameExtension(name, extension) : name;
 }
 
 export async function saveAnswerFile(

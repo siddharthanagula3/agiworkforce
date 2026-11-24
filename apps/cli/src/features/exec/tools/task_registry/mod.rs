@@ -638,7 +638,7 @@ pub(super) async fn execute_ask_user(
                 options: options.clone(),
             },
             question.clone(),
-            options.clone(),
+            options.iter().map(|option| option.label.clone()).collect(),
         );
         let (decision, mut notes) =
             super::collect_approval_notes(super::request_approval(approval_callback, request))
@@ -669,12 +669,15 @@ pub(super) async fn execute_ask_user(
             crate::terminal_style::accent_header("Agent asks:"),
             question
         );
-        let mut items = options.clone();
+        let mut items: Vec<_> = options.iter().map(|option| option.label.clone()).collect();
         items.push("Type your own answer".to_string());
         let picked = crate::output::choose_option("", &items, 0);
         match picked {
             Some(index) if index < options.len() => {
-                return Ok(answer(true, format!("User responded: {}", options[index])));
+                return Ok(answer(
+                    true,
+                    format!("User responded: {}", options[index].label),
+                ));
             }
             Some(_) => {}
             None => {
@@ -706,33 +709,63 @@ pub(super) async fn execute_ask_user(
     Ok(answer(true, format!("User responded: {reply}")))
 }
 
-fn question_options(raw: Option<&String>) -> Vec<String> {
+fn question_options(
+    raw: Option<&String>,
+) -> Vec<agiworkforce_protocol::developer_session::ApprovalQuestionOption> {
+    use agiworkforce_protocol::developer_session::ApprovalQuestionOption;
+
+    let label_only = |label| ApprovalQuestionOption {
+        label,
+        description: None,
+        preview: None,
+    };
     let Some(raw) = raw.map(|raw| raw.trim()).filter(|raw| !raw.is_empty()) else {
         return Vec::new();
     };
-    let parsed: Vec<String> = match serde_json::from_str::<Vec<serde_json::Value>>(raw) {
+    let parsed: Vec<_> = match serde_json::from_str::<Vec<serde_json::Value>>(raw) {
         Ok(values) => values
             .into_iter()
             .filter_map(|value| match value {
-                serde_json::Value::String(text) => Some(text),
-                serde_json::Value::Object(map) => map
-                    .get("label")
-                    .and_then(serde_json::Value::as_str)
-                    .map(str::to_string),
+                serde_json::Value::String(text) => Some(label_only(text)),
+                serde_json::Value::Object(map) => Some(ApprovalQuestionOption {
+                    label: map.get("label")?.as_str()?.to_owned(),
+                    description: map
+                        .get("description")
+                        .and_then(serde_json::Value::as_str)
+                        .and_then(|text| question_option_text(text, 2_000)),
+                    preview: map
+                        .get("preview")
+                        .and_then(serde_json::Value::as_str)
+                        .filter(|text| {
+                            !text.trim().is_empty() && text.encode_utf16().count() <= 4_000
+                        })
+                        .map(str::to_owned),
+                }),
                 _ => None,
             })
             .collect(),
-        Err(_) => raw.split('\n').map(str::to_string).collect(),
+        Err(_) => raw
+            .lines()
+            .map(|line| label_only(line.to_owned()))
+            .collect(),
     };
-    let mut options: Vec<String> = Vec::new();
-    for option in parsed {
-        let option = option.trim().to_string();
-        if !option.is_empty() && !options.contains(&option) && options.len() < MAX_QUESTION_OPTIONS
-        {
-            options.push(option);
-        }
+    let mut labels = std::collections::HashSet::new();
+    parsed
+        .into_iter()
+        .filter_map(|mut option| {
+            option.label = question_option_text(&option.label, 1_000)?;
+            labels.insert(option.label.clone()).then_some(option)
+        })
+        .take(MAX_QUESTION_OPTIONS)
+        .collect()
+}
+
+fn question_option_text(text: &str, limit: usize) -> Option<String> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() || trimmed.encode_utf16().count() > limit {
+        return None;
     }
-    options
+    Some(trimmed.to_owned())
 }
 
 const MAX_QUESTION_OPTIONS: usize = 6;

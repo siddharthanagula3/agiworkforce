@@ -1,4 +1,8 @@
-import { createECDH, randomBytes } from 'node:crypto';
+import { createECDH, createHash, randomBytes } from 'node:crypto';
+import {
+  PUSH_ACCOUNT_BINDING_DOMAIN,
+  PUSH_ACCOUNT_BINDING_FIELD,
+} from '@agiworkforce/cloud-contracts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -76,6 +80,23 @@ describe('getPushTokensForUser', () => {
 });
 
 describe('sendPushToUser, delivery', () => {
+  it('binds every Expo payload to the recipient selected by the server', async () => {
+    expoReturns([{ status: 'ok' }]);
+    const userId = 'actual-push-recipient';
+    await sendPushToUser(userId, {
+      title: 'Done',
+      body: 'Task finished',
+      data: { type: 'task_completed', [PUSH_ACCOUNT_BINDING_FIELD]: 'caller-supplied' },
+    });
+    const body = String(mocks.fetch.mock.calls[0]![1].body);
+    const binding = createHash('sha256')
+      .update(PUSH_ACCOUNT_BINDING_DOMAIN + userId)
+      .digest('hex');
+    expect(JSON.parse(body)).toMatchObject([
+      { data: { type: 'task_completed', [PUSH_ACCOUNT_BINDING_FIELD]: binding } },
+    ]);
+    expect(body).not.toContain(userId);
+  });
   it('sends one message per registered device', async () => {
     mocks.query.mockResolvedValue([{ push_token: TOKEN_A }, { push_token: TOKEN_B }]);
     expoReturns([{ status: 'ok' }, { status: 'ok' }]);

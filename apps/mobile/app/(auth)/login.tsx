@@ -169,7 +169,11 @@ export default function LoginScreen() {
         />
       );
     }
-    if (termsUserId === userId && (termsStatus === 'required' || termsStatus === 'error')) {
+    if (
+      adultConfirmed &&
+      termsUserId === userId &&
+      (termsStatus === 'required' || termsStatus === 'error')
+    ) {
       return (
         <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceBase }}>
           <ScrollView

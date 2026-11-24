@@ -3,6 +3,9 @@ import { pluralForms, t } from '../../l10n';
 export function webviewStrings() {
   return {
     retry: t('webview.retry'),
+    sessionPinned: t('webview.sessionPinned'),
+    pinSession: t('webview.pinSession'),
+    unpinSession: t('webview.unpinSession'),
     details: t('webview.details'),
     copy: t('webview.copy'),
     copyResponse: t('webview.copyResponse'),
@@ -35,8 +38,6 @@ export function webviewStrings() {
     starting: t('webview.starting'),
     completed: t('webview.completed'),
     completedWithErrors: t('webview.completedWithErrors'),
-    collapseDetails: t('webview.collapseDetails'),
-    expandDetails: t('webview.expandDetails'),
     lineDelta: t('webview.lineDelta'),
     searchingSessions: t('webview.searchingSessions'),
     noMatchingSessions: t('webview.noMatchingSessions'),
@@ -66,6 +67,9 @@ export function webviewStrings() {
     contextUsedUnknownWindow: pluralForms('webview.contextUsedUnknownWindow'),
     contextUsed: pluralForms('webview.contextUsed'),
     answerTokens: pluralForms('webview.answerTokens'),
+    promptCache: t('webview.promptCache'),
+    cacheRead: pluralForms('webview.cacheRead'),
+    cacheWrite: pluralForms('webview.cacheWrite'),
     moreLinesHidden: pluralForms('webview.moreLinesHidden'),
     sources: pluralForms('webview.sources'),
   };

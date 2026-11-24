@@ -124,7 +124,7 @@ vi.mock('../src/features/cloud-bridge/freeTrialClient', async (importOriginal) =
     > => ({
       subscriptionTier: 'pro',
       subscriptionStatus: 'active',
-      modelIds: [],
+      modelIds: [actual.FREE_TRIAL_MODEL],
       allowedAutoModes: [],
       usage: parseManagedUsageSummaryResponse({
         plan_tier: 'pro',
@@ -389,6 +389,40 @@ describe('More popover', () => {
 });
 
 describe('cached recent chat activation', () => {
+  it('keeps the draft notice visible when switching away from an unsent chat', async () => {
+    const content = 'Saved chat for the draft guard';
+    const conversationId = await openSavedConversation(content);
+    byId('sp-new-chat-btn')!.click();
+    const input = byId('sp-input') as HTMLTextAreaElement;
+    const draft = 'A draft I still need';
+    input.value = draft;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+
+    try {
+      byId('sp-history-btn')!.click();
+      let restore: HTMLButtonElement | undefined;
+      await vi.waitFor(() => {
+        restore = Array.from(
+          document.querySelectorAll<HTMLButtonElement>('[data-conversation-restore]'),
+        ).find((button) => button.textContent?.includes(content));
+        expect(restore).toBeDefined();
+      });
+      restore!.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(document.querySelector('.sp-drawer-history-error')?.textContent).toBe(
+        catalogMessage('spUnstartedDraftKeep', []),
+      );
+      expect(byId('sp-recents')?.hidden).toBe(false);
+      expect(input.value).toBe(draft);
+    } finally {
+      byId('sp-recents-close')!.click();
+      input.value = '';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      await deleteConversation(account.owner, conversationId);
+    }
+  });
+
   it('acknowledges a cached row after a new chat while its refresh is pending', async () => {
     const content = 'Cached history generation fixture';
     const conversationId = await openSavedConversation(content);

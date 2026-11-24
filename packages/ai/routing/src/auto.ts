@@ -170,6 +170,8 @@ export interface AutoRoutingRequest {
   currentModelKey?: string | null;
   previousTaskType?: RoutingTaskType | null;
   requiredCapabilities?: readonly IntrinsicCapability[];
+  /** Model admission from the caller's live catalog. An empty set admits no models. */
+  admittedModelKeys?: ReadonlySet<string>;
   allowedHarnessIds?: readonly string[];
   runtimeProfileId?: string;
   usOnly?: boolean;
@@ -1344,6 +1346,9 @@ function evaluateEligibility(
   const reasons: string[] = [];
   const model = registry.models[modelKey];
   if (!model) return { rankedRoutes: [], reasons: [`unknown model: ${modelKey}`] };
+  if (request.admittedModelKeys && !request.admittedModelKeys.has(modelKey)) {
+    return { rankedRoutes: [], reasons: [`model ${modelKey} is not available for this account`] };
+  }
 
   if (model.lifecycle.availability !== 'live') {
     reasons.push(`model ${modelKey} availability is ${model.lifecycle.availability}`);

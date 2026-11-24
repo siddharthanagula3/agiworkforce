@@ -120,6 +120,86 @@ describe('subagent group', () => {
     expect(panel.querySelectorAll('.subagents__row')).toHaveLength(0);
   });
 
+  it('keeps a manually closed panel closed and shows the measured duration on completion', () => {
+    bootWebview();
+    const task = {
+      id: 'subagent_b',
+      parentSessionId: 't',
+      title: 'Map the API',
+      state: 'running',
+      createdAt: '2026-11-23T00:00:00Z',
+    };
+    postHostMessage('subagents', { tasks: [task] });
+    const panel = document.getElementById('subagentsPanel') as HTMLDetailsElement;
+    expect(panel.open).toBe(true);
+    panel.open = false;
+    postHostMessage('subagents', {
+      tasks: [{ ...task, state: 'completed', updatedAt: '2026-11-23T00:00:02.500Z' }],
+    });
+
+    expect(panel.open).toBe(false);
+    expect(panel.querySelector('.subagents__state')?.textContent).toBe('Done · 2.5 s');
+  });
+
+  it('sends the identity of the selected subagent and omits Stop for saved tasks', () => {
+    const { postMessage } = bootWebview();
+    postHostMessage('subagents', {
+      tasks: [
+        {
+          id: 'subagent_a',
+          parentSessionId: 't',
+          title: 'Read the tests',
+          state: 'running',
+          canStop: true,
+        },
+        {
+          id: 'subagent_b',
+          parentSessionId: 't',
+          title: 'Map the API',
+          state: 'running',
+          canStop: true,
+        },
+        { id: 'subagent_c', parentSessionId: 't', title: 'Read the docs', state: 'running' },
+      ],
+    });
+    const buttons = document.querySelectorAll<HTMLButtonElement>('button[data-stop-task]');
+    expect(buttons).toHaveLength(2);
+    buttons[0]?.click();
+    expect(postMessage).toHaveBeenCalledWith({
+      origin: 'chat',
+      epoch: 0,
+      type: 'stopChildTask',
+      payload: { taskId: 'subagent_a' },
+    });
+  });
+
+  it('opens the stored transcript for the matching subagent', () => {
+    const { postMessage } = bootWebview();
+    postHostMessage('subagents', {
+      tasks: [
+        { id: 'subagent_a', parentSessionId: 't', title: 'Read the tests', state: 'completed' },
+        {
+          id: 'subagent_b',
+          parentSessionId: 't',
+          title: 'Map the API',
+          state: 'completed',
+          transcriptAvailable: true,
+        },
+      ],
+    });
+    const buttons = document.querySelectorAll<HTMLButtonElement>(
+      'button[aria-label^="View transcript"]',
+    );
+    expect(buttons).toHaveLength(1);
+    buttons[0]?.click();
+    expect(postMessage).toHaveBeenCalledWith({
+      origin: 'chat',
+      epoch: 0,
+      type: 'openChildTaskTranscript',
+      payload: { taskId: 'subagent_b' },
+    });
+  });
+
   it('shows the group a resumed conversation carries', () => {
     bootWebview();
     postHostMessage('conversationLoaded', {

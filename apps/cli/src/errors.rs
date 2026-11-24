@@ -966,6 +966,16 @@ impl CliError {
             CliError::Config { .. } => (TurnFailureCode::InvalidRequest, None),
             CliError::ClientUpdateRequired { .. } => (TurnFailureCode::InvalidRequest, None),
         };
+        let code = if matches!(
+            code,
+            TurnFailureCode::ProviderAuthMissing | TurnFailureCode::ProviderAuthInvalid
+        ) && provider.is_some_and(|provider| {
+            provider == crate::models::provider_name(&crate::models::Provider::ManagedCloud)
+        }) {
+            TurnFailureCode::AccountSignedOut
+        } else {
+            code
+        };
         let failure = TurnFailure::new(code, self.detail());
         // Only a figure the provider itself sent in `Retry-After` ever becomes
         // a wait a surface states.
@@ -1625,6 +1635,12 @@ mod tests {
     fn a_missing_managed_session_hint_names_only_the_plan_sign_in() {
         let err = CliError::auth_missing("managed_cloud", "No AGI session found.");
         assert_eq!(err.hint(), "Run `agi login` to use your AGI plan.");
+        for failure in [err, CliError::api("managed_cloud", 401, "Expired session")] {
+            assert_eq!(
+                failure.turn_failure().code,
+                TurnFailureCode::AccountSignedOut
+            );
+        }
     }
 
     #[test]

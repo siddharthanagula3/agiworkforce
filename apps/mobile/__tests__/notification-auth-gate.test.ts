@@ -59,7 +59,7 @@ jest.mock('expo-constants', () => ({
   default: { expoConfig: { extra: { eas: { projectId: 'fake' } } } },
 }));
 
-jest.mock('react-native', () => ({ Platform: { OS: 'ios' } }));
+jest.mock('react-native', () => ({ Platform: { OS: 'ios' }, Alert: { alert: jest.fn() } }));
 
 jest.mock('../services/api', () => ({
   api: { post: jest.fn().mockResolvedValue(undefined), delete: jest.fn() },
@@ -89,13 +89,36 @@ jest.mock('@/lib/mmkv', () => ({
 }));
 
 import {
+  notificationCenterStore,
   setNavigatorReady,
   setPushTypeReceivedListener,
-  setSignedIn,
+  setSignedIn as setNotificationSignedIn,
   setupNotificationListeners,
 } from '../services/notifications';
+import { Alert } from 'react-native';
+import { sha256 } from '@noble/hashes/sha256';
+import { bytesToHex } from '@noble/hashes/utils';
+import {
+  PUSH_ACCOUNT_BINDING_DOMAIN,
+  PUSH_ACCOUNT_BINDING_FIELD,
+} from '@agiworkforce/cloud-contracts';
+import {
+  activateCloudAccount,
+  captureCloudAccountEpoch,
+  invalidateCloudAccount,
+} from '@/src/features/auth/services/cloudAccountSession';
 import { AGENT_APPROVAL_REVIEW_ACTION_IDENTIFIER } from '../services/notificationCategories';
 import { useNotificationPrefsStore } from '../stores/notificationPrefsStore';
+import { ACCOUNT_PICKER_ROUTE } from '@/src/features/accounts/accountNavigation';
+
+const ACCOUNT = 'test-notification-owner';
+const OTHER_ACCOUNT = 'test-previous-owner';
+const binding = (ownerId: string) => bytesToHex(sha256(PUSH_ACCOUNT_BINDING_DOMAIN + ownerId));
+function setSignedIn(value: boolean) {
+  if (value) activateCloudAccount(ACCOUNT);
+  else invalidateCloudAccount();
+  setNotificationSignedIn(value);
+}
 
 beforeAll(() => {
   setPushTypeReceivedListener((type) =>
@@ -107,23 +130,83 @@ beforeAll(() => {
 
 beforeEach(() => {
   mockRouterPush.mockReset();
+  jest.mocked(Alert.alert).mockClear();
+  setSignedIn(false);
   mockFeatures.companion = true;
 });
 
 function fireNotification(
   data: Record<string, unknown>,
   actionIdentifier = 'expo.modules.notifications.actions.DEFAULT',
+  bindToCurrent = true,
 ): void {
   if (!capturedResponseListener) {
     throw new Error('response listener was not captured');
   }
+  const owner = captureCloudAccountEpoch();
   capturedResponseListener({
     actionIdentifier,
-    notification: { request: { content: { data } } },
+    notification: {
+      request: {
+        content: {
+          data: {
+            ...(bindToCurrent && owner
+              ? { [PUSH_ACCOUNT_BINDING_FIELD]: binding(owner.ownerId) }
+              : {}),
+            ...data,
+          },
+        },
+      },
+    },
   });
 }
 
 describe('handleNotificationResponse, auth gate', () => {
+  it('offers to switch accounts without opening or storing a notification for another account', () => {
+    setSignedIn(true);
+    const before = notificationCenterStore.getAll();
+    fireNotification({
+      type: 'task_completed',
+      target: 'chat',
+      targetId: 'old-chat',
+      [PUSH_ACCOUNT_BINDING_FIELD]: binding(OTHER_ACCOUNT),
+    });
+    expect(mockRouterPush).not.toHaveBeenCalled();
+    expect(notificationCenterStore.getAll()).toEqual(before);
+    expect(Alert.alert).toHaveBeenCalledWith(
+      'Notification for another account',
+      expect.any(String),
+      expect.any(Array),
+    );
+    const actions = jest.mocked(Alert.alert).mock.calls.at(-1)?.[2];
+    actions?.find(({ text }) => text === 'Switch account')?.onPress?.();
+    expect(mockRouterPush).toHaveBeenCalledWith(ACCOUNT_PICKER_ROUTE);
+  });
+
+  it('refuses to open the deep link from a legacy Cloud notification with no account binding', () => {
+    setSignedIn(true);
+    fireNotification(
+      { type: 'task_completed', target: 'chat', targetId: 'legacy-chat' },
+      undefined,
+      false,
+    );
+    expect(mockRouterPush).toHaveBeenCalledWith({ pathname: '/(app)' });
+  });
+
+  it('drops a delayed navigation when the signed-in account changes before the router is ready', () => {
+    jest.useFakeTimers();
+    try {
+      setNavigatorReady(false);
+      setSignedIn(true);
+      fireNotification({ type: 'task_completed', target: 'chat', targetId: 'original-chat' });
+      activateCloudAccount(OTHER_ACCOUNT);
+      jest.advanceTimersByTime(100);
+      expect(mockRouterPush).not.toHaveBeenCalled();
+    } finally {
+      setNavigatorReady(true);
+      jest.useRealTimers();
+    }
+  });
   it('opens Local Mode, not the sign-in wall, when no session is set', () => {
     setSignedIn(false);
     fireNotification({ type: 'task_completed', route: '/(app)/companion' });

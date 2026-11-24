@@ -103,12 +103,23 @@ export function capturePageObservation(expectedUrl: string): {
   const main = document.querySelector('main, article, [role="main"]');
   const mainText = main instanceof HTMLElement ? main.innerText.trim() : '';
   let pageText = mainText.length >= 200 ? mainText : (document.body?.innerText ?? '');
-  for (const element of document.querySelectorAll('input, textarea, select')) {
+  for (const element of document.querySelectorAll(
+    'input, textarea, select, [contenteditable], [role="textbox"], [role="searchbox"], [role="combobox"]',
+  )) {
     if (!isSensitiveField(element)) continue;
-    const value = (element as HTMLInputElement).value;
-    if (value) pageText = pageText.split(value).join('[Protected field]');
-    const text = element.textContent;
-    if (text?.trim()) pageText = pageText.split(text).join('[Protected field]');
+    const values = [element.textContent];
+    if (
+      element instanceof HTMLInputElement ||
+      element instanceof HTMLTextAreaElement ||
+      element instanceof HTMLSelectElement
+    ) {
+      values.push(element.value);
+    } else if (element instanceof HTMLElement) {
+      values.push(element.innerText);
+    }
+    for (const value of values) {
+      if (value?.trim()) pageText = pageText.split(value).join('[Protected field]');
+    }
   }
   const raw = sanitizePageText(
     (controls.length ? `Current form state:\n${JSON.stringify(controls)}\n\nPage text:\n` : '') +

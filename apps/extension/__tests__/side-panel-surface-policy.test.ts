@@ -11,6 +11,10 @@ import {
   getChromeSurfaceAvailability,
   isRestrictedPageUrl,
 } from '../src/features/side-panel/surface-policy';
+import {
+  boundPageText,
+  MAX_PAGE_TEXT_CHARACTERS,
+} from '../src/features/content/in-page-panel/pageActions';
 
 const sidePanelSource = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), '../src/side_panel.ts'),
@@ -67,6 +71,7 @@ function navigationState(source: PageContextSource) {
      let activePageSource = null;
      let currentPageHostname = '';
      let composerContextNotice = null;
+     let composerGeneratedSelectionPrompt = null;
      const managedCloudChatState = 'ready';
      ${navigationFunctions.map((node) => node.getText(navigationProgram)).join('\n')}
      return updateActivePage;`,
@@ -98,7 +103,12 @@ function tabContextEvents(source: PageContextSource, tabs: readonly { tabId: num
   const helpers = navigationProgram.statements.filter(
     (node) =>
       ts.isFunctionDeclaration(node) &&
-      ['clearPendingPageContext', 'attachedPageUsesTab'].includes(node.name?.text ?? ''),
+      [
+        'clearPendingPageContext',
+        'attachedPageUsesTab',
+        'removeBrowserTabSnapshot',
+        'setBrowserTabSnapshots',
+      ].includes(node.name?.text ?? ''),
   );
   const context = {
     pendingPageContext: 'Captured values' as string | null,
@@ -107,6 +117,8 @@ function tabContextEvents(source: PageContextSource, tabs: readonly { tabId: num
   const updateAttachmentPreview = vi.fn();
   const dependencies = {
     _ctx: context,
+    boundPageText,
+    MAX_PAGE_TEXT_CHARACTERS,
     editableRewrites: { invalidateTab: vi.fn() },
     taskSiteGrants: { releaseTab: vi.fn(async () => {}) },
     updateAttachmentPreview,
@@ -116,12 +128,19 @@ function tabContextEvents(source: PageContextSource, tabs: readonly { tabId: num
   };
   const compiled = ts.transpileModule(
     `let tabContextIntakeAbort = null;
-     let pendingBrowserContextTabs = ${JSON.stringify(tabs)};
+     let pendingBrowserContextTabs = ${JSON.stringify(
+       tabs.map(({ tabId }) => ({
+         source: { tabId, url: `https://tab-${tabId}.example/`, title: `Tab ${tabId}` },
+         text: `Snapshot from tab ${tabId}`,
+       })),
+     )};
      let composerContextNotice = null;
+     let composerGeneratedSelectionPrompt = null;
      ${helpers.map((node) => node.getText(navigationProgram)).join('\n')}
      return {
        updated: ${callbacks.get('onUpdated')!.getText(navigationProgram)},
        removed: ${callbacks.get('onRemoved')!.getText(navigationProgram)},
+       setSnapshots: setBrowserTabSnapshots,
        notice: () => composerContextNotice,
      };`,
     { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } },
@@ -132,6 +151,9 @@ function tabContextEvents(source: PageContextSource, tabs: readonly { tabId: num
   ) as {
     updated(tabId: number, change: { url?: string; status?: 'loading' | 'complete' }): void;
     removed(tabId: number): void;
+    setSnapshots(
+      snapshots: { source: { tabId: number; url: string; title: string }; text: string }[],
+    ): void;
     notice(): string | null;
   };
   return { ...events, context, updateAttachmentPreview };
@@ -180,11 +202,31 @@ describe('captured tab document lifetime', () => {
     expect(h.context.pendingPageContextSource).toEqual(live);
   });
 
-  it('invalidates a group when any selected source changes', () => {
+  it('removes only stale snapshots from the next message', () => {
     const h = tabContextEvents({ url: live.url, chosen: true }, [{ tabId: 7 }, { tabId: 8 }]);
     h.updated(8, { status: 'loading' });
-    expect(h.context.pendingPageContext).toBeNull();
+    expect(h.context.pendingPageContext).toContain('Snapshot from tab 7');
+    expect(h.context.pendingPageContext).not.toContain('Snapshot from tab 8');
     expect(h.notice()).toBe('spAttachedTabChanged');
+    h.removed(7);
+    expect(h.context.pendingPageContext).toBeNull();
+    expect(h.notice()).toBe('spAttachedTabClosed');
+  });
+
+  it('leaves room for every tab when an early snapshot fills the context budget', () => {
+    const h = tabContextEvents(live);
+    h.setSnapshots([
+      {
+        source: { tabId: 7, url: 'https://example.org/', title: 'Long page' },
+        text: 'A'.repeat(MAX_PAGE_TEXT_CHARACTERS),
+      },
+      {
+        source: { tabId: 8, url: 'https://example.com/', title: 'Short page' },
+        text: 'Relevant text on the second page',
+      },
+    ]);
+    expect(h.context.pendingPageContext).toContain('Relevant text on the second page');
+    expect(h.context.pendingPageContext!.length).toBeLessThanOrEqual(MAX_PAGE_TEXT_CHARACTERS);
   });
 });
 

@@ -1,4 +1,5 @@
 import { parseExplicitMemoryCommand } from '@agiworkforce/agent-core';
+import { trackComposerPointerFocus } from './lib/composer-focus';
 import {
   captureCallerBrowserContext,
   parseCallerBrowserContext,
@@ -20,6 +21,7 @@ import {
   type ConnectorInputResponse,
 } from '@agiworkforce/client-runtime';
 import {
+  createManagedCloudAgentRunClient,
   createManagedCloudChatAttachmentsClient,
   MAX_CHAT_ATTACHMENT_BYTES,
   MAX_CHAT_ATTACHMENT_MESSAGE_BYTES,
@@ -50,6 +52,7 @@ import {
   prepareSelectionContext,
   readVisibleSelection,
   TAB_CONTEXT_PICKER_CSS,
+  toBrowserContextTab,
   type PageSelection,
 } from './features/side-panel/tabContext';
 import { autofillSuccessMessage } from './features/side-panel/autofillSummary';
@@ -62,11 +65,12 @@ import { BrowserTaskSiteGrants } from './features/computer-use/taskSiteGrants';
 import { EditableRewriteController } from './features/side-panel/editableRewrite';
 import {
   parseEditableSelectionTarget,
+  readEditableSelectionDocument,
   type EditableSelectionTarget,
 } from './features/browser-tools/editableTarget';
 import {
-  readPageDocument,
   parseFormObservationReference,
+  readPageDocument,
 } from './features/browser-tools/documentBridge';
 import type {
   AdoptChatTurnResponse,
@@ -135,6 +139,7 @@ import {
   deleteConversation,
   persistConversationSeed,
   recordCloudSyncState,
+  settleStoredVideoStart,
   upsertConversation,
   updateConversationEntry,
   startNewConversation,
@@ -497,7 +502,7 @@ import {
   type ManagedCloudOwner,
 } from './features/cloud-bridge/managedCloudAuthority';
 import { normalizeAnsweredModel } from './features/cloud-bridge/answeredModel';
-import { logger, withTimeout } from './utils';
+import { logger, sleep, withTimeout } from './utils';
 import {
   cancelChromeManagedRun,
   listChromeManagedRuns,
@@ -1234,6 +1239,9 @@ function serializeMessagesForHistory() {
     ...(message.role === 'assistant' && message.agentEvents
       ? { agentEvents: message.agentEvents }
       : {}),
+    ...(message.role === 'assistant' && message.browserReviewFrames?.length
+      ? { browserReviewFrames: message.browserReviewFrames }
+      : {}),
     ...(message.role === 'assistant' && message.browserEvents
       ? { browserEvents: message.browserEvents }
       : {}),
@@ -1270,6 +1278,9 @@ function serializeMessagesForHistory() {
     ...(message.role === 'assistant' && message.videoTaskId
       ? { videoTaskId: message.videoTaskId }
       : {}),
+    ...(message.role === 'assistant' && message.videoStartId
+      ? { videoStartId: message.videoStartId }
+      : {}),
     ...(message.role === 'assistant' && message.sources ? { sources: message.sources } : {}),
     ...(message.role === 'assistant' && message.citations ? { citations: message.citations } : {}),
     ...(message.role === 'assistant' && message.durationMs !== undefined
@@ -1285,6 +1296,7 @@ function persistMessages(): Promise<void> {
   if (!owner || _ctx.temporaryChat) return Promise.resolve();
   const conversationId = _ctx.conversationId;
   persistCurrentConversationOwner();
+  if (!composerDraftKey) bindComposerDraft(true);
   const projectBinding = _ctx.pendingProjectBinding;
   return upsertConversation(
     owner,
@@ -1573,6 +1585,7 @@ async function loadMessages(): Promise<void> {
   let active = ownedConversation ?? forkSource;
   if (!active) {
     _ctx.conversationId = conversationOwner.conversationId;
+    bindComposerDraft(true);
     return;
   }
   if (
@@ -1619,6 +1632,7 @@ async function loadMessages(): Promise<void> {
     if (!importIsCurrent()) return;
   }
   _ctx.conversationId = conversationOwner.conversationId;
+  bindComposerDraft(true);
   activePersistenceEntry = active;
   adoptChatProject(active.projectId);
   _ctx.selectedModel = normalizeModelId(active.routing.selectedModel) ?? 'auto';
@@ -1651,6 +1665,16 @@ async function loadMessages(): Promise<void> {
 function resumeLatestStoredManagedRun(expectedGeneration: number): void {
   const ownerAtAdmission = _ctx.managedCloudOwner;
   if (!ownerAtAdmission) return;
+  const latest = _ctx.messages[_ctx.messages.length - 1];
+  if (latest?.role === 'assistant' && latest.streamCancellation && latest.cloudAgentRun) {
+    void reconcileStoredCancellation(
+      expectedGeneration,
+      ownerAtAdmission,
+      latest,
+      latest.cloudAgentRun,
+    );
+    return;
+  }
   const resumable = [..._ctx.messages]
     .reverse()
     .find(
@@ -1795,6 +1819,7 @@ function clearStoredMessages(): void {
   advanceConversationGeneration();
   _ctx.conversationId = createBrowserConversationId();
   leaveTemporaryChat();
+  bindComposerDraft();
   _ctx.pendingProjectBinding = _ctx.activeProject?.id;
   clearActivePersistenceState();
   persistCurrentConversationOwner();
@@ -1812,8 +1837,53 @@ function clearStoredMessages(): void {
   });
 }
 
-let pendingBrowserContextTabs: readonly BrowserContextTabReference[] = [];
+interface BrowserTabSnapshot {
+  source: BrowserContextTabReference;
+  text: string;
+}
+
+let pendingBrowserContextTabs: readonly BrowserTabSnapshot[] = [];
 let tabContextIntakeAbort: AbortController | null = null;
+
+function browserTabSnapshotsForPicker(): readonly BrowserTabSnapshot[] | null {
+  const page = _ctx.pendingPageContextSource;
+  const text = _ctx.pendingPageContext;
+  if (!page || text === null) return pendingBrowserContextTabs;
+  const { tabId, windowId, documentId, url, title } = page;
+  if (tabId === undefined || windowId === undefined || !documentId || pendingSelectionAttached())
+    return null;
+  return [
+    { source: { tabId, windowId, documentId, url, title: sanitizePageText(title ?? '') }, text },
+  ];
+}
+
+function setBrowserTabSnapshots(snapshots: readonly BrowserTabSnapshot[]): void {
+  pendingBrowserContextTabs = snapshots;
+  const share = Math.floor(
+    (MAX_PAGE_TEXT_CHARACTERS - Math.max(0, snapshots.length - 1) * 2) /
+      Math.max(1, snapshots.length),
+  );
+  _ctx.pendingPageContext = snapshots.length
+    ? boundPageText(
+        snapshots
+          .map(({ source, text }) =>
+            `Tab ${source.tabId}: ${source.title} (${new URL(source.url).origin})\n${text}`.slice(
+              0,
+              share,
+            ),
+          )
+          .join('\n\n'),
+      ).text
+    : null;
+  _ctx.pendingPageContextSource = null;
+}
+
+function removeBrowserTabSnapshot(tabId: number): boolean {
+  const remaining = pendingBrowserContextTabs.filter(({ source }) => source.tabId !== tabId);
+  if (remaining.length === pendingBrowserContextTabs.length) return false;
+  setBrowserTabSnapshots(remaining);
+  return true;
+}
 
 function clearPendingPageContext(): void {
   tabContextIntakeAbort?.abort();
@@ -1821,6 +1891,11 @@ function clearPendingPageContext(): void {
   pendingBrowserContextTabs = [];
   _ctx.pendingPageContext = null;
   _ctx.pendingPageContextSource = null;
+  if (composerGeneratedSelectionPrompt) {
+    const input = document.getElementById('sp-input') as HTMLTextAreaElement | null;
+    if (input?.value === composerGeneratedSelectionPrompt) input.value = '';
+  }
+  composerGeneratedSelectionPrompt = null;
 }
 
 function resetConversationView(): void {
@@ -1874,6 +1949,8 @@ async function transitionManagedCloudOwner(nextOwner: ManagedCloudOwner | null):
     _ctx.streamTimeoutHandle = null;
   }
   _ctx.managedCloudOwner = nextOwner ? { ...nextOwner } : null;
+  composerDraftKey = null;
+  leaveTemporaryChat();
   editableRewrites.reset();
   capabilityDocument = null;
   accountIdentity = null;
@@ -2858,6 +2935,8 @@ function injectStyles(): void {
       margin: 4px 0;
     }
     .sp-bubble-assistant li { margin: 2px 0; }
+    li[data-task-item] { list-style: none; }
+    li[data-task-item] [role="checkbox"] { margin-inline-end: 0.4em; }
     .sp-bubble-assistant li > ul, .sp-bubble-assistant li > ol { margin: 2px 0; }
     .sp-bubble-assistant h1, .sp-bubble-assistant h2, .sp-bubble-assistant h3,
     .sp-bubble-assistant h4, .sp-bubble-assistant h5, .sp-bubble-assistant h6 {
@@ -3758,9 +3837,9 @@ function injectStyles(): void {
       gap: 8px;
       transition: border-color var(--duration-quick), box-shadow var(--duration-quick);
     }
-    #sp-composer-shell:has(#sp-input:focus) {
-      border-color: color-mix(in srgb, var(--agi-ext-accent) 50%, transparent);
-      box-shadow: 0 0 0 2px color-mix(in srgb, var(--agi-ext-accent) 18%, transparent);
+    #sp-composer-shell:has(#sp-input:focus-visible:not([data-pointer-focus])) {
+      outline: 2px solid var(--agi-ext-text);
+      outline-offset: 2px;
     }
     #sp-composer-shell.dragover {
       border-color: color-mix(in srgb, var(--agi-ext-accent) 80%, transparent);
@@ -4638,7 +4717,7 @@ function injectStyles(): void {
     }
 
     #sp-input-area {
-      padding: 6px max(10px, calc((100% - var(--sp-reading-column)) / 2)) 8px;
+      padding: 6px max(14px, calc((100% - var(--sp-reading-column)) / 2)) 8px;
       border-top: 0;
       background: var(--agi-ext-bg);
     }
@@ -4649,10 +4728,6 @@ function injectStyles(): void {
       border-color: var(--agi-ext-border-control);
       border-radius: var(--corner-panel);
       background: var(--agi-ext-surface);
-      box-shadow: none;
-    }
-    #sp-composer-shell:has(#sp-input:focus) {
-      border-color: var(--agi-ext-focus);
       box-shadow: none;
     }
     #sp-input-row { align-items: stretch; }
@@ -4867,7 +4942,7 @@ function injectStyles(): void {
       border-radius: var(--corner-panel);
       gap: 4px;
     }
-    #sp-input { min-height: 28px; font-size: var(--type-body-large-size); line-height: var(--type-body-large-height); }
+    #sp-input { field-sizing: content; min-width: 0; min-height: 28px; font-size: var(--type-body-large-size); line-height: var(--type-body-large-height); }
     #sp-composer-bar {
       padding: 0;
       gap: 4px;
@@ -5245,7 +5320,7 @@ function injectStyles(): void {
       #sp-header { padding-inline: 10px; }
       #sp-model-badge { max-width: 132px; }
       #sp-messages { padding-inline: 11px; }
-      #sp-input-area { padding-inline: 8px; }
+      #sp-input-area { padding-inline: 11px; }
       #sp-composer-shell { padding-inline: 9px; }
     }
     @media (max-width: 340px) {
@@ -5254,6 +5329,9 @@ function injectStyles(): void {
     }
     @media (forced-colors: active) {
       * { forced-color-adjust: auto; }
+      #sp-composer-shell:has(#sp-input:focus-visible:not([data-pointer-focus])) {
+        outline-color: Highlight;
+      }
     }
 
     /* ── Panel chrome: More popover and conversation title row ── */
@@ -5830,6 +5908,19 @@ function renderMessages(): void {
   for (let i = _ctx.lastRenderedCount; i < _ctx.messages.length; i++) {
     const msg = _ctx.messages[i];
     if (msg) {
+      if (
+        msg.browserReviewFrames?.length &&
+        !finishedBrowserGalleries.has(msg) &&
+        !browserControlsByMessageId.has(msg.id)
+      ) {
+        const restored = buildBrowserTurnControls({
+          onTakeOver: async () => false,
+          onHandBack: async () => false,
+        });
+        for (const frame of msg.browserReviewFrames)
+          restored.setScreenshot(frame.dataUrl, frame.toolCallId);
+        finishedBrowserGalleries.set(msg, restored);
+      }
       const videoTurn = isVideoTurn(msg) || isVideoTurn(_ctx.messages[i + 1]);
       const regenerable =
         !videoTurn &&
@@ -5885,7 +5976,13 @@ function renderMessages(): void {
               }),
           ...(msg.role === 'assistant'
             ? {
-                browserControls: browserControlsByMessageId.get(msg.id)?.element ?? null,
+                browserControls:
+                  browserControlsByMessageId.get(msg.id)?.element ??
+                  finishedBrowserGalleries.get(msg)?.screenshotGallery ??
+                  null,
+                screenshotForStep: (
+                  browserControlsByMessageId.get(msg.id) ?? finishedBrowserGalleries.get(msg)
+                )?.screenshotForStep,
                 editableAction:
                   i === _ctx.messages.length - 1
                     ? editableRewrites.renderAction(msg.id, msg.content)
@@ -5980,8 +6077,8 @@ const artifactOutputs = createArtifactOutputs({
 
 let composerVideoMode = false;
 let composerSkill: string | null = null;
-const videoTurnIds = new Set<string>();
-const videoPolls = new Set<string>();
+const videoStarts = new Set<string>();
+const videoPolls = new WeakSet<ChatMessage>();
 const VIDEO_POLL_MAX_FAILURES = 3;
 const VIDEO_UPGRADE_RECOVERY: ManagedQuotaRecovery = { action: 'upgrade', href: '/pricing' };
 
@@ -5993,7 +6090,7 @@ function canCreateVideos(): boolean {
 }
 
 function isVideoTurn(msg: ChatMessage | undefined): boolean {
-  return Boolean(msg && (msg.videoTaskId || videoTurnIds.has(msg.id)));
+  return Boolean(msg && (msg.videoTaskId || msg.videoStartId));
 }
 
 function hasProducedVideo(msg: ChatMessage): boolean {
@@ -6023,13 +6120,30 @@ function finishVideoTurn(): void {
   renderMessages();
 }
 
-async function pollVideoTurn(msg: ChatMessage, generation: number): Promise<void> {
+function videoAccountToken(owner: ManagedCloudOwner): () => Promise<string | null> {
+  return async () => {
+    const auth = await getManagedCloudAuthContext();
+    return auth &&
+      sameManagedCloudOwner(auth.owner, owner) &&
+      sameManagedCloudOwner(_ctx.managedCloudOwner, owner)
+      ? auth.token
+      : null;
+  };
+}
+
+async function pollVideoTurn(
+  msg: ChatMessage,
+  owner: ManagedCloudOwner,
+  conversationId: string,
+): Promise<void> {
   const taskId = msg.videoTaskId;
-  if (!taskId || videoPolls.has(msg.id)) return;
-  videoPolls.add(msg.id);
+  if (!taskId || videoPolls.has(msg)) return;
+  videoPolls.add(msg);
   const deadline = Date.now() + VIDEO_POLL_TIMEOUT_MS;
   const stillHere = (): boolean =>
-    _ctx.conversationGeneration === generation && _ctx.messages.includes(msg);
+    _ctx.conversationId === conversationId &&
+    sameManagedCloudOwner(_ctx.managedCloudOwner, owner) &&
+    _ctx.messages.includes(msg);
   let failures = 0;
   try {
     while (stillHere() && Date.now() < deadline) {
@@ -6037,7 +6151,7 @@ async function pollVideoTurn(msg: ChatMessage, generation: number): Promise<void
       if (!stillHere()) return;
       let task;
       try {
-        task = await readChromeVideoStatus(taskId);
+        task = await readChromeVideoStatus(taskId, { getAuthToken: videoAccountToken(owner) });
         failures = 0;
       } catch (error) {
         failures += 1;
@@ -6078,35 +6192,102 @@ async function pollVideoTurn(msg: ChatMessage, generation: number): Promise<void
     }
     if (stillHere()) setVideoProgress(msg.id, t('spVideoStillRunning'));
   } finally {
-    videoPolls.delete(msg.id);
+    videoPolls.delete(msg);
   }
 }
 
 function resumeVideoPolling(): void {
+  const owner = _ctx.managedCloudOwner;
+  if (!owner) return;
+  const conversationId = _ctx.conversationId;
   for (const msg of _ctx.messages) {
-    if (msg.role !== 'assistant' || !msg.videoTaskId || msg.error || hasProducedVideo(msg))
-      continue;
-    void pollVideoTurn(msg, _ctx.conversationGeneration);
+    if (msg.role !== 'assistant' || msg.error || hasProducedVideo(msg)) continue;
+    if (msg.videoTaskId) {
+      void pollVideoTurn(msg, owner, conversationId);
+    } else if (msg.videoStartId && !videoStarts.has(msg.videoStartId)) {
+      const operationId = msg.videoStartId;
+      queueMicrotask(() => {
+        if (
+          _ctx.conversationId !== conversationId ||
+          !_ctx.messages.includes(msg) ||
+          !sameManagedCloudOwner(_ctx.managedCloudOwner, owner) ||
+          videoStarts.has(operationId) ||
+          msg.videoStartId !== operationId ||
+          msg.videoTaskId ||
+          msg.error
+        )
+          return;
+        failVideoTurn(msg, new Error(t('spVideoStartInterrupted')));
+        finishVideoTurn();
+      });
+    }
   }
 }
 
-async function runVideoTurn(assistant: ChatMessage, prompt: string): Promise<void> {
-  const generation = _ctx.conversationGeneration;
-  showThinking(t('spVideoStarting'));
+async function runVideoTurn(
+  assistant: ChatMessage,
+  prompt: string,
+  owner: ManagedCloudOwner,
+): Promise<void> {
+  const operationId = assistant.videoStartId;
+  if (!operationId || videoStarts.has(operationId)) return;
+  const conversationId = _ctx.conversationId;
+  const temporary = _ctx.temporaryChat;
+  const liveMessage = () =>
+    _ctx.conversationId === conversationId && sameManagedCloudOwner(_ctx.managedCloudOwner, owner)
+      ? _ctx.messages.find((message) => message.videoStartId === operationId)
+      : undefined;
+  videoStarts.add(operationId);
   try {
-    const task = await startChromeVideo(prompt);
-    if (_ctx.conversationGeneration !== generation) return;
-    assistant.videoTaskId = task.taskId;
+    await persistMessages();
+    if (!temporary) requestCloudConversationSync();
+    if (
+      !sameManagedCloudOwner(_ctx.managedCloudOwner, owner) ||
+      (temporary && _ctx.conversationId !== conversationId)
+    )
+      return;
+    const getAuthToken = videoAccountToken(owner);
+    let error: unknown;
+    let taskId: string | undefined;
+    try {
+      taskId = (await startChromeVideo(prompt, { getAuthToken, operationId: () => operationId }))
+        .taskId;
+    } catch (cause) {
+      error = cause;
+    }
+    if (!sameManagedCloudOwner(_ctx.managedCloudOwner, owner)) return;
+    let live = liveMessage();
+    if (!live && !temporary) {
+      const result = taskId
+        ? { taskId }
+        : {
+            errorText: error instanceof Error && error.message ? error.message : t('spVideoFailed'),
+          };
+      if (await settleStoredVideoStart(owner, conversationId, operationId, result)) {
+        requestCloudConversationSync();
+      }
+      live = liveMessage();
+    }
+    if (live && !live.videoTaskId) {
+      if (taskId) live.videoTaskId = taskId;
+      else failVideoTurn(live, error);
+      finishVideoTurn();
+    }
   } catch (error) {
-    if (_ctx.conversationGeneration !== generation) return;
-    failVideoTurn(assistant, error);
+    const live = liveMessage();
+    if (live) {
+      failVideoTurn(live, error);
+      finishVideoTurn();
+    }
+    console.warn('[SidePanel] Could not settle the video start:', error);
   } finally {
-    removeThinking();
+    videoStarts.delete(operationId);
   }
-  finishVideoTurn();
 }
 
 function startVideoTurn(prompt: string): void {
+  const owner = _ctx.managedCloudOwner;
+  if (!owner) return;
   advanceConversationGeneration();
   const userMsg: ChatMessage = {
     id: `u-${Date.now()}`,
@@ -6121,29 +6302,30 @@ function startVideoTurn(prompt: string): void {
     content: '',
     timestamp: Date.now(),
     runtime: 'managed-cloud',
+    videoStartId: crypto.randomUUID(),
   };
-  videoTurnIds.add(assistant.id);
   _ctx.messages.push(userMsg, assistant);
   trimLiveMessages();
   _ctx.needsMessageRebuild = true;
-  saveMessages();
+  void runVideoTurn(assistant, prompt, owner);
   renderMessages();
-  void runVideoTurn(assistant, prompt);
 }
 
 function retryVideoTurn(messageId: string): void {
   const index = _ctx.messages.findIndex((message) => message.id === messageId);
   const assistant = _ctx.messages[index];
   const userMsg = _ctx.messages[index - 1];
-  if (!assistant || userMsg?.role !== 'user') return;
+  const owner = _ctx.managedCloudOwner;
+  if (!owner || !assistant || userMsg?.role !== 'user') return;
+  if (assistant.videoTaskId || !assistant.videoStartId)
+    assistant.videoStartId = crypto.randomUUID();
   delete assistant.error;
   delete assistant.errorText;
   delete assistant.errorRecovery;
   delete assistant.videoTaskId;
-  videoTurnIds.add(assistant.id);
   _ctx.needsMessageRebuild = true;
+  void runVideoTurn(assistant, userMsg.content, owner);
   renderMessages();
-  void runVideoTurn(assistant, userMsg.content);
 }
 
 function messageArtifactsBinding(msg: ChatMessage): MessageArtifactsBinding {
@@ -6240,6 +6422,7 @@ export type PageContextCapture =
   | { ok: false; reason: string };
 
 function describePageContextFailure(message: string): string {
+  if (/no tab with id/i.test(message)) return t('spAttachmentTabClosed');
   if (/chrome:\/\/|extension gallery|chrome-untrusted|view-source/i.test(message)) {
     return PAGE_CONTEXT_BLOCKED_REASON;
   }
@@ -6301,7 +6484,7 @@ async function closeUnusedBrowserTabs(): Promise<void> {
  * the page, and neither is possible without the reason.
  */
 async function capturePageContext(
-  selected?: BrowserContextTabReference,
+  selected?: BrowserContextTabReference & { currentPage?: true },
   maxCharacters = MAX_PAGE_TEXT_CHARACTERS,
 ): Promise<PageContextCapture> {
   try {
@@ -6323,7 +6506,11 @@ async function capturePageContext(
       };
     if (selected && (tab.url !== selected.url || tab.windowId !== selected.windowId))
       return { ok: false, reason: PAGE_CONTEXT_CHANGED_REASON };
-    const capture = await readTabText(tab, selected !== undefined);
+    const capture = await readTabText(
+      tab,
+      selected !== undefined && !selected.currentPage,
+      selected?.documentId,
+    );
     if (!capture.ok) return capture;
     if (selected?.documentId && capture.documentId !== selected.documentId)
       return { ok: false, reason: PAGE_CONTEXT_CHANGED_REASON };
@@ -6370,10 +6557,16 @@ async function capturePageContextWithSiteAccess(
   }
 }
 
-async function readTabText(tab: chrome.tabs.Tab, chosen = false): Promise<PageContextCapture> {
+async function readTabText(
+  tab: chrome.tabs.Tab,
+  chosen = false,
+  expectedDocumentId?: string,
+): Promise<PageContextCapture> {
   if (!tab.id || !tab.url) return { ok: false, reason: 'That tab has no page to read.' };
   try {
-    const observation = await readTabObservation(tab.id, tab.url);
+    const observation = expectedDocumentId
+      ? await readTabObservation(tab.id, tab.url, expectedDocumentId)
+      : await readTabObservation(tab.id, tab.url);
     const { text, truncated } = boundPageText(
       sanitizePageText(observation.text),
       observation.truncated,
@@ -6387,6 +6580,8 @@ async function readTabText(tab: chrome.tabs.Tab, chosen = false): Promise<PageCo
           ...(observation.formSnapshotId ? { formSnapshotId: observation.formSnapshotId } : {}),
           source: {
             tabId: tab.id,
+            ...(typeof tab.windowId === 'number' ? { windowId: tab.windowId } : {}),
+            documentId: observation.documentId,
             url: tab.url,
             ...(tab.title ? { title: tab.title } : {}),
             ...(chosen ? { chosen: true } : {}),
@@ -6510,6 +6705,69 @@ function settleObservedStreamCancellation(streamId: string): void {
     quickModeByStreamId.delete(streamId);
     ownerByStreamId.delete(streamId);
     streamStartedAtById.delete(streamId);
+  }
+}
+
+const STORED_CANCELLATION_POLL_INTERVAL_MS = 1_500;
+
+async function reconcileStoredCancellation(
+  generation: number,
+  owner: ManagedCloudOwner,
+  assistant: ChatMessage,
+  reference: ManagedCloudAgentRunReference,
+): Promise<void> {
+  const signal = AbortSignal.any([
+    cloudHistoryOwnerAbort.signal,
+    AbortSignal.timeout(MANAGED_RUN_CANCELLATION_TIMEOUT_MS),
+  ]);
+  const isCurrent = () =>
+    !signal.aborted &&
+    _ctx.conversationGeneration === generation &&
+    sameManagedCloudOwner(_ctx.managedCloudOwner, owner) &&
+    _ctx.messages[_ctx.messages.length - 1] === assistant &&
+    assistant.streamCancellation === 'unconfirmed' &&
+    assistant.cloudAgentRun?.runId === reference.runId &&
+    !pendingStreamCancellations.get(assistant.id)?.pending;
+  if (!isCurrent()) return;
+
+  try {
+    const auth = await withTimeout(
+      getManagedCloudAuthContext(),
+      MANAGED_RUN_CANCELLATION_TIMEOUT_MS,
+    );
+    if (!auth || !sameManagedCloudOwner(auth.owner, owner) || !isCurrent()) return;
+    const client = createManagedCloudAgentRunClient({
+      baseUrl: FREE_TRIAL_GATEWAY,
+      getAuthToken: async () => (isCurrent() ? auth.token : null),
+    });
+
+    while (isCurrent()) {
+      const snapshot = await client.getRun(reference.runId, {
+        afterSequence: reference.lastSequence,
+        limit: 1,
+        signal,
+      });
+      if (!isCurrent() || snapshot.run.id !== reference.runId) return;
+      if (TERMINAL_AGENT_TASK_STATES.has(snapshot.run.state)) {
+        assistant.cloudAgentRun = {
+          ...reference,
+          state: snapshot.run.state,
+          lastSequence: Math.max(reference.lastSequence, snapshot.run.lastEventSequence),
+          cancellationRequestedAt: snapshot.run.cancellationRequestedAt,
+        };
+        reconcileManagedRunActivity(assistant);
+        settleChatToolActivity(assistant, 'cancelled');
+        settleObservedStreamCancellation(assistant.id);
+        _ctx.needsMessageRebuild = true;
+        saveMessages();
+        renderMessages();
+        updateSendButton();
+        return;
+      }
+      await sleep(STORED_CANCELLATION_POLL_INTERVAL_MS);
+    }
+  } catch {
+    // The existing unconfirmed status and Retry action remain usable.
   }
 }
 
@@ -6814,6 +7072,7 @@ interface ComposerBrowserRun {
 }
 
 let composerBrowserRun: ComposerBrowserRun | null = null;
+const finishedBrowserGalleries = new WeakMap<ChatMessage, BrowserTurnControls>();
 const browserControlsByMessageId = new Map<string, BrowserTurnControls>();
 
 function ownsComposerBrowserConversation(run: ComposerBrowserRun): boolean {
@@ -6920,6 +7179,10 @@ function finishComposerBrowserTask(
       assistant.streaming = false;
       if (failed) assistant.error = true;
     }
+    if (assistant && !run.controls.screenshotGallery.hidden) {
+      finishedBrowserGalleries.set(assistant, run.controls);
+      if (!_ctx.temporaryChat) assistant.browserReviewFrames = [...run.controls.screenshots];
+    }
     releaseBrowserTurnControls(run.messageId);
     _ctx.needsMessageRebuild = true;
     saveMessages();
@@ -7006,7 +7269,7 @@ function startComposerBrowserTask(
       message: 'Another browser task is already running in this panel.',
     });
   }
-  const selectedTabs = nested ? [] : pendingBrowserContextTabs.map((tab) => ({ ...tab }));
+  const selectedTabs = nested ? [] : pendingBrowserContextTabs.map(({ source }) => ({ ...source }));
   const pageContext = nested ? null : _ctx.pendingPageContext;
   const pageAtAdmission = nested
     ? (browserTurnMessage(nested.messageId)?.browserSource ?? null)
@@ -7251,7 +7514,7 @@ function applyComposerBrowserMessage(message: Record<string, unknown>): void {
     const step = message['step'] as AgentLoopStep | undefined;
     if (!step || typeof step !== 'object') return;
     if (step.kind === 'screenshot' && typeof step.screenshotDataUrl === 'string') {
-      run.controls.setScreenshot(step.screenshotDataUrl);
+      run.controls.setScreenshot(step.screenshotDataUrl, run.translator.lastScreenshotCallId);
       return;
     }
     if (step.kind === 'final' && typeof step.finalMessage === 'string') {
@@ -8497,7 +8760,6 @@ function returnFollowUpsToComposer(): void {
   if (!input) return;
   const current = input.value.trim();
   replaceComposerText(input, [...parked, ...(current ? [current] : [])].join('\n\n'));
-  autoResizeInput(input);
   composerContextNotice = t('spQueuedReturned');
   updateAttachmentPreview();
   updateSendButton();
@@ -8584,7 +8846,11 @@ function sendMessage(text: string, displayText?: string, explicitBrowserTask = f
   }
   if (slashCmd?.captureContext === true && editableRewrites.current()) editableRewrites.cancel();
   const capturePage = slashCmd?.captureContext === true;
-  const pageSource = _ctx.pendingPageContextSource;
+  const pages = _ctx.pendingPageContextSource
+    ? [pageReference(_ctx.pendingPageContextSource)]
+    : pendingBrowserContextTabs.map(({ source }) =>
+        pageReference({ title: source.title, url: new URL(source.url).origin }),
+      );
   const payload: TurnPayload = {
     prompt: capturePage && slashCmd ? slashCmd.prompt : prompt,
     pageText: _ctx.pendingPageContext,
@@ -8619,7 +8885,7 @@ function sendMessage(text: string, displayText?: string, explicitBrowserTask = f
     timestamp: Date.now(),
     runtime: 'managed-cloud',
     ...(attachments.length > 0 ? { attachments } : {}),
-    ...(pageSource && payload.pageText ? { pages: [pageReference(pageSource)] } : {}),
+    ...(pages.length > 0 && payload.pageText ? { pages } : {}),
   };
   _ctx.messages.push(userMsg);
   turnPayloadByMessageId.set(userMsg.id, payload);
@@ -8673,9 +8939,21 @@ function leaveTemporaryChat(): void {
 function startTemporaryChat(): void {
   if (_ctx.messages.length > 0 || _ctx.isStreaming) return;
   _ctx.temporaryChat = true;
+  bindComposerDraft();
   _ctx.temporaryConversationId = null;
   temporaryEndPending = false;
   renderTemporaryChatState();
+}
+
+function leaveEmptyTemporaryChat(): void {
+  const composer = document.getElementById('sp-input') as HTMLTextAreaElement | null;
+  if (composer?.value) {
+    composerContextNotice = t('spTemporaryDraftKeep');
+    updateAttachmentPreview();
+    return;
+  }
+  leaveTemporaryChat();
+  bindComposerDraft();
 }
 
 function endTemporaryChat(): void {
@@ -9274,8 +9552,12 @@ function replayableTurnPayload(userMsg: ChatMessage): TurnPayload | null {
 function restoreTurnToComposer(userMsg: ChatMessage): void {
   const input = document.getElementById('sp-input') as HTMLTextAreaElement | null;
   if (!input) return;
+  if (!composerAvailableForContext(true)) {
+    composerContextNotice = t('spRetryKeepDraft');
+    updateAttachmentPreview();
+    return;
+  }
   replaceComposerText(input, userMsg.content);
-  autoResizeInput(input);
   composerContextNotice = t('spRetryNeedsAttachments');
   updateAttachmentPreview();
 }
@@ -9811,6 +10093,69 @@ let composerAttachmentNotices: string[] = [];
 /** Why the last page-context capture produced nothing. Rendered in the same composer strip. */
 let composerContextNotice: string | null = null;
 let composerDraftRevision = 0;
+let composerDraftKey: string | null = null;
+let composerGeneratedSelectionPrompt: string | null = null;
+
+function hasUnstartedComposerDraft(): boolean {
+  const input = document.getElementById('sp-input') as HTMLTextAreaElement | null;
+  return _ctx.messages.length === 0 && Boolean(input?.value);
+}
+
+function saveComposerDraft(text: string): void {
+  const key = composerDraftKey;
+  if (!key) return;
+  const revision = composerDraftRevision;
+  const saved =
+    text && text !== composerGeneratedSelectionPrompt
+      ? chrome.storage.session.set({ [key]: text })
+      : chrome.storage.session.remove(key);
+  void saved.catch(() => {
+    if (composerDraftKey !== key || composerDraftRevision !== revision) return;
+    composerContextNotice = t('spDraftSaveFailed');
+    updateAttachmentPreview();
+  });
+}
+
+function bindComposerDraft(keepUnboundText = false): void {
+  const input = document.getElementById('sp-input') as HTMLTextAreaElement | null;
+  if (!input) return;
+  const owner = _ctx.managedCloudOwner;
+  const key =
+    owner && !_ctx.temporaryChat
+      ? JSON.stringify([
+          'composer-draft',
+          owner.accountId,
+          owner.authIncarnation,
+          _ctx.conversationId,
+        ])
+      : null;
+  if (key === composerDraftKey && key !== null) return;
+  if (!keepUnboundText || composerDraftKey) input.value = '';
+  composerDraftKey = key;
+  const revision = ++composerDraftRevision;
+  updateSendButton();
+  if (!key) return;
+  if (input.value) {
+    saveComposerDraft(input.value);
+    return;
+  }
+  void chrome.storage.session.get(key).then(
+    (saved) => {
+      if (composerDraftKey !== key || composerDraftRevision !== revision || input.value) return;
+      const text = saved[key];
+      if (typeof text !== 'string' || !text) return;
+      input.value = text;
+      composerContextNotice = t('spDraftRestored');
+      updateAttachmentPreview();
+      updateSendButton();
+    },
+    () => {
+      if (composerDraftKey !== key || composerDraftRevision !== revision) return;
+      composerContextNotice = t('spDraftRestoreFailed');
+      updateAttachmentPreview();
+    },
+  );
+}
 let voiceInputComposerNotice: string | null = null;
 
 function clearVoiceInputComposerNotice(): void {
@@ -10247,16 +10592,75 @@ async function attachPageSelection(): Promise<void> {
   document.getElementById('sp-input')?.focus();
 }
 
-function renderPendingPageChip(bar: HTMLElement): void {
-  const source = _ctx.pendingPageContextSource;
-  if (!_ctx.pendingPageContext || !source) return;
-  const selection = pendingSelectionAttached();
-  const label = source.title || pageChipLabel(source.url);
+async function refreshBrowserSnapshot(source: PageContextSource): Promise<void> {
+  if (_ctx.isStreaming || composerAttachmentIntakes.size > 0) return;
+  const { tabId, windowId, documentId, url } = source;
+  if (tabId === undefined || windowId === undefined || !documentId) return;
+  const existing = pendingBrowserContextTabs.find((snapshot) => snapshot.source === source);
+  const capturedSourceIsCurrent = () =>
+    existing
+      ? pendingBrowserContextTabs.includes(existing)
+      : _ctx.pendingPageContextSource === source && !pendingSelectionAttached();
+  if (!capturedSourceIsCurrent()) return;
+  const intake = beginComposerAttachmentIntake('page');
+  if (!intake) return;
+  const isCurrent = () => composerAttachmentIntakeCurrent(intake) && capturedSourceIsCurrent();
+  let grant: ReadGrant | undefined;
+  try {
+    if (tabId !== activePageSource?.tabId || url !== activePageSource.url) {
+      grant = await requestReadGrant([source.url]);
+      if (!isCurrent()) return;
+      if (!grant.granted) {
+        showSelectionNotice(t('spSiteAccessRefused', [pageChipLabel(source.url)]));
+        return;
+      }
+    }
+    const capture = await capturePageContext({
+      tabId,
+      windowId,
+      documentId,
+      url,
+      title: source.title ?? '',
+    });
+    if (!isCurrent()) return;
+    if (!capture.ok) {
+      showSelectionNotice(capture.reason);
+      return;
+    }
+    if (existing) {
+      setBrowserTabSnapshots(
+        pendingBrowserContextTabs.map((snapshot) =>
+          snapshot === existing ? { source: existing.source, text: capture.text } : snapshot,
+        ),
+      );
+    } else {
+      _ctx.pendingPageContext = capture.text;
+    }
+    composerContextNotice = t('spPageSnapshotRefreshed');
+  } catch {
+    if (isCurrent()) showSelectionNotice(t('spPageSnapshotRefreshFailed'));
+  } finally {
+    try {
+      await grant?.release();
+    } finally {
+      finishComposerAttachmentIntake(intake);
+    }
+  }
+}
+
+function renderPendingPageChip(
+  bar: HTMLElement,
+  source: PageContextSource,
+  selection: string | null,
+  remove: () => void,
+): void {
+  const host = pageChipLabel(source.url);
+  const label = source.title || host;
   const chip = el('div', {
     class: selection
       ? 'sp-attachment-chip sp-attachment-doc sp-attachment-page sp-attachment-selection'
       : 'sp-attachment-chip sp-attachment-doc sp-attachment-page',
-    title: selection ? _ctx.pendingPageContext : source.url,
+    title: selection ?? source.url,
   });
   const icon = el('span', { class: 'sp-attachment-doc-icon', 'aria-hidden': 'true' });
   icon.appendChild(renderIcon(selection ? FileText : Globe, 16));
@@ -10264,13 +10668,31 @@ function renderPendingPageChip(bar: HTMLElement): void {
   const copy = el('div', { class: 'sp-attachment-doc-copy' });
   copy.appendChild(el('span', { class: 'sp-attachment-doc-name' }, label));
   copy.appendChild(
-    el(
-      'span',
-      { class: 'sp-attachment-doc-status' },
-      selection ? _ctx.pendingPageContext : pageChipLabel(source.url),
-    ),
+    el('span', { class: 'sp-attachment-doc-status' }, selection ?? t('spPageSnapshotFrom', [host])),
   );
   chip.appendChild(copy);
+  if (
+    !selection &&
+    source.tabId !== undefined &&
+    source.windowId !== undefined &&
+    source.documentId
+  ) {
+    const refresh = el(
+      'button',
+      {
+        class: 'sp-attachment-doc-retry',
+        type: 'button',
+        'aria-label': t('spPageSnapshotRefreshLabel', [label]),
+      },
+      t('spPageSnapshotRefresh'),
+    ) as HTMLButtonElement;
+    refresh.disabled = _ctx.isStreaming || composerAttachmentIntakes.size > 0;
+    refresh.addEventListener('click', () => {
+      document.getElementById('sp-input')?.focus();
+      void refreshBrowserSnapshot(source);
+    });
+    chip.appendChild(refresh);
+  }
   const removeBtn = el(
     'button',
     {
@@ -10282,7 +10704,7 @@ function renderPendingPageChip(bar: HTMLElement): void {
     '×',
   );
   removeBtn.addEventListener('click', () => {
-    clearPendingPageContext();
+    remove();
     updateContextButton();
     updateAttachmentPreview();
     document.getElementById('sp-input')?.focus();
@@ -10296,7 +10718,7 @@ function updateAttachmentPreview(): void {
   if (!bar) return;
   clearChildren(bar);
   const editableChip = editableRewrites.renderChip();
-  const pageAttached = _ctx.pendingPageContext !== null && _ctx.pendingPageContextSource !== null;
+  const pageAttached = _ctx.pendingPageContext !== null;
   renderVideoModeItem();
   if (
     pendingDocuments.length === 0 &&
@@ -10316,14 +10738,29 @@ function updateAttachmentPreview(): void {
   bar.style.display = 'flex';
   renderVideoModeChip(bar);
   renderSkillChip(bar);
-  renderPendingPageChip(bar);
+  const pageSource = _ctx.pendingPageContextSource;
+  if (_ctx.pendingPageContext && pageSource)
+    renderPendingPageChip(
+      bar,
+      pageSource,
+      pendingSelectionAttached() ? _ctx.pendingPageContext : null,
+      clearPendingPageContext,
+    );
+  for (const { source } of pendingBrowserContextTabs) {
+    renderPendingPageChip(bar, source, null, () => {
+      removeBrowserTabSnapshot(source.tabId);
+    });
+  }
   for (const entry of pendingDocuments) bar.appendChild(renderComposerDocumentChip(entry));
   if (composerContextNotice) {
     bar.appendChild(
       el(
         'div',
         {
-          class: 'sp-attachment-notice',
+          class:
+            composerContextNotice === t('spPageSnapshotRefreshed')
+              ? 'sp-attachment-retention'
+              : 'sp-attachment-notice',
           id: 'sp-context-notice',
           role: 'status',
           'aria-live': 'polite',
@@ -10382,11 +10819,6 @@ function updateActivePage(url: string, tabId?: number, windowId?: number): void 
   updateAgentPageIndicator();
   updateContextButton();
   refreshComputerUseSiteHook();
-}
-
-function autoResizeInput(ta: HTMLTextAreaElement): void {
-  ta.style.height = 'auto';
-  ta.style.height = `${Math.min(ta.scrollHeight, 120)}px`;
 }
 
 function setBlockedState(blocked: boolean): void {
@@ -11104,6 +11536,11 @@ function buildUI(): void {
   });
   newChatBtn.appendChild(renderIcon(FilePen, 16));
   newChatBtn.addEventListener('click', () => {
+    if (hasUnstartedComposerDraft()) {
+      composerContextNotice = t('spUnstartedDraftKeep');
+      updateAttachmentPreview();
+      return;
+    }
     cancelCurrentManagedStream(false);
     resetConversationView();
     switchTab('chat');
@@ -11252,6 +11689,11 @@ function buildUI(): void {
   ): Promise<boolean> {
     const ownerAtStart = _ctx.managedCloudOwner;
     const background = reason === 'refresh';
+    const switchingChats = !background && _ctx.conversationId !== conversationId;
+    if (switchingChats && hasUnstartedComposerDraft()) {
+      showHistoryStatus(t('spUnstartedDraftKeep'));
+      return false;
+    }
     if (
       !ownerAtStart ||
       _ctx.isStreaming ||
@@ -11276,6 +11718,7 @@ function buildUI(): void {
       _ctx.conversationGeneration === restoreGeneration &&
       sameManagedCloudOwner(_ctx.managedCloudOwner, ownerAtStart) &&
       !_ctx.isStreaming &&
+      !(switchingChats && hasUnstartedComposerDraft()) &&
       !restoreSignal.aborted &&
       (!background ||
         (_ctx.conversationId === conversationId &&
@@ -11390,6 +11833,7 @@ function buildUI(): void {
       advanceConversationGeneration();
       _ctx.conversationId = conversationOwner.conversationId;
       leaveTemporaryChat();
+      bindComposerDraft();
       adoptChatProject(entry.projectId);
       if (conversationOwner.forked) _ctx.pendingProjectBinding = entry.projectId ?? null;
       activePersistenceEntry = entry;
@@ -11729,10 +12173,12 @@ function buildUI(): void {
   });
   let drawerHistoryEntries: ConversationEntry[] = [];
   let historyListRevision = 0;
+  let historyStatusRevision = 0;
   let recentsOpenRevision = 0;
   let recentsRefreshAbort: AbortController | null = null;
 
   function showHistoryStatus(message: string): void {
+    historyStatusRevision += 1;
     drawerHistoryError.textContent = message;
     drawerHistoryError.removeAttribute('hidden');
     showTitleStatus(message);
@@ -12451,6 +12897,7 @@ function buildUI(): void {
         if (!rowIsCurrent() || openButton.disabled) return;
         const openingRevision = recentsOpenRevision;
         showHistoryStatus(t('spHistoryOpening'));
+        const openingStatusRevision = historyStatusRevision;
         void openStoredConversation(entry.id).then((opened) => {
           if (
             openingRevision !== recentsOpenRevision ||
@@ -12463,6 +12910,7 @@ function buildUI(): void {
             closeRecents();
             return;
           }
+          if (openingStatusRevision !== historyStatusRevision) return;
           showHistoryStatus(
             _ctx.isStreaming ? t('spHistoryStopBeforeOpen') : t('spHistoryOpenFailed'),
           );
@@ -12485,6 +12933,7 @@ function buildUI(): void {
     if (refreshAccount && owner) {
       recentsRefreshAbort?.abort();
       const controller = new AbortController();
+      const refreshStatusRevision = historyStatusRevision;
       recentsRefreshAbort = controller;
       try {
         const scope = await getConversationScope();
@@ -12503,7 +12952,11 @@ function buildUI(): void {
         if (refreshed.status === 'refreshed' && isCurrent())
           cloudHistoryOrganizationId = refreshed.organizationId;
       } catch {
-        if (isCurrent() && !controller.signal.aborted)
+        if (
+          isCurrent() &&
+          !controller.signal.aborted &&
+          refreshStatusRevision === historyStatusRevision
+        )
           showHistoryStatus(t('spHistoryRefreshFailed'));
       } finally {
         if (recentsRefreshAbort === controller) recentsRefreshAbort = null;
@@ -12791,6 +13244,14 @@ function buildUI(): void {
         href: recovery.href,
       });
       scheduleUsageResetRefresh(blocking?.resetAt ?? null);
+      return;
+    }
+
+    if (access.modelIds.length === 0) {
+      setManagedCloudChatState('unavailable', {
+        action: 'retry',
+        actionLabel: t('spGateRetry'),
+      });
       return;
     }
 
@@ -13713,6 +14174,7 @@ function buildUI(): void {
     name: 'message',
     'aria-label': 'Message AGI',
   }) as HTMLTextAreaElement;
+  trackComposerPointerFocus(inputEl);
 
   const slashMenu = el('div', {
     id: 'sp-slash-menu',
@@ -13765,7 +14227,6 @@ function buildUI(): void {
     if (!picked) return;
     replaceComposerText(inputEl, `${picked[0]} `);
     closeSlashMenu();
-    autoResizeInput(inputEl);
     updateSendButton();
   }
 
@@ -13797,12 +14258,9 @@ function buildUI(): void {
     }
   });
 
-  function approveSiteForReading(url: string): Promise<ReadGrant> {
-    return requestReadGrant([url]);
-  }
-
   function attachPageCapture(capture: PageContextCapture): void {
     if (capture.ok) {
+      clearPendingPageContext();
       _ctx.pendingPageContext = capture.text;
       _ctx.pendingPageContextSource = capture.source;
       composerContextNotice = null;
@@ -13813,32 +14271,78 @@ function buildUI(): void {
     updateContextButton();
   }
 
-  async function attachChosenTab(
-    tab: chrome.tabs.Tab,
-    approval: Promise<ReadGrant>,
+  function canAttachMentionedTab(tab: BrowserContextTabReference): boolean {
+    if (_ctx.isStreaming) {
+      showSelectionNotice(t('spMentionAfterReply'));
+      return false;
+    }
+    if (_ctx.pendingPageContextSource !== null || editableRewrites.current()) {
+      showSelectionNotice(t('spMentionCurrentContext'));
+      return false;
+    }
+    const replacing = pendingBrowserContextTabs.some(({ source }) => source.tabId === tab.tabId);
+    if (
+      !replacing &&
+      pendingBrowserContextTabs.length + pendingAttachmentCount() >= MANAGED_CHAT_MAX_ATTACHMENTS
+    ) {
+      showSelectionNotice(t('spMentionTabLimit'));
+      return false;
+    }
+    return true;
+  }
+
+  async function attachMentionedTab(
+    tab: BrowserContextTabReference,
+    mention: { start: number; end: number },
   ): Promise<void> {
+    if (composerAttachmentIntakes.size > 0) {
+      showSelectionNotice(t('spMentionAttachmentBusy'));
+      return;
+    }
+    if (!canAttachMentionedTab(tab)) return;
     const intake = beginComposerAttachmentIntake('page');
+    if (!intake) return;
+    const prefix = inputEl.value.slice(0, mention.end);
     let grant: ReadGrant | null = null;
     try {
-      grant = await approval;
-      if (!intake || !composerAttachmentIntakeCurrent(intake)) return;
-      if (!grant.granted) {
-        attachPageCapture({
-          ok: false,
-          reason: t('spSiteAccessRefused', [pageChipLabel(tab.url ?? '')]),
-        });
+      if (tab.tabId !== activePageSource?.tabId || tab.url !== activePageSource.url) {
+        grant = await requestReadGrant([tab.url]);
+        if (!composerAttachmentIntakeCurrent(intake)) return;
+        if (!grant.granted) {
+          showSelectionNotice(t('spSiteAccessRefused', [pageChipLabel(tab.url)]));
+          return;
+        }
+      }
+      const capture = await capturePageContext(tab);
+      if (!composerAttachmentIntakeCurrent(intake)) return;
+      if (!capture.ok) {
+        showSelectionNotice(capture.reason);
         return;
       }
-      const capture = await readTabText(tab, true);
-      if (composerAttachmentIntakeCurrent(intake)) attachPageCapture(capture);
+      if (inputEl.value.slice(0, mention.end) !== prefix) {
+        showSelectionNotice(t('spMentionDraftChanged'));
+        return;
+      }
+      if (!canAttachMentionedTab(tab)) return;
+      const source = {
+        ...tab,
+        title: sanitizePageText(tab.title),
+        ...(capture.documentId ? { documentId: capture.documentId } : {}),
+      };
+      setBrowserTabSnapshots([
+        ...pendingBrowserContextTabs.filter((snapshot) => snapshot.source.tabId !== tab.tabId),
+        { source, text: capture.text },
+      ]);
+      composerContextNotice = null;
+      replaceComposerRange(inputEl, mention.start, mention.end, '');
+      updateContextButton();
     } catch {
-      if (intake && composerAttachmentIntakeCurrent(intake))
-        attachPageCapture({ ok: false, reason: PAGE_CONTEXT_BLOCKED_REASON });
+      if (composerAttachmentIntakeCurrent(intake)) showSelectionNotice(t('spAttachTabsFailed'));
     } finally {
       try {
         await grant?.release();
       } finally {
-        if (intake) finishComposerAttachmentIntake(intake);
+        finishComposerAttachmentIntake(intake);
       }
     }
   }
@@ -13849,13 +14353,13 @@ function buildUI(): void {
     'aria-label': t('spMentionMenuLabel'),
   });
   type MentionOption =
-    | { kind: 'tab'; tab: chrome.tabs.Tab; label: string; detail: string }
+    | { kind: 'tab'; tab: BrowserContextTabReference; label: string; detail: string }
     | { kind: 'project'; project: ActiveProjectSelection; label: string; detail: string };
   let mentionOptions: MentionOption[] = [];
   let mentionActive = 0;
   let mentionStart = -1;
   let mentionGeneration = 0;
-  let mentionTabs: chrome.tabs.Tab[] = [];
+  let mentionTabs: BrowserContextTabReference[] = [];
   const mentionProjects = createOwnedProjectCatalog();
 
   const mentionOpen = (): boolean => mentionOptions.length > 0;
@@ -13898,10 +14402,8 @@ function buildUI(): void {
       });
       item.appendChild(el('span', { class: 'sp-slash-name' }, option.label));
       item.appendChild(el('span', { class: 'sp-slash-hint' }, option.detail));
-      item.addEventListener('mousedown', (event: Event) => {
-        event.preventDefault();
-        acceptMention(index);
-      });
+      item.addEventListener('mousedown', (event: Event) => event.preventDefault());
+      item.addEventListener('click', () => acceptMention(index));
       mentionMenu.appendChild(item);
     });
     mentionMenu.classList.add('visible');
@@ -13914,6 +14416,7 @@ function buildUI(): void {
   function closeMentionMenu(): void {
     mentionGeneration += 1;
     mentionOptions = [];
+    mentionTabs = [];
     mentionProjects.clear();
     mentionActive = 0;
     mentionStart = -1;
@@ -13926,10 +14429,9 @@ function buildUI(): void {
     const matchesQuery = (...texts: string[]): boolean =>
       texts.some((text) => text.toLowerCase().includes(mention.query));
     const tabOptions = mentionTabs.flatMap((tab): MentionOption[] => {
-      const url = tab.url ?? '';
-      const label = tab.title || pageChipLabel(url);
-      const detail = pageChipLabel(url);
-      return matchesQuery(label, url) ? [{ kind: 'tab', tab, label, detail }] : [];
+      const label = tab.title || pageChipLabel(tab.url);
+      const detail = pageChipLabel(tab.url);
+      return matchesQuery(label, tab.url) ? [{ kind: 'tab', tab, label, detail }] : [];
     });
     const projectOptions = mentionProjects
       .read(_ctx.managedCloudOwner)
@@ -13963,12 +14465,14 @@ function buildUI(): void {
     mentionProjects.clear();
     void pageWindowQuery().then((query) =>
       chrome.tabs.query(query, (tabs) => {
-        if (generation !== mentionGeneration) return;
+        if (
+          generation !== mentionGeneration ||
+          !sameManagedCloudOwner(owner, _ctx.managedCloudOwner)
+        )
+          return;
         mentionTabs = chrome.runtime.lastError
           ? []
-          : tabs.filter(
-              (tab) => tab.id !== undefined && !!tab.url && !isRestrictedPageUrl(tab.url),
-            );
+          : tabs.map((tab) => toBrowserContextTab(tab)).filter((tab) => tab !== null);
         recomputeMentionOptions();
       }),
     );
@@ -14000,19 +14504,14 @@ function buildUI(): void {
       closeMentionMenu();
       return;
     }
-    const approval =
-      option.kind === 'tab' && option.tab.id !== activePageSource?.tabId
-        ? approveSiteForReading(option.tab.url ?? '')
-        : Promise.resolve<ReadGrant>({ granted: true, release: async () => {} });
     closeMentionMenu();
-    replaceComposerRange(inputEl, mention.start, mention.end, '');
-    autoResizeInput(inputEl);
-    updateSendButton();
     if (option.kind === 'project') {
+      replaceComposerRange(inputEl, mention.start, mention.end, '');
+      updateSendButton();
       chooseChatProject(option.project);
       return;
     }
-    void attachChosenTab(option.tab, approval);
+    void attachMentionedTab(option.tab, mention);
   }
 
   inputEl.addEventListener('input', refreshMentionMenu);
@@ -14051,8 +14550,8 @@ function buildUI(): void {
         if (composerDraftRevision !== revision || inputEl.value !== text) return;
         inputEl.value = task;
         if (!task || sendMessage(task, undefined, true)) inputEl.value = '';
+        inputEl.dispatchEvent(new Event('input', { bubbles: true }));
         composerContextNotice = t('spAutonomyYoloTooltip');
-        autoResizeInput(inputEl);
         updateSendButton();
         updateAttachmentPreview();
       })
@@ -14068,7 +14567,7 @@ function buildUI(): void {
 
   inputEl.addEventListener('input', () => {
     composerDraftRevision += 1;
-    autoResizeInput(inputEl);
+    saveComposerDraft(inputEl.value);
     updateSendButton();
   });
   inputEl.addEventListener('keydown', (e: KeyboardEvent) => {
@@ -14078,8 +14577,7 @@ function buildUI(): void {
       if (handleUnattendedCommand(text)) return;
       if (!submitComposerText(text)) return;
       inputEl.value = '';
-      autoResizeInput(inputEl);
-      updateSendButton();
+      inputEl.dispatchEvent(new Event('input', { bubbles: true }));
     }
   });
 
@@ -14106,8 +14604,7 @@ function buildUI(): void {
     if (handleUnattendedCommand(text)) return;
     if (!sendMessage(text)) return;
     inputEl.value = '';
-    autoResizeInput(inputEl);
-    updateSendButton();
+    inputEl.dispatchEvent(new Event('input', { bubbles: true }));
   });
 
   const attachWrapper = el('div', { class: 'sp-attach-wrapper' });
@@ -14219,28 +14716,61 @@ function buildUI(): void {
     }
     const intake = beginComposerAttachmentIntake('page');
     if (!intake) return;
+    const pageAtClick = activePageSource ? { ...activePageSource } : null;
     attachMenu.classList.remove('open');
     attachBtn.setAttribute('aria-expanded', 'false');
     contextItemLabel.textContent = t('spContextChipCapturing');
     chip.disabled = true;
     try {
-      let capture = await capturePageContext();
+      const [tab] = await chrome.tabs.query(await activePageQuery());
       if (!composerAttachmentIntakeCurrent(intake)) return;
+      const chosen = tab ? toBrowserContextTab(tab) : null;
+      if (!chosen) {
+        attachPageCapture({ ok: false, reason: PAGE_CONTEXT_BLOCKED_REASON });
+        return;
+      }
+      const target = { ...chosen, currentPage: true as const };
+      const canReadTarget = (): boolean => {
+        if (!composerAttachmentIntakeCurrent(intake)) return false;
+        if (
+          pageContextStillDescribes(target, activePageSource?.tabId, activePageSource?.url ?? '') &&
+          (activePageSource?.windowId === undefined ||
+            activePageSource.windowId === target.windowId)
+        ) {
+          return true;
+        }
+        composerContextNotice = PAGE_CONTEXT_CHANGED_REASON;
+        return false;
+      };
+      if (!pageContextStillDescribes(pageAtClick, target.tabId, target.url)) {
+        composerContextNotice = PAGE_CONTEXT_CHANGED_REASON;
+        return;
+      }
+      if (!canReadTarget()) return;
+      let capture = await capturePageContext(target);
+      if (!canReadTarget()) return;
       if (!capture.ok && capture.reason === PAGE_CONTEXT_DENIED_REASON) {
-        const [tab] = await chrome.tabs
-          .query(await activePageQuery())
-          .catch((): chrome.tabs.Tab[] => []);
-        if (!composerAttachmentIntakeCurrent(intake)) return;
-        const origin = webTabOrigin(tab);
+        const origin = normalizeApprovedSiteOrigin(target.url);
         if (origin) {
           const transientId = `site_once_${crypto.randomUUID()}`;
           await recordTransientHostPermission(transientId, origin).catch(() => undefined);
           let granted = false;
           try {
-            if (!composerAttachmentIntakeCurrent(intake)) return;
+            if (!canReadTarget()) return;
             granted = await requestBrowserControlHostPermission(origin).catch(() => false);
-            if (granted && composerAttachmentIntakeCurrent(intake))
-              capture = await capturePageContext();
+            if (granted && canReadTarget()) {
+              const [currentTab] = await chrome.tabs.query(await activePageQuery());
+              if (!canReadTarget()) return;
+              if (
+                currentTab?.id !== target.tabId ||
+                currentTab.url !== target.url ||
+                currentTab.windowId !== target.windowId
+              ) {
+                composerContextNotice = PAGE_CONTEXT_CHANGED_REASON;
+                return;
+              }
+              capture = await capturePageContext(target);
+            }
           } finally {
             if (granted && !(await originApprovedForBrowserControl(origin)))
               await removeBrowserControlHostPermission(origin);
@@ -14248,18 +14778,7 @@ function buildUI(): void {
           }
         }
       }
-      if (!composerAttachmentIntakeCurrent(intake)) return;
-      if (
-        capture.ok &&
-        !pageContextStillDescribes(
-          capture.source,
-          activePageSource?.tabId,
-          activePageSource?.url ?? '',
-        )
-      ) {
-        composerContextNotice = PAGE_CONTEXT_CHANGED_REASON;
-        return;
-      }
+      if (!canReadTarget()) return;
       attachPageCapture(capture);
     } catch {
       if (composerAttachmentIntakeCurrent(intake))
@@ -14435,7 +14954,7 @@ function buildUI(): void {
     attachMenu.classList.remove('open');
     attachBtn.setAttribute('aria-expanded', 'false');
     if (_ctx.temporaryChat) {
-      if (_ctx.messages.length === 0) leaveTemporaryChat();
+      if (_ctx.messages.length === 0) leaveEmptyTemporaryChat();
       else {
         temporaryEndPending = true;
         renderTemporaryChatState();
@@ -14457,6 +14976,18 @@ function buildUI(): void {
     if (_ctx.isStreaming || composerAttachmentIntakes.size > 0 || !_ctx.managedCloudOwner) return;
     attachMenu.classList.remove('open');
     attachBtn.setAttribute('aria-expanded', 'false');
+    const attached = browserTabSnapshotsForPicker();
+    if (!attached || editableRewrites.current()) {
+      showSelectionNotice(t('spMentionCurrentContext'));
+      inputEl.focus();
+      return;
+    }
+    const remaining = MANAGED_CHAT_MAX_ATTACHMENTS - pendingAttachmentCount() - attached.length;
+    if (remaining <= 0) {
+      showSelectionNotice(t('spMentionTabLimit'));
+      inputEl.focus();
+      return;
+    }
     const attachmentIntake = beginComposerAttachmentIntake('page');
     if (!attachmentIntake) return;
     const owner = { ..._ctx.managedCloudOwner };
@@ -14476,36 +15007,60 @@ function buildUI(): void {
     try {
       const selection = await chooseBrowserContextTabs(
         isCurrent,
-        MANAGED_CHAT_MAX_ATTACHMENTS - pendingAttachmentCount(),
+        remaining,
         async (urls) => {
           readGrant = await requestReadGrant(urls);
           return readGrant.granted;
         },
         intake.signal,
+        attached.map(({ source }) => source),
       );
       if (!selection || !isCurrent()) return;
-      const budget = Math.floor(MAX_PAGE_TEXT_CHARACTERS / selection.length);
-      const parts: string[] = [];
-      const sources: BrowserContextTabReference[] = [];
+      const budget = Math.floor(MAX_PAGE_TEXT_CHARACTERS / (attached.length + selection.length));
+      const snapshots: BrowserTabSnapshot[] = [];
+      let firstFailure: string | null = null;
       for (const tab of selection) {
         if (!isCurrent()) return;
         const capture = await capturePageContext(tab, budget);
         if (!isCurrent()) return;
-        if (!capture.ok) throw new Error(capture.reason);
-        const title = sanitizePageText(tab.title);
-        parts.push(`Tab ${tab.tabId}: ${title} (${new URL(tab.url).origin})\n${capture.text}`);
-        sources.push({
-          ...tab,
-          title,
-          ...(capture.documentId ? { documentId: capture.documentId } : {}),
+        if (!capture.ok) {
+          firstFailure ??= capture.reason;
+          continue;
+        }
+        snapshots.push({
+          source: {
+            ...tab,
+            title: sanitizePageText(tab.title),
+            ...(capture.documentId ? { documentId: capture.documentId } : {}),
+          },
+          text: capture.text,
         });
       }
+      const checks = await Promise.allSettled(
+        snapshots.map(({ source }) =>
+          readPageDocument(source.tabId, source.url, source.documentId),
+        ),
+      );
       if (!isCurrent()) return;
-      const context = boundPageText(parts.join('\n\n')).text;
-      pendingBrowserContextTabs = sources;
-      _ctx.pendingPageContext = context;
-      _ctx.pendingPageContextSource = null;
-      composerContextNotice = tPlural('spTabSnapshotsAttached', sources.length);
+      const verified = snapshots.filter((_, index) => checks[index]?.status === 'fulfilled');
+      if (verified.length < snapshots.length) firstFailure ??= PAGE_CONTEXT_CHANGED_REASON;
+      const skipped = selection.length - verified.length;
+      const current = browserTabSnapshotsForPicker();
+      if (!current || editableRewrites.current()) {
+        composerContextNotice = t('spMentionCurrentContext');
+        return;
+      }
+      if (
+        current.length + verified.length + pendingAttachmentCount() >
+        MANAGED_CHAT_MAX_ATTACHMENTS
+      ) {
+        composerContextNotice = t('spMentionTabLimit');
+        return;
+      }
+      if (verified.length) setBrowserTabSnapshots([...current, ...verified]);
+      composerContextNotice = skipped
+        ? [firstFailure, tPlural('spAttachTabsSkipped', skipped)].filter(Boolean).join(' ')
+        : null;
       updateContextButton();
     } catch (error) {
       if (isCurrent())
@@ -14515,6 +15070,7 @@ function buildUI(): void {
       if (tabContextIntakeAbort === intake) tabContextIntakeAbort = null;
       finishComposerAttachmentIntake(attachmentIntake);
       updateAttachmentPreview();
+      if (document.activeElement === document.body && !attachBtn.disabled) attachBtn.focus();
     }
   });
 
@@ -14785,7 +15341,6 @@ function buildUI(): void {
       edit.addEventListener('click', () => {
         removeQueued();
         replaceComposerText(inputEl, text);
-        autoResizeInput(inputEl);
         updateSendButton();
       });
       const cancel = el(
@@ -15180,7 +15735,7 @@ function buildUI(): void {
   });
   temporaryEnd.addEventListener('click', () => {
     if (_ctx.messages.length === 0) {
-      leaveTemporaryChat();
+      leaveEmptyTemporaryChat();
       return;
     }
     if (!temporaryEndPending) {
@@ -15271,7 +15826,6 @@ function buildUI(): void {
   composerVoiceInput = setupVoiceInput(
     micBtn,
     inputEl,
-    autoResizeInput,
     (message) => {
       voiceInputComposerNotice = message;
       composerContextNotice = message;
@@ -15653,7 +16207,7 @@ window.addEventListener('pagehide', () => void taskSiteGrants.releaseTask());
 function attachedPageUsesTab(tabId: number): boolean {
   return (
     _ctx.pendingPageContextSource?.tabId === tabId ||
-    pendingBrowserContextTabs.some((tab) => tab.tabId === tabId)
+    pendingBrowserContextTabs.some(({ source }) => source.tabId === tabId)
   );
 }
 
@@ -15669,7 +16223,7 @@ chrome.tabs.onUpdated?.addListener((_tabId, changeInfo) => {
       pendingBrowserContextTabs.length > 0 || _ctx.pendingPageContextSource?.chosen
         ? t('spAttachedTabChanged')
         : t('spContextChipDropped');
-    clearPendingPageContext();
+    if (!removeBrowserTabSnapshot(_tabId)) clearPendingPageContext();
     composerContextNotice = message;
     updateContextButton();
     updateAttachmentPreview();
@@ -15682,7 +16236,7 @@ chrome.tabs.onRemoved?.addListener((tabId) => {
   editableRewrites.invalidateTab(tabId);
   void taskSiteGrants.releaseTab(tabId);
   if (!attachedPageUsesTab(tabId)) return;
-  clearPendingPageContext();
+  if (!removeBrowserTabSnapshot(tabId)) clearPendingPageContext();
   composerContextNotice = t('spAttachedTabClosed');
   updateContextButton();
   updateAttachmentPreview();
@@ -15741,19 +16295,6 @@ function browserLanguageName(): string {
   }
 }
 
-function pendingChatPrompt(pending: { type: string; text: string }): string {
-  switch (pending.type) {
-    case 'explain':
-      return `Explain the following:\n\n"${pending.text}"`;
-    case 'translate': {
-      const language = browserLanguageName();
-      return `Translate the following into ${language}. If it is already in ${language}, ask me which language to translate it into:\n\n"${pending.text}"`;
-    }
-    default:
-      return pending.text;
-  }
-}
-
 interface PendingComposerChat {
   type: string;
   text: string;
@@ -15762,12 +16303,25 @@ interface PendingComposerChat {
   tabId?: number;
   target?: unknown;
   windowId?: number;
+  frameUrl?: string;
 }
 
 const pendingChatCaptures = new Set<string>();
 
 function pendingChatIdentity(pending: PendingComposerChat): string {
-  return JSON.stringify([pending.type, pending.text, pending.url, pending.timestamp]);
+  return JSON.stringify([
+    pending.type,
+    pending.text,
+    pending.url,
+    pending.frameUrl,
+    pending.tabId,
+    pending.windowId,
+    pending.timestamp,
+  ]);
+}
+
+function isPendingSelection(pending: PendingComposerChat): boolean {
+  return ['ask-selection', 'explain', 'translate'].includes(pending.type);
 }
 
 function pendingChatInvocationCurrent(): () => boolean {
@@ -15830,10 +16384,10 @@ async function removeHandledPendingChat(pending: PendingComposerChat): Promise<v
   }
 }
 
-function pendingPageComposerAvailable(summarize: boolean): boolean {
+function composerAvailableForContext(requireEmptyText: boolean): boolean {
   const input = document.getElementById('sp-input') as HTMLTextAreaElement | null;
   return (
-    (!summarize || (input !== null && !input.value.trim())) &&
+    (!requireEmptyText || (input !== null && !input.value.trim())) &&
     _ctx.pendingPageContext === null &&
     pendingBrowserContextTabs.length === 0 &&
     pendingAttachmentCount() === 0 &&
@@ -15851,7 +16405,7 @@ async function attachPageForQuestion(
   const prompt = SLASH_COMMANDS['/summarize']!.prompt;
   if (!isCurrent()) return;
   editableRewrites.cancel();
-  if (!pendingPageComposerAvailable(summarize) || !canAdmitComposerMessage(prompt)) {
+  if (!composerAvailableForContext(summarize) || !canAdmitComposerMessage(prompt)) {
     composerContextNotice =
       'The page request was not applied. Finish your current draft or turn, then try again.';
     updateAttachmentPreview();
@@ -15869,7 +16423,7 @@ async function attachPageForQuestion(
     updateAttachmentPreview();
     return;
   }
-  if (!pendingPageComposerAvailable(summarize) || !canAdmitComposerMessage(prompt)) {
+  if (!composerAvailableForContext(summarize) || !canAdmitComposerMessage(prompt)) {
     composerContextNotice =
       'The page request was not applied because chat is not ready. Try again when it is ready.';
     updateAttachmentPreview();
@@ -15883,7 +16437,6 @@ async function attachPageForQuestion(
   if (summarize && !sendMessage(prompt)) {
     const input = document.getElementById('sp-input') as HTMLTextAreaElement;
     replaceComposerText(input, prompt);
-    autoResizeInput(input);
     updateSendButton();
     composerContextNotice =
       'The page and summary request are saved in your draft. Send it when chat is ready.';
@@ -15893,37 +16446,66 @@ async function attachPageForQuestion(
   await removeHandledPendingChat(pending);
 }
 
-async function attachSelectionForQuestion(pending: {
-  text: string;
-  url: string;
-  tabId?: number;
-}): Promise<void> {
-  editableRewrites.cancel();
-  if (!Number.isInteger(pending.tabId) || typeof pending.text !== 'string') return;
-  const generation = _ctx.conversationGeneration;
+async function attachSelectionForQuestion(
+  pending: PendingComposerChat,
+  isCurrent: () => boolean,
+): Promise<void> {
+  if (!isCurrent() || !Number.isInteger(pending.tabId) || typeof pending.text !== 'string') return;
+  const needsPrompt = pending.type !== 'ask-selection';
+  if (!composerAvailableForContext(needsPrompt)) {
+    showSelectionNotice(t('spSelectionDraftOccupied'));
+    await removeHandledPendingChat(pending);
+    return;
+  }
   try {
     const tab = await chrome.tabs.get(pending.tabId!);
     if (tab.url !== pending.url) throw new Error(PAGE_CONTEXT_CHANGED_REASON);
-    if (await isUserBlockedSite(pending.url))
-      throw new Error(t('spSiteBlockedByYou', [pageChipLabel(pending.url)]));
-    const prepared = prepareSelectionContext({ text: pending.text, truncated: false }, pending.url);
-    if (!prepared || generation !== _ctx.conversationGeneration) return;
+    const selectionUrl = pending.frameUrl ?? pending.url;
+    for (const url of new Set([pending.url, selectionUrl])) {
+      if (await isUserBlockedSite(url))
+        throw new Error(t('spSiteBlockedByYou', [pageChipLabel(url)]));
+    }
+    const prepared = prepareSelectionContext(
+      { text: pending.text, truncated: false },
+      selectionUrl,
+    );
+    if (!isCurrent()) return;
+    if (!prepared) {
+      showSelectionNotice(t('spSelectionNotAvailable'));
+      return;
+    }
+    const input = document.getElementById('sp-input') as HTMLTextAreaElement | null;
+    if (!input || !composerAvailableForContext(needsPrompt)) return;
+    editableRewrites.cancel();
     pendingSelectionText = prepared.text;
     _ctx.pendingPageContext = prepared.text;
     _ctx.pendingPageContextSource = {
       tabId: pending.tabId!,
       url: pending.url,
-      title: t('spSelectionChipTitle', [pageChipLabel(pending.url)]),
+      title: t('spSelectionChipTitle', [pageChipLabel(selectionUrl)]),
     };
     pendingBrowserContextTabs = [];
     composerContextNotice = null;
+    composerGeneratedSelectionPrompt = null;
+    if (needsPrompt) {
+      const prompt =
+        pending.type === 'explain'
+          ? t('spExplainSelectionPrompt')
+          : t('spTranslateSelectionPrompt', [browserLanguageName()]);
+      composerGeneratedSelectionPrompt = prompt;
+      replaceComposerText(input, prompt);
+    }
     updateAttachmentPreview();
     updateContextButton();
-    document.getElementById('sp-input')?.focus();
+    updateSendButton();
+    input.focus();
   } catch (error) {
+    if (!isCurrent()) return;
     console.error('[SidePanel] Failed to attach selected browser context:', error);
     composerContextNotice = error instanceof Error ? error.message : PAGE_CONTEXT_CHANGED_REASON;
     updateAttachmentPreview();
+  } finally {
+    await removeHandledPendingChat(pending);
   }
 }
 
@@ -15935,7 +16517,7 @@ async function startSelectionRewrite(value: unknown): Promise<void> {
       throw new Error(t('spRewriteAccountChanged'));
     if (await isUserBlockedSite(target.url))
       throw new Error(t('spSiteBlockedByYou', [pageChipLabel(target.url)]));
-    await readPageDocument(target.tabId, target.url, target.documentId);
+    await readEditableSelectionDocument(target);
     if (generation !== _ctx.conversationGeneration) throw new Error(t('spRewriteSelectAgain'));
     editableRewrites.stage(target);
     if (!canAdmitComposerMessage(t('spRewritePrompt'))) {
@@ -15993,16 +16575,17 @@ function checkPendingChat(): void {
       handlePendingComposerChat(pending, identity, isCurrent);
       return;
     }
-    const claimsPage = pending.type === 'ask-page' || pending.type === 'summarize';
-    if (claimsPage) pendingChatCaptures.add(identity);
+    const claimsContext =
+      pending.type === 'ask-page' || pending.type === 'summarize' || isPendingSelection(pending);
+    if (claimsContext) pendingChatCaptures.add(identity);
     void assistantHostWindowId()
       .then((windowId) => {
-        if (claimsPage) pendingChatCaptures.delete(identity);
+        if (claimsContext) pendingChatCaptures.delete(identity);
         if (!isCurrent() || windowId !== pending.windowId) return;
         handlePendingComposerChat(pending, identity, isCurrent);
       })
       .catch(() => {
-        if (claimsPage) pendingChatCaptures.delete(identity);
+        if (claimsContext) pendingChatCaptures.delete(identity);
       });
   });
 }
@@ -16065,25 +16648,13 @@ function handlePendingComposerChat(
     return;
   }
 
-  if (pending.type === 'ask-selection') {
-    chrome.storage.session.remove('agi_pending_chat').catch(() => {});
-    void attachSelectionForQuestion(pending);
-    return;
+  if (isPendingSelection(pending)) {
+    if (pending.type !== 'ask-selection' && managedCloudChatState !== 'ready') return;
+    pendingChatCaptures.add(identity);
+    void attachSelectionForQuestion(pending, isCurrent).finally(() => {
+      pendingChatCaptures.delete(identity);
+    });
   }
-
-  if (!['ask', 'explain', 'translate'].includes(pending.type)) return;
-  const prompt = pendingChatPrompt(pending);
-  if (!canAdmitComposerMessage(prompt)) {
-    const input = document.getElementById('sp-input') as HTMLTextAreaElement | null;
-    if (input && !input.value.trim()) {
-      replaceComposerText(input, prompt);
-      autoResizeInput(input);
-      updateSendButton();
-      void removeHandledPendingChat(pending);
-    }
-    return;
-  }
-  if (sendMessage(prompt)) void removeHandledPendingChat(pending);
 }
 
 async function checkPendingContextHandoff(): Promise<void> {

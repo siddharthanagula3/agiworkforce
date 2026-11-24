@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
+use agiworkforce_protocol::developer_session::DeveloperChildTask;
 use anyhow::{Context as _, Result};
 
 use crate::compaction;
@@ -100,6 +101,17 @@ pub struct ToolEventSink(
 impl std::fmt::Debug for ToolEventSink {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("ToolEventSink(<callback>)")
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct ChildTaskSink(
+    pub std::sync::Arc<dyn Fn(DeveloperChildTask, Option<subagent::SubagentControl>) + Send + Sync>,
+);
+
+impl std::fmt::Debug for ChildTaskSink {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("ChildTaskSink")
     }
 }
 
@@ -314,10 +326,12 @@ pub struct AgentSession {
     pub skip_permissions: bool,
     pub(crate) bypass_permissions_available: bool,
     pub auto_approve_safe: bool,
+    pub(crate) require_shell_approval: bool,
     pub on_tool_approval: Option<ToolApprovalSink>,
     /// Where `ask_user` sends its question when a surface can answer it.
     pub on_user_input: Option<UserInputSink>,
     pub on_tool_event: Option<ToolEventSink>,
+    pub(crate) on_child_task: Option<ChildTaskSink>,
     pub on_steer: Option<SteerSource>,
     pub on_continuation_chunk: Option<ContinuationSink>,
     pub(crate) transcript_renderer:
@@ -838,9 +852,11 @@ impl AgentSession {
             skip_permissions: false,
             bypass_permissions_available: false,
             auto_approve_safe: false,
+            require_shell_approval: false,
             on_tool_approval: None::<ToolApprovalSink>,
             on_user_input: None::<UserInputSink>,
             on_tool_event: None::<ToolEventSink>,
+            on_child_task: None,
             on_steer: None::<SteerSource>,
             on_continuation_chunk: None::<ContinuationSink>,
             transcript_renderer: None,
@@ -2533,6 +2549,7 @@ impl AgentSession {
         &mut self,
         id: &str,
         status: &crate::subagent::SubagentStatus,
+        transcript: Vec<String>,
     ) -> Result<()> {
         use agiworkforce_protocol::code_domain::CodeTaskState;
         use agiworkforce_protocol::developer_session::{TurnFailure, TurnFailureCode};
@@ -2560,9 +2577,26 @@ impl AgentSession {
             }
         }
         managed.set_code_session(code);
+        managed.record_child_transcript(id, transcript);
         self.persist_managed_session()?;
         self.active_child_ids.remove(id);
+        self.publish_child_task(id);
         Ok(())
+    }
+
+    fn publish_child_task(&self, id: &str) {
+        let (Some(sink), Some(managed)) = (&self.on_child_task, &self.managed_session) else {
+            return;
+        };
+        let code = managed.code_session();
+        if let Some(task) = code.tasks.iter().find(|task| task.id.as_str() == id) {
+            (sink.0)(
+                managed.developer_child_task(task),
+                self.subagent_manager
+                    .as_ref()
+                    .map(subagent::SubagentManager::control),
+            );
+        }
     }
 
     pub(crate) fn interrupt_child_tasks(&mut self, cancelled: bool) {
@@ -2591,15 +2625,22 @@ impl AgentSession {
     }
 
     pub fn persist_managed_session(&mut self) -> Result<()> {
+        if self.persist_managed_session_file()? {
+            self.sync_managed_session_metadata()?;
+        }
+        Ok(())
+    }
+
+    fn persist_managed_session_file(&mut self) -> Result<bool> {
         if !self.session_persistence {
-            return Ok(());
+            return Ok(false);
         }
         let workspace_root = self.workspace_root();
         let (Some(managed_session), Some(path)) = (
             self.managed_session.as_mut(),
             self.managed_session_path.as_deref(),
         ) else {
-            return Ok(());
+            return Ok(false);
         };
         managed_session.reconcile_transcript(&self.messages);
         managed_session.messages = self.messages.clone();
@@ -2648,7 +2689,24 @@ impl AgentSession {
         managed_session.save_to_path(path)?;
         self.loaded_fingerprint = crate::runtime::session::session_fingerprint(path);
         self.claim_writer_lease();
-        self.sync_managed_session_metadata()
+        Ok(true)
+    }
+
+    pub(crate) fn persist_developer_turn_writer(&mut self, writer: Option<String>) -> Result<()> {
+        let Some(managed) = self.managed_session.as_mut() else {
+            return Ok(());
+        };
+        if managed.developer_turn_writer == writer {
+            return Ok(());
+        }
+        let previous = std::mem::replace(&mut managed.developer_turn_writer, writer);
+        if let Err(error) = self.persist_managed_session_file() {
+            if let Some(managed) = self.managed_session.as_mut() {
+                managed.developer_turn_writer = previous;
+            }
+            return Err(error);
+        }
+        Ok(())
     }
 
     /// This session as the hosted chat history sees it. `None` when the session
@@ -5475,12 +5533,14 @@ mod tests {
             .settle_child_task(
                 "subagent_first",
                 &crate::subagent::SubagentStatus::Completed,
+                vec!["assistant: Done".to_string()],
             )
             .expect("settle");
         session
             .settle_child_task(
                 "subagent_first",
                 &crate::subagent::SubagentStatus::Cancelled,
+                Vec::new(),
             )
             .expect("late result");
         assert_eq!(
@@ -5494,6 +5554,9 @@ mod tests {
             CodeTaskState::Completed
         );
         let disk = ManagedSession::load_from_path(&path).expect("reload");
+        assert_eq!(disk.child_transcripts.len(), 1);
+        assert_eq!(disk.child_transcripts[0].task_id, "subagent_first");
+        assert_eq!(disk.child_transcripts[0].lines, ["assistant: Done"]);
         session.adopt_managed_session(disk, path).expect("restart");
         let code = session.managed_session.as_ref().unwrap().code_session();
         assert_eq!(code.tasks[0].state, CodeTaskState::Completed);

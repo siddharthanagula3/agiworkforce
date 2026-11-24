@@ -1,11 +1,12 @@
 import { app } from 'electron';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import {
   EMPTY_SHELL_POLICY,
   normalizeShellPolicy,
   type ShellPolicy,
 } from '@agiworkforce/local-runtime-contract';
+import { replaceStoreFile, StoreWriteError } from './atomicStoreFile';
 
 let policy: ShellPolicy = { ...EMPTY_SHELL_POLICY };
 let loaded = false;
@@ -50,14 +51,12 @@ export function readShellPolicy(): ShellPolicy {
 
 export function writeShellPolicy(next: ShellPolicy): ShellPolicy {
   load();
-  policy = normalizeShellPolicy(next);
+  const normalized = normalizeShellPolicy(next);
   try {
-    writeFileSync(storePath(), `${JSON.stringify(policy, null, 2)}\n`, {
-      encoding: 'utf8',
-      mode: 0o600,
-    });
+    replaceStoreFile(storePath(), `${JSON.stringify(normalized, null, 2)}\n`);
   } catch (error) {
-    console.warn('[shell-policy] could not persist the command policy:', error);
+    throw new StoreWriteError('Could not save command permissions. Try again.', { cause: error });
   }
+  policy = normalized;
   return readShellPolicy();
 }

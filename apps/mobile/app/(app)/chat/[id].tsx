@@ -1,4 +1,7 @@
-import { runComposerAttachmentPick } from '@/src/features/chat/utils/runComposerAttachmentPick';
+import {
+  attachmentFromPickedDocument,
+  runComposerAttachmentPick,
+} from '@/src/features/chat/utils/runComposerAttachmentPick';
 import { photoSelectionLimitForPlan } from '@/src/features/chat/utils/photoSelectionLimit';
 import { attachmentLimitsFor } from '@/src/features/chat/utils/attachmentValidation';
 import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
@@ -104,6 +107,7 @@ import { showVoiceCaptureFailureAlert } from '@/src/features/voice/components/vo
 import { classifyVoiceFailure } from '@/src/features/voice/services/voiceFailure';
 import { useVoiceOutputOwner } from '@/src/features/voice/hooks/useVoiceOutputOwner';
 import type { DraftProvenance } from '@/src/features/chat/draftStore';
+import type { ComposerSendOutcome } from '@/src/features/chat/components/ChatInput';
 import { draftIdentityKey } from '@/src/features/chat/draftIdentity';
 import { useVoiceAttachments } from '@/src/features/voice/hooks/useVoiceAttachments';
 import { useFocusBoundVisibility } from '@/src/features/voice/hooks/useInlineVoiceBar';
@@ -188,7 +192,7 @@ import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { API_URL } from '@/lib/constants';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { offlineQueue } from '@/services/offlineQueue';
+import { OfflineQueueAdmissionError, offlineQueue } from '@/services/offlineQueue';
 import { createMobileCloudAgentRunClient } from '@/services/streaming';
 import { ManagedCloudAgentRunReferenceSchema } from '@agiworkforce/cloud-contracts';
 import { CLOUD_SIGN_IN_MESSAGE, offersModelSwitch } from '@/services/apiErrors';
@@ -598,7 +602,11 @@ export default function ChatScreen() {
     (
       text: string,
       attachments?: Attachment[],
-      dispatchOptions?: { awaitCompletion?: boolean; onAccepted?: () => void },
+      dispatchOptions?: {
+        awaitCompletion?: boolean;
+        onAccepted?: () => void;
+        onConsentDeclined?: () => void;
+      },
     ): boolean | Promise<boolean> => {
       if (!id) return false;
       stopSpeaking?.();
@@ -660,7 +668,7 @@ export default function ChatScreen() {
       }
       if (videoRequest.status === 'ready') {
         const action = captureConversationAction();
-        return sharingWithProvidersAllowed()
+        return sharingWithProvidersAllowed(dispatchOptions?.onConsentDeclined)
           .then((allowed) => {
             if (!allowed || (action && !isConversationActionCurrent(action))) return false;
             let started = false;
@@ -789,7 +797,7 @@ export default function ChatScreen() {
       }
       if (imageRequest.status === 'ready') {
         const action = captureConversationAction();
-        return sharingWithProvidersAllowed()
+        return sharingWithProvidersAllowed(dispatchOptions?.onConsentDeclined)
           .then((allowed) => {
             if (!allowed || (action && !isConversationActionCurrent(action))) return false;
             let started = false;
@@ -856,6 +864,13 @@ export default function ChatScreen() {
           );
           return false;
         }
+        if (conversation?.temporary) {
+          Alert.alert(
+            'Connect to send in a temporary chat',
+            'Send this message after reconnecting. Your draft is still in the composer.',
+          );
+          return false;
+        }
         if (!clerkUserId) {
           Alert.alert(
             'Sign in to queue this message',
@@ -872,11 +887,25 @@ export default function ChatScreen() {
             ...(skillNameForTurn ? { skillName: skillNameForTurn } : {}),
             provenance: { scope: 'cloud', ownerId: clerkUserId },
           });
-        } catch {
-          Alert.alert(
-            'Account changed',
-            'This Cloud message was not queued because the active account changed. Please try again.',
-          );
+        } catch (error) {
+          if (error instanceof OfflineQueueAdmissionError) {
+            if (error.reason === 'queue-full') {
+              Alert.alert(
+                'Offline queue is full',
+                'Your message is still in the composer. Try again after some queued messages have gone through.',
+              );
+            } else {
+              Alert.alert(
+                'Could not save the message offline',
+                'Your message is still in the composer. Reconnect and try again.',
+              );
+            }
+          } else {
+            Alert.alert(
+              'Account changed',
+              'This Cloud message was not queued because the active account changed. Please try again.',
+            );
+          }
           return false;
         }
         enqueueOfflineMessage(id, finalText, selectedModel, entry.id);
@@ -885,9 +914,14 @@ export default function ChatScreen() {
         return true;
       }
 
-      const sendOptions = skillNameForTurn
-        ? { skillName: skillNameForTurn, skillTools: selectedSkillTools(skillSelection) }
-        : {};
+      const sendOptions = {
+        ...(skillNameForTurn
+          ? { skillName: skillNameForTurn, skillTools: selectedSkillTools(skillSelection) }
+          : {}),
+        ...(dispatchOptions?.onConsentDeclined
+          ? { onConsentDeclined: dispatchOptions.onConsentDeclined }
+          : {}),
+      };
 
       if (dispatchOptions?.awaitCompletion) {
         return sendMessage(id, finalText, selectedModel, attachments, {
@@ -927,6 +961,7 @@ export default function ChatScreen() {
     [
       id,
       conversationExecutionMode,
+      conversation?.temporary,
       selectedModel,
       subscriptionTier,
       grantedCapabilities,
@@ -963,6 +998,19 @@ export default function ChatScreen() {
       videoResolution,
       setAppMode,
     ],
+  );
+
+  const handleComposerSend = useCallback(
+    async (text: string, attachments?: Attachment[]): Promise<ComposerSendOutcome> => {
+      let declined = false;
+      const accepted = await handleSend(text, attachments, {
+        onConsentDeclined: () => {
+          declined = true;
+        },
+      });
+      return !accepted && declined ? 'declined' : accepted;
+    },
+    [handleSend],
   );
 
   const handleFollowUp = useRowHandler((prompt: string) => {
@@ -1080,6 +1128,7 @@ export default function ChatScreen() {
 
   const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
   const cloudModeWrittenFor = useRef<string | null>(null);
+  const failedSystemModelIds = useSystemModelSession((state) => state.failedModelIds);
 
   useEffect(() => {
     if (!conversation || !screenFocused) return;
@@ -1095,8 +1144,9 @@ export default function ChatScreen() {
       Boolean(modelId) &&
       executionModeForSelection(modelId as string, conversationExecutionMode) ===
         conversationExecutionMode &&
-      (conversationExecutionMode === 'local' ||
-        isSelectableModelIdForAccess(modelId as string, cloudUnlocked, subscriptionTier));
+      (conversationExecutionMode === 'local'
+        ? !failedSystemModelIds.includes(modelId as string)
+        : isSelectableModelIdForAccess(modelId as string, cloudUnlocked, subscriptionTier));
     const preferredModel = fitsConversation(conversation.model)
       ? conversation.model
       : fitsConversation(currentModel)
@@ -1114,6 +1164,7 @@ export default function ChatScreen() {
     cloudUnlocked,
     conversation,
     conversationExecutionMode,
+    failedSystemModelIds,
     screenFocused,
     setAppMode,
     subscriptionTier,
@@ -1121,16 +1172,34 @@ export default function ChatScreen() {
 
   const installedModelIds = useModelInstallStore((state) => state.installedModelIds);
   const readySystemModelIds = useModelInstallStore((state) => state.readySystemModelIds);
-  const failedSystemModelIds = useSystemModelSession((state) => state.failedModelIds);
+  const [dismissedLocalFailure, setDismissedLocalFailure] = useState<string | null>(null);
+  const latestMessage = conversationMessages.at(-1);
+  const replyFailure =
+    latestMessage?.role === 'assistant' && !latestMessage.isStreaming
+      ? getMessageStreamErrorMessage(latestMessage)
+      : undefined;
+  const replyModel = latestMessage?.model ?? conversation?.model;
+  const retainedLocalFailure =
+    conversationExecutionMode === 'local' &&
+    replyFailure &&
+    replyModel &&
+    failedSystemModelIds.includes(replyModel) &&
+    dismissedLocalFailure !== latestMessage?.id
+      ? replyFailure
+      : null;
+  const visibleSendError = sendError ?? retainedLocalFailure;
+  const failedReply =
+    replyFailure && visibleSendError?.startsWith(replyFailure) ? latestMessage : undefined;
+  const recoveryModelId = (failedReply && replyModel) || selectedModel;
 
   const localRecovery = useMemo(
     () =>
       localModelRecovery({
         executionMode: conversationExecutionMode,
         isNoLocalModelError:
-          sendError === LOCAL_NO_MODEL_MESSAGE ||
-          (Boolean(sendError) && failedSystemModelIds.includes(selectedModel)),
-        selectedModelId: selectedModel,
+          visibleSendError === LOCAL_NO_MODEL_MESSAGE ||
+          (Boolean(visibleSendError) && failedSystemModelIds.includes(recoveryModelId)),
+        selectedModelId: recoveryModelId,
         installedModelIds,
         readySystemModelIds,
         displayNameFor: (modelId) => getShortDisplayName(modelId, subscriptionTier),
@@ -1140,8 +1209,8 @@ export default function ChatScreen() {
       failedSystemModelIds,
       installedModelIds,
       readySystemModelIds,
-      selectedModel,
-      sendError,
+      recoveryModelId,
+      visibleSendError,
       subscriptionTier,
     ],
   );
@@ -1152,31 +1221,48 @@ export default function ChatScreen() {
       label: localRecovery.label,
       onPress: () => {
         if (localRecovery.kind === 'open-models') {
-          clearError();
           router.push('/(app)/models' as Parameters<typeof router.push>[0]);
           return;
         }
-        if (!localRecovery.modelId) return;
-        useModelStore.getState().showConversationModel(localRecovery.modelId);
+        const modelId = localRecovery.modelId;
+        if (!id || !modelId) return;
+        void setConversationModel(id, modelId);
+        useModelStore.getState().showConversationModel(modelId);
         clearError();
-        if (!id) return;
-        const lastUser = [...conversationMessages].reverse().find((m) => m.role === 'user');
-        if (lastUser) retryMessage(id, lastUser.id);
+        if (sendErrorRetry?.kind === 'resend') {
+          chatInputAttachRef.current?.focus?.();
+          return;
+        }
+        const lastUser = [...conversationMessages]
+          .reverse()
+          .find((message) => message.role === 'user');
+        const target =
+          failedReply?.id ??
+          (sendErrorRetry?.kind === 'regenerate' ? sendErrorRetry.messageId : lastUser?.id);
+        if (target) retryMessage(id, target, modelId);
       },
     };
-  }, [clearError, conversationMessages, id, localRecovery, retryMessage, router]);
+  }, [
+    clearError,
+    conversationMessages,
+    failedReply,
+    id,
+    localRecovery,
+    retryMessage,
+    router,
+    sendErrorRetry,
+    setConversationModel,
+  ]);
 
   const handleOpenCloudSignIn = useCallback(() => {
     router.push(beginCloudPostAuthIntent());
   }, [router]);
 
-  const failureShownInTurn = useMemo(() => {
-    if (!sendError) return false;
-    const lastAssistant = [...conversationMessages].reverse().find((m) => m.role === 'assistant');
-    if (!lastAssistant || lastAssistant.isStreaming) return false;
-    const turnFailure = getMessageStreamErrorMessage(lastAssistant);
-    return Boolean(turnFailure && sendError.startsWith(turnFailure));
-  }, [conversationMessages, sendError]);
+  const failureShownInTurn = failedReply !== undefined;
+  const dismissSendError = useCallback(() => {
+    if (failedReply && localRecovery) setDismissedLocalFailure(failedReply.id);
+    clearError();
+  }, [clearError, failedReply, localRecovery]);
 
   const sendRecoveryAction = useMemo(() => {
     if (localRecoveryAction) return localRecoveryAction;
@@ -1523,13 +1609,7 @@ export default function ChatScreen() {
           multiple: true,
         });
         if (!scope.isCurrent() || result.canceled) return [];
-        return result.assets.map((asset) => ({
-          id: `doc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          uri: asset.uri,
-          mimeType: asset.mimeType ?? 'application/octet-stream',
-          fileName: asset.name ?? 'document',
-          fileSize: asset.size,
-        }));
+        return result.assets.map(attachmentFromPickedDocument);
       },
       () => {
         Alert.alert('Error', 'Failed to pick document. Please try again.');
@@ -2043,8 +2123,11 @@ export default function ChatScreen() {
   const handleDeleteImageConversation = useCallback(() => {
     const actionScope = captureConversationAction();
     if (!id || !actionScope || !isConversationActionCurrent(actionScope)) return;
-    deleteConversation(id);
-    handleBack();
+    void deleteConversation(id).then((deleted) => {
+      if (deleted && composerFocusedRef.current && isConversationActionCurrent(actionScope)) {
+        handleBack();
+      }
+    });
   }, [captureConversationAction, deleteConversation, handleBack, id, isConversationActionCurrent]);
 
   const shareConversationLink = useCallback(
@@ -2123,7 +2206,9 @@ export default function ChatScreen() {
           run: whenCurrent(() => setContextSheetVisible(true)),
         },
       ],
-      onDeleted: handleBack,
+      onDeleted: whenCurrent(() => {
+        if (composerFocusedRef.current) handleBack();
+      }),
       onArchived: whenCurrent(() => {
         if (composerFocusedRef.current) handleBack();
       }),
@@ -2634,12 +2719,12 @@ export default function ChatScreen() {
         />
 
         <SendErrorBanner
-          error={providerConsentError ? null : sendError}
+          error={providerConsentError ? null : visibleSendError}
           freeCapacity={providerConsentError ? null : freeCapacityError}
           action={sendRecoveryAction}
           detailShownInTurn={failureShownInTurn}
           onRetry={retryFailedSend}
-          onDismiss={clearError}
+          onDismiss={dismissSendError}
         />
 
         {/* Composer.
@@ -2655,7 +2740,7 @@ export default function ChatScreen() {
         ) : null}
         {voiceInlineVisible || liveVoiceVisible || conversationUnavailable ? null : (
           <Composer
-            onSend={handleSend}
+            onSend={handleComposerSend}
             isStreaming={isStreaming}
             onStop={handleStop}
             onOpenModelPicker={handleOpenModelPicker}
@@ -2686,22 +2771,6 @@ export default function ChatScreen() {
             onHasTextChange={setComposerHasText}
           />
         )}
-
-        <AddToChatSheet
-          destinationKey={id ?? 'unavailable'}
-          ref={addToChatRef}
-          onCamera={handleSheetCamera}
-          onPhotos={handleSheetPhotos}
-          onPasteImage={handleSheetPasteImage}
-          onFile={handleSheetFile}
-          onOpenCloudAccess={handleOpenCloudSignIn}
-          onOpenStyleSelector={handleOpenStyleSelector}
-          onOpenProjectPicker={handleSheetProjectPicker}
-          onAttachFromLibrary={handleAttachFromLibrary}
-          onOpenSkills={handleOpenSkills}
-          offersOutputFormat
-          conversationProjectId={conversation?.projectId ?? null}
-        />
 
         <StyleSelector openSignal={styleSelectorOpenSignal} />
 
@@ -2803,6 +2872,21 @@ export default function ChatScreen() {
 
         <RenameConversationModal rename={conversationActions.rename} />
       </KeyboardAvoidingView>
+      <AddToChatSheet
+        destinationKey={id ?? 'unavailable'}
+        ref={addToChatRef}
+        onCamera={handleSheetCamera}
+        onPhotos={handleSheetPhotos}
+        onPasteImage={handleSheetPasteImage}
+        onFile={handleSheetFile}
+        onOpenCloudAccess={handleOpenCloudSignIn}
+        onOpenStyleSelector={handleOpenStyleSelector}
+        onOpenProjectPicker={handleSheetProjectPicker}
+        onAttachFromLibrary={handleAttachFromLibrary}
+        onOpenSkills={handleOpenSkills}
+        offersOutputFormat
+        conversationProjectId={conversation?.projectId ?? null}
+      />
       <ModelPickerSheet
         sheetRef={modelPickerRef}
         openSignal={modelPickerOpenSignal}

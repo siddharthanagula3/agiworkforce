@@ -1,4 +1,5 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { useState } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const billing = vi.hoisted(() => ({
@@ -30,6 +31,19 @@ vi.mock('./SchedulesPage', () => ({
   },
 }));
 
+vi.mock('./LocalRoutinesSection', () => ({
+  LocalRoutinesSection: function LocalRoutinesSection() {
+    const [draft, setDraft] = useState('');
+    return (
+      <input
+        aria-label="Local routine draft"
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+      />
+    );
+  },
+}));
+
 import { SchedulesPageWithProjects } from './SchedulesPageWithProjects';
 
 beforeEach(() => {
@@ -58,5 +72,25 @@ describe('SchedulesPageWithProjects billing hydration', () => {
     expect(schedulePageProps).toHaveBeenCalledWith(
       expect.objectContaining({ subscriptionTier: 'enterprise' }),
     );
+  });
+
+  it('keeps the local routine draft mounted while cloud billing becomes ready', () => {
+    const { rerender } = render(<SchedulesPageWithProjects />);
+    const draft = screen.getByRole('textbox', { name: 'Local routine draft' });
+    fireEvent.change(draft, { target: { value: 'Summarize this folder' } });
+    expect(schedulePageProps).not.toHaveBeenCalled();
+
+    billing.state = {
+      subscription: { tier: 'basic' },
+      isLoading: false,
+      initialized: true,
+    };
+    rerender(<SchedulesPageWithProjects />);
+
+    expect(screen.getByRole('textbox', { name: 'Local routine draft' })).toHaveValue(
+      'Summarize this folder',
+    );
+    expect(screen.queryByRole('status', { name: 'Loading schedule access' })).toBeNull();
+    expect(schedulePageProps).toHaveBeenCalled();
   });
 });

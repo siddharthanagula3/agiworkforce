@@ -33,6 +33,7 @@ jest.mock('../src/shared/components/Toast', () => ({
 
 import { Alert } from 'react-native';
 import { api } from '../services/api';
+import { managedCloudChat } from '../services/managedCloudChat';
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 import { useConversationActions } from '../src/features/conversation-actions/useConversationActions';
 import { useChatMessageStore } from '../stores/chat/chatMessageStore';
@@ -184,8 +185,15 @@ describe('conversation row actions reach every action on both platforms', () => 
 
     expect(result.current.rename.menu.visible).toBe(false);
   });
-  it("adds a caller's extra actions and reports a confirmed delete to the caller", () => {
+  it("adds a caller's extra actions and waits for Cloud before reporting a deletion", async () => {
     seedCloudRow('c-1');
+    let finish!: () => void;
+    jest.mocked(managedCloudChat.deleteConversation).mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
     const { result } = renderHook(() => useConversationActions());
     const extraRun = jest.fn();
     const onDeleted = jest.fn();
@@ -212,6 +220,8 @@ describe('conversation row actions reach every action on both platforms', () => 
       onPress?: () => void;
     }>;
     act(() => buttons.find((button) => button.text === 'Delete')?.onPress?.());
+    expect(onDeleted).not.toHaveBeenCalled();
+    await act(async () => finish());
     expect(onDeleted).toHaveBeenCalledTimes(1);
   });
 

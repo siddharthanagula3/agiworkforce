@@ -272,7 +272,7 @@ describe('memory enable/disable controls', () => {
     installAccountMemory({
       facts: [{ id: 'mem_1', text: 'Prefer Rust', createdAt: '2026-01-01T00:00:00.000Z' }],
     });
-    vi.mocked(vscode.window.showQuickPick).mockResolvedValue({ detail: 'list' } as never);
+    vi.mocked(vscode.window.showQuickPick).mockResolvedValue({ action: 'list' } as never);
     createdQuickPicks.length = 0;
 
     const pending = handlers.get('agi-workforce.memory')?.();
@@ -293,7 +293,7 @@ describe('memory enable/disable controls', () => {
     signedOut.contextValue = 'memorySignedOut';
     const { handlers } = registerMemoryCommands(makeWorkspaceState(), [signedOut]);
     installAccountMemory({ signedOut: true });
-    vi.mocked(vscode.window.showQuickPick).mockResolvedValue({ detail: 'list' } as never);
+    vi.mocked(vscode.window.showQuickPick).mockResolvedValue({ action: 'list' } as never);
     createdQuickPicks.length = 0;
 
     const pending = handlers.get('agi-workforce.memory')?.();

@@ -17,14 +17,14 @@ describe('GlobalSearchDialog accessibility (a11y regression)', () => {
   it('exposes an accessible description on the search dialog (no Radix Missing-Description warning)', () => {
     render(<GlobalSearchDialog open onOpenChange={() => {}} />);
     const dialog = screen.getByRole('dialog');
-    expect(dialog).toHaveAccessibleDescription('Search across your conversations and messages.');
-    expect(dialog).toHaveAccessibleName(/search conversations/i);
+    expect(dialog).toHaveAccessibleDescription(
+      'Search sessions, Code, artifacts, projects, and schedules.',
+    );
+    expect(dialog).toHaveAccessibleName('Search');
   });
 
   it('gives the search input a stable accessible name independent of the placeholder', () => {
     render(<GlobalSearchDialog open onOpenChange={() => {}} />);
-    expect(
-      screen.getByRole('textbox', { name: /search messages and conversations/i }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: /search your workspace/i })).toBeInTheDocument();
   });
 });

@@ -92,6 +92,7 @@ interface ModelInstallState {
   readySystemModelIds: string[];
   systemModelStates: Record<string, UnusableSystemModelState>;
   totalRAMMB: number | null;
+  tier2Available: boolean | null;
   allowCellularDownloads: boolean;
   jobs: Record<string, ModelInstallJob>;
   setAllowCellularDownloads: (allowed: boolean) => void;
@@ -115,6 +116,16 @@ function pushCellularConsentToNative(allowed: boolean): void {
 
 export const MULTIMODAL_RAM_LOCK_REASON =
   'This device needs at least 3.5 GB of RAM to run on-device vision models.';
+const EXECUTORCH_UNAVAILABLE = 'This device cannot run this on-device model.';
+
+function executorchDeviceLock(
+  model: ModelDef,
+  tier2Available: boolean | null,
+): ModelInstallJob | null {
+  if (tier2Available !== false) return null;
+  const preset = model.executorchPreset ?? getCatalogModelById(model.id)?.executorchPreset;
+  return preset ? { status: 'unavailable', progress: 0, error: EXECUTORCH_UNAVAILABLE } : null;
+}
 
 function multimodalRamLock(model: ModelDef, totalRAMMB: number | null): ModelInstallJob | null {
   const catalogModel = getCatalogModelById(model.id);
@@ -364,6 +375,7 @@ export const useModelInstallStore = create<ModelInstallState>()(
       readySystemModelIds: [],
       systemModelStates: {},
       totalRAMMB: null,
+      tier2Available: null,
       allowCellularDownloads: false,
       jobs: {},
 
@@ -384,7 +396,9 @@ export const useModelInstallStore = create<ModelInstallState>()(
         const systemModel = getSystemModelForTier1Runtime(caps?.tier1Runtime ?? null);
         const readySystemModelIds =
           systemModel && !systemModelStates[systemModel.id] ? [systemModel.id] : [];
-        const installedModelIds = installed.map((model) => model.id);
+        const installedModelIds = installed
+          .filter((model) => caps?.tier2Available !== false || model.format !== 'pte')
+          .map((model) => model.id);
         set((state) => {
           const jobs = { ...state.jobs };
           for (const modelId of Object.keys(systemModelStates)) delete jobs[modelId];
@@ -394,7 +408,8 @@ export const useModelInstallStore = create<ModelInstallState>()(
             readySystemModelIds,
             systemModelStates,
             jobs,
-            totalRAMMB: cachedCaps?.totalRAMMB ?? caps?.totalRAMMB ?? null,
+            totalRAMMB: caps?.totalRAMMB ?? null,
+            tier2Available: caps?.tier2Available ?? null,
           };
         });
         pushCellularConsentToNative(get().allowCellularDownloads);
@@ -445,6 +460,17 @@ export const useModelInstallStore = create<ModelInstallState>()(
           return;
         }
 
+        const catalogModel = getCatalogModelById(model.id);
+        const preset = model.executorchPreset ?? catalogModel?.executorchPreset;
+        if (preset) {
+          const caps = await getCapabilities().catch(() => null);
+          const tier2Available = caps?.tier2Available ?? get().tier2Available;
+          set({ tier2Available });
+          if (executorchDeviceLock(model, tier2Available)) {
+            throw new Error(EXECUTORCH_UNAVAILABLE);
+          }
+        }
+
         const recordedModel = await getInstalledModel(model.id).catch(() => null);
         const existing = recordedModel
           ? ((await liveInstalledModels([recordedModel]).catch(() => [recordedModel]))[0] ?? null)
@@ -457,8 +483,6 @@ export const useModelInstallStore = create<ModelInstallState>()(
           return;
         }
 
-        const catalogModel = getCatalogModelById(model.id);
-        const preset = model.executorchPreset ?? catalogModel?.executorchPreset;
         const ggufInstallable = !preset && catalogModel && hasRunnableGgufArtifacts(catalogModel);
         if (!preset && !ggufInstallable) {
           const error = 'The native package for this model is not bundled yet.';
@@ -599,6 +623,7 @@ export const useModelInstallStore = create<ModelInstallState>()(
 
       statusForModel: (model) => {
         return (
+          executorchDeviceLock(model, get().tier2Available) ??
           get().jobs[model.id] ??
           defaultStatusForModel(
             model,

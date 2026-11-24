@@ -29,6 +29,8 @@ function thread(overrides: Partial<RemoteCodeThread> = {}): RemoteCodeThread {
     runningTasks: 0,
     transcript: null,
     queuedGuidance: [],
+    rejectedGuidance: [],
+    dismissedGuidanceIds: [],
     hostMessage: null,
     syncedAt: '2026-09-17T12:00:00.000Z',
     ...overrides,

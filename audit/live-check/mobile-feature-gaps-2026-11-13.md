@@ -72,3 +72,123 @@ A part is built only where the data or the server really supports it.
 ## How an item closes
 
 Delete a row in the first table once its check is recorded in `audit/live-check/`. A left-out part closes when it is built or when the founder declines it in `docs/decisions/`. Delete this file when the tables and the list are empty. The features that only one app has are not tracked here; they stay in the comparison as inventory.
+
+## Local model failure recovery
+
+In the iPhone simulator with the native development client and the current mobile bundle, Apple Intelligence failed an ordinary Local reply. After the fix, the failed reply retained an Open Models action even though the composer moved to AGI Standard. The model library showed Apple Intelligence as unavailable on this device and AGI Standard as requiring a download. Returning to the chat preserved the recovery action and the on-device send indicator. The focused screen test also verified that a newly ready alternative retries the original reply with that exact model selected.
+
+On November 24, a fresh iPhone 17 Pro simulator ran the local Release build with embedded Hermes bytecode. The build passed the release bundle scan, opened first-run onboarding, and reached Local chat. Apple Intelligence refused the test reply. Open Models led to a successful AGI Lite download, and Use AGI Lite retried the original prompt and produced a Local reply marked Stays on device. After a cold restart, the same reply reopened from history without repeating the age prompt. Physical iOS hardware and the Store-signed build remain unverified.
+
+## AGI Code access on iPhone
+
+The signed-out iPhone Release build opened the Cloud sign-in sheet from an AGI
+Code deep link. The standard Cloud switch in the drawer also opened sign-in.
+Closing that sheet returned to the Local composer with its unsent draft.
+The Code gate now explains that it covers both cloud coding tasks and sessions
+on paired computers. In the rebuilt iPhone Release app, Back to chat left both
+the Code list and session-detail deep links and restored the same unsent Local
+draft. The embedded Hermes bundle passed the Release scan. All 202 focused
+mobile tests passed, including the sign-in return intent and the task-options
+sheet without a manual step count. A signed-in Cloud coding run on a physical
+phone remains open.
+
+The mobile Cloud Code session and list tests now cover leaving and reopening a
+session before the server has recorded a submitted turn. The reopened view
+shows the pending task and keeps Stop available. The Running filter includes
+the task while its last server status is still Ready. A second send is refused
+while the first request is pending. If a send fails while the session is
+closed, reopening restores the prompt ahead of any newer draft and shows the
+failure. Switching Cloud accounts retires the former account's requests and
+clears their pending drafts. These checks used React Native integration tests
+with controlled Cloud responses. Signed-in execution on a device remains open.
+
+The mobile New session sheet also offers **Send and stay here** for Cloud
+tasks. It returns to the session list, waits for provisioning when needed,
+and sends one turn using the selected account's model. A refused start marks
+the session and restores the prompt when it is opened. Tests cover a change
+of account during creation and provisioning. If a paired computer loses its
+folders, the sheet keeps the chosen execution location and disables Start
+until the user selects an available folder or explicitly chooses Cloud.
+
+Cloud Code follow-up drafts now use the existing encrypted mobile composer
+store with a session key and account ownership. A signed-in Android 14
+development build restored two independently edited drafts after route
+changes and a process restart. Sending one produced exactly one turn in
+the loopback fixture, cleared its draft, and kept the other session's
+draft. Focused React Native tests also verified account isolation and
+recovery of a refused prompt ahead of newer draft text.
+These checks used React Native integration tests and controlled Cloud
+responses.
+
+On November 24, a disposable iPhone 17 Pro simulator ran the current Hermes
+bundle with a Clerk development account and the local backend. A loopback
+Cloud Code fixture received one create request and one turn for a new
+**Send and stay here** submission. The list showed the running session.
+Opening it exposed Stop while the turn was pending, and the reply appeared
+when the fixture finished. Back and reopen restored the saved reply with an
+empty composer. The development health notice covered the Back control
+until dismissed. The run did not exercise production managed compute or a
+Store-signed build on physical hardware.
+
+The mobile Code follow-up composer now hides Send for an empty or whitespace
+draft and keeps Stop visible during a turn. In the rebuilt iPhone simulator
+app, the empty field showed the full prompt and microphone. Typing a wrapped
+draft with the native keyboard open exposed Send. The fixture received one
+authenticated follow-up, the active turn exposed Stop, and the reply appeared
+above the empty field with the keyboard still open. The development client
+used an ad hoc signed Hermes bundle and a loopback Cloud Code response. All
+32 focused tests passed, including the paired-device composer.
+
+The Android 14 QA client with the current Metro bundle also completed this
+flow at 320 dp with the native keyboard open. The idle composer had no Send
+control. The wrapped draft exposed Send beside the microphone. One submission
+reached the authenticated fixture, Stop appeared while it ran, and the reply
+then appeared above the cleared composer. The keyboard stayed open. This
+used a read-only emulator profile and a loopback Cloud Code response.
+
+The iPhone simulator reproduced an enabled Stop button after its label
+changed to **Stopping the task**. The rebuilt composer shows a busy disabled
+control, ignores a second tap, and restores Stop if the request fails. The
+session also reads a pending cancellation recorded by the backend when it
+reopens. In the native run, the control stayed unavailable after Back and
+reopen, the fixture received one cancellation request, and the transcript
+displayed **Cancelled** before returning to an empty composer. All 51 focused
+tests and the mobile typecheck passed. This run used a loopback Cloud Code
+fixture on iOS.
+
+The mobile service notice now reserves space above the navigation drawer.
+An updated Hermes build on the signed-in iPhone 17 Pro simulator displayed a
+loopback incident notice while the drawer opened, **AGI Code** opened, and
+**Back** returned to Chat. Dismissing the same notice left an unsent draft
+intact. The alert text is separately accessible from the Status and Dismiss
+buttons.
+
+The signed-in Android 14 emulator also displayed the loopback notice above
+the navigator. The notice region ended at y=374 and the Code Back control
+started at y=385 in the native accessibility hierarchy. The drawer opened
+Code, Back returned to Chat with the notice still visible, and dismissing
+the notice preserved the same unsent draft. The run used the current Metro
+bundle in a QA development client. The development Tools overlay covered
+part of the Dismiss button, so the test tapped its exposed edge without
+changing any overlay permission. Physical Android hardware and a
+Play-signed build remain outside this check.
+
+The matching Android arm64 Release APK passed the bundle scan with the Hermes
+bytecode extracted from the APK. A fresh user on an Android 14 emulator opened
+both Code deep links. Back to chat returned to Local mode with the same unsent
+draft from each link. Opening and dismissing the Cloud sign-in sheet preserved
+it too. A cold restart reopened the draft without another age prompt. The
+emulator ran a local APK signed with the development key. A Play-signed build,
+physical hardware and signed-in Cloud execution remain outside this check.
+
+## Android first-send and launcher checks
+
+The previously installed Android build created a Local conversation with a failed reply when no model was installed. The current debug client, installed under the separate `com.agiworkforce.app.qa` ID, allowed Continue without downloading during onboarding. Sending the first draft opened a model setup prompt while leaving the composer on New local chat. Opening Models and using Android Back restored the same text. The iPhone simulator verified the same draft round trip. On November 24, AGI Lite downloaded and generated “Ready” in an Android 14 arm64 emulator with 4 GB of configured memory, airplane mode on, and Wi-Fi off. The 3 GB configuration now marks ExecuTorch models unavailable before download or selection, including an already downloaded AGI Lite. The offline notice leaves the navigation drawer reachable. Physical Android devices and the release build still need verification.
+
+A new Android user in a disposable 3 GB emulator profile completed the age check and first-run disclosure. The model setup screen explained that the recommended model was unavailable and offered browsing, continuing without a local model, and Cloud sign-in. Continuing opened Local chat. Attempting to send left the test draft in the composer, and a cold restart restored the draft without repeating the age prompt. The Cloud option opened sign-in without a second age prompt in the signed-out flow.
+
+The local Android arm64 Release APK also passed on a fresh user in a disposable 4 GB emulator profile. The APK contained the exact Hermes bytecode that passed the release bundle scan. It launched through onboarding without Metro or a network connection. After the AGI Lite download, airplane mode with Wi-Fi disabled still allowed a Local reply, and the reply reopened from history after a cold restart without another age prompt. Android App info showed the blue ribbon launcher icon. The local APK used the development signing key. Gradle's default 2 GB heap ran out during DEX merging, and the same Release build succeeded with a 5 GB heap and three workers. Verification on physical hardware and a Play-signed build remains open.
+
+Expo prebuild now generates the verified Gradle memory settings for production and preview. A clean production prebuild in a disposable directory wrote the properties, and its Gradle daemon reported a 5,120 MiB heap and three workers without command-line overrides.
+
+The Android and iOS generated native projects still had the old radial launcher assets despite the current Expo config pointing to the blue symbol. A clean, isolated Expo prebuild generated the expected launcher and splash artwork. I refreshed only those generated resources in the local native projects. Android App info showed the blue launcher icon after updating the separate debug package, and Apple's asset compiler accepted the refreshed iPhone and iPad icon catalog. The installed release packages were outside this local verification.

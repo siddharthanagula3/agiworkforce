@@ -1,5 +1,6 @@
 import { translateUiPlural } from '@agiworkforce/ui';
 import {
+  approvedRootId,
   DEVELOPER_AGENT_MODES,
   isSshEnvironmentId,
   DEVELOPER_FILE_CHANGE_LABELS,
@@ -26,6 +27,7 @@ import {
   canUseBillingPlanCapability,
   CLOUD_CODE_DEFAULT_TURN_MODE,
   getBillingPlanPricing,
+  PRODUCT_NAMES,
   providerLabels,
   SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER,
   type CloudCodeAgentStep,
@@ -46,6 +48,7 @@ export const LOCAL_CODE_COPY = {
   heading: 'On this device',
   skipChoice: 'Skip the question',
   addFolder: 'Add a folder',
+  chooseFolder: 'Choose a local folder',
   addRepository: 'Add a repository',
   addingFolder: 'Choosing…',
   runTests: 'Run tests',
@@ -64,8 +67,9 @@ export const LOCAL_CODE_COPY = {
   newSessionPrefix: 'New session in',
   empty: 'No coding sessions on this device yet.',
   emptyNoFolders: 'No folder on this device is open to AGI yet.',
-  sessionsWithheld: 'Allow running commands in this folder to see its sessions.',
+  sessionsWithheld: 'To see a folder’s sessions, allow running commands for that folder.',
   allowSessions: 'Allow running commands',
+  allowLinkedSession: (folder: string) => `Allow running commands in ${folder}`,
   allowingSessions: 'Waiting for your answer',
   sessionsRefused:
     'Running commands in this folder was refused. That lasts until you quit Desktop, or until you withdraw the answer in Settings, under Capabilities.',
@@ -78,6 +82,13 @@ export const LOCAL_CODE_COPY = {
   gitOff: (reason: string): string => `Git status is off for this folder: ${reason}.`,
   loading: 'Loading local sessions',
   openingSession: 'Opening session',
+  emptySessionHeading: 'Start a coding task',
+  exploreProject: 'Explore the project',
+  exploreProjectPrompt:
+    'Explain what this project does and identify the main files to read first. Leave the files unchanged.',
+  findTests: 'Find the test command',
+  findTestsPrompt:
+    'Find the command for running this project’s tests and explain any setup it needs. Leave the files unchanged.',
   composerPlaceholder: 'Continue this session',
   send: 'Send',
   stop: 'Stop',
@@ -92,6 +103,10 @@ export const LOCAL_CODE_COPY = {
   activityReloaded:
     'Some live activity could not be kept. The session was read again; check its history for details.',
   startFailed: 'That session could not be started.',
+  startNeedsCommandAccess: 'Starting a task requires command access for this folder.',
+  startCommandAccessDenied:
+    'Command access was denied for this folder. To ask again, clear the refusal in Settings under Capabilities.',
+  reviewCommandAccess: 'Open Capabilities',
   switchToReadyModel: 'Switch to a ready model',
   modelNeedsSetup: (model: string, provider: string): string =>
     `${model} cannot run on this machine yet: ${provider} needs a sign-in first.`,
@@ -105,6 +120,9 @@ export const LOCAL_CODE_COPY = {
   newSessionWith: (model: string): string => `New session with ${model}`,
   cloudModels: 'Cloud',
   readFailed: 'That session could not be opened.',
+  searchFailed: 'Local sessions could not be searched.',
+  retryRead: 'Retry loading session',
+  storedTurnStopped: 'The previous turn stopped early. You can continue here.',
   turnFailed: 'That message could not be sent.',
   changesFailed: 'The changes in this folder could not be read.',
   changesNotRepository: 'This folder is not a git repository, so there are no changes to show.',
@@ -183,6 +201,7 @@ export const LOCAL_CODE_COPY = {
   showArchived: 'Show archived',
   hideArchived: 'Hide archived',
   archivedLabel: 'Archived',
+  archivedSessionReadOnly: 'Restore this session before sending another message.',
   pinnedLabel: 'Pinned',
   renameFailed: 'The session could not be renamed.',
   pinFailed: 'The pin could not be changed.',
@@ -238,6 +257,8 @@ export const LOCAL_CODE_COPY = {
   memoryFailed: 'That could not be saved to memory.',
   steerPlaceholder: 'Add to the running turn',
   queuePlaceholder: 'Queue a follow-up',
+  queueShortcutHint: (keys: string): string => `Press ${keys} to queue this follow-up.`,
+  steerShortcutHint: (keys: string): string => `Press ${keys} to send to the running turn.`,
   steer: 'Send to the running turn',
   queue: 'Queue',
   queued: (count: number): string => (count === 1 ? '1 queued' : `${count} queued`),
@@ -285,9 +306,14 @@ export const LOCAL_CODE_COPY = {
   folderEmpty: 'No files here.',
   listFailed: 'This folder could not be listed.',
   removeContextFile: (path: string): string => `Remove ${path}`,
-  imagesOnly: 'Only images can be pasted into a coding session. Add other files from this folder.',
-  imagesNeedUpdate:
-    'Pasting images into a coding session needs a newer version of Desktop. Update the app, then try again.',
+  imagesOnly: 'Paste or drop images here. Use the folder picker for other files.',
+  addImages: 'Add images',
+  imagesRequireFolder: 'Choose a folder before attaching images to this task.',
+  imagesWhileStarting: 'Wait for the session to open before attaching another image.',
+  imagesDestinationChanged: 'The destination changed. Attach any images again before sending.',
+  imageReadFailed: 'An image could not be read. Remove it or attach it again.',
+  imagesNeedUpdate: `Update ${PRODUCT_NAMES.desktop} to attach images to a coding session.`,
+  imagesUnavailableOverSsh: 'Image attachments are unavailable in SSH sessions.',
   tooManyImages: (limit: number): string => `A message can carry at most ${limit} images.`,
   tooManyFiles: (limit: number): string => `A message can carry at most ${limit} files.`,
   imageTooLarge: (limit: string): string => `Images must be ${limit} or smaller.`,
@@ -495,6 +521,10 @@ export function localSessionMarker(
   if (session.status === 'awaiting_approval') return 'needs-approval';
   if (session.status === 'failed') return 'failed';
   return null;
+}
+
+export function localSessionIsArchived(session: LocalDeveloperSession): boolean {
+  return session.status === 'archived' || session.archivedAt !== undefined;
 }
 
 export interface LocalQueuedMessage {
@@ -1147,6 +1177,18 @@ export function localFileChangeLabel(changes: LocalTurnChanges, path: string): s
   return DEVELOPER_FILE_CHANGE_LABELS[changes.changes[path] ?? 'modified'];
 }
 
+export function localWorkspaceRelativePath(path: string, workspace: string): string {
+  if (workspace === '') return path;
+  const windows = /^(?:[a-z]:[\\/]|\\\\)/iu.test(workspace);
+  const root = windows ? workspace.replaceAll('\\', '/') : workspace;
+  const candidate = windows ? path.replaceAll('\\', '/') : path;
+  const prefix = root.endsWith('/') ? root : `${root}/`;
+  const matches = windows
+    ? candidate.toLowerCase().startsWith(prefix.toLowerCase())
+    : candidate.startsWith(prefix);
+  return matches ? candidate.slice(prefix.length) || path : path;
+}
+
 export interface LocalTurn {
   turnId: string | null;
   prompt: string;
@@ -1370,6 +1412,14 @@ export type LocalRouteResolution =
   | { kind: 'waiting'; notice: string }
   | { kind: 'missing' };
 
+export function localRouteCommandAccessGroup(
+  groups: readonly DeveloperSessionGroup[],
+  rootId: string,
+): DeveloperSessionGroup | undefined {
+  const approvedId = approvedRootId(rootId);
+  return groups.find((group) => group.rootId === approvedId && group.sessionsWithheld);
+}
+
 export function resolveLocalRoute(
   groups: readonly DeveloperSessionGroup[],
   wanted: { rootId: string; threadId: string },
@@ -1378,11 +1428,19 @@ export function resolveLocalRoute(
   const group = groups.find((candidate) => candidate.rootId === wanted.rootId);
   const session = group?.sessions.find((candidate) => candidate.id === wanted.threadId);
   if (session) return { kind: 'found', session };
-  if (group?.sessionsWithheld === true) {
+  if (localRouteCommandAccessGroup(groups, wanted.rootId)) {
     return { kind: 'waiting', notice: LOCAL_CODE_COPY.sessionWithheld };
   }
-  if (group?.unavailable) {
-    return { kind: 'waiting', notice: `${group.unavailable.message} ${group.unavailable.hint}` };
+  const listing =
+    group ?? groups.find((candidate) => candidate.rootId === approvedRootId(wanted.rootId));
+  if (listing?.unavailable) {
+    return {
+      kind: 'waiting',
+      notice: `${listing.unavailable.message} ${listing.unavailable.hint}`,
+    };
+  }
+  if (!group && listing?.worktreesUnavailable) {
+    return { kind: 'waiting', notice: listing.worktreesUnavailable };
   }
   if (listError !== null) return { kind: 'waiting', notice: LOCAL_CODE_COPY.sessionUnreadable };
   return { kind: 'missing' };
@@ -1838,8 +1896,13 @@ export const LOCAL_WORKTREE_SETTINGS_COPY = {
 } as const;
 
 export const LOCAL_TERMINAL_COPY = {
+  commandMode: 'Command mode',
+  commandModeHint:
+    'Run one program at a time. Pipes, redirects, and shell variables are unavailable.',
+  latestOutput: 'Back to latest output',
   starting: 'Starting the shell…',
   failed: 'The terminal could not start.',
+  closeFailed: 'The terminal could not be confirmed closed. Try again.',
   exited: (code: number | null): string =>
     code === null ? 'The shell ended.' : `The shell ended with exit code ${code}.`,
   restart: 'Start a new shell',
@@ -1971,6 +2034,7 @@ export const LOCAL_PANEL_COPY = {
   stopTabDescription: (command: string): string =>
     `${command} is still running here. Closing the terminal stops it and clears what it printed.`,
   stopTabConfirm: 'Stop and close',
+  stopShellTabDescription: 'Closing this terminal stops its shell and any jobs running in it.',
 } as const;
 
 /** The last segment of a folder path, as a shell prompt names it. */

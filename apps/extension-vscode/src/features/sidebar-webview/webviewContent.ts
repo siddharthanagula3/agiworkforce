@@ -9,6 +9,8 @@ import {
 import {
   DEVELOPER_AGENT_MODES,
   DEVELOPER_AGENT_MODE_LABELS,
+  DEVELOPER_AUTO_MODE_DESCRIPTION,
+  DEVELOPER_ASK_MODE_DESCRIPTION,
   DEVELOPER_REASONING_EFFORTS,
   DEVELOPER_REASONING_EFFORT_LABELS,
   DEVELOPER_CHILD_TASK_STATE_LABELS,
@@ -21,10 +23,16 @@ import {
   agiVsCodeCssVars,
   cssVarsToString,
 } from '@agiworkforce/design-tokens';
-import type { ComposerFollowUpBehavior } from '../../platform/config';
-import { SURFACE_MENU_ITEMS } from '../surfaces/surfaceMenu';
 import {
+  DEFAULT_CONTEXT_WARNING_PERCENT,
+  type ComposerFollowUpBehavior,
+} from '../../platform/config';
+import { slashMenuEntries, SURFACE_MENU_ITEMS } from '../surfaces/surfaceMenu';
+import {
+  MAX_COMPOSER_ATTACHMENT_BATCH,
+  MAX_COMPOSER_ATTACHMENT_BYTES,
   MAX_SEND_MESSAGE_CHARS,
+  MAX_SESSION_GROUP_SELECTION,
   MAX_SEND_MESSAGE_REFERENCES,
   MAX_SIDE_QUESTION_CHARS,
   type SessionBinding,
@@ -57,8 +65,8 @@ function serializeForInlineScript(value: unknown): string {
 
 const DEVELOPER_MODE_DESCRIPTIONS: Record<DeveloperAgentMode, string> = {
   plan: 'Generate a plan; no edits until approved',
-  ask: 'Confirm every edit before it runs',
-  auto: 'Reads and edits files without asking. Asks before running commands or changing git hooks and MCP settings.',
+  ask: DEVELOPER_ASK_MODE_DESCRIPTION,
+  auto: DEVELOPER_AUTO_MODE_DESCRIPTION,
   bypass: 'Skip all approval prompts (dangerous)',
 };
 
@@ -69,11 +77,24 @@ const DEVELOPER_MODE_ICONS: Record<DeveloperAgentMode, string> = {
   bypass: 'warning',
 };
 
-const DEVELOPER_MODE_OPTIONS = DEVELOPER_AGENT_MODES.map((mode) => ({
+const EDIT_AUTOMATICALLY_LABEL = 'Edit automatically';
+const developerModeOption = (mode: DeveloperAgentMode) => ({
   value: mode,
   label: DEVELOPER_AGENT_MODE_LABELS[mode],
   description: DEVELOPER_MODE_DESCRIPTIONS[mode],
-}));
+});
+const DEVELOPER_MODE_OPTIONS = DEVELOPER_AGENT_MODES.flatMap((mode) =>
+  mode === 'auto'
+    ? [
+        {
+          value: 'edit-automatically',
+          label: EDIT_AUTOMATICALLY_LABEL,
+          description: 'Apply ordinary edits automatically and ask before every shell command.',
+        },
+        developerModeOption(mode),
+      ]
+    : [developerModeOption(mode)],
+);
 
 const DEVELOPER_EFFORT_OPTIONS = DEVELOPER_REASONING_EFFORTS.map((effort) => ({
   value: effort,
@@ -148,6 +169,9 @@ export function getWebviewContent(
     webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'agi-symbol.png')).toString(),
   );
 
+  const emptyStateContent = `<h2 class="empty-state-headline" id="emptyStateHeadline">Start a conversation</h2>
+        <p class="empty-state-copy" id="emptyStateCopy">Ask about your code or describe a change.</p>`;
+
   return /* html */ `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -221,6 +245,7 @@ export function getWebviewContent(
       --type-code-size: max(12px, calc(var(--vscode-font-size, 13px) - 1px));
       --type-code-height: 1.5;
       --message-actions-gap: 4px;
+      --conversation-width: 768px;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -246,10 +271,10 @@ export function getWebviewContent(
       display: flex;
       align-items: center;
       justify-content: space-between;
-      min-height: 48px;
-      padding: 8px 10px;
+      min-height: 44px;
+      padding: 6px 10px;
       border-bottom: 1px solid var(--border);
-      background: var(--bg-elevated);
+      background: var(--bg-base);
       flex-shrink: 0;
     }
 
@@ -417,82 +442,42 @@ export function getWebviewContent(
     /* ── First-run onboarding ── */
     .onboarding {
       position: fixed;
-      inset: 44px 0 0;
+      inset: 0;
+      display: flex;
       z-index: var(--z-overlay);
       min-height: 0;
       padding: clamp(14px, 4vw, 24px);
       overflow: auto;
-      background: var(--vscode-sideBar-background, var(--bg-base));
+      background: var(--bg-base);
     }
+    .onboarding[hidden] { display: none; }
     .onboarding-shell {
       display: flex;
       flex-direction: column;
-      width: min(100%, 560px);
-      min-height: 100%;
-      margin: 0 auto;
-    }
-    .onboarding-topline {
-      display: flex;
-      gap: 12px;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: clamp(18px, 5vh, 34px);
+      width: min(100%, 400px);
+      margin: auto;
     }
     .onboarding-progress {
       color: var(--text-secondary);
-      font-size: var(--type-caption-size);
-      line-height: var(--type-caption-height);
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
       font-variant-numeric: tabular-nums;
-      font-weight: 600;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
+      margin-bottom: 12px;
     }
-    .onboarding-dots {
-      display: flex;
-      gap: 5px;
-      align-items: center;
-    }
-    .onboarding-dot {
-      width: 18px;
-      height: 3px;
-      border: 0;
-      border-radius: var(--corner-pill);
-      background: var(--border);
-    }
-    .onboarding-dot.active {
-      background: var(--accent-teal);
-    }
-    .onboarding-step {
-      display: flex;
-      flex: 1;
-      flex-direction: column;
-      justify-content: flex-end;
-      animation: onboarding-enter var(--duration-quick) var(--curve-standard);
-    }
-    .onboarding-step[hidden] {
-      display: none;
-    }
-    @keyframes onboarding-enter {
-      from { opacity: 0; transform: translateY(6px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
+    .onboarding-step[hidden] { display: none; }
     .onboarding h2 {
-      max-width: 430px;
       color: var(--text-primary);
-      font-size: var(--type-display-size);
-      font-weight: 650;
-      letter-spacing: -0.035em;
-      line-height: var(--type-display-height);
+      font-size: var(--type-h2-size);
+      font-weight: 600;
+      line-height: var(--type-h2-height);
     }
-    /* The step heading takes focus only so a screen reader announces the new
-       step; it is not tabbable, so a ring on it reads as a defect. */
     .onboarding h2:focus,
     .onboarding h2:focus-visible {
       outline: none;
     }
     .onboarding-lede {
       max-width: 490px;
-      margin-top: 13px;
+      margin-top: 6px;
       color: var(--text-secondary);
       font-size: var(--type-body-size);
       line-height: var(--type-body-height);
@@ -503,6 +488,7 @@ export function getWebviewContent(
       gap: 7px;
       margin-top: 14px;
     }
+    .onboarding-inline-actions:has(> :only-child[hidden]) { display: none; }
     .onboarding-link,
     .onboarding-button {
       border: 1px solid var(--border);
@@ -527,8 +513,8 @@ export function getWebviewContent(
       grid-template-columns: auto 1fr auto;
       gap: 8px;
       align-items: center;
-      margin-top: clamp(22px, 6vh, 40px);
-      padding-top: 14px;
+      margin-top: 20px;
+      padding-top: 12px;
       border-top: 1px solid var(--border);
     }
     .onboarding-button {
@@ -545,13 +531,10 @@ export function getWebviewContent(
       /* Both values are host button aliases, so they change as one pair. */
       color: var(--button-text);
     }
-    .onboarding-button:disabled {
-      cursor: not-allowed;
-      opacity: 0.42;
-    }
+    .onboarding-button:disabled { visibility: hidden; }
     .onboarding-skip {
       justify-self: center;
-      padding: 5px 8px;
+      padding: 5px 2px;
       border: 0;
       background: transparent;
       color: var(--text-secondary);
@@ -576,14 +559,43 @@ export function getWebviewContent(
     }
 
     /* ── Messages ── */
+    .transcript {
+      display: flex;
+      flex: 1;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .transcript-prompt {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
+      background: var(--bg-base);
+      color: var(--text-secondary);
+      border: 0;
+      border-bottom: 1px solid var(--border);
+      font: inherit;
+      font-size: var(--type-caption-size);
+      text-align: start;
+      cursor: pointer;
+    }
+    .transcript-prompt[hidden] { display: none; }
+    .transcript-prompt:hover { color: var(--text-primary); }
+    .transcript-prompt:focus-visible { outline-offset: -2px; }
+    .transcript-prompt__text {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
     #messages {
       flex: 1;
       overflow-y: auto;
-      padding: 10px max(12px, calc((100% - 768px) / 2)) 16px;
+      padding: 10px max(12px, calc((100% - var(--conversation-width)) / 2)) 16px;
       display: flex;
       flex-direction: column;
       gap: 10px;
-      scroll-behavior: smooth;
     }
 
     #messages::-webkit-scrollbar { width: 4px; }
@@ -604,6 +616,7 @@ export function getWebviewContent(
 
     .message.user {
       background: var(--bg-overlay);
+      max-width: 85%;
       align-self: flex-end;
       color: var(--text-primary);
       border: 1px solid var(--border);
@@ -636,6 +649,32 @@ export function getWebviewContent(
       color: var(--text-secondary);
       font-size: var(--type-caption-size);
       line-height: var(--type-caption-height);
+      overflow-wrap: anywhere;
+    }
+    .sent-context {
+      margin-top: 6px;
+      color: var(--text-secondary);
+      text-align: start;
+      white-space: normal;
+    }
+    .sent-context summary {
+      width: fit-content;
+      cursor: pointer;
+      font-size: var(--type-caption-size);
+    }
+    .sent-context summary:focus-visible,
+    .sent-context pre:focus-visible {
+      outline: 2px solid var(--vscode-focusBorder, var(--accent-teal));
+      outline-offset: 2px;
+    }
+    .sent-context ul { margin: 6px 0 0; padding: 0; list-style: none; }
+    .sent-context li { margin-left: 0; list-style: none; }
+    .sent-context li + li { margin-top: 8px; }
+    .sent-context li > div { color: var(--text-primary); overflow-wrap: anywhere; }
+    .sent-context pre {
+      max-height: 12em;
+      overflow: auto;
+      white-space: pre-wrap;
       overflow-wrap: anywhere;
     }
     .message.user[data-delivery-state='running']::after { content: 'Running'; }
@@ -692,6 +731,13 @@ export function getWebviewContent(
       color: var(--text-primary);
     }
     .message-action[aria-pressed='true'] { color: var(--text-primary); }
+    .message.assistant .message-actions:has(.message-action--bookmark[aria-pressed='true']) {
+      opacity: 1;
+    }
+    @media (hover: hover) {
+      .message.assistant:not(:hover) .message-actions:has(.message-action--bookmark[aria-pressed='true']):not(:focus-within)
+        .message-action:not(.message-action--bookmark) { opacity: 0; }
+    }
     .message-sources {
       margin-top: var(--message-actions-gap);
       color: var(--text-secondary);
@@ -702,6 +748,14 @@ export function getWebviewContent(
     .message-sources__list { margin: 4px 0 0; padding-left: 20px; }
     .message-sources__list li { margin: 2px 0; }
     .message-sources__host { margin-left: 6px; }
+    .message-cache {
+      margin-top: 6px;
+      color: var(--text-secondary);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      white-space: normal;
+    }
+    .message-cache span { display: inline-block; max-width: 100%; }
     .message-action--regenerate { display: none; }
     .message.assistant.message--latest .message-action--regenerate { display: inline-flex; }
     .message-meta {
@@ -880,6 +934,46 @@ export function getWebviewContent(
       line-height: var(--type-label-height);
     }
     .approval-card__action:hover { background: var(--hover); }
+    .question-options {
+      display: grid;
+      gap: 8px;
+      flex: 1 0 100%;
+      min-width: 0;
+    }
+    .question-option {
+      min-width: 0;
+      padding: 8px;
+      border: 1px solid var(--border);
+      border-radius: var(--corner-control);
+    }
+    .question-option .approval-card__action {
+      max-width: 100%;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      text-align: start;
+    }
+    .question-option__description {
+      margin: 4px 0 0;
+      color: var(--text-secondary);
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+    .question-option__preview {
+      margin-top: 4px;
+      color: var(--text-secondary);
+    }
+    .question-option__preview summary { cursor: pointer; }
+    .question-option__preview summary:focus-visible,
+    .question-option__preview pre:focus-visible {
+      outline: 2px solid var(--vscode-focusBorder, var(--accent-teal));
+      outline-offset: 2px;
+    }
+    .question-option__preview pre {
+      max-height: 12em;
+      overflow: auto;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
     .approval-card__action--primary {
       border-color: transparent;
       background: var(--accent-teal);
@@ -929,7 +1023,10 @@ export function getWebviewContent(
     /* ── Input area / composer (design-spec §7) ── */
     .input-area {
       background: var(--bg-base);
-      padding: 8px 10px 12px;
+      width: 100%;
+      max-width: calc(var(--conversation-width) + 24px);
+      align-self: center;
+      padding: 6px 12px 8px;
       display: flex;
       flex-direction: column;
       gap: 0;
@@ -941,16 +1038,16 @@ export function getWebviewContent(
     .composer-card {
       background: var(--vscode-input-background, var(--bg-elevated));
       border: 1px solid var(--vscode-input-border, var(--border));
-      border-radius: var(--corner-panel);
+      border-radius: var(--corner-overlay);
       position: relative;
       display: flex;
       flex-direction: column;
-      min-height: 84px;
       overflow: visible;
       transition: border-color var(--duration-quick) var(--curve-standard);
     }
-    .composer-card:focus-within {
-      border-color: var(--vscode-focusBorder, var(--accent-teal));
+    .composer-card:has(#userInput:focus-visible:not([data-pointer-focus])) {
+      outline: 2px solid var(--text-primary);
+      outline-offset: 2px;
     }
 
     .model-row { display: none; } /* hidden, model is now in bottom controls row */
@@ -959,7 +1056,7 @@ export function getWebviewContent(
       display: flex;
       gap: 0;
       align-items: flex-end;
-      padding: 11px 12px 0;
+      padding: 10px 12px 0;
     }
 
     #userInput {
@@ -985,12 +1082,12 @@ export function getWebviewContent(
          in the one control they type into. */
       font-size: var(--type-body-size);
       line-height: var(--type-body-height);
-      min-height: 46px;
+      min-height: 1.5em;
       max-height: 140px;
       padding: 0;
       resize: none;
     }
-    #userInput::placeholder { color: var(--text-secondary); opacity: 0.7; }
+    #userInput::placeholder { color: var(--text-secondary); }
 
     /* ── Bottom controls row ── */
     .composer-bottom {
@@ -998,7 +1095,7 @@ export function getWebviewContent(
       align-items: center;
       gap: 2px;
       min-width: 0;
-      padding: 4px 6px 6px;
+      padding: 4px 7px 7px;
     }
 
     /* Plus button */
@@ -1039,10 +1136,21 @@ export function getWebviewContent(
       height: var(--control-md);
       padding: 0 6px;
       white-space: nowrap;
-      min-width: 72px;
-      max-width: 160px;
+      min-width: 54px;
+      max-width: 200px;
+      margin-inline-start: auto;
       overflow: hidden;
       transition: background var(--duration-instant) var(--curve-standard), color var(--duration-instant) var(--curve-standard);
+    }
+    .model-pill::after, .controls-summary::after {
+      content: "";
+      inline-size: 5px;
+      block-size: 5px;
+      border-inline-end: 1px solid currentColor;
+      border-block-end: 1px solid currentColor;
+      transform: rotate(45deg) translateY(-2px);
+      flex-shrink: 0;
+      margin-inline: 5px 2px;
     }
     .model-pill-name {
       overflow: hidden;
@@ -1053,10 +1161,10 @@ export function getWebviewContent(
     .model-pill[aria-expanded="true"] { background: var(--hover); color: var(--text-primary); }
 
     #sendBtn {
-      background: var(--accent-terra);
+      background: var(--accent-teal);
       border: none;
-      border-radius: 50%;
-      color: var(--accent-terra-foreground);
+      border-radius: var(--corner-pill);
+      color: var(--button-text);
       cursor: pointer;
       font-size: 14px;
       height: var(--control-md);
@@ -1065,12 +1173,9 @@ export function getWebviewContent(
       align-items: center;
       justify-content: center;
       flex-shrink: 0;
-      margin-left: auto;
-      transition: opacity var(--duration-quick) var(--curve-standard),
-                  transform var(--duration-instant) var(--curve-standard),
-                  width var(--duration-quick) var(--curve-standard);
+      transition: background var(--duration-quick) var(--curve-standard);
     }
-    #sendBtn:hover:not(:disabled) { opacity: 0.88; transform: scale(1.05); }
+    #sendBtn:hover:not(:disabled) { background: var(--vscode-button-hoverBackground, var(--accent-teal)); }
     #sendBtn:disabled {
       background: color-mix(in srgb, var(--text-secondary) 28%, transparent);
       color: var(--text-secondary);
@@ -1139,6 +1244,8 @@ export function getWebviewContent(
     }
     .follow-up-status.visible { display: inline; }
     .follow-up-status.error { color: var(--error); }
+    #dictationBtn[hidden], #dictationStatus:empty { display: none; }
+    #dictationStatus { display: inline; white-space: normal; }
 
     /* ── Plus-menu popover ── */
     .plus-menu {
@@ -1152,7 +1259,10 @@ export function getWebviewContent(
       box-shadow: var(--elevation-2);
       width: min(300px, calc(100vw - 20px));
       z-index: var(--z-dropdown);
-      overflow: hidden;
+      max-height: min(480px, var(--plus-menu-room, 50vh));
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      scrollbar-width: thin;
       padding: 5px;
     }
     .plus-menu.open { display: block; }
@@ -1161,7 +1271,8 @@ export function getWebviewContent(
       display: flex;
       align-items: center;
       gap: 8px;
-      padding: 8px;
+      padding: 6px 8px;
+      min-height: var(--control-lg);
       font-size: var(--type-label-size);
       line-height: var(--type-label-height);
       color: var(--text-secondary);
@@ -1175,10 +1286,9 @@ export function getWebviewContent(
       font-family: inherit;
     }
     .plus-menu-item:hover { background: var(--bg-overlay); color: var(--text-primary); }
-    .plus-menu-item[disabled] {
-      cursor: default;
-      opacity: 0.5;
-    }
+    .plus-menu-item:focus-visible { outline-offset: -2px; }
+    .plus-menu-item[disabled] { cursor: default; }
+    .plus-menu-item[disabled] .plus-menu-title { color: var(--text-secondary); }
     .plus-menu-item[disabled]:hover { background: transparent; color: var(--text-secondary); }
     .plus-menu-item[hidden] { display: none; }
     .plus-menu-item[aria-checked="true"] {
@@ -1314,10 +1424,20 @@ export function getWebviewContent(
     h2, h3, h4 { margin: 8px 0 4px; font-weight: 600; }
     h2 { font-size: var(--type-h2-size); line-height: var(--type-h2-height); } h3 { font-size: var(--type-h3-size); line-height: var(--type-h3-height); } h4 { font-size: var(--type-body-size); line-height: var(--type-body-height); }
     hr { border: none; border-top: 1px solid var(--border); margin: 8px 0; }
-    .message table { display: block; max-width: 100%; margin: 8px 0; overflow-x: auto; border-collapse: collapse; white-space: normal; }
+    [data-math="display"] {
+      display: block;
+      max-width: 100%;
+      overflow-x: auto;
+      text-align: center;
+    }
+    .message-table-scroll { max-width: 100%; margin: 8px 0; overflow-x: auto; }
+    .message-table-scroll:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
+    .message table { border-collapse: collapse; white-space: normal; overflow-wrap: normal; word-break: normal; }
     .message th, .message td { padding: 4px 10px; border: 1px solid var(--border); text-align: left; vertical-align: top; }
-    .message th { background: var(--bg-overlay); font-weight: 600; }
+    .message th { background: var(--bg-overlay); font-weight: 600; white-space: nowrap; }
     li { margin-left: 16px; list-style: disc; }
+    li[data-task-item] { list-style: none; }
+    li[data-task-item] [role="checkbox"] { margin-inline-end: 0.4em; }
     ol > li { list-style: decimal; }
     blockquote { border-left: 2px solid var(--accent-teal); padding-left: 8px; color: var(--text-secondary); margin: 6px 0; }
     .code-block-wrapper { position: relative; margin: 8px 0; }
@@ -1372,14 +1492,15 @@ export function getWebviewContent(
       background: var(--hover);
     }
     .controls-summary {
-      flex-shrink: 4;
+      flex-shrink: 0;
       min-width: 36px;
       max-width: 120px;
       padding: 0 6px;
       display: inline-flex;
       align-items: center;
-      gap: 4px;
+      gap: 3px;
     }
+    .controls-summary::after { margin-inline-start: 2px; }
     .controls-summary__icon { flex-shrink: 0; font-size: 14px; }
     .controls-summary__label {
       min-width: 0;
@@ -1390,6 +1511,14 @@ export function getWebviewContent(
     .chip-separator {
       flex: 1;
     }
+
+    #sessionIdentity,
+    #usageMeterBanner,
+    #usageMeterCollapsed,
+    #meterBuckets,
+    #meterCloudIcon,
+    #meterBarWrap,
+    #upgradeBtn { display: none; }
 
     /* ── Usage meter banner ── */
     .usage-meter-banner {
@@ -1648,8 +1777,18 @@ export function getWebviewContent(
       font: inherit;
       text-align: left;
     }
-    .activity-group__summary:hover { background: var(--bg-overlay); }
-    .activity-group__icon { color: var(--accent-teal); }
+    .activity-group--collapsed {
+      border-color: transparent;
+      background: transparent;
+      margin-bottom: 0;
+    }
+    .activity-group--collapsed .activity-group__summary {
+      min-height: var(--control-lg);
+      padding-block: 4px;
+    }
+    .activity-group__summary:hover { background: var(--hover); }
+    .activity-group__summary:focus-visible { outline-offset: -2px; }
+    .activity-group__icon { color: var(--text-secondary); }
     .activity-group[data-status='working'] .activity-group__icon {
       animation: tool-spin var(--duration-spin) linear infinite;
     }
@@ -1741,7 +1880,7 @@ export function getWebviewContent(
       font-size: var(--type-caption-size);
       line-height: var(--type-caption-height);
       margin-left: 4px;
-      max-width: 220px;
+      max-width: min(100%, 260px);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -1851,17 +1990,20 @@ export function getWebviewContent(
       display: flex;
       flex-wrap: wrap;
       align-items: center;
-      gap: 8px;
-      margin-top: 8px;
+      justify-content: space-between;
+      gap: 6px 10px;
+      margin-top: 10px;
+      padding-top: 6px;
+      border-top: 1px solid var(--border);
       color: var(--text-secondary);
       font-size: var(--type-label-size);
       line-height: var(--type-label-height);
     }
     .turn-changes__review {
-      min-height: 28px;
-      padding: 0 12px;
-      border: 1px solid var(--border);
-      border-radius: var(--corner-pill);
+      min-height: var(--control-md);
+      padding: 0 8px;
+      border: 0;
+      border-radius: var(--corner-control);
       background: transparent;
       color: var(--text-primary);
       cursor: pointer;
@@ -1899,10 +2041,21 @@ export function getWebviewContent(
       padding: 6px 10px;
       color: var(--text-primary);
     }
-    .subagents__list { list-style: none; margin: 0; padding: 0 10px 8px; }
-    .subagents__row { display: flex; gap: 6px; padding: 2px 0; }
-    .subagents__title { color: var(--text-primary); min-width: 0; overflow-wrap: anywhere; }
+    .subagents__list {
+      list-style: none;
+      margin: 0;
+      padding: 0 10px 8px;
+      max-block-size: min(14rem, 32vh);
+      overflow-y: auto;
+    }
+    .subagents__list:focus-visible {
+      outline: 2px solid var(--vscode-focusBorder, var(--accent-teal));
+      outline-offset: -2px;
+    }
+    .subagents__row { display: flex; align-items: center; gap: 6px; padding: 2px 0; }
+    .subagents__title { color: var(--text-primary); flex: 1; min-width: 0; overflow-wrap: anywhere; }
     .subagents__state { color: var(--text-secondary); flex: none; }
+    .subagents__action { flex: none; min-height: var(--control-sm); padding-inline: 8px; }
     .side-question {
       border: 1px solid var(--border);
       border-radius: var(--corner-field);
@@ -1998,26 +2151,16 @@ export function getWebviewContent(
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 10px;
+      gap: 4px;
       min-height: 100%;
-      padding: 32px 12px 20px;
+      padding: 16px 4px;
       text-align: center;
     }
-
-    .empty-state-mark {
-      width: 28px;
-      height: 28px;
-      color: var(--text-secondary);
-      opacity: 0.7;
-      line-height: 0;
-    }
-    .empty-state-mark img { display: block; width: 100%; height: 100%; object-fit: contain; }
 
     .empty-state-headline {
       font-size: var(--type-title-size);
       font-weight: 600;
       color: var(--text-primary);
-      letter-spacing: -0.01em;
       line-height: var(--type-title-height);
     }
 
@@ -2029,38 +2172,17 @@ export function getWebviewContent(
     }
 
     .empty-state--has-recents {
+      align-items: stretch;
       justify-content: flex-start;
-      padding-top: 12px;
-    }
-    .empty-state--has-recents .empty-state-mark { margin-top: auto; }
-    .empty-state--has-recents .empty-state-copy { margin-bottom: auto; }
-
-    .terminal-hint {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-wrap: wrap;
-      gap: 2px 4px;
-      padding: 4px 12px;
-      color: var(--text-secondary);
-      font-size: var(--type-body-small-size);
-      line-height: var(--type-body-small-height);
-      text-align: center;
-      flex-shrink: 0;
-    }
-    .terminal-hint[hidden] { display: none; }
-    .terminal-hint-link {
-      background: none;
-      border: none;
-      padding: 0;
-      color: var(--text-primary);
-      font: inherit;
-      text-decoration: underline;
-      cursor: pointer;
-      border-radius: var(--corner-control);
+      gap: 8px;
+      padding: 12px 0 0;
+      text-align: start;
     }
 
-    .recent-chats {
+    .empty-state--has-recents > .empty-state-headline,
+    .empty-state--has-recents > .empty-state-copy { display: none; }
+
+    .recent-chats, .start-suggestions {
       align-self: stretch;
       display: flex;
       flex-direction: column;
@@ -2073,9 +2195,7 @@ export function getWebviewContent(
       color: var(--text-secondary);
       font-size: var(--type-label-size);
       line-height: var(--type-label-height);
-      text-transform: uppercase;
       font-weight: 600;
-      letter-spacing: 0.02em;
       padding: 0 6px 4px;
     }
 
@@ -2097,6 +2217,7 @@ export function getWebviewContent(
       width: 100%;
     }
     .recent-chat-row:hover { background: var(--hover); }
+    .recent-chat-row:focus-visible { outline-offset: -2px; }
 
     .recent-chat-title {
       flex: 1;
@@ -2169,6 +2290,8 @@ export function getWebviewContent(
     .actions-menu-item:hover,
     .actions-menu-item:focus-visible { background: var(--hover); outline: none; }
     .actions-menu-item .codicon { color: var(--text-secondary); }
+    .actions-menu-item .focus-view-check { margin-inline-start: auto; visibility: hidden; }
+    .actions-menu-item[aria-checked='true'] .focus-view-check { visibility: visible; }
 
     .actions-menu-separator {
       height: 1px;
@@ -2274,13 +2397,94 @@ export function getWebviewContent(
       padding: 8px 6px 12px;
     }
 
-    .sessions-sheet-row {
+    .sessions-filters {
       display: flex;
       align-items: center;
+      justify-content: space-between;
       gap: 8px;
+      padding: 6px 12px 0;
+      color: var(--text-secondary);
+      font-size: var(--type-caption-size);
+    }
+    .sessions-filters[hidden], .sessions-group-filter[hidden],
+    .sessions-filters .icon-btn[hidden] { display: none; }
+    .sessions-unread-filter { display: flex; align-items: center; gap: 6px; }
+    .sessions-group-filter {
+      max-width: 55%;
+      padding: 4px;
+      color: var(--vscode-input-foreground, var(--text-primary));
+      background: var(--vscode-input-background, var(--bg-elevated));
+      border: 1px solid var(--border);
+      border-radius: var(--corner-control);
+      font: inherit;
+    }
+    .sessions-group-controls { display: flex; align-items: center; gap: 4px; min-width: 0; }
+    .sessions-group-controls .sessions-group-filter { max-width: 100%; min-width: 0; }
+    .sessions-group-controls .icon-btn { flex-shrink: 0; }
+    .sessions-sheet-entry {
+      display: flex;
+      align-items: center;
+      position: relative;
+      border-radius: var(--corner-field);
+    }
+    .sessions-sheet-entry:hover, .sessions-sheet-entry:focus-within { background: var(--hover); }
+    .sessions-row-actions { display: flex; align-items: center; gap: 0; }
+    @media (hover: hover) and (pointer: fine) {
+      .sessions-row-actions {
+        position: absolute;
+        inset-inline-end: 6px;
+        inset-block-end: 3px;
+        opacity: 0;
+        pointer-events: none;
+      }
+      .sessions-sheet-entry:hover .sessions-row-actions,
+      .sessions-sheet-entry:focus-within .sessions-row-actions {
+        opacity: 1;
+        pointer-events: auto;
+        background: var(--bg-base);
+        border-radius: var(--corner-control);
+      }
+      .sessions-row-actions .icon-btn { width: var(--control-sm); height: var(--control-sm); }
+      .sessions-sheet-entry:has(.sessions-row-actions):is(:hover, :focus-within) .sessions-sheet-row-meta {
+        padding-inline-end: calc(4px + 2 * var(--control-sm));
+      }
+      .sessions-sheet-entry:has([data-session-pin-id]):is(:hover, :focus-within) .sessions-sheet-row-meta {
+        padding-inline-end: calc(4px + 3 * var(--control-sm));
+      }
+    }
+    .sessions-sheet-entry .sessions-sheet-row { flex: 1; min-width: 0; }
+    .sessions-sheet-entry .icon-btn { flex-shrink: 0; }
+    .sessions-sheet-entry input[type='checkbox'] { margin: 0 4px 0 8px; flex-shrink: 0; }
+    .sessions-bulk-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      color: var(--text-secondary);
+      font-size: var(--type-caption-size);
+    }
+    .sessions-bulk-actions[hidden] { display: none; }
+    .sessions-bulk-actions button {
+      padding: 4px 8px;
+      border-radius: var(--corner-control);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+      background: var(--bg-elevated);
+      font: inherit;
+      cursor: pointer;
+    }
+    .sessions-bulk-actions button:disabled { opacity: .55; cursor: default; }
+    .sessions-sheet-row[data-unread='true'] .sessions-sheet-row-title { font-weight: 650; }
+    .sessions-sheet-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: baseline;
+      column-gap: 8px;
+      row-gap: 2px;
       width: 100%;
       min-height: var(--control-lg);
-      padding: 0 8px;
+      padding: 6px 8px;
       background: none;
       border: none;
       border-radius: var(--corner-field);
@@ -2289,43 +2493,25 @@ export function getWebviewContent(
       font: inherit;
       font-size: var(--type-body-size);
       line-height: var(--type-body-height);
-      text-align: left;
+      text-align: start;
     }
-    .sessions-sheet-row:hover { background: var(--hover); }
-    .sessions-sheet-row.has-snippet { flex-wrap: wrap; row-gap: 2px; padding-top: 6px; padding-bottom: 6px; }
+    .sessions-sheet-row:focus-visible { outline-offset: -2px; }
+    .sessions-sheet-row-title,
+    .sessions-sheet-row-meta,
     .sessions-sheet-row-snippet {
-      flex-basis: 100%;
       min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      text-align: start;
+    }
+    .sessions-sheet-row-age, .sessions-sheet-row-meta, .sessions-sheet-row-snippet {
       color: var(--text-secondary);
       font-size: var(--type-caption-size);
       line-height: var(--type-caption-height);
     }
-    .sessions-sheet-row-title {
-      flex: 1;
-      min-width: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .sessions-sheet-row-age { color: var(--text-secondary); font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
-    .sessions-sheet-row-branch {
-      font-family: var(--vscode-editor-font-family, monospace);
-      max-width: 40%;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .sessions-sheet-row-dot {
-      width: 4px;
-      height: 4px;
-      border-radius: 50%;
-      background: var(--text-secondary);
-      opacity: 0.6;
-    }
+    .sessions-sheet-row-age { white-space: nowrap; }
+    .sessions-sheet-row-meta, .sessions-sheet-row-snippet { grid-column: 1 / -1; }
+    .sessions-sheet-row-branch { font-family: var(--type-code-family); }
     .sessions-sheet-empty {
       padding: 16px 10px;
       color: var(--text-secondary);
@@ -2435,21 +2621,14 @@ export function getWebviewContent(
       flex-wrap: wrap;
       align-items: center;
       gap: 6px;
-      padding: 6px 4px 0;
+      padding: 4px 2px 0;
       color: var(--text-secondary);
       font-size: var(--type-label-size);
       line-height: var(--type-label-height);
     }
 
-    .composer-status-route {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      min-width: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
+    .composer-status:has(.composer-status-signin[hidden]) { display: none; }
+
     .composer-status-signin {
       margin-left: auto;
       padding: 0;
@@ -2487,6 +2666,12 @@ export function getWebviewContent(
     @media (max-width: 400px) {
       /* Effort is one click away in the same popover; the model name is not. */
       .model-pill-effort { display: none; }
+      .subagents__row:has(.subagents__action) {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        row-gap: 2px;
+      }
+      .subagents__row:has(.subagents__action) .subagents__title { grid-column: 1 / -1; }
     }
 
     @media (max-width: 340px) {
@@ -2496,8 +2681,7 @@ export function getWebviewContent(
       .header-actions { gap: 0; }
       .header-title { display: none; }
       .session-identity { max-width: calc(100vw - 136px); }
-      .controls-summary { max-width: 54px; }
-      .empty-state-copy { max-width: 230px; }
+      .controls-summary { max-width: 88px; }
     }
 
     @media (max-width: 380px) {
@@ -2508,9 +2692,10 @@ export function getWebviewContent(
     }
 
     @media (max-width: 280px) {
-      /* Both chips stay reachable: min-width keeps each clickable and the mode
-         chip gives up its width four times faster than the model name. */
-      .controls-summary { max-width: 46px; }
+      .composer-bottom { flex-wrap: wrap; }
+      .model-pill { flex: 1 1 0; }
+      .controls-summary { max-width: 58px; }
+      .controls-summary .controls-summary__icon { display: none; }
     }
 
     .answer-surface-email, .answer-surface-writing { min-width: 0; margin-block: 12px; }
@@ -2623,6 +2808,9 @@ export function getWebviewContent(
         outline: 2px solid Highlight;
         outline-offset: 2px;
       }
+      .composer-card:has(#userInput:focus-visible:not([data-pointer-focus])) {
+        outline-color: Highlight;
+      }
     }
 
     /* ── Composer drag-drop overlay + attachment strip (2026-05-21 P0 #3) ── */
@@ -2644,8 +2832,8 @@ export function getWebviewContent(
       align-items: center;
       gap: 6px;
       max-width: 220px;
-      padding: 4px 8px;
-      border-radius: var(--corner-pill);
+      padding: 2px 5px 2px 8px;
+      border-radius: var(--corner-field);
       background: var(--bg-overlay);
       border: 1px solid var(--border);
       color: var(--text-secondary);
@@ -2669,11 +2857,12 @@ export function getWebviewContent(
     .attachment-chip__name {
       overflow: hidden;
       text-overflow: ellipsis;
+      min-width: 0;
       flex: 1 1 auto;
     }
     .context-limit-notice {
       display: block;
-      flex-basis: 100%;
+      padding: 6px 12px 0;
       color: var(--text-secondary);
       font-size: var(--type-caption-size);
       line-height: var(--type-caption-height);
@@ -2697,11 +2886,15 @@ export function getWebviewContent(
       color: var(--text-secondary);
       cursor: pointer;
       padding: 0;
-      font-size: 13px;
+      width: var(--control-sm);
+      height: var(--control-sm);
+      border-radius: var(--corner-control);
+      font-size: 14px;
       line-height: 1;
       flex-shrink: 0;
     }
-    .attachment-chip__remove:hover { color: var(--text-primary); }
+    .attachment-chip__remove:hover { color: var(--text-primary); background: var(--hover); }
+    .attachment-chip__remove:focus-visible { outline-offset: -2px; }
 
     .browse-context-strip {
       display: flex;
@@ -2717,13 +2910,13 @@ export function getWebviewContent(
   <div class="header">
     <div class="header-left">
       <span class="brand-mark" aria-hidden="true"><img src="${markUri}" alt="" width="18" height="18" /></span>
-      <span class="header-title">AGI</span>
+      <span class="header-title">Chat</span>
       <span
         class="session-identity"
         id="sessionIdentity"
+        style="display: none"
         role="status"
         aria-live="polite"
-        style="display:none"
       >
         <span class="session-identity-dot" aria-hidden="true"></span>
         <span class="session-identity-copy">
@@ -2753,6 +2946,19 @@ export function getWebviewContent(
           <span class="codicon codicon-ellipsis" aria-hidden="true"></span>
         </button>
         <div class="actions-menu" id="actionsMenu" role="menu" aria-label="${PRODUCT_NAMES.code} surfaces">
+          <button type="button" class="actions-menu-item" role="menuitem" id="openOutputStyles">
+            <span class="codicon codicon-symbol-text" aria-hidden="true"></span>
+            <span>Output style</span>
+          </button>
+          <button type="button" class="actions-menu-item" role="menuitem" id="openNextEffort">
+            <span class="codicon codicon-dashboard" aria-hidden="true"></span>
+            <span>Next message effort</span>
+          </button>
+          <button type="button" class="actions-menu-item" role="menuitemcheckbox" id="toggleFocusView" aria-checked="false">
+            <span class="codicon codicon-list-selection" aria-hidden="true"></span>
+            <span>Focus view</span>
+            <span class="codicon codicon-check focus-view-check" aria-hidden="true"></span>
+          </button>
           ${SURFACE_MENU_ITEMS.filter((item) => item.id !== 'account')
             .map(
               (item) => `<button
@@ -2766,6 +2972,18 @@ export function getWebviewContent(
           </button>`,
             )
             .join('')}
+          <button type="button" class="actions-menu-item" role="menuitem" id="openReplyBookmarks">
+            <span class="codicon codicon-bookmark" aria-hidden="true"></span>
+            <span>Reply bookmarks</span>
+          </button>
+          <button type="button" class="actions-menu-item" role="menuitem" id="openAnsweredQuestions">
+            <span class="codicon codicon-question" aria-hidden="true"></span>
+            <span>Answered questions</span>
+          </button>
+          <button type="button" class="actions-menu-item" role="menuitem" id="openBackgroundCommands">
+            <span class="codicon codicon-terminal" aria-hidden="true"></span>
+            <span>Background commands</span>
+          </button>
           <div class="actions-menu-separator" role="separator"></div>
           <div class="actions-menu-account">
             <span class="actions-menu-account-name" id="menuAccountName">Not signed in</span>
@@ -2788,6 +3006,9 @@ export function getWebviewContent(
     <div class="sessions-sheet-head">
       <h2 class="sessions-sheet-title">Sessions</h2>
       <div class="sessions-sheet-actions">
+        <button type="button" class="icon-btn" id="selectSessions" title="Select sessions" aria-label="Select sessions" aria-pressed="false">
+          <span class="codicon codicon-checklist" aria-hidden="true"></span>
+        </button>
         <button
           class="icon-btn"
           id="sessionsArchived"
@@ -2824,6 +3045,22 @@ export function getWebviewContent(
       aria-label="Search sessions"
       hidden
     />
+    <div class="sessions-filters" id="sessionsUnreadFilter">
+      <label class="sessions-unread-filter">
+        <input id="sessionsUnreadOnly" type="checkbox" />
+        Unread only
+      </label>
+      <div class="sessions-group-controls">
+        <select class="sessions-group-filter" id="sessionsGroupFilter" aria-label="Session group" hidden></select>
+        <button type="button" class="icon-btn" id="manageSessionGroups" title="Manage session groups" aria-label="Manage session groups" hidden>
+          <span class="codicon codicon-settings-gear" aria-hidden="true"></span>
+        </button>
+      </div>
+    </div>
+    <div class="sessions-bulk-actions" id="sessionsBulkActions" hidden>
+      <span id="sessionsSelectionCount" role="status"></span>
+      <button type="button" id="moveSelectedSessions" disabled>Move to group</button>
+    </div>
     <div class="sessions-sheet-list" id="sessionsSheetList" role="list"></div>
   </section>
 
@@ -2833,23 +3070,15 @@ export function getWebviewContent(
     role="dialog"
     aria-modal="true"
     aria-labelledby="onboardingTitle"
-    style="display:${showOnboarding ? 'flex' : 'none'}"
+    ${showOnboarding ? '' : 'hidden'}
   >
     <div class="onboarding-shell">
-      <div class="onboarding-topline">
-        <span class="onboarding-progress" id="onboardingProgress">Step 1 of 4</span>
-        <div class="onboarding-dots" aria-hidden="true">
-          <span class="onboarding-dot active"></span>
-          <span class="onboarding-dot"></span>
-          <span class="onboarding-dot"></span>
-          <span class="onboarding-dot"></span>
-        </div>
-      </div>
+      <p class="onboarding-progress" id="onboardingProgress">Setup · 1 of 4</p>
 
       <article class="onboarding-step" data-onboarding-step="0">
-        <h2 id="onboardingTitle" tabindex="-1">Build with AGI in this repository.</h2>
+        <h2 id="onboardingTitle" tabindex="-1">Work with your code</h2>
         <p class="onboarding-lede" id="onboardingWorkspaceLede">
-          Ask about code, edit through reviewable diffs, and run approved commands, all scoped to this workspace.
+          Ask about this workspace or describe the change you want to make.
         </p>
         <div class="onboarding-inline-actions">
           <button type="button" class="onboarding-link" id="onboardingWorkspaceAction" hidden>Open folder</button>
@@ -2857,23 +3086,23 @@ export function getWebviewContent(
       </article>
 
       <article class="onboarding-step" data-onboarding-step="1" hidden>
-        <h2 tabindex="-1">Foreground here. Background work follows you.</h2>
+        <h2 tabindex="-1">Follow cloud tasks</h2>
         <p class="onboarding-lede">
           Cloud runs started on any device appear in the Cloud Tasks view, where you can follow, approve, or stop them.
         </p>
       </article>
 
       <article class="onboarding-step" data-onboarding-step="2" hidden>
-        <h2 tabindex="-1">Describe the intent. Inspect the change.</h2>
+        <h2 tabindex="-1">Review changes in your editor</h2>
         <p class="onboarding-lede">
           Proposed code opens in VS Code's own diff view before you accept it.
         </p>
       </article>
 
       <article class="onboarding-step" data-onboarding-step="3" hidden>
-        <h2 tabindex="-1">You choose authority. You verify the result.</h2>
+        <h2 tabindex="-1">Choose how actions are approved</h2>
         <p class="onboarding-lede">
-          Ask, Auto, Plan, or Bypass sets how much a session may do on its own, and the header names the active trust boundary.
+          The mode menu controls which actions need your approval. The session label shows where your work runs.
         </p>
         <div class="onboarding-inline-actions">
           <button type="button" class="onboarding-link" id="onboardingPermissionDocs">Permission docs</button>
@@ -2891,7 +3120,7 @@ export function getWebviewContent(
   </section>
 
   <div class="runtime-status" id="runtimeStatus" role="status" aria-live="polite">
-    <strong id="runtimeStatusTitle">Developer runtime needs setup</strong>
+    <strong id="runtimeStatusTitle" tabindex="-1">Developer runtime needs setup</strong>
     <span id="runtimeStatusMessage">Checking the workspace developer runtime…</span>
     <div class="runtime-status-actions">
       <button type="button" id="runtimeSettingsBtn">Open setup</button>
@@ -2901,9 +3130,9 @@ export function getWebviewContent(
   </div>
 
   <!-- ── Usage meter banner ── -->
-  <div class="usage-meter-banner" id="usageMeterBanner" style="display:none">
-    <span class="codicon codicon-cloud" id="meterCloudIcon" style="display:none" aria-hidden="true"></span>
-    <div class="usage-meter-bar-wrap" id="meterBarWrap" style="display:none">
+  <div class="usage-meter-banner" id="usageMeterBanner">
+    <span class="codicon codicon-cloud" id="meterCloudIcon" aria-hidden="true"></span>
+    <div class="usage-meter-bar-wrap" id="meterBarWrap">
       <div
         class="usage-progress"
         id="meterProgress"
@@ -2913,44 +3142,40 @@ export function getWebviewContent(
         aria-valuemax="100"
         aria-valuenow="0"
       >
-        <div class="usage-progress-fill" id="meterFill" style="width:0%;background:var(--accent-teal)"></div>
+        <div class="usage-progress-fill" id="meterFill"></div>
       </div>
     </div>
     <span class="usage-text" id="meterText"></span>
     <span class="usage-reset" id="meterReset"></span>
-    <button class="upgrade-btn" id="upgradeBtn" style="display:none">Upgrade</button>
+    <button class="upgrade-btn" id="upgradeBtn">Upgrade</button>
     <button class="meter-dismiss-btn" id="meterDismissBtn" title="Collapse meter" aria-label="Collapse usage meter">&#215;</button>
   </div>
   <!-- ── Per-limit usage breakdown ── -->
-  <ul class="usage-bucket-list" id="meterBuckets" style="display:none" aria-label="Managed Cloud usage limits"></ul>
+  <ul class="usage-bucket-list" id="meterBuckets" aria-label="Managed Cloud usage limits"></ul>
   <!-- ── Usage meter collapsed pill ── -->
-  <div class="usage-meter-collapsed" id="usageMeterCollapsed" style="display:none">
+  <div class="usage-meter-collapsed" id="usageMeterCollapsed">
     <button class="meter-restore-btn" id="meterRestoreBtn" title="Show usage details">&#9660; <span id="meterCollapsedLabel">Usage</span></button>
   </div>
 
   <!-- ── Messages ── -->
-  <h2 class="visually-hidden">Conversation</h2>
-  <div id="messages" role="log" aria-live="polite" aria-relevant="additions">
-    <div class="empty-state" id="emptyState">
-      <div class="empty-state-mark" aria-hidden="true"><img src="${markUri}" alt="" width="28" height="28" /></div>
-      <div class="empty-state-headline" id="emptyStateHeadline">Build with AGI</div>
-      <div class="empty-state-copy" id="emptyStateCopy">Ask about this workspace, edit files, run commands and tests.</div>
-    </div>
-  </div>
-
-  <div class="terminal-hint" id="terminalHint" hidden>
-    <span>Prefer the terminal?</span>
-    <button class="terminal-hint-link" id="terminalHintSettings" type="button">Turn on Use terminal in Settings.</button>
-    <button class="icon-btn" id="terminalHintDismiss" type="button" title="Dismiss" aria-label="Dismiss the terminal hint">
-      <span class="codicon codicon-close" aria-hidden="true"></span>
+  <h2 class="visually-hidden" id="transcriptHeading">Conversation</h2>
+  <div class="transcript">
+    <button class="transcript-prompt" id="transcriptPrompt" type="button" aria-label="Jump to prompt" hidden>
+      <span class="codicon codicon-arrow-up" aria-hidden="true"></span>
+      <span class="transcript-prompt__text" id="transcriptPromptText"></span>
     </button>
+    <div id="messages" role="log" aria-live="polite" aria-relevant="additions" tabindex="0" aria-labelledby="transcriptHeading">
+      <div class="empty-state" id="emptyState">
+        ${emptyStateContent}
+      </div>
+    </div>
   </div>
 
   <!-- ── Input ── -->
   <div class="input-area">
     <details class="subagents" id="subagentsPanel" aria-label="Subagents" hidden>
       <summary id="subagentsSummary"></summary>
-      <ul class="subagents__list" id="subagentsList"></ul>
+      <ul class="subagents__list" id="subagentsList" tabindex="0" aria-label="Subagent status"></ul>
     </details>
     <section class="side-question" id="sideQuestion" aria-label="Side question" hidden>
       <div class="side-question__header">
@@ -2971,49 +3196,14 @@ export function getWebviewContent(
 
     <!-- Plus-menu popover -->
     <div class="plus-menu" id="plusMenu" role="menu" aria-label="Attach or add context">
-      <div class="plus-menu-label" id="plusMenuLabel">Add workspace context</div>
+      <div class="plus-menu-label" id="plusMenuLabel">Add context</div>
       <button type="button" class="plus-menu-item" id="plusMenuUpload" role="menuitem">
         <span class="pm-icon codicon codicon-files" aria-hidden="true"></span>
         <span class="plus-menu-copy">
-          <span class="plus-menu-title">Workspace files</span>
-          <span class="plus-menu-description">Pin files in this workspace's Context view</span>
+          <span class="plus-menu-title">Attach workspace files</span>
+          <span class="plus-menu-description">Include text files in your next message</span>
         </span>
       </button>
-      <button
-        type="button"
-        class="plus-menu-item"
-        id="plusMenuBrowse"
-        role="menuitemcheckbox"
-        aria-checked="false"
-      >
-        <span class="pm-icon codicon codicon-globe" aria-hidden="true"></span>
-        <span class="plus-menu-copy">
-          <span class="plus-menu-title">Browse the web</span>
-          <span class="plus-menu-description">CLI search · Local privacy mode refuses network</span>
-        </span>
-      </button>
-      <button
-        type="button"
-        class="plus-menu-item"
-        id="plusMenuSearchSetup"
-        role="menuitem"
-        hidden
-        disabled
-      >
-        <span class="pm-icon codicon codicon-key" aria-hidden="true"></span>
-        <span class="plus-menu-copy">
-          <span class="plus-menu-title">Set up web search</span>
-          <span class="plus-menu-description">Your key and Local sessions need a search key</span>
-        </span>
-      </button>
-      <button type="button" class="plus-menu-item" id="plusMenuPlanMode" role="menuitem">
-        <span class="pm-icon codicon codicon-lightbulb" aria-hidden="true"></span>
-        <span class="plus-menu-copy">
-          <span class="plus-menu-title">Plan mode</span>
-          <span class="plus-menu-description">Review an approach before edits</span>
-        </span>
-      </button>
-      <div class="plus-menu-label">Attach from this window</div>
       <button type="button" class="plus-menu-item" data-context-kind="selection" role="menuitem">
         <span class="pm-icon codicon codicon-selection" aria-hidden="true"></span>
         <span class="plus-menu-copy">
@@ -3054,6 +3244,42 @@ export function getWebviewContent(
         <span class="plus-menu-copy">
           <span class="plus-menu-title">Web page</span>
           <span class="plus-menu-description"></span>
+        </span>
+      </button>
+      <div class="plus-menu-divider" role="separator"></div>
+      <div class="plus-menu-label">Tools</div>
+      <button
+        type="button"
+        class="plus-menu-item"
+        id="plusMenuBrowse"
+        role="menuitemcheckbox"
+        aria-checked="false"
+      >
+        <span class="pm-icon codicon codicon-globe" aria-hidden="true"></span>
+        <span class="plus-menu-copy">
+          <span class="plus-menu-title">Browse the web</span>
+          <span class="plus-menu-description">CLI search · Local privacy mode refuses network</span>
+        </span>
+      </button>
+      <button
+        type="button"
+        class="plus-menu-item"
+        id="plusMenuSearchSetup"
+        role="menuitem"
+        hidden
+        disabled
+      >
+        <span class="pm-icon codicon codicon-key" aria-hidden="true"></span>
+        <span class="plus-menu-copy">
+          <span class="plus-menu-title">Set up web search</span>
+          <span class="plus-menu-description">Configure a search key for Local or BYOK</span>
+        </span>
+      </button>
+      <button type="button" class="plus-menu-item" id="plusMenuPlanMode" role="menuitem">
+        <span class="pm-icon codicon codicon-lightbulb" aria-hidden="true"></span>
+        <span class="plus-menu-copy">
+          <span class="plus-menu-title">Plan mode</span>
+          <span class="plus-menu-description">Review an approach before edits</span>
         </span>
       </button>
     </div>
@@ -3104,12 +3330,19 @@ export function getWebviewContent(
       <div class="attachment-strip" id="editorContextStrip" role="list" aria-label="Editor context attached to the next message"></div>
       <!-- Attachment chips strip, populated by drag-drop / paste / +menu -->
       <div class="attachment-strip" id="attachmentStrip" role="list" aria-label="Pending attachments"></div>
+      <div class="browse-context-strip" id="nextEffortNotice" hidden>
+        <span class="attachment-chip">
+          <span id="nextEffortLabel" role="status"></span>
+          <button type="button" class="attachment-chip__remove" id="clearNextEffort" aria-label="Clear next message effort">&#215;</button>
+        </span>
+      </div>
+      <div class="context-limit-notice" id="contextLimitNotice" role="status" aria-live="polite" hidden></div>
       <div class="input-row">
         <div class="input-wrapper">
           <div class="mention-dropdown" id="mentionDropdown" role="listbox" aria-label="Workspace files and symbols"></div>
           <textarea
             id="userInput"
-            placeholder="Ask AGI to do anything…"
+            placeholder="Describe a task…"
             rows="1"
             spellcheck="true"
             aria-label="Chat input"
@@ -3122,11 +3355,13 @@ export function getWebviewContent(
       <div class="composer-bottom">
         <button class="plus-btn" id="plusBtn" title="Attach or use tools" aria-label="Attach or use tools" aria-haspopup="menu" aria-expanded="false">+</button>
         <button class="plus-btn" id="slashBtn" title="Commands" aria-label="Commands" aria-haspopup="menu" aria-expanded="false">/</button>
-        <button class="model-pill" id="modelPill" title="Model" aria-haspopup="menu" aria-expanded="false">Auto</button>
         <button class="controls-summary" id="controlsSummary" title="Mode and reasoning effort" aria-label="Mode and reasoning effort"><span class="codicon codicon-${modeIcon} controls-summary__icon" aria-hidden="true"></span><span class="controls-summary__label">${modeLabel}</span></button>
         <span class="context-usage" id="contextUsage"></span>
-        <span class="context-limit-notice" id="contextLimitNotice" role="status" aria-live="polite" hidden></span>
         <span class="follow-up-status" id="followUpStatus" role="status" aria-live="polite"></span>
+        <button class="model-pill" id="modelPill" title="Model" aria-haspopup="menu" aria-expanded="false">Auto</button>
+        <button class="icon-btn" id="dictationBtn" type="button" title="Dictate with AGI Cloud" aria-label="Dictate with AGI Cloud" aria-pressed="false" hidden>
+          <span class="codicon codicon-mic" aria-hidden="true"></span>
+        </button>
         <button id="stopBtn" title="Stop response" aria-label="Stop response"></button>
         <button id="sendBtn" title="Send (Enter)" aria-label="Send"><span class="send-action-label" id="sendActionLabel"></span></button>
       </div>
@@ -3136,12 +3371,11 @@ export function getWebviewContent(
       </div>
     </div>
     <div class="composer-status">
-      <span class="composer-status-route" id="composerStatus" role="status" aria-live="polite">
-        <span id="composerStatusBoundary"></span>
-        <span id="composerStatusSeparator" aria-hidden="true" hidden>·</span>
-        <span id="composerStatusMode">${modeLabel}</span>
-      </span>
       <button type="button" class="composer-status-signin" id="composerStatusSignIn" hidden>Sign in</button>
+    </div>
+    <div class="dictation-recovery">
+      <span class="follow-up-status" id="dictationStatus" role="status" aria-live="polite"></span>
+      <button type="button" class="composer-status-signin" id="dictationSignIn" hidden>Sign in</button>
     </div>
   </div>
 
@@ -3190,6 +3424,54 @@ export function getWebviewContent(
 
     // ── DOM refs ──────────────────────────────────────────────────────────────
     const messagesEl = document.getElementById('messages');
+    const transcriptPrompt = document.getElementById('transcriptPrompt');
+    const transcriptPromptText = document.getElementById('transcriptPromptText');
+    let pinnedPrompt = null;
+    let followingTranscript = true;
+    let focusView = false;
+
+    function updatePinnedPrompt() {
+      const top = messagesEl.getBoundingClientRect().top;
+      const prompts = messagesEl.querySelectorAll('.message.user[data-text]');
+      let start = 0;
+      let end = prompts.length;
+      while (start < end) {
+        const middle = Math.floor((start + end) / 2);
+        if (prompts[middle].getBoundingClientRect().bottom <= top) start = middle + 1;
+        else end = middle;
+      }
+      const previousPrompt = prompts[start - 1] || null;
+      if (previousPrompt === pinnedPrompt) return;
+      pinnedPrompt = previousPrompt;
+      transcriptPrompt.hidden = !pinnedPrompt;
+      const text = pinnedPrompt ? pinnedPrompt.getAttribute('data-text') : '';
+      const line = text.replace(/\\s+/g, ' ').trim();
+      const preview = line.length > 120 ? line.slice(0, 119) + '…' : line;
+      transcriptPromptText.textContent = preview;
+      transcriptPrompt.setAttribute('aria-label', 'Jump to prompt: ' + preview);
+      return true;
+    }
+
+    function followTranscriptEnd(force) {
+      if (force) followingTranscript = true;
+      if (followingTranscript) messagesEl.scrollTop = messagesEl.scrollHeight;
+      if (updatePinnedPrompt() && followingTranscript) messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    messagesEl.addEventListener('scroll', function () {
+      const distance = messagesEl.scrollHeight - messagesEl.clientHeight - messagesEl.scrollTop;
+      followingTranscript = distance <= 24;
+      updatePinnedPrompt();
+    }, { passive: true });
+
+    transcriptPrompt.addEventListener('click', function () {
+      if (!pinnedPrompt) return;
+      const prompt = pinnedPrompt;
+      followingTranscript = false;
+      messagesEl.focus({ preventScroll: true });
+      prompt.scrollIntoView({ block: 'start' });
+      updatePinnedPrompt();
+    });
     const subagentsPanel = document.getElementById('subagentsPanel');
     const subagentsSummary = document.getElementById('subagentsSummary');
     const subagentsList = document.getElementById('subagentsList');
@@ -3197,9 +3479,17 @@ export function getWebviewContent(
     function renderSubagents(tasks) {
       if (!subagentsPanel || !subagentsSummary || !subagentsList) return;
       var list = Array.isArray(tasks) ? tasks : [];
+      const wasHidden = subagentsPanel.hidden;
+      const focusedTask = subagentsList.contains(document.activeElement)
+        ? document.activeElement.getAttribute('data-stop-task')
+        : null;
+      let restoredFocus = null;
       subagentsList.replaceChildren();
       subagentsPanel.hidden = list.length === 0;
-      if (list.length === 0) return;
+      if (list.length === 0) {
+        subagentsPanel.open = false;
+        return;
+      }
       var counts = Object.keys(SUBAGENT_STATE_LABELS)
         .map(function (state) {
           var count = list.filter(function (task) { return task.state === state; }).length;
@@ -3209,7 +3499,7 @@ export function getWebviewContent(
       subagentsSummary.textContent = 'Subagents (' + list.length + ') · ' + counts.join(' · ');
       var active = false;
       for (var i = 0; i < list.length; i++) {
-        var task = list[i];
+        const task = list[i];
         if (task.state === 'running' || task.state === 'queued' || task.state === 'awaiting_input') {
           active = true;
         }
@@ -3221,14 +3511,49 @@ export function getWebviewContent(
         title.textContent = task.title;
         var state = document.createElement('span');
         state.className = 'subagents__state';
-        state.textContent = SUBAGENT_STATE_LABELS[task.state] || '';
+        state.textContent = task.stopping ? 'Stopping…' : SUBAGENT_STATE_LABELS[task.state] || '';
+        if (task.state === 'completed' || task.state === 'failed' || task.state === 'cancelled') {
+          const elapsed = Date.parse(task.updatedAt) - Date.parse(task.createdAt);
+          if (Number.isFinite(elapsed) && elapsed > 0) {
+            state.textContent += ' · ' + formatElapsedMs(elapsed);
+          }
+        }
         row.append(title, state);
+        if (task.canStop && task.state === 'running' && !task.stopping) {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'approval-card__action subagents__action';
+          button.textContent = 'Stop';
+          button.setAttribute('aria-label', 'Stop subagent ' + task.title);
+          button.setAttribute('data-stop-task', task.id);
+          button.addEventListener('click', function() {
+            vscode.postMessage({ type: 'stopChildTask', payload: { taskId: task.id } });
+          });
+          if (focusedTask === task.id) restoredFocus = button;
+          row.appendChild(button);
+        }
+        if (task.transcriptAvailable) {
+          const transcriptButton = document.createElement('button');
+          transcriptButton.type = 'button';
+          transcriptButton.className = 'approval-card__action subagents__action';
+          transcriptButton.textContent = 'Transcript';
+          transcriptButton.setAttribute('aria-label', 'View transcript for ' + task.title);
+          transcriptButton.addEventListener('click', function() {
+            vscode.postMessage({ type: 'openChildTaskTranscript', payload: { taskId: task.id } });
+          });
+          row.appendChild(transcriptButton);
+        }
         subagentsList.appendChild(row);
       }
-      subagentsPanel.open = active;
+      if (wasHidden && active) subagentsPanel.open = true;
+      if (focusedTask && subagentsPanel.open) {
+        (restoredFocus || subagentsSummary).focus({ preventScroll: true });
+      }
     }
     const contextLimitNotice = document.getElementById('contextLimitNotice');
     const userInput = document.getElementById('userInput');
+    userInput?.addEventListener('pointerdown', () => userInput.setAttribute('data-pointer-focus', ''));
+    userInput?.addEventListener('blur', () => userInput.removeAttribute('data-pointer-focus'));
     const sendBtn = document.getElementById('sendBtn');
     const stopBtn = document.getElementById('stopBtn');
     const sendActionLabel = document.getElementById('sendActionLabel');
@@ -3262,14 +3587,19 @@ export function getWebviewContent(
     const sessionsTabCloud = document.getElementById('sessionsTabCloud');
     const sessionsContinueInCloud = document.getElementById('sessionsContinueInCloud');
     const sessionsArchived = document.getElementById('sessionsArchived');
+    const sessionsUnreadFilter = document.getElementById('sessionsUnreadFilter');
+    const sessionsUnreadOnly = document.getElementById('sessionsUnreadOnly');
+    const sessionsGroupFilter = document.getElementById('sessionsGroupFilter');
+    const manageSessionGroups = document.getElementById('manageSessionGroups');
+    const selectSessions = document.getElementById('selectSessions');
+    const sessionsBulkActions = document.getElementById('sessionsBulkActions');
+    const sessionsSelectionCount = document.getElementById('sessionsSelectionCount');
+    const moveSelectedSessions = document.getElementById('moveSelectedSessions');
     const slashBtn = document.getElementById('slashBtn');
     const slashMenu = document.getElementById('slashMenu');
     const slashFilter = document.getElementById('slashFilter');
     const slashList = document.getElementById('slashList');
-    const composerStatusBoundary = document.getElementById('composerStatusBoundary');
-    const composerStatusSeparator = document.getElementById('composerStatusSeparator');
     const composerStatusSignIn = document.getElementById('composerStatusSignIn');
-    const composerStatusMode = document.getElementById('composerStatusMode');
     const mentionDropdown = document.getElementById('mentionDropdown');
     const sessionIdentity = document.getElementById('sessionIdentity');
     const sessionBoundaryLabel = document.getElementById('sessionBoundaryLabel');
@@ -3286,7 +3616,6 @@ export function getWebviewContent(
     const onboardingGetHelp = document.getElementById('onboardingGetHelp');
     const onboardingEl = document.getElementById('onboarding');
     const onboardingSteps = Array.from(document.querySelectorAll('[data-onboarding-step]'));
-    const onboardingDots = Array.from(document.querySelectorAll('.onboarding-dot'));
     const onboardingProgress = document.getElementById('onboardingProgress');
     const onboardingBack = document.getElementById('onboardingBack');
     const onboardingNext = document.getElementById('onboardingNext');
@@ -3325,6 +3654,8 @@ export function getWebviewContent(
     var activeAccountStatus = 'loading';
     var activeProviderIdentity = '';
     var activeMode = '${initialMode}';
+    var activeEditAutomatically = false;
+    var settingsRequireShellApproval = false;
     var activeEffort = '${initialEffort}';
     var activeSupportsEffort = ${supportsEffort ? 'true' : 'false'};
     var runtimeBlock = null;
@@ -3333,23 +3664,24 @@ export function getWebviewContent(
     var onboardingStep = 0;
 
     // ── First-run onboarding helpers ──────────────────────────────────────────
+    function renderOnboardingNext() {
+      if (!onboardingNext) return;
+      onboardingNext.textContent = onboardingStep < onboardingSteps.length - 1
+        ? 'Next'
+        : runtimeBlock === null ? 'Open chat' : 'Done';
+    }
+
     function renderOnboardingStep(shouldFocus) {
       if (!onboardingEl || onboardingSteps.length === 0) return;
       onboardingStep = Math.max(0, Math.min(onboardingSteps.length - 1, onboardingStep));
       onboardingSteps.forEach(function(step, index) {
         step.hidden = index !== onboardingStep;
       });
-      onboardingDots.forEach(function(dot, index) {
-        dot.classList.toggle('active', index === onboardingStep);
-      });
       if (onboardingProgress) {
-        onboardingProgress.textContent = 'Step ' + (onboardingStep + 1) + ' of ' + onboardingSteps.length;
+        onboardingProgress.textContent = 'Setup · ' + (onboardingStep + 1) + ' of ' + onboardingSteps.length;
       }
       if (onboardingBack) onboardingBack.disabled = onboardingStep === 0;
-      if (onboardingNext) {
-        onboardingNext.textContent =
-          onboardingStep === onboardingSteps.length - 1 ? 'Start using AGI' : 'Next';
-      }
+      renderOnboardingNext();
       var heading = onboardingSteps[onboardingStep].querySelector('h2');
       if (heading) {
         heading.id = 'onboardingStepTitle' + onboardingStep;
@@ -3358,9 +3690,20 @@ export function getWebviewContent(
       }
     }
 
+    function focusAfterOnboarding() {
+      if (runtimeBlock === null) {
+        if (userInput && !userInput.disabled) userInput.focus();
+      } else if (runtimeSettingsBtn && !runtimeSettingsBtn.hidden && !runtimeSettingsBtn.disabled) {
+        runtimeSettingsBtn.focus();
+      } else if (runtimeStatusTitleEl) {
+        runtimeStatusTitleEl.focus();
+      }
+    }
+
     function setOnboardingVisible(visible) {
       if (!onboardingEl) return;
-      onboardingEl.style.display = visible ? 'flex' : 'none';
+      var wasVisible = !onboardingEl.hidden;
+      onboardingEl.hidden = !visible;
       onboardingEl.setAttribute('aria-hidden', String(!visible));
       [
         messagesEl,
@@ -3375,8 +3718,8 @@ export function getWebviewContent(
       if (visible) {
         onboardingStep = 0;
         renderOnboardingStep(true);
-      } else if (userInput) {
-        userInput.focus();
+      } else if (wasVisible) {
+        focusAfterOnboarding();
       }
     }
 
@@ -3397,10 +3740,15 @@ export function getWebviewContent(
     }
 
     function renderOnboardingWorkspaceState(status) {
+      renderOnboardingNext();
       if (onboardingSteps.length === 0) return;
       var heading = onboardingSteps[0].querySelector('h2');
       if (!heading || !onboardingWorkspaceLede || !onboardingWorkspaceAction) return;
-      if (status === 'workspace-required') {
+      if (status === 'probing') {
+        heading.textContent = 'Checking the developer runtime…';
+        onboardingWorkspaceLede.textContent = 'AGI is connecting to the CLI for this workspace.';
+        onboardingWorkspaceAction.hidden = true;
+      } else if (status === 'workspace-required') {
         heading.textContent = 'Open a workspace to begin.';
         onboardingWorkspaceLede.textContent =
           'Choose a folder before AGI can read project context, attach files, or propose reviewable changes.';
@@ -3422,9 +3770,9 @@ export function getWebviewContent(
           : 'Open runtime setup';
         onboardingWorkspaceAction.hidden = false;
       } else {
-        heading.textContent = 'Build with AGI in this repository.';
+        heading.textContent = 'Work with your code';
         onboardingWorkspaceLede.textContent =
-          'Ask about code, edit through reviewable diffs, and run approved commands, all scoped to this workspace.';
+          'Ask about this workspace or describe the change you want to make.';
         onboardingWorkspaceAction.hidden = true;
       }
     }
@@ -3482,7 +3830,12 @@ export function getWebviewContent(
     }
     if (onboardingEl) {
       onboardingEl.addEventListener('keydown', function(event) {
-        if (event.key === 'Escape') completeOnboarding();
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          event.stopPropagation();
+          completeOnboarding();
+          return;
+        }
         if (event.key !== 'Tab') return;
         // The screen-reader contract says this is a modal dialog. The inert state
         // protects the rest of the sidebar, but it does not cycle focus back
@@ -3491,10 +3844,14 @@ export function getWebviewContent(
         if (focusable.length === 0) return;
         var first = focusable[0];
         var last = focusable[focusable.length - 1];
-        if (event.shiftKey && document.activeElement === first) {
+        var active = document.activeElement;
+        if (!focusable.includes(active)) {
+          event.preventDefault();
+          (event.shiftKey ? last : first).focus();
+        } else if (event.shiftKey && active === first) {
           event.preventDefault();
           last.focus();
-        } else if (!event.shiftKey && document.activeElement === last) {
+        } else if (!event.shiftKey && active === last) {
           event.preventDefault();
           first.focus();
         }
@@ -3579,7 +3936,7 @@ export function getWebviewContent(
       sessionIdentity.setAttribute('aria-label', spec.label +
         (showProviderIdentity && activeProviderIdentity ? ' using ' + activeProviderIdentity : '') + '. ' + title);
       sessionIdentity.style.display = 'inline-flex';
-      renderComposerStatus(spec.label);
+      renderComposerSignIn();
     }
 
     function renderNoWorkspaceIdentity() {
@@ -3646,6 +4003,7 @@ export function getWebviewContent(
 
     function resetAuthoritativeSessionBoundary() {
       sessionBoundaryAuthoritative = false;
+      renderComposerSignIn();
       renderSessionIdentity();
       renderBrowseAvailability();
     }
@@ -3787,8 +4145,7 @@ export function getWebviewContent(
           : 'Upgrade for Cloud';
       } else if (payload.source === 'unbounded' || payload.source === 'user-api-key') {
         // Neither route has an AGI quota, so the meter has nothing to meter.
-        // The route itself is named in the header chip and the composer status
-        // line, and the billing consequence lives in Account & usage.
+        // The route is named in the header, and billing lives in Account & usage.
         usageMeterBanner.style.display = 'none';
         usageMeterCollapsed.style.display = 'none';
         renderUsageBuckets(null);
@@ -3886,6 +4243,21 @@ export function getWebviewContent(
     let mentionStart = -1;
     let mentionQuery = null;
     let pendingFileReferences = [];
+    const savedComposerState = vscode.getState() || {};
+    const composerDrafts = new Map(
+      Array.isArray(savedComposerState.composerDrafts)
+        ? savedComposerState.composerDrafts.filter(function(entry) {
+            return Array.isArray(entry) &&
+              (entry[0] === null || typeof entry[0] === 'string') &&
+              typeof entry[1] === 'string';
+          })
+        : []
+    );
+    if (!composerDrafts.has(null) && typeof savedComposerState.composerDraft === 'string') {
+      composerDrafts.set(null, savedComposerState.composerDraft);
+    }
+    let composerThreadId = null;
+    let awaitingComposerThread = typeof savedComposerState.composerThreadId === 'string';
     let activePlanCard = null;
     let currentAssistantEl = null;
     let accumulatedContent = '';
@@ -3894,6 +4266,7 @@ export function getWebviewContent(
     let browseWebEnabled = false;
     let followUpBehavior = '${followUpBehaviorLiteral}';
     let enterBehavior = 'enter';
+    let escapeStops = false;
     let followUpStatusTimer = null;
     let clientMessageSeq = 0;
     // The turn a Retry resends. Cleared by a new conversation so a retry can
@@ -3903,7 +4276,7 @@ export function getWebviewContent(
 
     function syncSendState() {
       var hasContent = userInput.value.trim() !== '' || pendingAttachmentCount > 0;
-      sendBtn.disabled = runtimeBlock !== null || !hasContent;
+      sendBtn.disabled = runtimeBlock !== null || awaitingComposerThread || !hasContent;
     }
 
     function syncComposerAvailability() {
@@ -3936,6 +4309,8 @@ export function getWebviewContent(
     }
 
     function renderRuntimeAvailability(status, message) {
+      var focusWasInRecovery = document.activeElement === runtimeStatusTitleEl ||
+        document.activeElement === runtimeSettingsBtn || document.activeElement === runtimeRetryBtn;
       if (status === 'probing') {
         runtimeBlock = status;
         renderOnboardingWorkspaceState(status);
@@ -3948,6 +4323,7 @@ export function getWebviewContent(
         userInput.placeholder = 'Checking the developer runtime…';
         syncComposerAvailability();
         renderRuntimeProbing();
+        if (focusWasInRecovery) focusAfterOnboarding();
         return;
       }
       setRuntimeRetryBusy(false);
@@ -3958,9 +4334,9 @@ export function getWebviewContent(
       var copy = document.getElementById('emptyStateCopy');
       if (status === 'ready') {
         runtimeStatusEl.style.display = 'none';
-        if (headline) headline.textContent = 'Build with AGI';
+        if (headline) headline.textContent = 'Start a conversation';
         if (copy) copy.textContent =
-          'Ask about this workspace, edit files, run commands and tests.';
+          'Ask about your code or describe a change.';
         if (lastUsageMeterPayload) renderUsageMeter(lastUsageMeterPayload);
       } else {
         var workspaceRequired = status === 'workspace-required';
@@ -4006,8 +4382,9 @@ export function getWebviewContent(
           ? 'Trust this workspace to start chatting'
           : runtimeBlock === 'unavailable'
             ? 'Set up the developer runtime to start chatting'
-            : 'Ask AGI to do anything…';
+            : 'Describe a task…';
       syncComposerAvailability();
+      if (focusWasInRecovery) focusAfterOnboarding();
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -4015,6 +4392,7 @@ export function getWebviewContent(
     var MODE_ICONS = ${serializeForInlineScript(DEVELOPER_MODE_ICONS)};
     var EFFORT_LABELS = ${serializeForInlineScript(DEVELOPER_REASONING_EFFORT_LABELS)};
     function modeLabel(value) {
+      if (value === 'auto' && activeEditAutomatically) return '${EDIT_AUTOMATICALLY_LABEL}';
       return Object.prototype.hasOwnProperty.call(MODE_LABELS, value) ? MODE_LABELS[value] : '';
     }
     function modeIcon(value) {
@@ -4059,7 +4437,7 @@ export function getWebviewContent(
         (activeSupportsEffort ? ', ' + effort + ' effort' : ', effort unavailable for this model');
       controlsSummary.title = fullLabel;
       controlsSummary.setAttribute('aria-label', fullLabel);
-      renderComposerStatus(null);
+      renderComposerSignIn();
     }
 
     function formatContextTokens(count) {
@@ -4069,19 +4447,22 @@ export function getWebviewContent(
     }
 
     function clearContextUsage() {
+      contextUsageMeasurement = null;
       if (!contextUsageEl) return;
       contextUsageEl.textContent = '';
       contextUsageEl.className = 'context-usage';
       contextUsageEl.removeAttribute('title');
-      announceContextLimit(0);
+      announceContextLimit(false);
     }
 
     var MOD_KEY_LABEL = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '') ? 'Cmd' : 'Ctrl';
     var contextLimitAnnounced = false;
+    var contextWarningPercent = ${DEFAULT_CONTEXT_WARNING_PERCENT};
+    var contextUsageMeasurement = null;
 
-    function announceContextLimit(pct) {
+    function announceContextLimit(show, pct) {
       if (!contextLimitNotice) return;
-      if (pct < 90) {
+      if (!show) {
         contextLimitAnnounced = false;
         contextLimitNotice.hidden = true;
         contextLimitNotice.textContent = '';
@@ -4100,22 +4481,26 @@ export function getWebviewContent(
         clearContextUsage();
         return;
       }
+      contextUsageMeasurement = { usedTokens: usedTokens, contextWindow: contextWindow };
       var used = formatContextTokens(usedTokens);
       if (typeof contextWindow !== 'number' || !isFinite(contextWindow) || contextWindow <= 0) {
         contextUsageEl.textContent = used + ' tok';
         contextUsageEl.className = 'context-usage visible';
         contextUsageEl.title = pluralText(L10N.contextUsedUnknownWindow, usedTokens);
+        announceContextLimit(false);
         return;
       }
-      var pct = Math.min(100, Math.round((usedTokens / contextWindow) * 100));
+      var usagePercent = (usedTokens / contextWindow) * 100;
+      var pct = Math.min(100, Math.round(usagePercent));
+      var warn = contextWarningPercent > 0 && usedTokens >= contextWindow * contextWarningPercent / 100;
       contextUsageEl.textContent = used + ' / ' + formatContextTokens(contextWindow);
       contextUsageEl.className = 'context-usage visible' +
-        (pct >= 90 ? ' is-critical' : pct >= 75 ? ' is-high' : '');
+        (warn ? ' is-critical' : pct >= 75 ? ' is-high' : '');
       contextUsageEl.title = pluralText(L10N.contextUsed, contextWindow, {
         used: usedTokens.toLocaleString(),
         percent: pct,
       });
-      announceContextLimit(pct);
+      announceContextLimit(warn, pct);
     }
 
     function addErrorMessage(presentation) {
@@ -4212,7 +4597,7 @@ export function getWebviewContent(
       }
 
       messagesEl.appendChild(block);
-      messagesEl.scrollTop = messagesEl.scrollHeight;
+      followTranscriptEnd();
       return block;
     }
 
@@ -4240,7 +4625,7 @@ export function getWebviewContent(
       });
       actions.appendChild(reconnect);
       card.appendChild(actions);
-      messagesEl.scrollTop = messagesEl.scrollHeight;
+      followTranscriptEnd();
     }
 
     function settleMcpAuthCard(server, ok) {
@@ -4285,15 +4670,20 @@ export function getWebviewContent(
       var mounted = document.createElement('div');
       mounted.className = 'empty-state';
       mounted.id = 'emptyState';
-      mounted.innerHTML = '<div class="empty-state-mark" aria-hidden="true"><img src="${markUri}" alt="" width="28" height="28"></div>' +
-        '<div class="empty-state-headline" id="emptyStateHeadline">Build with AGI</div>' +
-        '<div class="empty-state-copy" id="emptyStateCopy">Ask about this workspace, edit files, run commands and tests.</div>';
+      mounted.innerHTML = ${serializeForInlineScript(emptyStateContent)};
       messagesEl.appendChild(mounted);
       emptyStateEl = mounted;
       syncStartSuggestions();
+      syncRecentChats();
     }
 
     var assistantSources = new WeakMap();
+    var bookmarkButtonSequence = 0;
+
+    function markReplyBookmark(button, bookmarked) {
+      button.setAttribute('aria-pressed', String(bookmarked));
+      button.title = bookmarked ? 'Remove reply bookmark' : 'Bookmark reply';
+    }
 
     function settleMessageCopy(button, icon, copied) {
       icon.className = 'codicon ' + (copied ? 'codicon-check' : 'codicon-error');
@@ -4396,7 +4786,7 @@ export function getWebviewContent(
       messageEl.insertBefore(details, messageEl.querySelector('.message-actions'));
     }
 
-    function appendMessageActions(messageEl, sourceText, meta, rating) {
+    function appendMessageActions(messageEl, sourceText, meta, rating, messageIndex, bookmarked) {
       if (!messageEl || !sourceText) return;
       assistantSources.set(messageEl, sourceText);
       var previous = messagesEl.querySelectorAll('.message.assistant.message--latest');
@@ -4462,6 +4852,38 @@ export function getWebviewContent(
         });
       });
       row.appendChild(branch);
+      var bookmark = document.createElement('button');
+      bookmark.type = 'button';
+      bookmark.className = 'message-action message-action--bookmark';
+      bookmark.setAttribute('aria-label', 'Bookmark reply');
+      const bookmarkButtonId = ++bookmarkButtonSequence;
+      bookmark.dataset.bookmarkButton = String(bookmarkButtonId);
+      if (typeof messageIndex === 'number') bookmark.dataset.replyIndex = String(messageIndex);
+      markReplyBookmark(bookmark, bookmarked === true);
+      var bookmarkIcon = document.createElement('span');
+      bookmarkIcon.className = 'codicon codicon-bookmark';
+      bookmarkIcon.setAttribute('aria-hidden', 'true');
+      bookmark.appendChild(bookmarkIcon);
+      bookmark.addEventListener('click', function () {
+        var text = assistantSources.get(messageEl) || '';
+        var occurrence = 0;
+        var answers = messagesEl.querySelectorAll('.message.assistant');
+        for (var i = 0; i < answers.length; i++) {
+          if (answers[i] === messageEl) break;
+          if (assistantSources.get(answers[i]) === text) occurrence++;
+        }
+        vscode.postMessage({
+          type: 'messageAction',
+          payload: {
+            action: 'bookmarkAnswer',
+            text: text,
+            occurrence: occurrence,
+            bookmarkButtonId: bookmarkButtonId,
+            messageIndex: bookmark.dataset.replyIndex === undefined ? undefined : Number(bookmark.dataset.replyIndex)
+          }
+        });
+      });
+      row.appendChild(bookmark);
       if (meta && meta.label) {
         var metaEl = document.createElement('span');
         metaEl.className = 'message-meta';
@@ -4505,7 +4927,6 @@ export function getWebviewContent(
 
     function appendUserActions(messageEl, text) {
       if (!messageEl || !text) return;
-      messageEl.setAttribute('data-text', text);
       var row = document.createElement('div');
       row.className = 'message-actions message-actions--user';
       row.appendChild(userActionButton('resend', 'codicon-redo', L10N.resendMessage, L10N.resendMessageLabel, messageEl));
@@ -4535,12 +4956,34 @@ export function getWebviewContent(
       };
     }
 
-    function addMessage(role, text) {
+    function appendPromptCacheUsage(messageEl, payload) {
+      if (!payload) return;
+      const parts = [];
+      if (payload.cacheReadTokens > 0) {
+        parts.push(pluralText(L10N.cacheRead, payload.cacheReadTokens));
+      }
+      if (payload.cacheWriteTokens > 0) {
+        parts.push(pluralText(L10N.cacheWrite, payload.cacheWriteTokens));
+      }
+      if (parts.length === 0) return;
+      const cache = document.createElement('div');
+      cache.className = 'message-cache';
+      cache.textContent = L10N.promptCache;
+      for (const part of parts) {
+        const count = document.createElement('span');
+        count.textContent = part;
+        cache.append(' · ', count);
+      }
+      messageEl.appendChild(cache);
+    }
+
+    function addMessage(role, text, deferScroll) {
       const div = document.createElement('div');
       div.className = 'message ' + role;
       div.textContent = text;
+      if (role === 'user' && text) div.setAttribute('data-text', text);
       messagesEl.appendChild(div);
-      messagesEl.scrollTop = messagesEl.scrollHeight;
+      if (!deferScroll) followTranscriptEnd();
       return div;
     }
 
@@ -4581,7 +5024,7 @@ export function getWebviewContent(
       var existing = document.getElementById('typingIndicator');
       if (existing) {
         messagesEl.appendChild(existing);
-        messagesEl.scrollTop = messagesEl.scrollHeight;
+        followTranscriptEnd();
         return;
       }
       var div = document.createElement('div');
@@ -4596,7 +5039,7 @@ export function getWebviewContent(
       mark.src = ${JSON.stringify(webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'agi-symbol.png')).toString())};
       div.appendChild(mark);
       messagesEl.appendChild(div);
-      messagesEl.scrollTop = messagesEl.scrollHeight;
+      followTranscriptEnd();
     }
 
     function removeTyping() {
@@ -4609,7 +5052,6 @@ export function getWebviewContent(
       activePlanCard = null;
       toolCallStack = null;
       toolCallList = null;
-      activitySummaryButton = null;
       activityIcon = null;
       activityMeta = null;
       toolCallMap = {};
@@ -4618,18 +5060,32 @@ export function getWebviewContent(
       accumulatedContent = '';
       for (var historyIndex = 0; historyIndex < conversation.messages.length; historyIndex++) {
         var historyMessage = conversation.messages[historyIndex];
-        if (!historyMessage) continue;
+        if (!historyMessage || !historyMessage.text.trim()) continue;
         if (historyMessage.role === 'assistant') {
-          var assistantHistoryEl = addMessage('assistant', '');
+          var assistantHistoryEl = addMessage('assistant', '', true);
+          if (historyMessage.turnId) assistantHistoryEl.dataset.savedTurnId = historyMessage.turnId;
           renderAssistantInto(assistantHistoryEl, historyMessage.text || '');
           bindCodeBlockActions(assistantHistoryEl);
-          appendMessageActions(assistantHistoryEl, historyMessage.text || '', null, historyMessage.rating);
+          appendMessageActions(
+            assistantHistoryEl,
+            historyMessage.text || '',
+            null,
+            historyMessage.rating,
+            historyMessage.index,
+            historyMessage.bookmarked
+          );
         } else if (historyMessage.role === 'user') {
-          var userHistoryEl = addMessage('user', historyMessage.text || '');
+          var userHistoryEl = addMessage('user', historyMessage.text || '', true);
+          renderAcceptedContext(userHistoryEl, historyMessage.sentContext || []);
           appendUserActions(userHistoryEl, historyMessage.text || '');
         }
       }
       if (conversation.plan) upsertPlanCard(conversation.plan);
+      if (conversation.stoppedTurnNotice) {
+        const notice = addMessage('system', conversation.stoppedTurnNotice, true);
+        notice.id = 'storedTurnNotice';
+        notice.setAttribute('role', 'status');
+      }
     }
 
     function composerKeys() {
@@ -4688,6 +5144,7 @@ export function getWebviewContent(
       userInput.style.height = 'auto';
       userInput.style.height = Math.min(userInput.scrollHeight, 140) + 'px';
     }
+    window.addEventListener('resize', autoResize);
 
     var MODE_OPTIONS = ${serializeForInlineScript(DEVELOPER_MODE_OPTIONS)};
     var activeEffortLevels = null;
@@ -4722,6 +5179,7 @@ export function getWebviewContent(
         option.className = 'model-popover__option' + (active ? ' is-active' : '');
         option.setAttribute('role', 'menuitemradio');
         option.setAttribute('aria-checked', String(active));
+        option.disabled = choice.disabled === true;
         option.dataset.controlValue = choice.value;
         option.dataset.controlMessage = messageType;
         option.dataset.controlKey = key;
@@ -4740,6 +5198,10 @@ export function getWebviewContent(
           var target = event.currentTarget;
           var payload = {};
           payload[target.dataset.controlKey] = target.dataset.controlValue;
+          if (target.dataset.controlMessage === 'setMode' && payload.mode === 'edit-automatically') {
+            payload.mode = 'auto';
+            payload.editAutomatically = true;
+          }
           // The host re-checks consent and echoes the value it accepted, so the
           // menu never paints a selection the host refused.
           closeControlsPopover();
@@ -4754,7 +5216,20 @@ export function getWebviewContent(
     function openControlsPopover() {
       if (!controlsPopoverEl) return;
       controlsPopoverEl.innerHTML = '';
-      appendControlsGroup('Mode', '', MODE_OPTIONS, activeMode, 'setMode', 'mode');
+      var modeOptions = MODE_OPTIONS.map(function(option) {
+        if (option.value === 'auto' && settingsRequireShellApproval) {
+          return Object.assign({}, option, {
+            disabled: true,
+            description: 'Require Shell Approval is enabled in your user settings.'
+          });
+        }
+        return option;
+      });
+      appendControlsGroup(
+        'Mode', '', modeOptions,
+        activeMode === 'auto' && activeEditAutomatically ? 'edit-automatically' : activeMode,
+        'setMode', 'mode'
+      );
       appendControlsGroup(
         'Reasoning effort',
         activeSupportsEffort ? '' : 'This model does not take a reasoning effort.',
@@ -5145,6 +5620,46 @@ export function getWebviewContent(
       messageEl.appendChild(row);
     }
 
+    function renderAcceptedContext(messageEl, entries) {
+      messageEl.querySelector('.message-attachments, .sent-context')?.remove();
+      if (entries.length === 0) return;
+      const details = document.createElement('details');
+      details.className = 'sent-context';
+      const label = document.createElement('summary');
+      label.textContent = 'Context (' + entries.length + ')';
+      const list = document.createElement('ul');
+      const unavailable = {
+        'active-file': 'Included as a workspace file reference.',
+        image: 'Image attachment.',
+        web: 'Web search requested.',
+      };
+      entries.forEach(function(entry) {
+        const item = document.createElement('li');
+        const name = document.createElement('div');
+        name.textContent = entry.label;
+        item.appendChild(name);
+        if (entry.text === undefined) {
+          const note = document.createElement('span');
+          note.textContent = unavailable[entry.kind] || 'Preview unavailable for this message.';
+          item.appendChild(note);
+        } else {
+          const preview = document.createElement('pre');
+          preview.className = 'tool-call__code';
+          preview.tabIndex = 0;
+          preview.textContent = entry.text;
+          item.appendChild(preview);
+          if (entry.truncated) {
+            const notice = document.createElement('span');
+            notice.textContent = 'Preview shortened.';
+            item.appendChild(notice);
+          }
+        }
+        list.appendChild(item);
+      });
+      details.append(label, list);
+      messageEl.appendChild(details);
+    }
+
     var sideQuestionEl = document.getElementById('sideQuestion');
     var sideQuestionTextEl = document.getElementById('sideQuestionText');
     var sideQuestionAnswerEl = document.getElementById('sideQuestionAnswer');
@@ -5209,13 +5724,22 @@ export function getWebviewContent(
     }
 
     function sendMessage(oneTurnBehavior, generatedText) {
-      if (runtimeBlock !== null) return;
+      if (runtimeBlock !== null || awaitingComposerThread) return;
       const generated = typeof generatedText === 'string';
       const isFollowUp = streaming;
       const typedText = generated ? generatedText.trim() : userInput.value.trim();
       var sideMatch = generated ? null : typedText.match(/^\\/(?:btw|side)\\s+([\\s\\S]+)$/);
       if (sideMatch) {
         askSideQuestion(sideMatch[1].trim());
+        return;
+      }
+      if (!generated && /^\\/plan\\s+open$/i.test(typedText)) {
+        userInput.value = '';
+        autoResize();
+        saveComposerDraft();
+        syncSendState();
+        closeSlashMenu();
+        vscode.postMessage({ type: 'openPlanDocument' });
         return;
       }
       const text = generated ? typedText : typedText || (pendingAttachmentCount === 1
@@ -5250,6 +5774,7 @@ export function getWebviewContent(
       prependAuthor(userMessageEl, 'You said:');
       if (!generated) appendSentContext(userMessageEl);
       appendUserActions(userMessageEl, text);
+      followTranscriptEnd(true);
       if (isFollowUp) {
         userMessageEl.setAttribute('data-delivery-state', 'queued');
         appendQueuedControls(userMessageEl, clientMessageId, text);
@@ -5293,6 +5818,46 @@ export function getWebviewContent(
     }
 
     // ── Event listeners ───────────────────────────────────────────────────────
+    const dictationBtn = document.getElementById('dictationBtn');
+    const dictationStatus = document.getElementById('dictationStatus');
+    const dictationSignIn = document.getElementById('dictationSignIn');
+    dictationSignIn.addEventListener('click', function () {
+      vscode.postMessage({ type: 'openSurface', payload: { surfaceId: 'signIn' } });
+    });
+    let dictationPending = false;
+    let dictationId = 0;
+    let dictationBinding = null;
+    function resetDictation(status, needsSignIn) {
+      dictationPending = false;
+      dictationBtn.setAttribute('aria-pressed', 'false');
+      dictationBtn.setAttribute('aria-label', 'Dictate with AGI Cloud');
+      dictationBtn.title = 'Dictate with AGI Cloud';
+      dictationStatus.textContent = status;
+      dictationSignIn.hidden = needsSignIn !== true;
+    }
+    function cancelDictation() {
+      if (!dictationPending) return;
+      vscode.postMessage({ type: 'cancelDictation', payload: { id: dictationId } });
+      dictationId++;
+      resetDictation('');
+    }
+    dictationBtn.addEventListener('click', function () {
+      if (dictationPending) {
+        cancelDictation();
+        return;
+      }
+      dictationPending = true;
+      const id = ++dictationId;
+      dictationBinding = { epoch: sessionBinding.epoch, revision: composerBinding.revision };
+      dictationBtn.setAttribute('aria-pressed', 'true');
+      dictationBtn.setAttribute('aria-label', 'Cancel dictation');
+      dictationBtn.title = 'Cancel dictation';
+      dictationSignIn.hidden = true;
+      dictationStatus.textContent = 'Finish recording in your browser.';
+      vscode.postMessage({ type: 'startDictation', payload: { id: id } });
+    });
+    window.addEventListener('pagehide', cancelDictation);
+
     sendBtn.addEventListener('click', function() { sendMessage(); });
     window.addEventListener('focus', function() {
       vscode.postMessage({ type: 'viewFocused' });
@@ -5369,6 +5934,16 @@ export function getWebviewContent(
           return;
         }
       }
+      if (e.key === 'Escape' && dictationPending) {
+        e.preventDefault();
+        cancelDictation();
+        return;
+      }
+      if (e.key === 'Escape' && escapeStops && streaming && stopBtn) {
+        e.preventDefault();
+        stopBtn.click();
+        return;
+      }
       if (e.key === 'Enter') {
         var modifier = e.metaKey || e.ctrlKey;
         var needsModifier = enterNeedsModifier();
@@ -5384,10 +5959,31 @@ export function getWebviewContent(
 
     function saveComposerDraft() {
       composerBinding.revision++;
+      if (userInput.value) composerDrafts.set(composerThreadId, userInput.value);
+      else composerDrafts.delete(composerThreadId);
       var state = vscode.getState() || {};
-      state.composerDraft = userInput.value;
+      delete state.composerDraft;
+      state.composerDrafts = Array.from(composerDrafts);
+      if (!awaitingComposerThread) state.composerThreadId = composerThreadId;
       vscode.setState(state);
       vscode.postMessage({ type: 'composerState', payload: composerSnapshot() });
+    }
+
+    function showComposerDraft(threadId, adoptNewDraft) {
+      if (!awaitingComposerThread && composerThreadId === threadId) return;
+      if (adoptNewDraft && composerThreadId === null && !awaitingComposerThread) {
+        composerDrafts.delete(null);
+      } else {
+        userInput.value = composerDrafts.get(threadId) || '';
+        pendingFileReferences = [];
+        hideMentionDropdown();
+        clearComposerLimit();
+      }
+      composerThreadId = threadId;
+      awaitingComposerThread = false;
+      autoResize();
+      saveComposerDraft();
+      syncSendState();
     }
 
     userInput.addEventListener('input', function() {
@@ -5399,9 +5995,8 @@ export function getWebviewContent(
     });
 
     (function restoreComposerDraft() {
-      var state = vscode.getState() || {};
-      if (typeof state.composerDraft === 'string' && state.composerDraft && !userInput.value) {
-        userInput.value = state.composerDraft;
+      if (!awaitingComposerThread && !userInput.value && composerDrafts.has(null)) {
+        userInput.value = composerDrafts.get(null);
         autoResize();
       }
       syncSendState();
@@ -5438,6 +6033,37 @@ export function getWebviewContent(
           vscode.postMessage({ type: 'openSurface', payload: { surfaceId: surfaceId } });
         });
       }
+      document.getElementById('openOutputStyles').addEventListener('click', function() {
+        closeActionsMenu();
+        vscode.postMessage({ type: 'openOutputStyles' });
+      });
+      document.getElementById('openNextEffort').addEventListener('click', function() {
+        closeActionsMenu();
+        vscode.postMessage({ type: 'openNextEffort' });
+      });
+      document.getElementById('toggleFocusView').addEventListener('click', function() {
+        closeActionsMenu();
+        actionsBtn.focus();
+        vscode.postMessage({ type: 'toggleFocusView' });
+      });
+      document.getElementById('clearNextEffort').addEventListener('click', function() {
+        vscode.postMessage({ type: 'clearNextEffort' });
+        userInput.focus();
+      });
+      document.getElementById('openReplyBookmarks').addEventListener('click', function() {
+        closeActionsMenu();
+        vscode.postMessage({ type: 'openReplyBookmarks' });
+      });
+      document.getElementById('openAnsweredQuestions').addEventListener('click', function() {
+        closeActionsMenu();
+        actionsBtn.focus();
+        vscode.postMessage({ type: 'openAnsweredQuestions' });
+      });
+      document.getElementById('openBackgroundCommands').addEventListener('click', function() {
+        closeActionsMenu();
+        actionsBtn.focus();
+        vscode.postMessage({ type: 'openBackgroundCommands' });
+      });
       if (menuAccountAction) {
         menuAccountAction.addEventListener('click', function () {
           closeActionsMenu();
@@ -5522,11 +6148,43 @@ export function getWebviewContent(
     // ── Sessions sheet ────────────────────────────────────────────────────────
     var sessionsSource = 'local';
     var sessionsRows = [];
+    var sessionsGroups = [];
+    var sessionsSelecting = false;
+    var selectedSessionIds = new Set();
+    var maxSessionGroupSelection = ${MAX_SESSION_GROUP_SELECTION};
     var sessionsUnavailable = null;
+    var sessionsRetryable = false;
+    var sessionPinFocus = null;
     var sessionsLoading = false;
     var sessionsSearchState = null;
     var sessionsSearchTimer = null;
     var accountSignedIn = false;
+
+    function updateSessionsGroupFilter() {
+      var current = sessionsGroupFilter.value;
+      sessionsGroupFilter.replaceChildren(new Option('All groups', ''), new Option('Ungrouped', 'ungrouped'));
+      for (var group of sessionsGroups) sessionsGroupFilter.add(new Option(group.name, group.id));
+      sessionsGroupFilter.value = (current === 'ungrouped' && sessionsGroups.length > 0) || sessionsGroups.some(function(group) {
+        return group.id === current;
+      }) ? current : '';
+      sessionsGroupFilter.hidden = sessionsSource !== 'local' || sessionsGroups.length === 0;
+      manageSessionGroups.hidden = sessionsGroupFilter.hidden;
+    }
+
+    function updateSessionSelection() {
+      sessionsBulkActions.hidden = !sessionsSelecting;
+      selectSessions.setAttribute('aria-pressed', String(sessionsSelecting));
+      sessionsSelectionCount.textContent = selectedSessionIds.size + ' selected';
+      moveSelectedSessions.disabled = selectedSessionIds.size === 0;
+      for (var box of sessionsSheetList.querySelectorAll('[data-session-selection-id]')) {
+        box.disabled = !box.checked && selectedSessionIds.size >= maxSessionGroupSelection;
+      }
+    }
+
+    function clearSessionSelection() {
+      selectedSessionIds.clear();
+      updateSessionSelection();
+    }
 
     function renderSessionsRows() {
       if (!sessionsSheetList) return;
@@ -5584,23 +6242,62 @@ export function getWebviewContent(
         notice.setAttribute('role', 'status');
         notice.textContent = sessionsUnavailable;
         sessionsSheetList.appendChild(notice);
+        if (sessionsRetryable) {
+          var retryListing = document.createElement('button');
+          retryListing.type = 'button';
+          retryListing.className = 'error-retry';
+          retryListing.textContent = L10N.retry;
+          retryListing.addEventListener('click', function () {
+            if (sessionsTabLocal) sessionsTabLocal.focus();
+            requestSessions(sessionsSource);
+          });
+          sessionsSheetList.appendChild(retryListing);
+        }
         if (visible.length === 0) return;
       }
+      var unreadOnly = sessionsSource === 'local' && sessionsUnreadOnly.checked;
+      if (unreadOnly) visible = visible.filter(function(row) { return row.unread === true; });
+      var groupFilter = sessionsSource === 'local' ? sessionsGroupFilter.value : '';
+      if (groupFilter) visible = visible.filter(function(row) {
+        return groupFilter === 'ungrouped' ? !row.groupId : row.groupId === groupFilter;
+      });
       if (visible.length === 0) {
         var empty = document.createElement('div');
         empty.className = 'sessions-sheet-empty';
-        empty.textContent = sessionsSource === 'local'
-          ? 'No developer sessions in this workspace yet'
-          : 'No cloud chats or AGI Code sessions yet';
+        empty.textContent = unreadOnly
+          ? 'No unread sessions'
+          : groupFilter
+            ? 'No sessions in this group'
+            : sessionsSource === 'local'
+            ? 'No developer sessions in this workspace yet'
+            : 'No cloud chats or AGI Code sessions yet';
         sessionsSheetList.appendChild(empty);
         return;
       }
       for (var i = 0; i < visible.length; i++) {
         (function (row) {
+          var entry = document.createElement('div');
+          entry.className = 'sessions-sheet-entry';
+          entry.setAttribute('role', 'listitem');
+          var selectRow = null;
+          if (sessionsSelecting && row.source === 'local') {
+            selectRow = document.createElement('input');
+            selectRow.type = 'checkbox';
+            selectRow.dataset.sessionSelectionId = row.id;
+            selectRow.checked = selectedSessionIds.has(row.id);
+            selectRow.disabled = !selectRow.checked && selectedSessionIds.size >= maxSessionGroupSelection;
+            selectRow.setAttribute('aria-label', 'Select ' + row.title);
+            selectRow.addEventListener('change', function () {
+              if (selectRow.checked) selectedSessionIds.add(row.id);
+              else selectedSessionIds.delete(row.id);
+              updateSessionSelection();
+            });
+            entry.appendChild(selectRow);
+          }
           var button = document.createElement('button');
           button.type = 'button';
           button.className = 'sessions-sheet-row';
-          button.setAttribute('role', 'listitem');
+          if (selectRow) button.tabIndex = -1;
           button.title = row.title;
           var title = document.createElement('span');
           title.className = 'sessions-sheet-row-title';
@@ -5608,56 +6305,131 @@ export function getWebviewContent(
           var age = document.createElement('span');
           age.className = 'sessions-sheet-row-age';
           age.textContent = row.age;
-          var dot = document.createElement('span');
-          dot.className = 'sessions-sheet-row-dot';
-          dot.setAttribute('aria-hidden', 'true');
-          var source = document.createElement('span');
-          source.className = 'sessions-sheet-row-age';
-          source.textContent = row.sourceLabel;
           button.appendChild(title);
           button.appendChild(age);
-          button.appendChild(dot);
-          button.appendChild(source);
+          if (row.unread) button.dataset.unread = 'true';
+
+          var metadata = document.createElement('span');
+          metadata.className = 'sessions-sheet-row-meta';
+          var details = [];
+          if (row.pinned) details.push([L10N.sessionPinned, '']);
+          if (row.unread) details.push(['Unread', '']);
+          if (row.sourceLabel) details.push([row.sourceLabel, '']);
+          var group = sessionsGroups.find(function(group) { return group.id === row.groupId; });
+          if (group) details.push([group.name, 'sessions-sheet-row-group']);
+          if (row.branch) details.push([row.branch, 'sessions-sheet-row-branch']);
+          for (var detail of details) {
+            if (metadata.childNodes.length) metadata.append(' · ');
+            var label = document.createElement('span');
+            label.className = detail[1];
+            label.textContent = detail[0];
+            metadata.appendChild(label);
+          }
+          if (details.length) {
+            button.appendChild(metadata);
+            button.title = row.title + ' · ' + metadata.textContent;
+          }
           if (row.snippet) {
             var snippet = document.createElement('span');
             snippet.className = 'sessions-sheet-row-snippet';
             snippet.textContent = row.snippet;
-            button.classList.add('has-snippet');
             button.appendChild(snippet);
-            button.title = row.title + ' · ' + row.snippet;
-          }
-          if (row.branch) {
-            var branchDot = document.createElement('span');
-            branchDot.className = 'sessions-sheet-row-dot';
-            branchDot.setAttribute('aria-hidden', 'true');
-            var branch = document.createElement('span');
-            branch.className = 'sessions-sheet-row-age sessions-sheet-row-branch';
-            branch.textContent = row.branch;
-            button.appendChild(branchDot);
-            button.appendChild(branch);
-            button.title = row.title + ' · ' + row.branch;
+            button.title += ' · ' + row.snippet;
           }
           button.addEventListener('click', function () {
+            if (selectRow) {
+              selectRow.click();
+              selectRow.focus();
+              return;
+            }
             closeSessionsSheet();
             vscode.postMessage({
               type: 'openSessionRow',
               payload: { id: row.id, source: row.source },
             });
           });
-          sessionsSheetList.appendChild(button);
+          entry.appendChild(button);
+          if (row.source === 'local' && !sessionsSelecting) {
+            var rowActions = document.createElement('div');
+            rowActions.className = 'sessions-row-actions';
+            if (row.canPin && !sessionsSearchState) {
+              var pin = document.createElement('button');
+              var pinLabel = row.pinned ? L10N.unpinSession : L10N.pinSession;
+              pin.type = 'button';
+              pin.className = 'icon-btn';
+              pin.dataset.sessionPinId = row.id;
+              pin.title = pinLabel;
+              pin.setAttribute('aria-label', pinLabel + ' ' + row.title);
+              var pinIcon = document.createElement('span');
+              pinIcon.className = 'codicon ' + (row.pinned ? 'codicon-pinned-dirty' : 'codicon-pinned');
+              pinIcon.setAttribute('aria-hidden', 'true');
+              pin.appendChild(pinIcon);
+              pin.addEventListener('click', function () {
+                if (document.activeElement === pin) sessionPinFocus = row.id;
+                pin.disabled = true;
+                vscode.postMessage({
+                  type: 'setSessionPinned',
+                  payload: { id: row.id, pinned: row.pinned !== true },
+                });
+              });
+              rowActions.appendChild(pin);
+            }
+            var move = document.createElement('button');
+            move.type = 'button';
+            move.className = 'icon-btn';
+            move.dataset.sessionGroupId = row.id;
+            move.title = 'Move to group';
+            move.setAttribute('aria-label', 'Move to group: ' + row.title);
+            var folder = document.createElement('span');
+            folder.className = 'codicon codicon-folder';
+            folder.setAttribute('aria-hidden', 'true');
+            move.appendChild(folder);
+            move.addEventListener('click', function () {
+              vscode.postMessage({ type: 'chooseSessionGroup', payload: { id: row.id } });
+            });
+            rowActions.appendChild(move);
+            var mark = document.createElement('button');
+            var markLabel = row.unread ? 'Mark as read' : 'Mark as unread';
+            mark.type = 'button';
+            mark.className = 'icon-btn';
+            mark.dataset.sessionUnreadId = row.id;
+            mark.title = markLabel;
+            mark.setAttribute('aria-label', markLabel + ': ' + row.title);
+            var icon = document.createElement('span');
+            icon.className = 'codicon ' + (row.unread ? 'codicon-check' : 'codicon-circle-filled');
+            icon.setAttribute('aria-hidden', 'true');
+            mark.appendChild(icon);
+            mark.addEventListener('click', function () {
+              vscode.postMessage({
+                type: 'setSessionUnread',
+                payload: { id: row.id, unread: row.unread !== true }
+              });
+            });
+            rowActions.appendChild(mark);
+            entry.appendChild(rowActions);
+          }
+          sessionsSheetList.appendChild(entry);
         })(visible[i]);
       }
     }
 
     function requestSessions(source) {
+      if (sessionsSearch && source !== sessionsSource) sessionsSearch.value = '';
       sessionsSource = source;
       sessionsRows = [];
       sessionsUnavailable = null;
+      sessionsRetryable = false;
+      sessionPinFocus = null;
       sessionsLoading = true;
       sessionsSearchState = null;
       if (sessionsSearchTimer) clearTimeout(sessionsSearchTimer);
       if (sessionsSearch) sessionsSearch.hidden = true;
       if (sessionsArchived) sessionsArchived.hidden = source !== 'local';
+      sessionsUnreadFilter.hidden = source !== 'local';
+      selectSessions.hidden = source !== 'local';
+      sessionsSelecting = false;
+      clearSessionSelection();
+      updateSessionsGroupFilter();
       if (sessionsTabLocal) sessionsTabLocal.setAttribute('aria-selected', String(source === 'local'));
       if (sessionsTabCloud) sessionsTabCloud.setAttribute('aria-selected', String(source === 'cloud'));
       if (sessionsContinueInCloud) sessionsContinueInCloud.hidden = source !== 'cloud';
@@ -5675,6 +6447,8 @@ export function getWebviewContent(
     function closeSessionsSheet() {
       if (!sessionsSheet) return;
       sessionsSheet.hidden = true;
+      sessionsSelecting = false;
+      clearSessionSelection();
       sessionsSearchState = null;
       if (sessionsSearchTimer) clearTimeout(sessionsSearchTimer);
       if (sessionsSearch) sessionsSearch.value = '';
@@ -5695,6 +6469,7 @@ export function getWebviewContent(
       sessionsTabCloud.addEventListener('click', function () { requestSessions('cloud'); });
     }
     function onSessionsSearchInput() {
+      clearSessionSelection();
       var query = sessionsSearch ? sessionsSearch.value.trim() : '';
       if (sessionsSearchTimer) clearTimeout(sessionsSearchTimer);
       if (sessionsSource !== 'local' || query.length < 2) {
@@ -5710,6 +6485,24 @@ export function getWebviewContent(
     }
 
     if (sessionsSearch) sessionsSearch.addEventListener('input', onSessionsSearchInput);
+    function changeSessionFilter() {
+      clearSessionSelection();
+      renderSessionsRows();
+    }
+    sessionsUnreadOnly.addEventListener('change', changeSessionFilter);
+    sessionsGroupFilter.addEventListener('change', changeSessionFilter);
+    selectSessions.addEventListener('click', function () {
+      sessionsSelecting = !sessionsSelecting;
+      clearSessionSelection();
+      renderSessionsRows();
+    });
+    moveSelectedSessions.addEventListener('click', function () {
+      if (selectedSessionIds.size)
+        vscode.postMessage({ type: 'chooseSessionGroup', payload: { ids: Array.from(selectedSessionIds) } });
+    });
+    manageSessionGroups.addEventListener('click', function() {
+      vscode.postMessage({ type: 'manageSessionGroups' });
+    });
     if (sessionsArchived) {
       sessionsArchived.addEventListener('click', function () {
         closeSessionsSheet();
@@ -5726,8 +6519,11 @@ export function getWebviewContent(
     }
 
     // ── Slash commands ────────────────────────────────────────────────────────
-    var slashCommands = [];
+    var slashCommands = ${serializeForInlineScript(
+      slashMenuEntries([]).map(({ name, description }) => ({ name, description })),
+    )};
     var slashRequested = false;
+    var slashCommandsLoaded = false;
     var slashHighlight = -1;
     var slashMode = 'typed';
 
@@ -5772,6 +6568,8 @@ export function getWebviewContent(
     }
 
     function startNewChat() {
+      cancelDictation();
+      dictationBtn.hidden = true;
       invalidateAttachmentBatches();
       vscode.postMessage({ type: 'newChat' });
     }
@@ -5896,7 +6694,7 @@ export function getWebviewContent(
         return needle === '' || entry.name.toLowerCase().indexOf(needle) === 0;
       });
       if (visible.length === 0) {
-        appendSlashEmpty(slashList, slashCommands.length === 0 ? 'Loading commands…' : 'No matching command');
+        appendSlashEmpty(slashList, slashCommandsLoaded ? 'No matching command' : 'Loading commands…');
         highlightSlashItem(0);
         return;
       }
@@ -5923,7 +6721,7 @@ export function getWebviewContent(
         actions.forEach(function (action) { appendSlashAction(section, action); });
         sections++;
       });
-      if (slashCommands.length === 0) {
+      if (!slashCommandsLoaded) {
         appendSlashEmpty(appendSlashSection('Commands'), 'Loading commands…');
         sections++;
       } else {
@@ -6037,18 +6835,16 @@ export function getWebviewContent(
         var icon = menuAccountAction.querySelector('.codicon');
         if (icon) icon.className = 'codicon codicon-' + (accountSignedIn ? 'sign-out' : 'sign-in');
       }
-      if (composerStatusSignIn) composerStatusSignIn.hidden = accountSignedIn;
+      renderComposerSignIn();
     }
 
     // ── Composer status line ──────────────────────────────────────────────────
-    function renderComposerStatus(boundaryLabel) {
-      if (composerStatusBoundary && boundaryLabel) {
-        composerStatusBoundary.textContent = boundaryLabel;
+    function renderComposerSignIn() {
+      if (composerStatusSignIn) {
+        var independentSession = sessionBoundaryAuthoritative &&
+          (activeRuntimeSource === 'unbounded' || activeRuntimeSource === 'user-api-key');
+        composerStatusSignIn.hidden = accountSignedIn || independentSession;
       }
-      if (composerStatusSeparator && composerStatusBoundary) {
-        composerStatusSeparator.hidden = composerStatusBoundary.textContent === '';
-      }
-      if (composerStatusMode) composerStatusMode.textContent = modeLabel(activeMode);
     }
 
     if (composerStatusSignIn) {
@@ -6064,6 +6860,14 @@ export function getWebviewContent(
         plusBtn.setAttribute('aria-expanded', 'false');
       };
 
+      function fitPlusMenu() {
+        var top = plusMenu.parentElement.getBoundingClientRect().top;
+        plusMenu.style.setProperty('--plus-menu-room', Math.max(0, top - 12) + 'px');
+      }
+
+      window.addEventListener('resize', function () {
+        if (plusMenu.classList.contains('open')) fitPlusMenu();
+      });
       plusBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         closeModelPopover();
@@ -6073,6 +6877,7 @@ export function getWebviewContent(
         plusMenu.classList.toggle('open', !isOpen);
         plusBtn.setAttribute('aria-expanded', String(!isOpen));
         if (!isOpen) {
+          fitPlusMenu();
           // Availability is whatever the window holds right now, so it is read
           // on every open rather than cached from the last one.
           vscode.postMessage({ type: 'requestContextMenuState' });
@@ -6096,6 +6901,7 @@ export function getWebviewContent(
       if (plusMenuUpload) {
         plusMenuUpload.addEventListener('click', () => {
           closePlusMenu();
+          userInput.focus();
           vscode.postMessage({ type: 'openFilePicker' });
         });
       }
@@ -6450,13 +7256,14 @@ export function getWebviewContent(
 
       approvalCards[payload.requestId] = { el: card, actions: actions };
       messagesEl.appendChild(card);
-      messagesEl.scrollTop = messagesEl.scrollHeight;
+      followTranscriptEnd();
       var first = actions.querySelector('.approval-card__action');
-      if (first) first.focus();
+      if (first && followingTranscript) first.focus();
       return card;
     }
 
     function renderQuestionCard(payload) {
+      if (approvalCards[payload.requestId]) return;
       hideEmptyState();
       var card = document.createElement('section');
       card.className = 'approval-card';
@@ -6481,37 +7288,74 @@ export function getWebviewContent(
       summary.textContent = payload.question.text;
       card.appendChild(summary);
 
-      function answer(text) {
+      function respond(decision, text) {
+        if (card.getAttribute('aria-busy') === 'true') return;
+        card.setAttribute('aria-busy', 'true');
+        actions.querySelectorAll('button, input').forEach(function(control) {
+          control.disabled = true;
+        });
         vscode.postMessage({
           type: 'respondToApproval',
-          payload: { requestId: payload.requestId, decision: 'once', answer: text },
+          payload: text
+            ? { requestId: payload.requestId, decision: decision, answer: text }
+            : { requestId: payload.requestId, decision: decision },
         });
       }
 
       var actions = document.createElement('div');
       actions.className = 'approval-card__actions';
-      for (var i = 0; i < payload.question.options.length; i++) {
-        (function (option) {
-          var button = document.createElement('button');
-          button.type = 'button';
-          button.className = 'approval-card__action';
-          button.textContent = option;
-          button.addEventListener('click', function () {
-            answer(option);
-          });
-          actions.appendChild(button);
-        })(payload.question.options[i]);
+      const options = payload.question.options;
+      const detailsByLabel = new Map((payload.question.optionDetails || []).map(function(option) {
+        return [option.label, option];
+      }));
+      const detailed = options.some(function(label) { return detailsByLabel.has(label); });
+      const choices = detailed ? document.createElement('div') : actions;
+      if (detailed) {
+        choices.className = 'question-options';
+        actions.appendChild(choices);
       }
+      options.forEach(function(label) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'approval-card__action';
+        button.textContent = label;
+        button.addEventListener('click', function () { respond('once', label); });
+        if (!detailed) {
+          choices.appendChild(button);
+          return;
+        }
+        const option = document.createElement('div');
+        option.className = 'question-option';
+        option.appendChild(button);
+        const detail = detailsByLabel.get(label);
+        if (detail && detail.description) {
+          const description = document.createElement('p');
+          description.className = 'question-option__description';
+          description.textContent = detail.description;
+          option.appendChild(description);
+        }
+        if (detail && detail.preview) {
+          const preview = document.createElement('details');
+          preview.className = 'question-option__preview';
+          const toggle = document.createElement('summary');
+          toggle.textContent = 'Preview';
+          toggle.setAttribute('aria-label', 'Preview ' + label);
+          const snippet = document.createElement('pre');
+          snippet.className = 'tool-call__code';
+          snippet.tabIndex = 0;
+          snippet.textContent = detail.preview;
+          preview.append(toggle, snippet);
+          option.appendChild(preview);
+        }
+        choices.appendChild(option);
+      });
       var skip = document.createElement('button');
       skip.type = 'button';
       skip.className = 'approval-card__action';
       skip.textContent = 'Skip';
       skip.title = 'Close the question without answering; AGI carries on with its best judgment.';
       skip.addEventListener('click', function () {
-        vscode.postMessage({
-          type: 'respondToApproval',
-          payload: { requestId: payload.requestId, decision: 'deny' },
-        });
+        respond('deny');
       });
       actions.appendChild(skip);
       var typed = document.createElement('input');
@@ -6520,25 +7364,26 @@ export function getWebviewContent(
       typed.maxLength = ${REMOTE_CODE_LIMITS.guidanceLength};
       typed.placeholder =
         payload.question.options.length > 0
-          ? 'Or type your own answer, then press Enter'
-          : 'Type your answer, then press Enter';
+          ? 'Other answer, then Enter'
+          : 'Answer, then Enter';
       typed.setAttribute('aria-label', 'Your answer');
       typed.addEventListener('keydown', function (event) {
         if (event.key !== 'Enter' || event.isComposing || event.keyCode === 229) return;
         if (!typed.value.trim()) return;
         event.preventDefault();
-        answer(typed.value.trim());
+        respond('once', typed.value.trim());
       });
       actions.appendChild(typed);
       card.appendChild(actions);
 
       approvalCards[payload.requestId] = { el: card, actions: actions, question: true };
       messagesEl.appendChild(card);
-      messagesEl.scrollTop = messagesEl.scrollHeight;
-      if (payload.question.options.length > 0) {
-        actions.querySelector('.approval-card__action').focus();
-      } else {
-        typed.focus();
+      followTranscriptEnd();
+      if (followingTranscript) {
+        const target = payload.question.options.length > 0
+          ? actions.querySelector('.approval-card__action')
+          : typed;
+        target.focus();
       }
       return card;
     }
@@ -6552,23 +7397,24 @@ export function getWebviewContent(
       }
     }
 
-    function resolveApprovalCard(requestId, outcome) {
+    function resolveApprovalCard(requestId, outcome, answer, reason) {
       if (outcome === 'once' || outcome === 'session' || outcome === 'always') {
         restartPendingToolClocks();
       }
       var entry = approvalCards[requestId];
       if (!entry) return;
       delete approvalCards[requestId];
+      entry.el.removeAttribute('aria-busy');
       entry.actions.remove();
       var outcomeEl = document.createElement('div');
       outcomeEl.className = 'approval-card__outcome';
       outcomeEl.textContent = entry.question
         ? outcome === 'once'
-          ? 'Answered.'
+          ? answer ? 'Answered: ' + answer : 'Answered.'
           : outcome === 'deny'
             ? 'Skipped.'
             : APPROVAL_OUTCOMES.expired
-        : APPROVAL_OUTCOMES[outcome] || APPROVAL_OUTCOMES.expired;
+        : reason || APPROVAL_OUTCOMES[outcome] || APPROVAL_OUTCOMES.expired;
       entry.el.appendChild(outcomeEl);
     }
 
@@ -6587,6 +7433,7 @@ export function getWebviewContent(
         (function (entry) {
           var chip = document.createElement('span');
           chip.className = 'attachment-chip';
+          chip.title = entry.label;
           chip.setAttribute('role', 'listitem');
 
           var icon = document.createElement('span');
@@ -6606,6 +7453,7 @@ export function getWebviewContent(
           remove.textContent = '\u00d7';
           remove.addEventListener('click', function () {
             vscode.postMessage({ type: 'dismissEditorContext', payload: { id: entry.id } });
+            userInput.focus();
           });
           chip.appendChild(remove);
 
@@ -6629,7 +7477,7 @@ export function getWebviewContent(
     // here is not a looser limit, it is a dropped batch: the schema rejects
     // the whole message, so the sibling files lose their ack and their chips
     // never leave "uploading".
-    var MAX_ATTACHMENT_BYTES = 10000000;
+    var MAX_ATTACHMENT_BYTES = ${MAX_COMPOSER_ATTACHMENT_BYTES};
 
     function invalidateAttachmentBatches() {
       attachmentGeneration++;
@@ -6742,12 +7590,12 @@ export function getWebviewContent(
       label.className = 'attachment-chip__name';
       label.textContent = name;
       var size = file ? formatFileSize(file.size) : '';
-      if (size) chip.title = name + ', ' + size;
+      chip.title = size ? name + ', ' + size : name;
 
       var removeBtn = document.createElement('button');
       removeBtn.type = 'button';
       removeBtn.className = 'attachment-chip__remove';
-      removeBtn.setAttribute('aria-label', 'Remove attachment');
+      removeBtn.setAttribute('aria-label', 'Remove attachment ' + name);
       removeBtn.textContent = '×';
       removeBtn.addEventListener('click', function() {
         var attachId = chip.getAttribute('data-attachment-id');
@@ -6766,6 +7614,7 @@ export function getWebviewContent(
         chip.remove();
         saveComposerDraft();
         renderAttachmentStrip();
+        userInput.focus();
       });
 
       chip.appendChild(icon);
@@ -6780,6 +7629,16 @@ export function getWebviewContent(
       return chip;
     }
 
+    function describeAttachmentLimit(chip, name, limit) {
+      if (!limit) return;
+      var note = document.createElement('span');
+      note.className = 'attachment-chip__size';
+      note.textContent = 'Truncated';
+      note.setAttribute('aria-label', 'Only the first ' + limit.toLocaleString() + ' characters are sent');
+      chip.insertBefore(note, chip.querySelector('.attachment-chip__remove'));
+      chip.title = name + ': only the first ' + limit.toLocaleString() + ' characters are sent';
+    }
+
     function readFileAsDataUrl(file) {
       return new Promise(function(resolve, reject) {
         var reader = new FileReader();
@@ -6791,7 +7650,7 @@ export function getWebviewContent(
 
     function acceptIncomingFiles(fileList) {
       if (!fileList || fileList.length === 0) return;
-      var files = Array.from(fileList).slice(0, 8);
+      var files = Array.from(fileList).slice(0, ${MAX_COMPOSER_ATTACHMENT_BATCH});
 
       // Render uploading chips immediately so the user sees the drop landed.
       var batchKey = 'batch_' + (++attachmentBatchSeq);
@@ -6893,8 +7752,64 @@ export function getWebviewContent(
     window.addEventListener('message', (event) => {
       const msg = event.data;
 
+      if (msg.type === 'dictationAvailability') {
+        dictationBtn.hidden = !msg.payload.enabled;
+        if (dictationBtn.hidden) {
+          cancelDictation();
+          resetDictation('');
+        }
+        return;
+      }
+      if (msg.type === 'nextEffort') {
+        document.getElementById('nextEffortNotice').hidden = !msg.payload.label;
+        document.getElementById('nextEffortLabel').textContent = msg.payload.label
+          ? msg.payload.label + ' effort for the next message'
+          : '';
+        return;
+      }
+      if (msg.type === 'replyBookmarkChanged') {
+        const payload = msg.payload;
+        if (payload.epoch !== sessionBinding.epoch) return;
+        for (const button of messagesEl.querySelectorAll('.message-action--bookmark')) {
+          if (
+            (payload.buttonId !== undefined && button.dataset.bookmarkButton === String(payload.buttonId)) ||
+            button.dataset.replyIndex === String(payload.index)
+          ) {
+            button.dataset.replyIndex = String(payload.index);
+            markReplyBookmark(button, payload.bookmarked === true);
+          }
+        }
+        return;
+      }
+      if (msg.type === 'dictationResult') {
+        if (!dictationPending || msg.payload.id !== dictationId) return;
+        const binding = dictationBinding;
+        if (binding.epoch !== sessionBinding.epoch || binding.revision !== composerBinding.revision) {
+          resetDictation('The draft changed during dictation.');
+          return;
+        }
+        if (msg.payload.error) {
+          resetDictation(msg.payload.error, msg.payload.needsSignIn);
+          return;
+        }
+        const next = userInput.value + (userInput.value && !/\\s$/.test(userInput.value) ? ' ' : '') + msg.payload.text;
+        if (next.length > MAX_SEND_MESSAGE_CHARS) {
+          resetDictation('The transcript would exceed the draft limit.');
+          return;
+        }
+        userInput.value = next;
+        userInput.dispatchEvent(new Event('input', { bubbles: true }));
+        userInput.focus();
+        resetDictation('');
+        return;
+      }
       if (msg.type === 'sessionBinding') {
+        cancelDictation();
+        resetDictation('');
         sessionBinding.epoch = msg.payload.epoch;
+        if (msg.payload.composerThreadId !== undefined) {
+          showComposerDraft(msg.payload.composerThreadId, false);
+        }
         vscode.postMessage({ type: 'composerState', payload: composerSnapshot() });
         return;
       }
@@ -6944,6 +7859,7 @@ export function getWebviewContent(
         renderAssistantInto(currentAssistantEl, accumulatedContent);
         bindCodeBlockActions(currentAssistantEl);
         showTyping();
+        followTranscriptEnd();
       }
 
       else if (msg.type === 'streamReplaced') {
@@ -6951,6 +7867,7 @@ export function getWebviewContent(
         accumulatedContent = msg.payload.text;
         renderAssistantInto(currentAssistantEl, accumulatedContent);
         bindCodeBlockActions(currentAssistantEl);
+        followTranscriptEnd();
       }
 
       else if (msg.type === 'done') {
@@ -6965,6 +7882,7 @@ export function getWebviewContent(
             msg.payload && msg.payload.modelLabel ? 'AGI (' + msg.payload.modelLabel + ') replied:' : 'AGI replied:'
           );
           bindCodeBlockActions(currentAssistantEl);
+          appendPromptCacheUsage(currentAssistantEl, msg.payload);
           appendMessageActions(currentAssistantEl, accumulatedContent, answerMeta(msg.payload));
           if (turnSources.length > 0) appendSources(currentAssistantEl, turnSources);
           if (msg.payload && msg.payload.turnId && msg.payload.changedFiles > 0) {
@@ -6983,10 +7901,20 @@ export function getWebviewContent(
         }
         currentAssistantEl = null;
         accumulatedContent = '';
+        followTranscriptEnd();
       }
 
       else if (msg.type === 'contextUsage') {
         renderContextUsage(msg.payload.usedTokens, msg.payload.contextWindow);
+      }
+      else if (msg.type === 'contextWarningPreference') {
+        contextWarningPercent = msg.payload.percent;
+        if (contextUsageMeasurement) {
+          renderContextUsage(contextUsageMeasurement.usedTokens, contextUsageMeasurement.contextWindow);
+        }
+      }
+      else if (msg.type === 'focusViewChanged') {
+        setFocusView(msg.payload.enabled);
       }
 
       else if (msg.type === 'sourceList') {
@@ -7069,6 +7997,7 @@ export function getWebviewContent(
       else if (msg.type === 'conversationBoundaryChanged') {
         var boundaryUser = userMessageById(msg.payload.clientMessageId);
         messagesEl.replaceChildren();
+        renderSubagents([]);
         addMessage('system', msg.payload.message);
         if (boundaryUser) {
           messagesEl.appendChild(boundaryUser);
@@ -7081,6 +8010,7 @@ export function getWebviewContent(
         accumulatedContent = '';
         activePlanCard = null;
         if (streaming) showTyping();
+        followTranscriptEnd(true);
       }
 
       else if (msg.type === 'followUpStatus') {
@@ -7106,6 +8036,7 @@ export function getWebviewContent(
 
       else if (msg.type === 'followUpBehavior') {
         followUpBehavior = msg.payload.behavior === 'steer' ? 'steer' : 'queue';
+        escapeStops = msg.payload.escapeStops === true;
         enterBehavior =
           msg.payload.enterBehavior === 'modifier' || msg.payload.enterBehavior === 'modifierIfMultiline'
             ? msg.payload.enterBehavior
@@ -7184,11 +8115,26 @@ export function getWebviewContent(
 
       else if (msg.type === 'sessionsList') {
         if (msg.payload.source === sessionsSource) {
+          var restorePinFocus = sessionPinFocus !== null && !sessionsSheet.hidden &&
+            (document.activeElement === document.body ||
+              document.activeElement?.dataset.sessionPinId === sessionPinFocus);
           sessionsLoading = false;
           sessionsRows = msg.payload.rows || [];
+          if (sessionsSource === 'local') {
+            sessionsGroups = msg.payload.groups || [];
+            updateSessionsGroupFilter();
+          }
           sessionsUnavailable = msg.payload.unavailable || null;
+          sessionsRetryable = msg.payload.retryable === true;
           if (sessionsSearch) sessionsSearch.hidden = sessionsRows.length === 0;
           renderSessionsRows();
+          if (restorePinFocus) {
+            var pinToFocus = Array.from(sessionsSheetList.querySelectorAll('[data-session-pin-id]'))
+              .find(function (button) { return button.dataset.sessionPinId === sessionPinFocus; });
+            if (pinToFocus) pinToFocus.focus();
+            else if (sessionsTabLocal) sessionsTabLocal.focus();
+          }
+          sessionPinFocus = null;
         }
       }
 
@@ -7204,8 +8150,68 @@ export function getWebviewContent(
         }
       }
 
+      else if (msg.type === 'sessionUnreadChanged') {
+        var focused = document.activeElement?.dataset.sessionUnreadId;
+        var lists = [sessionsRows, sessionsSearchState?.rows ?? []];
+        for (var rows of lists) {
+          for (var row of rows) {
+            if (row.source === 'local' && row.id === msg.payload.id) row.unread = msg.payload.unread;
+          }
+        }
+        if (sessionsSheet.hidden || sessionsSource !== 'local') return;
+        renderSessionsRows();
+        if (focused) {
+          var next = Array.from(sessionsSheetList.querySelectorAll('[data-session-unread-id]'))
+            .find(function(button) { return button.dataset.sessionUnreadId === focused; });
+          (next || sessionsUnreadOnly).focus();
+        }
+      }
+
+      else if (msg.type === 'sessionGroupChanged') {
+        sessionsGroups = msg.payload.groups || [];
+        var groupFocus = document.activeElement?.dataset.sessionGroupId;
+        var groupLists = [sessionsRows, sessionsSearchState?.rows ?? []];
+        var movedIds = new Set(msg.payload.ids);
+        for (var groupRows of groupLists) {
+          for (var groupRow of groupRows) {
+            if (groupRow.source === 'local' && movedIds.has(groupRow.id)) groupRow.groupId = msg.payload.groupId;
+          }
+        }
+        if (sessionsSheet.hidden || sessionsSource !== 'local') return;
+        var finishedSelection = sessionsSelecting &&
+          selectedSessionIds.size === movedIds.size &&
+          Array.from(movedIds).every(function(id) { return selectedSessionIds.has(id); });
+        if (finishedSelection) {
+          sessionsSelecting = false;
+          clearSessionSelection();
+        }
+        updateSessionsGroupFilter();
+        renderSessionsRows();
+        if (finishedSelection) selectSessions.focus();
+        if (groupFocus) {
+          var nextGroup = Array.from(sessionsSheetList.querySelectorAll('[data-session-group-id]'))
+            .find(function(button) { return button.dataset.sessionGroupId === groupFocus; });
+          (nextGroup || sessionsGroupFilter).focus();
+        }
+      }
+
+      else if (msg.type === 'sessionGroupsChanged') {
+        sessionsGroups = msg.payload.groups || [];
+        var validGroups = new Set(sessionsGroups.map(function(group) { return group.id; }));
+        for (var managedRows of [sessionsRows, sessionsSearchState?.rows ?? []]) {
+          for (var managedRow of managedRows) {
+            if (managedRow.groupId && !validGroups.has(managedRow.groupId)) managedRow.groupId = undefined;
+          }
+        }
+        if (sessionsSheet.hidden || sessionsSource !== 'local') return;
+        updateSessionsGroupFilter();
+        renderSessionsRows();
+        (manageSessionGroups.hidden ? sessionsUnreadOnly : manageSessionGroups).focus();
+      }
+
       else if (msg.type === 'slashCommands') {
         slashCommands = msg.payload.items || [];
+        slashCommandsLoaded = true;
         if (slashMenu && slashMenu.classList.contains('open')) {
           renderSlashMenu(slashRenderFilter());
         }
@@ -7266,7 +8272,13 @@ export function getWebviewContent(
         ))) sendMessage();
       }
 
+      else if (msg.type === 'composerThreadStarted') {
+        showComposerDraft(msg.payload.threadId, true);
+      }
+
       else if (msg.type === 'conversationLoaded') {
+        cancelDictation();
+        if (typeof msg.payload.threadId === 'string') showComposerDraft(msg.payload.threadId, false);
         closeSideQuestion();
         lastSendPayload = null;
         clearContextUsage();
@@ -7291,7 +8303,7 @@ export function getWebviewContent(
         } else {
           emptyStateEl = null;
         }
-        messagesEl.scrollTop = messagesEl.scrollHeight;
+        followTranscriptEnd(true);
       }
 
       else if (msg.type === 'transcriptRefreshed') {
@@ -7304,12 +8316,26 @@ export function getWebviewContent(
         );
         renderTranscript(msg.payload.conversation);
         emptyStateEl = null;
-        addMessage('system', msg.payload.notice);
+        if (msg.payload.notice) addMessage('system', msg.payload.notice);
         for (var undeliveredIndex = 0; undeliveredIndex < undelivered.length; undeliveredIndex++) {
           messagesEl.appendChild(undelivered[undeliveredIndex]);
         }
         if (streaming) showTyping();
-        messagesEl.scrollTop = messagesEl.scrollHeight;
+        followTranscriptEnd();
+      }
+
+      else if (msg.type === 'reviewableTurns') {
+        var savedReplies = new Map();
+        messagesEl.querySelectorAll('.message.assistant[data-saved-turn-id]').forEach(function(reply) {
+          savedReplies.set(reply.dataset.savedTurnId, reply);
+        });
+        msg.payload.turns.forEach(function(turn) {
+          var reply = savedReplies.get(turn.turnId);
+          if (reply && !reply.querySelector('.turn-changes')) {
+            appendTurnChanges(reply, turn.turnId, turn.changedFiles);
+          }
+        });
+        followTranscriptEnd();
       }
 
       else if (msg.type === 'subagents') {
@@ -7343,12 +8369,12 @@ export function getWebviewContent(
         activePlanCard = null;
         mountEmptyState();
         syncRecentChats();
+        followTranscriptEnd(true);
         streaming = false;
         currentAssistantEl = null;
         activeQueuedClientMessageId = null;
         toolCallStack = null;
         toolCallList = null;
-        activitySummaryButton = null;
         activityIcon = null;
         activityMeta = null;
         toolCallMap = {};
@@ -7368,6 +8394,8 @@ export function getWebviewContent(
 
       else if (msg.type === 'modeChanged') {
         activeMode = msg.payload.mode;
+        activeEditAutomatically = msg.payload.editAutomatically === true;
+        settingsRequireShellApproval = msg.payload.settingsRequireShellApproval === true;
         renderControlsSummary();
         renderPlanDecision();
       }
@@ -7395,6 +8423,7 @@ export function getWebviewContent(
       }
 
       else if (msg.type === 'contextMenuState') {
+        var activeContextItem = plusMenu.contains(document.activeElement) ? document.activeElement : null;
         var stateItems = (msg.payload && msg.payload.items) || [];
         for (var si = 0; si < stateItems.length; si++) {
           var state = stateItems[si] || {};
@@ -7405,6 +8434,7 @@ export function getWebviewContent(
           var description = button.querySelector('.plus-menu-description');
           if (description) description.textContent = state.detail || '';
         }
+        if (activeContextItem && activeContextItem.disabled) focusMenuItem(plusMenu, 0);
       }
 
       else if (msg.type === 'approvalRequested') {
@@ -7418,17 +8448,27 @@ export function getWebviewContent(
       }
 
       else if (msg.type === 'approvalResolved') {
-        resolveApprovalCard(msg.payload.requestId, msg.payload.outcome);
+        resolveApprovalCard(msg.payload.requestId, msg.payload.outcome, msg.payload.answer, msg.payload.reason);
       }
 
       else if (msg.type === 'editorContext') {
         renderEditorContext((msg.payload && msg.payload.chips) || []);
       }
 
+      else if (msg.type === 'sentContext') {
+        document.getElementById('storedTurnNotice')?.remove();
+        const sentMessage = userMessageById(msg.payload.clientMessageId);
+        if (sentMessage) {
+          renderAcceptedContext(sentMessage, msg.payload.entries);
+          followTranscriptEnd();
+        }
+      }
+
       else if (msg.type === 'contextAttached') {
         if (attachmentStrip) {
           var contextChip = makeAttachmentChip(msg.payload.name, '');
           contextChip.setAttribute('data-attachment-id', msg.payload.id);
+          describeAttachmentLimit(contextChip, msg.payload.name, msg.payload.truncatedAt);
           attachmentStrip.appendChild(contextChip);
           pendingAttachmentCount++;
           renderAttachmentStrip();
@@ -7466,13 +8506,7 @@ export function getWebviewContent(
             var idQueue = addedIdsByName[attachName];
             var addedAck = idQueue && idQueue.length > 0 ? idQueue.shift() : null;
             var attachId = addedAck ? addedAck.id : '';
-            if (addedAck && addedAck.truncatedAt && nameEl) {
-              var truncatedNote = document.createElement('span');
-              truncatedNote.className = 'attachment-chip__size';
-              truncatedNote.textContent = 'first ' + addedAck.truncatedAt.toLocaleString() + ' characters';
-              nameEl.parentNode.insertBefore(truncatedNote, nameEl.nextSibling);
-              chipEl.title = attachName + ': only the first ' + addedAck.truncatedAt.toLocaleString() + ' characters are sent';
-            }
+            if (addedAck) describeAttachmentLimit(chipEl, attachName, addedAck.truncatedAt);
             if (attachId && chipEl.getAttribute('data-remove-requested') === '1') {
               // The user dismissed this chip while it was still uploading:
               // honour it now that the host id exists.
@@ -7597,7 +8631,6 @@ export function getWebviewContent(
     // ── Inline tool-call rendering (design-spec §4) ───────────────────────────
     var toolCallStack = null; // active .activity-group container
     var toolCallList = null;
-    var activitySummaryButton = null;
     var activityIcon = null;
     var activityMeta = null;
     var toolCallMap = {}; // toolUseId → inline disclosure state
@@ -7698,7 +8731,7 @@ export function getWebviewContent(
         });
       }
       renderPlanDecision();
-      messagesEl.scrollTop = messagesEl.scrollHeight;
+      followTranscriptEnd();
     }
 
     function planDecisionButton(label, primary, onClick) {
@@ -7815,8 +8848,6 @@ export function getWebviewContent(
     var TOOL_SNIPPET_LINES = 40;
 
     function appendTurnChanges(container, turnId, count) {
-      var earlier = messagesEl.querySelectorAll('.turn-changes__review');
-      for (var r = 0; r < earlier.length; r++) earlier[r].remove();
       var row = document.createElement('div');
       row.className = 'turn-changes';
       row.dataset.turnId = turnId;
@@ -7828,7 +8859,7 @@ export function getWebviewContent(
       review.type = 'button';
       review.className = 'turn-changes__review';
       review.textContent = 'Review changes';
-      review.title = 'Open every file this reply changed in a diff against the last commit, where each change can be kept or reverted. Other uncommitted edits in those files show too.';
+      review.title = 'Open the saved changes for this reply';
       review.addEventListener('click', function () {
         vscode.postMessage({ type: 'reviewTurnChanges', payload: { turnId: turnId } });
       });
@@ -7959,7 +8990,7 @@ export function getWebviewContent(
     }
 
     function updateActivitySummary(latestSummary, terminal) {
-      if (!toolCallStack || !activityMeta || !activitySummaryButton || !activityIcon || !toolCallList) return;
+      if (!toolCallStack || !activityMeta || !activityIcon || !toolCallList) return;
       var total = toolCallList.querySelectorAll('.tool-call').length;
       var running = toolCallList.querySelectorAll('.tool-call--pending').length;
       var errors = toolCallList.querySelectorAll('.tool-call--error').length;
@@ -7984,11 +9015,24 @@ export function getWebviewContent(
       toolCallStack.dataset.status = status;
       activityIcon.className = 'activity-group__icon codicon codicon-' +
         (status === 'error' ? 'error' : status === 'done' ? 'check' : 'loading');
-      activitySummaryButton.setAttribute(
-        'aria-label',
-        L10N.activity + ', ' + parts.join(', ') + '. ' +
-          (activitySummaryButton.getAttribute('aria-expanded') === 'true' ? L10N.collapseDetails : L10N.expandDetails)
-      );
+    }
+
+    function setActivityExpanded(group, expanded) {
+      const summary = group.querySelector('.activity-group__summary');
+      const body = group.querySelector('.activity-group__body');
+      if (!expanded && body.contains(document.activeElement)) summary.focus({ preventScroll: true });
+      group.classList.toggle('activity-group--collapsed', !expanded);
+      summary.setAttribute('aria-expanded', String(expanded));
+    }
+
+    function setFocusView(enabled) {
+      if (focusView === enabled) return;
+      focusView = enabled;
+      document.getElementById('toggleFocusView').setAttribute('aria-checked', String(enabled));
+      messagesEl.querySelectorAll('.activity-group').forEach(function(group) {
+        setActivityExpanded(group, !enabled && group.dataset.status === 'working');
+      });
+      followTranscriptEnd();
     }
 
     function ensureToolCallStack() {
@@ -8003,7 +9047,6 @@ export function getWebviewContent(
       var summaryButton = document.createElement('button');
       summaryButton.type = 'button';
       summaryButton.className = 'activity-group__summary';
-      summaryButton.setAttribute('aria-expanded', 'true');
       var iconEl = document.createElement('span');
       iconEl.className = 'activity-group__icon codicon codicon-loading';
       iconEl.setAttribute('aria-hidden', 'true');
@@ -8025,17 +9068,15 @@ export function getWebviewContent(
       var listEl = document.createElement('div');
       listEl.className = 'activity-group__body';
       summaryButton.addEventListener('click', function() {
-        var collapsed = stackEl.classList.toggle('activity-group--collapsed');
-        summaryButton.setAttribute('aria-expanded', String(!collapsed));
-        updateActivitySummary('', stackEl.dataset.status !== 'working');
+        setActivityExpanded(stackEl, summaryButton.getAttribute('aria-expanded') !== 'true');
       });
       stackEl.appendChild(summaryButton);
       stackEl.appendChild(listEl);
+      setActivityExpanded(stackEl, !focusView);
       messagesEl.appendChild(stackEl);
-      messagesEl.scrollTop = messagesEl.scrollHeight;
+      followTranscriptEnd();
       toolCallStack = stackEl;
       toolCallList = listEl;
-      activitySummaryButton = summaryButton;
       activityIcon = iconEl;
       activityMeta = metaEl;
       return listEl;
@@ -8152,7 +9193,7 @@ export function getWebviewContent(
 
       stack.appendChild(wrapper);
       updateActivitySummary(summary || label, false);
-      messagesEl.scrollTop = messagesEl.scrollHeight;
+      followTranscriptEnd();
 
       toolCallMap[toolUseId] = {
         el: wrapper,
@@ -8238,18 +9279,16 @@ export function getWebviewContent(
         existing.iconEl.classList.add('codicon-check');
       }
       updateActivitySummary(summary, false);
-      messagesEl.scrollTop = messagesEl.scrollHeight;
+      followTranscriptEnd();
       return existing;
     }
 
     function finalizeToolCallStack() {
       if (!toolCallStack) return;
-      toolCallStack.classList.add('activity-group--collapsed');
-      if (activitySummaryButton) activitySummaryButton.setAttribute('aria-expanded', 'false');
+      if (!focusView) setActivityExpanded(toolCallStack, false);
       updateActivitySummary('', true);
       toolCallStack = null;
       toolCallList = null;
-      activitySummaryButton = null;
       activityIcon = null;
       activityMeta = null;
       toolCallMap = {};
@@ -8260,31 +9299,7 @@ export function getWebviewContent(
     var emptyStateEl = document.getElementById('emptyState');
     function hideEmptyState() {
       if (emptyStateEl) { emptyStateEl.style.display = 'none'; }
-      syncTerminalHint();
     }
-
-    var terminalHintEl = document.getElementById('terminalHint');
-    function terminalHintDismissed() {
-      var state = vscode.getState() || {};
-      return state.terminalHintDismissed === true;
-    }
-    function syncTerminalHint() {
-      if (!terminalHintEl) return;
-      var current = document.getElementById('emptyState');
-      var emptyVisible = Boolean(current) && current.style.display !== 'none';
-      terminalHintEl.hidden = !emptyVisible || terminalHintDismissed();
-    }
-    document.getElementById('terminalHintSettings').addEventListener('click', function () {
-      vscode.postMessage({ type: 'openSettings' });
-    });
-    document.getElementById('terminalHintDismiss').addEventListener('click', function () {
-      var state = vscode.getState() || {};
-      state.terminalHintDismissed = true;
-      vscode.setState(state);
-      syncTerminalHint();
-    });
-    new MutationObserver(syncTerminalHint).observe(messagesEl, { childList: true });
-    syncTerminalHint();
 
     var recentChats = { conversations: [], total: 0 };
     var startSuggestions = { projects: [], skills: [], connectors: [] };
@@ -8331,7 +9346,7 @@ export function getWebviewContent(
       var mounted = emptyStateEl.querySelector('.start-suggestions');
       if (mounted) mounted.parentNode.removeChild(mounted);
       var block = document.createElement('div');
-      block.className = 'recent-chats start-suggestions';
+      block.className = 'start-suggestions';
       appendSuggestionGroup(block, 'Projects', startSuggestions.projects.map(function (project) {
         return buildSuggestionRow(project.name, 'Use in this chat', function () {
           vscode.postMessage({ type: 'openSuggestedProject', payload: { projectId: project.id } });
@@ -8347,8 +9362,11 @@ export function getWebviewContent(
           prefillComposer('Using ' + connector.name + ', ');
         });
       }));
+      emptyStateEl.classList.toggle(
+        'empty-state--has-recents',
+        Boolean(block.firstChild || emptyStateEl.querySelector('.recent-chats')),
+      );
       if (!block.firstChild) return;
-      emptyStateEl.classList.add('empty-state--has-recents');
       emptyStateEl.appendChild(block);
     }
 
@@ -8387,23 +9405,26 @@ export function getWebviewContent(
       block.className = 'recent-chats';
       var heading = document.createElement('div');
       heading.className = 'recent-chats-title';
-      heading.textContent = 'Sessions';
+      heading.textContent = 'Recent chats';
       block.appendChild(heading);
       for (var i = 0; i < recentChats.conversations.length; i++) {
         block.appendChild(buildRecentChatRow(recentChats.conversations[i]));
       }
-      var viewAll = document.createElement('button');
-      viewAll.type = 'button';
-      viewAll.className = 'recent-chats-all';
-      viewAll.textContent = 'View all (' + recentChats.total + ')';
-      viewAll.setAttribute('aria-label', 'View all ' + recentChats.total + ' sessions');
-      viewAll.addEventListener('click', function() {
-        openSessionsSheet();
-      });
-      block.appendChild(viewAll);
-      emptyStateEl.insertBefore(block, emptyStateEl.firstChild);
+      if (recentChats.total > recentChats.conversations.length) {
+        var viewAll = document.createElement('button');
+        viewAll.type = 'button';
+        viewAll.className = 'recent-chats-all';
+        viewAll.textContent = 'View all (' + recentChats.total + ')';
+        viewAll.setAttribute('aria-label', 'View all ' + recentChats.total + ' sessions');
+        viewAll.addEventListener('click', function() {
+          openSessionsSheet();
+        });
+        block.appendChild(viewAll);
+      }
+      var suggestions = emptyStateEl.querySelector('.start-suggestions');
+      emptyStateEl.insertBefore(block, suggestions);
     }
-    if (onboardingEl && onboardingEl.style.display !== 'none') {
+    if (onboardingEl && !onboardingEl.hidden) {
       setOnboardingVisible(true);
     } else if (onboardingEl) {
       setOnboardingVisible(false);

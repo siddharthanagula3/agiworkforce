@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { clearAuthSession, getAuthToken } from '@/services/authSession';
+import { getAuthToken } from '@/services/authSession';
 import {
   clearLocalCloudAccountState,
   clearUnsentCloudWork,
@@ -29,6 +29,7 @@ import {
   getDeviceAccountsClerk,
   planSignOutHandover,
   readDeviceAccounts,
+  type DeviceAccountsClerk,
 } from '@/src/features/accounts/deviceAccounts';
 
 interface AuthState {
@@ -47,15 +48,50 @@ interface AuthState {
   switchAccount: (sessionId: string) => Promise<void>;
 }
 
-async function revokeAskIntentForAccount(capturedAuthTokenPromise: Promise<string | null>) {
+type SignOutScope = {
+  clerk: DeviceAccountsClerk | null;
+  activeId: string | null;
+  sessionIds: string[];
+};
+
+function captureSignOutScope(clerk: DeviceAccountsClerk | null): SignOutScope {
+  const activeId = clerk ? activeDeviceSessionId(clerk) : null;
+  const sessionIds = new Set(clerk?.client?.signedInSessions.map((session) => session.id));
+  if (activeId) sessionIds.add(activeId);
+  return { clerk, activeId, sessionIds: [...sessionIds] };
+}
+
+function stillOnEndingSession(scope: SignOutScope): boolean {
+  return (
+    scope.clerk !== null &&
+    scope.activeId !== null &&
+    activeDeviceSessionId(scope.clerk) === scope.activeId
+  );
+}
+
+function hasCapturedDeviceSession(clerk: DeviceAccountsClerk, sessionId: string): boolean {
+  return (
+    activeDeviceSessionId(clerk) === sessionId ||
+    clerk.client?.signedInSessions.some((session) => session.id === sessionId) === true
+  );
+}
+
+async function revokeAskIntentForAccount(
+  capturedAuthTokenPromise: Promise<string | null>,
+  isCurrent?: () => boolean,
+) {
   try {
-    await revokeAskIntentForSignOut((await capturedAuthTokenPromise) ?? '');
+    const token = (await capturedAuthTokenPromise) ?? '';
+    await revokeAskIntentForSignOut(token, isCurrent);
   } catch (err) {
     console.warn('[auth] Ask from Siri teardown on sign-out failed:', err);
   }
 }
 
-async function retireCloudCredentials(capturedAuthTokenPromise: Promise<string | null>) {
+async function retireCloudCredentials(
+  capturedAuthTokenPromise: Promise<string | null>,
+  scope: SignOutScope,
+) {
   try {
     const capturedAuthToken = await capturedAuthTokenPromise;
     if (capturedAuthToken) {
@@ -65,7 +101,7 @@ async function retireCloudCredentials(capturedAuthTokenPromise: Promise<string |
     console.warn('[auth] push-token teardown on sign-out failed:', err);
   }
 
-  await revokeAskIntentForAccount(capturedAuthTokenPromise);
+  await revokeAskIntentForAccount(capturedAuthTokenPromise, () => stillOnEndingSession(scope));
 }
 
 type SetAuthState = (partial: Partial<AuthState>) => void;
@@ -83,15 +119,27 @@ function retireActiveCloudAccount(set: SetAuthState) {
 async function endEveryDeviceSession(
   set: SetAuthState,
   capturedAuthTokenPromise: Promise<string | null>,
+  scope: SignOutScope,
 ) {
   retireActiveCloudAccount(set);
 
-  await retireCloudCredentials(capturedAuthTokenPromise);
+  await retireCloudCredentials(capturedAuthTokenPromise, scope);
 
-  try {
-    await clearAuthSession();
-  } catch {
-    // External sign-out may fail; local state already failed closed above.
+  await endCapturedDeviceSessions(scope);
+}
+
+async function endCapturedDeviceSessions(scope: SignOutScope): Promise<void> {
+  const { clerk, sessionIds } = scope;
+  if (!clerk) return;
+  for (const sessionId of sessionIds) {
+    const activeId = activeDeviceSessionId(clerk);
+    if (activeId && !sessionIds.includes(activeId)) return;
+    if (!hasCapturedDeviceSession(clerk, sessionId)) continue;
+    try {
+      await endDeviceSession(clerk, sessionId);
+    } catch (error) {
+      console.warn('[auth] a captured session could not be ended:', error);
+    }
   }
 }
 
@@ -178,9 +226,10 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   signOut: async () => {
     const capturedAuthTokenPromise = getAuthToken();
     const clerk = getDeviceAccountsClerk();
+    const scope = captureSignOutScope(clerk);
     const handover = planSignOutHandover(readDeviceAccounts(clerk));
     if (!clerk || !handover) {
-      await endEveryDeviceSession(set, capturedAuthTokenPromise);
+      await endEveryDeviceSession(set, capturedAuthTokenPromise, scope);
       return;
     }
 
@@ -190,28 +239,33 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     try {
       await releasePushDeviceForAccountChange(capturedAuthToken);
     } catch (err) {
-      console.warn(
-        '[auth] could not release the push registration for the hand-over, ending every session:',
-        err,
-      );
-      await endEveryDeviceSession(set, Promise.resolve(capturedAuthToken));
+      console.warn('[auth] could not release the push registration for the hand-over:', err);
+      await retireCloudCredentials(Promise.resolve(capturedAuthToken), scope);
+      await endCapturedDeviceSessions(scope);
       return;
     }
-    await revokeAskIntentForAccount(Promise.resolve(capturedAuthToken));
+    await revokeAskIntentForAccount(Promise.resolve(capturedAuthToken), () =>
+      stillOnEndingSession(scope),
+    );
 
+    if (!stillOnEndingSession(scope)) return;
     if (continueInCloud) stagePostAuthIntent(CLOUD_CHAT_POST_AUTH_INTENT);
     try {
       await activateDeviceSession(clerk, handover.next.sessionId);
     } catch (err) {
       if (activeDeviceSessionId(clerk) !== handover.next.sessionId) {
-        console.warn(
-          '[auth] could not continue on the remaining account, ending every session:',
-          err,
-        );
+        if (!stillOnEndingSession(scope)) return;
+        console.warn('[auth] could not continue on the remaining account:', err);
         clearPostAuthIntent();
-        await clearAuthSession();
+        await endCapturedDeviceSessions(scope);
         return;
       }
+    }
+    if (
+      activeDeviceSessionId(clerk) !== handover.next.sessionId ||
+      !hasCapturedDeviceSession(clerk, handover.ending.sessionId)
+    ) {
+      return;
     }
     try {
       await endDeviceSession(clerk, handover.ending.sessionId);
@@ -221,7 +275,8 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   },
 
   signOutAllAccounts: async () => {
-    await endEveryDeviceSession(set, getAuthToken());
+    const scope = captureSignOutScope(getDeviceAccountsClerk());
+    await endEveryDeviceSession(set, getAuthToken(), scope);
   },
 
   switchAccount: async (sessionId: string) => {

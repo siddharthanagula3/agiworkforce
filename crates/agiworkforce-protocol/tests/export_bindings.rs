@@ -69,6 +69,12 @@ fn export_typescript_bindings() {
         .expect("TerminalReadParams");
     agiworkforce_protocol::workspace_terminal::TerminalReadResponse::export_all_to(dir)
         .expect("TerminalReadResponse");
+    agiworkforce_protocol::workspace_terminal::BackgroundCommandIdParams::export_all_to(dir)
+        .expect("BackgroundCommandIdParams");
+    agiworkforce_protocol::workspace_terminal::BackgroundCommandListResponse::export_all_to(dir)
+        .expect("BackgroundCommandListResponse");
+    agiworkforce_protocol::workspace_terminal::BackgroundCommandReadResponse::export_all_to(dir)
+        .expect("BackgroundCommandReadResponse");
     agiworkforce_protocol::workspace_terminal::TerminalWriteParams::export_all_to(dir)
         .expect("TerminalWriteParams");
     agiworkforce_protocol::workspace_terminal::TerminalResizeParams::export_all_to(dir)
@@ -235,6 +241,14 @@ fn export_typescript_bindings() {
         .expect("export developer-session thread history graph");
     agiworkforce_protocol::developer_session::ThreadIdParams::export_all_to(dir)
         .expect("export developer-session thread id graph");
+    agiworkforce_protocol::developer_session::ThreadArchiveInactiveParams::export_all_to(dir)
+        .expect("export inactive thread archive params");
+    agiworkforce_protocol::developer_session::ThreadArchiveInactiveResponse::export_all_to(dir)
+        .expect("export inactive thread archive response");
+    agiworkforce_protocol::developer_session::ThreadPinParams::export_all_to(dir)
+        .expect("export thread pin params");
+    agiworkforce_protocol::developer_session::ThreadPinResponse::export_all_to(dir)
+        .expect("export thread pin response");
     agiworkforce_protocol::developer_session::ThreadForkParams::export_all_to(dir)
         .expect("export developer-session thread fork graph");
     agiworkforce_protocol::developer_session::ThreadCompactParams::export_all_to(dir)
@@ -263,6 +277,16 @@ fn export_typescript_bindings() {
     // failure a client branches on. No envelope references them.
     agiworkforce_protocol::developer_session::TurnEndedNotification::export_all_to(dir)
         .expect("export developer-session turn ended graph");
+    agiworkforce_protocol::developer_session::TurnChildTaskNotification::export_all_to(dir)
+        .expect("export developer-session child task notification");
+    agiworkforce_protocol::developer_session::ChildTaskStopParams::export_all_to(dir)
+        .expect("export developer-session child task stop params");
+    agiworkforce_protocol::developer_session::ChildTaskStopResponse::export_all_to(dir)
+        .expect("export developer-session child task stop response");
+    agiworkforce_protocol::developer_session::ChildTaskTranscriptParams::export_all_to(dir)
+        .expect("export developer-session child transcript params");
+    agiworkforce_protocol::developer_session::ChildTaskTranscriptResponse::export_all_to(dir)
+        .expect("export developer-session child transcript response");
     agiworkforce_protocol::developer_session::ApprovalResponseParams::export_all_to(dir)
         .expect("export developer-session approval graph");
     agiworkforce_protocol::developer_session::UserInputRequestedParams::export_all_to(dir)
@@ -312,6 +336,12 @@ fn export_typescript_bindings() {
         .expect("export developer-session plugin graph");
     agiworkforce_protocol::developer_session::PluginSetEnabledParams::export_all_to(dir)
         .expect("export developer-session plugin toggle graph");
+    agiworkforce_protocol::developer_session::PluginSettingsReadParams::export_all_to(dir)
+        .expect("export developer-session plugin settings read parameters");
+    agiworkforce_protocol::developer_session::PluginSettingSetParams::export_all_to(dir)
+        .expect("export developer-session plugin setting write parameters");
+    agiworkforce_protocol::developer_session::PluginSettingsResponse::export_all_to(dir)
+        .expect("export developer-session plugin settings response");
     agiworkforce_protocol::developer_session::McpServerListResponse::export_all_to(dir)
         .expect("export developer-session mcp graph");
     agiworkforce_protocol::developer_session::McpSetEnabledParams::export_all_to(dir)

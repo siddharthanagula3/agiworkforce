@@ -222,25 +222,3 @@ export async function showSurfaceQuickPick(options: SurfaceQuickPickOptions): Pr
     void load();
   });
 }
-
-export async function showCapabilityQuickPick(options: {
-  title: string;
-  placeholder: string;
-  rows: readonly { label: string; description?: string; detail?: string }[];
-  emptyLabel: string;
-}): Promise<void> {
-  const items: vscode.QuickPickItem[] =
-    options.rows.length === 0
-      ? [{ label: options.emptyLabel, alwaysShow: true }]
-      : options.rows.map((row) => ({
-          label: row.label,
-          ...(row.description === undefined ? {} : { description: row.description }),
-          ...(row.detail === undefined ? {} : { detail: row.detail }),
-        }));
-  await vscode.window.showQuickPick(items, {
-    title: options.title,
-    placeHolder: options.placeholder,
-    matchOnDescription: true,
-    matchOnDetail: true,
-  });
-}

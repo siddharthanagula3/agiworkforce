@@ -1,6 +1,6 @@
 import { app } from 'electron';
 import { randomUUID } from 'node:crypto';
-import { readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
 import { realpath, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -10,9 +10,11 @@ import {
   parseWorktreeRootId,
   worktreeRootId,
   type WorkspaceRoot,
+  type WorkspaceRootKind,
 } from '@agiworkforce/local-runtime-contract';
 import { revokeScope } from './permissionManager';
 import { readRegularFile } from './regularFile';
+import { replaceStoreFile, StoreWriteError } from './atomicStoreFile';
 
 const roots = new Map<string, WorkspaceRoot>();
 
@@ -85,14 +87,11 @@ function load(): void {
   }
 }
 
-function persist(): void {
+function persist(next: Iterable<WorkspaceRoot>): void {
   try {
-    writeFileSync(storePath(), `${JSON.stringify([...roots.values()], null, 2)}\n`, {
-      encoding: 'utf8',
-      mode: 0o600,
-    });
+    replaceStoreFile(storePath(), `${JSON.stringify([...next], null, 2)}\n`);
   } catch (error) {
-    console.warn('[workspace] could not persist approved roots:', error);
+    throw new StoreWriteError('Could not save approved folders. Try again.', { cause: error });
   }
 }
 
@@ -189,7 +188,10 @@ export function forgetWorktreeRoot(id: string): void {
 
 export class WorkspaceGrantRefused extends Error {}
 
-export async function grantRoot(selectedPath: string): Promise<WorkspaceRoot> {
+export async function grantRoot(
+  selectedPath: string,
+  kind: WorkspaceRootKind = 'folder',
+): Promise<WorkspaceRoot> {
   load();
   const resolved = await realpath(selectedPath);
   if (!isGrantableRoot(resolved, currentPlatform(), homeSpellings())) {
@@ -199,23 +201,20 @@ export async function grantRoot(selectedPath: string): Promise<WorkspaceRoot> {
   }
 
   const existing = [...roots.values()].find((root) => root.path === resolved);
-  if (existing) {
-    const touched: WorkspaceRoot = { ...existing, lastOpenedAtMs: Date.now() };
-    roots.set(existing.id, touched);
-    persist();
-    return touched;
-  }
-
   const now = Date.now();
-  const root: WorkspaceRoot = {
-    id: randomUUID(),
-    path: resolved,
-    name: path.basename(resolved) || resolved,
-    grantedAtMs: now,
-    lastOpenedAtMs: now,
-  };
+  const root: WorkspaceRoot = existing
+    ? { ...existing, lastOpenedAtMs: now }
+    : {
+        id: randomUUID(),
+        path: resolved,
+        name: path.basename(resolved) || resolved,
+        grantedAtMs: now,
+        lastOpenedAtMs: now,
+      };
+  if (kind === 'repository') root.gitRoot = resolved;
+  const next = new Map(roots).set(root.id, root);
+  persist(next.values());
   roots.set(root.id, root);
-  persist();
   return root;
 }
 
@@ -233,22 +232,11 @@ export function worktreeRootIds(parentId: string): string[] {
  */
 export function revokeRoot(id: string): boolean {
   load();
-  for (const worktreeId of worktreeRootIds(id)) worktrees.delete(worktreeId);
   const root = roots.get(id);
   if (!root) return false;
+  persist([...roots.values()].filter((entry) => entry.id !== id));
   roots.delete(id);
-  persist();
+  for (const worktreeId of worktreeRootIds(id)) worktrees.delete(worktreeId);
   revokeScope({ kind: 'workspace', target: root.path });
   return true;
-}
-
-export function setRootGit(id: string, gitRoot: string | undefined): void {
-  load();
-  const root = roots.get(id);
-  if (!root) return;
-  const next: WorkspaceRoot = { ...root };
-  if (gitRoot) next.gitRoot = gitRoot;
-  else delete next.gitRoot;
-  roots.set(id, next);
-  persist();
 }

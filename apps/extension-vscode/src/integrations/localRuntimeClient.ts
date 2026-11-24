@@ -3,9 +3,18 @@ import { spawn as nodeSpawn, type ChildProcessWithoutNullStreams } from 'node:ch
 import { type Readable, type Writable } from 'node:stream';
 import { z } from 'zod';
 import { parseAgentEventDelta } from '@agiworkforce/cloud-contracts';
+import { DEVELOPER_SESSION_TABLE } from '@agiworkforce/types/protocol';
 import type {
   AgentEventApprovalRiskLevel,
   AgentEventEnvelope,
+  BackgroundCommandListResponse,
+  BackgroundCommandReadResponse,
+  CheckpointDiffResponse,
+  CheckpointListResponse,
+  ChildTaskStopParams,
+  ChildTaskStopResponse,
+  ChildTaskTranscriptParams,
+  ChildTaskTranscriptResponse,
   TurnFailureAction,
   TurnFailureCode,
 } from '@agiworkforce/types/protocol';
@@ -41,13 +50,17 @@ import type {
   McpServerToolsResponse,
   PluginInstallParams,
   PluginListResponse,
+  PluginSettingsResponse,
   SettingsReadResponse,
   SettingsWriteParams,
   SkillConsentResponse,
   SkillListResponse,
   SlashCommandListResponse,
   SlashCommandRunResponse,
+  ThreadArchiveInactiveParams,
+  ThreadArchiveInactiveResponse,
   ThreadCompactResponse,
+  ThreadPinParams,
   ThreadRewindParams,
   ThreadSideQuestionParams,
   ThreadSideQuestionResponse,
@@ -73,6 +86,8 @@ import { describeCliResolutionFailure, type CliResolution } from '../platform/re
 const MAX_LINE_BYTES = 4 * 1024 * 1024;
 const MAX_REJECTED_LINE_CHARS = 400;
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
+// A cold thread start loads account routing and workspace context before it claims a session.
+const THREAD_START_TIMEOUT_MS = 120_000;
 const SHUTDOWN_ACK_TIMEOUT_MS = 7_000;
 // A device grant runs at the user's pace in a browser, and an MCP sign-in
 // opens one too, so neither fits the default request timeout.
@@ -199,6 +214,7 @@ const capabilitiesSchema = z.object({
   codeDrafts: z.boolean().optional(),
   workspaceFileRecoveryBrowser: z.boolean().optional(),
   workspaceTerminal: z.boolean().optional(),
+  backgroundCommands: z.boolean().optional(),
   instructions: z.boolean().optional(),
   skills: z.boolean().optional(),
   plugins: z.boolean().optional(),
@@ -215,8 +231,11 @@ const capabilitiesSchema = z.object({
   approvalNotes: z.boolean().optional(),
   approvalEdits: z.boolean().optional(),
   threadUnarchive: z.boolean().optional(),
+  threadPin: z.boolean().optional(),
   threadSearch: z.boolean().optional(),
+  threadTitleSearch: z.boolean().optional(),
   forkAtMessage: z.boolean().optional(),
+  forkAndRewind: z.boolean().optional(),
   promptCommands: z.boolean().optional(),
   maxTurns: z.boolean().optional(),
   memory: z.boolean().optional(),
@@ -239,6 +258,8 @@ const capabilitiesSchema = z.object({
   mcpApproval: z.boolean().optional(),
   managedWorktrees: z.boolean().optional(),
   threadRename: z.boolean().optional(),
+  inactiveThreadArchive: z.boolean().optional(),
+  requireShellApproval: z.boolean().optional(),
   reasoningEffortLadder: z.boolean().optional(),
   mcpSetEnabled: z.boolean().optional(),
 });
@@ -320,6 +341,7 @@ const threadSummarySchema = z.object({
   status: z
     .enum(['idle', 'running', 'awaiting_approval', 'archived', 'failed', 'unknown'])
     .catch('unknown'),
+  pinned: z.boolean().optional(),
   gitBranch: z.string().min(1).max(512).optional(),
   worktreeRoot: z.string().min(1).max(16_384).optional(),
   client: z.string().min(1).max(200).optional(),
@@ -349,6 +371,43 @@ const developerStepStatusSchema = z.enum([
   'skipped',
   'superseded',
 ]);
+
+export const MAX_DEVELOPER_CHILD_TASKS = 50;
+
+const developerChildTaskSchema = z.object({
+  id: z.string().min(1).max(200),
+  parentSessionId: z.string().min(1).max(200),
+  title: z.string().max(400),
+  state: z.enum([
+    'queued',
+    'running',
+    'paused',
+    'awaiting_input',
+    'completed',
+    'cancelled',
+    'failed',
+  ]),
+  createdAt: z.string().max(64).optional().catch(undefined),
+  updatedAt: z.string().max(64).optional().catch(undefined),
+  transcriptAvailable: z.boolean().optional().catch(undefined),
+});
+const backgroundCommandSchema = z.object({
+  id: z.string().min(1).max(100),
+  command: z.string().max(4_000),
+  startedAt: z.string().max(64),
+  state: z.enum(['running', 'stopped', 'exited']),
+  exitCode: z.number().int().optional(),
+});
+const backgroundCommandOutputSchema = z.object({
+  command: backgroundCommandSchema,
+  output: z.string().max(16_384),
+});
+const turnChildTaskSchema = z.object({
+  threadId: z.string().min(1).max(200),
+  turnId: z.string().min(1).max(200),
+  task: developerChildTaskSchema,
+  canStop: z.boolean().optional().catch(undefined),
+});
 
 const threadReadResponseSchema = z.object({
   thread: threadSummarySchema,
@@ -380,6 +439,7 @@ const threadReadResponseSchema = z.object({
         role: z.string().min(1).max(40),
         text: z.string().max(1_000_000),
         index: z.number().int().nonnegative().optional(),
+        turnId: z.string().min(1).optional().catch(undefined),
       }),
     )
     .max(10_000),
@@ -400,6 +460,7 @@ const threadReadResponseSchema = z.object({
         ]),
         requestedAt: z.string(),
         decidedAt: z.string(),
+        questionAnswer: z.string().max(8_000).optional().catch(undefined),
       }),
     )
     .optional()
@@ -418,26 +479,51 @@ const threadReadResponseSchema = z.object({
     .optional()
     .catch(undefined),
   childTasks: z
-    .array(
-      z.object({
-        id: z.string().max(200),
-        parentSessionId: z.string().max(200),
-        title: z.string().max(400),
-        state: z.enum([
-          'queued',
-          'running',
-          'paused',
-          'awaiting_input',
-          'completed',
-          'cancelled',
-          'failed',
-        ]),
-      }),
-    )
-    .max(50)
+    .array(developerChildTaskSchema)
+    .max(MAX_DEVELOPER_CHILD_TASKS)
     .optional()
     .catch(undefined),
 });
+const checkpointReviewListSchema = z.object({
+  threadId: z.string().min(1),
+  available: z.boolean(),
+  turns: z.array(
+    z.object({
+      turnId: z.string().min(1),
+      finishedAt: z.string().optional(),
+      files: z.array(z.object({ path: z.string().min(1) })),
+    }),
+  ),
+}) satisfies z.ZodType<
+  Pick<CheckpointListResponse, 'threadId' | 'available'> & {
+    turns: Array<{
+      turnId: CheckpointListResponse['turns'][number]['turnId'];
+      finishedAt?: string;
+      files: Array<Pick<CheckpointListResponse['turns'][number]['files'][number], 'path'>>;
+    }>;
+  }
+>;
+
+const checkpointDiffSchema = z.object({
+  threadId: z.string(),
+  turnId: z.string(),
+  index: z.number().int().positive(),
+  files: z.array(
+    z.object({
+      path: z.string().min(1),
+      status: z.enum(['added', 'modified', 'deleted']),
+      binary: z.boolean(),
+      hunks: z.array(
+        z.object({
+          index: z.number().int().nonnegative(),
+          header: z.string(),
+          text: z.string(),
+        }),
+      ),
+    }),
+  ),
+}) satisfies z.ZodType<CheckpointDiffResponse>;
+
 const threadCheckpointsResponseSchema = z.object({
   checkpoints: z
     .array(
@@ -733,9 +819,26 @@ const pluginListResponseSchema = z.object({
         source: z.enum(['user', 'project']),
         path: z.string().min(1).max(16_384),
         format: z.string().max(64).optional(),
+        configurable: z.boolean().optional(),
       }),
     )
     .max(2_000),
+});
+const pluginSettingsResponseSchema = z.object({
+  settings: z
+    .array(
+      z.object({
+        key: z.string().min(1).max(200),
+        title: z.string().max(512),
+        description: z.string().max(4_096),
+        configured: z.boolean(),
+        required: z.boolean(),
+        sensitive: z.boolean(),
+        multiple: z.boolean(),
+        options: z.array(z.string().max(512)).max(200),
+      }),
+    )
+    .max(200),
 });
 const mcpAuthRequiredSchema = z.object({
   threadId: z.string().min(1).max(200),
@@ -975,6 +1078,8 @@ const turnTerminalEventSchema = z.object({
   response: z.string(),
   inputTokens: z.number().int().nonnegative(),
   outputTokens: z.number().int().nonnegative(),
+  cacheReadTokens: z.number().int().positive().optional().catch(undefined),
+  cacheWriteTokens: z.number().int().positive().optional().catch(undefined),
   error: z.string().nullable().optional(),
   failure: turnFailureSchema.nullable().optional().catch(null),
   managedRequestIds: z.array(z.string().min(1).max(200)).max(500).optional().catch(undefined),
@@ -988,6 +1093,25 @@ const turnModelEventSchema = z.object({
   autoSelection: z.string().max(100).optional().catch(undefined),
   fallbackFrom: z.string().max(200).optional().catch(undefined),
 });
+const approvalQuestionSchema = z
+  .object({
+    question: z.string().max(8_000),
+    options: z.array(z.string().max(1_000)).max(50).default([]),
+    optionDetails: z
+      .array(
+        z.object({
+          label: z.string().max(1_000),
+          description: z.string().max(2_000).optional().catch(undefined),
+          preview: z.string().max(4_000).optional().catch(undefined),
+        }),
+      )
+      .max(50)
+      .optional()
+      .catch(undefined),
+  })
+  .nullish()
+  .catch(undefined);
+
 const approvalRequestedEventSchema = z.object({
   threadId: z.string().min(1),
   turnId: z.string().min(1),
@@ -1003,13 +1127,8 @@ const approvalRequestedEventSchema = z.object({
   proposedContent: z.string().max(1_000_000).optional().catch(undefined),
   editable: z.boolean().optional().catch(undefined),
   alwaysAllowSaved: z.boolean().optional().catch(undefined),
-  question: z
-    .object({
-      question: z.string().max(8_000),
-      options: z.array(z.string().max(1_000)).max(50).default([]),
-    })
-    .nullish()
-    .catch(undefined),
+  requiresExplicitDecision: z.boolean().optional().catch(undefined),
+  question: approvalQuestionSchema,
 });
 const threadReconnectResponseSchema = z.object({
   activeTurn: z
@@ -1028,6 +1147,8 @@ const threadReconnectResponseSchema = z.object({
             reversible: z.boolean().optional().catch(undefined),
             proposedContent: z.string().max(1_000_000).optional().catch(undefined),
             alwaysAllowSaved: z.boolean().optional().catch(undefined),
+            requiresExplicitDecision: z.boolean().optional().catch(undefined),
+            question: approvalQuestionSchema,
           }),
         )
         .default([]),
@@ -1120,6 +1241,7 @@ export type LocalRuntimeEvent =
   | ({ type: 'turn_interrupted' } & z.infer<typeof turnInterruptedEventSchema>)
   | ({ type: 'turn_model' } & z.infer<typeof turnModelEventSchema>)
   | ({ type: 'approval_requested' } & z.infer<typeof approvalRequestedEventSchema>)
+  | ({ type: 'child_task' } & z.infer<typeof turnChildTaskSchema>)
   | ({
       type: 'tool_execution_start';
       threadId: string;
@@ -1158,6 +1280,10 @@ export type LocalRuntimeEvent =
   | { type: 'runtime_disconnected'; error: string };
 
 function parseRuntimeEvent(notification: AppServerNotification): LocalRuntimeEvent | undefined {
+  if (notification.method === 'turn/childTask') {
+    const parsed = turnChildTaskSchema.safeParse(notification.params);
+    return parsed.success ? { type: 'child_task', ...parsed.data } : undefined;
+  }
   if (notification.method === 'turn/output_delta') {
     const parsed = outputDeltaEventSchema.safeParse(notification.params);
     return parsed.success ? { type: 'output_delta', ...parsed.data } : undefined;
@@ -1472,6 +1598,7 @@ export interface LocalRuntimeClientOptions {
   workspaceTrusted: () => boolean;
   memoryEnabled?: () => boolean;
   bypassPermissionsAvailable?: () => boolean;
+  requireShellApproval?: () => boolean;
   /** When the user consented to AGI working in `cwd`; undefined withholds consent. */
   workspaceConsentAtMs?: () => number | undefined;
   cwd: string;
@@ -1513,6 +1640,7 @@ export class LocalRuntimeClient {
     const result = await connection.request(
       'thread/start',
       requestedRoot ? { ...params, cwd: requestedRoot } : params,
+      THREAD_START_TIMEOUT_MS,
     );
     const thread = threadStartResponseSchema.parse(result).thread as ThreadSummary;
     if (requestedRoot && !isSameWorkspacePath(requestedRoot, thread.cwd)) {
@@ -1707,6 +1835,31 @@ export class LocalRuntimeClient {
     await connection.request('thread/archive', { threadId });
   }
 
+  async setThreadPinned(params: ThreadPinParams): Promise<void> {
+    if (!(await this.offers('threadPin'))) {
+      throw new Error('Update the AGI CLI to pin developer sessions.');
+    }
+    const connection = await this.readyConnection();
+    const result = z
+      .object({ pinned: z.boolean() })
+      .parse(await connection.request(DEVELOPER_SESSION_TABLE.methods.THREAD_PIN, params));
+    if (result.pinned !== params.pinned) {
+      throw new Error('The AGI CLI did not confirm the pin change.');
+    }
+  }
+
+  async archiveInactiveThread(
+    params: ThreadArchiveInactiveParams,
+  ): Promise<ThreadArchiveInactiveResponse | undefined> {
+    if (!(await this.offers('inactiveThreadArchive'))) return undefined;
+    const connection = await this.readyConnection();
+    const result = await connection.request(
+      DEVELOPER_SESSION_TABLE.methods.THREAD_ARCHIVE_INACTIVE,
+      params,
+    );
+    return z.object({ archived: z.boolean() }).parse(result);
+  }
+
   async reconnectThread(threadId: string): Promise<ThreadActiveTurn | null> {
     const connection = await this.readyConnection();
     if (!(await this.offers('reconnect'))) return null;
@@ -1748,6 +1901,37 @@ export class LocalRuntimeClient {
     return (await this.initialize()).capabilities[capability] === true;
   }
 
+  async listReviewableTurnFiles(threadId: string): Promise<Map<string, string[]>> {
+    if (!(await this.offers('checkpoints'))) return new Map();
+    const connection = await this.readyConnection();
+    const response = checkpointReviewListSchema.parse(
+      await connection.request(DEVELOPER_SESSION_TABLE.methods.CHECKPOINT_LIST, { threadId }),
+    );
+    if (response.threadId !== threadId) {
+      throw new Error('The CLI returned saved changes for a different session.');
+    }
+    if (!response.available) return new Map();
+    return new Map(
+      response.turns
+        .filter((turn) => turn.finishedAt !== undefined && turn.files.length > 0)
+        .map((turn) => [turn.turnId, turn.files.map((file) => file.path)]),
+    );
+  }
+
+  async readTurnCheckpointDiff(threadId: string, turnId: string): Promise<CheckpointDiffResponse> {
+    const connection = await this.readyConnection();
+    const response = checkpointDiffSchema.parse(
+      await connection.request(DEVELOPER_SESSION_TABLE.methods.CHECKPOINT_DIFF, {
+        threadId,
+        turnId,
+      }),
+    );
+    if (response.threadId !== threadId || response.turnId !== turnId) {
+      throw new Error('The CLI returned a checkpoint for a different turn.');
+    }
+    return response;
+  }
+
   async listCheckpoints(threadId: string): Promise<ThreadCheckpointList> {
     const connection = await this.readyConnection();
     if (!(await this.offers('checkpoints'))) {
@@ -1762,6 +1946,9 @@ export class LocalRuntimeClient {
     const connection = await this.readyConnection();
     if (!(await this.offers('checkpoints'))) {
       throw new Error('The installed AGI CLI keeps no checkpoints. Update the AGI CLI to rewind.');
+    }
+    if (params.restore === 'fork_and_code' && !(await this.offers('forkAndRewind'))) {
+      throw new Error('Update the AGI CLI to fork a conversation and rewind code together.');
     }
     return threadRewindResponseSchema.parse(await connection.request('thread/rewind', params));
   }
@@ -1811,13 +1998,72 @@ export class LocalRuntimeClient {
   async startTurn(params: TurnStartParams): Promise<TurnSummary> {
     const connection = await this.readyConnection();
     this.assertPermissionAuthority();
-    const result = await connection.request('turn/start', params);
+    const requireShellApproval =
+      params.requireShellApproval === true ||
+      (params.agentMode !== 'bypass' && this.options.requireShellApproval?.() === true);
+    if (requireShellApproval && !(await this.offers('requireShellApproval'))) {
+      throw new Error('Update the AGI CLI to require approval for every shell command.');
+    }
+    const result = await connection.request(
+      'turn/start',
+      requireShellApproval ? { ...params, requireShellApproval: true } : params,
+    );
     return turnStartResponseSchema.parse(result).turn as TurnSummary;
   }
 
   async interruptTurn(params: TurnInterruptParams): Promise<void> {
     const connection = await this.readyConnection();
     await connection.request('turn/interrupt', params);
+  }
+
+  async stopChildTask(params: ChildTaskStopParams): Promise<ChildTaskStopResponse> {
+    const connection = await this.readyConnection();
+    const response = await connection.request('childTask/stop', params);
+    return z.object({ stoppedAt: z.string().max(64).optional() }).parse(response);
+  }
+
+  async readChildTaskTranscript(
+    params: ChildTaskTranscriptParams,
+  ): Promise<ChildTaskTranscriptResponse> {
+    const connection = await this.readyConnection();
+    const response = await connection.request('childTask/transcript', params);
+    return z
+      .object({
+        title: z.string().max(400),
+        lines: z.array(z.string()).max(12_288),
+        truncated: z.boolean(),
+      })
+      .parse(response);
+  }
+
+  async listBackgroundCommands(threadId: string): Promise<BackgroundCommandListResponse> {
+    if (!(await this.offers('backgroundCommands'))) {
+      throw new Error('Update the AGI CLI to inspect this chat’s background commands.');
+    }
+    const connection = await this.readyConnection();
+    return z
+      .object({ commands: z.array(backgroundCommandSchema) })
+      .parse(await connection.request('backgroundCommand/list', { threadId }));
+  }
+
+  async readBackgroundCommand(
+    threadId: string,
+    commandId: string,
+  ): Promise<BackgroundCommandReadResponse> {
+    const connection = await this.readyConnection();
+    return backgroundCommandOutputSchema.parse(
+      await connection.request('backgroundCommand/read', { threadId, commandId }),
+    );
+  }
+
+  async stopBackgroundCommand(
+    threadId: string,
+    commandId: string,
+  ): Promise<BackgroundCommandReadResponse> {
+    const connection = await this.readyConnection();
+    return backgroundCommandOutputSchema.parse(
+      await connection.request('backgroundCommand/stop', { threadId, commandId }),
+    );
   }
 
   async steerTurn(params: TurnSteerParams): Promise<TurnSummary> {
@@ -1916,6 +2162,21 @@ export class LocalRuntimeClient {
     return pluginListResponseSchema.parse(
       await connection.request('plugins/setEnabled', { id, enabled }),
     ) as PluginListResponse;
+  }
+
+  async readPluginSettings(id: string): Promise<PluginSettingsResponse> {
+    const connection = await this.readyConnection();
+    return pluginSettingsResponseSchema.parse(
+      await connection.request('plugins/settings/read', { id }),
+    );
+  }
+
+  async setPluginSetting(id: string, key: string, value: string): Promise<PluginSettingsResponse> {
+    const connection = await this.readyConnection();
+    this.assertPermissionAuthority();
+    return pluginSettingsResponseSchema.parse(
+      await connection.request('plugins/settings/set', { id, key, value }),
+    );
   }
 
   async listMcpServers(): Promise<McpServerListResponse> {
@@ -2044,9 +2305,11 @@ export class LocalRuntimeClient {
     ) as SlashCommandListResponse;
   }
 
-  async createWorktree(): Promise<WorktreeSummary> {
+  async createWorktree(name?: string): Promise<WorktreeSummary> {
     const connection = await this.readyConnection();
-    return worktreeSummarySchema.parse(await connection.request('worktree/create', {}));
+    return worktreeSummarySchema.parse(
+      await connection.request('worktree/create', name === undefined ? {} : { name }),
+    );
   }
 
   async listWorktrees(): Promise<WorktreeSummary[]> {

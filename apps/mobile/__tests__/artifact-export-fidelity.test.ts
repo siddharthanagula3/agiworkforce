@@ -157,6 +157,12 @@ describe('artifact exports are the artifact', () => {
 });
 
 describe('file names', () => {
+  it('uses one dot before the extension for chat titles that end in punctuation', async () => {
+    const result = await exportToText('body', 'Quarterly results. ... ');
+    expect(result.fileName).toBe('Quarterly results.txt');
+    expect(result.uri).toBe('file:///cache/exports/export-1/Quarterly%20results.txt');
+  });
+
   it('keeps accents, spaces and non-Latin letters in an exported title', async () => {
     const report = await exportToMarkdown('# Plan', 'Résumé 2026');
     const quarterly = await exportToText('body', '季度报告');

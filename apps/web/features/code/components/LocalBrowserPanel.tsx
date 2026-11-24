@@ -1,6 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from 'react';
 import { ChevronLeft, ChevronRight, Globe, RefreshCw, X } from '@agiworkforce/icons';
 import {
   CLOSED_BROWSER_PANE,
@@ -29,7 +37,9 @@ export interface LocalBrowserPanelProps {
   address: string | null;
   /** Changes each time the same address is asked for again. */
   addressKey: number;
+  visible?: boolean;
   onClose: () => void;
+  toolSwitcher?: ReactNode;
 }
 
 function boundsOf(element: HTMLElement): BrowserPaneBounds {
@@ -41,11 +51,18 @@ function modalOpen(): boolean {
   return document.querySelector(MODAL_SELECTOR) !== null;
 }
 
-export function LocalBrowserPanel({ address, addressKey, onClose }: LocalBrowserPanelProps) {
+export function LocalBrowserPanel({
+  address,
+  addressKey,
+  visible = true,
+  onClose,
+  toolSwitcher,
+}: LocalBrowserPanelProps) {
   const inputId = useId();
   const viewportRef = useRef<HTMLDivElement>(null);
+  const openedAddress = useRef<{ address: string | null; key: number } | null>(null);
   const [state, setState] = useState<BrowserPaneState>(CLOSED_BROWSER_PANE);
-  const [draft, setDraft] = useState(address ?? '');
+  const [draft, setDraft] = useState<string | null>(null);
   const [lastAsked, setLastAsked] = useState<string | null>(address);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,32 +71,30 @@ export function LocalBrowserPanel({ address, addressKey, onClose }: LocalBrowser
       const next = await work();
       setState(next);
       setError(null);
-      if (next.url) setDraft(next.url);
     } catch (cause: unknown) {
       setError(toUserMessage(cause, LOCAL_CODE_COPY.browserFailed));
     }
   }, []);
 
-  useEffect(
-    () =>
-      onBrowserPaneState((next) => {
-        setState(next);
-        if (next.url) setDraft(next.url);
-      }),
-    [],
-  );
+  useEffect(() => onBrowserPaneState(setState), []);
 
   useEffect(() => {
     const viewport = viewportRef.current;
-    if (!viewport) return undefined;
-    void run(() => openBrowserPane(boundsOf(viewport), address));
-    if (address) setLastAsked(address);
+    if (!viewport || !visible) return undefined;
+    const opened = openedAddress.current;
+    const changed = opened === null || opened.key !== addressKey || opened.address !== address;
+    openedAddress.current = { address, key: addressKey };
+    void run(() => openBrowserPane(boundsOf(viewport), changed ? address : null));
+    if (changed && address) {
+      setDraft(null);
+      setLastAsked(address);
+    }
     return undefined;
-  }, [address, addressKey, run]);
+  }, [address, addressKey, run, visible]);
 
   useEffect(() => {
     const viewport = viewportRef.current;
-    if (!viewport) return undefined;
+    if (!viewport || !visible) return undefined;
     let frame = 0;
     let hidden = false;
     const sync = () => {
@@ -119,23 +134,34 @@ export function LocalBrowserPanel({ address, addressKey, onClose }: LocalBrowser
       window.removeEventListener('scroll', sync, true);
       void hideBrowserPane().catch(() => undefined);
     };
-  }, []);
+  }, [visible]);
 
+  const shownAddress = draft ?? state.url ?? address ?? '';
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    const url = browserPaneAddress(draft);
+    const url = browserPaneAddress(shownAddress);
     if (!url) {
       setError(LOCAL_CODE_COPY.browserInvalid);
       return;
     }
+    setDraft(null);
     setLastAsked(url);
     void run(() => navigateBrowserPane(url));
+  };
+  const step = (direction: Parameters<typeof stepBrowserPane>[0]) => {
+    setDraft(null);
+    void run(() => stepBrowserPane(direction));
   };
 
   const showEmpty = state.url === null && state.refusedHost === null;
 
   return (
-    <aside className={styles['changes']} aria-label={LOCAL_CODE_COPY.browser}>
+    <aside
+      className={styles['changes']}
+      aria-label={LOCAL_CODE_COPY.browser}
+      style={visible ? undefined : { display: 'none' }}
+    >
+      {toolSwitcher}
       <div className={styles['changesHeader']}>
         <div className="flex min-w-0 flex-1 items-center gap-1">
           <button
@@ -144,7 +170,7 @@ export function LocalBrowserPanel({ address, addressKey, onClose }: LocalBrowser
             aria-label={LOCAL_CODE_COPY.browserBack}
             title={LOCAL_CODE_COPY.browserBack}
             disabled={!state.canGoBack}
-            onClick={() => void run(() => stepBrowserPane('back'))}
+            onClick={() => step('back')}
           >
             <ChevronLeft size={GLYPH_SIZE} aria-hidden="true" />
           </button>
@@ -154,7 +180,7 @@ export function LocalBrowserPanel({ address, addressKey, onClose }: LocalBrowser
             aria-label={LOCAL_CODE_COPY.browserForward}
             title={LOCAL_CODE_COPY.browserForward}
             disabled={!state.canGoForward}
-            onClick={() => void run(() => stepBrowserPane('forward'))}
+            onClick={() => step('forward')}
           >
             <ChevronRight size={GLYPH_SIZE} aria-hidden="true" />
           </button>
@@ -164,7 +190,7 @@ export function LocalBrowserPanel({ address, addressKey, onClose }: LocalBrowser
             aria-label={LOCAL_CODE_COPY.browserReload}
             title={LOCAL_CODE_COPY.browserReload}
             disabled={state.url === null}
-            onClick={() => void run(() => stepBrowserPane('reload'))}
+            onClick={() => step('reload')}
           >
             <RefreshCw size={GLYPH_SIZE} aria-hidden="true" />
           </button>
@@ -180,7 +206,7 @@ export function LocalBrowserPanel({ address, addressKey, onClose }: LocalBrowser
               spellCheck={false}
               className={styles['textInput']}
               placeholder={LOCAL_CODE_COPY.browserAddressPlaceholder}
-              value={draft}
+              value={shownAddress}
               onChange={(event) => setDraft(event.target.value)}
             />
           </form>

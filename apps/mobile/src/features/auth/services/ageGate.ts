@@ -119,8 +119,9 @@ export function ageGateStatus(): AgeGateStatus {
   return deviceAdultEvidence() ? 'confirmed' : 'required';
 }
 
-export function isAgeGateConfirmed(): boolean {
-  return ageGateStatus() === 'confirmed';
+export function isAgeGateConfirmed(accountConfirmed = false): boolean {
+  const status = ageGateStatus();
+  return status === 'confirmed' || (status === 'required' && accountConfirmed);
 }
 
 export function isMinorMode(): boolean {

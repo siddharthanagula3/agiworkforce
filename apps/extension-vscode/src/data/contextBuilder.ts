@@ -5,6 +5,7 @@ import * as path from 'path';
 import { promisify } from 'util';
 import { getActiveWorkspaceFolderSync } from '../platform/workspaceFolders';
 import { redactTelemetryText } from '../core/telemetry';
+import { isPrivateDeveloperOutput } from '../features/sidebar-webview/developerOutput';
 
 const execFileAsync = promisify(execFile);
 
@@ -105,7 +106,7 @@ export class ContextBuilder {
     editor: EditorContextSource | undefined = vscode.window.activeTextEditor,
   ): ActiveFileContext | undefined {
     try {
-      if (editor === undefined) return undefined;
+      if (editor === undefined || isPrivateDeveloperOutput(editor.document.uri)) return undefined;
 
       const { document, selection } = editor;
       let selectedText = document.getText(selection);
@@ -138,6 +139,7 @@ export class ContextBuilder {
           const input = tab.input;
           if (input instanceof vscode.TabInputText) {
             const uri = input.uri;
+            if (isPrivateDeveloperOutput(uri)) continue;
             const languageId = inferLanguageFromUri(uri);
             entries.push({
               filePath: uri.fsPath,

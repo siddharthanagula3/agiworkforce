@@ -120,7 +120,7 @@ try {
   fail(`packaged extension manifest is invalid JSON: ${error.message}`);
 }
 
-for (const field of ['name', 'publisher', 'version']) {
+for (const field of ['name', 'publisher', 'version', 'icon']) {
   if (packagedManifest[field] !== sourceManifest[field]) {
     fail(
       `packaged ${field} ${JSON.stringify(packagedManifest[field])} does not match source ${JSON.stringify(sourceManifest[field])}`,
@@ -144,6 +144,12 @@ for (const listingFile of [packagedManifest.icon, 'readme.md', 'LICENSE.txt']) {
   ) {
     fail(`packaged listing file is missing: ${listingFile ?? '<icon unset>'}`);
   }
+}
+
+const iconPath = sourceManifest.icon.replace(/^\.\//u, '');
+const packagedIcon = archive.contentsByName.get(`extension/${iconPath}`);
+if (!packagedIcon?.equals(fs.readFileSync(path.join(extensionRoot, iconPath)))) {
+  fail('packaged extension icon differs from the current AGI Code artwork');
 }
 
 if (archive.vsixManifest === undefined) fail('extension.vsixmanifest is missing');

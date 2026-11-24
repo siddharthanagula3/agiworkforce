@@ -35,7 +35,7 @@ describe('extension panel theming', () => {
       expect(css).toContain(':host {');
     }
     expect(panelCss).toContain('width:min(380px, 100vw)');
-    expect(panelCss).toContain('focus-visible');
-    expect(launcherCss).toContain('background:var(--agi-ext-primary)');
+    expect(panelCss).toContain('.agi-textarea:focus-visible:not([data-pointer-focus])');
+    expect(launcherCss).toContain('background:var(--agi-ext-surface)');
   });
 });

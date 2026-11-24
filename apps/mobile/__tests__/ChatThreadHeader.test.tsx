@@ -526,7 +526,7 @@ describe('Thread header', () => {
     expect(screen.getByTestId('conversation-action-pin')).toBeTruthy();
   });
 
-  it('leaves the thread after a confirmed delete', () => {
+  it('leaves the thread after a confirmed delete', async () => {
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     seedThread();
     const screen = render(<ChatScreen />);
@@ -540,7 +540,7 @@ describe('Thread header', () => {
     buttons.find((button) => button.text === 'Delete')?.onPress?.();
 
     expect(useChatStore.getState().conversations.some((c) => c.id === 'thread-1')).toBe(false);
-    expect(mockReplace).toHaveBeenCalled();
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/(app)'));
   });
 
   describe('a Cloud chat the drawer keeps mounted', () => {

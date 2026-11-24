@@ -1,6 +1,9 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { runComposerAttachmentPick } from '../utils/runComposerAttachmentPick';
+import {
+  attachmentFromPickedDocument,
+  runComposerAttachmentPick,
+} from '../utils/runComposerAttachmentPick';
 import type { Attachment } from '../components/AttachmentPreview';
 
 function deferred<T>() {
@@ -103,6 +106,32 @@ describe('native attachment pick settlement', () => {
   });
 });
 
+describe('files returned by the document picker', () => {
+  it.each([
+    ['brief.PDF', undefined, 'application/pdf'],
+    ['data.csv', 'application/octet-stream', 'text/csv'],
+    ['plan.docx', '', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+    ['photo.JPG', '', 'application/octet-stream'],
+    ['notes.pdf', 'text/plain', 'text/plain'],
+    ['unknown.bin', '', 'application/octet-stream'],
+    ['unknown.constructor', '', 'application/octet-stream'],
+  ])('resolves %s while keeping its local URI and size', (name, mimeType, expected) => {
+    expect(
+      attachmentFromPickedDocument({
+        name,
+        ...(mimeType === undefined ? {} : { mimeType }),
+        uri: 'file:///cache/picker-item',
+        size: 100,
+      }),
+    ).toMatchObject({
+      fileName: name,
+      mimeType: expected,
+      uri: 'file:///cache/picker-item',
+      fileSize: 100,
+    });
+  });
+});
+
 const root = join(__dirname, '../../../..');
 for (const [route, mode] of [
   ['app/(app)/(tabs)/chat.tsx', 'activeMode'],
@@ -128,6 +157,7 @@ for (const [route, mode] of [
     );
     expect(native).toContain('scope.isCurrent() ? imageAssetsToChatAttachments(assets) : []');
     expect(native).toContain('if (!scope.isCurrent() || result.canceled) return [];');
+    expect(native).toContain('result.assets.map(attachmentFromPickedDocument)');
     expect(native).not.toMatch(/deleteAsync|unlink|AppState/);
   });
 }

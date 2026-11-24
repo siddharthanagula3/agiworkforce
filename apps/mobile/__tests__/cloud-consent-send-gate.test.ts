@@ -131,12 +131,16 @@ describe('Cloud provider consent at send time', () => {
     const saveMessage = jest.spyOn(managedCloudChat, 'saveMessage');
     const createConversation = jest.spyOn(managedCloudChat, 'createConversation');
     const getConversation = jest.spyOn(managedCloudChat, 'getConversation');
+    const onConsentDeclined = jest.fn();
 
     const accepted = await useChatExecutionStore
       .getState()
-      .sendMessage(CLOUD_CONV_ID, 'keep this in the composer', model);
+      .sendMessage(CLOUD_CONV_ID, 'keep this in the composer', model, undefined, {
+        onConsentDeclined,
+      });
 
     expect(accepted).toBe(false);
+    expect(onConsentDeclined).toHaveBeenCalledTimes(1);
     expect(mockEnsureCloudSendConsent).toHaveBeenCalledTimes(1);
     expect(mockStreamChat).not.toHaveBeenCalled();
     expect(saveMessage).not.toHaveBeenCalled();

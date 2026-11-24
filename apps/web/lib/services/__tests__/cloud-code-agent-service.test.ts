@@ -61,7 +61,10 @@ import { dirname, join, sep } from 'node:path';
 import { SLOT_REGISTRY, listCanonicalModels } from '@agiworkforce/types';
 import { getE2BExecutor } from '@/lib/e2b/runtime';
 import { getCloudCodeSession } from '@/lib/services/cloud-code-session-service';
-import { runCloudCodeAgentTurn } from '@/lib/services/cloud-code-agent-loop';
+import {
+  CLOUD_CODE_AGENT_MAX_STEPS,
+  runCloudCodeAgentTurn,
+} from '@/lib/services/cloud-code-agent-loop';
 import { runCloudCodeTurn } from '@/lib/services/cloud-code-turn-transport';
 import {
   accumulateObservedProviderUsage,
@@ -563,6 +566,41 @@ describe('Cloud Code loop budget fits inside the platform ceiling', () => {
     await runTurnOn(trackedDb(), 'done');
     const passed = vi.mocked(runCloudCodeAgentTurn).mock.calls.at(-1)?.[0];
     expect(passed?.maxDurationMs).toBe(CLOUD_CODE_AGENT_TURN_BUDGET_MS);
+    expect(passed?.maxSteps).toBe(CLOUD_CODE_AGENT_MAX_STEPS);
+  });
+
+  it('keeps the default step budget cumulative when a turn resumes after approval', async () => {
+    vi.mocked(runCloudCodeAgentTurn).mockResolvedValue({
+      stopReason: 'done',
+      stepsUsed: 1,
+      usage: NO_USAGE,
+      finalMessage: '',
+      messages: [],
+    });
+    const completedSteps = 3;
+    await executePersistedAgentTurn({
+      db: trackedDb() as never,
+      owner: { userId: 'user-1', organizationId: null },
+      session: {
+        networkAccess: 'none',
+        runtimeId: null,
+        workspacePath: '/workspace',
+        repositoryUrl: null,
+      },
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      goal: 'Fix the failing test',
+      model: STANDARD_MODEL,
+      provider: 'anthropic',
+      planTier: 'pro',
+      idempotencyKey: '11111111-1111-4111-8111-111111111111',
+      signal: new AbortController().signal,
+      initialStepIndex: completedSteps,
+      priorMessages: [],
+    });
+
+    const passed = vi.mocked(runCloudCodeAgentTurn).mock.calls.at(-1)?.[0];
+    expect(passed?.maxSteps).toBe(CLOUD_CODE_AGENT_MAX_STEPS - completedSteps);
   });
 
   it('holds the sandbox for the turn and its unwind, never past the route ceiling', async () => {

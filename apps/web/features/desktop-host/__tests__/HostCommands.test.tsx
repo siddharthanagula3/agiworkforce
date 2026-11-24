@@ -69,6 +69,20 @@ describe('host commands', () => {
     expect(useUIStore.getState().sidebarCollapsed).toBe(false);
   });
 
+  it('delegates the sidebar toggle to a surface that owns its sidebar', () => {
+    const toggle = vi.fn();
+    const stop = onAppCommand('toggle-sidebar', toggle);
+    try {
+      render(<Harness host={fakeHost()} />);
+      deliver?.('toggle-sidebar');
+
+      expect(toggle).toHaveBeenCalledTimes(1);
+      expect(useUIStore.getState().sidebarCollapsed).toBe(false);
+    } finally {
+      stop();
+    }
+  });
+
   it('asks the page to open a side chat through the command the pane listens for', () => {
     const opened = vi.fn();
     const stop = onAppCommand('toggle-side-chat', opened);

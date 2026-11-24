@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
 import { FlatList, SectionList, StyleSheet } from 'react-native';
-import { fireEvent, render } from '@testing-library/react-native';
+import { act, fireEvent, render } from '@testing-library/react-native';
 import { READING_COLUMN_MAX_WIDTH } from '@/src/shared/layout/contentColumn';
 
 jest.mock('expo-router', () => ({
@@ -136,6 +136,7 @@ jest.mock('../src/features/cloud-code/useCloudCodeSessions', () => ({
 }));
 
 import { CloudCodeSessionsScreen } from '../src/features/cloud-code/CloudCodeSessionsScreen';
+import { beginCloudCodeRequest } from '../src/features/cloud-code/cloudCodeRequests';
 import { useCodePreferences } from '../src/features/settings/code/store';
 
 function shownTitles(screen: ReturnType<typeof render>) {
@@ -300,6 +301,25 @@ describe('AGI Code sessions state filter', () => {
       screen.getByLabelText(`Filter sessions: ${label}`).props.accessibilityState,
     ).toMatchObject({ selected: true });
     expect(mockUseSessions).toHaveBeenLastCalledWith('open');
+  });
+
+  it('shows a submitted session in Running while the last server list still says Ready', () => {
+    const screen = render(<CloudCodeSessionsScreen />);
+    fireEvent.press(screen.getByLabelText('Filter sessions: Running'));
+    let operation: ReturnType<typeof beginCloudCodeRequest> = null;
+    act(() => {
+      operation = beginCloudCodeRequest('s2', {
+        kind: 'send',
+        goal: 'Check billing',
+        baseline: null,
+      });
+    });
+    try {
+      expect(shownTitles(screen)).toEqual(['Add billing page', 'Fix parser']);
+    } finally {
+      act(() => operation?.finish());
+    }
+    expect(shownTitles(screen)).toEqual(['Fix parser']);
   });
 
   it.each([

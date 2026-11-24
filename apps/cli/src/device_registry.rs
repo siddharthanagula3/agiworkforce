@@ -1,5 +1,6 @@
+use anyhow::Result;
 use serde::Serialize;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 const HEARTBEAT_PATH: &str = "/api/devices/heartbeat";
@@ -92,7 +93,7 @@ pub fn build_heartbeat(
     }
 }
 
-fn install_id_path() -> Option<PathBuf> {
+pub(crate) fn install_id_path() -> Option<PathBuf> {
     crate::config::CliConfig::config_dir()
         .ok()
         .map(|dir| dir.join(INSTALL_ID_FILE))
@@ -100,23 +101,37 @@ fn install_id_path() -> Option<PathBuf> {
 
 fn install_id() -> Option<String> {
     let path = install_id_path()?;
-    if let Ok(existing) = std::fs::read_to_string(&path) {
-        let existing = existing.trim().to_string();
-        if is_valid_install_id(&existing) {
-            return Some(existing);
-        }
-    }
-    let created = uuid::Uuid::new_v4().to_string();
+    ensure_install_id(&path).ok()
+}
+
+pub(crate) fn ensure_install_id(path: &Path) -> Result<String> {
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).ok()?;
+        std::fs::create_dir_all(parent)?;
     }
-    std::fs::write(&path, &created).ok()?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+    let lock = std::fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(false)
+        .open(path.with_extension("lock"))?;
+    lock.lock()?;
+    match std::fs::read_to_string(path) {
+        Ok(existing) if is_valid_install_id(existing.trim()) => {
+            return Ok(existing.trim().to_owned());
+        }
+        Err(error)
+            if !matches!(
+                error.kind(),
+                std::io::ErrorKind::NotFound | std::io::ErrorKind::InvalidData
+            ) =>
+        {
+            return Err(error.into())
+        }
+        _ => {}
     }
-    Some(created)
+
+    let created = uuid::Uuid::new_v4().to_string();
+    crate::secure_store::write_owner_only(path, created.as_bytes())?;
+    Ok(created)
 }
 
 fn hostname() -> Option<String> {

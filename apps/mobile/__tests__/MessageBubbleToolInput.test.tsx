@@ -2,7 +2,8 @@
 
 import React from 'react';
 import { act, fireEvent, render } from '@testing-library/react-native';
-import { sitsInColumn } from '../test-utils/sheetColumn';
+import { insetHasPanelBackground, sitsInColumn } from '../test-utils/sheetColumn';
+import { lightColors } from '@/src/ui/theme/tokens';
 import type { ChatMessage } from '@/types/chat';
 
 jest.mock('@/src/ui/theme', () => {
@@ -454,6 +455,8 @@ describe('MessageBubble: when a message was sent', () => {
     );
     fireEvent(getByLabelText('Your message: What time is it?'), 'longPress');
 
-    expect(sitsInColumn(getByTestId('message-action-rows'), 'reading')).toBe(true);
+    const rows = getByTestId('message-action-rows');
+    expect(sitsInColumn(rows, 'reading')).toBe(true);
+    expect(insetHasPanelBackground(rows, lightColors.surfaceElevated)).toBe(true);
   });
 });

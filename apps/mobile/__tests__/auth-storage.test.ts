@@ -19,16 +19,24 @@ const mockGetItemAsync = _SecureStoreMock.getItemAsync;
 const mockDeleteItemAsync = _SecureStoreMock.deleteItemAsync;
 
 jest.mock('../services/authSession', () => ({
-  clearAuthSession: jest.fn(),
   getAuthToken: jest.fn(),
 }));
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const _cloudAuthMock = require('../services/authSession') as {
-  clearAuthSession: jest.Mock;
   getAuthToken: jest.Mock;
 };
-const mockClearAuthSession = _cloudAuthMock.clearAuthSession;
+const mockEndDeviceSession = jest.fn();
+const mockSession = { id: 'session-123' };
+const mockDeviceClerk = { session: mockSession, client: { signedInSessions: [mockSession] } };
+
+jest.mock('../src/features/accounts/deviceAccounts', () => ({
+  getDeviceAccountsClerk: () => mockDeviceClerk,
+  activeDeviceSessionId: () => mockSession.id,
+  readDeviceAccounts: () => ({ multiSession: false, accounts: [] }),
+  planSignOutHandover: () => null,
+  endDeviceSession: (...args: unknown[]) => mockEndDeviceSession(...args),
+}));
 const mockGetAuthToken = _cloudAuthMock.getAuthToken;
 
 jest.mock('../stores/settings/settingsSyncStateStore', () => ({
@@ -268,7 +276,7 @@ describe('authStore, secure storage persistence', () => {
     jest.clearAllMocks();
     resetAuthStore();
 
-    mockClearAuthSession.mockResolvedValue(undefined);
+    mockEndDeviceSession.mockResolvedValue(undefined);
     mockGetAuthToken.mockResolvedValue('captured-clerk-jwt');
     _pushTokenCleanupMock.unregisterPushTokenForSignOut.mockResolvedValue(undefined);
 
@@ -289,7 +297,7 @@ describe('authStore, secure storage persistence', () => {
   });
 
   it('clears the signed-in account when cloud-session cleanup fails (always-clear guarantee)', async () => {
-    mockClearAuthSession.mockRejectedValue(new Error('Network error'));
+    mockEndDeviceSession.mockRejectedValue(new Error('Network error'));
 
     useAuthStore.setState({ isClerkSignedIn: true, clerkUserId: 'user-123' });
 
@@ -352,7 +360,7 @@ describe('authStore, secure storage persistence', () => {
 
   it('fails closed immediately while external Clerk sign-out is still pending', async () => {
     let resolveExternalSignOut: (() => void) | undefined;
-    mockClearAuthSession.mockReturnValue(
+    mockEndDeviceSession.mockReturnValue(
       new Promise<void>((resolve) => {
         resolveExternalSignOut = resolve;
       }),
@@ -401,7 +409,7 @@ describe('authStore, secure storage persistence', () => {
 
     const cleanupOrder =
       _pushTokenCleanupMock.unregisterPushTokenForSignOut.mock.invocationCallOrder[0];
-    const clerkClearOrder = mockClearAuthSession.mock.invocationCallOrder[0];
+    const clerkClearOrder = mockEndDeviceSession.mock.invocationCallOrder[0];
     expect(cleanupOrder).toBeLessThan(clerkClearOrder);
   });
 
@@ -413,9 +421,9 @@ describe('authStore, secure storage persistence', () => {
     });
 
     const revoke = jest.mocked(revokeAskIntentForSignOut);
-    expect(revoke).toHaveBeenCalledWith('captured-clerk-jwt');
+    expect(revoke).toHaveBeenCalledWith('captured-clerk-jwt', expect.any(Function));
     expect(revoke.mock.invocationCallOrder[0]).toBeLessThan(
-      mockClearAuthSession.mock.invocationCallOrder[0],
+      mockEndDeviceSession.mock.invocationCallOrder[0],
     );
   });
 });

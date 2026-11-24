@@ -5,8 +5,10 @@ import '@xterm/xterm/css/xterm.css';
 import {
   DEFAULT_TERMINAL_PREFERENCES,
   TERMINAL_WRITE_LIMIT,
+  WORKSPACE_TERMINAL_SCROLLBACK_LINES,
   normalizeTerminalPreferences,
   type HostTerminalPreferences,
+  type WorkspaceTerminalViewport,
 } from '@agiworkforce/local-runtime-contract';
 import { Spinner } from '@agiworkforce/ui';
 import {
@@ -14,6 +16,7 @@ import {
   onDeveloperTerminal,
   openDeveloperTerminal,
   resizeDeveloperTerminal,
+  scrollDeveloperTerminal,
   useDesktopHost,
   writeDeveloperTerminal,
   type DeveloperTerminalOutput,
@@ -25,6 +28,8 @@ import styles from '../CloudCodePage.module.css';
 const FONT_SIZE = 13;
 const LINE_HEIGHT = 1.2;
 const MINIMUM_CONTRAST_RATIO = 4.5;
+const EARLY_TERMINAL_EVENT_LIMIT = 32;
+const WHEEL_SCROLLBACK_LINES = 3;
 
 type Phase =
   | { kind: 'starting' }
@@ -34,6 +39,7 @@ type Phase =
 
 export interface LocalPtyTerminalProps {
   rootId: string;
+  onTerminalId?: (terminalId: string | null) => void;
 }
 
 function themeOf(element: HTMLElement) {
@@ -47,12 +53,16 @@ function themeOf(element: HTMLElement) {
   };
 }
 
-export function LocalPtyTerminal({ rootId }: LocalPtyTerminalProps) {
+export function LocalPtyTerminal({ rootId, onTerminalId }: LocalPtyTerminalProps) {
   const host = useDesktopHost();
   const screenRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const [phase, setPhase] = useState<Phase>({ kind: 'starting' });
   const [generation, setGeneration] = useState(0);
+  const [workspaceViewport, setWorkspaceViewport] = useState<WorkspaceTerminalViewport>();
+  const showLatest = useRef<() => void>(() => undefined);
+  const terminalIdListener = useRef(onTerminalId);
+  terminalIdListener.current = onTerminalId;
 
   useEffect(() => {
     const screen = screenRef.current;
@@ -60,6 +70,9 @@ export function LocalPtyTerminal({ rootId }: LocalPtyTerminalProps) {
     if (!screen || !viewport) return undefined;
     let disposed = false;
     let terminalId: string | null = null;
+    let awaitingOpen = true;
+    let history: WorkspaceTerminalViewport | undefined;
+    setWorkspaceViewport(undefined);
     const early: DeveloperTerminalOutput[] = [];
     const cleanups: Array<() => void> = [];
     let queued = '';
@@ -118,16 +131,30 @@ export function LocalPtyTerminal({ rootId }: LocalPtyTerminalProps) {
       });
 
       const write = (output: DeveloperTerminalOutput) => {
+        if (output.viewport) {
+          const next = output.viewport;
+          history = next;
+          setWorkspaceViewport((current) =>
+            current?.scrollback === next.scrollback &&
+            current.scrollbackLength === next.scrollbackLength &&
+            current.alternateScreen === next.alternateScreen
+              ? current
+              : next,
+          );
+        }
         if (output.data !== undefined) terminal.write(output.data);
         if (output.exitCode !== undefined) {
           terminalId = null;
+          terminalIdListener.current?.(null);
           setPhase({ kind: 'exited', exitCode: output.exitCode });
         }
       };
       cleanups.push(
         onDeveloperTerminal(rootId, (output) => {
-          if (terminalId === null) early.push(output);
-          else if (output.terminalId === terminalId) write(output);
+          if (awaitingOpen) {
+            if (early.length >= EARLY_TERMINAL_EVENT_LIMIT) early.shift();
+            early.push(output);
+          } else if (output.terminalId === terminalId) write(output);
         }),
       );
 
@@ -135,6 +162,7 @@ export function LocalPtyTerminal({ rootId }: LocalPtyTerminalProps) {
       try {
         opened = await openDeveloperTerminal(rootId, terminal.cols, terminal.rows);
       } catch (cause: unknown) {
+        awaitingOpen = false;
         if (!disposed) {
           setPhase({ kind: 'failed', message: toUserMessage(cause, LOCAL_TERMINAL_COPY.failed) });
         }
@@ -145,14 +173,50 @@ export function LocalPtyTerminal({ rootId }: LocalPtyTerminalProps) {
         return;
       }
       terminalId = opened.terminalId;
+      awaitingOpen = false;
+      terminalIdListener.current?.(terminalId);
       const owned = opened.terminalId;
       cleanups.push(() => {
+        terminalIdListener.current?.(null);
         void closeDeveloperTerminal(rootId, owned).catch(() => undefined);
       });
       setPhase({ kind: 'open' });
       for (const output of early.splice(0)) {
         if (output.terminalId === owned) write(output);
       }
+
+      const scroll = (lines: number): boolean => {
+        if (
+          terminalId !== owned ||
+          !history ||
+          history.alternateScreen ||
+          !history.scrollbackLength
+        ) {
+          return false;
+        }
+        void scrollDeveloperTerminal(rootId, owned, lines).catch(() => undefined);
+        return true;
+      };
+      showLatest.current = () => {
+        if (scroll(-WORKSPACE_TERMINAL_SCROLLBACK_LINES)) terminal.focus();
+      };
+      const wheel = (event: WheelEvent) => {
+        if (event.deltaY === 0 || event.ctrlKey) return;
+        if (scroll(-Math.sign(event.deltaY) * WHEEL_SCROLLBACK_LINES)) event.preventDefault();
+      };
+      viewport.addEventListener('wheel', wheel, { passive: false });
+      terminal.attachCustomKeyEventHandler((event) => {
+        if (event.type !== 'keydown' || !event.shiftKey) return true;
+        const handled =
+          (event.key === 'PageUp' && scroll(terminal.rows)) ||
+          (event.key === 'PageDown' && scroll(-terminal.rows));
+        if (handled) event.preventDefault();
+        return !handled;
+      });
+      cleanups.push(() => {
+        showLatest.current = () => undefined;
+        viewport.removeEventListener('wheel', wheel);
+      });
 
       const flush = async () => {
         if (flushing) return;
@@ -208,7 +272,21 @@ export function LocalPtyTerminal({ rootId }: LocalPtyTerminalProps) {
   }, [host, rootId, generation]);
 
   return (
-    <div ref={screenRef} className={styles['ptyScreen']}>
+    <div
+      ref={screenRef}
+      className={styles['ptyScreen']}
+      data-terminal-buffer={workspaceViewport?.alternateScreen ? 'alternate' : 'normal'}
+      data-terminal-scrollback={workspaceViewport?.scrollbackLength}
+    >
+      {Boolean(workspaceViewport?.scrollback) && phase.kind === 'open' && (
+        <button
+          type="button"
+          className={`${styles['secondaryButton']} ${styles['terminalLatestOutput']}`}
+          onClick={() => showLatest.current()}
+        >
+          {LOCAL_TERMINAL_COPY.latestOutput}
+        </button>
+      )}
       {phase.kind === 'starting' && (
         <div className={styles['ptyStatus']}>
           <Spinner size="sm" aria-label={LOCAL_TERMINAL_COPY.starting} />

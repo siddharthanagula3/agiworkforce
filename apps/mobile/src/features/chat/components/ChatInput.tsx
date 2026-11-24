@@ -316,7 +316,7 @@ function typedAfterSentEcho(
   return elapsed <= AUTOCORRECT_COMMIT_WINDOW_MS ? '' : null;
 }
 
-export type ComposerSendOutcome = void | boolean | { openedConversationId: string };
+export type ComposerSendOutcome = void | boolean | 'declined' | { openedConversationId: string };
 
 function openedConversationIdOf(outcome: ComposerSendOutcome): string | undefined {
   return typeof outcome === 'object' && outcome !== null ? outcome.openedConversationId : undefined;
@@ -1022,11 +1022,14 @@ export function ChatInput({
       }
       pendingSend
         .then((outcome) => {
-          if (outcome === false) {
-            const pastedFailure = pastedTextUploadFailure(pastedFiles);
-            if (pastedFailure) Alert.alert('Pasted text not sent', pastedFailure);
-            if (wasCloudUploadDeclined(outgoingAttachments)) restoreUnsentMarks();
-            else markSendFailed();
+          if (outcome === false || outcome === 'declined') {
+            if (outcome === 'declined' || wasCloudUploadDeclined(outgoingAttachments)) {
+              restoreUnsentMarks();
+            } else {
+              const pastedFailure = pastedTextUploadFailure(pastedFiles);
+              if (pastedFailure) Alert.alert('Pasted text not sent', pastedFailure);
+              markSendFailed();
+            }
             releaseHandOver();
             restoreSentText();
             return;
@@ -1176,8 +1179,11 @@ ${current}`
           onSend(next.text, next.attachments.length > 0 ? next.attachments : undefined),
         )
           .then((accepted) => {
-            if (accepted === false) {
-              returnQueuedToComposer(next, !wasCloudUploadDeclined(next.attachments));
+            if (accepted === false || accepted === 'declined') {
+              returnQueuedToComposer(
+                next,
+                accepted !== 'declined' && !wasCloudUploadDeclined(next.attachments),
+              );
               return;
             }
             removePastedTextFiles(next.attachments);

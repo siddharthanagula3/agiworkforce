@@ -705,7 +705,10 @@ export const COMPUTER_USE_PANEL_CSS = `
   }
   .sp-browser-turn:empty { display: none; }
   .sp-browser-turn .sp-cu-approval { margin: 0; }
-  .sp-browser-turn .sp-cu-screenshot {
+  .sp-browser-frames-nav { display: flex; align-items: center; gap: 8px; color: var(--agi-ext-text-muted); font-size: var(--type-caption-size); }
+  .sp-browser-frames-nav button { min-width: 32px; min-height: 32px; color: inherit; background: transparent; border: 0; cursor: pointer; font: inherit; }
+  .sp-browser-frames-nav button:disabled { opacity: .4; cursor: default; }
+  .sp-browser-frames .sp-cu-screenshot {
     width: 100%;
     max-width: 320px;
     margin: 0;
@@ -1881,7 +1884,7 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
         const emoji = (step.toolName && TOOL_EMOJI[step.toolName]) ?? KIND_EMOJI['tool_call'] ?? '';
         iconEl.textContent = emoji;
         titleEl.textContent = formatToolCallTitle(step.toolName ?? '', step.toolArgs);
-        if (step.toolArgs && Object.keys(step.toolArgs).length > 0) {
+        if (step.toolName !== 'type' && step.toolArgs && Object.keys(step.toolArgs).length > 0) {
           detailEl.textContent = formatArgs(step.toolArgs);
           makeExpandable();
         }
@@ -1998,7 +2001,7 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
           return `Click at (${String(args['x'])}, ${String(args['y'])})`;
         return 'Click';
       case 'type':
-        return `Type: "${String(args?.['text'] ?? '').slice(0, 40)}"`;
+        return t('spBrowserStepTyping');
       case 'select_option':
         return `Choose option: ${String(args?.['option'] ?? '').slice(0, 60)}`;
       case 'navigate':

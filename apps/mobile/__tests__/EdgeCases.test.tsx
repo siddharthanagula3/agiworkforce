@@ -36,13 +36,13 @@ jest.mock('@/src/ui/theme', () => ({
 }));
 
 jest.mock('@/hooks/useNetworkStatus', () => ({
-  useNetworkStatus: () => ({ isOnline: false, isReconnecting: false, queueSize: 0 }),
+  useNetworkStatus: jest.fn(),
 }));
 
 import React from 'react';
-import { AccessibilityInfo } from 'react-native';
-import { render, fireEvent } from '@testing-library/react-native';
+import { render } from '@testing-library/react-native';
 import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';
+import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 
 import { EDGE_COPY } from '@/src/features/edge-cases/components/copy';
 import { OfflineBanner } from '@/src/features/edge-cases/components/OfflineBanner';
@@ -57,17 +57,21 @@ function withSafeArea(node: React.ReactElement): React.ReactElement {
 }
 
 describe('OfflineBanner', () => {
-  beforeEach(() => {
-    jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(false);
-  });
+  it('reserves space for the notice offline and removes it on reconnect', () => {
+    jest
+      .mocked(useNetworkStatus)
+      .mockReturnValue({ isOnline: false, isReconnecting: false, queueSize: 0 });
+    const screen = render(withSafeArea(<OfflineBanner />));
+    expect(screen.getByRole('alert', { name: EDGE_COPY.offline.banner })).not.toHaveStyle({
+      position: 'absolute',
+    });
+    expect(screen.getByText(EDGE_COPY.offline.banner)).toBeTruthy();
 
-  afterEach(() => {
-    jest.restoreAllMocks();
-  });
-
-  it('renders the celebratory offline copy when offline', () => {
-    const { getByText } = render(withSafeArea(<OfflineBanner />));
-    expect(getByText(EDGE_COPY.offline.banner)).toBeTruthy();
+    jest
+      .mocked(useNetworkStatus)
+      .mockReturnValue({ isOnline: true, isReconnecting: false, queueSize: 0 });
+    screen.rerender(withSafeArea(<OfflineBanner />));
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 });
 

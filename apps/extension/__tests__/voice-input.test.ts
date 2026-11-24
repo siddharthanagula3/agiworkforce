@@ -52,10 +52,9 @@ function setup() {
   const input = document.createElement('textarea');
   const notice = buildMicrophoneNotice();
   document.body.append(mic, input, notice.element);
-  const resize = vi.fn();
   const error = vi.fn();
-  const api = setupVoiceInput(mic, input, resize, error, notice);
-  return { mic, input, notice, resize, error, api };
+  const api = setupVoiceInput(mic, input, error, notice);
+  return { mic, input, notice, error, api };
 }
 
 async function start(mic: HTMLButtonElement) {
@@ -81,13 +80,15 @@ describe('voice input lifetime', () => {
   );
 
   it('appends a current transcript and preserves the typed draft', async () => {
-    const { mic, input, resize } = setup();
+    const { mic, input } = setup();
+    const changed = vi.fn();
+    input.addEventListener('input', changed);
     input.value = 'Typed draft';
     const current = await start(mic);
     current.onstart!();
     current.onresult!({ results: [[{ transcript: 'spoken addition' }]] });
     expect(input.value).toBe('Typed draft spoken addition');
-    expect(resize).toHaveBeenCalledWith(input);
+    expect(changed).toHaveBeenCalledOnce();
     expect(mic.getAttribute('aria-pressed')).toBe('true');
     current.onend!();
     expect(mic.getAttribute('aria-pressed')).toBe('false');

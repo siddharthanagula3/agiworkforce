@@ -635,22 +635,6 @@ pub async fn run_repl(
                     input.to_string()
                 };
 
-                crate::hooks::run_hooks(
-                    &hooks_config,
-                    crate::hooks::HookEvent::UserPromptSubmit,
-                    &crate::hooks::HookInput {
-                        event: "UserPromptSubmit".to_string(),
-                        session_id: Some(session.runtime_session_id.clone()),
-                        model: Some(session.model.clone()),
-                        tool_name: None,
-                        tool_args: None,
-                        tool_output: None,
-                        message: Some(full_input.clone()),
-                        tool_execution: None,
-                    },
-                )
-                .await;
-
                 // Drain the background MCP attach task on the first real prompt
                 // turn.  After this point `mcp_attach_join` is None and all
                 // subsequent turns see the manager already on the session.
@@ -789,6 +773,18 @@ fn with_security_review_scope(input: &str) -> Option<String> {
 }
 
 async fn run_prompt_turn(session: &mut AgentSession, config: &CliConfig, full_input: String) {
+    if let Err(reason) = crate::hooks::check_user_prompt(
+        session.hooks_config(),
+        &session.runtime_session_id,
+        &session.model,
+        &full_input,
+    )
+    .await
+    {
+        output::print_warn(&reason);
+        return;
+    }
+
     match session.reload_if_changed_on_disk() {
         Ok(Some(saved_mode)) => {
             output::print_info(
@@ -947,6 +943,7 @@ pub async fn attach_url_context(url: &str, session: &mut AgentSession) -> Result
         additional_workspace_roots: session.additional_context_dirs(),
         tool_search_catalog: None,
         require_confirmation: false,
+        require_shell_approval: false,
         auto_approve_safe: session.auto_approve_safe,
         auto_approve_edits: session.governed_permission_mode().auto_approves_edits(),
         quiet: true,
@@ -983,6 +980,7 @@ pub async fn run_user_shell_command(
         additional_workspace_roots: session.additional_context_dirs(),
         tool_search_catalog: None,
         require_confirmation,
+        require_shell_approval: false,
         auto_approve_safe: session.auto_approve_safe,
         auto_approve_edits: session.governed_permission_mode().auto_approves_edits(),
         quiet: session.quiet,
@@ -1015,6 +1013,7 @@ async fn run_advisor_question(
         additional_workspace_roots: Vec::new(),
         tool_search_catalog: None,
         require_confirmation: false,
+        require_shell_approval: false,
         auto_approve_safe: true,
         auto_approve_edits: false,
         quiet: false,

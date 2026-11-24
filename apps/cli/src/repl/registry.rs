@@ -311,8 +311,9 @@ pub fn handle_history() {
             eprintln!("{}", ts::accent_header("Managed Sessions:"));
             for (index, summary) in summaries.iter().take(20).enumerate() {
                 eprintln!(
-                    "  {} {} {} ({})",
+                    "  {} {}{} {} ({})",
                     format!("{:>2}.", index + 1).dimmed(),
+                    output::session_pin_label(summary.pinned.unwrap_or_default()),
                     summary.session_id.bold(),
                     summary
                         .updated_at
@@ -948,7 +949,8 @@ pub(super) fn handle_sessions(arg: &str) {
                 }
                 for summary in &list {
                     eprintln!(
-                        "  {}  {}  {}  {}",
+                        "  {}{}  {}  {}  {}",
+                        output::session_pin_label(summary.pinned.unwrap_or_default()),
                         summary.session_id.bold(),
                         summary
                             .updated_at

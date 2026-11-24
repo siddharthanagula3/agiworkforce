@@ -202,6 +202,7 @@ fn thread(id: &str) -> ThreadSummary {
         updated_at: "2026-07-14T12:01:00Z".to_string(),
         created_by: DeveloperSessionSource::Vscode,
         status: ThreadStatus::Idle,
+        pinned: None,
         location: None,
     }
 }
@@ -415,7 +416,9 @@ impl DeveloperSessionHost for FakeHost {
                     reversible: Some(true),
                     proposed_content: None,
                     always_allow_saved: false,
+                    requires_explicit_decision: false,
                     proposed_execpolicy_amendment: None,
+                    question: None,
                 }],
                 pending_user_inputs: Vec::new(),
             }),
@@ -539,6 +542,7 @@ fn capabilities() -> AppServerCapabilities {
         code_drafts: false,
         workspace_file_recovery_browser: false,
         workspace_terminal: false,
+        background_commands: false,
         worktrees: false,
         models: true,
         account: false,
@@ -574,6 +578,7 @@ fn capabilities() -> AppServerCapabilities {
         thread_unarchive: false,
         thread_search: false,
         fork_at_message: false,
+        fork_and_rewind: false,
         prompt_commands: false,
         max_turns: false,
         memory: false,
@@ -600,6 +605,8 @@ fn capabilities() -> AppServerCapabilities {
         managed_worktrees: true,
         side_question: true,
         thread_rename: true,
+        inactive_thread_archive: false,
+        require_shell_approval: false,
         reasoning_effort_ladder: false,
         mcp_set_enabled: false,
     }
@@ -1612,6 +1619,7 @@ impl DeveloperSessionHost for SurfaceHost {
                 source: PluginScope::User,
                 path: "/home/dev/.agiworkforce/plugins/reviewer".to_string(),
                 format: Some("agi".to_string()),
+                configurable: None,
             }],
             notices: Vec::new(),
         })
@@ -2075,6 +2083,7 @@ async fn a_bypass_turn_cannot_be_started_from_a_query_token_connection() {
                 routing_task_type: None,
                 cwd: None,
                 agent_mode,
+                require_shell_approval: false,
                 reasoning_effort: None,
                 context_files: None,
                 client_turn_id: None,
@@ -3138,7 +3147,9 @@ fn handoff_record(to: HandoffEnvironment) -> DeveloperSessionHandoff {
             reversible: Some(true),
             proposed_content: None,
             always_allow_saved: false,
+            requires_explicit_decision: false,
             proposed_execpolicy_amendment: None,
+            question: None,
         }],
         last_turn: Some(HandoffLastTurn {
             turn_id: "turn-9".to_string(),

@@ -1,4 +1,5 @@
 import { buildMetadata } from '@/lib/seo/metadata';
+import { OG_IMAGE } from '@/lib/seo/site';
 import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
@@ -272,8 +273,13 @@ export default function PressPage() {
               <a href="/logo-192.png" download className="agi-ds-btn" data-variant="secondary">
                 AGI mark: PNG, 192&times;192
               </a>
-              <a href="/og-image.svg" download className="agi-ds-btn" data-variant="secondary">
-                Social card: SVG
+              <a
+                href={OG_IMAGE.url}
+                download="agi-social-card.png"
+                className="agi-ds-btn"
+                data-variant="secondary"
+              >
+                Social card: PNG
               </a>
             </ButtonRow>
           </Stack>

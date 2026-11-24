@@ -190,8 +190,39 @@ describe('sidebar recent conversations', () => {
       payload: {
         source: 'local',
         rows: [],
+        groups: [],
         unavailable: expect.stringContaining('AGI CLI not found'),
       },
     });
+  });
+
+  it('sends the partial Local session rows with a retryable notice', async () => {
+    const context = new vscode.ExtensionContext();
+    const posted: ExtToWebviewMessage[] = [];
+    const manager = new ChatStateManager(
+      context.secrets,
+      context,
+      (message) => posted.push(message),
+      {
+        listThreads: vi.fn(async () => ({
+          items: [{ id: 'first', title: 'Already loaded', updatedAt: '2026-11-24T00:00:00Z' }],
+          failures: [{ folderName: 'Project', reason: 'Read interrupted.', partial: true }],
+        })),
+      } as unknown as ConversationTreeProvider,
+      context.workspaceState,
+    );
+    await manager.handleMessage({ type: 'requestSessions', payload: { source: 'local' } });
+
+    expect(posted).toContainEqual(
+      expect.objectContaining({
+        type: 'sessionsList',
+        payload: expect.objectContaining({
+          source: 'local',
+          retryable: true,
+          unavailable: 'Some sessions in Project could not be listed. Read interrupted.',
+          rows: [expect.objectContaining({ id: 'first', title: 'Already loaded' })],
+        }),
+      }),
+    );
   });
 });

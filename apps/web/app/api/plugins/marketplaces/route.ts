@@ -1,7 +1,6 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
 
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -15,19 +14,14 @@ import {
   registerMarketplaceSource,
 } from '@/lib/services/plugin-marketplace-service';
 import { isShadowSourceName } from '@/features/plugins/server/directory/constants';
-import type { PluginMarketplaceSourceListResponse } from '@agiworkforce/cloud-contracts';
+import {
+  RegisterMarketplaceBodySchema,
+  type PluginMarketplaceSourceListResponse,
+} from '@agiworkforce/cloud-contracts';
 import { recordAuditEvent } from '@/lib/security-audit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-const RegisterMarketplaceBodySchema = z
-  .object({
-    repositoryUrl: z.string().trim().min(1).max(2_000),
-    ref: z.string().trim().min(1).max(200).optional(),
-    name: z.string().trim().min(1).max(200).optional(),
-  })
-  .strict();
 
 async function handleGet(request: NextRequest): Promise<NextResponse> {
   const { db, userId } = await getUserScopedDb(request);

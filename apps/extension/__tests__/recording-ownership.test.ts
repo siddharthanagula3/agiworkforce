@@ -57,28 +57,52 @@ describe('recordings belong to the account that made them', () => {
     expect(rows[0]?.ownerAccountId).toBe('acct_a');
   });
 
-  it('removes another account recordings on a switch and keeps prompts', async () => {
+  it('filters another account’s recordings without deleting them and keeps prompts visible', async () => {
     rows = [saved('mine', 'acct_a'), saved('theirs', 'acct_b'), saved('prompt', undefined, false)];
 
-    await api.releaseRecordingsOfOtherAccounts('acct_a');
-
-    expect(rows.map((row) => row.id)).toEqual(['mine', 'prompt']);
+    expect((await api.loadShortcuts('acct_a')).map((row) => row.id)).toEqual(['mine', 'prompt']);
+    expect((await api.loadShortcuts('acct_b')).map((row) => row.id)).toEqual(['theirs', 'prompt']);
+    expect(rows.map((row) => row.id)).toEqual(['mine', 'theirs', 'prompt']);
   });
 
-  it('removes every bound recording on a sign-out', async () => {
+  it('hides bound recordings signed out and restores them to the same account on sign-in', async () => {
     rows = [saved('mine', 'acct_a'), saved('signed-out', null)];
 
-    await api.releaseRecordingsOfOtherAccounts(null);
-
-    expect(rows.map((row) => row.id)).toEqual(['signed-out']);
+    expect((await api.loadShortcuts(null)).map((row) => row.id)).toEqual(['signed-out']);
+    expect(await api.loadShortcuts(undefined)).toEqual([]);
+    await api.claimUnownedRecordings('acct_a');
+    expect((await api.loadShortcuts('acct_a')).map((row) => row.id)).toEqual([
+      'mine',
+      'signed-out',
+    ]);
   });
 
   it('gives a recording made while signed out to the first account seen', async () => {
     rows = [saved('signed-out', null), saved('legacy', undefined)];
 
-    await api.releaseRecordingsOfOtherAccounts('acct_a');
-    await api.releaseRecordingsOfOtherAccounts('acct_b');
+    await api.claimUnownedRecordings('acct_a');
+    await api.claimUnownedRecordings('acct_b');
 
-    expect(rows).toEqual([]);
+    expect(await api.loadShortcuts('acct_b')).toEqual([]);
+    expect(rows.map((row) => row.ownerAccountId)).toEqual(['acct_a', 'acct_a']);
+  });
+
+  it('does not reveal a different account’s recordings in mutations or allow deleting a hidden recording', async () => {
+    rows = [saved('theirs', 'acct_b'), saved('prompt', undefined, false)];
+    await expect(
+      api.handleDeleteShortcut({ type: 'DELETE_SHORTCUT', shortcutId: 'theirs' }, 'acct_a'),
+    ).resolves.toMatchObject({ success: false });
+    const response = await api.handleSaveShortcut(
+      { type: 'SAVE_SHORTCUT', name: 'My prompt', actions: [], prompt: 'Summarize' },
+      'acct_a',
+    );
+    expect(response).toMatchObject({
+      success: true,
+      shortcuts: [
+        expect.objectContaining({ id: 'prompt' }),
+        expect.objectContaining({ name: 'My prompt' }),
+      ],
+    });
+    expect(rows.find((row) => row.id === 'theirs')).toBeTruthy();
   });
 });

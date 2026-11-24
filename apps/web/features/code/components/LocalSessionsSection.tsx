@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useLayoutEffect, useRef, useState, type RefCallback } from 'react';
 import {
   Archive,
   ArchiveRestore,
@@ -19,6 +19,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   Spinner,
+  useConfirmAction,
 } from '@agiworkforce/ui';
 import type {
   DeveloperMcpServerAwaitingApproval,
@@ -29,8 +30,10 @@ import { formatRelativeTime } from '@shared/utils/format';
 import {
   LOCAL_CODE_COPY,
   LOCAL_SESSION_MARKER_LABELS,
+  localArchiveSessionConsequence,
   localMcpServerKey,
   localModelLabel,
+  localSessionIsArchived,
   localSessionMarker,
   localSessionOriginLabel,
   localSessionStatusLabel,
@@ -38,6 +41,7 @@ import {
   type LocalSessionMarker,
 } from '../local-code';
 import styles from '../CloudCodePage.module.css';
+import { LocalSessionTitleInput } from './LocalSessionTitleInput';
 
 const RAIL_GLYPH_SIZE = 16;
 const GROUP_GLYPH_SIZE = 13;
@@ -59,6 +63,7 @@ export interface LocalSessionsSectionProps {
   /** Why a folder still lists no sessions after the user was asked, by root id. */
   allowRefusals: Record<string, string>;
   onAllowSessions: (rootId: string) => void;
+  onReviewCommandAccess: () => void;
   /** The server whose review dialog is up, by `localMcpServerKey`. */
   reviewingMcp: string | null;
   /** Why a server is still waiting after a review, by `localMcpServerKey`. */
@@ -68,8 +73,9 @@ export interface LocalSessionsSectionProps {
   onToggleArchived?: () => void;
   sessionActions?: { rename: boolean; unarchive: boolean; pin: boolean };
   actionError?: string | null;
-  onRename?: (session: LocalDeveloperSession, title: string) => Promise<boolean>;
-  onSetArchived?: (session: LocalDeveloperSession, archived: boolean) => void;
+  selectedHasUnsavedEdits?: boolean;
+  onRename?: (session: LocalDeveloperSession, title: string) => Promise<string | null>;
+  onSetArchived?: (session: LocalDeveloperSession, archived: boolean) => Promise<boolean>;
   onSetPinned?: (session: LocalDeveloperSession, pinned: boolean) => void;
 }
 
@@ -83,17 +89,21 @@ function pinnedFirst(sessions: LocalDeveloperSession[]): LocalDeveloperSession[]
 function SessionMenu({
   session,
   actions,
+  triggerRef,
+  archiveBlocked,
   onRename,
   onSetArchived,
   onSetPinned,
 }: {
   session: LocalDeveloperSession;
   actions: { rename: boolean; unarchive: boolean; pin: boolean };
+  triggerRef: RefCallback<HTMLButtonElement>;
+  archiveBlocked: boolean;
   onRename?: () => void;
   onSetArchived?: (session: LocalDeveloperSession, archived: boolean) => void;
   onSetPinned?: (session: LocalDeveloperSession, pinned: boolean) => void;
 }) {
-  const archived = session.archivedAt !== undefined;
+  const archived = localSessionIsArchived(session);
   const canArchive = onSetArchived !== undefined && (!archived || actions.unarchive);
   const canPin = onSetPinned !== undefined && actions.pin && !archived;
   const canRename = onRename !== undefined && actions.rename;
@@ -102,6 +112,7 @@ function SessionMenu({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
+          ref={triggerRef}
           type="button"
           className={`${styles['headerButton']} ${styles['railRowMenu']}`}
           aria-label={LOCAL_CODE_COPY.sessionActions(session.title)}
@@ -127,7 +138,13 @@ function SessionMenu({
           </DropdownMenuItem>
         )}
         {canArchive && (
-          <DropdownMenuItem onSelect={() => onSetArchived?.(session, !archived)}>
+          <DropdownMenuItem
+            disabled={!archived && archiveBlocked}
+            aria-description={
+              !archived && archiveBlocked ? LOCAL_CODE_COPY.archiveSessionWhileRunning : undefined
+            }
+            onSelect={() => onSetArchived?.(session, !archived)}
+          >
             {archived ? (
               <ArchiveRestore size={MENU_GLYPH_SIZE} aria-hidden="true" />
             ) : (
@@ -138,43 +155,6 @@ function SessionMenu({
         )}
       </DropdownMenuContent>
     </DropdownMenu>
-  );
-}
-
-function RenameField({
-  session,
-  onSave,
-  onCancel,
-}: {
-  session: LocalDeveloperSession;
-  onSave: (title: string) => void;
-  onCancel: () => void;
-}) {
-  const [draft, setDraft] = useState(session.title);
-  const submit = (event: FormEvent) => {
-    event.preventDefault();
-    const title = draft.trim();
-    if (title === '' || title === session.title) onCancel();
-    else onSave(title);
-  };
-  return (
-    <form className={`${styles['railRow']} ${styles['railLocalRow']}`} onSubmit={submit}>
-      <input
-        aria-label={LOCAL_CODE_COPY.sessionName}
-        className={styles['textInput']}
-        value={draft}
-        autoFocus
-        maxLength={200}
-        onChange={(event) => setDraft(event.target.value)}
-        onBlur={submit}
-        onKeyDown={(event) => {
-          if (event.key === 'Escape') {
-            event.preventDefault();
-            onCancel();
-          }
-        }}
-      />
-    </form>
   );
 }
 
@@ -193,6 +173,7 @@ export function LocalSessionsSection({
   allowing,
   allowRefusals,
   onAllowSessions,
+  onReviewCommandAccess,
   reviewingMcp,
   mcpRefusals,
   onReviewMcpServer,
@@ -200,21 +181,69 @@ export function LocalSessionsSection({
   onToggleArchived,
   sessionActions = NO_ACTIONS,
   actionError = null,
+  selectedHasUnsavedEdits = false,
   onRename,
   onSetArchived,
   onSetPinned,
 }: LocalSessionsSectionProps) {
   const [renaming, setRenaming] = useState<string | null>(null);
+  const actionButtons = useRef(new Map<string, HTMLButtonElement>());
+  const restoreActionFocus = useRef<string | null>(null);
+  const section = useRef<HTMLElement>(null);
+  const archivedToggle = useRef<HTMLButtonElement>(null);
+  const { confirm, dialog } = useConfirmAction();
+  useLayoutEffect(() => {
+    if (renaming === null && restoreActionFocus.current !== null) {
+      actionButtons.current.get(restoreActionFocus.current)?.focus();
+      restoreActionFocus.current = null;
+    }
+  }, [renaming]);
   const empty = groups.length === 0 ? LOCAL_CODE_COPY.emptyNoFolders : LOCAL_CODE_COPY.empty;
   const nothingToShow =
     !loading && unavailable === null && groups.every((group) => group.sessions.length === 0);
 
+  const changeArchive = (session: LocalDeveloperSession, archived: boolean) => {
+    if (!onSetArchived) return;
+    if (!archived) {
+      void onSetArchived(session, false);
+      return;
+    }
+    let archivedSuccessfully = false;
+    const description = localArchiveSessionConsequence(
+      session.title,
+      session.id,
+      sessionActions.unarchive,
+    );
+    confirm({
+      title: LOCAL_CODE_COPY.archiveSessionTitle,
+      description:
+        session.id === selectedId && selectedHasUnsavedEdits
+          ? `${description} ${LOCAL_CODE_COPY.discardLocalEditsDescription}`
+          : description,
+      confirmLabel: LOCAL_CODE_COPY.archiveSessionConfirm,
+      destructive: false,
+      onConfirm: async () => {
+        archivedSuccessfully = await onSetArchived(session, true);
+      },
+      getRestoreTarget: () => {
+        if (archivedSuccessfully && !showArchived) return archivedToggle.current ?? section.current;
+        return actionButtons.current.get(session.id) ?? archivedToggle.current ?? section.current;
+      },
+    });
+  };
+
   return (
-    <section aria-label={LOCAL_CODE_COPY.heading} data-testid="local-code-section">
+    <section
+      ref={section}
+      tabIndex={-1}
+      aria-label={LOCAL_CODE_COPY.heading}
+      data-testid="local-code-section"
+    >
       <div className={styles['railSectionHeader']}>
         <span className={styles['railSectionLabel']}>{LOCAL_CODE_COPY.heading}</span>
         {onToggleArchived && sessionActions.unarchive && (
           <button
+            ref={archivedToggle}
             type="button"
             className={styles['railSectionAction']}
             aria-pressed={showArchived}
@@ -245,9 +274,13 @@ export function LocalSessionsSection({
 
       {unavailable !== null && <p className={styles['railEmpty']}>{unavailable}</p>}
 
+      {unavailable === null && groups.some((group) => group.sessionsWithheld) && (
+        <p className={styles['railEmpty']}>{LOCAL_CODE_COPY.sessionsWithheld}</p>
+      )}
+
       {unavailable === null &&
         groups.map((group) => (
-          <div key={group.rootId}>
+          <div key={group.rootId} role="group" aria-label={group.name}>
             <div className={styles['railGroup']}>
               {group.branch ? (
                 <GitBranch size={GROUP_GLYPH_SIZE} aria-hidden="true" />
@@ -275,24 +308,36 @@ export function LocalSessionsSection({
 
             {group.sessionsWithheld && (
               <>
-                <p className={styles['railEmpty']}>{LOCAL_CODE_COPY.sessionsWithheld}</p>
                 {allowRefusals[group.rootId] !== undefined && (
                   <p className={styles['railEmpty']} role="alert">
                     {allowRefusals[group.rootId]}
                   </p>
                 )}
-                <button
-                  type="button"
-                  className={`${styles['railRow']} ${styles['railSubRow']}`}
-                  disabled={allowing !== null}
-                  onClick={() => onAllowSessions(group.rootId)}
-                >
-                  <span className={styles['railRowLabel']}>
-                    {allowing === group.rootId
-                      ? LOCAL_CODE_COPY.allowingSessions
-                      : LOCAL_CODE_COPY.allowSessions}
-                  </span>
-                </button>
+                {group.commandAccessRefused ||
+                allowRefusals[group.rootId] === LOCAL_CODE_COPY.sessionsRefused ? (
+                  <button
+                    type="button"
+                    className={`${styles['railRow']} ${styles['railSubRow']}`}
+                    onClick={onReviewCommandAccess}
+                  >
+                    <span className={styles['railRowLabel']}>
+                      {LOCAL_CODE_COPY.reviewCommandAccess}
+                    </span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className={`${styles['railRow']} ${styles['railSubRow']}`}
+                    disabled={allowing !== null}
+                    onClick={() => onAllowSessions(group.rootId)}
+                  >
+                    <span className={styles['railRowLabel']}>
+                      {allowing === group.rootId
+                        ? LOCAL_CODE_COPY.allowingSessions
+                        : LOCAL_CODE_COPY.allowSessions}
+                    </span>
+                  </button>
+                )}
               </>
             )}
 
@@ -327,17 +372,19 @@ export function LocalSessionsSection({
             {pinnedFirst(group.sessions).map((session) => {
               const marker = localSessionMarker(session, activity[session.id]);
               const statusLabel = marker === null ? localSessionStatusLabel(session.status) : null;
-              const archived = session.archivedAt !== undefined;
+              const archived = localSessionIsArchived(session);
               if (renaming === session.id && onRename) {
                 return (
-                  <RenameField
+                  <LocalSessionTitleInput
                     key={session.id}
-                    session={session}
-                    onCancel={() => setRenaming(null)}
-                    onSave={(title) => {
+                    title={session.title}
+                    formClassName={`${styles['railRow']} ${styles['railLocalRow']}`}
+                    inputClassName={styles['textInput']}
+                    onFinish={(restoreFocus) => {
+                      restoreActionFocus.current = restoreFocus ? session.id : null;
                       setRenaming(null);
-                      void onRename(session, title);
                     }}
+                    onSave={(title) => onRename(session, title)}
                   />
                 );
               }
@@ -399,8 +446,17 @@ export function LocalSessionsSection({
                   <SessionMenu
                     session={session}
                     actions={sessionActions}
+                    archiveBlocked={
+                      marker === 'running' ||
+                      marker === 'needs-approval' ||
+                      marker === 'needs-input'
+                    }
+                    triggerRef={(button) => {
+                      if (button) actionButtons.current.set(session.id, button);
+                      else actionButtons.current.delete(session.id);
+                    }}
                     {...(onRename ? { onRename: () => setRenaming(session.id) } : {})}
-                    {...(onSetArchived ? { onSetArchived } : {})}
+                    {...(onSetArchived ? { onSetArchived: changeArchive } : {})}
                     {...(onSetPinned ? { onSetPinned } : {})}
                   />
                 </div>
@@ -441,6 +497,7 @@ export function LocalSessionsSection({
           {adding ? LOCAL_CODE_COPY.addingFolder : LOCAL_CODE_COPY.addFolder}
         </span>
       </button>
+      {dialog}
     </section>
   );
 }

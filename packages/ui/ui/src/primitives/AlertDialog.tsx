@@ -41,9 +41,16 @@ interface AlertDialogContentProps extends React.ComponentPropsWithoutRef<
    * document.activeElement is <body> or whatever claimed it next.
    */
   opener?: HTMLElement | null;
+  getRestoreTarget?: () => HTMLElement | null;
 }
 
-function AlertDialogContent({ className, ref, opener, ...props }: AlertDialogContentProps) {
+function AlertDialogContent({
+  className,
+  ref,
+  opener,
+  getRestoreTarget,
+  ...props
+}: AlertDialogContentProps) {
   // The same two things DialogContent already does, which this sibling was
   // missing. An alert dialog is the destructive-confirmation surface, so losing
   // your place on close costs more here than anywhere: measured on the delete
@@ -67,14 +74,18 @@ function AlertDialogContent({ className, ref, opener, ...props }: AlertDialogCon
     [onOpenAutoFocus, opener],
   );
 
-  const restoreFocus = React.useCallback((event: Event) => {
-    if (event.defaultPrevented) return;
-    const opener = openerRef.current;
-    if (opener && document.contains(opener)) {
-      event.preventDefault();
-      opener.focus();
-    }
-  }, []);
+  const restoreFocus = React.useCallback(
+    (event: Event) => {
+      if (event.defaultPrevented) return;
+      const preferred = getRestoreTarget?.();
+      const target = preferred?.isConnected ? preferred : openerRef.current;
+      if (target?.isConnected) {
+        event.preventDefault();
+        target.focus();
+      }
+    },
+    [getRestoreTarget],
+  );
 
   return (
     <AlertDialogPortal>

@@ -18,6 +18,9 @@ export const CLOUD_CODE_LIMITS = {
  */
 export const NOTEBOOK_TEMPLATE_ID = 'code-interpreter-v1';
 
+export const CLOUD_CODE_SESSION_READY_POLLS = 20;
+export const CLOUD_CODE_SESSION_READY_POLL_INTERVAL_MS = 1_000;
+
 export const CLOUD_CODE_SESSION_STATES = [
   'provisioning',
   'ready',

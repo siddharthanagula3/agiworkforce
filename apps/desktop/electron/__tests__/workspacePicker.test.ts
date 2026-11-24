@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { WorkspaceRoot } from '@agiworkforce/local-runtime-contract';
+import type { WorkspaceRoot, WorkspaceRootKind } from '@agiworkforce/local-runtime-contract';
 
 const findRepositoryRoot = vi.fn<(directory: string) => Promise<string | null>>();
 const stored = new Map<string, WorkspaceRoot>();
@@ -9,22 +9,18 @@ class WorkspaceGrantRefused extends Error {}
 vi.mock('../runtime/gitService', () => ({ findRepositoryRoot }));
 vi.mock('../runtime/workspaceStore', () => ({
   WorkspaceGrantRefused,
-  grantRoot: vi.fn(async (selected: string) => {
+  grantRoot: vi.fn(async (selected: string, kind?: WorkspaceRootKind) => {
     const root: WorkspaceRoot = {
       id: `root:${selected}`,
       path: selected,
       name: selected.split('/').pop() ?? selected,
       grantedAtMs: 1,
       lastOpenedAtMs: 1,
+      ...(kind === 'repository' ? { gitRoot: selected } : {}),
     };
     stored.set(root.id, root);
     return root;
   }),
-  getRoot: (id: string) => stored.get(id),
-  setRootGit: (id: string, gitRoot: string | undefined) => {
-    const root = stored.get(id);
-    if (root && gitRoot) stored.set(id, { ...root, gitRoot });
-  },
 }));
 
 const { grantPickedRoot } = await import('../runtime/workspacePicker');

@@ -56,6 +56,14 @@ function click(id: string): void {
   element?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 }
 
+function reportRuntime(status: string, cliMissing = false): void {
+  window.dispatchEvent(
+    new MessageEvent('message', {
+      data: { type: 'runtimeStatus', payload: { status, cliMissing } },
+    }),
+  );
+}
+
 describe('VS Code first-run onboarding', () => {
   beforeEach(() => {
     document.head.innerHTML = '';
@@ -72,13 +80,13 @@ describe('VS Code first-run onboarding', () => {
 
     const onboarding = document.getElementById('onboarding');
     const back = document.getElementById('onboardingBack') as HTMLButtonElement;
-    expect(onboarding?.style.display).toBe('flex');
+    expect(onboarding?.hidden).toBe(false);
     expect(onboarding?.getAttribute('aria-hidden')).toBe('false');
     expect(back.disabled).toBe(true);
     expect((document.querySelector('.input-area') as HTMLElement & { inert: boolean }).inert).toBe(
       true,
     );
-    expect(document.getElementById('onboardingProgress')?.textContent).toBe('Step 1 of 4');
+    expect(document.getElementById('onboardingProgress')?.textContent).toBe('Setup · 1 of 4');
     expect(document.querySelector('[data-onboarding-step="0"]')?.hasAttribute('hidden')).toBe(
       false,
     );
@@ -102,7 +110,7 @@ describe('VS Code first-run onboarding', () => {
     executeOnboarding();
     click('onboardingNext');
 
-    expect(document.getElementById('onboardingProgress')?.textContent).toBe('Step 2 of 4');
+    expect(document.getElementById('onboardingProgress')?.textContent).toBe('Setup · 2 of 4');
     expect(document.body.textContent).toContain('appear in the Cloud Tasks view');
     expect(document.getElementById('onboardingTasks')).toBeNull();
   });
@@ -113,8 +121,10 @@ describe('VS Code first-run onboarding', () => {
     click('onboardingNext');
     click('onboardingNext');
 
-    expect(document.getElementById('onboardingProgress')?.textContent).toBe('Step 4 of 4');
-    expect(document.body.textContent).toContain('Ask, Auto, Plan, or Bypass');
+    expect(document.getElementById('onboardingProgress')?.textContent).toBe('Setup · 4 of 4');
+    expect(document.body.textContent).toContain(
+      'The mode menu controls which actions need your approval',
+    );
     expect(document.getElementById('onboardingBoundary')).toBeNull();
 
     click('onboardingPermissionDocs');
@@ -135,7 +145,7 @@ describe('VS Code first-run onboarding', () => {
     const { postMessage } = executeOnboarding();
     click('onboardingSkip');
 
-    expect(document.getElementById('onboarding')?.style.display).toBe('none');
+    expect(document.getElementById('onboarding')?.hidden).toBe(true);
     expect((document.querySelector('.input-area') as HTMLElement & { inert: boolean }).inert).toBe(
       false,
     );
@@ -146,13 +156,71 @@ describe('VS Code first-run onboarding', () => {
     });
 
     window.dispatchEvent(new MessageEvent('message', { data: { type: 'showOnboarding' } }));
-    expect(document.getElementById('onboarding')?.style.display).toBe('flex');
-    expect(document.getElementById('onboardingProgress')?.textContent).toBe('Step 1 of 4');
+    expect(document.getElementById('onboarding')?.hidden).toBe(false);
+    expect(document.getElementById('onboardingProgress')?.textContent).toBe('Setup · 1 of 4');
 
     window.dispatchEvent(new MessageEvent('message', { data: { type: 'hideOnboarding' } }));
-    expect(document.getElementById('onboarding')?.style.display).toBe('none');
+    expect(document.getElementById('onboarding')?.hidden).toBe(true);
     expect((document.querySelector('.input-area') as HTMLElement & { inert: boolean }).inert).toBe(
       false,
     );
+  });
+
+  it.each([
+    ['workspace-required', false, 'Open folder', 'openWorkspace'],
+    ['workspace-untrusted', false, 'Manage trust', 'manageWorkspaceTrust'],
+    ['unavailable', true, 'Install CLI', 'installCli'],
+  ])(
+    'focuses the actionable recovery control when skipping intro with %s',
+    (state, cliMissing, label, message) => {
+      const { postMessage } = executeOnboarding();
+      reportRuntime(state, cliMissing);
+      click('onboardingSkip');
+
+      const recovery = document.getElementById('runtimeSettingsBtn');
+      expect(recovery?.textContent).toBe(label);
+      expect(document.activeElement).toBe(recovery);
+      expect((document.getElementById('userInput') as HTMLTextAreaElement).disabled).toBe(true);
+      expect(postMessage.mock.calls.some(([entry]) => entry.type === message)).toBe(false);
+      click('runtimeSettingsBtn');
+      expect(postMessage).toHaveBeenCalledWith(expect.objectContaining({ type: message }));
+    },
+  );
+
+  it('keeps exit focus on startup progress and moves to the composer when it is ready', () => {
+    executeOnboarding();
+    reportRuntime('probing');
+    expect(document.querySelector('[data-onboarding-step="0"] h2')?.textContent).toBe(
+      'Checking the developer runtime…',
+    );
+    click('onboardingNext');
+    click('onboardingNext');
+    click('onboardingNext');
+    expect(document.getElementById('onboardingNext')?.textContent).toBe('Done');
+    click('onboardingNext');
+    expect(document.activeElement?.id).toBe('runtimeStatusTitle');
+
+    reportRuntime('ready');
+    expect(document.activeElement?.id).toBe('userInput');
+  });
+
+  it('keeps Tab and Shift+Tab inside the intro when focus starts on the heading', () => {
+    executeOnboarding();
+    const heading = document.activeElement;
+    expect(heading?.tagName).toBe('H2');
+    const backward = new KeyboardEvent('keydown', {
+      key: 'Tab',
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    heading?.dispatchEvent(backward);
+    expect(backward.defaultPrevented).toBe(true);
+    expect(document.activeElement?.id).toBe('onboardingNext');
+
+    const forward = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+    document.activeElement?.dispatchEvent(forward);
+    expect(forward.defaultPrevented).toBe(true);
+    expect(document.activeElement?.id).toBe('onboardingSkip');
   });
 });

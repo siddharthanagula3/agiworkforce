@@ -263,10 +263,8 @@ const CASES: SheetCase[] = [
         session={session}
         model="fixture-model"
         turnControls
-        mode={'auto' as never}
-        steps={'standard' as never}
+        mode="agent"
         onModeChange={jest.fn()}
-        onStepsChange={jest.fn()}
         onClose={onClose}
       />
     ),
@@ -326,6 +324,15 @@ function renderSheet(testCase: SheetCase, onClose: jest.Mock) {
   testCase.open?.(screen);
   return screen;
 }
+
+it('keeps mobile Code task mode and usage without a step-count picker', () => {
+  const sheet = CASES.find((testCase) => testCase.name === 'CloudCodeTaskOptionsSheet')!;
+  const screen = renderSheet(sheet, jest.fn());
+  expect(screen.getByRole('radio', { name: /Agent/ })).toBeTruthy();
+  expect(screen.getByRole('radio', { name: /Plan/ })).toBeTruthy();
+  expect(screen.getByText('Usage')).toBeTruthy();
+  expect(screen.queryByText('Steps per task')).toBeNull();
+});
 
 describe.each(CASES)('$name page sheet', (testCase) => {
   it('pads its content by the dialog window insets on Android, where the sheet fills the window', () => {

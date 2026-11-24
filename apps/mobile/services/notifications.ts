@@ -1,6 +1,13 @@
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
+import { Alert } from 'react-native';
 import { router } from 'expo-router';
+import { sha256 } from '@noble/hashes/sha256';
+import { bytesToHex } from '@noble/hashes/utils';
+import {
+  PUSH_ACCOUNT_BINDING_DOMAIN,
+  PUSH_ACCOUNT_BINDING_FIELD,
+} from '@agiworkforce/cloud-contracts';
 import { FEATURES, type FeatureKey } from '@/lib/v1FeatureFlags';
 import {
   nativeRouteForProductLink,
@@ -9,6 +16,12 @@ import {
 } from '@/src/features/notifications/productLinks';
 import { storage, whenMmkvReady } from '@/lib/mmkv';
 import { webContentPageUrl } from '@/src/platform/webContentPage';
+import { ACCOUNT_PICKER_ROUTE } from '@/src/features/accounts/accountNavigation';
+import {
+  captureCloudAccountEpoch,
+  isCloudAccountEpochCurrent,
+  type CloudAccountEpoch,
+} from '@/src/features/auth/services/cloudAccountSession';
 import { isConversationOpenInForeground } from './conversationFocus';
 import { notificationAllowedOnceReadable, vibrationAllowed } from './notificationGate';
 import {
@@ -52,6 +65,35 @@ export interface NotificationData {
   [key: string]: unknown;
 }
 
+function accountBinding(ownerId: string): string {
+  return bytesToHex(sha256(PUSH_ACCOUNT_BINDING_DOMAIN + ownerId));
+}
+
+type NotificationAudience = 'device' | 'current' | 'other' | 'unbound';
+
+function notificationAudience(
+  notification: Notifications.Notification,
+  owner: CloudAccountEpoch | null,
+): NotificationAudience {
+  const data = notification.request.content.data as NotificationData | undefined;
+  if (data && Object.hasOwn(data, PUSH_ACCOUNT_BINDING_FIELD)) {
+    return owner && data[PUSH_ACCOUNT_BINDING_FIELD] === accountBinding(owner.ownerId)
+      ? 'current'
+      : 'other';
+  }
+  const conversationId = data?.type === 'chat_message' ? readConversationId(data) : null;
+  const trigger = notification.request.trigger;
+  const isPush =
+    trigger !== null && trigger !== undefined && 'type' in trigger && trigger.type === 'push';
+  if (
+    !isPush &&
+    conversationId &&
+    (data?.deviceConversation === true || LOCAL_CONVERSATION_ID.test(conversationId))
+  )
+    return 'device';
+  return 'unbound';
+}
+
 function isReplyForOpenConversation(data: NotificationData | undefined): boolean {
   return data?.type === 'chat_message' && isConversationOpenInForeground(data.conversationId);
 }
@@ -59,11 +101,16 @@ function isReplyForOpenConversation(data: NotificationData | undefined): boolean
 Notifications.setNotificationHandler({
   handleNotification: async (notification) => {
     const data = notification.request.content.data as NotificationData | undefined;
-    notePushTypeReceived(data?.type);
+    const owner = captureCloudAccountEpoch();
+    const audience = notificationAudience(notification, owner);
+    if (audience === 'current' || audience === 'device') notePushTypeReceived(data?.type);
 
     if (
+      audience === 'other' ||
+      audience === 'unbound' ||
       isReplyForOpenConversation(data) ||
-      (data?.type && !(await notificationAllowedOnceReadable(data.type)))
+      (data?.type && !(await notificationAllowedOnceReadable(data.type))) ||
+      (audience === 'current' && !isCloudAccountEpochCurrent(owner))
     ) {
       return {
         shouldShowBanner: false,
@@ -256,7 +303,9 @@ export async function scheduleLocalNotification(opts: {
   /** The one approval this notification is about. */
   approvalId?: string;
   conversationId?: string;
+  account?: CloudAccountEpoch | null;
 }): Promise<void> {
+  if (opts.account && !isCloudAccountEpochCurrent(opts.account)) return;
   const priority = opts.priority ?? inferPriority(opts.type);
 
   const data: NotificationData = {
@@ -264,6 +313,8 @@ export async function scheduleLocalNotification(opts: {
     priority,
     agentId: opts.agentId,
     route: opts.route,
+    ...(opts.account ? { [PUSH_ACCOUNT_BINDING_FIELD]: accountBinding(opts.account.ownerId) } : {}),
+    ...(opts.account === null ? { deviceConversation: true } : {}),
     ...(opts.rootId ? { rootId: opts.rootId } : {}),
     ...(opts.threadId ? { threadId: opts.threadId } : {}),
     ...(opts.approvalId ? { approvalId: opts.approvalId } : {}),
@@ -316,8 +367,8 @@ export function releaseNoteUrl(data: NotificationData): string | null {
   return webContentPageUrl(`/release-notes/${release}`);
 }
 
-function openConversation(conversationId: string): void {
-  safeNavigate({
+function openConversation(conversationId: string, navigate = safeNavigate): void {
+  navigate({
     pathname: '/(app)/chat/[id]',
     params: { id: conversationId },
   } as Parameters<typeof router.push>[0]);
@@ -335,11 +386,12 @@ export function setNavigatorReady(ready: boolean): void {
   _navigatorReady = ready;
 }
 
-function safeNavigate(route: Parameters<typeof router.push>[0]): void {
+function safeNavigate(route: Parameters<typeof router.push>[0], isCurrent = () => true): void {
   let attempts = 0;
   const maxAttempts = 4;
 
   const attemptPush = () => {
+    if (!isCurrent()) return;
     attempts++;
     try {
       router.push(route);
@@ -428,45 +480,63 @@ function handleNotificationResponse(response: Notifications.NotificationResponse
     return;
   }
 
+  const owner = captureCloudAccountEpoch();
+  const audience = notificationAudience(response.notification, owner);
+  if (audience === 'other') {
+    Alert.alert('Notification for another account', 'Switch accounts to view this notification.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Switch account',
+        onPress: () => safeNavigate(_isSignedIn ? ACCOUNT_PICKER_ROUTE : '/(auth)/login'),
+      },
+    ]);
+    return;
+  }
+  if (audience === 'unbound') {
+    safeNavigate({ pathname: '/(app)' as const });
+    return;
+  }
+  const current = () => audience === 'device' || isCloudAccountEpochCurrent(owner);
+  const navigate = (route: Parameters<typeof router.push>[0]) => safeNavigate(route, current);
   notificationCenterStore.add(response.notification);
   notePushTypeReceived(data.type);
 
   const localConversationId = data.type === 'chat_message' ? readConversationId(data) : null;
-  if (localConversationId && LOCAL_CONVERSATION_ID.test(localConversationId)) {
-    openConversation(localConversationId);
+  if (audience === 'device' && localConversationId) {
+    openConversation(localConversationId, navigate);
     return;
   }
 
   // Local Mode is the app's own front door, so a tap never lands on a sign-in
   // wall. Whatever the notification was about, the app opens (MOBILE-052).
   if (!_isSignedIn) {
-    safeNavigate({ pathname: '/(app)' as const });
+    navigate({ pathname: '/(app)' as const });
     return;
   }
 
   const codeSessionId = readIdentifier(data, 'codeSessionId');
   if (codeSessionId) {
-    safeNavigate(
+    navigate(
       `/(app)/cloud-code/${encodeURIComponent(codeSessionId)}` as Parameters<typeof router.push>[0],
     );
     return;
   }
 
   if (readIdentifier(data, 'threadId') && readIdentifier(data, 'rootId')) {
-    safeNavigate(approvalRoute(data) as Parameters<typeof router.push>[0]);
+    navigate(approvalRoute(data) as Parameters<typeof router.push>[0]);
     return;
   }
 
   const runRoute = cloudRunNotificationRoute(data);
   if (runRoute) {
-    safeNavigate(runRoute);
+    navigate(runRoute);
     return;
   }
 
   const researchConversationId =
     data.type === 'research_completed' ? readConversationId(data) : null;
   if (researchConversationId) {
-    safeNavigate(
+    navigate(
       `/(app)/open/chat/${encodeURIComponent(researchConversationId)}` as Parameters<
         typeof router.push
       >[0],
@@ -478,7 +548,7 @@ function handleNotificationResponse(response: Notifications.NotificationResponse
   if (productLink) {
     const nativeRoute = nativeRouteForProductLink(productLink);
     if (nativeRoute) {
-      safeNavigate(
+      navigate(
         (productLink.target === 'chat'
           ? `/(app)/open/${productLink.target}/${encodeURIComponent(productLink.id)}`
           : nativeRoute) as Parameters<typeof router.push>[0],
@@ -486,7 +556,7 @@ function handleNotificationResponse(response: Notifications.NotificationResponse
     } else {
       const fallbackUrl = productLinkWebFallbackUrl(productLink);
       void import('@/lib/safeOpenURL').then(({ openInAppBrowser }) =>
-        openInAppBrowser(fallbackUrl),
+        current() ? openInAppBrowser(fallbackUrl) : undefined,
       );
     }
     return;
@@ -496,82 +566,82 @@ function handleNotificationResponse(response: Notifications.NotificationResponse
     case 'agent_failed':
     case 'emergency_stop_triggered':
     case 'agent_paused':
-      safeNavigate('/(app)/tasks' as Parameters<typeof router.push>[0]);
+      navigate('/(app)/tasks' as Parameters<typeof router.push>[0]);
       break;
 
     case 'agent_approval_needed':
     case 'approval_pending_escalation':
-      safeNavigate(approvalRoute(data) as Parameters<typeof router.push>[0]);
+      navigate(approvalRoute(data) as Parameters<typeof router.push>[0]);
       break;
 
     case 'task_completed':
       if (data.route && typeof data.route === 'string' && isAllowedRoute(data.route)) {
-        safeNavigate(data.route as Parameters<typeof router.push>[0]);
+        navigate(data.route as Parameters<typeof router.push>[0]);
       } else {
         if (data.route && !isAllowedRoute(data.route as string)) {
           console.warn('[notifications] Blocked navigation to disallowed route:', data.route);
         }
-        safeNavigate({ pathname: '/(app)' as const });
+        navigate({ pathname: '/(app)' as const });
       }
       break;
 
     case 'schedule_triggered':
     case 'schedule_run':
-      safeNavigate({ pathname: '/(app)/schedules' as const });
+      navigate({ pathname: '/(app)/schedules' as const });
       break;
 
     case 'companion_connected':
-      safeNavigate(companionHomeRoute());
+      navigate(companionHomeRoute());
       break;
 
     case 'chat_message':
       if (readConversationId(data)) {
-        openConversation(readConversationId(data) as string);
+        openConversation(readConversationId(data) as string, navigate);
       } else if (data.route && typeof data.route === 'string') {
         if (isAllowedRoute(data.route)) {
-          safeNavigate(data.route as Parameters<typeof router.push>[0]);
+          navigate(data.route as Parameters<typeof router.push>[0]);
         } else {
           console.warn('[notifications] Blocked navigation to disallowed route:', data.route);
-          safeNavigate({ pathname: '/(app)/(tabs)/chat' as const });
+          navigate({ pathname: '/(app)/(tabs)/chat' as const });
         }
       } else {
-        safeNavigate({ pathname: '/(app)/(tabs)/chat' as const });
+        navigate({ pathname: '/(app)/(tabs)/chat' as const });
       }
       break;
 
     case 'status_update':
     case 'heartbeat_info':
-      safeNavigate({ pathname: '/(app)/notifications' as const });
+      navigate({ pathname: '/(app)/notifications' as const });
       break;
 
     case 'usage_limit_reset':
-      safeNavigate({ pathname: '/(app)/(tabs)/chat' as const });
+      navigate({ pathname: '/(app)/(tabs)/chat' as const });
       break;
 
     case 'research_completed':
-      safeNavigate({ pathname: '/(app)/reports' as const });
+      navigate({ pathname: '/(app)/reports' as const });
       break;
 
     case 'code_session_completed':
     case 'code_session_failed':
     case 'code_session_needs_input':
-      safeNavigate({ pathname: '/(app)/cloud-code' as const });
+      navigate({ pathname: '/(app)/cloud-code' as const });
       break;
 
     case 'product_update': {
       const url = releaseNoteUrl(data);
       if (url) {
         void import('@/lib/safeOpenURL').then(({ openUntrustedUrlInAppBrowser }) =>
-          openUntrustedUrlInAppBrowser(url),
+          current() ? openUntrustedUrlInAppBrowser(url) : undefined,
         );
       } else {
-        safeNavigate({ pathname: '/(app)/notifications' as const });
+        navigate({ pathname: '/(app)/notifications' as const });
       }
       break;
     }
 
     default:
-      safeNavigate({ pathname: '/(app)' as const });
+      navigate({ pathname: '/(app)' as const });
       break;
   }
 }
@@ -747,7 +817,12 @@ export function setupNotificationListeners(
   lifetime.subscriptions.push(
     Notifications.addNotificationReceivedListener((notification) => {
       const data = notification.request.content.data as NotificationData | undefined;
-      if (isCurrent() && !isReplyForOpenConversation(data)) {
+      const audience = notificationAudience(notification, captureCloudAccountEpoch());
+      if (
+        isCurrent() &&
+        (audience === 'current' || audience === 'device') &&
+        !isReplyForOpenConversation(data)
+      ) {
         notificationCenterStore.add(notification);
       }
     }),

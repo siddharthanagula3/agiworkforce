@@ -1,4 +1,5 @@
-import { spreadsheetSafeExport } from '@agiworkforce/unified-chat';
+import { appendFilenameExtension } from '@agiworkforce/unified-chat/filename';
+import { spreadsheetSafeExport } from '@agiworkforce/unified-chat/tabular';
 
 export interface DownloadableArtifact {
   title?: string;
@@ -30,7 +31,7 @@ function artifactFilename(artifact: DownloadableArtifact): string {
   const title = sanitizeFilename(artifact.title || 'artifact');
   if (/\.[a-z0-9]{1,12}$/i.test(title)) return title;
   const ext = sanitizeFilename(artifact.language || artifact.type || 'txt').replace(/^\.+/, '');
-  return `${title}.${ext || 'txt'}`;
+  return appendFilenameExtension(title, ext || 'txt');
 }
 
 function filenameExtension(filename: string): string {

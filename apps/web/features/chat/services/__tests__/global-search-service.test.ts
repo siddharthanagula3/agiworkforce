@@ -109,6 +109,37 @@ describe('globalSearchService.search, project surfacing', () => {
   });
 });
 
+describe('globalSearchService.search, scheduled work', () => {
+  it('requests the Scheduled category and preserves the schedule destination', async () => {
+    const href = '/chat/schedules?schedule=schedule-1';
+    fetchMock.mockResolvedValue(
+      jsonResponse({
+        results: [],
+        schedules: [
+          {
+            id: 'schedule-1',
+            name: 'Daily brief',
+            href,
+            matchedText: 'brief',
+            createdAt: '2026-07-01T00:00:00Z',
+            updatedAt: '2026-07-02T00:00:00Z',
+          },
+        ],
+      }),
+    );
+    const { results, stats } = await globalSearchService.search('user-1', {
+      query: 'brief',
+      category: 'scheduled',
+    });
+
+    expect(fetchMock.mock.calls[0]?.[0]).toContain('category=scheduled');
+    expect(results).toEqual([
+      expect.objectContaining({ type: 'schedule', sessionTitle: 'Daily brief', href }),
+    ]);
+    expect(stats.totalResults).toBe(1);
+  });
+});
+
 describe('globalSearchService.search, indexed documents', () => {
   it('adds artifacts, reports and developer sessions with their destination links', async () => {
     fetchMock.mockResolvedValue(

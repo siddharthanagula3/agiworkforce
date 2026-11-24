@@ -1,3 +1,4 @@
+import { resolveProviderDisplayId } from '@agiworkforce/types';
 /**
  * The one place the chat webview turns a failure into words.
  *
@@ -398,9 +399,13 @@ function failureHeadline(failure: TurnFailureShape, provider: string): string {
       return time ? t('chatError.usageLimitResetsAt', { time }) : t('chatError.usageLimit');
     }
     case 'provider_auth_missing':
-      return t('chatError.noProviderKey', { provider });
+      return resolveProviderDisplayId(failure.provider) === 'agi-cloud'
+        ? t('chatError.signInToRun')
+        : t('chatError.noProviderKey', { provider });
     case 'provider_auth_invalid':
-      return t('chatError.keyRejected', { provider });
+      return resolveProviderDisplayId(failure.provider) === 'agi-cloud'
+        ? t('chatError.signInToRun')
+        : t('chatError.keyRejected', { provider });
     case 'provider_rate_limited':
       return wait
         ? t('chatError.providerBusyWait', { provider, wait })
@@ -426,6 +431,9 @@ function failureHeadline(failure: TurnFailureShape, provider: string): string {
     case 'timeout':
       return t('chatError.timeout', { provider });
     case 'invalid_request':
+      if (failure.provider === undefined && failure.message.trim() !== '') {
+        return failure.message.trim();
+      }
       return t('chatError.invalidRequest', { provider });
     default:
       return t('chatError.generic');
@@ -438,6 +446,7 @@ export function turnFailureOffer(failure: {
   provider?: string;
 }): ChatErrorAction | undefined {
   if (failure.action === 'sign_in_provider') {
+    if (resolveProviderDisplayId(failure.provider) === 'agi-cloud') return offer('sign-in-account');
     const provider =
       failure.provider === undefined
         ? t('chatError.theProvider')

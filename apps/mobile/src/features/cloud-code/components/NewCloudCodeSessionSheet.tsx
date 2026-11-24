@@ -27,6 +27,10 @@ import { computerLocationLabel, CLOUD_LOCATION_LABEL } from './CodeSessionListRo
 import { useComputerCodeSessions } from './useComputerCodeSessions';
 import { NETWORK_ACCESS_OPTIONS } from '../networkAccessOptions';
 import { useCodePreferences } from '@/src/features/settings/code/store';
+import {
+  captureCloudAccountEpoch,
+  isCloudAccountEpochCurrent,
+} from '@/src/features/auth/services/cloudAccountSession';
 
 export const NEW_CLOUD_CODE_SESSION_ERROR = 'The session could not be started';
 const GITHUB_CONNECT_FAILED = 'GitHub could not be connected';
@@ -187,6 +191,7 @@ interface NewCloudCodeSessionSheetProps {
   onClose: () => void;
   onCreated: (session: CloudCodeSession, goal: string) => void;
   onCreatedInBackground?: (session: CloudCodeSession) => void;
+  onSendAndStay?: (session: CloudCodeSession, goal: string) => void;
   onStartedOnComputer?: (rootId: string, threadId: string) => void;
 }
 
@@ -197,6 +202,7 @@ export function NewCloudCodeSessionSheet({
   onClose,
   onCreated,
   onCreatedInBackground,
+  onSendAndStay,
   onStartedOnComputer,
 }: NewCloudCodeSessionSheetProps) {
   const colors = useThemeColors();
@@ -332,8 +338,11 @@ export function NewCloudCodeSessionSheet({
 
   const goal = task.trim();
   const folders = onStartedOnComputer ? computer.folders : [];
-  const onComputer = place === 'computer' && folders.length > 0;
-  const folder = folders.find((root) => root.rootId === folderId) ?? folders[0] ?? null;
+  const onComputer = place === 'computer';
+  const showLocationChoice = onComputer || folders.length > 0;
+  const folder = folderId
+    ? (folders.find((root) => root.rootId === folderId) ?? null)
+    : (folders[0] ?? null);
   const computerStart = useCodeSessionStart((rootId, threadId) => {
     reset();
     onStartedOnComputer?.(rootId, threadId);
@@ -350,6 +359,7 @@ export function NewCloudCodeSessionSheet({
     if (clonesRepository && networkAccess === 'none') setNetworkAccess('trusted');
   }, [clonesRepository, networkAccess]);
   const canCreate =
+    !onComputer &&
     goal.length > 0 &&
     !creating &&
     blocked === null &&
@@ -376,56 +386,76 @@ export function NewCloudCodeSessionSheet({
     }
   }, [onClose, router]);
 
-  const handleCreate = useCallback(async () => {
-    if (!canCreate || creatingRef.current) return;
-    creatingRef.current = true;
-    const opening = sheetOpenings.current;
-    setCreating(true);
-    setError(null);
-    const hosts = networkAccess === 'full' ? [] : parseExtraHosts(extraHosts);
-    try {
-      const body = await cloudCodeApi.create({
-        requestId: newCloudCodeIdempotencyKey(),
-        title: titleFromTask(goal),
-        repository: repository
-          ? {
-              installationId: repository.installationId,
-              fullName: repository.fullName,
-              branch: branch.trim() || null,
-            }
-          : null,
-        ...(urlMode && !repository && repositoryUrl.trim()
-          ? { repositoryUrl: repositoryUrl.trim(), repositoryBranch: branch.trim() || null }
-          : {}),
-        networkAccess,
-        ...(networkAccess === 'full' ? { fullNetworkAcknowledged: fullAccepted } : {}),
-        ...(runtimeId ? { runtimeId } : {}),
-        ...(hosts.length > 0 ? { extraHosts: hosts } : {}),
-      });
-      reset();
-      if (opening === sheetOpenings.current) onCreated(body.session, goal);
-      else onCreatedInBackground?.(body.session);
-    } catch (createError) {
-      setError(describeCloudCodeError(createError, NEW_CLOUD_CODE_SESSION_ERROR));
-    } finally {
-      creatingRef.current = false;
-      setCreating(false);
-    }
-  }, [
-    branch,
-    canCreate,
-    extraHosts,
-    fullAccepted,
-    goal,
-    networkAccess,
-    onCreated,
-    onCreatedInBackground,
-    repository,
-    repositoryUrl,
-    reset,
-    runtimeId,
-    urlMode,
-  ]);
+  const handleCreate = useCallback(
+    async (stayHere = false) => {
+      if (!canCreate || creatingRef.current) return;
+      const account = stayHere ? captureCloudAccountEpoch() : null;
+      if (stayHere && !account) {
+        setError('Sign in to Cloud to send this task.');
+        return;
+      }
+      creatingRef.current = true;
+      const opening = sheetOpenings.current;
+      setCreating(true);
+      setError(null);
+      const hosts = networkAccess === 'full' ? [] : parseExtraHosts(extraHosts);
+      try {
+        const body = await cloudCodeApi.create({
+          requestId: newCloudCodeIdempotencyKey(),
+          title: titleFromTask(goal),
+          repository: repository
+            ? {
+                installationId: repository.installationId,
+                fullName: repository.fullName,
+                branch: branch.trim() || null,
+              }
+            : null,
+          ...(urlMode && !repository && repositoryUrl.trim()
+            ? { repositoryUrl: repositoryUrl.trim(), repositoryBranch: branch.trim() || null }
+            : {}),
+          networkAccess,
+          ...(networkAccess === 'full' ? { fullNetworkAcknowledged: fullAccepted } : {}),
+          ...(runtimeId ? { runtimeId } : {}),
+          ...(hosts.length > 0 ? { extraHosts: hosts } : {}),
+        });
+        if (stayHere && !isCloudAccountEpochCurrent(account)) return;
+        const sameOpening = opening === sheetOpenings.current;
+        if (sameOpening) reset();
+        if (stayHere) {
+          if (sameOpening) onClose();
+          onSendAndStay?.(body.session, goal);
+        } else if (sameOpening) {
+          onCreated(body.session, goal);
+        } else {
+          onCreatedInBackground?.(body.session);
+        }
+      } catch (createError) {
+        if (opening === sheetOpenings.current) {
+          setError(describeCloudCodeError(createError, NEW_CLOUD_CODE_SESSION_ERROR));
+        }
+      } finally {
+        creatingRef.current = false;
+        setCreating(false);
+      }
+    },
+    [
+      branch,
+      canCreate,
+      extraHosts,
+      fullAccepted,
+      goal,
+      networkAccess,
+      onCreated,
+      onCreatedInBackground,
+      onClose,
+      onSendAndStay,
+      repository,
+      repositoryUrl,
+      reset,
+      runtimeId,
+      urlMode,
+    ],
+  );
 
   const inputStyle = {
     minHeight: 44,
@@ -469,7 +499,7 @@ export function NewCloudCodeSessionSheet({
                   fontWeight: '600',
                 }}
               >
-                {folders.length > 0 ? COPY.titleWithComputer : COPY.title}
+                {showLocationChoice ? COPY.titleWithComputer : COPY.title}
               </Text>
               <Pressable
                 onPress={onClose}
@@ -491,7 +521,7 @@ export function NewCloudCodeSessionSheet({
             >
               {blocked && !onComputer ? <Note tone="error">{blocked}</Note> : null}
 
-              {folders.length > 0 ? (
+              {showLocationChoice ? (
                 <Section title={COPY.placeHeading}>
                   <View accessibilityRole="radiogroup">
                     <Choice
@@ -525,6 +555,9 @@ export function NewCloudCodeSessionSheet({
 
               {onComputer ? (
                 <Section title={COPY.folderHeading}>
+                  {folders.length === 0 ? (
+                    <Note tone="error">No folders are available on the paired computer.</Note>
+                  ) : null}
                   <View accessibilityRole="radiogroup">
                     {folders.map((root) => (
                       <Choice
@@ -850,6 +883,15 @@ export function NewCloudCodeSessionSheet({
                 disabled={onComputer ? !canStartOnComputer : !canCreate}
                 testID="new-cloud-code-start"
               />
+              {!onComputer && onSendAndStay ? (
+                <Button
+                  title="Send and stay here"
+                  variant="outline"
+                  onPress={() => void handleCreate(true)}
+                  disabled={!canCreate}
+                  testID="new-cloud-code-send-and-stay"
+                />
+              ) : null}
             </ScrollView>
           </View>
         </KeyboardAvoidingView>

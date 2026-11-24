@@ -77,4 +77,24 @@ describe('what the chat webview says about itself', () => {
       expect(message).toMatchObject({ origin: 'agi-workforce-sidebar', epoch: 4 });
     }
   });
+
+  it('shows a stopped turn notice until the host accepts a follow-up', () => {
+    boot('chatPanel-2', 7);
+    const deliver = (type: string, payload: unknown) =>
+      window.dispatchEvent(new MessageEvent('message', { data: { type, payload } }));
+
+    deliver('conversationLoaded', {
+      threadId: 'history-1',
+      trustMode: 'local',
+      messages: [{ role: 'user', text: 'Inspect this workspace' }],
+      stoppedTurnNotice: 'The previous turn stopped early. You can continue here.',
+    });
+    const notice = document.querySelector('#storedTurnNotice');
+    expect(notice?.getAttribute('role')).toBe('status');
+    expect(notice?.textContent).toBe('The previous turn stopped early. You can continue here.');
+
+    deliver('sentContext', { clientMessageId: 'follow-up', entries: [] });
+    expect(document.querySelector('#storedTurnNotice')).toBeNull();
+    expect(document.body.textContent).toContain('Inspect this workspace');
+  });
 });

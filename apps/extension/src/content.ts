@@ -1,3 +1,4 @@
+import { recordedPageKey } from './features/shortcuts/recordedPages';
 import type { WebMCPToolInfo } from './webmcp';
 import type {
   ExtensionMessage,
@@ -17,7 +18,7 @@ import type {
   AutoFillJobApplicationMessage,
 } from './types';
 import { logger, domUtils, formUtils, validators, sleep } from './utils';
-import { getExtensionTokensCssAuto } from './tokens';
+import { createBrowserRunOverlay } from './features/content/browserRunOverlay';
 import { redactSecrets } from '@agiworkforce/utils/logger';
 import { runPlatformJobAutofill } from './jobAutofill';
 import { detectJobApplication } from './features/content/autofill/detector';
@@ -145,7 +146,10 @@ async function askPageAccess(): Promise<PageAccess> {
  * again through PAGE_ACCESS_CHANGED when the approved sites or the in-page
  * panel preference change.
  */
-const initialPageAccess: Promise<PageAccess> = askPageAccess();
+const isTopFrame = window.top === window;
+const initialPageAccess: Promise<PageAccess> = isTopFrame
+  ? askPageAccess()
+  : Promise.resolve(NO_PAGE_ACCESS);
 let pageAccessGeneration = 0;
 let approvedStartupDone = false;
 
@@ -198,8 +202,29 @@ function initialize(): void {
   }
   scope.__agiWorkforceContentScriptReady = true;
 
-  watchPasswordFields();
   initializeEditableSelection();
+  if (!isTopFrame) {
+    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+      if (
+        message?.type !== 'CAPTURE_EDITABLE_SELECTION' &&
+        message?.type !== 'APPLY_EDITABLE_SELECTION' &&
+        message?.type !== 'UNDO_EDITABLE_SELECTION'
+      )
+        return false;
+      try {
+        if (!message.topUrl || window.top?.location.href !== message.topUrl) return false;
+        for (let ancestor = window.parent; ancestor !== window; ancestor = ancestor.parent) {
+          if (ancestor.location.origin !== location.origin) return false;
+          if (ancestor === window.top) break;
+        }
+      } catch {
+        return false;
+      }
+      return handleMessage(message, sender, sendResponse);
+    });
+    return;
+  }
+  watchPasswordFields();
   void applyPageAccess(initialPageAccess);
 
   chrome.runtime.onMessage.addListener(handleMessage);
@@ -327,7 +352,7 @@ async function handleMessageAsync(message: ExtensionMessage): Promise<ExtensionR
     case 'START_RECORDING':
       if (message.expectedOrigin !== undefined && message.expectedOrigin !== location.origin)
         return { success: false, error: 'The recording target changed. Choose the website again.' };
-      return handleStartRecording();
+      return handleStartRecording(message.followPages === true);
 
     case 'STOP_RECORDING':
       return handleStopRecording();
@@ -362,7 +387,7 @@ async function handleMessageAsync(message: ExtensionMessage): Promise<ExtensionR
 
     case 'AGI_CU_SHOW_ACTION': {
       if (typeof message.x === 'number' && typeof message.y === 'number') {
-        showActionPoint(message.x, message.y);
+        if (runOverlay?.runId === message.runId) runOverlay?.move(message.x, message.y);
       }
       return { success: true } as ExtensionResponse;
     }
@@ -372,6 +397,19 @@ async function handleMessageAsync(message: ExtensionMessage): Promise<ExtensionR
       return { success: true } as ExtensionResponse;
 
     case 'AGI_CU_WATCH_INPUT':
+      if (!message.watching || (runOverlay && runOverlay.runId !== message.runId)) {
+        runOverlay?.remove();
+        runOverlay = null;
+      }
+      if (message.watching && message.runId) {
+        const runId = message.runId;
+        runOverlay ??= createBrowserRunOverlay(runId, (command) => {
+          void chrome.runtime
+            .sendMessage({ type: 'AGI_CU_USER_INPUT', runId, command })
+            .catch(() => undefined);
+        });
+        runOverlay.setPaused(message.paused === true);
+      }
       watchUserInput(message.watching === true);
       return { success: true } as ExtensionResponse;
 
@@ -382,10 +420,17 @@ async function handleMessageAsync(message: ExtensionMessage): Promise<ExtensionR
 
 async function notifyTabReady(): Promise<void> {
   try {
-    await chrome.runtime.sendMessage({
+    const result = await chrome.runtime.sendMessage({
       type: 'TAB_READY',
       timestamp: Date.now(),
     });
+    if (result?.recordingOrigin === location.origin && !automationState.isRecording) {
+      handleSetRecordingValueCapture({
+        type: 'SET_RECORDING_VALUE_CAPTURE',
+        enabled: result.captureValues === true,
+      });
+      handleStartRecording(true);
+    }
   } catch (error) {
     logger.debug('Failed to notify TAB_READY', error);
   }
@@ -681,7 +726,13 @@ async function handleRunPageActions(message: RunPageActionsMessage): Promise<Ext
     message.expectedOrigin === undefined ||
     (normalizeShortcutStartUrl(message.expectedOrigin) === message.expectedOrigin &&
       location.origin === message.expectedOrigin);
-  if (!originMatches())
+  const initialUrl = location.href;
+  if (
+    !originMatches() ||
+    (message.expectedPage &&
+      ((await recordedPageKey(initialUrl)) !== message.expectedPage ||
+        location.href !== initialUrl))
+  )
     return {
       success: false,
       taskId,
@@ -704,11 +755,16 @@ async function handleRunPageActions(message: RunPageActionsMessage): Promise<Ext
   let firstError: string | undefined;
 
   for (const action of actions) {
-    if (!originMatches()) {
+    if (!originMatches() || (message.expectedPage && location.href !== initialUrl)) {
       firstError = 'The recorded website changed during replay.';
       break;
     }
-    const result = await executePlannedAction(action);
+    const matched = await targetRecordedAction(action);
+    if (!matched || !originMatches() || (message.expectedPage && location.href !== initialUrl)) {
+      firstError = 'The recorded control or page changed and could not be identified uniquely.';
+      break;
+    }
+    const result = await executePlannedAction(matched);
     results.push({
       id: action.id,
       ...result,
@@ -727,17 +783,18 @@ async function handleRunPageActions(message: RunPageActionsMessage): Promise<Ext
   }
 
   let screenshot: string | undefined;
-  try {
-    const capture = (await chrome.runtime.sendMessage({
-      type: 'CAPTURE_SCREENSHOT',
-      format: 'png',
-    })) as { success?: boolean; data?: string };
-    if (capture?.success && typeof capture.data === 'string') {
-      screenshot = capture.data;
+  if (!message.expectedPage)
+    try {
+      const capture = (await chrome.runtime.sendMessage({
+        type: 'CAPTURE_SCREENSHOT',
+        format: 'png',
+      })) as { success?: boolean; data?: string };
+      if (capture?.success && typeof capture.data === 'string') {
+        screenshot = capture.data;
+      }
+    } catch (error) {
+      logger.debug('Unable to capture screenshot after page actions', error);
     }
-  } catch (error) {
-    logger.debug('Unable to capture screenshot after page actions', error);
-  }
 
   return {
     success: !firstError,
@@ -1181,15 +1238,27 @@ function sanitizeRecordedValue(
   return redactSecrets(target.value ?? '');
 }
 
-function reportRecordedAction(action: UserRecordedAction): void {
-  chrome.runtime.sendMessage({ type: 'RECORDING_ACTION', action }).catch(() => {
-    logger.debug('The recorded step did not reach the extension');
-  });
+let recordingAcrossPages = false;
+
+function reportRecordedAction(action: UserRecordedAction, targetDescription?: string): void {
+  chrome.runtime
+    .sendMessage({
+      type: 'RECORDING_ACTION',
+      action,
+      ...(targetDescription ? { targetDescription } : {}),
+    })
+    .catch(() => {
+      logger.debug('The recorded step did not reach the extension');
+    });
 }
 
 function recordAction(action: UserRecordedAction): void {
   _userRecordedActions.push(action);
-  reportRecordedAction(action);
+  const target =
+    recordingAcrossPages && action.selector && (action.type === 'click' || action.type === 'input')
+      ? document.querySelector(action.selector)
+      : null;
+  reportRecordedAction(action, target ? recordedTargetDescription(target) : undefined);
 }
 
 let _recordingClickListener: ((e: MouseEvent) => void) | null = null;
@@ -1213,6 +1282,52 @@ function simpleCssSelector(el: Element): string {
   const base = el.tagName.toLowerCase();
   const firstClass = el.classList[0] ? `.${CSS.escape(el.classList[0])}` : '';
   return `${base}${firstClass}`;
+}
+
+function recordedTargetDescription(element: Element): string | undefined {
+  if (!element.matches('button,a[href],input,select,textarea,[role="button"],[role="link"]'))
+    return undefined;
+  const label =
+    element.getAttribute('aria-label') ||
+    element.getAttribute('name') ||
+    (element.matches('button,a[href],[role="button"],[role="link"]') ? element.textContent : '');
+  if (!label?.trim()) return undefined;
+  return JSON.stringify([
+    element.localName,
+    element.getAttribute('role'),
+    element.getAttribute('type'),
+    label.trim().replace(/\s+/g, ' ').slice(0, 200),
+    element.getAttribute('href')?.slice(0, 384),
+  ]);
+}
+
+async function targetRecordedAction(action: RunPageAction): Promise<RunPageAction | null> {
+  if (!action.targetFingerprint) return action;
+  const selector = action.selector;
+  if (!selector) return null;
+  const matches = async (element: Element) => {
+    const description = recordedTargetDescription(element);
+    return (
+      description &&
+      (await recordedPageKey(description)) === action.targetFingerprint &&
+      element.isConnected &&
+      recordedTargetDescription(element) === description
+    );
+  };
+  if (selectorMatchCount(selector) === 1 && (await matches(document.querySelector(selector)!)))
+    return action;
+  const candidates = document.querySelectorAll(
+    'button,a[href],input,select,textarea,[role="button"],[role="link"]',
+  );
+  if (candidates.length > 256) return null;
+  const found = (
+    await Promise.all(
+      Array.from(candidates, async (element) => ((await matches(element)) ? element : null)),
+    )
+  ).filter((e): e is Element => e !== null);
+  return found.length === 1 && found[0]!.isConnected
+    ? { ...action, selector: buildCssSelector(found[0]!) }
+    : null;
 }
 
 function selectorMatchCount(selector: string): number {
@@ -1411,7 +1526,8 @@ function handleSetRecordingValueCapture(
   return { success: true, captureValues: enabled } as ExtensionResponse;
 }
 
-function handleStartRecording(): ExtensionResponse {
+function handleStartRecording(followPages: boolean): ExtensionResponse {
+  recordingAcrossPages = followPages;
   automationState.isRecording = true;
   _userRecordedActions.length = 0;
 
@@ -1622,34 +1738,7 @@ const VALID_MESSAGE_TYPES = new Set([
   'PAGE_ACCESS_CHANGED',
 ]);
 
-const ACTION_POINT_VISIBLE_MS = 900;
-
-function showActionPoint(x: number, y: number): void {
-  if (!Number.isFinite(x) || !Number.isFinite(y)) return;
-  const host = document.createElement('div');
-  host.style.cssText =
-    'position:fixed;left:0;top:0;width:0;height:0;z-index:2147483647;pointer-events:none;';
-  host.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
-  const root = host.attachShadow({ mode: 'closed' });
-  const style = document.createElement('style');
-  style.textContent = `
-    ${getExtensionTokensCssAuto(':host')}
-    .ring {
-      position:absolute; left:-14px; top:-14px; width:28px; height:28px;
-      box-sizing:border-box; border-radius:50%;
-      border:3px solid var(--agi-ext-accent);
-      background:color-mix(in srgb, var(--agi-ext-accent) 22%, transparent);
-      animation:agi-action-ring ${ACTION_POINT_VISIBLE_MS}ms ease-out forwards;
-    }
-    @keyframes agi-action-ring { from { transform:scale(0.5); opacity:1; } to { transform:scale(1.4); opacity:0; } }
-    @media (prefers-reduced-motion: reduce) { .ring { animation:none; } }
-  `;
-  const ring = document.createElement('span');
-  ring.className = 'ring';
-  root.append(style, ring);
-  document.documentElement.appendChild(host);
-  setTimeout(() => host.remove(), ACTION_POINT_VISIBLE_MS);
-}
+let runOverlay: ReturnType<typeof createBrowserRunOverlay> | null = null;
 
 const USER_INPUT_REPORT_INTERVAL_MS = 1_000;
 const USER_INPUT_EVENTS = ['pointerdown', 'keydown'] as const;
@@ -1663,7 +1752,7 @@ function watchUserInput(watching: boolean): void {
   if (!watching) return;
   let lastReportAt = 0;
   userInputWatcher = (event: Event) => {
-    if (!event.isTrusted) return;
+    if (!event.isTrusted || event.target === runOverlay?.host) return;
     const now = Date.now();
     if (now - lastReportAt < USER_INPUT_REPORT_INTERVAL_MS) return;
     lastReportAt = now;

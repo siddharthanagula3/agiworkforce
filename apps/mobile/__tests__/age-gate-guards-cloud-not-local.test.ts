@@ -7,7 +7,9 @@ const rootIndex = readFileSync(join(appDir, 'index.tsx'), 'utf8');
 
 describe('the age gate guards every way into the app, Local Mode included', () => {
   it('sends the root index to the age gate before onboarding or the app', () => {
-    const gate = rootIndex.indexOf('if (!isAgeGateConfirmed())');
+    const gate = rootIndex.indexOf(
+      'if (!isAgeGateConfirmed(FEATURES.auth && accountAgeConfirmed))',
+    );
     expect(gate).toBeGreaterThan(-1);
     expect(rootIndex.indexOf('pathname: AGE_GATE_PATH', gate)).toBeGreaterThan(gate);
     expect(gate).toBeLessThan(rootIndex.indexOf('pathname: ONBOARDING_PATH'));

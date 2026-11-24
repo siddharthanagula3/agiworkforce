@@ -274,7 +274,7 @@ function renderPicker(overrides?: {
   conversationId?: string;
   showSpeed?: boolean;
 }) {
-  return render(
+  const picker = render(
     <ModelPickerSheet
       sheetRef={mockSheetRef as never}
       onSelect={overrides?.onSelect}
@@ -285,6 +285,10 @@ function renderPicker(overrides?: {
       showSpeed={overrides?.showSpeed}
     />,
   );
+  const BottomSheet = jest.requireMock('@gorhom/bottom-sheet').default as jest.Mock;
+  const sheetProps = BottomSheet.mock.calls.at(-1)?.[0] as { onChange: (index: number) => void };
+  act(() => sheetProps.onChange(0));
+  return picker;
 }
 
 type AlertButton = { text?: string; onPress?: () => void };

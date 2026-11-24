@@ -17,6 +17,7 @@ import {
   filterConversations,
   conversationAwaitsProjectBinding,
   persistConversationSeed as persistOwnedConversationSeed,
+  settleStoredVideoStart,
   MAX_CONVERSATION_STORE_BYTES,
   type HistoryMessage,
   type ConversationEntry,
@@ -55,6 +56,9 @@ function selectedValues(key: string | string[]): Record<string, unknown> {
 }
 
 const chromeMock = {
+  i18n: {
+    getMessage: vi.fn((key: string) => (key === 'spBrowserStepTyping' ? 'Typing' : '')),
+  },
   storage: {
     local: {
       get: vi.fn((key: string | string[], cb: (res: Record<string, unknown>) => void) => {
@@ -146,6 +150,33 @@ describe('conversation-history', () => {
     const restored = await getConversation(conversationId);
     expect(restored?.messages[1]).toMatchObject({ content: '', videoTaskId: 'vid_123' });
     expect(restored?.messages[2]?.videoTaskId).toBeUndefined();
+  });
+
+  it('settles a video on the original history message without activating that conversation', async () => {
+    const operationId = '0190a000-0000-7000-8000-000000000001';
+    const original = await saveConversation([
+      { role: 'user', content: 'a lighthouse', timestamp: 1 },
+      { role: 'assistant', content: '', timestamp: 2, videoStartId: operationId },
+      { role: 'user', content: 'follow-up', timestamp: 3 },
+    ]);
+    await startNewConversation();
+    const active = await getActiveConversation();
+
+    await expect(
+      settleStoredVideoStart(OTHER_OWNER, original, operationId, { taskId: 'vid_other' }),
+    ).resolves.toBe(false);
+    await expect(
+      settleStoredVideoStart(OWNER, original, operationId, { taskId: 'vid_123' }),
+    ).resolves.toBe(true);
+    expect((await getConversation(original))?.messages[1]).toMatchObject({
+      videoStartId: operationId,
+      videoTaskId: 'vid_123',
+    });
+    expect((await getConversation(original))?.messages[2]).toMatchObject({ content: 'follow-up' });
+    expect(await getActiveConversation()).toEqual(active);
+    await expect(
+      settleStoredVideoStart(OWNER, original, operationId, { taskId: 'vid_late' }),
+    ).resolves.toBe(false);
   });
 
   beforeEach(() => {
@@ -353,6 +384,23 @@ describe('conversation-history', () => {
     expect((await getActiveConversation())?.messages).toHaveLength(4);
   });
 
+  it('keeps local image previews only on their owned browser activity', async () => {
+    const frame = { dataUrl: 'data:image/jpeg;base64,AAAA', toolCallId: 'click-1' };
+    const entry = await saveActiveConversation([
+      {
+        role: 'assistant',
+        content: 'Done',
+        timestamp: 42,
+        browserEvents: [agentEvent()],
+        browserReviewFrames: [frame, { dataUrl: 'https://untrusted.test/tracker.png' }],
+      },
+      { role: 'user', content: 'Continue', timestamp: 43, browserReviewFrames: [frame] },
+    ]);
+    expect((await getActiveConversation())?.messages[0]?.browserReviewFrames).toEqual([frame]);
+    expect(entry?.messages[1]?.browserReviewFrames).toBeUndefined();
+    expect(await getOwnedConversation(OTHER_OWNER, entry!.id)).toBeUndefined();
+  });
+
   it('keeps an in-chat browser task activity with its assistant turn', async () => {
     const saved = await saveActiveConversation([
       { role: 'user', content: 'Fill the form', timestamp: 1 },
@@ -365,6 +413,56 @@ describe('conversation-history', () => {
     ]);
     expect(saved?.messages[1]?.browserEvents).toEqual([expect.objectContaining({ sequence: 0 })]);
     expect(saved?.messages[0]?.browserEvents).toBeUndefined();
+  });
+
+  it('removes private data from previously saved typing activity', async () => {
+    const secret = 'synthetic-field-code-482913';
+    const browserEvents: AgentEventEnvelope[] = [
+      {
+        ...agentEvent(),
+        event: {
+          type: 'tool-execution-start',
+          toolCallId: 'type-1',
+          name: 'type',
+          category: 'computer-use',
+          summary: secret,
+          input: { text: secret },
+        },
+      },
+      {
+        ...agentEvent(1),
+        event: {
+          type: 'tool-execution-end',
+          toolCallId: 'type-1',
+          name: 'type',
+          output: secret,
+          isError: true,
+        },
+      },
+      agentEvent(2),
+    ];
+    _store[BROWSER_STORE_KEY] = {
+      version: 2,
+      activeConversationId: 'legacy-typing',
+      activeOwner: OWNER,
+      conversations: [
+        {
+          id: 'legacy-typing',
+          owner: OWNER,
+          title: 'Form task',
+          messages: [{ role: 'assistant', content: 'Done', timestamp: 2, browserEvents }],
+          savedAt: Date.now(),
+          routing: { selectedModel: 'auto' },
+        },
+      ],
+    };
+
+    const restored = (await getActiveConversation())?.messages[0]?.browserEvents;
+    expect(restored?.map(({ event }) => event)).toEqual([
+      expect.objectContaining({ name: 'type', input: null, summary: 'Typing' }),
+      expect.objectContaining({ name: 'type', output: null, isError: true }),
+      browserEvents[2]?.event,
+    ]);
   });
 
   it('persists validated canonical activity and the durable run cursor with an assistant turn', async () => {

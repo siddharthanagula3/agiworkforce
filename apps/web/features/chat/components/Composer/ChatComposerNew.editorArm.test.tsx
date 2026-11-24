@@ -221,6 +221,16 @@ describe('editor arm · the composer mounts it', () => {
 
     expect(preloadTranscriptMarkdown).toHaveBeenCalledOnce();
   });
+
+  it('suppresses pointer focus on the draft and clears it on blur', () => {
+    render(<ChatComposerNew onSend={vi.fn()} />);
+    const input = screen.getByRole('textbox', { name: /message input/i });
+
+    fireEvent.pointerDown(input);
+    expect(input).toHaveAttribute('data-pointer-focus');
+    fireEvent.blur(input);
+    expect(input).not.toHaveAttribute('data-pointer-focus');
+  });
 });
 
 /**

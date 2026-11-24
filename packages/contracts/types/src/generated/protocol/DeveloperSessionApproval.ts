@@ -8,4 +8,5 @@ export type DeveloperSessionApproval = {
   outcome: DeveloperApprovalOutcome;
   requestedAt: string;
   decidedAt: string;
+  questionAnswer?: string;
 };

@@ -55,6 +55,7 @@ import { useAgentControlStore } from '../stores/agentControlStore';
 import { selectMediaMode, supportedMediaKinds, useMediaModeStore } from '../stores/mediaModeStore';
 import { isCodeExecutionAvailable } from '../lib/codeExecutionAvailability';
 import { decideComposerPaste } from '../lib/largePaste';
+import { composerFocusEvents } from '../lib/composer-focus';
 import type { ComposerAttachmentPasteDecision, ComposerEditorHandle } from '../composer-editor';
 import '../composer-editor/composer-editor.css';
 import { loadWritingStyle, saveWritingStyle, type WritingStyle } from '../lib/writingStyle';
@@ -1081,8 +1082,6 @@ export function ChatInput({
     handle.setText(draftContent);
   }, [draftContent]);
 
-  const [focused, setFocused] = useState(false);
-
   const placeholder = disabled
     ? (disabledMessage ?? t('composer.connectToChat', 'Connect to start chatting'))
     : modelCatalogLoadingWithoutModels
@@ -1151,15 +1150,14 @@ export function ChatInput({
       ) : null}
       <div
         className={cn(
-          'overflow-hidden border transition-colors',
+          'chat-composer-focus overflow-hidden border transition-colors',
           'bg-[var(--chat-surface-elevated)]',
           isDragOver
             ? 'border-[var(--chat-accent-primary)] shadow-[0_0_0_2px_color-mix(in_srgb,var(--chat-accent-primary)_25%,transparent)]'
-            : focused
-              ? 'border-[var(--chat-border-strong,var(--chat-border))] shadow-[0_0_0_2px_var(--chat-focus-ring)]'
-              : 'border-[var(--chat-border)]',
+            : 'border-[var(--chat-border)]',
         )}
         style={{ borderRadius: 'var(--corner-panel)' }}
+        {...composerFocusEvents}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
@@ -1252,7 +1250,6 @@ export function ChatInput({
                 onFollowUpInvert?.();
                 handleSend();
               }}
-              onFocusChange={setFocused}
               onPasteDecision={handleEditorPasteDecision}
               isSlashMenuActive={() => slashMenuOpen}
               onSlashMenuKey={handleSlashMenuKey}
@@ -1261,14 +1258,13 @@ export function ChatInput({
         ) : (
           <textarea
             ref={textareaRef}
+            data-composer-textarea
             rows={1}
             value={draftContent}
             placeholder={placeholder}
             onChange={handleChange}
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
-            onFocus={() => setFocused(true)}
-            onBlur={() => setFocused(false)}
             disabled={disabled}
             className={cn(
               'w-full resize-none border-0 bg-transparent px-4 pt-3 pb-1',

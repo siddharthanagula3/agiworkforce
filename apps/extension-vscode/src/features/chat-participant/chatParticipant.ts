@@ -49,6 +49,10 @@ async function gatherEditorContext(): Promise<EditorContext> {
 
   if (editor === undefined || !Config.editorContextAutoAttach()) return empty;
 
+  const attachOpenFile = Config.editorContextAttachOpenFile();
+  const attachSelection = Config.editorContextAttachSelection() && !editor.selection.isEmpty;
+  if (!attachOpenFile && !attachSelection) return empty;
+
   const resolved = await resolveContextEditor(editor);
   if (typeof resolved === 'string') {
     const relativePath = vscode.workspace.asRelativePath(editor.document.uri);
@@ -63,12 +67,12 @@ async function gatherEditorContext(): Promise<EditorContext> {
   const { document, selection } = resolved;
   const contextLines = Config.contextLines();
 
-  const selectedText = document.getText(selection);
+  const selectedText = attachSelection ? document.getText(selection) : '';
 
   const startLine = Math.max(0, selection.start.line - contextLines);
   const endLine = Math.min(document.lineCount - 1, selection.end.line + contextLines);
   const surroundingRange = new vscode.Range(startLine, 0, endLine, 0);
-  const surroundingCode = document.getText(surroundingRange);
+  const surroundingCode = attachOpenFile ? document.getText(surroundingRange) : '';
 
   return {
     fileName: document.fileName,

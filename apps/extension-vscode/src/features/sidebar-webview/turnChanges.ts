@@ -1,6 +1,8 @@
 import { PRODUCT_NAMES } from '@agiworkforce/types';
+import { realpath } from 'node:fs/promises';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
+import { resolvePathReferenceUri } from '../path-links';
 
 /** Tool names that write a whole file the agent names by path, shared with the webview. */
 export const FILE_WRITE_TOOL_NAMES: readonly string[] = [
@@ -29,8 +31,24 @@ export function writtenFilePath(toolName: string, input: unknown): string | unde
   return undefined;
 }
 
+export async function hasUnsavedNotebook(filePath: string): Promise<boolean> {
+  const dirty = vscode.workspace.notebookDocuments.filter(
+    (notebook) => notebook.isDirty && notebook.uri.scheme === 'file',
+  );
+  if (dirty.some((notebook) => notebook.uri.fsPath === filePath)) return true;
+  if (dirty.length === 0) return false;
+  const target = await realpath(filePath).catch(() => undefined);
+  if (target === undefined) return false;
+  for (const notebook of dirty) {
+    const candidate = await realpath(notebook.uri.fsPath).catch(() => undefined);
+    if (candidate === target && notebook.isDirty) return true;
+  }
+  return false;
+}
+
 interface GitApi {
   toGitUri(uri: vscode.Uri, ref: string): vscode.Uri;
+  getRepository(uri: vscode.Uri): object | null;
 }
 
 async function gitApi(): Promise<GitApi | undefined> {
@@ -40,30 +58,32 @@ async function gitApi(): Promise<GitApi | undefined> {
   return exports.getAPI(1);
 }
 
-/**
- * Opens one multi-file diff of the files a reply changed, each against its last
- * commit, in VS Code's own diff editor where hunks can be kept or reverted. The
- * runtime keeps no per-reply snapshot, so the title says what the diff is
- * against: other uncommitted edits in those files show too.
- */
 export async function openTurnChanges(files: readonly string[]): Promise<void> {
+  if (!vscode.workspace.isTrusted) return;
+  const uris = (
+    await Promise.all(files.map((file) => resolvePathReferenceUri({ path: file })))
+  ).filter((uri): uri is vscode.Uri => uri !== undefined);
   const git = await gitApi().catch(() => undefined);
-  if (git === undefined) {
-    for (const file of files) {
-      await vscode.window.showTextDocument(vscode.Uri.file(file), { preview: false });
-    }
+  if (!vscode.workspace.isTrusted) return;
+  if (uris.length === 0) {
     void vscode.window.showInformationMessage(
-      `${PRODUCT_NAMES.code}: this workspace has no source control to diff against, so the changed files opened instead.`,
+      'The changed files are unavailable in this workspace.',
     );
     return;
   }
-  const resources = files.map((file) => {
-    const uri = vscode.Uri.file(file);
-    return [uri, git.toGitUri(uri, 'HEAD'), uri] as const;
-  });
+  if (git === undefined || uris.some((uri) => git.getRepository(uri) === null)) {
+    for (const uri of uris) {
+      await vscode.window.showTextDocument(uri, { preview: false });
+    }
+    void vscode.window.showInformationMessage(
+      `${PRODUCT_NAMES.code}: a Git comparison is unavailable. The changed files are open in the editor.`,
+    );
+    return;
+  }
+  const resources = uris.map((uri) => [uri, git.toGitUri(uri, 'HEAD'), uri] as const);
   const title =
-    files.length === 1
-      ? `${path.basename(files[0] ?? '')} since last commit`
-      : `${files.length} files since last commit`;
+    uris.length === 1
+      ? `${path.basename(uris[0]?.fsPath ?? '')} since last commit`
+      : `${uris.length} files since last commit`;
   await vscode.commands.executeCommand('vscode.changes', title, resources);
 }

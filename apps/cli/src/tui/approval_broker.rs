@@ -12,6 +12,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use agiworkforce_protocol::agent_events::AgentEventApprovalRiskLevel;
+use agiworkforce_protocol::developer_session::ApprovalQuestionOption;
 use tokio::sync::{oneshot, Mutex, Notify};
 use uuid::Uuid;
 
@@ -47,7 +48,7 @@ pub enum ApprovalRequestKind {
     },
     Question {
         question: String,
-        options: Vec<String>,
+        options: Vec<ApprovalQuestionOption>,
     },
     Hook {
         hook_name: String,

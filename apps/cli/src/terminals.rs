@@ -292,6 +292,35 @@ impl BackgroundCommand {
         plain_text(&output.kept.iter().skip(skip).copied().collect::<Vec<_>>())
     }
 
+    pub(crate) fn developer_summary(
+        &self,
+    ) -> agiworkforce_protocol::workspace_terminal::BackgroundCommandSummary {
+        use agiworkforce_protocol::workspace_terminal::{BackgroundCommandState, BackgroundCommandSummary};
+        let (state, exit_code) = match self.state() {
+            CommandState::Running => (BackgroundCommandState::Running, None),
+            CommandState::Exited(code) => (BackgroundCommandState::Exited, code),
+            CommandState::Stopped => (BackgroundCommandState::Stopped, None),
+        };
+        BackgroundCommandSummary {
+            id: self.id.clone(),
+            command: crate::approval_audit::sanitize_field(
+                &crate::secret_redaction::redact_tool_output(&self.command),
+            ),
+            state,
+            started_at: self.started_at.to_rfc3339(),
+            exit_code,
+        }
+    }
+
+    pub(crate) fn developer_snapshot(
+        &self,
+    ) -> agiworkforce_protocol::workspace_terminal::BackgroundCommandReadResponse {
+        agiworkforce_protocol::workspace_terminal::BackgroundCommandReadResponse {
+            command: self.developer_summary(),
+            output: crate::secret_redaction::redact_tool_output(&self.recent_output()),
+        }
+    }
+
     fn record(&self, bytes: &[u8]) {
         if let Some(observer) = &self.observer {
             observer(bytes);
@@ -721,6 +750,15 @@ pub(crate) fn stop_all() {
     }
 }
 
+pub(crate) async fn stop_owned_by(owner: &str) {
+    let owned: Vec<_> = commands()
+        .iter()
+        .filter(|command| command.owner.as_deref() == Some(owner))
+        .cloned()
+        .collect();
+    futures_util::future::join_all(owned.iter().map(|command| stop(command))).await;
+}
+
 pub(crate) fn report(command: &BackgroundCommand, output: &NewOutput) -> String {
     let mut lines = vec![format!(
         "{} {}: {}",
@@ -1040,11 +1078,49 @@ mod input_tests {
         commands()
             .retain(|command| !Arc::ptr_eq(command, &first) && !Arc::ptr_eq(command, &second));
     }
+    #[tokio::test]
+    async fn inspecting_background_output_does_not_consume_the_agents_read_cursor() {
+        let command = registered("output-inspection-test", Some("output-inspection-thread"));
+        command.record(b"ready\n");
+        assert_eq!(command.developer_snapshot().output, "ready\n");
+        command.record(b"new output\n");
+        assert_eq!(command.developer_snapshot().output, "ready\nnew output\n");
+        assert_eq!(
+            read_new(&command, Duration::ZERO).await.text,
+            "ready\nnew output\n"
+        );
+        commands().retain(|candidate| !Arc::ptr_eq(candidate, &command));
+    }
 }
 
 #[cfg(all(test, unix))]
 mod native_terminal_tests {
     use super::*;
+
+    #[tokio::test]
+    async fn stopping_one_owner_leaves_the_sibling_command_running() {
+        let _children = crate::process_tree::CHILD_SPAWNING_TESTS.lock().await;
+        let spawn = || {
+            start("sleep fixture", |_| {
+                let mut command = std::process::Command::new("/bin/sleep");
+                command.arg("30");
+                Ok(PreparedCommand {
+                    command,
+                    scratch: None,
+                })
+            })
+            .unwrap()
+        };
+        let first = scope_owner("stop-child-fixture-alpha".into(), async { spawn() }).await;
+        let sibling = scope_owner("stop-child-fixture-beta".into(), async { spawn() }).await;
+        stop_owned_by("stop-child-fixture-alpha").await;
+        let first_state = first.state();
+        let sibling_state = sibling.state();
+        stop_owned_by("stop-child-fixture-beta").await;
+        assert_ne!(first_state, CommandState::Running);
+        assert_eq!(sibling_state, CommandState::Running);
+    }
+
     #[tokio::test]
     async fn scoped_pty_resizes_accepts_controls_hides_manual_input_and_stops_every_job_group() {
         let _children = crate::process_tree::CHILD_SPAWNING_TESTS.lock().await;

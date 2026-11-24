@@ -13,6 +13,19 @@ The permission menu shows **YOLO, unattended** until you choose another mode.
 Routine actions on approved sites run without confirmation. Steps that need
 additional access or a protected action are reported as unfinished.
 
+## Reviewing a browser task
+
+During browser control, a blue pointer follows mouse input on the active web
+page, and a glow marks its corners. Use **Take over** at the bottom center to
+pause, **Hand back** in the side panel to resume, or **Stop** to end the run.
+
+During a visual task, the side panel shows page previews as the assistant works.
+Use the arrows to review the most recent eight frames or open one at
+full size. The gallery remains in the current chat view after the task stops or
+finishes. Saved chats keep their previews in this Chrome profile when you reopen the panel.
+Temporary chats keep them in memory. If local history reaches its storage
+budget, previews are discarded before conversation text.
+
 ## Closing finished tabs
 
 Open **More → Close tabs…**, select the tabs you have finished using, then choose

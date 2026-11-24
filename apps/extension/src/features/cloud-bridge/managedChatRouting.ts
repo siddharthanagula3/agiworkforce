@@ -15,6 +15,7 @@ export interface ChromeManagedChatRoutingRequest {
   attachments?: ReadonlyArray<RoutingAttachment>;
   currentModelKey?: string | null;
   previousTaskType?: RoutingTaskType | null;
+  admittedModelKeys?: ReadonlySet<string>;
 }
 
 export const ROUTING_TASK_TYPES: ReadonlySet<RoutingTaskType> = new Set([
@@ -50,6 +51,7 @@ export function resolveChromeManagedChatRoute(
         : CHROME_MANAGED_RUNTIME_PROFILE,
     currentModelKey: request.currentModelKey,
     previousTaskType: request.previousTaskType,
+    admittedModelKeys: request.admittedModelKeys,
     fallbackToAutoForCapabilityMismatch: true,
   });
 }

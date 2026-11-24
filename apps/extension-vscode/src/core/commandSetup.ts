@@ -128,6 +128,8 @@ import {
 } from '@agiworkforce/types';
 import {
   DEVELOPER_AGENT_MODE_LABELS,
+  DEVELOPER_AUTO_MODE_DESCRIPTION,
+  DEVELOPER_ASK_MODE_DESCRIPTION,
   DEVELOPER_REASONING_EFFORTS,
   DEVELOPER_REASONING_EFFORT_LABELS,
   type DeveloperReasoningEffort,
@@ -135,7 +137,7 @@ import {
 import {
   CliCapabilityAdapter,
   openArtifactsSurface,
-  openCapabilitySurface,
+  openInstructionsSurface,
   manageHooks,
   manageSavedApprovals,
   manageProviderKeys,
@@ -161,12 +163,14 @@ import {
   signIn as signInPreferringCli,
 } from '../features/surfaces/accountAccess';
 import { rememberForRepository } from '../features/surfaces/repositoryMemory';
+import { browseAccountMarketplace } from '../features/surfaces/accountMarketplace';
 import {
   manageSessionWorktrees,
   newSessionInWorktree,
 } from '../features/surfaces/sessionWorktrees';
 import { ModelMetricsPanel } from '../features/model-picker/modelMetrics';
 import { runInlineCommand } from './runInlineCommand';
+import { createAgiTerminal, findAgiTerminal } from '../platform/agiTerminal';
 import { buildExplainSelectionPrompt, runEditorUtility } from '../features/editor-utilities';
 import { openPathReference, OPEN_PATH_REFERENCE_COMMAND } from '../features/path-links';
 import {
@@ -484,14 +488,13 @@ async function continueThisSessionInTheTerminal(sidebarProvider: SidebarProvider
     );
     return;
   }
-  const terminal = vscode.window.createTerminal({ name: AGI_TERMINAL_NAME, cwd: folder.uri });
+  const terminal = await createAgiTerminal(folder.uri);
   terminal.show();
   terminal.sendText(
     `${shellExecutableForCurrentPlatform(cli)} --resume ${shellQuoteForCurrentPlatform(threadId)}`,
   );
 }
 
-const AGI_TERMINAL_NAME = 'AGI';
 const INSTALL_CLI_ACTION = 'Install AGI CLI';
 
 async function ensureCliForTerminal(): Promise<string | undefined> {
@@ -516,17 +519,15 @@ async function openAgiInTheTerminal(sidebarProvider: SidebarProvider): Promise<v
     await continueThisSessionInTheTerminal(sidebarProvider);
     return;
   }
-  const running = vscode.window.terminals.find(
-    (terminal) => terminal.name === AGI_TERMINAL_NAME && terminal.exitStatus === undefined,
-  );
+  const folder = getActiveWorkspaceFolderSync();
+  const running = findAgiTerminal(folder?.uri);
   if (running !== undefined) {
     running.show();
     return;
   }
   const cli = await ensureCliForTerminal();
   if (cli === undefined) return;
-  const folder = getActiveWorkspaceFolderSync();
-  const terminal = vscode.window.createTerminal({ name: AGI_TERMINAL_NAME, cwd: folder?.uri });
+  const terminal = await createAgiTerminal(folder?.uri);
   terminal.show();
   terminal.sendText(shellExecutableForCurrentPlatform(cli));
 }
@@ -903,6 +904,9 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
 
   context.subscriptions.push(
     register('agi-workforce.sendSelectionToNewSession', sendSelectionToNewSession),
+    register('agi-workforce.toggleFocusView', async () => {
+      await Config.update(context, { key: 'chat.focusView', value: !Config.focusView() });
+    }),
     register('agi-workforce.openSettings', (section?: unknown) => {
       SettingsPanel.createOrShow(
         context,
@@ -1107,6 +1111,17 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     register('agi-workforce.chat', async () => {
       if (Config.useTerminal()) {
         await openAgiInTheTerminal(sidebarProvider);
+        return;
+      }
+      if (Config.chatLocation() === 'editor') {
+        ChatEditorPanel.revealMostRecentOrCreate(
+          context.extensionUri,
+          context.secrets,
+          context,
+          localRuntimes,
+          conversationTreeProvider,
+          diffDecorationProvider,
+        );
         return;
       }
       await revealFirstPartyChat();
@@ -1363,7 +1378,9 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       );
     }),
 
-    register('agi-workforce.showCheckpoints', () => sidebarProvider.showCheckpoints()),
+    register('agi-workforce.showCheckpoints', () =>
+      (focusedChat() ?? ChatEditorPanel.activePanel() ?? sidebarProvider).showCheckpoints(),
+    ),
     register('agi-workforce.compactConversation', () => sidebarProvider.compactConversation()),
     register('agi-workforce.showSessionStatus', () => sidebarProvider.showSessionStatus()),
     register('agi-workforce.exportConversation', () => sidebarProvider.exportConversation()),
@@ -1391,9 +1408,17 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         'Archive',
       );
       if (choice === 'Archive') {
-        const archived = await conversationTreeProvider.archiveThread(thread.id);
-        if (!archived) {
-          vscode.window.showWarningMessage(`${PRODUCT_NAMES.code}: Developer session not found.`);
+        try {
+          const archived = await conversationTreeProvider.archiveThread(thread.id);
+          if (!archived) {
+            void vscode.window.showWarningMessage(
+              `${PRODUCT_NAMES.code}: Developer session not found.`,
+            );
+          }
+        } catch (error) {
+          void vscode.window.showWarningMessage(
+            error instanceof Error ? error.message : 'Could not archive the conversation.',
+          );
         }
       }
     }),
@@ -1716,6 +1741,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     }),
 
     register('agi-workforce.openActionSheet', async () => {
+      const checkpointChat = focusedChat() ?? ChatEditorPanel.activePanel() ?? sidebarProvider;
       const currentModel = normalizeConfiguredModelId(sidebarProvider.activeModel());
       const currentMode = Config.agentMode();
       const currentEffort = Config.agentEffort();
@@ -1753,7 +1779,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           description: 'Resume a workspace-scoped developer session',
           action: 'history',
         },
-        ...((await sidebarProvider.checkpointsAvailable())
+        ...((await checkpointChat.checkpointsAvailable())
           ? [
               {
                 label: '$(debug-step-back) Checkpoints',
@@ -1819,7 +1845,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           await vscode.commands.executeCommand('agi-workforce.showSessionsHistory');
           break;
         case 'checkpoints':
-          await sidebarProvider.showCheckpoints();
+          await checkpointChat.showCheckpoints();
           break;
         case 'switch-model':
           await vscode.commands.executeCommand('agi-workforce.selectModel');
@@ -1849,16 +1875,15 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       const modeItems: ModeItem[] = [
         {
           label: `$(comment-discussion) ${DEVELOPER_AGENT_MODE_LABELS.ask}`,
-          description: 'AGI will ask for approval before making each edit',
+          description: DEVELOPER_ASK_MODE_DESCRIPTION,
           detail:
-            'Example: “add a test for parseDate” shows each edit and command for you to approve.',
+            'Example: AGI can read parseDate while preparing a test, then asks before writing the file.',
           mode: 'ask',
           picked: currentMode === 'ask',
         },
         {
           label: `$(symbol-misc) ${DEVELOPER_AGENT_MODE_LABELS.auto}`,
-          description:
-            'Reads and edits files without asking. Asks before running commands or changing git hooks and MCP settings.',
+          description: DEVELOPER_AUTO_MODE_DESCRIPTION,
           detail:
             'Example: reading and editing files run on their own; npm install still asks first.',
           mode: 'auto',
@@ -1926,45 +1951,56 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       const action = await vscode.window.showQuickPick(
         [
           {
-            label: enabled ? '$(circle-slash) Turn memory off' : '$(check) Turn memory on',
-            detail: 'toggle',
+            label: enabled
+              ? '$(circle-slash) Turn account memory off'
+              : '$(check) Turn account memory on',
+            action: 'toggle',
           },
-          { label: '$(add) Add a memory fact', detail: 'add' },
-          { label: '$(list-unordered) List & remove facts', detail: 'list' },
-          { label: '$(eye-closed) Never remember…', detail: 'exclusions' },
-          { label: '$(trash) Forget everything', detail: 'clear' },
+          { label: '$(add) Add a memory fact', description: 'AGI Cloud account', action: 'add' },
+          { label: '$(list-unordered) List & remove facts', action: 'list' },
+          { label: '$(eye-closed) Never remember…', action: 'exclusions' },
+          { label: '$(trash) Clear account memory', action: 'clear' },
+          { label: '$(bookmark) Add a repository note', action: 'repositoryNote' },
+          { label: '$(go-to-file) Open an instruction file', action: 'instructions' },
         ],
         {
-          title: `${PRODUCT_NAMES.code}, Memory (${enabled ? 'on' : 'off'})`,
-          placeHolder: enabled
-            ? 'Choose an action'
-            : 'Saved facts are kept but not sent with your turns',
+          title: `${PRODUCT_NAMES.code}, Memory`,
+          placeHolder: `Account memory ${enabled ? 'on' : 'off'}`,
         },
       );
       if (!action) return;
 
-      if (action.detail === 'toggle') {
+      if (action.action === 'repositoryNote') {
+        await rememberForRepository(cliCapabilities);
+        return;
+      }
+      if (action.action === 'instructions') {
+        await openInstructionsSurface(cliCapabilities);
+        return;
+      }
+
+      if (action.action === 'toggle') {
         await vscode.commands.executeCommand('agi-workforce.memory.toggle');
         return;
       }
 
-      if (action.detail === 'add') {
+      if (action.action === 'add') {
         await vscode.commands.executeCommand('agi-workforce.memory.create');
         return;
       }
 
-      if (action.detail === 'list') {
+      if (action.action === 'list') {
         await memoryTreeProvider.refresh();
         await openMemorySurface(memoryTreeProvider, memoryTreeProvider.surfacePlaceholder());
         return;
       }
 
-      if (action.detail === 'exclusions') {
+      if (action.action === 'exclusions') {
         await manageMemoryExclusions(context.secrets);
         return;
       }
 
-      if (action.detail === 'clear') {
+      if (action.action === 'clear') {
         const store = getAccountMemoryStore();
         if (store === undefined) {
           vscode.window.showWarningMessage(`${PRODUCT_NAMES.code}: memory is not ready yet.`);
@@ -2633,7 +2669,12 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     register('agi-workforce.rememberForRepository', () => rememberForRepository(cliCapabilities)),
     register('agi-workforce.newSessionInWorktree', () => newSessionInWorktree(cliCapabilities)),
     register('agi-workforce.manageWorktrees', () => manageSessionWorktrees(cliCapabilities)),
-    register('agi-workforce.showPlugins', () => managePlugins(cliCapabilities)),
+    register('agi-workforce.showPlugins', () =>
+      managePlugins(cliCapabilities, () => browseAccountMarketplace(context.secrets)),
+    ),
+    register('agi-workforce.browsePluginMarketplace', () =>
+      browseAccountMarketplace(context.secrets),
+    ),
     register('agi-workforce.showMcpServers', () =>
       manageMcpServers(cliCapabilities, mcpServerDetails),
     ),
@@ -2646,9 +2687,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     ),
     register('agi-workforce.manageProviderKeys', () => manageProviderKeys(cliCapabilities)),
     register(CREATE_PULL_REQUEST_COMMAND, () => createPullRequest(cliCapabilities)),
-    register('agi-workforce.showInstructions', () =>
-      openCapabilitySurface(cliCapabilities, 'instructions'),
-    ),
+    register('agi-workforce.showInstructions', () => openInstructionsSurface(cliCapabilities)),
     register('agi-workforce.runCliCommand', async (commandName: unknown) => {
       const name = typeof commandName === 'string' ? commandName.trim() : '';
       if (name === '') await sidebarProvider.pickSlashCommand();

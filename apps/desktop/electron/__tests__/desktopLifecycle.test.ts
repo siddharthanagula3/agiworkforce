@@ -355,6 +355,30 @@ function deepLinksSent(): unknown[] {
     .map(([, url]) => url);
 }
 
+describe('the first page of a window', () => {
+  it('keeps loading visible through a blank paint and removes it when the page draws', async () => {
+    await vi.waitFor(() => expect(showLoadingOverlay).toHaveBeenCalledTimes(1), { timeout: 3_000 });
+    expect(createdWindows[0]?.show).toHaveBeenCalled();
+    const removeOverlay = showLoadingOverlay.mock.results[0]?.value;
+    expect(removeOverlay).toBeDefined();
+    const readyToShow = windowOwnHandlers.get('ready-to-show')?.[0];
+    expect(readyToShow).toBeDefined();
+
+    const initialPage = pageUrl;
+    try {
+      pageUrl = '';
+      readyToShow?.();
+      expect(removeOverlay).not.toHaveBeenCalled();
+
+      pageUrl = initialPage;
+      readyToShow?.();
+      expect(removeOverlay).toHaveBeenCalledTimes(1);
+    } finally {
+      pageUrl = initialPage;
+    }
+  });
+});
+
 describe('deep links held until the renderer is ready', () => {
   it('replays links held from the last run, then new ones, in order once the page loads', () => {
     appHandlers.get('open-url')?.({ preventDefault: vi.fn() }, 'agiworkforce-cloud://chat/new-1');
@@ -530,22 +554,14 @@ describe('what the app sets up when it starts', () => {
   });
 });
 
-describe('the first page of a window', () => {
-  it('shows the window with the loading state when the page is slow to draw', async () => {
-    await vi.waitFor(() => expect(showLoadingOverlay).toHaveBeenCalledTimes(1), { timeout: 3_000 });
-
-    expect(createdWindows[0]?.show).toHaveBeenCalled();
-  });
-});
-
 describe('the screen drawn when the app cannot be reached', () => {
   const failLoad = (errorCode: number, url: string): void => {
     for (const listener of windowHandlers.get('did-fail-load') ?? []) {
       listener({}, errorCode, '', url, true);
     }
   };
-  const pageCommitted = (url: string): void => {
-    windowHandlers.get('did-navigate')?.[0]?.({}, url, 200);
+  const pageCommitted = (url: string, status = 200): void => {
+    windowHandlers.get('did-navigate')?.[0]?.({}, url, status);
   };
   const loadedScreens = () => loadedUrls.filter((url) => url.startsWith('data:'));
 
@@ -562,6 +578,38 @@ describe('the screen drawn when the app cannot be reached', () => {
       expect(loadedUrls.at(-1)).toBe('https://agiworkforce.com/chat/abc');
     } finally {
       pageCommitted('https://agiworkforce.com/chat/abc');
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps the conversation and backs off while its server returns 503', async () => {
+    vi.useFakeTimers();
+    const conversation = 'https://agiworkforce.com/chat/temporarily-unavailable?tab=files';
+    try {
+      loadedUrls.length = 0;
+      pageCommitted(conversation, 503);
+      expect(loadedScreens()).toHaveLength(1);
+      const screen = decodeURIComponent(loadedScreens()[0] ?? '');
+      expect(screen).toContain('Reference: http-503');
+      expect(screen).toContain(`data-retry-url="${conversation}"`);
+      expect(loadedUrls).not.toContain('https://agiworkforce.com/chat');
+
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(loadedUrls.at(-1)).toBe(conversation);
+
+      pageCommitted(conversation, 503);
+      await vi.advanceTimersByTimeAsync(9_999);
+      expect(loadedScreens()).toHaveLength(2);
+      expect(loadedUrls.filter((url) => url === conversation)).toHaveLength(1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(loadedUrls.filter((url) => url === conversation)).toHaveLength(2);
+
+      pageCommitted(conversation);
+      const count = loadedUrls.length;
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(loadedUrls).toHaveLength(count);
+    } finally {
+      pageCommitted(conversation);
       vi.useRealTimers();
     }
   });

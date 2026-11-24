@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowUp, Maximize2, Square, X } from 'lucide-react';
 import { MarkdownContent, toUserMessage, type StreamEvent } from '@agiworkforce/unified-chat';
+import { composerFocusEvents } from '@agiworkforce/unified-chat/composer-focus';
 import { Spinner } from '@/ui/Spinner';
 import { invoke } from '../../lib/tauri-mock';
 import { cn } from '../../lib/utils';
@@ -271,9 +272,13 @@ export const FloatingChat = () => {
         }}
         className="border-t border-[var(--chat-border)] p-3"
       >
-        <div className="flex items-end gap-2 rounded-2xl border border-[var(--chat-border-strong)] bg-[var(--chat-surface-elevated)] px-3 py-2 focus-within:ring-2 focus-within:ring-[var(--chat-focus-ring)]">
+        <div
+          className="chat-composer-focus flex items-end gap-2 rounded-2xl border border-[var(--chat-border-strong)] bg-[var(--chat-surface-elevated)] px-3 py-2"
+          {...composerFocusEvents}
+        >
           <textarea
             ref={inputRef}
+            data-composer-textarea
             value={input}
             onChange={(event) => setInput(event.target.value)}
             onKeyDown={(event) => {

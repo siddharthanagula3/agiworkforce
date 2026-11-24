@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type {
@@ -46,6 +46,7 @@ function renderSection(overrides: Partial<LocalSessionsSectionProps> = {}) {
     allowing: null,
     allowRefusals: {},
     onAllowSessions: vi.fn(),
+    onReviewCommandAccess: vi.fn(),
     reviewingMcp: null,
     mcpRefusals: {},
     onReviewMcpServer: vi.fn(),
@@ -196,16 +197,18 @@ describe('on this device', () => {
 describe('a folder whose sessions are withheld', () => {
   const withheld: DeveloperSessionGroup = { ...group, sessions: [], sessionsWithheld: true };
 
-  it('says how to see its sessions and asks for the grant on the button', async () => {
+  it('explains command access once and requests it only for the folder selected', async () => {
     const user = userEvent.setup();
-    const props = renderSection({ groups: [withheld] });
+    const second = { ...withheld, rootId: 'root-2', name: 'another-project' };
+    const props = renderSection({ groups: [withheld, second] });
 
     expect(
-      screen.getByText('Allow running commands in this folder to see its sessions.'),
+      screen.getByText('To see a folder’s sessions, allow running commands for that folder.'),
     ).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Allow running commands' }));
+    const folder = screen.getByRole('group', { name: second.name });
+    await user.click(within(folder).getByRole('button', { name: 'Allow running commands' }));
 
-    expect(props.onAllowSessions).toHaveBeenCalledWith('root-1');
+    expect(props.onAllowSessions).toHaveBeenCalledExactlyOnceWith('root-2');
   });
 
   it('waits on the prompt that is already up rather than raising another', () => {
@@ -227,7 +230,7 @@ describe('a folder whose sessions are withheld', () => {
     renderSection();
 
     expect(screen.queryByRole('button', { name: 'Allow running commands' })).toBeNull();
-    expect(screen.queryByText(/to see its sessions/)).toBeNull();
+    expect(screen.queryByText(/To see a folder’s sessions/)).toBeNull();
   });
 });
 
@@ -318,16 +321,22 @@ describe('managing a local session from the rail', () => {
 
   it('archives through the row menu', async () => {
     const user = userEvent.setup();
-    const onSetArchived = vi.fn();
+    const onSetArchived = vi.fn(async () => true);
     renderSection({ sessionActions: ALL, onSetArchived });
     await user.click(screen.getByRole('button', { name: 'More actions for Quote the readme' }));
     await user.click(await screen.findByRole('menuitem', { name: 'Archive session' }));
+    expect(onSetArchived).not.toHaveBeenCalled();
+    await user.click(
+      within(await screen.findByRole('alertdialog')).getByRole('button', {
+        name: 'Archive session',
+      }),
+    );
     expect(onSetArchived).toHaveBeenCalledWith(session, true);
   });
 
   it('renames in place through the row menu', async () => {
     const user = userEvent.setup();
-    const onRename = vi.fn(async () => true);
+    const onRename = vi.fn(async () => null);
     renderSection({ sessionActions: ALL, onRename });
     await user.click(screen.getByRole('button', { name: 'More actions for Quote the readme' }));
     await user.click(await screen.findByRole('menuitem', { name: 'Rename' }));
@@ -339,7 +348,7 @@ describe('managing a local session from the rail', () => {
 
   it('cancels a rename on Escape', async () => {
     const user = userEvent.setup();
-    const onRename = vi.fn(async () => true);
+    const onRename = vi.fn(async () => null);
     renderSection({ sessionActions: ALL, onRename });
     await user.click(screen.getByRole('button', { name: 'More actions for Quote the readme' }));
     await user.click(await screen.findByRole('menuitem', { name: 'Rename' }));
@@ -350,7 +359,7 @@ describe('managing a local session from the rail', () => {
 
   it('restores an archived session and toggles the archived list', async () => {
     const user = userEvent.setup();
-    const onSetArchived = vi.fn();
+    const onSetArchived = vi.fn(async () => true);
     const onToggleArchived = vi.fn();
     const archived = { ...session, archivedAt: 1_700_000_000_000 };
     renderSection({
@@ -370,7 +379,7 @@ describe('managing a local session from the rail', () => {
   });
 
   it('offers nothing the CLI here cannot do', () => {
-    renderSection({ onSetPinned: vi.fn(), onRename: vi.fn(async () => true) });
+    renderSection({ onSetPinned: vi.fn(), onRename: vi.fn(async () => null) });
     expect(
       screen.queryByRole('button', { name: 'More actions for Quote the readme' }),
     ).not.toBeInTheDocument();

@@ -419,58 +419,56 @@ describe('computer-use agent loop, one round-trip', () => {
   });
 
   it.each([
-    { text: '73', actual: '73', verified: true },
-    { text: '73', actual: '7342', verified: false },
-    { text: '', actual: '', verified: true },
-  ])(
-    'verifies an indexed replacement by exact retained value: %j',
-    async ({ text, actual, verified }) => {
-      const driver = await import('../src/features/computer-use/cdpDriver');
-      const signature = 'input||number|number_input||Number';
-      const spies = [
-        vi.spyOn(driver, 'type').mockResolvedValue(null),
-        vi.spyOn(driver, 'getTargetSignature').mockResolvedValue(signature),
-        vi.spyOn(driver, 'getElementIndexMap').mockReturnValue(new Map([[1, '#number']])),
-        vi.spyOn(driver, 'getFieldValue').mockResolvedValue(actual),
-      ];
-      try {
-        fetchMock
-          .mockReset()
-          .mockResolvedValueOnce({
-            ok: true,
-            status: 200,
-            headers: new Headers(),
-            body: makeNamedToolCallSseStream('type', { index: 1, text, replace: true }),
-          })
-          .mockResolvedValueOnce({
-            ok: true,
-            status: 200,
-            headers: new Headers(),
-            body: makeFinalSseStream(),
-          });
-        const steps: AgentLoopStep[] = [];
-        await runAgentLoop('Replace the number', 42, {
-          maxSteps: 2,
-          onBeforeAction: async () => true,
-          onProgress: (step) => steps.push(step),
+    { text: '73', verified: true },
+    { text: '73', verified: false },
+    { text: '', verified: true },
+  ])('uses exact verification for an indexed replacement: %j', async ({ text, verified }) => {
+    const driver = await import('../src/features/computer-use/cdpDriver');
+    const signature = 'input||number|number_input||Number';
+    const spies = [
+      vi.spyOn(driver, 'type').mockResolvedValue(null),
+      vi.spyOn(driver, 'getTargetSignature').mockResolvedValue(signature),
+      vi.spyOn(driver, 'getElementIndexMap').mockReturnValue(new Map([[1, '#number']])),
+      vi.spyOn(driver, 'verifyTypedField').mockResolvedValue(verified),
+    ];
+    try {
+      fetchMock
+        .mockReset()
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          headers: new Headers(),
+          body: makeNamedToolCallSseStream('type', { index: 1, text, replace: true }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          headers: new Headers(),
+          body: makeFinalSseStream(),
         });
-        expect(driver.type).toHaveBeenCalledWith(
-          42,
-          text,
-          1,
-          undefined,
-          signature,
-          expect.any(Function),
-          true,
-        );
-        expect(steps.find((step) => step.kind === 'tool_result')?.actionOutcome).toMatchObject({
-          verification: { passed: verified },
-        });
-      } finally {
-        spies.forEach((spy) => spy.mockRestore());
-      }
-    },
-  );
+      const steps: AgentLoopStep[] = [];
+      await runAgentLoop('Replace the number', 42, {
+        maxSteps: 2,
+        onBeforeAction: async () => true,
+        onProgress: (step) => steps.push(step),
+      });
+      expect(driver.type).toHaveBeenCalledWith(
+        42,
+        text,
+        1,
+        undefined,
+        signature,
+        expect.any(Function),
+        true,
+      );
+      expect(driver.verifyTypedField).toHaveBeenCalledWith(42, '#number', text, true, undefined);
+      expect(steps.find((step) => step.kind === 'tool_result')?.actionOutcome).toMatchObject({
+        verification: { passed: verified },
+      });
+    } finally {
+      spies.forEach((spy) => spy.mockRestore());
+    }
+  });
 
   it('does not publish a successful final step when the HTTP 200 provider stream fails', async () => {
     fetchMock.mockReset().mockResolvedValueOnce({

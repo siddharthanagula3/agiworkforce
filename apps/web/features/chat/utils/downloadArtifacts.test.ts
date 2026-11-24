@@ -68,6 +68,16 @@ describe('artifact downloads', () => {
     expect(Object.keys(archive.files).sort()).toEqual(['report (2).csv', 'report.csv']);
   });
 
+  it('omits trailing title dots when appending the file extension', async () => {
+    const bytes = await createArtifactsZip([
+      { title: 'Quarterly results. ... ', content: 'a,b', language: 'csv' },
+      { title: 'Quarterly results', content: 'c,d', language: 'csv' },
+    ]);
+    const archive = await JSZip.loadAsync(bytes);
+    expect(await archive.file('Quarterly results.csv')?.async('string')).toBe('a,b');
+    expect(await archive.file('Quarterly results (2).csv')?.async('string')).toBe('c,d');
+  });
+
   it('fails honestly when persisted generated-file bytes cannot be retrieved', async () => {
     vi.stubGlobal(
       'fetch',

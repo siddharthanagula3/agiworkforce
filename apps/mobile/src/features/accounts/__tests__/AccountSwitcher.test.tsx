@@ -4,6 +4,7 @@ import { Alert } from 'react-native';
 import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 
 const mockPush = jest.fn();
+let mockSettingsParams: { view?: string } = {};
 const mockSecureFetch = jest.fn();
 const mockRegisterForPush = jest.fn();
 const mockSetPushAccountContext = jest.fn();
@@ -123,6 +124,7 @@ jest.mock('@/stores/connectionStore', () => ({
 
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
+  useLocalSearchParams: () => mockSettingsParams,
   useRouter: () => ({
     push: mockPush,
     replace: jest.fn(),
@@ -180,6 +182,8 @@ import {
   peekPostAuthIntent,
 } from '@/src/features/auth/services/postAuthIntent';
 import { useAccountSwitchStore } from '@/src/features/accounts/useDeviceAccounts';
+import { ACCOUNT_PICKER_ROUTE } from '@/src/features/accounts/accountNavigation';
+import { useAdultEligibilityStore } from '@/src/features/auth/store/adultEligibilityStore';
 
 const mmkvValues = (require('@/lib/mmkv') as { __values: Map<string, unknown> }).__values;
 
@@ -285,6 +289,8 @@ async function settle() {
 describe('accounts signed in on this phone', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockSettingsParams = {};
+    useAdultEligibilityStore.getState().reset();
     offlineQueue.clear();
     mmkvValues.clear();
     invalidateCloudAccount();
@@ -344,6 +350,53 @@ describe('accounts signed in on this phone', () => {
       'Log out of AGI Cloud on this device?',
       expect.any(Array),
     );
+  });
+
+  it('opens the account controls directly from a notification even while in Local Mode', () => {
+    signInFirstAccount({ multiSession: true });
+    useChatAppModeStore.setState({ appMode: 'local' });
+    mockSettingsParams = ACCOUNT_PICKER_ROUTE.params;
+
+    const screen = render(<SettingsTabScreen />);
+
+    expect(screen.getByText('Switch account')).toBeTruthy();
+    expect(screen.getByLabelText('Switch to second@example.com')).toBeTruthy();
+    expect(screen.queryByText('Settings')).toBeNull();
+    expect(mockClerk.setActive).not.toHaveBeenCalled();
+  });
+
+  it('offers the existing log-out confirmation when only one account can be signed in', () => {
+    signInFirstAccount({ multiSession: false });
+    mockSettingsParams = ACCOUNT_PICKER_ROUTE.params;
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+
+    const screen = render(<SettingsTabScreen />);
+    expect(screen.queryByTestId('device-accounts-card')).toBeNull();
+    expect(mockClerk.signOut).not.toHaveBeenCalled();
+    fireEvent.press(screen.getByLabelText('Log Out'));
+    expect(alert).toHaveBeenCalledWith(
+      'Log Out',
+      'Log out of AGI Cloud on this device?',
+      expect.any(Array),
+    );
+    expect(mockClerk.signOut).not.toHaveBeenCalled();
+  });
+
+  it('opens account confirmation if the chosen account still needs to confirm its age', async () => {
+    signInFirstAccount({ multiSession: true });
+    mockSettingsParams = ACCOUNT_PICKER_ROUTE.params;
+    const screen = render(<SettingsTabScreen />);
+    fireEvent.press(screen.getByLabelText('Switch to second@example.com'));
+    await waitFor(() => expect(mockClerk.setActive).toHaveBeenCalledWith({ session: 'sess_b' }));
+    act(() => {
+      useAuthStore.setState({ clerkUserId: 'user_b', isClerkSignedIn: false });
+      useAdultEligibilityStore.setState({ userId: 'user_b', status: 'age_required' });
+    });
+
+    await waitFor(() =>
+      expect(mockPush).toHaveBeenCalledWith(expect.objectContaining({ pathname: '/(auth)/login' })),
+    );
+    expect(screen.queryByTestId('account-switch-progress')).toBeNull();
   });
 
   it('shows no account list in Local mode', () => {
@@ -635,8 +688,10 @@ describe('accounts signed in on this phone', () => {
 
     await useAuthStore.getState().signOut();
 
-    expect(mockClerk.signOut).toHaveBeenCalledTimes(1);
-    expect(mockClerk.signOut.mock.calls[0]![0]).toBeUndefined();
+    expect(mockClerk.signOut.mock.calls).toEqual([
+      [{ sessionId: 'sess_a' }],
+      [{ sessionId: 'sess_b' }],
+    ]);
     expect(mockClerk.client.signedInSessions).toEqual([]);
     expect(mockClerk.session).toBeNull();
     expect(captureCloudAccountEpoch()).toBeNull();
@@ -664,8 +719,10 @@ describe('accounts signed in on this phone', () => {
       await useAuthStore.getState().signOut();
 
       expect(mockClerk.setActive).not.toHaveBeenCalled();
-      expect(mockClerk.signOut).toHaveBeenCalledTimes(1);
-      expect(mockClerk.signOut.mock.calls[0]![0]).toBeUndefined();
+      expect(mockClerk.signOut.mock.calls).toEqual([
+        [{ sessionId: 'sess_a' }],
+        [{ sessionId: 'sess_b' }],
+      ]);
       expect(mockClerk.client.signedInSessions).toEqual([]);
       expect(mockClerk.session).toBeNull();
       expect(captureCloudAccountEpoch()).toBeNull();
@@ -683,8 +740,10 @@ describe('accounts signed in on this phone', () => {
     await useAuthStore.getState().signOutAllAccounts();
 
     expect(mockClerk.setActive).not.toHaveBeenCalled();
-    expect(mockClerk.signOut).toHaveBeenCalledTimes(1);
-    expect(mockClerk.signOut.mock.calls[0]![0]).toBeUndefined();
+    expect(mockClerk.signOut.mock.calls).toEqual([
+      [{ sessionId: 'sess_a' }],
+      [{ sessionId: 'sess_b' }],
+    ]);
     expect(mockClerk.client.signedInSessions).toEqual([]);
     expect(peekPostAuthIntent()).toBeNull();
     const [unregister] = pushTokenRequests();
@@ -694,20 +753,44 @@ describe('accounts signed in on this phone', () => {
     expect(storedCloudDrafts()).toEqual([]);
   });
 
-  it('signs out exactly as before when the phone holds one account', async () => {
+  it('ends the active session when the phone holds one account', async () => {
     signInFirstAccount({ multiSession: false });
 
     await useAuthStore.getState().signOut();
 
     expect(mockClerk.setActive).not.toHaveBeenCalled();
-    expect(mockClerk.signOut).toHaveBeenCalledTimes(1);
-    expect(mockClerk.signOut.mock.calls[0]![0]).toBeUndefined();
+    expect(mockClerk.signOut.mock.calls).toEqual([[{ sessionId: 'sess_a' }]]);
     const [unregister] = pushTokenRequests();
     expect(unregister!.init.method).toBe('DELETE');
     expect(unregister!.url.searchParams.get('release')).toBeNull();
     expect(mockSecureFetch.mock.invocationCallOrder[0]).toBeLessThan(
       mockClerk.signOut.mock.invocationCallOrder[0]!,
     );
+  });
+
+  it('leaves a replacement session active when an earlier sign-out resumes', async () => {
+    signInFirstAccount({ multiSession: false });
+    let completePushCleanup!: () => void;
+    const pushCleanup = new Promise((resolve) => {
+      completePushCleanup = () => resolve({ ok: true, status: 200 });
+    });
+    mockSecureFetch.mockReturnValueOnce(pushCleanup);
+
+    const ending = useAuthStore.getState().signOutAllAccounts();
+    await waitFor(() => expect(pushTokenRequests()).toHaveLength(1));
+    await useAuthStore.getState().signOutAllAccounts();
+    expect(mockClerk.session).toBeNull();
+
+    mockClerk.client.signedInSessions = [SECOND];
+    mockClerk.session = SECOND;
+    activateCloudAccount(SECOND.user.id);
+    useAuthStore.setState({ isClerkSignedIn: true, clerkUserId: SECOND.user.id });
+    completePushCleanup();
+    await ending;
+
+    expect(mockClerk.signOut.mock.calls).toEqual([[{ sessionId: 'sess_a' }]]);
+    expect(mockClerk.session).toBe(SECOND);
+    expect(useAuthStore.getState().clerkUserId).toBe(SECOND.user.id);
   });
 
   it('opens the Cloud sign-in screen in add-account mode', async () => {

@@ -1,7 +1,16 @@
 'use client';
 
-import { useCallback, useEffect, useId, useState } from 'react';
-import { ChevronDown, ChevronRight, Pencil, RefreshCw, Undo2, X } from '@agiworkforce/icons';
+import { useCallback, useEffect, useId, useMemo, useState } from 'react';
+import {
+  ChevronDown,
+  ChevronRight,
+  GitBranch,
+  Pencil,
+  RefreshCw,
+  Search,
+  Undo2,
+  X,
+} from '@agiworkforce/icons';
 import { Spinner, useConfirmAction } from '@agiworkforce/ui';
 import type { WorkingTreeChange, WorkingTreeChanges } from '@agiworkforce/local-runtime-contract';
 import {
@@ -10,7 +19,7 @@ import {
 } from '@/features/desktop-host';
 import { toUserMessage } from '@/lib/user-error-message';
 import { CODE_COPY, changeStateLabel } from '../code-surface';
-import { diffByPath } from '../code-diff';
+import { diffByPath, diffLineCounts } from '../code-diff';
 import { LOCAL_CODE_COPY } from '../local-code';
 import { DiffBody } from './CodeDiffFile';
 import { LocalFileEditor } from './LocalFileEditor';
@@ -19,26 +28,44 @@ import { LocalRunningCommands } from './LocalRunningCommands';
 import styles from '../CloudCodePage.module.css';
 
 const GLYPH_SIZE = 15;
+const SHORT_REVISION_LENGTH = 7;
 
 function LocalChangedFile({
   change,
   body,
+  countLines,
   busy,
   onEdit,
   onDiscard,
 }: {
   change: WorkingTreeChange;
   body: string | undefined;
+  countLines: boolean;
   busy: boolean;
   onEdit: (() => void) | null;
   onDiscard: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const regionId = useId();
+  const countsId = useId();
+  const counts = countLines && body ? diffLineCounts(body) : null;
   const label = (
     <>
       <span className={styles['fileStatus']}>{changeStateLabel(change.state)}</span>
-      <span className={styles['fileName']}>{change.path}</span>
+      <span className={styles['fileName']} title={change.path}>
+        {change.path}
+      </span>
+      {counts && (
+        <>
+          <span className={styles['fileLineCounts']} aria-hidden="true">
+            <span>+{counts.added}</span>
+            <span>−{counts.removed}</span>
+          </span>
+          <span id={countsId} className="sr-only">
+            {CODE_COPY.changesLineCount(counts.added, counts.removed)}
+          </span>
+        </>
+      )}
     </>
   );
 
@@ -49,6 +76,8 @@ function LocalChangedFile({
           <button
             type="button"
             className={styles['fileRow']}
+            aria-label={`${changeStateLabel(change.state)} ${change.path}`}
+            aria-describedby={counts ? countsId : undefined}
             aria-expanded={expanded}
             aria-controls={regionId}
             onClick={() => setExpanded((open) => !open)}
@@ -129,6 +158,7 @@ export function LocalChangesPanel({
   const [editing, setEditing] = useState<string | null>(null);
   const [editorDirty, setEditorDirty] = useState(false);
   const [revision, setRevision] = useState(0);
+  const [filter, setFilter] = useState('');
   const { confirm, dialog } = useConfirmAction();
 
   useEffect(() => {
@@ -195,7 +225,18 @@ export function LocalChangesPanel({
       });
   };
 
-  const diffs = diffByPath(changes?.diff ?? '');
+  const diffs = useMemo(() => diffByPath(changes?.diff ?? ''), [changes?.diff]);
+  const query = filter.trim().toLowerCase();
+  const files = changes?.files ?? [];
+  const visibleFiles =
+    query === ''
+      ? files
+      : files.filter(
+          (file) =>
+            file.path.toLowerCase().includes(query) ||
+            file.originalPath?.toLowerCase().includes(query),
+        );
+  const comparison = changes?.comparison;
   const folderPath = (path: string): string | null => {
     const prefix = changes?.folderPrefix ?? '';
     return path.startsWith(prefix) ? path.slice(prefix.length) : null;
@@ -259,15 +300,63 @@ export function LocalChangesPanel({
           <p className={styles['changesEmpty']}>{CODE_COPY.changesNone}</p>
         )}
 
-        {changes !== null && changes.files.length > 0 && (
+        {comparison && (
+          <div className={styles['changesComparison']}>
+            <GitBranch size={GLYPH_SIZE} aria-hidden="true" />
+            {(comparison.branch ??
+              (comparison.revision ? CODE_COPY.changesDetachedHead : null)) && (
+              <strong>{comparison.branch ?? CODE_COPY.changesDetachedHead}</strong>
+            )}
+            <span title={comparison.revision ?? undefined}>
+              {comparison.revision
+                ? CODE_COPY.changesAgainstHead(comparison.revision.slice(0, SHORT_REVISION_LENGTH))
+                : CODE_COPY.changesNoCommit}
+            </span>
+          </div>
+        )}
+
+        {changes?.diffTruncated && (
+          <p className={styles['formHelp']} role="status">
+            {CODE_COPY.changesDiffTruncated}
+          </p>
+        )}
+
+        {changes?.diffUnavailable && (
+          <p className={styles['formHelp']} role="status">
+            {CODE_COPY.changesDiffUnavailable}
+          </p>
+        )}
+
+        {files.length > 0 && (
+          <label className={styles['repositorySearch']}>
+            <Search size={GLYPH_SIZE} aria-hidden="true" />
+            <input
+              type="search"
+              className={styles['repositorySearchInput']}
+              aria-label={CODE_COPY.changesFilter}
+              placeholder={CODE_COPY.changesFilter}
+              value={filter}
+              onChange={(event) => setFilter(event.target.value)}
+            />
+          </label>
+        )}
+
+        {files.length > 0 && visibleFiles.length === 0 && (
+          <p className={styles['changesEmpty']} role="status">
+            {CODE_COPY.changesNoMatch}
+          </p>
+        )}
+
+        {visibleFiles.length > 0 && (
           <div className={styles['fileList']}>
-            {changes.files.map((change) => {
+            {visibleFiles.map((change) => {
               const editable = change.state === 'deleted' ? null : folderPath(change.path);
               return (
                 <LocalChangedFile
                   key={change.path}
                   change={change}
                   body={diffs.get(change.path)}
+                  countLines={!changes?.diffTruncated}
                   busy={busy}
                   onEdit={editable === null ? null : () => openEditor(editable)}
                   onDiscard={() => discard(change.path)}
@@ -289,10 +378,6 @@ export function LocalChangesPanel({
               setEditing(null);
             }}
           />
-        )}
-
-        {changes?.diffTruncated && (
-          <p className={styles['formHelp']}>{CODE_COPY.changesDiffTruncated}</p>
         )}
 
         <LocalPullRequest rootId={rootId} title={title} refreshKey={refreshKey} />

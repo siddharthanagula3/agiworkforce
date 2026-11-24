@@ -31,6 +31,32 @@ describe('a picture added to the draft', () => {
     expect(result.current.previews[0]?.file).toBe(held);
   });
 
+  it('previews an unlabelled JPEG as a picture and returns the original input as taken', async () => {
+    const { result } = renderHook(() => useAttachments());
+    const photo = new File([jpegWithLocationBytes()], 'beach.JPG', { lastModified: 42 });
+    let taken: File[] = [];
+
+    await act(async () => {
+      taken = await result.current.admitFiles([photo]);
+    });
+
+    expect(taken).toEqual([photo]);
+    expect(result.current.previews[0]?.type).toBe('image');
+    expect(result.current.attachments[0]?.type).toBe('image/jpeg');
+    expect(result.current.attachments[0]?.lastModified).toBe(42);
+  });
+
+  it('applies the picture limit before preparing a JPEG with an empty browser type', () => {
+    const photo = new File([jpegWithLocationBytes()], 'beach.jpg');
+    const { result } = renderHook(() => useAttachments({ maxImageSize: photo.size - 1 }));
+
+    act(() => result.current.addFiles([photo]));
+
+    expect(result.current.preparing).toBe(false);
+    expect(result.current.attachments).toEqual([]);
+    expect(result.current.refused).toEqual([{ filename: 'beach.jpg', reason: 'too_large' }]);
+  });
+
   it('is refused by name, with a sentence the reader can act on', async () => {
     const onError = vi.fn();
     const { result } = renderHook(() => useAttachments({ onError }));
@@ -116,6 +142,18 @@ describe('a document added to the draft', () => {
 
     expect(result.current.preparing).toBe(false);
     expect(result.current.attachments[0]).toBe(document);
+  });
+
+  it('admits a PDF whose browser type is empty without waiting for picture preparation', () => {
+    const { result } = renderHook(() => useAttachments());
+    const pdf = new File(['%PDF-1.7'], 'report.PDF');
+
+    act(() => result.current.addFiles([pdf]));
+
+    expect(result.current.preparing).toBe(false);
+    expect(result.current.attachments[0]).toBe(pdf);
+    expect(result.current.previews[0]?.type).toBe('document');
+    expect(result.current.refused).toEqual([]);
   });
 
   it('keeps its place behind a picture that is still being prepared', async () => {

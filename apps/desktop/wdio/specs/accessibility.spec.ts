@@ -1,5 +1,54 @@
+import { enterLocalDesktopShell, waitForDesktopShell } from '../support/desktop-shell';
 
 describe('AGI Desktop Accessibility (real keyboard nav + ARIA)', () => {
+  it('keeps the native composer quiet on pointer focus and clears that state on blur', async () => {
+    await waitForDesktopShell();
+    await enterLocalDesktopShell();
+
+    const selector = 'textarea[aria-label="Chat message input"]';
+    const styles = () =>
+      browser.execute((inputSelector) => {
+        const input = document.querySelector(inputSelector);
+        const frame = input?.closest('.chat-composer-focus');
+        if (!input || !frame) throw new Error('The chat composer did not render.');
+        const outer = getComputedStyle(frame);
+        return {
+          focused: input === document.activeElement,
+          focusVisible: input.matches(':focus-visible'),
+          pointerFocus: input.hasAttribute('data-pointer-focus'),
+          border: outer.borderColor,
+          outerOutline: outer.outlineStyle,
+          innerOutline: getComputedStyle(input).outlineStyle,
+          shadow: outer.boxShadow,
+        };
+      }, selector);
+
+    await browser.execute((inputSelector) => {
+      document.querySelector<HTMLTextAreaElement>(inputSelector)?.blur();
+    }, selector);
+    const resting = await styles();
+    // The embedded driver uses element.click(), which does not emit pointerdown.
+    await browser.execute((inputSelector) => {
+      const input = document.querySelector<HTMLTextAreaElement>(inputSelector);
+      input?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+      input?.focus();
+    }, selector);
+    expect(await styles()).toEqual({
+      ...resting,
+      focused: true,
+      focusVisible: expect.any(Boolean),
+      pointerFocus: true,
+      outerOutline: 'none',
+      innerOutline: 'none',
+      shadow: 'none',
+    });
+
+    await browser.execute((inputSelector) => {
+      document.querySelector<HTMLTextAreaElement>(inputSelector)?.blur();
+    }, selector);
+    expect(await styles()).toEqual({ ...resting, focused: false, pointerFocus: false });
+  });
+
   it('tabs through the composer/sidebar and reaches the composer via keyboard', async function () {
     this.timeout(30000);
     await browser.pause(1000);

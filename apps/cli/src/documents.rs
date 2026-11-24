@@ -4,6 +4,7 @@ use std::path::Path;
 use std::process::Stdio;
 use std::time::Duration;
 
+use agiworkforce_agent_core::context::estimate_pdf_context_tokens;
 use anyhow::{anyhow, bail, Context, Result};
 use calamine::Reader;
 use roxmltree::Document as XmlDocument;
@@ -83,6 +84,8 @@ impl DocumentKind {
 pub struct ExtractedDocument {
     pub text: String,
     pub note: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pdf_context_tokens: Option<usize>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -299,7 +302,11 @@ fn bounded<'a, R: Read>(inner: R, budget: &'a Budget) -> Bounded<'a, R> {
 }
 
 fn whole(text: String) -> ExtractedDocument {
-    ExtractedDocument { text, note: None }
+    ExtractedDocument {
+        text,
+        note: None,
+        pdf_context_tokens: None,
+    }
 }
 
 fn check_archive(bytes: &[u8]) -> Result<()> {
@@ -398,6 +405,7 @@ fn pdf_text(bytes: &[u8], pages: Option<RangeInclusive<usize>>) -> Result<Extrac
     } else {
         None
     };
+    let pdf_context_tokens = Some(estimate_pdf_context_tokens(total, &selected));
     if selected.iter().all(|page| page.trim().is_empty()) {
         return Ok(ExtractedDocument {
             text: format!(
@@ -405,11 +413,13 @@ fn pdf_text(bytes: &[u8], pages: Option<RangeInclusive<usize>>) -> Result<Extrac
                 range.start()
             ),
             note,
+            pdf_context_tokens,
         });
     }
     Ok(ExtractedDocument {
         text: text.trim_end().to_string(),
         note,
+        pdf_context_tokens,
     })
 }
 
@@ -603,6 +613,13 @@ fn archive_entry(bytes: &[u8], entry: &str, budget: &Budget) -> Result<String> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn pdf_context_budget_counts_text_and_visuals_on_sampled_and_unsampled_pages() {
+        let page = "a".repeat(400);
+        assert_eq!(estimate_pdf_context_tokens(1, &[page.clone()]), 1_668);
+        assert_eq!(estimate_pdf_context_tokens(2, &[page]), 6_236);
+    }
+
     #[cfg(unix)]
     fn shell(script: &str) -> tokio::process::Command {
         let mut command = tokio::process::Command::new("/bin/sh");
@@ -640,6 +657,7 @@ mod tests {
         let reply = serde_json::to_string(&ExtractReply::Document(ExtractedDocument {
             text: "hello".to_string(),
             note: None,
+            pdf_context_tokens: None,
         }))
         .expect("reply");
         let document = run_extractor(

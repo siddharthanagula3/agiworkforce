@@ -232,11 +232,16 @@ impl SubagentUsage {
 struct ChildRunFailure {
     error: anyhow::Error,
     usage: Option<SubagentUsage>,
+    transcript: Vec<String>,
 }
 
 impl ChildRunFailure {
     fn before_any_request(error: anyhow::Error) -> Self {
-        Self { error, usage: None }
+        Self {
+            error,
+            usage: None,
+            transcript: Vec::new(),
+        }
     }
 }
 
@@ -354,6 +359,7 @@ struct SubagentEntry {
     result: Arc<RwLock<Option<SubagentResult>>>,
     /// What the child's provider requests cost, kept however the child ended.
     spent: Arc<RwLock<Option<SubagentUsage>>>,
+    unfinished_transcript: Arc<RwLock<Vec<String>>>,
     /// OS thread handle, each subagent gets its own tokio runtime on a
     /// dedicated thread, avoiding the `Send` constraint of `tokio::spawn`.
     handle: Option<thread::JoinHandle<()>>,
@@ -363,6 +369,43 @@ struct SubagentEntry {
     /// Still running when [`SUBAGENT_WAIT_LIMIT`] ran out. Its thread is left
     /// to notice the cancel flag on its own; no later wait holds a turn for it.
     abandoned: bool,
+}
+
+#[derive(Clone)]
+pub(crate) struct SubagentControl(Arc<RwLock<HashMap<String, SubagentEntry>>>);
+
+impl SubagentControl {
+    pub(crate) async fn cancel(&self, id: &str) -> Result<()> {
+        let entries = self.0.read().await;
+        let entry = entries
+            .get(id)
+            .ok_or_else(|| anyhow::anyhow!("Subagent '{}' not found", id))?;
+        let mut status = entry.status.write().await;
+        if matches!(*status, SubagentStatus::Running) {
+            entry
+                .cancelled
+                .store(true, std::sync::atomic::Ordering::Release);
+            *status = SubagentStatus::Cancelled;
+            return Ok(());
+        }
+        bail!("Subagent '{}' is not running (status: {})", id, *status)
+    }
+
+    pub(crate) async fn wait_for_exit(&self, id: &str) -> bool {
+        tokio::time::timeout(ABANDONED_SETTLE_LIMIT, async {
+            loop {
+                let finished = self.0.read().await.get(id).is_none_or(|entry| {
+                    entry.handle.as_ref().is_none_or(thread::JoinHandle::is_finished)
+                });
+                if finished {
+                    return;
+                }
+                tokio::time::sleep(SUBAGENT_JOIN_POLL_INTERVAL).await;
+            }
+        })
+        .await
+        .is_ok()
+    }
 }
 
 // SubagentEntry contains thread::JoinHandle which is not Debug by default.
@@ -444,6 +487,7 @@ pub struct SubagentManager {
 struct SubagentRunConfig {
     config: CliConfig,
     route: InheritedRoute,
+    terminal_owner: String,
     /// Depth the spawned child session runs at (owning manager's depth + 1).
     depth: usize,
     /// Per-child spend cap, distinct from the parent's own budget.
@@ -619,6 +663,7 @@ impl SubagentManager {
         let status = Arc::new(RwLock::new(SubagentStatus::Running));
         let result: Arc<RwLock<Option<SubagentResult>>> = Arc::new(RwLock::new(None));
         let spent: Arc<RwLock<Option<SubagentUsage>>> = Arc::new(RwLock::new(None));
+        let unfinished_transcript = Arc::new(RwLock::new(Vec::new()));
         let cancelled = Arc::new(std::sync::atomic::AtomicBool::new(false));
 
         // Clone values for the spawned thread
@@ -633,6 +678,7 @@ impl SubagentManager {
         let task_run_config = SubagentRunConfig {
             config: self.config.clone(),
             route: self.route.clone(),
+            terminal_owner: uuid::Uuid::new_v4().to_string(),
             depth: self.depth + 1,
             max_budget_usd: child_budget_usd,
             sys_context: self.sys_context.clone(),
@@ -648,6 +694,7 @@ impl SubagentManager {
         let task_status = Arc::clone(&status);
         let task_result = Arc::clone(&result);
         let task_spent = Arc::clone(&spent);
+        let task_transcript = unfinished_transcript.clone();
         let task_cancelled = Arc::clone(&cancelled);
         let task_description = description.to_string();
         let task_depth = self.depth + 1;
@@ -704,17 +751,20 @@ impl SubagentManager {
                         run_subagent(&task_run_config, &task_prompt, &task_cancelled).await;
 
                     // Check cancellation after completion
+                    let mut terminal_status = task_status.write().await;
                     if task_cancelled.load(std::sync::atomic::Ordering::Acquire) {
+                        crate::terminals::stop_owned_by(&task_run_config.terminal_owner).await;
                         let unfinished = match &outcome {
                             Ok((model, turn, _)) => Some(SubagentUsage::from_turn(model, turn)),
                             Err(failure) => failure.usage.clone(),
                         };
+                        *task_transcript.write().await = match outcome {
+                            Ok((_, _, lines)) => lines,
+                            Err(failure) => failure.transcript,
+                        };
                         *task_spent.write().await = unfinished.clone();
-                        {
-                            let mut status = task_status.write().await;
-                            if matches!(*status, SubagentStatus::Running) {
-                                *status = SubagentStatus::Cancelled;
-                            }
+                        if matches!(*terminal_status, SubagentStatus::Running) {
+                            *terminal_status = SubagentStatus::Cancelled;
                         }
                         audit(&SubagentStatus::Cancelled, None, unfinished.as_ref());
                         return;
@@ -736,7 +786,7 @@ impl SubagentManager {
                             );
                             *task_spent.write().await = Some(subagent_result.usage.clone());
                             *task_result.write().await = Some(subagent_result);
-                            *task_status.write().await = SubagentStatus::Completed;
+                            *terminal_status = SubagentStatus::Completed;
 
                             if !crate::tui::tui_active() {
                                 eprintln!(
@@ -751,7 +801,8 @@ impl SubagentManager {
                             let failed = SubagentStatus::Failed(err_msg.clone());
                             audit(&failed, None, failure.usage.as_ref());
                             *task_spent.write().await = failure.usage;
-                            *task_status.write().await = failed;
+                            *task_transcript.write().await = failure.transcript;
+                            *terminal_status = failed;
 
                             if !crate::tui::tui_active() {
                                 eprintln!("{}", subagent_failure_line(&task_id, &err_msg));
@@ -772,6 +823,7 @@ impl SubagentManager {
             status,
             result,
             spent,
+            unfinished_transcript,
             handle: Some(handle),
             cancelled,
             abandoned: false,
@@ -800,6 +852,18 @@ impl SubagentManager {
         } else {
             None
         }
+    }
+
+    pub(crate) async fn get_transcript(&self, id: &str) -> Vec<String> {
+        let entries = self.entries.read().await;
+        let Some(entry) = entries.get(id) else {
+            return Vec::new();
+        };
+        if let Some(result) = entry.result.read().await.as_ref() {
+            return result.transcript.clone();
+        }
+        let transcript = entry.unfinished_transcript.read().await.clone();
+        transcript
     }
 
     /// What a finished subagent's provider requests cost, whether it
@@ -844,30 +908,11 @@ impl SubagentManager {
 
     /// Cancel a running subagent.
     pub async fn cancel(&self, id: &str) -> Result<()> {
-        let entries = self.entries.read().await;
-        if let Some(entry) = entries.get(id) {
-            // Hold a single write lock for both the check and the update
-            // to prevent a TOCTOU race where another thread changes the
-            // status between our read and write.
-            let mut status = entry.status.write().await;
-            if matches!(*status, SubagentStatus::Running) {
-                // Signal cancellation, the thread will check this flag.
-                entry
-                    .cancelled
-                    .store(true, std::sync::atomic::Ordering::Release);
-                *status = SubagentStatus::Cancelled;
-                Ok(())
-            } else {
-                let status_display = format!("{}", *status);
-                bail!(
-                    "Subagent '{}' is not running (status: {})",
-                    id,
-                    status_display
-                )
-            }
-        } else {
-            bail!("Subagent '{}' not found", id)
-        }
+        self.control().cancel(id).await
+    }
+
+    pub(crate) fn control(&self) -> SubagentControl {
+        SubagentControl(self.entries.clone())
     }
 
     /// Wait for all running subagents to complete. Returns a summary.
@@ -1035,6 +1080,9 @@ async fn run_subagent(
         .route
         .child_session(&run_config.sys_context)
         .map_err(ChildRunFailure::before_any_request)?;
+    session
+        .runtime_session_id
+        .clone_from(&run_config.terminal_owner);
     if let Some(authority) = run_config.workspace_authority.clone() {
         session.install_workspace_file_authority(authority);
     }
@@ -1089,6 +1137,12 @@ async fn run_subagent(
         }
     };
 
+    if cancelled.load(std::sync::atomic::Ordering::Acquire) {
+        if let Some(children) = session.take_subagent_manager() {
+            Box::pin(children.shutdown_all()).await;
+        }
+    }
+
     match result {
         Ok(turn) => {
             let turn = with_nested_spend(turn, &session);
@@ -1097,6 +1151,7 @@ async fn run_subagent(
         Err(error) => Err(ChildRunFailure {
             error,
             usage: SubagentUsage::from_unfinished_session(&model, &session),
+            transcript: transcript_lines(&session.messages),
         }),
     }
 }
@@ -1588,6 +1643,7 @@ mod tests {
                 status: Arc::new(RwLock::new(status)),
                 result: Arc::new(RwLock::new(None)),
                 spent: Arc::new(RwLock::new(None)),
+                unfinished_transcript: Arc::new(RwLock::new(Vec::new())),
                 handle: None,
                 cancelled: Arc::new(std::sync::atomic::AtomicBool::new(false)),
                 abandoned: false,
@@ -1749,6 +1805,7 @@ mod tests {
                 status: Arc::new(RwLock::new(SubagentStatus::Running)),
                 result: Arc::new(RwLock::new(None)),
                 spent: Arc::new(RwLock::new(None)),
+                unfinished_transcript: Arc::new(RwLock::new(Vec::new())),
                 handle: Some(handle),
                 cancelled: cancelled.clone(),
                 abandoned: false,
@@ -1795,6 +1852,7 @@ mod tests {
                 status: Arc::new(RwLock::new(SubagentStatus::Running)),
                 result: Arc::new(RwLock::new(None)),
                 spent: Arc::new(RwLock::new(None)),
+                unfinished_transcript: Arc::new(RwLock::new(Vec::new())),
                 handle: Some(handle),
                 cancelled: cancelled.clone(),
                 abandoned: false,
@@ -1858,6 +1916,7 @@ mod tests {
                 status: Arc::new(RwLock::new(SubagentStatus::Running)),
                 result: Arc::new(RwLock::new(None)),
                 spent: Arc::new(RwLock::new(None)),
+                unfinished_transcript: Arc::new(RwLock::new(Vec::new())),
                 handle: Some(handle),
                 cancelled: cancelled.clone(),
                 abandoned: false,
@@ -1945,6 +2004,7 @@ mod tests {
                 status: Arc::new(RwLock::new(SubagentStatus::Running)),
                 result: Arc::new(RwLock::new(None)),
                 spent,
+                unfinished_transcript: Arc::new(RwLock::new(Vec::new())),
                 handle: Some(handle),
                 cancelled: cancelled.clone(),
                 abandoned: false,

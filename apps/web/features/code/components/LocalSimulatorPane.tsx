@@ -64,11 +64,13 @@ function join(...names: Array<string | false | undefined>): string {
 }
 
 export interface LocalSimulatorPaneProps {
+  visible?: boolean;
   expanded: boolean;
   onToggleExpanded: () => void;
   floating: boolean;
   onToggleFloating: () => void;
   onClose: () => void;
+  toolSwitcher?: ReactNode;
   /** Absent when this session cannot take pictures; then every "add to chat" control is left out. */
   onAttachImage?: (file: File) => void;
 }
@@ -144,11 +146,13 @@ function CaptureMenu({
 }
 
 export function LocalSimulatorPane({
+  visible = true,
   expanded,
   onToggleExpanded,
   floating,
   onToggleFloating,
   onClose,
+  toolSwitcher,
   onAttachImage,
 }: LocalSimulatorPaneProps) {
   const [annotating, setAnnotating] = useState<SimulatorCaptureImage | null>(null);
@@ -156,7 +160,7 @@ export function LocalSimulatorPane({
   const [ratio, setRatio] = useState(DEFAULT_RATIO);
   const [phoneOnlyRequested, setPhoneOnlyRequested] = useState(false);
   const { confirm, dialog } = useConfirmAction();
-  const sim = useSimulator({ framesPaused: annotating !== null });
+  const sim = useSimulator({ framesPaused: !visible || annotating !== null });
 
   useEffect(() => {
     if (!floating) setPhoneOnlyRequested(false);
@@ -739,7 +743,9 @@ export function LocalSimulatorPane({
       )}
       data-testid="local-simulator-pane"
       aria-label={COPY.pane}
+      style={visible ? undefined : { display: 'none' }}
     >
+      {!floating && !annotating && toolSwitcher}
       {!phoneOnly && header}
       {annotating ? (
         <LocalCaptureAnnotator

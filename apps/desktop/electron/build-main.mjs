@@ -2,7 +2,7 @@ import { build } from 'esbuild';
 // Imported rather than used as globals: the repo eslint config does not grant
 // Node globals to plain .mjs files.
 import console from 'node:console';
-import { cpSync, existsSync, writeFileSync } from 'node:fs';
+import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import process from 'node:process';
@@ -15,8 +15,11 @@ import {
 import { readShellTokens } from './shellTokens.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(__dirname, '..', '..', '..');
+const webPublicDir = path.join(repoRoot, 'apps', 'web', 'public');
 
-const shellTokens = readShellTokens(path.join(__dirname, '..', '..', '..'));
+const shellTokens = readShellTokens(repoRoot);
+const shellSymbol = readFileSync(path.join(webPublicDir, 'agi-symbol.png')).toString('base64');
 
 const shared = {
   bundle: true,
@@ -30,6 +33,7 @@ const shared = {
   logLevel: 'info',
   metafile: true,
   define: {
+    AGI_SHELL_SYMBOL_URL: JSON.stringify(`data:image/png;base64,${shellSymbol}`),
     AGI_PAGE_BACKGROUND_LIGHT: JSON.stringify(shellTokens.pageBackgroundLight),
     AGI_PAGE_BACKGROUND_DARK: JSON.stringify(shellTokens.pageBackgroundDark),
     AGI_PAGE_INK_LIGHT: JSON.stringify(shellTokens.pageInkLight),
@@ -80,7 +84,9 @@ if (existsSync(assetsSrc)) {
   console.warn('  no electron/assets directory; tray will fall back to a text-only icon');
 }
 
-const repoRoot = path.resolve(__dirname, '..', '..', '..');
+const appIconDir = path.join(__dirname, 'dist', 'assets');
+mkdirSync(appIconDir, { recursive: true });
+copyFileSync(path.join(webPublicDir, 'logo.png'), path.join(appIconDir, 'app-icon.png'));
 const electronPackage = path.dirname(
   createRequire(path.join(__dirname, '..', 'package.json')).resolve('electron/package.json'),
 );

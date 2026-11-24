@@ -8,6 +8,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Shield } from 'lucide-react-native';
@@ -16,11 +17,20 @@ import { Text } from '@/components/ui/Text';
 import { useTheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { contentColumn } from '@/src/shared/layout/contentColumn';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 import { useAuthStore } from '@/src/features/auth/store';
-import { confirmAgeGate, getAgeThreshold, isMinorMode } from '@/src/features/auth/services/ageGate';
+import {
+  confirmAgeGate,
+  getAgeThreshold,
+  isAgeGateConfirmed,
+  isMinorMode,
+} from '@/src/features/auth/services/ageGate';
 import { assureAgeWithOs } from '@/src/features/age-assurance';
 import { AgeRefused } from '@/src/features/auth/components/AgeRefused';
-import { useAdultEligibilityStore } from '@/src/features/auth/store/adultEligibilityStore';
+import {
+  useAccountAgeConfirmed,
+  useAdultEligibilityStore,
+} from '@/src/features/auth/store/adultEligibilityStore';
 import {
   AGE_GATE_PATH,
   CLOUD_SIGN_IN_RETURN_PATH,
@@ -47,6 +57,9 @@ export default function AgeGateScreen() {
   const [error, setError] = useState<string | null>(null);
   const [refused, setRefused] = useState(isMinorMode);
   const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
+  const isClerkLoaded = useAuthStore((s) => s.isClerkLoaded);
+  const userId = useAuthStore((s) => s.clerkUserId);
+  const accountAgeConfirmed = useAccountAgeConfirmed(userId);
   const signOutAllAccounts = useAuthStore((s) => s.signOutAllAccounts);
   const inputRef = useRef<TextInput>(null);
 
@@ -56,6 +69,8 @@ export default function AgeGateScreen() {
   const disabledButtonBg = colors.surfaceHover;
   const disabledButtonTextColor = colors.textMuted;
   const returnTo = resolveReturnPath(params.returnTo);
+  const accountCoversGate = FEATURES.auth && accountAgeConfirmed && isAgeGateConfirmed(true);
+  const restoringSession = FEATURES.auth && !isClerkLoaded && !isAgeGateConfirmed();
 
   const handleComplete = useCallback(() => {
     if (returnTo === CLOUD_SIGN_IN_RETURN_PATH) {
@@ -67,12 +82,17 @@ export default function AgeGateScreen() {
       );
       return;
     }
-    router.replace(ONBOARDING_PATH);
-  }, [returnTo, router]);
+    router.replace(accountCoversGate ? '/' : ONBOARDING_PATH);
+  }, [accountCoversGate, returnTo, router]);
 
   const osCheckStarted = useRef(false);
   useEffect(() => {
-    if (osCheckStarted.current || refused) return;
+    if (refused || restoringSession) return;
+    if (accountCoversGate) {
+      handleComplete();
+      return;
+    }
+    if (osCheckStarted.current) return;
     osCheckStarted.current = true;
     void assureAgeWithOs().then((record) => {
       if (!record) return;
@@ -83,7 +103,7 @@ export default function AgeGateScreen() {
       void useAdultEligibilityStore.getState().reportDeviceGateAnswer(null);
       handleComplete();
     });
-  }, [handleComplete, refused]);
+  }, [accountCoversGate, handleComplete, refused, restoringSession]);
 
   const handleContinue = useCallback(() => {
     const parsed = parseInt(ageText.trim(), 10);
@@ -123,6 +143,21 @@ export default function AgeGateScreen() {
         onSignOut={() => void handleSignOut()}
         onDeviceDataErased={handleDeviceDataErased}
       />
+    );
+  }
+
+  if (accountCoversGate || restoringSession) {
+    return (
+      <SafeAreaView
+        style={{
+          flex: 1,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: colors.background,
+        }}
+      >
+        <LoadingIndicator size="large" />
+      </SafeAreaView>
     );
   }
 

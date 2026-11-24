@@ -2,6 +2,7 @@ import { logger } from '@shared/lib/logger';
 
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { getCsrfToken } from '@/lib/client/csrf';
+import type { GlobalSearchCategory } from '../lib/global-search-categories';
 
 export type IndexedSearchSourceType =
   | 'project_knowledge'
@@ -17,6 +18,7 @@ export interface SearchResult {
     | 'message'
     | 'project'
     | 'file'
+    | 'schedule'
     | 'artifact'
     | 'research_report'
     | 'developer_session'
@@ -47,6 +49,7 @@ export function globalSearchResultHref(result: SearchResult, query?: string): st
 
 export interface SearchFilters {
   query: string;
+  category?: GlobalSearchCategory;
   startDate?: Date;
   endDate?: Date;
   role?: 'user' | 'assistant' | 'system';
@@ -61,6 +64,7 @@ export interface SearchStats {
   projectMatches: number;
   fileMatches: number;
   documentMatches: number;
+  scheduleMatches?: number;
   searchTime: number;
 }
 
@@ -103,6 +107,17 @@ interface APIProjectResult {
   projectId: string;
   projectName: string;
   content: string;
+  createdAt: string;
+  updatedAt: string;
+  matchedText: string;
+  contextBefore?: string;
+  contextAfter?: string;
+}
+
+interface APIScheduleResult {
+  id: string;
+  name: string;
+  href: string;
   createdAt: string;
   updatedAt: string;
   matchedText: string;
@@ -163,6 +178,7 @@ class GlobalSearchService {
     const params = new URLSearchParams();
     params.set('q', filters.query);
     params.set('limit', String(limit));
+    if (filters.category && filters.category !== 'all') params.set('category', filters.category);
     if (options.trackSearch === false) params.set('track', 'false');
     if (filters.includeArchived) params.set('includeArchived', 'true');
     if (filters.role) params.set('role', filters.role);
@@ -185,6 +201,7 @@ class GlobalSearchService {
       results: APISearchResult[];
       projects?: APIProjectResult[];
       files?: APIFileResult[];
+      schedules?: APIScheduleResult[];
       documents?: APIDocumentResult[];
       stats: APISearchStats;
     };
@@ -227,6 +244,18 @@ class GlobalSearchService {
       contextAfter: f.contextAfter,
     }));
 
+    const scheduleResults: SearchResult[] = (data.schedules ?? []).map((schedule) => ({
+      type: 'schedule',
+      href: schedule.href,
+      sessionId: schedule.id,
+      sessionTitle: schedule.name,
+      content: schedule.name,
+      createdAt: new Date(schedule.createdAt),
+      updatedAt: new Date(schedule.updatedAt),
+      matchedText: schedule.matchedText,
+      contextBefore: schedule.contextBefore,
+      contextAfter: schedule.contextAfter,
+    }));
     const seenConversations = new Set(conversationResults.map((r) => r.sessionId));
     const seenFiles = new Set(fileResults.map((r) => r.sessionId));
     const documentResults: SearchResult[] = (data.documents || []).flatMap(
@@ -261,6 +290,7 @@ class GlobalSearchService {
       ...conversationResults,
       ...projectResults,
       ...fileResults,
+      ...scheduleResults,
       ...documentResults,
     ];
 
@@ -271,12 +301,14 @@ class GlobalSearchService {
         (data.stats?.totalResults ?? conversationResults.length) +
         projectMatches +
         fileMatches +
+        scheduleResults.length +
         documentResults.length,
       sessionMatches: data.stats?.sessionMatches ?? 0,
       messageMatches: data.stats?.messageMatches ?? 0,
       projectMatches,
       fileMatches,
       documentMatches: documentResults.length,
+      scheduleMatches: scheduleResults.length,
       searchTime: Date.now() - startTime,
     };
 

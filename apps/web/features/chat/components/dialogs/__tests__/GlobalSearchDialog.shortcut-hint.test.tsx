@@ -42,7 +42,7 @@ describe('GlobalSearchDialog keyboard shortcut hint', () => {
 
   it('clears the typed query from the field', () => {
     render(<GlobalSearchDialog open onOpenChange={() => {}} />);
-    const input = screen.getByRole('textbox', { name: /search messages and conversations/i });
+    const input = screen.getByRole('textbox', { name: /search your workspace/i });
 
     fireEvent.change(input, { target: { value: 'quarterly plan' } });
     expect(input).toHaveValue('quarterly plan');

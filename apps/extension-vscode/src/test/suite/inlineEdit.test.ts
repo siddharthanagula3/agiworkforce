@@ -26,6 +26,33 @@ suite('native inline edit safety', () => {
     assert.strictEqual(await fixture.verifySyntheticSecretStorage(), true);
   });
 
+  if (vscode.env.appName === 'Cursor') {
+    for (const autoApply of [true, false]) {
+      test(`previews an edit without writing to the document with auto-apply ${autoApply}`, async () => {
+        const item = await target();
+        const apply = applyLlmEdit(
+          item.editor,
+          item.selection,
+          '```typescript\nconst value = 1;\n```',
+          'Fix',
+          { autoApply, expectedDocument: item.expectedDocument },
+        );
+
+        assert.strictEqual(
+          await item.editor.edit((edit) => edit.replace(item.selection, 'const value = 9;')),
+          true,
+        );
+        assert.strictEqual(await apply, undefined);
+        assert.strictEqual(item.document.getText(), 'const value = 9;');
+        const preview = vscode.window.activeTextEditor?.document;
+        assert.ok(preview, 'The proposal must remain available in a preview tab');
+        assert.strictEqual(preview.languageId, 'markdown');
+        assert.match(preview.getText(), /const value = 1;/u);
+      });
+    }
+    return;
+  }
+
   test('accepts an unchanged target through the actual editor transaction', async () => {
     const item = await target();
     const outcome = await applyLlmEdit(
@@ -59,15 +86,33 @@ suite('native inline edit safety', () => {
   test('accepts only one of two native writes racing against the same version', async () => {
     const item = await target();
     let humanChange: Thenable<boolean> | undefined;
-    const proposed = item.editor.edit((edit) => {
-      edit.replace(item.selection, 'const value = 1;');
-      const human = new vscode.WorkspaceEdit();
-      human.replace(item.document.uri, item.selection, 'const value = 9;');
-      humanChange = vscode.workspace.applyEdit(human);
-    });
+    const editor = {
+      document: item.document,
+      edit: (editProposal: (edit: vscode.TextEditorEdit) => void) =>
+        item.editor.edit((edit) => {
+          editProposal(edit);
+          const human = new vscode.WorkspaceEdit();
+          human.replace(item.document.uri, item.selection, 'const value = 9;');
+          humanChange = vscode.workspace.applyEdit(human);
+        }),
+    } as vscode.TextEditor;
+    const proposed = applyLlmEdit(
+      editor,
+      item.selection,
+      '```typescript\nconst value = 1;\n```',
+      'Fix',
+      {
+        autoApply: true,
+        expectedDocument: item.expectedDocument,
+      },
+    );
     assert.ok(humanChange);
-    const [humanApplied, proposalApplied] = await Promise.all([humanChange, proposed]);
-    assert.notStrictEqual(humanApplied, proposalApplied);
+    const [humanApplied, proposalOutcome] = await Promise.all([humanChange, proposed]);
+    assert.notStrictEqual(
+      humanApplied,
+      proposalOutcome === 'accepted',
+      `Human edit applied: ${humanApplied}, AGI outcome: ${proposalOutcome}, final text: ${item.document.getText()}`,
+    );
     assert.strictEqual(
       item.document.getText(),
       humanApplied ? 'const value = 9;' : 'const value = 1;',

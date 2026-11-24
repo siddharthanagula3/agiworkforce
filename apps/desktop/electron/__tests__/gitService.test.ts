@@ -6,6 +6,7 @@ import type { WorkspaceRoot } from '@agiworkforce/local-runtime-contract';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import {
   branchSlug,
+  discardWorkingTreeChanges,
   findRepositoryRoot,
   hostGitInvocation,
   listLocalBranches,
@@ -21,6 +22,94 @@ let sandbox: string;
 let repo: string;
 let plain: string;
 let fakeSsh: string;
+
+describe('Code changes in an approved repository subfolder', () => {
+  async function editedSubfolder(label: string) {
+    const root = await committedRepo(label);
+    const folder = path.join(root, 'approved');
+    await fs.mkdir(folder);
+    const inside = path.join(folder, 'inside.txt');
+    const sibling = path.join(root, 'tracked.txt');
+    await fs.writeFile(inside, 'inside original\n');
+    git(root, 'add', 'approved/inside.txt');
+    git(root, 'commit', '-qm', 'Track approved file');
+    await fs.writeFile(inside, 'inside edit\n');
+    await fs.writeFile(sibling, 'sibling edit\n');
+    return { folder, inside, sibling };
+  }
+
+  it('includes only the approved folder in status and diff', async () => {
+    const { folder } = await editedSubfolder('changes-subfolder');
+    const changes = await readWorkingTreeChanges(folder);
+    expect(changes?.folderPrefix).toBe('approved/');
+    expect(changes?.files.map((file) => file.path)).toEqual(['approved/inside.txt']);
+    expect(changes?.diff).toContain('+inside edit');
+    expect(changes?.diff).not.toContain('sibling edit');
+    expect(changes?.comparison).toEqual({
+      branch: execFileSync('git', ['branch', '--show-current'], {
+        cwd: folder,
+        encoding: 'utf8',
+      }).trim(),
+      revision: execFileSync('git', ['rev-parse', 'HEAD'], {
+        cwd: folder,
+        encoding: 'utf8',
+      }).trim(),
+    });
+  });
+
+  it('refuses a mixed discard before restoring either file and still permits an in-scope restore', async () => {
+    const { folder, inside, sibling } = await editedSubfolder('discard-subfolder');
+    await expect(
+      discardWorkingTreeChanges(folder, ['approved/inside.txt', 'tracked.txt']),
+    ).rejects.toThrow('outside the approved folder');
+    expect(await fs.readFile(inside, 'utf8')).toBe('inside edit\n');
+    expect(await fs.readFile(sibling, 'utf8')).toBe('sibling edit\n');
+
+    await expect(discardWorkingTreeChanges(folder, ['approved/inside.txt'])).resolves.toEqual([
+      'approved/inside.txt',
+    ]);
+    expect(await fs.readFile(inside, 'utf8')).toBe('inside original\n');
+    expect(await fs.readFile(sibling, 'utf8')).toBe('sibling edit\n');
+  });
+
+  it('keeps the file list and marks the preview truncated when Git exceeds its output limit', async () => {
+    const root = await committedRepo('changes-over-output-limit');
+    await fs.writeFile(path.join(root, 'tracked.txt'), 'large text line\n'.repeat(600_000));
+
+    const changes = await readWorkingTreeChanges(root);
+    expect(changes?.files.map((file) => file.path)).toEqual(['tracked.txt']);
+    expect(changes?.diffTruncated).toBe(true);
+    expect(changes?.diffUnavailable).toBeUndefined();
+  });
+
+  it('does not expose or restore the sibling path of a rename into the approved folder', async () => {
+    const root = await committedRepo('rename-into-approved-folder');
+    const folder = path.join(root, 'approved');
+    await fs.mkdir(folder);
+    await fs.writeFile(path.join(folder, 'inside.txt'), 'inside original\n');
+    git(root, 'add', 'approved/inside.txt');
+    git(root, 'commit', '-qm', 'Track approved rename source');
+    const original = await fs.readFile(path.join(root, 'tracked.txt'), 'utf8');
+    git(root, 'mv', 'tracked.txt', 'approved/moved.txt');
+    git(root, 'mv', 'approved/inside.txt', 'approved/renamed.txt');
+
+    const changes = await readWorkingTreeChanges(folder);
+    expect(changes?.files).toEqual([
+      { path: 'approved/moved.txt', state: 'added', originalPath: null },
+      {
+        path: 'approved/renamed.txt',
+        state: 'renamed',
+        originalPath: 'approved/inside.txt',
+      },
+    ]);
+    expect(changes?.diff).not.toContain('tracked.txt');
+    await expect(discardWorkingTreeChanges(folder, ['approved/moved.txt'])).rejects.toThrow(
+      'This rename also affects a file outside the approved folder.',
+    );
+    expect(await fs.readFile(path.join(folder, 'moved.txt'), 'utf8')).toBe(original);
+    await expect(fs.stat(path.join(root, 'tracked.txt'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+});
 const realHome = process.env['HOME'];
 
 function git(cwd: string, ...args: string[]): void {

@@ -26,6 +26,7 @@ import {
   PLUGIN_MARKETPLACE_STANDARD_MANIFEST_PATH,
   PLUGIN_SCAN_REVIEW_REFUSAL,
   PluginMarketplaceManifestSchema,
+  parseGithubRepositoryUrl,
   type PluginMarketplaceEntry,
   type PluginMarketplaceManifest,
   type PluginMarketplaceManifestPlugin,
@@ -63,8 +64,7 @@ import {
   type PluginDependencyRef,
 } from './plugin-dependencies';
 
-const GITHUB_REPOSITORY_URL_PATTERN =
-  /^https:\/\/github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+?)(?:\.git)?\/?$/;
+export { parseGithubRepositoryUrl };
 const MANIFEST_TOO_LARGE_MESSAGE = `The marketplace manifest is larger than ${PLUGIN_MARKETPLACE_MAX_MANIFEST_BYTES} bytes.`;
 const MANIFEST_TOO_MANY_PLUGINS_MESSAGE = `A marketplace manifest may declare at most ${PLUGIN_MARKETPLACE_MAX_PLUGINS} plugins.`;
 const STANDARD_NAME_MAX_CHARS = 200;
@@ -423,16 +423,6 @@ function mapEntryRow(row: PluginMarketplaceEntryRow): PluginMarketplaceEntry {
     createdAt: toIso(row.created_at) ?? new Date(0).toISOString(),
     updatedAt: toIso(row.updated_at) ?? new Date(0).toISOString(),
   };
-}
-
-export function parseGithubRepositoryUrl(
-  repositoryUrl: string,
-): { owner: string; repo: string } | null {
-  const match = GITHUB_REPOSITORY_URL_PATTERN.exec(repositoryUrl.trim());
-  if (!match) return null;
-  const [, owner, repo] = match;
-  if (!owner || !repo) return null;
-  return { owner, repo };
 }
 
 async function resolveDefaultBranch(owner: string, repo: string): Promise<string> {

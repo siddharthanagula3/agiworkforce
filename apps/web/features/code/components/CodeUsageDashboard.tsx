@@ -2,8 +2,18 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { BarChart3, ChevronRight } from 'lucide-react';
-import { EmptyState, Spinner, Tabs, TabsContent, TabsList, TabsTrigger } from '@agiworkforce/ui';
+import { BarChart3, ChevronDown, ChevronRight } from 'lucide-react';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+  EmptyState,
+  Spinner,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@agiworkforce/ui';
 import {
   formatCredits,
   getModelMetadataById,
@@ -130,18 +140,53 @@ function Models({ rows }: { rows: readonly AccountUsageBreakdownRow[] }) {
 export function CodeUsageDashboard({
   planTier,
   linkOnly = false,
+  collapsed = false,
 }: {
   planTier: string | null;
   linkOnly?: boolean;
+  collapsed?: boolean;
 }) {
-  const metered = planTier !== null && !isFreeBillingPlanTier(planTier);
+  if (planTier === null || isFreeBillingPlanTier(planTier)) return null;
+
+  if (linkOnly) {
+    return (
+      <Link
+        href={CODE_ROUTES.usage}
+        data-testid="code-usage-link"
+        className="mt-6 flex min-h-11 items-center justify-between gap-3 rounded-xl border border-border px-4 text-left text-sm text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <span className="flex min-w-0 items-center gap-3">
+          <BarChart3 className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <span className="truncate">{COPY.label}</span>
+        </span>
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      </Link>
+    );
+  }
+
+  if (!collapsed) return <CodeUsageDetails />;
+
+  return (
+    <Collapsible className="mt-5 flex flex-col items-center">
+      <CollapsibleTrigger className="group inline-flex min-h-8 items-center gap-2 rounded-md px-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:min-h-11">
+        <BarChart3 className="h-4 w-4" aria-hidden="true" />
+        {COPY.label}
+        <ChevronDown className="h-4 w-4 group-data-[state=open]:rotate-180" aria-hidden="true" />
+      </CollapsibleTrigger>
+      <CollapsibleContent className="w-full">
+        <CodeUsageDetails />
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+function CodeUsageDetails() {
   const [tab, setTab] = useState<CodeUsageTab>('overview');
   const [range, setRange] = useState<CodeUsageRange>(DEFAULT_RANGE);
   const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState<LoadState>({ status: 'loading' });
 
   useEffect(() => {
-    if (!metered || linkOnly) return;
     const controller = new AbortController();
     setState({ status: 'loading' });
     const query = new URLSearchParams({
@@ -165,25 +210,7 @@ export function CodeUsageDashboard({
       }
     })();
     return () => controller.abort();
-  }, [metered, linkOnly, range, attempt]);
-
-  if (!metered) return null;
-
-  if (linkOnly) {
-    return (
-      <Link
-        href={CODE_ROUTES.usage}
-        data-testid="code-usage-link"
-        className="mt-6 flex min-h-11 items-center justify-between gap-3 rounded-xl border border-border px-4 text-left text-sm text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        <span className="flex min-w-0 items-center gap-3">
-          <BarChart3 className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <span className="truncate">{COPY.label}</span>
-        </span>
-        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-      </Link>
-    );
-  }
+  }, [range, attempt]);
 
   const history =
     state.status === 'ready' && state.history.totals.requests > 0 ? state.history : null;

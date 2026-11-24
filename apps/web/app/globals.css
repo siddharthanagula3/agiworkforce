@@ -1249,12 +1249,7 @@
     ):focus-visible {
     outline: none;
     box-shadow: inset 0 0 0 1.5px hsl(var(--foreground));
-  } /* The chat composer renders its own accent-colored focus ring on the
-   outer container (see ChatComposerNew.tsx `isFocused` state). Without
-   this override the generic *:focus-visible rule above also paints a
-   second, differently-colored outline directly on the textarea, producing
-   a visible double focus ring. The container ring is sufficient focus
-   affordance, so suppress the redundant inner outline here. */
+  }
   [data-composer-textarea]:focus-visible {
     outline: none;
   }

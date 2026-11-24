@@ -378,6 +378,35 @@ describe('background service worker security guards', () => {
       text: 'clear wording',
     };
 
+    it('binds same-origin iframe edits to the captured document, including after a reload', async () => {
+      const auth = await dispatch({ type: 'GET_CLOUD_AUTH_TOKEN', refresh: false });
+      const owner = auth['owner'];
+      const frame = { id: 3, url: `${SITE_A}/embedded-editor` };
+      const scripting = harness.chromeMock.scripting.executeScript;
+      const send = harness.chromeMock.tabs.sendMessage;
+      scripting.mockResolvedValue([{ documentId: base.documentId, result: frame.url }]);
+      send.mockClear();
+      send.mockResolvedValueOnce({ success: true, verified: true });
+
+      expect(await dispatch({ ...base, owner, frame })).toMatchObject({ success: true });
+      expect(scripting).toHaveBeenCalledWith(
+        expect.objectContaining({ target: { tabId: RUN_TAB_ID, frameIds: [frame.id] } }),
+      );
+      expect(send).toHaveBeenCalledWith(
+        RUN_TAB_ID,
+        expect.objectContaining({ pageUrl: frame.url, topUrl: base.pageUrl }),
+        { documentId: base.documentId },
+      );
+
+      send.mockClear();
+      scripting.mockResolvedValue([{ documentId: 'reloaded-document', result: frame.url }]);
+      expect(await dispatch({ ...base, owner, frame })).toMatchObject({ success: false });
+      expect(await dispatch({ ...base, owner, frame: { ...frame, url: SITE_B } })).toMatchObject({
+        success: false,
+      });
+      expect(send).not.toHaveBeenCalled();
+    });
+
     it('refuses to capture or write into a field on a site the user has not approved', async () => {
       const auth = await dispatch({ type: 'GET_CLOUD_AUTH_TOKEN', refresh: false });
       const owner = auth['owner'] as { accountId: string; authIncarnation: string };
@@ -1576,6 +1605,24 @@ describe('background service worker security guards', () => {
         success: false,
         error: 'This action requires the extension UI.',
       });
+    });
+
+    it('binds page control buttons to the active run and its top-level tab', async () => {
+      const runId = 'cu_run_page_buttons';
+      await startRun(runId);
+      const stop = { type: 'AGI_CU_USER_INPUT', command: 'stop', runId };
+      expect(await dispatch(stop, contentSender(55))).toMatchObject({ success: false });
+      expect(
+        await dispatch({ ...stop, runId: 'cu_run_stale' }, contentSender(RUN_TAB_ID)),
+      ).toMatchObject({ success: false });
+      expect(await dispatch(stop, { ...contentSender(RUN_TAB_ID), frameId: 1 })).toMatchObject({
+        success: false,
+      });
+      expect(
+        await dispatch({ ...stop, command: 'takeover' }, contentSender(RUN_TAB_ID)),
+      ).toMatchObject({ success: true });
+      expect(await dispatch(stop, contentSender(RUN_TAB_ID))).toMatchObject({ success: true });
+      expect(await dispatch(stop, contentSender(RUN_TAB_ID))).toMatchObject({ success: false });
     });
 
     it('stops a page from reporting input for a run it no longer belongs to', async () => {

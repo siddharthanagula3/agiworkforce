@@ -348,7 +348,7 @@ describe('production serialized DOM targeting', () => {
     },
   );
 
-  it('indexes, resolves, focuses and reads an actual iframe/open-shadow input without clicking', async () => {
+  it('indexes, resolves, and types in an actual iframe/open-shadow input without clicking', async () => {
     const { input } = framedInput('Frame name');
     input.value = 'Current actual value';
     const summary = await driver.getPageContent(42);
@@ -356,7 +356,6 @@ describe('production serialized DOM targeting', () => {
     const index = indexFor('Frame name');
     const locator = driver.resolveIndexedSelector(42, index)!;
     expect(locator).toContain('@agi-dom:');
-    expect(await driver.getFieldValue(42, locator)).toBe('Current actual value');
     await driver.type(
       42,
       'Attempted input',

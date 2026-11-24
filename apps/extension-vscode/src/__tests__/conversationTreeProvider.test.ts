@@ -8,7 +8,14 @@ import {
 } from '../features/trees/conversationTreeProvider';
 import { isSameWorkspacePath } from '../integrations/developerSessionValidation';
 import type { LocalRuntimeClient } from '../integrations/localRuntimeClient';
-import type { LocalRuntimePool } from '../integrations/localRuntimePool';
+import { LocalRuntimePool } from '../integrations/localRuntimePool';
+
+function mockProvider(pool: LocalRuntimePool): ConversationTreeProvider {
+  return new ConversationTreeProvider({
+    waitForRestart: async () => undefined,
+    ...pool,
+  } as LocalRuntimePool);
+}
 
 function thread(id: string, updatedAt: string, cwd: string): ThreadSummary {
   return {
@@ -32,6 +39,75 @@ describe('ConversationTreeProvider', () => {
       { name: 'a', index: 0, uri: vscode.Uri.file('/workspace/a') },
       { name: 'b', index: 1, uri: vscode.Uri.file('/workspace/b') },
     ];
+  });
+
+  it('archives only eligible threads from already-running workspaces', async () => {
+    const old = '2026-10-01T00:00:00Z';
+    const folder = '/workspace/a';
+    const runtime = {
+      offers: vi.fn().mockResolvedValue(true),
+      listThreads: vi.fn().mockResolvedValue({
+        threads: [
+          thread('stale', old, folder),
+          thread('grouped', old, folder),
+          thread('unread', old, folder),
+          thread('open', old, folder),
+          { ...thread('pinned', old, folder), pinned: true },
+          thread('recent', '2026-11-15T00:00:00Z', folder),
+          { ...thread('cloud', old, folder), location: 'cloud' },
+          { ...thread('running', old, folder), status: 'running' },
+          thread('different-workspace', old, '/workspace/b'),
+        ],
+      }),
+      archiveInactiveThread: vi.fn().mockResolvedValue({ archived: true }),
+    };
+    const pool = {
+      forWorkspace: vi.fn(),
+      peekWorkspace: vi.fn((cwd: string) => (cwd === folder ? runtime : undefined)),
+    };
+    const provider = mockProvider(pool as unknown as LocalRuntimePool);
+    const cutoff = new Date('2026-11-01T00:00:00Z');
+    await expect(
+      provider.archiveInactiveSessions(
+        cutoff,
+        () => true,
+        (id) => ['grouped', 'unread', 'open'].includes(id),
+      ),
+    ).resolves.toBe(1);
+    expect(pool.forWorkspace).not.toHaveBeenCalled();
+    expect(runtime.listThreads).toHaveBeenCalledWith(
+      expect.objectContaining({ includeCloud: false }),
+    );
+    expect(runtime.archiveInactiveThread).toHaveBeenCalledExactlyOnceWith({
+      threadId: 'stale',
+      inactiveBefore: cutoff.toISOString(),
+    });
+  });
+
+  it('does not automatically archive the first page when a later read fails', async () => {
+    const cwd = '/workspace/a';
+    const runtime = {
+      offers: vi.fn().mockResolvedValue(true),
+      listThreads: vi
+        .fn()
+        .mockResolvedValueOnce({
+          threads: [thread('stale', '2026-09-01T00:00:00Z', cwd)],
+          nextCursor: 'stale',
+        })
+        .mockRejectedValueOnce(new Error('Read interrupted.')),
+      archiveInactiveThread: vi.fn(),
+    };
+    const provider = mockProvider({
+      peekWorkspace: (path: string) => (path === cwd ? runtime : undefined),
+    } as unknown as LocalRuntimePool);
+    const cutoff = new Date('2026-10-01T00:00:00Z');
+    const archived = await provider.archiveInactiveSessions(
+      cutoff,
+      () => true,
+      () => false,
+    );
+    expect(archived).toBe(0);
+    expect(runtime.archiveInactiveThread).not.toHaveBeenCalled();
   });
 
   it('renders runtime-owned thread metadata and the open-session command', () => {
@@ -63,7 +139,7 @@ describe('ConversationTreeProvider', () => {
     vscode.workspace.workspaceFolders = [
       { name: 'a', index: 0, uri: vscode.Uri.file('/workspace/a') },
     ];
-    const provider = new ConversationTreeProvider({
+    const provider = mockProvider({
       forWorkspace: vi.fn(() => runtime as unknown as LocalRuntimeClient),
     } as unknown as LocalRuntimePool);
     const removed: string[] = [];
@@ -102,7 +178,7 @@ describe('ConversationTreeProvider', () => {
         (cwd: string) => (cwd.endsWith('/a') ? a : b) as unknown as LocalRuntimeClient,
       ),
     } as unknown as LocalRuntimePool;
-    const provider = new ConversationTreeProvider(pool);
+    const provider = mockProvider(pool);
 
     expect((await provider.getThreads()).map((value) => value.id)).toEqual(['new', 'old']);
     await provider.readThread('old');
@@ -128,7 +204,7 @@ describe('ConversationTreeProvider', () => {
     const pool = {
       forWorkspace: vi.fn(() => runtime as unknown as LocalRuntimeClient),
     } as unknown as LocalRuntimePool;
-    const provider = new ConversationTreeProvider(pool);
+    const provider = mockProvider(pool);
 
     await expect(provider.adoptAccountConversation(imported.id, '/workspace/a')).resolves.toBe(
       true,
@@ -159,16 +235,10 @@ describe('ConversationTreeProvider', () => {
     } as unknown as LocalRuntimePool;
 
     await expect(
-      new ConversationTreeProvider(refusingPool).adoptAccountConversation(
-        elsewhere.id,
-        '/workspace/a',
-      ),
+      mockProvider(refusingPool).adoptAccountConversation(elsewhere.id, '/workspace/a'),
     ).resolves.toBe(false);
     await expect(
-      new ConversationTreeProvider(misplacedPool).adoptAccountConversation(
-        elsewhere.id,
-        '/workspace/a',
-      ),
+      mockProvider(misplacedPool).adoptAccountConversation(elsewhere.id, '/workspace/a'),
     ).resolves.toBe(false);
   });
 
@@ -192,7 +262,7 @@ describe('ConversationTreeProvider', () => {
     const pool = {
       forWorkspace: vi.fn(() => runtime as unknown as LocalRuntimeClient),
     } as unknown as LocalRuntimePool;
-    const provider = new ConversationTreeProvider(pool);
+    const provider = mockProvider(pool);
 
     expect((await provider.getThreads()).map((value) => value.id)).toEqual(['cloud:5f1c']);
     expect(runtime.listThreads).toHaveBeenCalledWith(
@@ -216,7 +286,7 @@ describe('ConversationTreeProvider', () => {
     const pool = {
       forWorkspace: vi.fn(() => runtime as unknown as LocalRuntimeClient),
     } as unknown as LocalRuntimePool;
-    const provider = new ConversationTreeProvider(pool);
+    const provider = mockProvider(pool);
     const changed = vi.fn();
     provider.onDidChangeTreeData(changed);
     await provider.getThreads();
@@ -236,7 +306,7 @@ describe('ConversationTreeProvider', () => {
     const pool = {
       forWorkspace: vi.fn(() => runtime as unknown as LocalRuntimeClient),
     } as unknown as LocalRuntimePool;
-    const provider = new ConversationTreeProvider(pool);
+    const provider = mockProvider(pool);
     const changed = vi.fn();
     provider.onDidChangeTreeData(changed);
     await provider.getThreads();
@@ -266,7 +336,7 @@ describe('ConversationTreeProvider', () => {
     const pool = {
       forWorkspace: vi.fn(() => runtime as unknown as LocalRuntimeClient),
     } as unknown as LocalRuntimePool;
-    const provider = new ConversationTreeProvider(pool);
+    const provider = mockProvider(pool);
     const changed = vi.fn();
     provider.onDidChangeTreeData(changed);
     await provider.getThreads();
@@ -287,7 +357,7 @@ describe('ConversationTreeProvider', () => {
     const pool = {
       forWorkspace: vi.fn(() => runtime as unknown as LocalRuntimeClient),
     } as unknown as LocalRuntimePool;
-    const provider = new ConversationTreeProvider(pool);
+    const provider = mockProvider(pool);
 
     await expect(provider.forkThread('missing')).resolves.toBeNull();
     expect(runtime.forkThread).not.toHaveBeenCalled();
@@ -306,7 +376,7 @@ describe('ConversationTreeProvider', () => {
     const pool = {
       forWorkspace: vi.fn(() => runtime as unknown as LocalRuntimeClient),
     } as unknown as LocalRuntimePool;
-    const provider = new ConversationTreeProvider(pool);
+    const provider = mockProvider(pool);
 
     await provider.getThreads();
     await provider.getThreads();
@@ -328,7 +398,7 @@ describe('ConversationTreeProvider', () => {
     vscode.workspace.workspaceFolders = [
       { name: 'a', index: 0, uri: vscode.Uri.file('/workspace/a') },
     ];
-    const provider = new ConversationTreeProvider(pool);
+    const provider = mockProvider(pool);
 
     await expect(provider.getThreads()).resolves.toEqual([]);
     await expect(provider.resolveThread('foreign')).resolves.toBeUndefined();
@@ -352,7 +422,7 @@ describe('ConversationTreeProvider', () => {
     vscode.workspace.workspaceFolders = [
       { name: 'a', index: 0, uri: vscode.Uri.file('/workspace/a') },
     ];
-    const provider = new ConversationTreeProvider(pool);
+    const provider = mockProvider(pool);
     await provider.getThreads();
 
     await expect(provider.resolveThread('one')).rejects.toThrow('ownership metadata');
@@ -378,7 +448,7 @@ describe('ConversationTreeProvider', () => {
         (cwd: string) => (cwd.endsWith('/a') ? failing : healthy) as unknown as LocalRuntimeClient,
       ),
     } as unknown as LocalRuntimePool;
-    const provider = new ConversationTreeProvider(pool);
+    const provider = mockProvider(pool);
 
     const children = await provider.getChildren();
 
@@ -402,13 +472,35 @@ describe('ConversationTreeProvider', () => {
     vscode.workspace.workspaceFolders = [
       { name: 'a', index: 0, uri: vscode.Uri.file('/workspace/a') },
     ];
-    const provider = new ConversationTreeProvider(pool);
+    const provider = mockProvider(pool);
 
     const children = await provider.getChildren();
 
     expect(children).toHaveLength(1);
     expect(children[0]).toBeInstanceOf(ConversationTreeErrorItem);
     expect((children[0] as ConversationTreeErrorItem).reason).toContain('restarting');
+  });
+
+  it('waits for restart before replacing the visible session list', async () => {
+    const ready = Promise.withResolvers<void>();
+    const saved = thread('saved', '2026-07-14T00:00:00Z', '/workspace/a');
+    const listThreads = vi.fn().mockResolvedValue({ threads: [saved] });
+    const pool = new LocalRuntimePool(
+      () => ({ restart: () => ready.promise, listThreads }) as unknown as LocalRuntimeClient,
+    );
+    vscode.workspace.workspaceFolders = [
+      { name: 'a', index: 0, uri: vscode.Uri.file('/workspace/a') },
+    ];
+    pool.forWorkspace('/workspace/a');
+    const restart = pool.restartAll();
+    const provider = new ConversationTreeProvider(pool);
+    const listing = provider.getChildren();
+    await Promise.resolve();
+    expect(listThreads).not.toHaveBeenCalled();
+
+    ready.resolve();
+    await restart;
+    expect(await listing).toEqual([expect.objectContaining({ label: 'Session saved' })]);
   });
 
   it('clears the failure item once the listing succeeds again', async () => {
@@ -424,7 +516,7 @@ describe('ConversationTreeProvider', () => {
     vscode.workspace.workspaceFolders = [
       { name: 'a', index: 0, uri: vscode.Uri.file('/workspace/a') },
     ];
-    const provider = new ConversationTreeProvider(pool);
+    const provider = mockProvider(pool);
 
     expect(await provider.getChildren()).toHaveLength(1);
     expect((await provider.getChildren())[0]).toBeInstanceOf(ConversationTreeItem);
@@ -438,7 +530,7 @@ describe('ConversationTreeProvider', () => {
       vscode.workspace.workspaceFolders = [
         { name: 'a', index: 0, uri: vscode.Uri.file('/workspace/a') },
       ];
-      return new ConversationTreeProvider(pool);
+      return mockProvider(pool);
     }
 
     it('follows the continuation and routes sessions from later pages', async () => {
@@ -468,7 +560,7 @@ describe('ConversationTreeProvider', () => {
       await expect(provider.readThread('older')).resolves.toBeDefined();
     });
 
-    it('shows a continuation that never advances as a listing failure, not a truncated list', async () => {
+    it('keeps the earlier page and offers a retry when a continuation never advances', async () => {
       const listThreads = vi.fn().mockResolvedValue({
         threads: [thread('one', '2026-07-14T00:00:00Z', '/workspace/a')],
         nextCursor: 'c',
@@ -477,8 +569,10 @@ describe('ConversationTreeProvider', () => {
 
       const children = await provider.getChildren();
 
-      expect(children).toHaveLength(1);
+      expect(children).toHaveLength(2);
       expect(children[0]).toBeInstanceOf(ConversationTreeErrorItem);
+      expect(children[0]?.command?.command).toBe('agi-workforce.refreshConversations');
+      expect(children[1]).toMatchObject({ label: 'Session one' });
       expect(listThreads).toHaveBeenCalledTimes(2);
     });
   });
@@ -496,8 +590,30 @@ describe('ConversationTreeProvider', () => {
       vscode.workspace.workspaceFolders = [
         { name: 'a', index: 0, uri: vscode.Uri.file('/workspace/a') },
       ];
-      return new ConversationTreeProvider(pool);
+      return mockProvider(pool);
     }
+
+    it('finds an archived bookmark source without resuming the thread', async () => {
+      const saved = archived('bookmarked', '2026-06-01T00:00:00Z');
+      const listThreads = vi.fn().mockImplementation(async ({ includeArchived }) => ({
+        threads: includeArchived ? [saved] : [],
+      }));
+      const readThread = vi.fn().mockResolvedValue({
+        thread: saved,
+        messages: [{ role: 'assistant', text: 'Saved reply', index: 1 }],
+        transcriptTruncated: false,
+      });
+      const resumeThread = vi.fn();
+      const provider = singleFolderProvider({ listThreads, readThread, resumeThread });
+      await expect(
+        provider.resolveThread(saved.id, { includeArchived: true }),
+      ).resolves.toMatchObject({
+        response: { thread: saved, messages: [{ text: 'Saved reply' }] },
+      });
+      expect(listThreads).toHaveBeenCalledTimes(2);
+      expect(resumeThread).not.toHaveBeenCalled();
+      expect(readThread).toHaveBeenCalledOnce();
+    });
 
     it('follows the continuation past a first page of active sessions', async () => {
       const active = Array.from({ length: 100 }, (_, index) =>
@@ -534,7 +650,7 @@ describe('ConversationTreeProvider', () => {
       expect(items.map((item) => item.id)).toEqual(['newer', 'older']);
     });
 
-    it('reports a continuation that never advances as a listing failure', async () => {
+    it('keeps archived sessions from the first page when its continuation fails', async () => {
       const listThreads = vi
         .fn()
         .mockResolvedValue({ threads: [archived('one', '2026-07-01T00:00:00Z')], nextCursor: 'c' });
@@ -542,9 +658,10 @@ describe('ConversationTreeProvider', () => {
 
       const { items, failures } = await provider.getArchivedThreads();
 
-      expect(items).toEqual([]);
+      expect(items.map(({ id }) => id)).toEqual(['one']);
       expect(failures).toHaveLength(1);
       expect(failures[0]?.folderName).toBe('a');
+      expect(failures[0]?.partial).toBe(true);
       expect(listThreads).toHaveBeenCalledTimes(2);
     });
   });

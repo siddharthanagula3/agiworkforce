@@ -831,7 +831,7 @@ describe('browser tasks from the real composer functions', () => {
         kind: 'tool_result',
         stepNumber: 1,
         toolName: 'type',
-        toolResult: 'Typed into field [3]',
+        toolResult: 'Typed: "hunter2-secret"',
         actionOutcome: { status: 'succeeded' },
       },
     });

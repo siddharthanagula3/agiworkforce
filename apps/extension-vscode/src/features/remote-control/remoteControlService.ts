@@ -129,6 +129,7 @@ function toSession(rootId: string, thread: ThreadSummary): LocalDeveloperSession
     updatedAt: thread.updatedAt,
     origin: thread.createdBy,
     ...(thread.location === 'cloud' ? { location: 'cloud' as const } : {}),
+    ...(thread.location !== 'cloud' && thread.pinned === true ? { pinned: true as const } : {}),
   };
 }
 

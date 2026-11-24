@@ -18,6 +18,7 @@ import {
 } from '../features/surfaces';
 import { resolveAccountPresence, signIn } from '../features/surfaces/accountAccess';
 import { signInToAgiCloud } from '../features/account-auth/deviceAuth';
+import { clearAccountToken, setAccountToken } from '../utils/api';
 import { type LocalRuntimePool } from '../integrations/localRuntimePool';
 import { manageMcpServers } from '../features/surfaces/capabilityManagement';
 import type { McpServerDetailsProvider } from '../features/surfaces/mcpServerDetails';
@@ -44,8 +45,12 @@ function secretsWith(token: string | undefined): vscode.SecretStorage {
   if (token !== undefined) store.set('agiWorkforce.accountToken', token);
   return {
     get: async (key: string) => store.get(key),
-    store: async () => undefined,
-    delete: async () => undefined,
+    store: async (key: string, value: string) => {
+      store.set(key, value);
+    },
+    delete: async (key: string) => {
+      store.delete(key);
+    },
     onDidChange: () => ({ dispose: () => undefined }),
   } as unknown as vscode.SecretStorage;
 }
@@ -374,7 +379,7 @@ describe('single sign-in', () => {
     (vscode.workspace as { workspaceFolders: unknown }).workspaceFolders = undefined;
   });
 
-  it('prefers the identity the CLI already holds over the extension secret', async () => {
+  it('shows the CLI account when the editor has no existing session', async () => {
     const adapter = new CliCapabilityAdapter(
       poolWith({
         accountStatus: async () => ({ signedIn: true, email: 'dev@example.com', tier: 'max' }),
@@ -396,8 +401,31 @@ describe('single sign-in', () => {
     });
   });
 
+  it('keeps the account signed out after an explicit editor sign-out even when the CLI is signed in', async () => {
+    const accountStatus = vi.fn(async () => ({ signedIn: true, email: 'different@example.com' }));
+    const adapter = new CliCapabilityAdapter(poolWith({ accountStatus }));
+    const secrets = secretsWith('previous-editor-token');
+    await clearAccountToken(secrets);
+    await expect(resolveAccountPresence(secrets, adapter)).resolves.toEqual({
+      signedIn: false,
+      source: 'none',
+    });
+    expect(accountStatus).not.toHaveBeenCalled();
+  });
+
+  it('uses the editor sign-in flow when reauthentication is needed', async () => {
+    const startAccountLogin = vi.fn();
+    const adapter = new CliCapabilityAdapter(poolWith({ startAccountLogin }));
+    const secrets = secretsWith(undefined);
+    await setAccountToken(secrets, 'expired-editor-token', Date.now() - 1);
+    await signIn(secrets, adapter);
+    expect(signInToAgiCloud).toHaveBeenCalledWith(secrets);
+    expect(startAccountLogin).not.toHaveBeenCalled();
+  });
+
   it('opens the browser and waits for the CLI device grant before reporting a sign-in', async () => {
     const waited: string[] = [];
+    const secrets = secretsWith(undefined);
     const adapter = new CliCapabilityAdapter(
       poolWith({
         startAccountLogin: async () => ({
@@ -407,12 +435,13 @@ describe('single sign-in', () => {
         }),
         waitForAccountLogin: async (loginId: string) => {
           waited.push(loginId);
+          await setAccountToken(secrets, 'fixture-confirmed-token');
           return { outcome: 'completed', account: { signedIn: true } };
         },
       }),
     );
 
-    await expect(signIn(secretsWith(undefined), adapter)).resolves.toBe(true);
+    await expect(signIn(secrets, adapter)).resolves.toBe(true);
 
     expect(waited).toEqual(['login-1']);
     expect(vscode.env.openExternal).toHaveBeenCalled();

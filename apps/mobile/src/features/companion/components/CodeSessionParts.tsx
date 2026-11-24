@@ -214,6 +214,11 @@ export function CodeApprovalCard({
   onAnswer: (approved: boolean) => void;
 }) {
   const colors = useThemeColors();
+  const metadata = [
+    approval.kind === 'Exec' ? COPY.commandApproval : approval.kind,
+    approval.riskLevel && COPY.approvalRisk[approval.riskLevel],
+    approval.reversible === false && COPY.irreversibleApproval,
+  ].filter(Boolean);
 
   return (
     <Card variant="elevated" style={{ gap: 10 }}>
@@ -233,6 +238,11 @@ export function CodeApprovalCard({
           {approval.summary}
         </Text>
       </View>
+      {metadata.length > 0 && (
+        <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}>
+          {metadata.join(' · ')}
+        </Text>
+      )}
       {approval.detail ? (
         <Text
           variant="mono"
@@ -242,6 +252,14 @@ export function CodeApprovalCard({
           {approval.detail}
         </Text>
       ) : null}
+      {approval.truncated && (
+        <Text
+          accessibilityRole="alert"
+          style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}
+        >
+          {COPY.approvalPreviewIncomplete}
+        </Text>
+      )}
       <HoldNotice hold={hold} />
       <View style={{ flexDirection: 'row', gap: 8 }}>
         <PressableBox
@@ -268,28 +286,30 @@ export function CodeApprovalCard({
             Deny
           </Text>
         </PressableBox>
-        <PressableBox
-          onPress={() => onAnswer(true)}
-          accessibilityRole="button"
-          accessibilityLabel={`Approve ${approval.summary}`}
-          style={{
-            flex: 1,
-            minHeight: 44,
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 6,
-            borderRadius: radii.lg,
-            backgroundColor: colors.teal,
-          }}
-        >
-          <Check size={14} color={colors.accentText} />
-          <Text
-            style={{ color: colors.accentText, fontSize: typeScale.subhead, fontWeight: '600' }}
+        {!approval.truncated && (
+          <PressableBox
+            onPress={() => onAnswer(true)}
+            accessibilityRole="button"
+            accessibilityLabel={`Approve ${approval.summary}`}
+            style={{
+              flex: 1,
+              minHeight: 44,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+              borderRadius: radii.lg,
+              backgroundColor: colors.teal,
+            }}
           >
-            Approve
-          </Text>
-        </PressableBox>
+            <Check size={14} color={colors.accentText} />
+            <Text
+              style={{ color: colors.accentText, fontSize: typeScale.subhead, fontWeight: '600' }}
+            >
+              Approve
+            </Text>
+          </PressableBox>
+        )}
       </View>
     </Card>
   );

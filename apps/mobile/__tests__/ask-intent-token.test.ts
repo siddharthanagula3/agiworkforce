@@ -74,6 +74,7 @@ function loadContext() {
         siri: typeof import('../src/features/siri/askIntentToken');
         account: typeof import('../src/features/auth/services/cloudAccountSession');
         secureStore: typeof import('expo-secure-store');
+        secureFetch: typeof import('@/services/secureFetch').secureFetch;
         mode: typeof import('../src/features/chat/store/appModeStore').useChatAppModeStore;
       }
     | undefined;
@@ -85,6 +86,7 @@ function loadContext() {
       siri: require('../src/features/siri/askIntentToken'),
       account,
       secureStore: require('expo-secure-store'),
+      secureFetch: require('@/services/secureFetch').secureFetch,
       mode: require('@/src/features/chat/store/appModeStore').useChatAppModeStore,
     };
     jest.mocked(context.secureStore.setItemAsync).mockReset().mockResolvedValue(undefined);
@@ -554,6 +556,66 @@ describe('Ask from Siri ordinary-operation ownership', () => {
     expect(mockDelete).not.toHaveBeenCalled();
     expect(secureStore.setItemAsync).not.toHaveBeenCalled();
     expect(secureStore.deleteItemAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it('targets the old Siri token and preserves its replacement after a slow revocation', async () => {
+    const { siri, account, secureStore, secureFetch } = loadContext();
+    mockPost.mockResolvedValueOnce(TOKEN_A).mockResolvedValueOnce(TOKEN_B);
+    await siri.enableAskFromSiri();
+    const revoke = deferred<Response>();
+    const requested = deferred<string>();
+    jest.mocked(secureFetch).mockImplementationOnce((url) => {
+      requested.resolve(String(url));
+      return revoke.promise;
+    });
+
+    let endingSession = true;
+    const cleanup = siri.revokeAskIntentForSignOut('old-clerk-token', () => endingSession);
+    const endpoint = new URL(await requested.promise);
+    expect(endpoint.searchParams.get('tokenId')).toBe(TOKEN_A.tokenId);
+    endingSession = false;
+    account.activateCloudAccount('account-b');
+    await siri.enableAskFromSiri();
+    revoke.resolve({ ok: true } as Response);
+    await cleanup;
+
+    expect(secureStore.deleteItemAsync).not.toHaveBeenCalled();
+    expect(mockStorage.get('ask-from-siri-token-id-v1')).toBe(TOKEN_B.tokenId);
+    expect(siri.isAskFromSiriEnabled()).toBe(true);
+  });
+
+  it('publishes a replacement Siri token after an in-flight sign-out keychain deletion', async () => {
+    const { siri, account, secureStore } = loadContext();
+    mockPost.mockResolvedValueOnce(TOKEN_A);
+    await siri.enableAskFromSiri();
+    const removal = deferred<void>();
+    const removing = deferred<void>();
+    let keychainToken: string | null = TOKEN_A.token;
+    jest.mocked(secureStore.deleteItemAsync).mockImplementationOnce(async () => {
+      removing.resolve(undefined);
+      await removal.promise;
+      keychainToken = null;
+    });
+    jest.mocked(secureStore.setItemAsync).mockImplementationOnce(async (_key, token) => {
+      keychainToken = token;
+    });
+    const cleanup = siri.revokeAskIntentForSignOut('');
+    await removing.promise;
+
+    account.activateCloudAccount('account-b');
+    const issue = deferIssue();
+    const replacement = siri.enableAskFromSiri();
+    await issue.started;
+    issue.resolve(TOKEN_B);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(secureStore.setItemAsync).toHaveBeenCalledTimes(1);
+    removal.resolve(undefined);
+    await Promise.all([cleanup, replacement]);
+
+    expect(secureStore.setItemAsync).toHaveBeenCalledTimes(2);
+    expect(keychainToken).toBe(TOKEN_B.token);
+    expect(mockStorage.get('ask-from-siri-token-id-v1')).toBe(TOKEN_B.tokenId);
+    expect(siri.isAskFromSiriEnabled()).toBe(true);
   });
 
   it('does not let a retired pending-revoke result clear replacement markers', async () => {

@@ -7,6 +7,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
 import {
   Bot,
+  CalendarClock,
   ChevronRight,
   CreditCard,
   DollarSign,
@@ -87,6 +88,7 @@ const SEARCH_RESULT_TYPES: Readonly<
   artifact: { icon: Shapes, label: 'Artifact' },
   research_report: { icon: Telescope, label: 'Research report' },
   developer_session: { icon: SquareTerminal, label: 'Code session' },
+  schedule: { icon: CalendarClock, label: 'Scheduled' },
 };
 
 type SearchTypeFilterId = 'all' | 'chats' | 'projects' | 'files';

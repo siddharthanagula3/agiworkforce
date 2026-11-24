@@ -5,6 +5,7 @@ import {
   BYPASS_CONFIRM_ACTION,
   MAX_BYPASS_CANCEL_ACTION,
   MAX_BYPASS_CONFIRM_ACTION,
+  allowedAgentEffort,
   enforceAgentModeConsent,
   initializeAgentModeConsent,
   reconcileAgentControlConsent,
@@ -202,6 +203,7 @@ describe('agent-mode bypass consent', () => {
       title: BYPASS_CONFIRM_ACTION,
     });
     await setAgentModeWithConsent(context, 'bypass');
+    expect(allowedAgentEffort('max', 'bypass')).toBe('high');
     vi.mocked(vscode.window.showWarningMessage).mockClear();
     vi.mocked(vscode.window.showWarningMessage).mockResolvedValueOnce({
       title: MAX_BYPASS_CONFIRM_ACTION,
@@ -211,6 +213,7 @@ describe('agent-mode bypass consent', () => {
     await expect(setAgentEffortWithConsent(context, 'max')).resolves.toBe(true);
 
     expect(config.effort()).toBe('max');
+    expect(allowedAgentEffort('max', 'bypass')).toBe('max');
     expect(vscode.window.showWarningMessage).toHaveBeenCalledOnce();
   });
 

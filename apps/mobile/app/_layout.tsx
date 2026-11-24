@@ -520,6 +520,10 @@ export default function RootLayout() {
   const termsStatus = useTermsAcceptanceStore((s) => s.status);
   const eligibilityUserId = useAdultEligibilityStore((s) => s.userId);
   const eligibilityStatus = useAdultEligibilityStore((s) => s.status);
+  const accountAgeConfirmed = isAdultEligibilityConfirmed(
+    { userId: eligibilityUserId, status: eligibilityStatus },
+    clerkUserId,
+  );
   const cloudAnswerOwed =
     Boolean(clerkUserId) &&
     (termsStatus === 'required' ||
@@ -535,6 +539,7 @@ export default function RootLayout() {
   const [linkArrival, setLinkArrival] = useState<LinkArrival | null>(null);
   const linkArrivalCount = useRef(0);
   const initialLinkRead = useRef(false);
+  const initialNotificationRead = useRef(false);
   const handledPairingArrival = useRef(0);
   const handledIntentArrival = useRef(0);
   const handledResetArrival = useRef(0);
@@ -686,13 +691,18 @@ export default function RootLayout() {
   // the cold-start check are wired in every mode and without an account
   // (MOBILE-053). Neither path asks the OS for permission (MOBILE-021).
   useEffect(() => {
-    if (!isInitialized) return;
-    const removeListeners = setupNotificationListeners();
+    if (!isInitialized || (authEnabled && !isClerkLoaded)) return;
+    return setupNotificationListeners();
+  }, [authEnabled, isClerkLoaded, isInitialized]);
+
+  useEffect(() => {
+    if (!isInitialized || (authEnabled && !isClerkLoaded) || initialNotificationRead.current)
+      return;
+    initialNotificationRead.current = true;
     void handleInitialNotification().catch((err) => {
       console.warn('[RootLayout] Initial notification handling failed:', err);
     });
-    return removeListeners;
-  }, [isInitialized]);
+  }, [authEnabled, isClerkLoaded, isInitialized]);
 
   usePushTokenAccountRegistration({ isClerkSignedIn, clerkUserId, isCloud, isInitialized });
 
@@ -731,7 +741,8 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (!isInitialized || !isMmkvReady) return;
-    if (cloudAnswerOwed && isCloud && isAgeGateConfirmed() && segments[0] !== '(auth)') {
+    const ageGateConfirmed = isAgeGateConfirmed(authEnabled && accountAgeConfirmed);
+    if (cloudAnswerOwed && isCloud && ageGateConfirmed && segments[0] !== '(auth)') {
       router.replace(beginCloudPostAuthIntent());
       return;
     }
@@ -741,7 +752,7 @@ export default function RootLayout() {
       isClerkLoaded,
       isClerkSignedIn,
       onboardingDone: Boolean(storage.getString('onboarding-done')),
-      ageGateConfirmed: isAgeGateConfirmed(),
+      ageGateConfirmed,
       signInOwedForEndedSession: isSignInOwedForEndedSession(),
       addingAccount: isCloudAccountAdditionOpenFor(clerkUserId),
     });
@@ -770,6 +781,7 @@ export default function RootLayout() {
     segments,
     router,
     authEnabled,
+    accountAgeConfirmed,
     cloudAnswerOwed,
     eligibilityStatus,
     isCloud,
@@ -835,14 +847,14 @@ export default function RootLayout() {
 
   const appRouteBlocked =
     isMmkvReady &&
-    ((cloudAnswerOwed && isCloud && isAgeGateConfirmed()) ||
+    ((cloudAnswerOwed && isCloud && isAgeGateConfirmed(authEnabled && accountAgeConfirmed)) ||
       resolveRootRedirect({
         segments: ['(app)'],
         authEnabled,
         isClerkLoaded,
         isClerkSignedIn,
         onboardingDone: Boolean(storage.getString('onboarding-done')),
-        ageGateConfirmed: isAgeGateConfirmed(),
+        ageGateConfirmed: isAgeGateConfirmed(authEnabled && accountAgeConfirmed),
         signInOwedForEndedSession: isSignInOwedForEndedSession(),
         addingAccount: isCloudAccountAdditionOpenFor(clerkUserId),
       }) !== null);
@@ -990,10 +1002,14 @@ export default function RootLayout() {
                 compiled in. Must wrap Slot, not sit beside it. */}
             <ThemeVars>
               <TextScaleBoundary>
-                <Slot />
+                <View style={{ flex: 1 }}>
+                  <OfflineBanner />
+                  <SafeAreaProvider>
+                    <Slot />
+                  </SafeAreaProvider>
+                </View>
               </TextScaleBoundary>
             </ThemeVars>
-            <OfflineBanner />
             <CloudSyncErrorNotice />
             <ToastHost />
             <ActionMenuHost />

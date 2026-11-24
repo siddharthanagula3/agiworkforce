@@ -207,7 +207,7 @@ ${LOCAL_CAPABILITY_TABS.map(
 
       .settings-shell {
         display: grid;
-        grid-template-columns: minmax(190px, 232px) minmax(0, 1fr);
+        grid-template-columns: minmax(176px, 208px) minmax(0, 1fr);
         min-height: 100vh;
       }
 
@@ -216,9 +216,9 @@ ${LOCAL_CAPABILITY_TABS.map(
         top: 0;
         align-self: start;
         height: 100vh;
-        padding: 24px 14px;
+        padding: 26px 12px;
         border-right: 1px solid var(--vscode-panel-border);
-        background: var(--vscode-sideBar-background);
+        background: var(--vscode-editor-background);
         overflow-y: auto;
       }
 
@@ -226,13 +226,13 @@ ${LOCAL_CAPABILITY_TABS.map(
         display: flex;
         align-items: center;
         gap: 10px;
-        padding: 0 8px 20px;
+        padding: 0 8px 16px;
       }
 
       .brand-mark {
         display: block;
-        width: 30px;
-        height: 30px;
+        width: 20px;
+        height: 20px;
         flex: none;
         object-fit: contain;
       }
@@ -248,31 +248,13 @@ ${LOCAL_CAPABILITY_TABS.map(
         font-weight: 650;
       }
 
-      .brand-subtitle {
-        display: block;
-        margin-top: 1px;
-        color: var(--vscode-descriptionForeground);
-        font-size: var(--type-caption-size);
-        line-height: var(--type-caption-height);
-      }
-
-      .nav-label {
-        margin: 6px 10px 8px;
-        color: var(--vscode-descriptionForeground);
-        font-size: var(--type-caption-size);
-        line-height: var(--type-caption-height);
-        font-weight: 700;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-      }
-
       .nav-rail {
         position: relative;
       }
 
       .nav {
         display: grid;
-        gap: 12px;
+        gap: 16px;
       }
 
       .nav-overflow-button {
@@ -289,16 +271,15 @@ ${LOCAL_CAPABILITY_TABS.map(
         color: var(--vscode-descriptionForeground);
         font-size: var(--type-caption-size);
         line-height: var(--type-caption-height);
-        font-weight: 700;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
+        font-weight: 600;
       }
 
       .nav-button {
         width: 100%;
-        padding: 8px 10px;
+        min-height: var(--control-lg);
+        padding: 6px 10px;
         border: 0;
-        border-radius: var(--corner-control);
+        border-radius: var(--corner-field);
         color: var(--vscode-sideBar-foreground);
         background: transparent;
         text-align: left;
@@ -310,8 +291,8 @@ ${LOCAL_CAPABILITY_TABS.map(
       }
 
       .nav-button[aria-current='page'] {
-        color: var(--vscode-list-activeSelectionForeground);
-        background: var(--vscode-list-activeSelectionBackground);
+        color: var(--vscode-list-inactiveSelectionForeground, var(--vscode-editor-foreground));
+        background: var(--vscode-list-inactiveSelectionBackground);
         font-weight: 600;
       }
 
@@ -337,7 +318,7 @@ ${LOCAL_CAPABILITY_TABS.map(
 
       .content {
         width: min(100%, 980px);
-        padding: 40px clamp(28px, 5vw, 68px) 64px;
+        padding: 32px clamp(24px, 4vw, 56px) 64px;
       }
 
       .page-header {
@@ -346,16 +327,6 @@ ${LOCAL_CAPABILITY_TABS.map(
         justify-content: space-between;
         gap: 24px;
         margin-bottom: 26px;
-      }
-
-      .page-kicker {
-        margin: 0 0 7px;
-        color: var(--vscode-descriptionForeground);
-        font-size: var(--type-caption-size);
-        line-height: var(--type-caption-height);
-        font-weight: 700;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
       }
 
       .page-title {
@@ -398,8 +369,7 @@ ${LOCAL_CAPABILITY_TABS.map(
       }
 
       .status {
-        min-height: 20px;
-        margin: -12px 0 12px;
+        margin: -10px 0 12px;
         color: var(--vscode-descriptionForeground);
         font-size: var(--type-body-small-size);
         line-height: var(--type-body-small-height);
@@ -481,6 +451,8 @@ ${LOCAL_CAPABILITY_TABS.map(
         white-space: nowrap;
       }
 
+      .status:empty { margin: 0; }
+
       .override-notice {
         margin-bottom: 18px;
         padding: 12px 14px;
@@ -513,15 +485,25 @@ ${LOCAL_CAPABILITY_TABS.map(
       }
 
       .card {
-        margin-bottom: 14px;
+        margin-bottom: 26px;
+      }
+
+      .diagnostic-card {
         border: 1px solid var(--vscode-panel-border);
         border-radius: var(--corner-field);
         background: var(--vscode-editorWidget-background);
-        overflow: hidden;
+      }
+
+      .section {
+        --field-inset: 0px;
+      }
+
+      .section .diagnostic-card {
+        --field-inset: 18px;
       }
 
       .card-heading {
-        padding: var(--field-block) var(--field-inset) 10px;
+        padding: 0 var(--field-inset) 10px;
         border-bottom: 1px solid var(--vscode-panel-border);
       }
 
@@ -1124,7 +1106,6 @@ ${LOCAL_CAPABILITY_TABS.map(
           padding: 0 2px 10px;
         }
 
-        .nav-label,
         .sidebar-footer {
           display: none;
         }
@@ -1151,8 +1132,7 @@ ${LOCAL_CAPABILITY_TABS.map(
           border: 1px solid var(--vscode-panel-border);
           border-radius: var(--corner-control);
           color: var(--vscode-sideBar-foreground);
-          background: var(--vscode-sideBar-background);
-          box-shadow: 0 0 10px 6px var(--vscode-sideBar-background);
+          background: var(--vscode-editor-background);
           cursor: pointer;
         }
 
@@ -1285,18 +1265,14 @@ ${LOCAL_CAPABILITY_TABS.map(
     <div class="settings-shell">
       <aside class="sidebar" aria-label="Settings navigation">
         <div class="brand">
-          ${markUri ? `<img class="brand-mark" src="${markUri}" alt="" width="30" height="30" />` : ''}
-          <span class="brand-copy">
-            <span class="brand-title">AGI Settings</span>
-            <span class="brand-subtitle">VS Code extension</span>
-          </span>
+          ${markUri ? `<img class="brand-mark" src="${markUri}" alt="" width="20" height="20" />` : ''}
+          <span class="brand-title">AGI Settings</span>
         </div>
-        <p class="nav-label">Settings</p>
         <div class="nav-rail">
         <nav class="nav" id="settingsNav" aria-label="Settings sections">
           <div class="nav-group" role="group" aria-labelledby="nav-workspace-label">
             <span class="nav-group-label" id="nav-workspace-label">Workspace</span>
-            <button class="nav-button" type="button" data-section="general">Session</button>
+            <button class="nav-button" type="button" data-section="general">General</button>
             <button class="nav-button" type="button" data-section="configuration">Runtime</button>
             <button class="nav-button" type="button" data-section="personalization">Instructions &amp; editor</button>
             <button class="nav-button" type="button" data-section="usage">Usage &amp; billing</button>
@@ -1344,15 +1320,13 @@ ${LOCAL_CAPABILITY_TABS.map(
       <main class="content">
         <header class="page-header">
           <div>
-            <p class="page-kicker">Workspace-scoped developer tools</p>
             <h1 class="page-title" id="pageTitle" tabindex="-1">Settings</h1>
             <p class="page-description" id="pageDescription">
               Configure how AGI works in VS Code. Changes are stored in your VS Code user settings.
             </p>
           </div>
           <div class="scope-stack" aria-label="Configuration scope">
-            <span class="pill">User settings</span>
-            <span class="pill" id="trustPill">Trusted workspace</span>
+            <span class="pill" id="trustPill" hidden>Trusted workspace</span>
           </div>
         </header>
 
@@ -1363,13 +1337,12 @@ ${LOCAL_CAPABILITY_TABS.map(
           <div class="card">
             <div class="card-heading">
               <h3>Model and reasoning</h3>
-              <p>The local runtime remains the owner of workspace chat and tool execution.</p>
             </div>
             <div class="setting-row">
               <div>
                 <label class="setting-name" for="setting-model">Model preference</label>
                 <span class="setting-description">
-                  Auto selects from models admitted for the active Local, provider BYOK, or Managed Cloud boundary. Managed Cloud availability follows the signed-in AGI plan.
+                  Auto chooses a model for the current session. Cloud model availability depends on your plan.
                 </span>
               </div>
               <div class="control-stack">
@@ -1485,6 +1458,26 @@ ${LOCAL_CAPABILITY_TABS.map(
             </div>
             <div class="setting-row">
               <div>
+                <label class="setting-name" for="setting-escape-stops">Escape stops response</label>
+                <span class="setting-description">Stop the active turn from the composer when no menu is open.</span>
+              </div>
+              <label class="toggle" title="Escape stops response">
+                <input id="setting-escape-stops" data-setting="composer.escapeStops" data-kind="boolean" type="checkbox" />
+                <span class="toggle-track" aria-hidden="true"></span>
+              </label>
+            </div>
+            <div class="setting-row">
+              <div>
+                <label class="setting-name" for="setting-focus-view">Focus view</label>
+                <span class="setting-description">Keep tool activity collapsed until you open it. Plans, approvals, and questions stay visible.</span>
+              </div>
+              <label class="toggle">
+                <input id="setting-focus-view" data-setting="chat.focusView" data-kind="boolean" type="checkbox" />
+                <span class="toggle-track" aria-hidden="true"></span>
+              </label>
+            </div>
+            <div class="setting-row">
+              <div>
                 <label class="setting-name" for="setting-context-lines">Context lines</label>
                 <span class="setting-description">
                   Surrounding editor lines included with cloud-backed utility requests.
@@ -1534,6 +1527,26 @@ ${LOCAL_CAPABILITY_TABS.map(
             </div>
             <div class="setting-row">
               <div>
+                <label class="setting-name" for="setting-chat-location">Open chat in</label>
+                <span class="setting-description">Choose where Open Chat opens when terminal mode is off.</span>
+              </div>
+              <select class="select-input" id="setting-chat-location" data-setting="chatLocation" data-kind="string">
+                <option value="sidebar">Sidebar</option>
+                <option value="editor">Editor tab</option>
+              </select>
+            </div>
+            <div class="setting-row">
+              <div>
+                <label class="setting-name" for="setting-lock-chat-groups">Lock chat editor groups</label>
+                <span class="setting-description">Keep dedicated AGI Chat tabs together so regular files open in another editor group.</span>
+              </div>
+              <label class="toggle" title="Lock chat editor groups">
+                <input id="setting-lock-chat-groups" data-setting="chat.lockEditorGroups" data-kind="boolean" type="checkbox" />
+                <span class="toggle-track" aria-hidden="true"></span>
+              </label>
+            </div>
+            <div class="setting-row">
+              <div>
                 <label class="setting-name" for="setting-use-terminal">Use terminal</label>
                 <span class="setting-description">Open the AGI CLI in the integrated terminal instead of the native UI.</span>
               </div>
@@ -1544,6 +1557,16 @@ ${LOCAL_CAPABILITY_TABS.map(
                   data-kind="boolean"
                   type="checkbox"
                 />
+                <span class="toggle-track" aria-hidden="true"></span>
+              </label>
+            </div>
+            <div class="setting-row">
+              <div>
+                <label class="setting-name" for="setting-python-environment">Use the selected Python environment</label>
+                <span class="setting-description">Activate the workspace's Python environment in new AGI terminals. Requires the Python Environments extension.</span>
+              </div>
+              <label class="toggle" title="Use the selected Python environment">
+                <input id="setting-python-environment" data-setting="terminal.usePythonEnvironment" data-kind="boolean" type="checkbox" />
                 <span class="toggle-track" aria-hidden="true"></span>
               </label>
             </div>
@@ -1752,7 +1775,7 @@ ${LOCAL_CAPABILITY_TABS.map(
             <div class="setting-row">
               <div>
                 <label class="setting-name" for="setting-editor-context">Attach the active editor</label>
-                <span class="setting-description">Send the open file, the current selection and that file's problems with each turn.</span>
+                <span class="setting-description">Control automatic attachments for the open file, selected text, and problems.</span>
               </div>
               <label class="toggle" title="Attach the active editor">
                 <input
@@ -1761,6 +1784,36 @@ ${LOCAL_CAPABILITY_TABS.map(
                   data-kind="boolean"
                   type="checkbox"
                 />
+                <span class="toggle-track" aria-hidden="true"></span>
+              </label>
+            </div>
+            <div class="setting-row">
+              <div>
+                <label class="setting-name" for="setting-editor-open-file">Attach the open file</label>
+                <span class="setting-description">Add the current file to chat automatically.</span>
+              </div>
+              <label class="toggle" title="Attach the open file">
+                <input id="setting-editor-open-file" data-setting="editorContext.attachOpenFile" data-kind="boolean" type="checkbox" />
+                <span class="toggle-track" aria-hidden="true"></span>
+              </label>
+            </div>
+            <div class="setting-row">
+              <div>
+                <label class="setting-name" for="setting-save-open-file">Save the attached file before sending</label>
+                <span class="setting-description">Save changes in the open text file attached to chat so AGI's tools can read the same version.</span>
+              </div>
+              <label class="toggle" title="Save the attached file before sending">
+                <input id="setting-save-open-file" data-setting="editorContext.saveOpenFileBeforeSend" data-kind="boolean" type="checkbox" />
+                <span class="toggle-track" aria-hidden="true"></span>
+              </label>
+            </div>
+            <div class="setting-row">
+              <div>
+                <label class="setting-name" for="setting-editor-selection">Attach selected text</label>
+                <span class="setting-description">Include the highlighted code as a separate attachment.</span>
+              </div>
+              <label class="toggle" title="Attach selected text">
+                <input id="setting-editor-selection" data-setting="editorContext.attachSelection" data-kind="boolean" type="checkbox" />
                 <span class="toggle-track" aria-hidden="true"></span>
               </label>
             </div>
@@ -2077,11 +2130,11 @@ ${capabilityTabs}
         <section class="section" id="section-hooks" data-settings-section="hooks" hidden>
           <div class="card">
             <div class="empty-capability">
-              <h3>No hooks found</h3>
-              <p>Configure hooks through the local AGI CLI.</p>
+              <h3>Local automation</h3>
+              <p>View and manage commands configured for AGI CLI events.</p>
               <div class="action-row">
-                <button class="secondary-button" type="button" data-command="openDocs">
-                  Open AGI docs
+                <button class="secondary-button" type="button" data-command="showHooks">
+                  Manage hooks
                 </button>
               </div>
             </div>
@@ -2203,8 +2256,8 @@ ${capabilityTabs}
         var navScrollForward = document.getElementById('navScrollForward');
         var sectionCopy = {
           general: {
-            title: 'Session',
-            description: 'Configure the model, autonomy, reasoning, and session defaults used by AGI in VS Code.'
+            title: 'General',
+            description: 'Set your defaults for models, approvals, and the composer.'
           },
           configuration: {
             title: 'Runtime',
@@ -2245,8 +2298,13 @@ ${capabilityTabs}
           cliPath: 'CLI path',
           'composer.followUpBehavior': 'Active-turn send',
           'composer.enterBehavior': 'Send key',
+          'composer.escapeStops': 'Escape stops response',
+          'chat.focusView': 'Focus view',
           contextLines: 'Context lines',
           'editorContext.autoAttach': 'Editor context',
+          'editorContext.attachOpenFile': 'Open file context',
+          'editorContext.saveOpenFileBeforeSend': 'Save the attached file before sending',
+          'editorContext.attachSelection': 'Selected text context',
           respectGitIgnore: 'Respect .gitignore',
           telemetryEnabled: 'Telemetry',
           'memory.enabled': 'Memory',
@@ -2260,7 +2318,10 @@ ${capabilityTabs}
           'agent.effort': 'Reasoning effort',
           'agent.thinking': 'Extended thinking',
           activateOnStartup: 'Startup connection',
-          useTerminal: 'Use terminal'
+          chatLocation: 'Open chat in',
+          'chat.lockEditorGroups': 'Lock chat editor groups',
+          useTerminal: 'Use terminal',
+          'terminal.usePythonEnvironment': 'Use the selected Python environment'
         };
 
         function setStatus(message, kind) {
@@ -2296,6 +2357,9 @@ ${capabilityTabs}
 
         function setSection(section, moveFocus) {
           if (!sectionCopy[section]) return;
+          if (activeSection !== section && document.getElementById('status').dataset.kind !== 'error') {
+            setStatus('');
+          }
           activeSection = section;
           document.querySelectorAll('[data-settings-section]').forEach(function (panel) {
             panel.hidden = panel.getAttribute('data-settings-section') !== section;
@@ -2326,12 +2390,8 @@ ${capabilityTabs}
           document.getElementById('pageTitle').textContent = sectionCopy[section].title;
           document.getElementById('pageDescription').textContent = sectionCopy[section].description;
           if (moveFocus) {
-            // The per-section <h2> blocks were removed: they restated the same
-            // title and description the JS-driven page header already sets, so
-            // every section rendered its heading twice, stacked. #pageTitle is
-            // now the single heading and therefore the focus target.
-            var heading = document.getElementById('pageTitle');
-            if (heading) heading.focus();
+            if (document.scrollingElement) document.scrollingElement.scrollTop = 0;
+            document.getElementById('pageTitle').focus({ preventScroll: true });
           }
         }
 
@@ -2736,6 +2796,7 @@ ${capabilityTabs}
             ? 'Trusted workspace'
             : 'Restricted workspace';
           trustPill.classList.toggle('warning', !state.workspaceTrusted);
+          trustPill.hidden = state.workspaceTrusted;
 
           var overrideNotice = document.getElementById('overrideNotice');
           if (state.workspaceOverrides.length > 0) {
@@ -3001,6 +3062,8 @@ ${capabilityTabs}
             applySnapshot(message.state);
           } else if (message.type === 'settings.saved') {
             setStatus((settingLabels[message.key] || message.key) + ' saved.');
+          } else if (message.type === 'settings.capability.saved') {
+            setStatus(message.message);
           } else if (message.type === 'settings.instructions.saved') {
             if (
               (message.scope === 'host' || message.scope === 'workspace') &&

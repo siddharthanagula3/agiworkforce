@@ -14,6 +14,9 @@ use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
+const CHANGED_DURING_EDIT: &str =
+    "Notebook changed while this edit was pending. Read it again before attempting to edit it.";
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum NotebookEditMode {
@@ -44,8 +47,7 @@ impl CellKind {
 pub struct NotebookEditRequest {
     pub path: String,
     pub mode: NotebookEditMode,
-    /// One of: cell_id, index, or position-relative. Insert: position only.
-    /// Replace/Delete: cell_id preferred, falls back to index.
+    /// A cell to replace, delete, or insert after. Takes precedence over index.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cell_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -67,9 +69,19 @@ pub struct NotebookEditResult {
 /// Apply a single NotebookEdit operation. Reads the .ipynb JSON, mutates in
 /// place, writes back atomically.
 pub fn apply(req: &NotebookEditRequest) -> Result<NotebookEditResult> {
+    apply_with_basis(req, None)
+}
+
+pub(crate) fn apply_with_basis(
+    req: &NotebookEditRequest,
+    basis: Option<&str>,
+) -> Result<NotebookEditResult> {
     let path = Path::new(&req.path);
     let raw = std::fs::read_to_string(path)
         .with_context(|| format!("read notebook {}", path.display()))?;
+    if basis.is_some_and(|basis| basis != raw) {
+        bail!("{CHANGED_DURING_EDIT}");
+    }
     let mut nb: serde_json::Value = serde_json::from_str(&raw)
         .with_context(|| format!("parse notebook JSON {}", path.display()))?;
 
@@ -86,7 +98,7 @@ pub fn apply(req: &NotebookEditRequest) -> Result<NotebookEditResult> {
 
     let total = cells.len();
     let serialized = nbformat_json(&nb)?;
-    write_atomic(path, &serialized)
+    write_atomic(path, &serialized, &raw)
         .with_context(|| format!("write notebook {}", path.display()))?;
 
     Ok(NotebookEditResult {
@@ -118,7 +130,7 @@ fn nbformat_json(nb: &serde_json::Value) -> Result<Vec<u8>> {
 /// POSIX and Windows so a crash mid-write leaves the original notebook intact
 /// rather than truncated. Keeping the temp file in the same directory ensures
 /// the rename stays on one filesystem.
-fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+fn write_atomic(path: &Path, bytes: &[u8], basis: &str) -> std::io::Result<()> {
     use std::io::Write;
 
     let dir = path.parent().unwrap_or_else(|| Path::new("."));
@@ -127,15 +139,23 @@ fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_else(|| "notebook".to_string());
     let tmp_path = dir.join(format!(".{file_name}.{}.tmp", uuid::Uuid::new_v4()));
+    let permissions = std::fs::metadata(path)?.permissions();
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&tmp_path)?;
 
-    // Scope the file handle so it is closed before the rename.
     let write_result = (|| {
-        let mut f = std::fs::File::create(&tmp_path)?;
-        f.write_all(bytes)?;
-        f.flush()?;
-        f.sync_all()?;
+        file.set_permissions(permissions)?;
+        file.write_all(bytes)?;
+        file.flush()?;
+        file.sync_all()?;
+        if std::fs::read_to_string(path)? != basis {
+            return Err(std::io::Error::other(CHANGED_DURING_EDIT));
+        }
         Ok::<(), std::io::Error>(())
     })();
+    drop(file);
 
     if let Err(e) = write_result {
         let _ = std::fs::remove_file(&tmp_path);
@@ -165,7 +185,10 @@ fn apply_insert(
         "metadata": {},
     });
     conform_cell_to_kind(&mut new_cell, kind);
-    let index = req.index.unwrap_or(cells.len()).min(cells.len());
+    let index = match req.cell_id.as_deref() {
+        Some(id) => find_cell(cells, Some(id), None)?.0 + 1,
+        None => req.index.unwrap_or(cells.len()).min(cells.len()),
+    };
     cells.insert(index, new_cell);
     Ok((Some(new_id), index))
 }
@@ -185,6 +208,12 @@ fn apply_replace(
     if let Some(kind) = req.kind {
         cell["cell_type"] = serde_json::json!(kind.cell_type());
         conform_cell_to_kind(cell, kind);
+    }
+    if req.content.is_some()
+        && cell.get("cell_type").and_then(serde_json::Value::as_str) == Some("code")
+    {
+        cell["execution_count"] = serde_json::Value::Null;
+        cell["outputs"] = serde_json::json!([]);
     }
     Ok((id, idx))
 }
@@ -391,6 +420,25 @@ mod tests {
     }
 
     #[test]
+    fn insert_after_cell_id_keeps_surrounding_cells_in_order() {
+        let mut tmp = NamedTempFile::new().unwrap();
+        tmp.write_all(JUPYTER_SAVED.as_bytes()).unwrap();
+        let req = NotebookEditRequest {
+            path: tmp.path().to_string_lossy().into(),
+            mode: NotebookEditMode::Insert,
+            cell_id: Some("a".into()),
+            index: None,
+            kind: Some(CellKind::Markdown),
+            content: Some("# Between".into()),
+        };
+        let cells = edited_cells(&tmp, &req);
+        assert_eq!(cells[0]["id"], "a");
+        assert_eq!(cells[0]["execution_count"], 1);
+        assert_eq!(cells[1]["source"], serde_json::json!(["# Between\n"]));
+        assert_eq!(cells[2]["id"], "b");
+    }
+
+    #[test]
     fn replace_by_index_fallback_updates_source() {
         let mut tmp = NamedTempFile::new().unwrap();
         // Cell has no id field, exercises index-only path
@@ -551,18 +599,30 @@ mod tests {
     }
 
     #[test]
-    fn a_same_kind_code_replacement_keeps_cached_outputs() {
+    fn replacing_code_clears_its_cached_outputs() {
         let mut tmp = NamedTempFile::new().unwrap();
         write_notebook(
             &mut tmp,
             r#"[{"id":"c1","cell_type":"code","source":["x=1\n"],"metadata":{},"execution_count":3,"outputs":[{"output_type":"stream","name":"stdout","text":["1\n"]}]}]"#,
         );
-        let cells = edited_cells(
-            &tmp,
-            &kind_request(&tmp, NotebookEditMode::Replace, Some("c1"), CellKind::Code),
-        );
-        assert_eq!(cells[0]["execution_count"], 3);
-        assert_eq!(cells[0]["outputs"].as_array().unwrap().len(), 1);
+        let mut request =
+            kind_request(&tmp, NotebookEditMode::Replace, Some("c1"), CellKind::Code);
+        request.kind = None;
+        let cells = edited_cells(&tmp, &request);
+        assert_eq!(cells[0]["execution_count"], serde_json::Value::Null);
+        assert_eq!(cells[0]["outputs"], serde_json::json!([]));
+    }
+
+    #[test]
+    fn an_edit_loses_to_a_newer_notebook_save() {
+        let mut tmp = NamedTempFile::new().unwrap();
+        tmp.write_all(JUPYTER_SAVED.as_bytes()).unwrap();
+        let newer = JUPYTER_SAVED.replace("# Résumé", "# Edited by the user");
+        std::fs::write(tmp.path(), &newer).unwrap();
+        let req = kind_request(&tmp, NotebookEditMode::Replace, Some("a"), CellKind::Code);
+        let error = apply_with_basis(&req, Some(JUPYTER_SAVED)).unwrap_err();
+        assert_eq!(error.to_string(), CHANGED_DURING_EDIT);
+        assert_eq!(std::fs::read_to_string(tmp.path()).unwrap(), newer);
     }
 
     #[test]

@@ -28,6 +28,18 @@ export const PLUGIN_MARKETPLACE_MAX_MANIFEST_BYTES = 2_000_000;
 
 const MARKETPLACE_PLUGINS_MAX_COUNT = PLUGIN_MARKETPLACE_MAX_PLUGINS;
 
+const GITHUB_REPOSITORY_URL_PATTERN =
+  /^https:\/\/github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+?)(?:\.git)?\/?$/;
+
+export function parseGithubRepositoryUrl(
+  repositoryUrl: string,
+): { owner: string; repo: string } | null {
+  const match = GITHUB_REPOSITORY_URL_PATTERN.exec(repositoryUrl.trim());
+  const owner = match?.[1];
+  const repo = match?.[2];
+  return owner && repo ? { owner, repo } : null;
+}
+
 const marketplaceStringListSchema = z
   .array(z.string().trim().min(1).max(MARKETPLACE_LIST_ITEM_MAX_LENGTH))
   .max(MARKETPLACE_LIST_MAX_ITEMS);
@@ -140,6 +152,58 @@ export interface PluginMarketplaceSourceListResponse {
 export interface PluginMarketplaceEntryListResponse {
   entries: PluginMarketplaceEntry[];
 }
+
+const marketplaceSourceSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  repositoryUrl: z.string().nullable(),
+  ref: z.string().nullable(),
+  status: z.enum(PLUGIN_MARKETPLACE_SOURCE_STATUSES),
+  lastError: z.string().nullable(),
+  entryCount: z.number().int().nonnegative(),
+});
+
+export const PluginMarketplaceSourcesSchema = z.object({
+  sources: z.array(marketplaceSourceSchema),
+});
+export type PluginMarketplaceSource = z.infer<typeof marketplaceSourceSchema>;
+export const PluginMarketplaceSourceReceiptSchema = z.object({ source: marketplaceSourceSchema });
+
+export const RegisterMarketplaceBodySchema = z
+  .object({
+    repositoryUrl: z.string().trim().min(1).max(2_000),
+    ref: z.string().trim().min(1).max(200).optional(),
+    name: z.string().trim().min(1).max(200).optional(),
+  })
+  .strict();
+
+export const PluginMarketplaceBrowseSchema = z.object({
+  entries: z.array(
+    z.object({
+      id: z.string().uuid(),
+      sourceId: z.string().uuid(),
+      name: z.string(),
+      description: z.string(),
+      version: z.string(),
+      declaredSkills: marketplaceStringListSchema,
+      requiredConnectors: marketplaceStringListSchema,
+      agents: marketplaceStringListSchema,
+      permissions: marketplaceStringListSchema,
+    }),
+  ),
+});
+
+export const PluginMarketplaceInstalledEntriesSchema = z.object({
+  installations: z.array(z.object({ entryId: z.string().uuid() })),
+});
+
+export const PluginMarketplaceInstallReceiptSchema = z.object({
+  installation: z.object({
+    id: z.string().uuid(),
+    entryId: z.string().uuid(),
+    installedVersion: z.string(),
+  }),
+});
 
 export interface PluginMarketplaceInstallation {
   id: string;

@@ -32,7 +32,7 @@ if (!app.endsWith('.app') || !reportDir)
   throw new Error('Pass a .app and AGI_ACCEPTANCE_OUTPUT_DIR.');
 fs.mkdirSync(reportDir, { recursive: true });
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'agi-packaged-acceptance-'));
-const profile = process.env.AGI_ACCEPTANCE_PROFILE || path.join(scratch, 'profile');
+const profile = process.env.AGI_ACCEPTANCE_PROFILE || path.join(scratch, 'desktop-home');
 const home = path.join(scratch, 'cli');
 fs.mkdirSync(profile, { recursive: true });
 if (
@@ -112,6 +112,7 @@ const hash = (file) => crypto.createHash('sha256').update(fs.readFileSync(file))
 function checkWorkspaceConsent() {
   const workspace = fs.realpathSync(fs.mkdtempSync(path.join(scratch, 'consent-workspace-')));
   const consentProfile = fs.mkdtempSync(path.join(scratch, 'consent-profile-'));
+  const deviceIdentity = path.join(consentProfile, 'device-id');
   fs.writeFileSync(
     path.join(workspace, 'README.md'),
     'Synthetic packaged consent check. No hooks or tools.\n',
@@ -153,13 +154,16 @@ function checkWorkspaceConsent() {
     result.status !== 0 && result.stderr.includes('Current project is not trusted');
   if (!refuses(invoke(['app-server'])))
     throw new Error('An unapproved packaged workspace did not refuse.');
-  const accepted = invoke([
-    'app-server',
-    '--workspace-consent',
-    workspace,
-    '--workspace-consent-at-ms',
-    String(Date.now()),
-  ]);
+  if (fs.existsSync(deviceIdentity)) throw new Error('The trust check created a device identity.');
+  const invokeWithConsent = () =>
+    invoke([
+      'app-server',
+      '--workspace-consent',
+      workspace,
+      '--workspace-consent-at-ms',
+      String(Date.now()),
+    ]);
+  const accepted = invokeWithConsent();
   if (accepted.status !== 0) throw new Error('The packaged CLI rejected native workspace consent.');
   const replies = accepted.stdout.split('\n').flatMap((line) => {
     try {
@@ -170,12 +174,28 @@ function checkWorkspaceConsent() {
   });
   if (!replies.some((reply) => reply.id === 1 && reply.result?.protocolVersion === protocolVersion))
     throw new Error('The consented packaged CLI answered no protocol handshake.');
+  const checkDeviceIdentity = process.env.AGI_ACCEPTANCE_EXPECT_DEVICE_IDENTITY === '1';
+  if (checkDeviceIdentity) {
+    if (!fs.existsSync(deviceIdentity))
+      throw new Error('Native consent failed to initialize the device identity.');
+    const installId = fs.readFileSync(deviceIdentity, 'utf8').trim();
+    const repeated = invokeWithConsent();
+    if (
+      !installId ||
+      repeated.status !== 0 ||
+      fs.readFileSync(deviceIdentity, 'utf8').trim() !== installId
+    )
+      throw new Error(
+        'Repeated native consent failed to preserve the packaged CLI device identity.',
+      );
+  }
   if (!refuses(invoke(['app-server'])))
     throw new Error('Native consent persisted beyond its process.');
   receipt.checks.workspaceConsent = {
     handshake: 'passed',
     ordinaryRefusal: 'passed',
     processLifetime: 'passed',
+    ...(checkDeviceIdentity ? { deviceIdentity: 'passed' } : {}),
     modelTurns: 0,
   };
 }
@@ -210,13 +230,9 @@ try {
   const log = fs.openSync(path.join(scratch, 'app.log'), 'a');
   child = spawn(
     executable,
-    [
-      `--user-data-dir=${profile}`,
-      `--remote-debugging-port=${port}`,
-      `--agi-cloud-app-origin=${origin}`,
-    ],
+    [`--remote-debugging-port=${port}`, `--agi-cloud-app-origin=${origin}`],
     {
-      env: { ...env, AGIWORKFORCE_HOME: home },
+      env: { ...env, HOME: profile, CFFIXED_USER_HOME: profile, AGIWORKFORCE_HOME: home },
       stdio: ['ignore', log, log],
     },
   );
@@ -262,6 +278,8 @@ try {
     throw new Error('Packaged preload identity or Node isolation failed.');
   if (!bridge.status.ok || !bridge.routines.ok)
     throw new Error('Packaged runtime bridge refused its hosted renderer.');
+  if (!bridge.status.value.available || bridge.status.value.source !== 'bundled')
+    throw new Error('Packaged runtime did not select its bundled CLI.');
   receipt.checks.packagedHostedBridge = bridge;
   if (process.env.AGI_ACCEPTANCE_EXPECT_BROWSER_SIGN_IN === '1') {
     const signIn = await page.evaluate(async () => {

@@ -1,11 +1,9 @@
-import { useEffect, useRef } from 'react';
-import { Animated } from 'react-native';
+import { View } from 'react-native';
 import { WifiOff } from 'lucide-react-native';
 import { Text } from '@/components/ui/Text';
-import { spacing, useThemeColors, zIndex } from '@/src/ui/theme';
-import { motion, typeScale } from '@/src/ui/theme/tokens';
+import { spacing, useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useReduceMotion } from '@/src/ui/theme/useReduceMotion';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { EDGE_COPY } from './copy';
 
@@ -13,63 +11,11 @@ export function OfflineBanner() {
   const colors = useThemeColors();
   const { isOnline } = useNetworkStatus();
   const insets = useSafeAreaInsets();
-  const hiddenOffset = -(60 + insets.top);
-  const translateY = useRef(new Animated.Value(hiddenOffset)).current;
-  const opacity = useRef(new Animated.Value(0)).current;
-  const reduceMotion = useReduceMotion();
-
-  useEffect(() => {
-    const show = !isOnline;
-
-    if (show) {
-      if (reduceMotion) {
-        translateY.setValue(0);
-        opacity.setValue(1);
-      } else {
-        Animated.parallel([
-          Animated.timing(translateY, {
-            toValue: 0,
-            duration: motion.quick,
-            useNativeDriver: true,
-          }),
-          Animated.timing(opacity, {
-            toValue: 1,
-            duration: motion.quick,
-            useNativeDriver: true,
-          }),
-        ]).start();
-      }
-    } else {
-      if (reduceMotion) {
-        translateY.setValue(hiddenOffset);
-        opacity.setValue(0);
-      } else {
-        Animated.parallel([
-          Animated.timing(translateY, {
-            toValue: hiddenOffset,
-            duration: motion.quick,
-            useNativeDriver: true,
-          }),
-          Animated.timing(opacity, {
-            toValue: 0,
-            duration: motion.quick,
-            useNativeDriver: true,
-          }),
-        ]).start();
-      }
-    }
-  }, [isOnline, reduceMotion, translateY, opacity, hiddenOffset]);
+  if (isOnline) return null;
 
   return (
-    <Animated.View
+    <View
       style={{
-        transform: [{ translateY }],
-        opacity,
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        zIndex: zIndex.notification,
         backgroundColor: colors.teal,
         flexDirection: 'row',
         alignItems: 'center',
@@ -79,6 +25,7 @@ export function OfflineBanner() {
         paddingBottom: spacing.sm,
         gap: spacing.sm,
       }}
+      accessible
       accessibilityRole="alert"
       accessibilityLabel={EDGE_COPY.offline.banner}
       accessibilityLiveRegion="polite"
@@ -92,10 +39,9 @@ export function OfflineBanner() {
           flexShrink: 1,
           textAlign: 'center',
         }}
-        numberOfLines={2}
       >
         {EDGE_COPY.offline.banner}
       </Text>
-    </Animated.View>
+    </View>
   );
 }

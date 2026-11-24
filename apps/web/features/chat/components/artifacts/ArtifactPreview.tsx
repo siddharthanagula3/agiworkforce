@@ -90,6 +90,7 @@ import {
   EmailArtifact,
   spreadsheetSafeExport,
 } from '@agiworkforce/unified-chat';
+import { appendFilenameExtension } from '@agiworkforce/unified-chat/filename';
 import { TypeIcon } from './ArtifactLabels';
 import { ArtifactMoreMenu, type ArtifactMenuItem } from './ArtifactMoreMenu';
 import { ArtifactEditRequestLayer } from './ArtifactEditRequestLayer';
@@ -484,7 +485,7 @@ function cloudFileName(title: string, extension: string): string {
   const base = artifactCloudFileName(title);
   return base.toLowerCase().endsWith(`.${extension}`)
     ? base
-    : artifactCloudFileName(`${base}.${extension}`);
+    : artifactCloudFileName(appendFilenameExtension(base, extension));
 }
 
 function blobToBase64(blob: Blob): Promise<string> {
@@ -1368,7 +1369,10 @@ export function ArtifactPreview({
     try {
       const { buildDeckHtml } = await import('./presentation/deck-html');
       const html = await buildDeckHtml(title, activeContent);
-      saveBlob(new Blob([html], { type: 'application/octet-stream' }), `${title}.html`);
+      saveBlob(
+        new Blob([html], { type: 'application/octet-stream' }),
+        appendFilenameExtension(title, 'html'),
+      );
     } catch (error) {
       toast.error(toUserMessage(error, 'The HTML could not be made'));
     }
@@ -1387,14 +1391,14 @@ export function ArtifactPreview({
     switch (format) {
       case 'html':
         blob = new Blob([getPreviewHTML()], { type: 'application/octet-stream' });
-        filename = `${artifact.title || 'artifact'}.html`;
+        filename = appendFilenameExtension(artifact.title || 'artifact', 'html');
         break;
       case 'md': {
         const markdown = isMarkdownDoc
           ? content
           : `# ${artifact.title || 'Artifact'}\n\n\`\`\`${artifact.language || artifact.type}\n${content}\n\`\`\``;
         blob = new Blob([markdown], { type: 'text/markdown' });
-        filename = `${artifact.title || 'artifact'}.md`;
+        filename = appendFilenameExtension(artifact.title || 'artifact', 'md');
         break;
       }
       default: {
@@ -1403,7 +1407,7 @@ export function ArtifactPreview({
         const extension = artifact.language || 'txt';
         const source = spreadsheetSafeExport(content, extension);
         blob = new Blob([source.body], { type: source.mimeType });
-        filename = `${artifact.title || 'artifact'}.${extension}`;
+        filename = appendFilenameExtension(artifact.title || 'artifact', extension);
       }
     }
 
@@ -1421,14 +1425,16 @@ export function ArtifactPreview({
     const title = artifact.title || 'artifact';
     const language = (artifact.language || artifact.type || 'txt').toLowerCase();
     if (isMarkdownDoc) {
-      return new File([activeContent], `${title}.md`, { type: 'text/markdown' });
+      return new File([activeContent], appendFilenameExtension(title, 'md'), {
+        type: 'text/markdown',
+      });
     }
-    const sourceName = `${title}.${language}`;
+    const sourceName = appendFilenameExtension(title, language);
     if (isSupportedChatAttachment(sourceName, '')) {
       return new File([activeContent], sourceName, { type: 'text/plain' });
     }
     const markdown = `# ${title}\n\n\`\`\`${language}\n${activeContent}\n\`\`\``;
-    return new File([markdown], `${title}.md`, { type: 'text/markdown' });
+    return new File([markdown], appendFilenameExtension(title, 'md'), { type: 'text/markdown' });
   }, [activeContent, artifact.language, artifact.title, artifact.type, isMarkdownDoc]);
 
   const [savingProjectId, setSavingProjectId] = useState<string | null>(null);
@@ -1680,7 +1686,9 @@ export function ArtifactPreview({
       ? language
       : 'png';
     const title = artifact.title || 'generated-image';
-    const fileName = /\.[a-z0-9]{1,8}$/i.test(title) ? title : `${title}.${extension}`;
+    const fileName = /\.[a-z0-9]{1,8}$/i.test(title)
+      ? title
+      : appendFilenameExtension(title, extension);
     const mimeType =
       artifact.generatedFile?.mimeType ??
       (extension === 'jpg' ? 'image/jpeg' : `image/${extension}`);
@@ -1759,7 +1767,7 @@ export function ArtifactPreview({
     const title = artifact.title || 'artifact';
     const filename = title.toLowerCase().endsWith(`.${ext.toLowerCase()}`)
       ? title
-      : `${title}.${ext}`;
+      : appendFilenameExtension(title, ext);
     const a = document.createElement('a');
     let objectUrl: string | null = null;
     if (artifact.content.startsWith('data:')) {
@@ -1868,7 +1876,7 @@ export function ArtifactPreview({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${artifact.title || 'spreadsheet'}.csv`;
+    a.download = appendFilenameExtension(artifact.title || 'spreadsheet', 'csv');
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -1881,7 +1889,7 @@ export function ArtifactPreview({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${artifact.title || 'diagram'}.svg`;
+    a.download = appendFilenameExtension(artifact.title || 'diagram', 'svg');
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

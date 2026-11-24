@@ -25,6 +25,13 @@ const DEEPSEEK_400 =
 describe('presentTurnFailure', () => {
   const base = { message: '[deepseek] boom', provider: 'deepseek', retryable: false } as const;
 
+  it('shows a local rejection in the headline before any provider call', () => {
+    const message = 'A UserPromptSubmit hook blocked this message. Local review required.';
+    expect(
+      presentTurnFailure({ code: 'invalid_request', message, retryable: false, action: 'none' }),
+    ).toEqual({ category: 'runtime', headline: message, retryable: false });
+  });
+
   it('offers a provider sign-in for a missing credential, without matching on prose', () => {
     const presentation = presentTurnFailure({
       ...base,
@@ -54,6 +61,21 @@ describe('presentTurnFailure', () => {
     expect(presentation.category).toBe('sign-in');
     expect(presentation.action).toEqual({ kind: 'sign-in-account', label: 'Sign in to AGI' });
   });
+
+  it.each(['provider_auth_missing', 'provider_auth_invalid'])(
+    'routes an older CLI’s %s for Managed Cloud to account sign-in',
+    (code) => {
+      const presentation = presentTurnFailure({
+        ...base,
+        code,
+        provider: 'managed_cloud',
+        action: 'sign_in_provider',
+      });
+
+      expect(presentation.headline).toBe('Sign in to AGI to run this model on your plan.');
+      expect(presentation.action).toMatchObject({ kind: 'sign-in-account' });
+    },
+  );
 
   it('offers the plan when the account is signed in but excludes the model', () => {
     const presentation = presentTurnFailure({

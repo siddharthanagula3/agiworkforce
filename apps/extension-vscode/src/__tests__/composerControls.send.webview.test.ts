@@ -15,7 +15,10 @@ function clearWindowListeners(): void {
   for (const remove of registeredWindowListeners.splice(0)) remove();
 }
 
-function boot(mode: 'ask' | 'auto' | 'plan' | 'bypass' = 'ask'): ReturnType<typeof vi.fn> {
+function boot(
+  mode: 'ask' | 'auto' | 'plan' | 'bypass' = 'ask',
+  storage?: { state: unknown },
+): ReturnType<typeof vi.fn> {
   clearWindowListeners();
   const html = getWebviewContent(
     {
@@ -38,7 +41,14 @@ function boot(mode: 'ask' | 'auto' | 'plan' | 'bypass' = 'ask'): ReturnType<type
   const postMessage = vi.fn();
   Object.defineProperty(globalThis, 'acquireVsCodeApi', {
     configurable: true,
-    value: () => vscodeApiStub({ postMessage }),
+    value: () =>
+      storage
+        ? {
+            postMessage,
+            getState: () => storage.state,
+            setState: (value: unknown) => (storage.state = value),
+          }
+        : vscodeApiStub({ postMessage }),
   });
   const inline = Array.from(parsed.querySelectorAll('script')).find((s) =>
     s.textContent?.includes('acquireVsCodeApi()'),
@@ -67,6 +77,11 @@ const type = (v: string) => {
 const deliver = (data: unknown) => window.dispatchEvent(new MessageEvent('message', { data }));
 const composer = (post: ReturnType<typeof vi.fn>): ComposerBinding =>
   post.mock.calls.filter(([message]) => message.type === 'composerState').at(-1)![0].payload;
+const loadConversation = (threadId: string) =>
+  deliver({
+    type: 'conversationLoaded',
+    payload: { threadId, trustMode: 'local', title: threadId, messages: [] },
+  });
 
 describe('composer send state and controls', () => {
   beforeEach(() => {
@@ -90,6 +105,163 @@ describe('composer send state and controls', () => {
     expect(input().value).toBe('');
     expect(send().disabled).toBe(true);
   });
+
+  it('restores only the draft owned by the conversation selected in the same pane', () => {
+    const storage = { state: undefined as unknown };
+    boot('ask', storage);
+    loadConversation('first');
+    type('First conversation draft');
+    loadConversation('second');
+    expect(input().value).toBe('');
+    expect(send().disabled).toBe(true);
+    type('Second conversation draft');
+    loadConversation('first');
+    expect(input().value).toBe('First conversation draft');
+    deliver({ type: 'sessionBinding', payload: { epoch: 1, composerThreadId: null } });
+    expect(input().value).toBe('');
+    loadConversation('second');
+    expect(input().value).toBe('Second conversation draft');
+
+    boot('ask', storage);
+    expect(input().value).toBe('');
+    loadConversation('first');
+    expect(input().value).toBe('First conversation draft');
+    loadConversation('second');
+    expect(input().value).toBe('Second conversation draft');
+  });
+
+  it('binds typing during initial session creation to the newly opened conversation', () => {
+    boot();
+    type('A follow-up while the first send starts');
+    deliver({ type: 'composerThreadStarted', payload: { threadId: 'new-thread' } });
+    expect(input().value).toBe('A follow-up while the first send starts');
+    loadConversation('another-thread');
+    expect(input().value).toBe('');
+    loadConversation('new-thread');
+    expect(input().value).toBe('A follow-up while the first send starts');
+  });
+
+  it('keeps an older unscoped draft in New chat during migration', () => {
+    const storage = { state: { composerDraft: 'A draft before upgrading' } as unknown };
+    boot('ask', storage);
+    loadConversation('existing');
+    expect(input().value).toBe('');
+    deliver({ type: 'sessionBinding', payload: { epoch: 1, composerThreadId: null } });
+    expect(input().value).toBe('A draft before upgrading');
+  });
+
+  it('resizes a wrapped draft when the pane changes width without another edit', () => {
+    const post = boot();
+    const textarea = input();
+    let contentHeight = 39;
+    vi.spyOn(textarea, 'scrollHeight', 'get').mockImplementation(() => contentHeight);
+    type('Keep this draft while resizing the pane.');
+    expect(textarea.style.height).toBe('39px');
+    post.mockClear();
+
+    contentHeight = 92;
+    window.dispatchEvent(new Event('resize'));
+    expect(textarea.style.height).toBe('92px');
+
+    contentHeight = 240;
+    window.dispatchEvent(new Event('resize'));
+    expect(textarea.style.height).toBe('140px');
+
+    contentHeight = 39;
+    window.dispatchEvent(new Event('resize'));
+    expect(textarea.style.height).toBe('39px');
+    expect(textarea.value).toBe('Keep this draft while resizing the pane.');
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it('opens the output-style picker from the chat menu', () => {
+    const post = boot();
+    document.querySelector<HTMLButtonElement>('#actionsBtn')!.click();
+    document.querySelector<HTMLButtonElement>('#openOutputStyles')!.click();
+    expect(post).toHaveBeenCalledWith(expect.objectContaining({ type: 'openOutputStyles' }));
+    expect(document.querySelector('#actionsBtn')?.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('renders saved replies as bookmarked and applies acknowledgement only to the matching reply', () => {
+    const post = boot();
+    const messages = [
+      { role: 'assistant', text: 'Identical reply', index: 1, bookmarked: true },
+      { role: 'assistant', text: 'Identical reply', index: 3 },
+    ];
+    deliver({
+      type: 'conversationLoaded',
+      payload: { threadId: 'bookmarks', title: 'Bookmarks', trustMode: 'local', messages },
+    });
+    const buttons = document.querySelectorAll<HTMLButtonElement>('.message-action--bookmark');
+    expect(buttons[0]?.getAttribute('aria-pressed')).toBe('true');
+    expect(buttons[1]?.getAttribute('aria-pressed')).toBe('false');
+    buttons[1]!.click();
+    expect(post).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'messageAction',
+        payload: expect.objectContaining({ action: 'bookmarkAnswer', messageIndex: 3 }),
+      }),
+    );
+    deliver({ type: 'sessionBinding', payload: { epoch: 4 } });
+    deliver({
+      type: 'replyBookmarkChanged',
+      payload: { epoch: 3, index: 3, bookmarked: true },
+    });
+    expect(buttons[1]?.getAttribute('aria-pressed')).toBe('false');
+    deliver({
+      type: 'replyBookmarkChanged',
+      payload: { epoch: 4, index: 3, bookmarked: true },
+    });
+    expect(buttons[0]?.getAttribute('aria-pressed')).toBe('true');
+    expect(buttons[1]?.getAttribute('aria-pressed')).toBe('true');
+    expect(buttons[1]?.title).toBe('Remove reply bookmark');
+  });
+
+  it('returns dictation to an editable draft and ignores stale results', () => {
+    const post = boot();
+    const mic = document.querySelector<HTMLButtonElement>('#dictationBtn')!;
+    expect(mic.hidden).toBe(true);
+    expect(getComputedStyle(mic).display).toBe('none');
+    deliver({ type: 'dictationAvailability', payload: { enabled: true } });
+    expect(mic.hidden).toBe(false);
+    type('Existing draft');
+    mic.click();
+    expect(post).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'startDictation', payload: { id: 1 } }),
+    );
+    deliver({ type: 'dictationResult', payload: { id: 1, text: 'with speech' } });
+    expect(input().value).toBe('Existing draft with speech');
+    mic.click();
+    type('Keep my edits');
+    deliver({ type: 'dictationResult', payload: { id: 2, text: 'stale' } });
+    expect(input().value).toBe('Keep my edits');
+    expect(post.mock.calls.some(([message]) => message.type === 'sendMessage')).toBe(false);
+  });
+
+  it('opens the active plan without submitting a chat turn or consuming attachments', () => {
+    const post = boot();
+    deliver({ type: 'contextAttached', payload: { id: 'keep-file', name: 'notes.ts' } });
+    type('/plan open');
+    send().click();
+    expect(post).toHaveBeenCalledWith(expect.objectContaining({ type: 'openPlanDocument' }));
+    expect(post.mock.calls.some(([message]) => message.type === 'sendMessage')).toBe(false);
+    expect(composer(post).attachments).toBe(1);
+    expect(input().value).toBe('');
+  });
+
+  it('stops a streaming turn on Escape only when enabled', () => {
+    const post = boot();
+    type('Start a turn');
+    send().click();
+    const escape = () =>
+      input().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', cancelable: true }));
+    escape();
+    expect(post).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'cancel' }));
+    deliver({ type: 'followUpBehavior', payload: { behavior: 'queue', escapeStops: true } });
+    escape();
+    expect(post).toHaveBeenCalledWith(expect.objectContaining({ type: 'cancel' }));
+  });
+
   it('enables send for a pending attachment and disables it when the attachment is removed', () => {
     boot();
     deliver({ type: 'contextAttached', payload: { id: 'a1', name: 'x.ts' } });

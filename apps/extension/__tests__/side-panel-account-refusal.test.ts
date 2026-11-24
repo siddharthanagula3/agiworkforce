@@ -143,7 +143,7 @@ vi.mock('../src/features/cloud-bridge/freeTrialClient', async (importOriginal) =
       return {
         subscriptionTier: 'pro',
         subscriptionStatus: 'active',
-        modelIds: [],
+        modelIds: [actual.FREE_TRIAL_MODEL],
         allowedAutoModes: [],
         usage: {
           plan_tier: 'pro',

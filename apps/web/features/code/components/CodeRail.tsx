@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type Ref } from 'react';
 import {
   Archive,
   CalendarClock,
@@ -13,6 +13,7 @@ import {
   MessageSquare,
   MonitorPlay,
   PanelLeft,
+  Plug,
   Plus,
   Search,
   Settings,
@@ -59,6 +60,8 @@ import { ContinueOnDesktop, useDesktopHost } from '@/features/desktop-host';
 import { REMOTE_COMPUTER_PATH } from '@/features/remote-dispatch/lib/browser-pairing';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { useAccountFooter } from '@shared/components/layout/AccountFooter';
+import { useSettingsModal } from '@/features/settings/components/SettingsModalProvider';
+import { emitAppCommand } from '@shared/lib/app-commands';
 import { CodeCustomizeSidebarModal, type CodeRailItem } from './CodeCustomizeSidebarModal';
 import styles from '../CloudCodePage.module.css';
 
@@ -68,18 +71,31 @@ const SEGMENT_GLYPH_SIZE = 15;
 const ENVIRONMENT_FILTER_ALL = 'all';
 const RAIL_SESSION_DETAIL_PREFIX = 'code-rail-session-detail-';
 
-const RAIL_ITEMS: Readonly<Record<CodeRailItemId, Omit<CodeRailItem, 'id'>>> = {
-  artifacts: { href: CODE_ROUTES.artifacts, label: CODE_COPY.artifacts, glyph: LibraryBig },
-  routines: { href: CODE_ROUTES.routines, label: CODE_COPY.routines, glyph: CalendarClock },
-  computer: { href: REMOTE_COMPUTER_PATH, label: CODE_COPY.yourComputer, glyph: MonitorPlay },
+const RAIL_ITEMS: Readonly<Record<CodeRailItemId, CodeRailItem>> = {
+  artifacts: {
+    id: 'artifacts',
+    href: CODE_ROUTES.artifacts,
+    label: CODE_COPY.artifacts,
+    glyph: LibraryBig,
+  },
+  plugins: { id: 'plugins', settings: 'plugins', label: CODE_COPY.plugins, glyph: Plug },
+  routines: {
+    id: 'routines',
+    href: CODE_ROUTES.routines,
+    label: CODE_COPY.routines,
+    glyph: CalendarClock,
+  },
+  computer: {
+    id: 'computer',
+    href: REMOTE_COMPUTER_PATH,
+    label: CODE_COPY.yourComputer,
+    glyph: MonitorPlay,
+  },
 };
 
 function useRailItems(): CodeRailItem[] {
   const host = useDesktopHost();
-  return CODE_RAIL_ITEM_IDS.filter((id) => id !== 'computer' || !host).map((id) => ({
-    id,
-    ...RAIL_ITEMS[id],
-  }));
+  return CODE_RAIL_ITEM_IDS.filter((id) => id !== 'computer' || !host).map((id) => RAIL_ITEMS[id]);
 }
 
 function MoreMenu({
@@ -90,12 +106,16 @@ function MoreMenu({
   onCustomize: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const { openSettings } = useSettingsModal();
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const afterMenuClose = useRef<(() => void) | null>(null);
   const Chevron = open ? ChevronDown : ChevronRight;
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
         <button
+          ref={triggerRef}
           type="button"
           className={`${styles['railRow']} ${open ? styles['railRowActive'] : ''}`}
         >
@@ -105,15 +125,40 @@ function MoreMenu({
           <span className={styles['railRowLabel']}>{CODE_COPY.more}</span>
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent side="right" align="start" className={styles['moreMenu']}>
-        {items.map(({ id, href, label, glyph: Glyph }) => (
-          <DropdownMenuItem key={id} asChild className={styles['moreMenuItem']}>
-            <Link href={href}>
+      <DropdownMenuContent
+        side="right"
+        align="start"
+        className={styles['moreMenu']}
+        onCloseAutoFocus={(event) => {
+          const action = afterMenuClose.current;
+          if (!action) return;
+          afterMenuClose.current = null;
+          event.preventDefault();
+          triggerRef.current?.focus();
+          action();
+        }}
+      >
+        {items.map(({ id, href, label, settings, glyph: Glyph }) =>
+          settings !== undefined ? (
+            <DropdownMenuItem
+              key={id}
+              className={styles['moreMenuItem']}
+              onSelect={() => {
+                afterMenuClose.current = () => openSettings(settings);
+              }}
+            >
               <Glyph size={RAIL_GLYPH_SIZE} aria-hidden="true" />
               <span>{label}</span>
-            </Link>
-          </DropdownMenuItem>
-        ))}
+            </DropdownMenuItem>
+          ) : (
+            <DropdownMenuItem key={id} asChild className={styles['moreMenuItem']}>
+              <Link href={href}>
+                <Glyph size={RAIL_GLYPH_SIZE} aria-hidden="true" />
+                <span>{label}</span>
+              </Link>
+            </DropdownMenuItem>
+          ),
+        )}
         <DropdownMenuItem asChild className={styles['moreMenuItem']}>
           <Link href={CODE_ROUTES.editorExtension}>
             <Code2 size={RAIL_GLYPH_SIZE} aria-hidden="true" />
@@ -128,7 +173,12 @@ function MoreMenu({
           />
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem className={styles['moreMenuItem']} onSelect={onCustomize}>
+        <DropdownMenuItem
+          className={styles['moreMenuItem']}
+          onSelect={() => {
+            afterMenuClose.current = onCustomize;
+          }}
+        >
           <Settings size={RAIL_GLYPH_SIZE} aria-hidden="true" />
           <span>{CODE_COPY.customizeSidebar}</span>
         </DropdownMenuItem>
@@ -280,6 +330,8 @@ export interface CodeRailProps {
   onNewSession: () => void;
   onSelectSession: (sessionId: string, options?: { split: boolean }) => void;
   onCollapse?: () => void;
+  collapseButtonRef?: Ref<HTMLButtonElement>;
+  showLocalSearchSection?: boolean;
   /** The desktop shell's own sessions. Absent in a browser. */
   localSection?: React.ReactNode;
 }
@@ -294,6 +346,8 @@ export function CodeRail({
   onNewSession,
   onSelectSession,
   onCollapse,
+  collapseButtonRef,
+  showLocalSearchSection = false,
   localSection,
 }: CodeRailProps) {
   const [customizeOpen, setCustomizeOpen] = useState(false);
@@ -303,6 +357,7 @@ export function CodeRail({
   const morePinnable = railItems.filter((item) => !codeRailItemPinned(item.id, pins));
   const filterHidesSessions = filters.status === 'open' && hiddenSessionsExist;
   const accountFooter = useAccountFooter();
+  const { openSettings } = useSettingsModal();
   const [searchOpen, setSearchOpen] = useState(filters.query.length > 0);
   const searchButtonRef = useRef<HTMLButtonElement>(null);
   const searching = filters.query.trim().length > 0;
@@ -345,6 +400,7 @@ export function CodeRail({
           </button>
           {onCollapse && (
             <button
+              ref={collapseButtonRef}
               type="button"
               className={styles['railIconButton']}
               aria-label={CODE_COPY.collapseRail}
@@ -375,14 +431,42 @@ export function CodeRail({
         <span className={styles['railRowLabel']}>{CODE_COPY.newSession}</span>
       </button>
 
-      {pinnedItems.map(({ id, href, label, glyph: Glyph }) => (
-        <Link key={id} href={href} className={styles['railRow']}>
-          <span className={styles['railRowGlyph']}>
-            <Glyph size={RAIL_GLYPH_SIZE} aria-hidden="true" />
-          </span>
-          <span className={styles['railRowLabel']}>{label}</span>
-        </Link>
-      ))}
+      <button
+        type="button"
+        className={styles['railRow']}
+        onClick={() => emitAppCommand('open-search')}
+      >
+        <span className={styles['railRowGlyph']}>
+          <Search size={RAIL_GLYPH_SIZE} aria-hidden="true" />
+        </span>
+        <span className={styles['railRowLabel']}>{CODE_COPY.search}</span>
+      </button>
+
+      {pinnedItems.map(({ id, href, settings, label, glyph: Glyph }) => {
+        const content = (
+          <>
+            <span className={styles['railRowGlyph']}>
+              <Glyph size={RAIL_GLYPH_SIZE} aria-hidden="true" />
+            </span>
+            <span className={styles['railRowLabel']}>{label}</span>
+          </>
+        );
+        return settings !== undefined ? (
+          <button
+            key={id}
+            id={`code-rail-settings-${id}`}
+            type="button"
+            className={styles['railRow']}
+            onClick={() => openSettings(settings)}
+          >
+            {content}
+          </button>
+        ) : (
+          <Link key={id} href={href} className={styles['railRow']}>
+            {content}
+          </Link>
+        );
+      })}
 
       <MoreMenu items={morePinnable} onCustomize={() => setCustomizeOpen(true)} />
       <CodeCustomizeSidebarModal
@@ -391,118 +475,123 @@ export function CodeRail({
         items={railItems}
       />
 
-      {localSection}
+      <div className={styles['railList']} data-testid="code-rail-session-scroll">
+        {localSection}
 
-      <div className={styles['railSectionHeader']}>
-        <span className={styles['railSectionLabel']}>{CODE_COPY.recents}</span>
-        <FilterMenu filters={filters} onChange={onFiltersChange} />
-      </div>
+        <div className={styles['railSectionHeader']}>
+          <span className={styles['railSectionLabel']}>{CODE_COPY.recents}</span>
+          <FilterMenu filters={filters} onChange={onFiltersChange} />
+        </div>
 
-      <nav className={styles['railList']} aria-label={CODE_COPY.recents}>
-        {loading && (
-          <div className={styles['railEmpty']}>
-            <Spinner size="sm" aria-label={CODE_COPY.loadingSessions} />
-          </div>
-        )}
+        <nav aria-label={CODE_COPY.recents}>
+          {loading && (
+            <div className={styles['railEmpty']}>
+              <Spinner size="sm" aria-label={CODE_COPY.loadingSessions} />
+            </div>
+          )}
 
-        {!loading &&
-          groupCodeSessions(sessions).map((group) => (
-            <section
-              key={group.id}
-              className="mb-2 flex flex-col gap-0.5"
-              aria-label={group.label}
-              data-testid={`code-rail-group-${group.id}`}
-            >
-              <h3 className="m-0 px-2 pb-0.5 pt-1 text-[14px] font-medium text-[var(--chat-text-secondary)]">
-                {group.label}
-              </h3>
-              {group.sessions.map((session) => {
-                const repositoryId = `${RAIL_SESSION_DETAIL_PREFIX}repository-${session.id}`;
-                const badgeId = `${RAIL_SESSION_DETAIL_PREFIX}open-${session.id}`;
-                const busy = cloudCodeSessionIsBusy(session);
-                const failed = session.state === 'failed';
-                const details = [session.repositoryUrl ? repositoryId : null, busy ? badgeId : null]
-                  .filter(Boolean)
-                  .join(' ');
-                return (
-                  <button
-                    key={session.id}
-                    type="button"
-                    className={`${styles['railRow']} ${
-                      selectedId === session.id ? styles['railRowActive'] : ''
-                    }`}
-                    aria-label={
-                      failed
-                        ? `${session.title} ${CLOUD_CODE_SESSION_STATE_LABELS[session.state]}`
-                        : session.title
-                    }
-                    aria-describedby={details || undefined}
-                    aria-current={selectedId === session.id ? 'true' : undefined}
-                    onClick={(event) =>
-                      onSelectSession(session.id, { split: event.metaKey || event.ctrlKey })
-                    }
-                  >
-                    <span className={styles['railRowGlyph']}>
-                      {busy ? (
+          {!loading &&
+            groupCodeSessions(sessions).map((group) => (
+              <section
+                key={group.id}
+                className="mb-2 flex flex-col gap-0.5"
+                aria-label={group.label}
+                data-testid={`code-rail-group-${group.id}`}
+              >
+                <h3 className="m-0 px-2 pb-0.5 pt-1 text-[14px] font-medium text-[var(--chat-text-secondary)]">
+                  {group.label}
+                </h3>
+                {group.sessions.map((session) => {
+                  const repositoryId = `${RAIL_SESSION_DETAIL_PREFIX}repository-${session.id}`;
+                  const badgeId = `${RAIL_SESSION_DETAIL_PREFIX}open-${session.id}`;
+                  const busy = cloudCodeSessionIsBusy(session);
+                  const failed = session.state === 'failed';
+                  const details = [
+                    session.repositoryUrl ? repositoryId : null,
+                    busy ? badgeId : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' ');
+                  return (
+                    <button
+                      key={session.id}
+                      type="button"
+                      className={`${styles['railRow']} ${
+                        selectedId === session.id ? styles['railRowActive'] : ''
+                      }`}
+                      aria-label={
+                        failed
+                          ? `${session.title} ${CLOUD_CODE_SESSION_STATE_LABELS[session.state]}`
+                          : session.title
+                      }
+                      aria-describedby={details || undefined}
+                      aria-current={selectedId === session.id ? 'true' : undefined}
+                      onClick={(event) =>
+                        onSelectSession(session.id, { split: event.metaKey || event.ctrlKey })
+                      }
+                    >
+                      <span className={styles['railRowGlyph']}>
+                        {busy ? (
+                          <span
+                            className={styles['railRunningDot']}
+                            aria-label={CODE_COPY.runningSession}
+                          />
+                        ) : (
+                          <Archive size={RAIL_GLYPH_SIZE} aria-hidden="true" />
+                        )}
+                      </span>
+                      <span className="flex min-w-0 flex-1 flex-col py-1">
+                        <span className={styles['railRowLabel']}>{session.title}</span>
+                        {session.repositoryUrl && (
+                          <span
+                            id={repositoryId}
+                            className="truncate font-[family-name:var(--chat-font-mono)] text-[14px] text-[var(--chat-text-muted)]"
+                          >
+                            {cloudCodeRepositoryLabel(session.repositoryUrl)}
+                          </span>
+                        )}
+                      </span>
+                      {busy && (
                         <span
-                          className={styles['railRunningDot']}
-                          aria-label={CODE_COPY.runningSession}
-                        />
-                      ) : (
-                        <Archive size={RAIL_GLYPH_SIZE} aria-hidden="true" />
-                      )}
-                    </span>
-                    <span className="flex min-w-0 flex-1 flex-col py-1">
-                      <span className={styles['railRowLabel']}>{session.title}</span>
-                      {session.repositoryUrl && (
-                        <span
-                          id={repositoryId}
-                          className="truncate font-[family-name:var(--chat-font-mono)] text-[14px] text-[var(--chat-text-muted)]"
+                          id={badgeId}
+                          className="shrink-0 rounded-[var(--chat-radius-sm)] bg-[color-mix(in_srgb,var(--chat-success)_16%,transparent)] px-2 font-[family-name:var(--chat-font-mono)] text-[14px] text-[var(--chat-success-text)]"
                         >
-                          {cloudCodeRepositoryLabel(session.repositoryUrl)}
+                          {CODE_COPY.sessionOpenBadge}
                         </span>
                       )}
-                    </span>
-                    {busy && (
-                      <span
-                        id={badgeId}
-                        className="shrink-0 rounded-[var(--chat-radius-sm)] bg-[color-mix(in_srgb,var(--chat-success)_16%,transparent)] px-2 font-[family-name:var(--chat-font-mono)] text-[14px] text-[var(--chat-success-text)]"
-                      >
-                        {CODE_COPY.sessionOpenBadge}
-                      </span>
-                    )}
-                    {failed && (
-                      <span className={styles['railRowState']}>
-                        {CLOUD_CODE_SESSION_STATE_LABELS[session.state]}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </section>
-          ))}
+                      {failed && (
+                        <span className={styles['railRowState']}>
+                          {CLOUD_CODE_SESSION_STATE_LABELS[session.state]}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </section>
+            ))}
 
-        {!loading && sessions.length === 0 && searching && (
-          <div className={styles['railEmpty']}>
-            <span>{CODE_COPY.noSearchMatches}</span>
-          </div>
-        )}
+          {!loading && sessions.length === 0 && searching && !showLocalSearchSection && (
+            <div className={styles['railEmpty']} role="status">
+              <span>{CODE_COPY.noSearchMatches}</span>
+            </div>
+          )}
 
-        {!loading && sessions.length === 0 && !searching && (
-          <div className={styles['railEmpty']}>
-            <span>{filterHidesSessions ? CODE_COPY.noOpenSessions : CODE_COPY.noSessions}</span>
-            {filterHidesSessions && (
-              <button
-                type="button"
-                className={styles['railEmptyAction']}
-                onClick={() => onFiltersChange({ status: 'all' })}
-              >
-                {CODE_COPY.showClosed}
-              </button>
-            )}
-          </div>
-        )}
-      </nav>
+          {!loading && sessions.length === 0 && !searching && (
+            <div className={styles['railEmpty']}>
+              <span>{filterHidesSessions ? CODE_COPY.noOpenSessions : CODE_COPY.noSessions}</span>
+              {filterHidesSessions && (
+                <button
+                  type="button"
+                  className={styles['railEmptyAction']}
+                  onClick={() => onFiltersChange({ status: 'all' })}
+                >
+                  {CODE_COPY.showClosed}
+                </button>
+              )}
+            </div>
+          )}
+        </nav>
+      </div>
 
       {accountFooter && (
         <div

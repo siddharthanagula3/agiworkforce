@@ -82,7 +82,9 @@ nothing is left.
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
+| chrome | partial | Chrome keeps text in the current browser session. Recovery after Chrome restarts and across devices is open. |  |
+
+Code: `apps/extension/src/side_panel.ts:14187-14187`
 
 ## S13.17: Draft recovery.
 
@@ -94,7 +96,9 @@ nothing is left.
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
+| chrome | partial | Same-session panel reopen, reload, and delayed-read handling verified with a Chromium extension fixture. Authenticated side-panel acceptance and recovery after Chrome restarts remain open. |  |
+
+Code: `apps/extension/src/side_panel.ts:9914-9914`, `apps/extension/src/side_panel.ts:9324-9324`
 
 ## S13.18: Draft isolation by conversation.
 
@@ -106,7 +110,9 @@ nothing is left.
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
+| chrome | partial | Text is keyed by chat, account, and login session. Chromium verified isolation, including keyboard undo and Temporary Chat, in an extension fixture. Authenticated history navigation in the side panel remains unverified. |  |
+
+Code: `apps/extension/src/side_panel.ts:9892-9892`
 
 ## S13.20: Prompt suggestions.
 

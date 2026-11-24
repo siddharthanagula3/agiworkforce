@@ -409,8 +409,11 @@ pub fn current_routing_policy_version() -> Option<u64> {
 }
 
 pub const MANAGED_SESSION_MAX_APPROVALS: usize = 1_000;
+const MANAGED_SESSION_MAX_CHILD_TRANSCRIPTS: usize = 50;
+const MANAGED_CHILD_TRANSCRIPT_MAX_BYTES: usize = 12 * 1024;
 pub const MANAGED_SESSION_MAX_FILE_CHANGES: usize = 5_000;
 pub const MANAGED_SESSION_MAX_VALIDATIONS: usize = 1_000;
+pub(crate) const MAX_APPROVAL_NOTE_CHARS: usize = 4_000;
 const MANAGED_SESSION_ACTIVITY_TEXT_MAX_CHARS: usize = 500;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -433,6 +436,43 @@ pub struct ManagedSessionApproval {
     pub outcome: ManagedSessionApprovalOutcome,
     pub requested_at: DateTime<Utc>,
     pub decided_at: DateTime<Utc>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub question_answer: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ManagedChildTranscript {
+    pub task_id: String,
+    pub lines: Vec<String>,
+    pub truncated: bool,
+}
+
+impl ManagedChildTranscript {
+    fn bounded(task_id: &str, lines: Vec<String>) -> Self {
+        let first_size = lines.first().map_or(0, |line| line.len() + 1);
+        let mut retained_size = 0usize;
+        let mut retained = 0usize;
+        for line in lines.iter().rev().take(lines.len().saturating_sub(1)) {
+            let next = retained_size + line.len() + 1;
+            if first_size + next > MANAGED_CHILD_TRANSCRIPT_MAX_BYTES {
+                break;
+            }
+            retained_size = next;
+            retained += 1;
+        }
+        let truncated = retained + 1 < lines.len();
+        let start = lines.len() - retained;
+        let lines = lines
+            .into_iter()
+            .enumerate()
+            .filter_map(|(index, line)| (index == 0 || index >= start).then_some(line))
+            .collect();
+        Self {
+            task_id: task_id.to_owned(),
+            lines,
+            truncated,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -558,6 +598,8 @@ pub struct ManagedSession {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub approvals: Vec<ManagedSessionApproval>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub child_transcripts: Vec<ManagedChildTranscript>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub file_changes: Vec<ManagedSessionFileChange>,
     /// Checks this session ran against the work, oldest first.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -573,6 +615,8 @@ pub struct ManagedSession {
     pub architecture: Option<HandoffArchitecture>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub archived_at: Option<DateTime<Utc>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) developer_turn_writer: Option<String>,
     // --- v2 session-state fields (all optional for backward compat with v1 files) ---
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub permission_mode: Option<PermissionMode>,
@@ -891,6 +935,8 @@ struct ManagedSessionJsonlHeader {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     approvals: Vec<ManagedSessionApproval>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    child_transcripts: Vec<ManagedChildTranscript>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     file_changes: Vec<ManagedSessionFileChange>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     validations: Vec<ManagedSessionValidation>,
@@ -900,6 +946,8 @@ struct ManagedSessionJsonlHeader {
     architecture: Option<HandoffArchitecture>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     archived_at: Option<DateTime<Utc>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    developer_turn_writer: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     permission_mode: Option<PermissionMode>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -941,6 +989,32 @@ enum ManagedSessionJsonlRecord {
 }
 
 impl ManagedSession {
+    pub(crate) fn developer_child_task(
+        &self,
+        task: &agiworkforce_protocol::code_domain::CodeTask,
+    ) -> agiworkforce_protocol::developer_session::DeveloperChildTask {
+        let mut projected =
+            agiworkforce_protocol::developer_session::DeveloperChildTask::from(task);
+        projected.transcript_available = self
+            .child_transcripts
+            .iter()
+            .any(|transcript| transcript.task_id == task.id.as_str());
+        projected
+    }
+
+    pub fn record_child_transcript(&mut self, task_id: &str, lines: Vec<String>) {
+        if lines.is_empty() {
+            return;
+        }
+        self.child_transcripts
+            .retain(|existing| existing.task_id != task_id);
+        push_bounded(
+            &mut self.child_transcripts,
+            ManagedChildTranscript::bounded(task_id, lines),
+            MANAGED_SESSION_MAX_CHILD_TRANSCRIPTS,
+        );
+    }
+
     /// Create a new empty managed session.
     pub fn new(session_id: impl Into<String>, created_at: DateTime<Utc>) -> Self {
         Self {
@@ -959,11 +1033,13 @@ impl ManagedSession {
             worktree_root: None,
             repository: None,
             approvals: Vec::new(),
+            child_transcripts: Vec::new(),
             file_changes: Vec::new(),
             validations: Vec::new(),
             objective: None,
             architecture: None,
             archived_at: None,
+            developer_turn_writer: None,
             permission_mode: None,
             plan_mode: None,
             plan_approved: None,
@@ -1059,11 +1135,13 @@ impl ManagedSession {
             worktree_root: source.worktree_root.clone(),
             repository: source.repository.clone(),
             approvals: Vec::new(),
+            child_transcripts: Vec::new(),
             file_changes: Vec::new(),
             validations: Vec::new(),
             objective: None,
             architecture: None,
             archived_at: None,
+            developer_turn_writer: None,
             permission_mode: None,
             plan_mode: None,
             plan_approved: None,
@@ -1645,6 +1723,12 @@ impl ManagedSession {
         if buf.len() <= limit {
             return Ok(buf);
         }
+        if !self.child_transcripts.is_empty() {
+            let mut fallback = self.clone();
+            fallback.child_transcripts.clear();
+            tracing::warn!(session_id = %self.session_id, "child transcripts exceeded the session file budget");
+            return fallback.serialized_within(path, limit);
+        }
         if let Some(transcript) = transcript.as_deref() {
             for tool_text_max in TRANSCRIPT_TOOL_TEXT_FALLBACKS {
                 let shorter = transcript.shortened(tool_text_max);
@@ -1789,11 +1873,13 @@ impl ManagedSession {
                         worktree_root: record.worktree_root,
                         repository: record.repository,
                         approvals: record.approvals,
+                        child_transcripts: record.child_transcripts,
                         file_changes: record.file_changes,
                         validations: record.validations,
                         objective: record.objective,
                         architecture: record.architecture,
                         archived_at: record.archived_at,
+                        developer_turn_writer: record.developer_turn_writer,
                         permission_mode: record.permission_mode,
                         plan_mode: record.plan_mode,
                         plan_approved: record.plan_approved,
@@ -1883,6 +1969,18 @@ impl ManagedSession {
         if self.approvals.len() > MANAGED_SESSION_MAX_APPROVALS {
             bail!("Managed session records more than {MANAGED_SESSION_MAX_APPROVALS} approvals");
         }
+        if self.child_transcripts.len() > MANAGED_SESSION_MAX_CHILD_TRANSCRIPTS
+            || self.child_transcripts.iter().any(|transcript| {
+                transcript
+                    .lines
+                    .iter()
+                    .map(|line| line.len() + 1)
+                    .sum::<usize>()
+                    > MANAGED_CHILD_TRANSCRIPT_MAX_BYTES
+            })
+        {
+            bail!("Managed child transcripts exceed the session's transcript limits");
+        }
         for approval in &self.approvals {
             validate_summary_text(
                 &approval.request_id,
@@ -1898,6 +1996,13 @@ impl ManagedSession {
                 || approval.summary.encode_utf16().count() > MANAGED_SESSION_TITLE_MAX_UTF16
             {
                 bail!("Managed session approval summary is not a bounded single line");
+            }
+            if approval
+                .question_answer
+                .as_ref()
+                .is_some_and(|answer| answer.chars().count() > MAX_APPROVAL_NOTE_CHARS)
+            {
+                bail!("Managed session question answer exceeds its character limit");
             }
         }
         if self.file_changes.len() > MANAGED_SESSION_MAX_FILE_CHANGES {
@@ -2017,11 +2122,13 @@ impl ManagedSession {
             worktree_root: self.worktree_root.clone(),
             repository: self.repository.clone(),
             approvals: self.approvals.clone(),
+            child_transcripts: self.child_transcripts.clone(),
             file_changes: self.file_changes.clone(),
             validations: self.validations.clone(),
             objective: self.objective.clone(),
             architecture: self.architecture.clone(),
             archived_at: self.archived_at,
+            developer_turn_writer: self.developer_turn_writer.clone(),
             permission_mode: self.permission_mode,
             plan_mode: self.plan_mode,
             plan_approved: self.plan_approved,
@@ -2253,12 +2360,14 @@ mod tests {
             worktree_root: None,
             repository: None,
             approvals: Vec::new(),
+            child_transcripts: Vec::new(),
             file_changes: Vec::new(),
             validations: Vec::new(),
             objective: None,
             architecture: None,
             archived_at: None,
             permission_mode,
+            developer_turn_writer: None,
             plan_mode,
             plan_approved,
             current_plan,
@@ -2312,12 +2421,14 @@ mod tests {
             worktree_root: None,
             repository: None,
             approvals: Vec::new(),
+            child_transcripts: Vec::new(),
             file_changes: Vec::new(),
             validations: Vec::new(),
             objective: None,
             architecture: None,
             archived_at: None,
             permission_mode,
+            developer_turn_writer: None,
             plan_mode,
             plan_approved,
             current_plan,

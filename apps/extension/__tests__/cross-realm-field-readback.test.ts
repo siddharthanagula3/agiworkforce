@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getFieldValue, REDACTED_FIELD_PLACEHOLDER } from '../src/features/computer-use/cdpDriver';
+import { verifyTypedField } from '../src/features/computer-use/cdpDriver';
 import { createCdpInspectionFixture } from './fixtures/cdp-inspection';
 
 const inspection = createCdpInspectionFixture(document.location.href);
@@ -59,7 +59,7 @@ function adopted(tag: 'input' | 'textarea' | 'select') {
 
 describe('production native field readback across DOM realms', () => {
   it.each(['input', 'textarea', 'select'] as const)(
-    'reads an adopted %s value through its native getter',
+    'verifies an adopted %s through its native getter',
     async (tag) => {
       const field = adopted(tag);
       if (field.localName === 'select')
@@ -70,7 +70,7 @@ describe('production native field readback across DOM realms', () => {
           field instanceof HTMLTextAreaElement ||
           field instanceof HTMLSelectElement,
       ).toBe(false);
-      expect(await getFieldValue(42, '#field')).toBe(tag === 'select' ? 'beta' : 'Adopted proof');
+      expect(await verifyTypedField(42, '#field', field.value, true)).toBe(true);
     },
   );
 
@@ -80,8 +80,8 @@ describe('production native field readback across DOM realms', () => {
       const field = adopted(tag) as HTMLInputElement | HTMLTextAreaElement;
       field.readOnly = true;
       field.value = 'Existing value';
-      expect(await getFieldValue(42, '#field')).toBe('Existing value');
-      expect(await getFieldValue(42, '#field')).not.toContain('Attempted replacement');
+      expect(await verifyTypedField(42, '#field', 'Existing value', true)).toBe(true);
+      expect(await verifyTypedField(42, '#field', 'Attempted replacement', true)).toBe(false);
     },
   );
 
@@ -92,7 +92,7 @@ describe('production native field readback across DOM realms', () => {
       field.type = type;
       field.value = 'private synthetic value';
       const valueGetter = vi.spyOn(HTMLInputElement.prototype, 'value', 'get');
-      expect(await getFieldValue(42, '#field')).toBe(REDACTED_FIELD_PLACEHOLDER);
+      expect(await verifyTypedField(42, '#field', 'private synthetic value', true)).toBeNull();
       expect(valueGetter).not.toHaveBeenCalled();
     },
   );
@@ -104,7 +104,7 @@ describe('production native field readback across DOM realms', () => {
     vi.spyOn(HTMLInputElement.prototype, 'type', 'get').mockImplementation(() => {
       throw new Error('Type unavailable');
     });
-    expect(await getFieldValue(42, '#field')).toBeNull();
+    expect(await verifyTypedField(42, '#field', 'anything', true)).toBeNull();
     expect(valueGetter).not.toHaveBeenCalled();
   });
 
@@ -117,6 +117,6 @@ describe('production native field readback across DOM realms', () => {
         throw new Error('Must not read overridden value');
       },
     });
-    expect(await getFieldValue(42, '#field')).toBe(REDACTED_FIELD_PLACEHOLDER);
+    expect(await verifyTypedField(42, '#field', 'private synthetic value', true)).toBeNull();
   });
 });

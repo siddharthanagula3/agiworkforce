@@ -292,6 +292,7 @@ pub fn convert_message_to_openai(m: &Message) -> Vec<Value> {
                             mime,
                             data_b64,
                             asset_id,
+                            ..
                         } => {
                             content_parts.push(match asset_id {
                                 Some(asset_id) => serde_json::json!({
@@ -1202,6 +1203,7 @@ mod tests {
                 mime: mime.to_string(),
                 data_b64: data_b64.to_string(),
                 asset_id: None,
+                context_tokens: Some(3000),
             }],
         )
     }
@@ -1211,6 +1213,7 @@ mod tests {
         let pdf = convert_message_to_anthropic(&document("application/pdf", "JVBERi0="));
         assert_eq!(pdf["content"][0]["source"]["type"], "base64");
         assert_eq!(pdf["content"][0]["source"]["media_type"], "application/pdf");
+        assert!(!pdf.to_string().contains("context_tokens"));
 
         let text = convert_message_to_anthropic(&document("text/markdown", "IyBIaQ=="));
         assert_eq!(text["content"][0]["source"]["type"], "text");

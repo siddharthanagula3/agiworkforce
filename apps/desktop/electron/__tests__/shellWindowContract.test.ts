@@ -180,7 +180,8 @@ describe('what the reader is told about an update', () => {
       available: false,
       currentVersion: '1.2.3',
       version: '1.2.3',
-      downloadUrl: '',
+      latestVersion: '1.2.3',
+      downloadUrl: 'https://agiworkforce.com/api/download',
     });
     expect(prompt).toMatchObject({ type: 'info', title: `${PRODUCT_NAMES.desktop} is up to date` });
     expect(prompt.detail).toContain('Installed: 1.2.3');

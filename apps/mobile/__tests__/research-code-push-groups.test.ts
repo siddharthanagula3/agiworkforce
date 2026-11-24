@@ -1,4 +1,11 @@
-import { MobilePushPreferencesSchema } from '@agiworkforce/cloud-contracts';
+import {
+  MobilePushPreferencesSchema,
+  PUSH_ACCOUNT_BINDING_DOMAIN,
+  PUSH_ACCOUNT_BINDING_FIELD,
+} from '@agiworkforce/cloud-contracts';
+import { sha256 } from '@noble/hashes/sha256';
+import { bytesToHex } from '@noble/hashes/utils';
+import { activateCloudAccount } from '@/src/features/auth/services/cloudAccountSession';
 
 let capturedNotificationHandler:
   | ((notification: { request: { content: { data?: unknown } } }) => Promise<{
@@ -51,10 +58,20 @@ const SPLIT_TYPES = [
   'code_session_failed',
   'code_session_needs_input',
 ] as const;
+const ACCOUNT = 'push-category-owner';
 
 function present(type: string) {
   if (!capturedNotificationHandler) throw new Error('notification handler was not captured');
-  return capturedNotificationHandler({ request: { content: { data: { type } } } });
+  return capturedNotificationHandler({
+    request: {
+      content: {
+        data: {
+          type,
+          [PUSH_ACCOUNT_BINDING_FIELD]: bytesToHex(sha256(PUSH_ACCOUNT_BINDING_DOMAIN + ACCOUNT)),
+        },
+      },
+    },
+  });
 }
 
 describe('research and AGI Code notices reach the server preferences', () => {
@@ -66,6 +83,7 @@ describe('research and AGI Code notices reach the server preferences', () => {
   });
 
   beforeEach(() => {
+    activateCloudAccount(ACCOUNT);
     useNotificationPrefsStore.setState({
       categoryEnabled: { ...DEFAULT_CATEGORY_ENABLED, research: true, code: true, tasks: false },
       quietHours: { ...useNotificationPrefsStore.getState().quietHours, enabled: false },

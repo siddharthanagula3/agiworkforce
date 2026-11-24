@@ -14,11 +14,14 @@ import {
 import {
   DEVELOPER_RUNTIME_CAPABILITIES,
   DesktopRuntimeError,
+  worktreeRootId,
   type DeveloperHostModel,
   type DeveloperSessionGroup,
+  type DeveloperSessionListOptions,
   type LocalDeveloperSession,
 } from '@agiworkforce/local-runtime-contract';
-import { onAppCommand } from '@shared/lib/app-commands';
+import { emitAppCommand, onAppCommand } from '@shared/lib/app-commands';
+import { hostBridgeStub } from '@/test/host-bridge-stub';
 import { LOCAL_MODELS_SETTINGS_SECTION } from '@/features/settings/lib/web-settings-sections';
 import {
   LOCAL_CODE_COPY,
@@ -44,6 +47,7 @@ import {
 import { fetchPreferenceNamespace } from '@/app/settings/_lib/preferences-client';
 import { listLocalBranches, switchLocalBranch } from '@/features/desktop-host';
 import { CloudCodePage } from './CloudCodePage';
+import { CodeComposerDraftProvider } from './CodeComposerDrafts';
 import { forgetLocalSession } from './local-session-memory';
 import {
   CloudCodeApiError,
@@ -63,6 +67,7 @@ const codeIdentity = vi.hoisted(() => ({
     loaded: true,
     user: { id: 'account-a' },
     session: { id: 'auth-session-a', user: { id: 'account-a' }, getToken: async () => 'token-a' },
+    addListener: () => () => undefined,
   },
 }));
 vi.mock('@clerk/nextjs', async (importOriginal) => ({
@@ -73,7 +78,7 @@ vi.mock('@clerk/nextjs', async (importOriginal) => ({
 vi.mock('next/navigation', () => ({
   useRouter: () => router,
   usePathname: () => '/code',
-  useSearchParams: () => new URLSearchParams(navigationState.search),
+  useSearchParams: () => new URLSearchParams(navigationState.search || window.location.search),
 }));
 
 vi.mock('@shared/components/layout/WebAppShell', () => ({
@@ -110,11 +115,20 @@ vi.mock('@/features/notebook/NotebookPanel', () => ({
 }));
 
 vi.mock('./components/CodeUsageDashboard', () => ({
-  CodeUsageDashboard: ({ planTier, linkOnly }: { planTier: string | null; linkOnly?: boolean }) => (
+  CodeUsageDashboard: ({
+    planTier,
+    linkOnly,
+    collapsed,
+  }: {
+    planTier: string | null;
+    linkOnly?: boolean;
+    collapsed?: boolean;
+  }) => (
     <div
       data-testid="code-usage-dashboard"
       data-plan-tier={planTier ?? ''}
       data-link-only={String(Boolean(linkOnly))}
+      data-collapsed={String(Boolean(collapsed))}
     />
   ),
 }));
@@ -134,9 +148,11 @@ vi.mock('@/app/settings/_lib/preferences-client', () => ({
   savePreferenceNamespace: vi.fn(async () => undefined),
 }));
 
-type FakeHost = Record<string, never> | null;
+type FakeHost = { shell?: 'electron' } | null;
 let host: FakeHost = null;
 let hostAfterHydration: FakeHost = null;
+const mockDraftBrowserSupported = vi.fn(async () => false);
+const mockDraftSimulatorSupported = vi.fn(async () => false);
 let localModeHost = false;
 const localSession: LocalDeveloperSession = {
   id: 'thread-1',
@@ -152,7 +168,12 @@ const localSession: LocalDeveloperSession = {
   origin: 'cli',
 };
 let localGroups: DeveloperSessionGroup[] = [];
-const listDeveloperSessions = vi.fn(async () => ({ groups: localGroups }));
+const workspaceChanges = new Set<() => void>();
+const listDeveloperSessions = vi.fn(async (_options?: DeveloperSessionListOptions) => ({
+  groups: localGroups,
+}));
+const lookupDeveloperSession =
+  vi.fn<(rootId: string, threadId: string) => Promise<LocalDeveloperSession | null>>();
 const startDeveloperSession = vi.fn(async (rootId: string, _model?: string) => ({
   ...localSession,
   rootId,
@@ -164,7 +185,7 @@ const readDeveloperSession = vi.fn(async () => ({
   truncated: false,
   activeTurn: null,
 }));
-const pickWorkspaceRoot = vi.fn(async () => ({ rootId: 'root-added' }));
+const pickWorkspaceRoot = vi.fn(async (_kind?: string) => ({ id: 'root-added' }));
 let localHostModels: Array<
   Pick<DeveloperHostModel, 'id' | 'provider' | 'reachable' | 'unreachable'> &
     Partial<Pick<DeveloperHostModel, 'trustMode'>>
@@ -186,6 +207,8 @@ vi.mock('./services/local-review-client', async (importOriginal) => ({
 
 const deleteDeveloperThread = vi.fn();
 const archiveDeveloperThread = vi.fn();
+const unarchiveDeveloperThread = vi.fn();
+const renameDeveloperThread = vi.fn();
 const allowDeveloperSessions = vi.fn();
 const reviewDeveloperMcpServer = vi.fn();
 vi.mock('@/features/desktop-host', async (importOriginal) => ({
@@ -218,11 +241,20 @@ vi.mock('@/features/desktop-host', async (importOriginal) => ({
     </a>
   ),
   useDesktopHost: () => host,
+  browserPaneSupported: () => mockDraftBrowserSupported(),
+  simulatorPaneSupported: () => mockDraftSimulatorSupported(),
   useLocalModeHost: () => (localModeHost ? host : null),
   isDesktopHost: () => host !== null || hostAfterHydration !== null,
   archiveDeveloperThread: (...args: unknown[]) => archiveDeveloperThread(...args),
+  unarchiveDeveloperThread: (...args: unknown[]) => unarchiveDeveloperThread(...args),
+  renameDeveloperThread: (...args: unknown[]) => renameDeveloperThread(...args),
   allowDeveloperSessions: (...args: unknown[]) => allowDeveloperSessions(...args),
-  onWorkspaceChanged: () => () => undefined,
+  onWorkspaceChanged: (listener: () => void) => {
+    workspaceChanges.add(listener);
+    return () => {
+      workspaceChanges.delete(listener);
+    };
+  },
   deleteDeveloperThread: (...args: unknown[]) => deleteDeveloperThread(...args),
   forkDeveloperThread: vi.fn(),
   CODE_AGENT_MODE_CYCLE_SHORTCUT: { key: 'M', ctrl: true, meta: true, shift: true },
@@ -233,12 +265,14 @@ vi.mock('@/features/desktop-host', async (importOriginal) => ({
   interruptDeveloperTurn: vi.fn(async () => true),
   listWorkspaceFiles: vi.fn(async () => []),
   listDeveloperModels: (...args: unknown[]) => listDeveloperModels(...(args as [])),
-  listDeveloperSessions: () => listDeveloperSessions(),
+  listDeveloperSessions: (options?: DeveloperSessionListOptions) => listDeveloperSessions(options),
+  lookupDeveloperSession: (rootId: string, threadId: string) =>
+    lookupDeveloperSession(rootId, threadId),
   listLocalBranches: vi.fn(async () => null),
   switchLocalBranch: vi.fn(async (_rootId: string, branch: string) => branch),
   onDeveloperSessionEvent: () => () => undefined,
   openWorkspaceInEditor: vi.fn(async () => true),
-  pickWorkspaceRoot: () => pickWorkspaceRoot(),
+  pickWorkspaceRoot: (kind?: string) => pickWorkspaceRoot(kind),
   readDeveloperSession: () => readDeveloperSession(),
   reviewDeveloperMcpServer: (...args: unknown[]) => reviewDeveloperMcpServer(...args),
   startDeveloperSession: (rootId: string, model?: string) => startDeveloperSession(rootId, model),
@@ -263,9 +297,15 @@ beforeEach(() => {
     getToken: async () => 'token-a',
   };
   navigationState.search = '';
-  useSettingsStore.setState({ codeFirstRunCompleted: true, codeRailPins: {} });
+  useSettingsStore.setState({
+    codeFirstRunCompleted: true,
+    codeRailPins: {},
+    dictationEnabled: true,
+  });
   host = null;
   hostAfterHydration = null;
+  mockDraftBrowserSupported.mockReset().mockResolvedValue(false);
+  mockDraftSimulatorSupported.mockReset().mockResolvedValue(false);
   for (const rootId of ['root-recent', 'root-older', WORKTREE_ROOT_ID]) {
     for (const threadId of ['thread-1', 'thread-2']) forgetLocalSession(rootId, threadId);
   }
@@ -273,9 +313,11 @@ beforeEach(() => {
   localHostModels = [];
   localDefaultModelId = null;
   composerFooter.onUpgradeRequest = undefined;
-  listDeveloperSessions.mockClear();
+  listDeveloperSessions.mockReset().mockImplementation(async () => ({ groups: localGroups }));
+  lookupDeveloperSession.mockReset().mockResolvedValue(null);
   startDeveloperSession.mockClear();
   startDeveloperTurn.mockClear();
+  renameDeveloperThread.mockReset();
   pickWorkspaceRoot.mockClear();
 });
 
@@ -500,6 +542,63 @@ async function openEnvironmentSettings(user: ReturnType<typeof userEvent.setup>)
 }
 
 describe('CloudCodePage', () => {
+  it('keeps a separate unsent task for each Cloud session and for New session', async () => {
+    const user = userEvent.setup();
+    const other = { ...session, id: '22222222-2222-4222-8222-222222222222', title: 'Review build' };
+    const api = createApi({
+      list: vi.fn(async () => ({ availability, sessions: [session, other], runtimes: [] })),
+      get: vi.fn(async (id) => ({
+        session: id === other.id ? other : session,
+        terminalEntries: [],
+        turns: [],
+      })),
+    });
+    render(<CloudCodePage api={api} />);
+
+    await user.type(await enabledComposer(), 'New session draft');
+    await openSession(user, session.title);
+    expect(await enabledComposer()).toHaveValue('');
+    await user.type(await enabledComposer(), 'Test suite follow-up');
+    await openSession(user, other.title);
+    expect(await enabledComposer()).toHaveValue('');
+    await user.type(await enabledComposer(), 'Build review follow-up');
+    await openSession(user, session.title);
+    expect(await enabledComposer()).toHaveValue('Test suite follow-up');
+    await user.click(screen.getByRole('button', { name: 'New' }));
+    expect(await enabledComposer()).toHaveValue('New session draft');
+    await openSession(user, other.title);
+    expect(await enabledComposer()).toHaveValue('Build review follow-up');
+    expect(api.startAgentTurn).not.toHaveBeenCalled();
+  });
+
+  it('keeps drafts across Code page mounts and drops them on account change', async () => {
+    const user = userEvent.setup();
+    const api = createApi({
+      list: vi.fn(async () => ({ availability, sessions: [session], runtimes: [] })),
+    });
+    const route = (id?: string) => (
+      <CodeComposerDraftProvider>
+        <CloudCodePage key={id ?? 'new'} api={api} sessionId={id} />
+      </CodeComposerDraftProvider>
+    );
+    const { rerender } = render(route());
+    await user.type(await enabledComposer(), 'First account new task');
+    rerender(route(session.id));
+    expect(await enabledComposer()).toHaveValue('');
+    await user.type(await enabledComposer(), 'First account session draft');
+
+    rerender(route());
+    expect(await enabledComposer()).toHaveValue('First account new task');
+    rerender(route(session.id));
+    expect(await enabledComposer()).toHaveValue('First account session draft');
+
+    changeCodeIdentity('account-b', 'auth-session-b');
+    rerender(route(session.id));
+    expect(await enabledComposer()).toHaveValue('');
+    rerender(route());
+    expect(await enabledComposer()).toHaveValue('');
+  });
+
   beforeEach(() => {
     push.mockReset();
     replace.mockReset();
@@ -877,6 +976,29 @@ describe('CloudCodePage', () => {
     );
   });
 
+  it('puts folder setup ahead of collapsed usage in Electron and selects the folder that was picked', async () => {
+    const user = userEvent.setup();
+    host = { shell: 'electron' };
+    const pickedFolder = folder({ rootId: 'root-added', name: 'picked project', sessions: [] });
+    pickWorkspaceRoot.mockImplementationOnce(async () => {
+      localGroups = [folder(), pickedFolder];
+      return { id: pickedFolder.rootId };
+    });
+    render(<CloudCodePage api={createApi()} />);
+
+    const home = within(await screen.findByTestId('code-home'));
+    const choose = await home.findByRole('button', { name: LOCAL_CODE_COPY.chooseFolder });
+    expect(home.getByTestId('code-usage-dashboard')).toHaveAttribute('data-collapsed', 'true');
+    await user.click(choose);
+    expect(pickWorkspaceRoot).toHaveBeenCalledWith('folder');
+    expect(
+      await screen.findByRole('button', { name: 'Change the folder: picked project' }),
+    ).toBeInTheDocument();
+    expect(
+      home.queryByRole('button', { name: LOCAL_CODE_COPY.chooseFolder }),
+    ).not.toBeInTheDocument();
+  });
+
   describe('on a phone', () => {
     const wideWidth = window.innerWidth;
     const originalMatchMedia = window.matchMedia;
@@ -904,11 +1026,25 @@ describe('CloudCodePage', () => {
       render(<CloudCodePage api={createApi()} />);
 
       const slot = await screen.findByTestId('code-app-bar');
-      const drawerButton = within(slot).getByRole('button', { name: 'Cloud sessions' });
+      const drawerButton = within(slot).getByRole('button', { name: 'Open session list' });
       expect(slot.firstElementChild).toBe(drawerButton);
       expect(drawerButton).toHaveAttribute('aria-expanded', 'false');
       expect(drawerButton).toHaveAttribute('aria-controls', 'code-rail-drawer');
       expect(slot).toHaveTextContent('Code');
+    });
+
+    it('puts the desktop tools button in the phone app header without a second Code title', async () => {
+      const user = userEvent.setup();
+      host = { shell: 'electron' };
+      render(<CloudCodePage api={createApi()} />);
+
+      const appBar = await screen.findByTestId('code-app-bar');
+      const tools = within(appBar).getByRole('button', { name: 'Side panel' });
+      expect(screen.getAllByText('Code', { exact: true })).toHaveLength(1);
+
+      await user.click(tools);
+      expect(screen.getByRole('complementary', { name: 'Panel shortcuts' })).toBeVisible();
+      expect(tools).toHaveAttribute('aria-pressed', 'true');
     });
 
     it('swaps the usage card for a link to the usage page', async () => {
@@ -948,6 +1084,39 @@ describe('CloudCodePage', () => {
     expect(screen.queryByRole('note')).not.toBeInTheDocument();
   });
 
+  it('explains when Voice settings disable the microphone without hiding it', async () => {
+    useSettingsStore.setState({ dictationEnabled: false });
+    render(<CloudCodePage api={createApi()} />);
+
+    const microphone = await screen.findByRole('button', { name: CODE_COPY.startDictation });
+    expect(microphone).toBeVisible();
+    expect(microphone).toBeDisabled();
+    expect(microphone).toHaveAccessibleDescription('Dictation is off in Voice settings');
+  });
+
+  it('shows the microphone beside the draft and only adds Send when the draft has content', async () => {
+    const user = userEvent.setup();
+    render(<CloudCodePage api={createApi()} />);
+
+    const field = await enabledComposer();
+    const attach = screen.getByRole('button', { name: 'Add to this session' });
+    const mic = screen.getByRole('button', { name: 'Start voice input' });
+    const send = () => screen.queryByRole('button', { name: 'Start the task' });
+    expect(field.previousElementSibling).toBe(attach);
+    expect(field.parentElement).toContainElement(mic);
+    const frame = screen.getByTestId('code-composer-field');
+    expect(frame.nextElementSibling).toBe(screen.getByTestId('code-composer-footer'));
+    expect(send()).toBeNull();
+    await user.type(field, '  ');
+    expect(send()).toBeNull();
+    await user.type(field, 'Run the tests');
+    expect(send()).toBeEnabled();
+    expect(send()?.nextElementSibling).toBe(mic);
+    await user.clear(field);
+    expect(send()).toBeNull();
+    expect(mic).toBeVisible();
+  });
+
   it('renders inside the shared app shell and keeps the rail destinations as links', async () => {
     render(<CloudCodePage api={createApi()} />);
 
@@ -957,6 +1126,15 @@ describe('CloudCodePage', () => {
       '/chat/library?surface=artifact',
     );
     expect(screen.queryByRole('link', { name: 'Customize' })).not.toBeInTheDocument();
+  });
+
+  it('opens the existing Plugins settings from the Code sidebar', async () => {
+    const user = userEvent.setup();
+    openSettings.mockClear();
+    render(<CloudCodePage api={createApi()} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Plugins' }));
+    expect(openSettings).toHaveBeenCalledExactlyOnceWith('plugins');
   });
 
   it('opens More as a menu beside the rail with the unpinned destinations', async () => {
@@ -972,7 +1150,7 @@ describe('CloudCodePage', () => {
     const menu = await screen.findByRole('menu');
     expect(more).toHaveAttribute('aria-expanded', 'true');
     expect(more.className).toContain('railRowActive');
-    expect(within(menu).getByRole('menuitem', { name: 'Routines' })).toHaveAttribute(
+    expect(within(menu).getByRole('menuitem', { name: 'Scheduled' })).toHaveAttribute(
       'href',
       '/chat/schedules',
     );
@@ -989,7 +1167,7 @@ describe('CloudCodePage', () => {
     ).toHaveAttribute('href', '/vscode-extension');
     expect(within(menu).getByRole('separator')).toBeInTheDocument();
     const items = within(menu).getAllByRole('menuitem');
-    expect(items[items.length - 1]).toHaveTextContent('Customize sidebar');
+    expect(items[items.length - 1]).toHaveTextContent('Edit sidebar');
   });
 
   it('closes the More menu on Escape and drops the open highlight', async () => {
@@ -1012,19 +1190,19 @@ describe('CloudCodePage', () => {
     render(<CloudCodePage api={createApi()} />);
 
     await user.click(await screen.findByRole('button', { name: 'More' }));
-    await user.click(await screen.findByRole('menuitem', { name: 'Customize sidebar' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Edit sidebar' }));
 
-    const dialog = await screen.findByRole('dialog', { name: 'Customize sidebar' });
+    const dialog = await screen.findByRole('dialog', { name: 'Edit sidebar' });
     expect(within(dialog).getByText('Choose which items appear in your sidebar.')).toBeVisible();
     expect(within(dialog).getByRole('checkbox', { name: 'Artifacts' })).toBeChecked();
-    expect(within(dialog).getByRole('checkbox', { name: 'Routines' })).not.toBeChecked();
+    expect(within(dialog).getByRole('checkbox', { name: 'Scheduled' })).not.toBeChecked();
 
-    await user.click(within(dialog).getByRole('checkbox', { name: 'Routines' }));
+    await user.click(within(dialog).getByRole('checkbox', { name: 'Scheduled' }));
     await user.click(within(dialog).getByRole('checkbox', { name: 'Artifacts' }));
     await user.click(within(dialog).getByRole('button', { name: 'Done' }));
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-    expect(screen.getByRole('link', { name: 'Routines' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Scheduled' })).toHaveAttribute(
       'href',
       '/chat/schedules',
     );
@@ -1034,7 +1212,7 @@ describe('CloudCodePage', () => {
     await user.click(screen.getByRole('button', { name: 'More' }));
     const menu = await screen.findByRole('menu');
     expect(within(menu).getByRole('menuitem', { name: 'Artifacts' })).toBeInTheDocument();
-    expect(within(menu).queryByRole('menuitem', { name: 'Routines' })).not.toBeInTheDocument();
+    expect(within(menu).queryByRole('menuitem', { name: 'Scheduled' })).not.toBeInTheDocument();
   });
 
   it('closes the Customize sidebar dialog with its close button', async () => {
@@ -1042,12 +1220,13 @@ describe('CloudCodePage', () => {
     render(<CloudCodePage api={createApi()} />);
 
     await user.click(await screen.findByRole('button', { name: 'More' }));
-    await user.click(await screen.findByRole('menuitem', { name: 'Customize sidebar' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Customize sidebar' });
+    await user.click(await screen.findByRole('menuitem', { name: 'Edit sidebar' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Edit sidebar' });
 
     await user.click(within(dialog).getByRole('button', { name: 'Close' }));
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'More' })).toHaveFocus());
   });
 
   it('offers the other places to code from on an empty home', async () => {
@@ -1446,6 +1625,54 @@ describe('CloudCodePage', () => {
     expect(await screen.findByText('Code session is busy; wait and try again')).toBeInTheDocument();
     expect(await screen.findByRole('button', { name: 'Run this task again' })).toBeInTheDocument();
     await waitFor(() => expect(field).toHaveValue('run the tests'));
+  });
+
+  it('stops a turn started elsewhere and follows cancellation after reopening', async () => {
+    const user = userEvent.setup();
+    const turn = {
+      turnId: '33333333-3333-4333-8333-333333333333',
+      goal: 'Continue a task from another window',
+      mode: 'agent' as const,
+      stepsUsed: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      finalMessage: '',
+      errorMessage: null,
+      createdAt: '2026-07-30T12:05:00.000Z',
+      steps: [],
+    };
+    let cancelRequestedAt: string | null = null;
+    let finished = false;
+    const api = createApi({
+      get: vi.fn(async () => ({
+        session: { ...session, state: finished ? ('ready' as const) : ('running' as const) },
+        terminalEntries: [],
+        turns: [
+          { ...turn, stopReason: finished ? ('cancelled' as const) : null, cancelRequestedAt },
+        ],
+      })),
+      cancelAgentTurn: vi.fn(async () => {
+        cancelRequestedAt = '2026-07-30T12:05:03.000Z';
+        return { turnId: turn.turnId, requestedAt: cancelRequestedAt, durable: true };
+      }),
+    });
+    const first = render(<CloudCodePage api={api} sessionId={session.id} />);
+    const stop = await screen.findByRole('button', { name: 'Stop the task' });
+    const field = await enabledComposer();
+    await user.type(field, 'Keep this draft{Enter}');
+    expect(api.startAgentTurn).not.toHaveBeenCalled();
+    expect(field).toHaveValue('Keep this draft');
+    await user.click(stop);
+    expect(api.cancelAgentTurn).toHaveBeenCalledExactlyOnceWith(session.id, turn.turnId);
+    expect(screen.getByRole('button', { name: 'Stopping the task' })).toBeDisabled();
+    first.unmount();
+
+    render(<CloudCodePage api={api} sessionId={session.id} />);
+    expect(await screen.findByRole('button', { name: 'Stopping the task' })).toBeDisabled();
+    finished = true;
+    expect(await screen.findByText('Cancelled', undefined, { timeout: 6000 })).toBeVisible();
+    expect(screen.queryByRole('button', { name: /Stop(?:ping)? the task/ })).toBeNull();
+    expect(api.cancelAgentTurn).toHaveBeenCalledTimes(1);
   });
 
   it('rebuilds the transcript of a session it did not run in this tab', async () => {
@@ -1953,7 +2180,7 @@ describe('CloudCodePage', () => {
     expect(
       screen.getByRole('textbox', { name: 'Describe a task or ask a question' }),
     ).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Start the task' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Start the task' })).toBeNull();
   });
 
   it('does not offer command execution for readable history when managed compute is unavailable', async () => {
@@ -2061,15 +2288,90 @@ describe('CloudCodePage', () => {
 
   it('collapses the session column and offers a way back', async () => {
     const user = userEvent.setup();
+    const openSearch = vi.fn();
+    window.addEventListener('agi:open-search', openSearch, { once: true });
     render(<CloudCodePage api={createApi()} />);
 
-    await user.click(await screen.findByRole('button', { name: 'Collapse the session list' }));
+    const collapse = await screen.findByRole('button', { name: 'Collapse the session list' });
+    await user.click(collapse);
 
     expect(screen.queryByRole('navigation', { name: 'Cloud sessions' })).not.toBeInTheDocument();
+    const expand = screen.getByRole('button', { name: 'Expand the session list' });
+    expect(expand).toHaveFocus();
+    await user.click(screen.getByRole('button', { name: 'Search' }));
+    expect(openSearch).toHaveBeenCalledTimes(1);
 
-    await user.click(screen.getByRole('button', { name: 'Expand the session list' }));
+    await user.click(expand);
 
     expect(await screen.findByRole('navigation', { name: 'Cloud sessions' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Collapse the session list' })).toHaveFocus();
+  });
+
+  it('restores the session list without closing the active local session', async () => {
+    const user = userEvent.setup();
+    host = {};
+    localGroups = [folder()];
+    render(<CloudCodePage api={createApi()} />);
+
+    const rail = within(await screen.findByTestId('local-code-section'));
+    await user.click(await rail.findByRole('button', { name: /^Quote the readme/u }));
+    const composer = within(await screen.findByTestId('local-code-composer')).getByRole('textbox');
+    await user.type(composer, 'Keep this draft');
+    await user.click(screen.getByRole('button', { name: 'Collapse the session list' }));
+    await user.click(screen.getByRole('button', { name: 'Expand the session list' }));
+
+    expect(await screen.findByTestId('local-code-section')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Quote the readme' })).toBeInTheDocument();
+    expect(composer).toHaveValue('Keep this draft');
+  });
+
+  it('handles the desktop sidebar command without changing the Chat sidebar preference', async () => {
+    useUIStore.getState().setSidebarCollapsed(false);
+    render(<CloudCodePage api={createApi()} />);
+    await screen.findByRole('button', { name: 'Collapse the session list' });
+
+    act(() => window.dispatchEvent(new Event('agi:toggle-sidebar', { cancelable: true })));
+
+    expect(screen.getByRole('button', { name: 'Expand the session list' })).toHaveFocus();
+    expect(useUIStore.getState().sidebarCollapsed).toBe(false);
+  });
+
+  it('opens the session drawer at tablet widths from both Code home and a local session', async () => {
+    const user = userEvent.setup();
+    const width = window.innerWidth;
+    const originalMatchMedia = window.matchMedia;
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 840 });
+    window.matchMedia = (query) => ({
+      matches: query.includes('max-width'),
+      media: query,
+      onchange: null,
+      addListener: () => undefined,
+      removeListener: () => undefined,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+      dispatchEvent: () => false,
+    });
+    host = {};
+    localGroups = [folder()];
+    try {
+      render(<CloudCodePage api={createApi()} />);
+      expect(await screen.findByRole('button', { name: 'Open session list' })).toBeInTheDocument();
+      expect(screen.queryByTestId('code-app-bar')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('local-code-section')).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Open session list' }));
+      const drawer = await screen.findByRole('dialog');
+      await user.click(await within(drawer).findByRole('button', { name: /^Quote the readme/u }));
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      expect(await screen.findByRole('heading', { name: 'Quote the readme' })).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Open session list' }));
+      expect(await screen.findByRole('dialog')).toBeInTheDocument();
+      await user.keyboard('{Escape}');
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      expect(screen.getByRole('button', { name: 'Open session list' })).toHaveFocus();
+    } finally {
+      window.matchMedia = originalMatchMedia;
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
+    }
   });
 
   it('names the environment and the repository in one header chip', async () => {
@@ -2388,7 +2690,7 @@ describe('CloudCodePage', () => {
 
     expect(await screen.findByText('Cancelled')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Run this task again' })).toBeInTheDocument();
-    expect(await screen.findByRole('button', { name: 'Start the task' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Start the task' })).toBeNull();
   });
 
   it('renames a session inline from the more menu', async () => {
@@ -2916,6 +3218,86 @@ describe('CloudCodePage', () => {
     expect(await screen.findByText('Mode')).toBeInTheDocument();
     expect(screen.getByText('Ask before every action')).toBeInTheDocument();
     expect(screen.getByText('Run read-only actions without asking')).toBeInTheDocument();
+    expect(screen.queryByText('Steps per task')).not.toBeInTheDocument();
+  });
+
+  it('starts Cloud tasks without a step count from the composer', async () => {
+    const user = userEvent.setup();
+    const api = createApi();
+    render(<CloudCodePage api={api} />);
+    await user.type(await enabledComposer(), 'Read the project README{Enter}');
+
+    await waitFor(() => expect(api.startAgentTurn).toHaveBeenCalledTimes(1));
+    const input = vi.mocked(api.startAgentTurn).mock.calls[0]?.[1];
+    expect(input).toEqual(expect.objectContaining({ goal: 'Read the project README' }));
+    expect(input).not.toHaveProperty('maxSteps');
+  });
+
+  it('keeps a Cloud turn active when its session is opened from the new-task composer', async () => {
+    const completion = codeDeferred<Awaited<ReturnType<CloudCodeApi['startAgentTurn']>>>();
+    const approval = {
+      turnId: 'turn-background',
+      stepIndex: 0,
+      command: 'Inspect the project files',
+      reason: 'Reading the folder needs review',
+      goal: 'Read the project README',
+      expiresAt: '2026-11-24T08:00:00.000Z',
+      createdAt: '2026-11-24T07:00:00.000Z',
+    };
+    let readyForApproval = false;
+    const api = createApi({
+      list: vi.fn(async () => ({ availability, sessions: [session], runtimes: [] })),
+      startAgentTurn: vi.fn(() => completion.promise),
+      listApprovals: vi.fn(async () => (readyForApproval ? [approval] : [])),
+    });
+    const user = userEvent.setup();
+    const { unmount } = render(<CloudCodePage api={api} />);
+    const composer = await enabledComposer();
+    await user.type(composer, 'Read the project README{Meta>}{Enter}{/Meta}');
+
+    await waitFor(() => expect(composer).toHaveValue(''));
+    expect(api.startAgentTurn).toHaveBeenCalledExactlyOnceWith(
+      session.id,
+      expect.objectContaining({ goal: approval.goal, idempotencyKey: expect.any(String) }),
+    );
+    expect(push).not.toHaveBeenCalled();
+    unmount();
+
+    render(<CloudCodePage api={api} sessionId={session.id} />);
+    await user.click(await screen.findByRole('button', { name: 'Stop the task' }));
+    expect(api.cancelAgentTurn).toHaveBeenCalledExactlyOnceWith(session.id);
+    await act(async () => {
+      readyForApproval = true;
+      completion.resolve({
+        turnId: approval.turnId,
+        stopReason: 'awaiting_approval',
+        stepsUsed: 1,
+        finalMessage: '',
+        steps: [],
+      });
+    });
+
+    expect(await screen.findByText(approval.command)).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Stop the task' })).toBeNull();
+    expect(api.startAgentTurn).toHaveBeenCalledTimes(1);
+  });
+
+  it('restores an unedited Cloud draft when the turn fails before it is recorded', async () => {
+    const api = createApi({
+      startAgentTurn: vi.fn(async () => {
+        throw new Error('The Cloud workspace did not start');
+      }),
+    });
+    const user = userEvent.setup();
+    render(<CloudCodePage api={api} />);
+    const composer = await enabledComposer();
+    await user.type(composer, 'Read the project README');
+    await user.click(screen.getByRole('button', { name: 'Send options' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Send and stay here' }));
+
+    await waitFor(() => expect(api.get).toHaveBeenCalledWith(session.id));
+    await waitFor(() => expect(composer).toHaveValue('Read the project README'));
+    expect(push).not.toHaveBeenCalled();
   });
 
   it('shows the repository and its branch as two chips plus a change control', async () => {
@@ -3402,6 +3784,54 @@ function folder(overrides: Partial<DeveloperSessionGroup> = {}): DeveloperSessio
 }
 
 describe('the environment the composer starts a session in', () => {
+  it('filters Local Code sessions from the sidebar and opens the matched task', async () => {
+    host = {};
+    const other = { ...localSession, id: 'other-thread', title: 'Fix the tests' };
+    localGroups = [folder({ sessions: [localSession, other] })];
+    const user = userEvent.setup();
+    render(<CloudCodePage api={createApi()} />);
+
+    const rail = within(await screen.findByTestId('code-rail-session-scroll'));
+    expect(await rail.findByRole('button', { name: /^Fix the tests/ })).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Search sessions' }));
+    const field = screen.getByRole('searchbox', { name: 'Search sessions' });
+    await user.type(field, 'unknown title');
+    expect(await rail.findByText('No sessions match that search.')).toBeVisible();
+    expect(rail.queryByRole('button', { name: /^Fix the tests/ })).toBeNull();
+    expect(rail.queryByRole('button', { name: /^Quote the readme/ })).toBeNull();
+
+    await user.clear(field);
+    await user.type(field, 'QUOTE');
+    expect(rail.queryByText('No sessions match that search.')).toBeNull();
+    expect(rail.queryByRole('button', { name: /^Fix the tests/ })).toBeNull();
+    await user.click(await rail.findByRole('button', { name: /^Quote the readme/ }));
+    expect(
+      await screen.findByRole('heading', { name: 'Quote the readme', level: 1 }),
+    ).toBeVisible();
+  });
+
+  it('opens an older session found by the sidebar title search', async () => {
+    host = {};
+    localGroups = [folder()];
+    const older = { ...localSession, id: 'older-task', title: 'Earlier build notes' };
+    listDeveloperSessions.mockImplementation(async (options) => ({
+      groups: options?.titleQuery ? [folder({ sessions: [older] })] : localGroups,
+    }));
+    const user = userEvent.setup();
+    render(<CloudCodePage api={createApi()} />);
+
+    const rail = within(await screen.findByTestId('code-rail-session-scroll'));
+    expect(rail.queryByRole('button', { name: /^Earlier build notes/u })).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Search sessions' }));
+    await user.type(screen.getByRole('searchbox', { name: 'Search sessions' }), 'Earlier');
+    await user.click(await rail.findByRole('button', { name: /^Earlier build notes/u }));
+    expect(listDeveloperSessions).toHaveBeenCalledWith({
+      titleQuery: 'Earlier',
+      includeArchived: false,
+    });
+    expect(await screen.findByRole('heading', { level: 1, name: older.title })).toBeVisible();
+  });
+
   it('names the cloud environment and keeps the network level under it, in a browser', async () => {
     const user = userEvent.setup();
     render(<CloudCodePage api={createApi()} />);
@@ -3466,6 +3896,192 @@ describe('the environment the composer starts a session in', () => {
     expect(screen.queryByRole('button', { name: 'Select repository' })).not.toBeInTheDocument();
   });
 
+  it('opens supported tools on a new desktop draft without creating a coding session', async () => {
+    const user = userEvent.setup();
+    host = { shell: 'electron' };
+    mockDraftBrowserSupported.mockResolvedValue(true);
+    mockDraftSimulatorSupported.mockResolvedValue(true);
+    render(<CloudCodePage api={createApi()} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Side panel' }));
+    const launcher = within(screen.getByRole('complementary', { name: 'Panel shortcuts' }));
+    expect(launcher.getByRole('button', { name: 'Browser' })).toBeVisible();
+    expect(launcher.getByRole('button', { name: 'iOS Simulator' })).toBeVisible();
+    expect(startDeveloperSession).not.toHaveBeenCalled();
+    expect(startDeveloperTurn).not.toHaveBeenCalled();
+  });
+
+  it('explains that Terminal needs a folder and hides unsupported desktop tools', async () => {
+    const user = userEvent.setup();
+    host = { shell: 'electron' };
+    render(<CloudCodePage api={createApi()} />);
+    await user.click(await screen.findByRole('button', { name: 'Side panel' }));
+    const launcher = within(screen.getByRole('complementary', { name: 'Panel shortcuts' }));
+
+    expect(launcher.getByRole('button', { name: 'Terminal' })).toBeDisabled();
+    expect(launcher.getByRole('button', { name: 'Terminal' })).toHaveAccessibleDescription(
+      LOCAL_CODE_COPY.chooseFolder,
+    );
+    expect(launcher.getByText(LOCAL_CODE_COPY.chooseFolder)).toBeVisible();
+    expect(launcher.queryByRole('button', { name: 'Browser' })).toBeNull();
+    expect(launcher.queryByRole('button', { name: 'iOS Simulator' })).toBeNull();
+  });
+
+  it('reopens the selected Browser after collapsing the draft tools pane', async () => {
+    const user = userEvent.setup();
+    host = { shell: 'electron' };
+    mockDraftBrowserSupported.mockResolvedValue(true);
+    render(<CloudCodePage api={createApi()} />);
+
+    const toggle = await screen.findByRole('button', { name: 'Side panel' });
+    await user.click(toggle);
+    await user.click(await screen.findByRole('button', { name: 'Browser' }));
+    const browserPane = () => screen.queryByRole('complementary', { name: 'Browser' });
+    expect(browserPane()).toBeVisible();
+    await user.click(toggle);
+    expect(browserPane()).toBeNull();
+    await user.click(toggle);
+    expect(browserPane()).toBeVisible();
+
+    await user.click(within(browserPane()!).getByRole('button', { name: 'Close browser' }));
+    expect(screen.getByRole('complementary', { name: 'Panel shortcuts' })).toBeVisible();
+  });
+
+  it('opens a terminal in the current folder and keeps a draft unsent', async () => {
+    const user = userEvent.setup();
+    host = { shell: 'electron' };
+    localGroups = [folder()];
+    render(<CloudCodePage api={createApi()} />);
+
+    const composer = await enabledComposer();
+    await user.type(composer, 'Keep this task in the draft');
+    await user.click(screen.getByRole('button', { name: 'Side panel' }));
+    await user.click(screen.getByRole('button', { name: 'Terminal' }));
+
+    const dock = within(screen.getByTestId('local-terminal-dock'));
+    expect(dock.getByRole('tab', { name: 'qa-project' })).toBeVisible();
+    expect(composer).toHaveValue('Keep this task in the draft');
+    expect(startDeveloperSession).not.toHaveBeenCalled();
+    expect(startDeveloperTurn).not.toHaveBeenCalled();
+  });
+
+  it('keeps each workspace terminal mounted and only shows the active folder dock', async () => {
+    const user = userEvent.setup();
+    host = { shell: 'electron' };
+    const other = {
+      ...localSession,
+      id: 'other-thread',
+      rootId: 'other-root',
+      title: 'Inspect the other folder',
+      cwd: '/work/other-project',
+    };
+    localGroups = [
+      folder(),
+      folder({
+        rootId: other.rootId,
+        name: 'other-project',
+        path: other.cwd,
+        sessions: [other],
+      }),
+    ];
+    window.history.replaceState({}, '', '/code?local=root-recent&thread=thread-1');
+    try {
+      render(<CloudCodePage api={createApi()} />);
+      await screen.findByRole('heading', { name: localSession.title });
+      await user.click(screen.getByRole('button', { name: 'Terminal panel' }));
+      const firstDock = screen.getByTestId('local-terminal-dock');
+      await user.click(within(firstDock).getByRole('button', { name: 'New terminal' }));
+      expect(within(firstDock).getAllByRole('tab')).toHaveLength(2);
+
+      const rail = within(screen.getByTestId('code-rail-session-scroll'));
+      await user.click(rail.getByRole('button', { name: /^Inspect the other folder/ }));
+      await screen.findByRole('heading', { name: other.title });
+      expect(firstDock).toBeInTheDocument();
+      expect(firstDock).not.toBeVisible();
+      await user.click(screen.getByRole('button', { name: 'Terminal panel' }));
+      expect(screen.getByRole('tab', { name: 'other-project' })).toBeVisible();
+      const otherDock = screen
+        .getAllByTestId('local-terminal-dock')
+        .find((dock) => dock !== firstDock);
+      expect(otherDock).toBeDefined();
+      expect(firstDock).not.toBeVisible();
+
+      await user.click(rail.getByRole('button', { name: /^Quote the readme/ }));
+      await screen.findByRole('heading', { name: localSession.title });
+      expect(firstDock).toBeVisible();
+      expect(within(firstDock).getAllByRole('tab')).toHaveLength(2);
+      expect(screen.queryByRole('tab', { name: 'other-project' })).toBeNull();
+
+      const otherFolder = localGroups[1]!;
+      localGroups = [
+        folder({ unavailable: { message: 'Session list unavailable', hint: 'Try again.' } }),
+        { ...otherFolder, sessionsWithheld: true, sessions: [] },
+      ];
+      act(() => workspaceChanges.forEach((notify) => notify()));
+      await waitFor(() => expect(otherDock).not.toBeInTheDocument());
+      expect(firstDock).toBeInTheDocument();
+      expect(firstDock).not.toBeVisible();
+
+      localGroups = [folder()];
+      act(() => workspaceChanges.forEach((notify) => notify()));
+      await waitFor(() => expect(firstDock).toBeVisible());
+    } finally {
+      window.history.replaceState({}, '', '/');
+    }
+  });
+
+  it('opens Terminal from an active Browser without hiding the browser or sending the draft', async () => {
+    const user = userEvent.setup();
+    host = { shell: 'electron' };
+    localGroups = [folder()];
+    mockDraftBrowserSupported.mockResolvedValue(true);
+    render(<CloudCodePage api={createApi()} />);
+
+    const composer = await enabledComposer();
+    await user.type(composer, 'Keep this task in the draft');
+    await user.click(screen.getByRole('button', { name: 'Side panel' }));
+    await user.click(await screen.findByRole('button', { name: 'Browser' }));
+    const browser = screen.getByRole('complementary', { name: 'Browser' });
+    const tools = within(browser).getByRole('group', { name: 'Panel shortcuts' });
+    expect(within(tools).getByRole('button', { name: 'Browser' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(within(tools).queryByRole('button', { name: 'iOS Simulator' })).toBeNull();
+    await user.click(within(tools).getByRole('button', { name: 'Terminal' }));
+
+    expect(await screen.findByTestId('local-terminal-dock')).toBeVisible();
+    expect(browser).toBeVisible();
+    expect(composer).toHaveValue('Keep this task in the draft');
+    expect(startDeveloperTurn).not.toHaveBeenCalled();
+  });
+
+  it('toggles the desktop draft terminal from the shortcut and the View menu', async () => {
+    const user = userEvent.setup();
+    const setTerminalState = vi.fn();
+    window.agiHost = hostBridgeStub({ setTerminalState });
+    host = { shell: 'electron' };
+    localGroups = [folder()];
+    const view = render(<CloudCodePage api={createApi()} />);
+    try {
+      const composer = await enabledComposer();
+      await user.type(composer, 'Keep this unsent task');
+      expect(setTerminalState).toHaveBeenLastCalledWith({ available: true, open: false });
+      fireEvent.keyDown(composer, { key: '`', ctrlKey: true });
+      const terminal = await screen.findByTestId('local-terminal-dock');
+      expect(terminal).toBeVisible();
+      expect(setTerminalState).toHaveBeenLastCalledWith({ available: true, open: true });
+
+      act(() => emitAppCommand('toggle-terminal'));
+      expect(terminal).not.toBeVisible();
+      expect(setTerminalState).toHaveBeenLastCalledWith({ available: true, open: false });
+      expect(composer).toHaveValue('Keep this unsent task');
+    } finally {
+      view.unmount();
+      delete window.agiHost;
+    }
+  });
+
   it('shows the folder, Local and the branch as three chips above the composer', async () => {
     const user = userEvent.setup();
     host = {};
@@ -3525,6 +4141,22 @@ describe('the environment the composer starts a session in', () => {
     } finally {
       window.history.replaceState({}, '', '/');
     }
+  });
+
+  it('opens the local run named by the router after Code has mounted', async () => {
+    host = {};
+    localGroups = [folder()];
+    const api = createApi();
+    const { rerender } = render(<CloudCodePage api={api} />);
+    await screen.findByRole('button', { name: /^Quote the readme/ });
+    expect(screen.queryByRole('heading', { level: 1, name: 'Quote the readme' })).toBeNull();
+
+    navigationState.search = 'local=root-recent&thread=thread-1';
+    rerender(<CloudCodePage api={api} />);
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Quote the readme' }),
+    ).toBeVisible();
   });
 
   it('waits for the session list before calling a linked local session gone', async () => {
@@ -3612,28 +4244,96 @@ describe('the environment the composer starts a session in', () => {
     }
   });
 
-  it('keeps a linked local session while its folder withholds sessions, without a retry button', async () => {
+  it.each([
+    ['folder', 'root-linked'],
+    ['worktree', worktreeRootId('root-linked', '0a1b2c3d')],
+  ])('opens a linked local session in a %s after granting folder access', async (_, rootId) => {
+    const user = userEvent.setup();
     replace.mockClear();
     host = {};
-    localGroups = [folder({ rootId: 'root-recent', sessions: [], sessionsWithheld: true })];
-    window.history.replaceState({}, '', '/code?local=root-recent&thread=thread-1');
+    const linkedSession = { ...localSession, rootId };
+    const linkedFolder = folder({
+      rootId: 'root-linked',
+      name: 'linked-project',
+      path: '/work/linked-project',
+      sessions: [],
+    });
+    localGroups = [folder(), { ...linkedFolder, sessionsWithheld: true }];
+    allowDeveloperSessions.mockImplementationOnce(async () => {
+      const listed = { ...linkedFolder, rootId, sessions: [linkedSession] };
+      localGroups =
+        rootId === linkedFolder.rootId ? [folder(), listed] : [folder(), linkedFolder, listed];
+      return true;
+    });
+    window.history.replaceState(
+      {},
+      '',
+      `/code?local=${encodeURIComponent(rootId)}&thread=thread-1`,
+    );
     try {
       render(<CloudCodePage api={createApi()} />);
 
-      expect(
-        await screen.findByText(
-          'Allow running commands in this folder to open that coding session.',
-        ),
-      ).toBeInTheDocument();
+      const notices = within(await screen.findByTestId('code-notices'));
+      expect(await notices.findByText(LOCAL_CODE_COPY.sessionWithheld)).toBeInTheDocument();
       expect(screen.queryByText('That coding session is not on this device any more.')).toBeNull();
       expect(replace).not.toHaveBeenCalledWith('/code');
       expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+
+      await user.click(
+        notices.getByRole('button', { name: 'Allow running commands in linked-project' }),
+      );
+
+      expect(allowDeveloperSessions).toHaveBeenCalledExactlyOnceWith('root-linked');
+      expect(
+        await screen.findByRole('heading', { level: 1, name: 'Quote the readme' }),
+      ).toBeVisible();
     } finally {
       window.history.replaceState({}, '', '/');
     }
   });
 
-  it('says a linked local session is gone only after a complete list lacks it', async () => {
+  it('shows one Capabilities action when the linked folder is also the refused draft folder', async () => {
+    const user = userEvent.setup();
+    host = {};
+    localGroups = [folder({ sessions: [], sessionsWithheld: true, commandAccessRefused: true })];
+    window.history.replaceState({}, '', '/code?local=root-recent&thread=thread-1');
+    try {
+      render(<CloudCodePage api={createApi()} />);
+
+      const notices = within(await screen.findByTestId('code-notices'));
+      expect(await notices.findByText(LOCAL_CODE_COPY.startCommandAccessDenied)).toBeVisible();
+      expect(notices.queryByRole('button', { name: /Allow running commands/u })).toBeNull();
+      await user.click(notices.getByRole('button', { name: LOCAL_CODE_COPY.reviewCommandAccess }));
+      expect(openSettings).toHaveBeenCalledWith('capabilities');
+      expect(allowDeveloperSessions).not.toHaveBeenCalled();
+    } finally {
+      window.history.replaceState({}, '', '/');
+    }
+  });
+
+  it('finds a linked local session outside the recent list and retries an interrupted lookup', async () => {
+    const user = userEvent.setup();
+    replace.mockClear();
+    host = {};
+    localGroups = [folder({ sessions: [] })];
+    lookupDeveloperSession.mockRejectedValueOnce(new Error('bridge closed'));
+    lookupDeveloperSession.mockResolvedValueOnce(localSession);
+    window.history.replaceState({}, '', '/code?local=root-recent&thread=thread-1');
+    try {
+      render(<CloudCodePage api={createApi()} />);
+      await user.click(await screen.findByRole('button', { name: 'Retry' }));
+      expect(lookupDeveloperSession).toHaveBeenCalledTimes(2);
+      expect(lookupDeveloperSession).toHaveBeenLastCalledWith('root-recent', 'thread-1');
+      expect(
+        await screen.findByRole('heading', { level: 1, name: 'Quote the readme' }),
+      ).toBeVisible();
+      expect(replace).not.toHaveBeenCalledWith('/code');
+    } finally {
+      window.history.replaceState({}, '', '/');
+    }
+  });
+
+  it('says a linked local session is gone after its workspace lookup confirms it', async () => {
     replace.mockClear();
     host = {};
     localGroups = [folder({ rootId: 'root-recent', sessions: [] })];
@@ -3644,6 +4344,7 @@ describe('the environment the composer starts a session in', () => {
       expect(
         await screen.findByText('That coding session is not on this device any more.'),
       ).toBeInTheDocument();
+      expect(lookupDeveloperSession).toHaveBeenCalledExactlyOnceWith('root-recent', 'thread-1');
       expect(replace).toHaveBeenCalledWith('/code');
     } finally {
       window.history.replaceState({}, '', '/');
@@ -3774,7 +4475,10 @@ describe('the environment the composer starts a session in', () => {
     try {
       render(<CloudCodePage api={createApi()} />);
 
-      await user.click(await screen.findByRole('button', { name: 'Delete session' }));
+      await user.click(await screen.findByRole('button', { name: CODE_COPY.sessionMenu }));
+      await user.click(
+        within(await screen.findByRole('menu')).getByRole('menuitem', { name: 'Delete session' }),
+      );
       await user.click(
         within(await screen.findByRole('alertdialog')).getByRole('button', {
           name: 'Delete session',
@@ -3826,9 +4530,7 @@ describe('the environment the composer starts a session in', () => {
     render(<CloudCodePage api={createApi()} />);
 
     const rail = within(await screen.findByTestId('local-code-section'));
-    expect(
-      await rail.findByText('Allow running commands in this folder to see its sessions.'),
-    ).toBeInTheDocument();
+    expect(await rail.findByText(LOCAL_CODE_COPY.sessionsWithheld)).toBeInTheDocument();
     expect(listDeveloperModels).not.toHaveBeenCalled();
     await user.click(rail.getByRole('button', { name: 'Allow running commands' }));
 
@@ -3907,6 +4609,81 @@ describe('the environment the composer starts a session in', () => {
     expect(await rail.findByRole('alert')).toHaveTextContent('no longer declared by this project');
   });
 
+  it('renames the open local session in the header and sidebar without leaving the session', async () => {
+    const user = userEvent.setup();
+    host = {};
+    localGroups = [folder()];
+    renameDeveloperThread.mockImplementationOnce(async (_rootId, _threadId, title) => {
+      const renamed = { ...localSession, title };
+      localGroups = [folder({ sessions: [renamed] })];
+      return renamed;
+    });
+    render(<CloudCodePage api={createApi()} />);
+
+    const rail = within(await screen.findByTestId('local-code-section'));
+    await user.click(await rail.findByRole('button', { name: /^Quote the readme/u }));
+    const composer = within(await screen.findByTestId('local-code-composer')).getByRole('textbox');
+    await user.type(composer, 'Still drafting');
+    await user.click(screen.getByRole('button', { name: 'Rename: Quote the readme' }));
+    const input = screen.getByRole('textbox', { name: 'Session name' });
+    expect(input).toHaveFocus();
+    await user.clear(input);
+    await user.type(input, 'Readme follow-up{Enter}');
+
+    expect(await screen.findByRole('heading', { name: 'Readme follow-up' })).toBeInTheDocument();
+    expect(await rail.findByRole('button', { name: /^Readme follow-up/u })).toBeInTheDocument();
+    expect(renameDeveloperThread).toHaveBeenCalledExactlyOnceWith(
+      localSession.rootId,
+      localSession.id,
+      'Readme follow-up',
+    );
+    expect(composer).toHaveValue('Still drafting');
+  });
+
+  it('keeps a refused sidebar rename editable and returns focus to the saved row action', async () => {
+    const user = userEvent.setup();
+    host = {};
+    localGroups = [folder()];
+    const first = codeDeferred<LocalDeveloperSession>();
+    renameDeveloperThread
+      .mockReturnValueOnce(first.promise)
+      .mockImplementationOnce(async (_rootId, _threadId, title) => {
+        const renamed = { ...localSession, title };
+        localGroups = [folder({ sessions: [renamed] })];
+        return renamed;
+      });
+    render(<CloudCodePage api={createApi()} />);
+
+    const rail = within(await screen.findByTestId('local-code-section'));
+    await user.click(
+      await rail.findByRole('button', { name: 'More actions for Quote the readme' }),
+    );
+    await user.click(await screen.findByRole('menuitem', { name: 'Rename' }));
+    const input = rail.getByRole('textbox', { name: 'Session name' });
+    expect(input).toHaveFocus();
+    await user.clear(input);
+    await user.type(input, 'Readme follow-up{Enter}');
+    expect(input).toBeInTheDocument();
+    expect(input).toHaveValue('Readme follow-up');
+    expect(input).toHaveAttribute('readonly');
+    await user.keyboard('{Enter}');
+    expect(renameDeveloperThread).toHaveBeenCalledTimes(1);
+
+    await act(async () => first.reject(new Error('Could not write the title. Try again.')));
+    expect(await rail.findByRole('alert')).toHaveTextContent('Could not write the title');
+    expect(input).toHaveValue('Readme follow-up');
+    expect(input).toHaveFocus();
+    expect(input).not.toHaveAttribute('readonly');
+    await user.tab();
+    expect(renameDeveloperThread).toHaveBeenCalledTimes(1);
+    await user.click(input);
+    await user.keyboard('{Enter}');
+
+    const actions = await rail.findByRole('button', { name: 'More actions for Readme follow-up' });
+    expect(actions).toHaveFocus();
+    expect(renameDeveloperThread).toHaveBeenCalledTimes(2);
+  });
+
   it('archives a local session, closes it, and says how to bring it back', async () => {
     const user = userEvent.setup();
     host = {};
@@ -3916,7 +4693,10 @@ describe('the environment the composer starts a session in', () => {
     try {
       render(<CloudCodePage api={createApi()} />);
 
-      await user.click(await screen.findByRole('button', { name: 'Archive session' }));
+      await user.click(await screen.findByRole('button', { name: CODE_COPY.sessionMenu }));
+      await user.click(
+        within(await screen.findByRole('menu')).getByRole('menuitem', { name: 'Archive session' }),
+      );
       await user.click(
         within(await screen.findByRole('alertdialog')).getByRole('button', {
           name: 'Archive session',
@@ -3930,6 +4710,71 @@ describe('the environment the composer starts a session in', () => {
 
       await user.click(within(notice).getByRole('button', { name: 'Dismiss' }));
       expect(screen.queryByTestId('local-session-archived')).not.toBeInTheDocument();
+    } finally {
+      window.history.replaceState({}, '', '/');
+    }
+  });
+
+  it('archives the selected Local session from the sidebar and allows a read-only review before Restore', async () => {
+    const user = userEvent.setup();
+    host = {};
+    localGroups = [folder()];
+    archiveDeveloperThread.mockImplementationOnce(async () => {
+      localGroups = [folder({ sessions: [] })];
+      return true;
+    });
+    unarchiveDeveloperThread.mockImplementationOnce(async () => {
+      localGroups = [folder()];
+      return true;
+    });
+    window.history.replaceState({}, '', '/code?local=root-recent&thread=thread-1');
+    try {
+      render(<CloudCodePage api={createApi()} />);
+      await user.type(
+        within(await screen.findByTestId('local-code-composer')).getByRole('textbox'),
+        'Keep this follow-up through Archive',
+      );
+      const rail = within(screen.getByTestId('local-code-section'));
+      const actions = () => rail.getByRole('button', { name: 'More actions for Quote the readme' });
+      const requestArchive = async () => {
+        await user.click(actions());
+        await user.click(await screen.findByRole('menuitem', { name: 'Archive session' }));
+        return within(await screen.findByRole('alertdialog'));
+      };
+
+      await user.click((await requestArchive()).getByRole('button', { name: 'Cancel' }));
+      await waitFor(() => expect(actions()).toHaveFocus());
+      expect(archiveDeveloperThread).not.toHaveBeenCalled();
+      await user.click((await requestArchive()).getByRole('button', { name: 'Archive session' }));
+
+      expect(await screen.findByTestId('local-session-archived')).toBeVisible();
+      expect(screen.queryByTestId('local-code-composer')).not.toBeInTheDocument();
+      const showArchived = rail.getByRole('button', { name: 'Show archived' });
+      await waitFor(() => expect(showArchived).toHaveFocus());
+      expect(archiveDeveloperThread).toHaveBeenCalledExactlyOnceWith(
+        localSession.rootId,
+        localSession.id,
+      );
+
+      localGroups = [folder({ sessions: [{ ...localSession, status: 'archived' }] })];
+      await user.click(showArchived);
+      await user.click(await rail.findByRole('button', { name: /^Quote the readme/ }));
+      expect(
+        await screen.findByText('Restore this session before sending another message.'),
+      ).toBeVisible();
+      expect(screen.getByTestId('local-code-composer')).not.toBeVisible();
+      await user.click(actions());
+      await user.click(await screen.findByRole('menuitem', { name: 'Restore' }));
+
+      await waitFor(() => expect(screen.getByTestId('local-code-composer')).toBeVisible());
+      expect(within(screen.getByTestId('local-code-composer')).getByRole('textbox')).toHaveValue(
+        'Keep this follow-up through Archive',
+      );
+      expect(unarchiveDeveloperThread).toHaveBeenCalledExactlyOnceWith(
+        localSession.rootId,
+        localSession.id,
+      );
+      expect(startDeveloperTurn).not.toHaveBeenCalled();
     } finally {
       window.history.replaceState({}, '', '/');
     }
@@ -4054,6 +4899,70 @@ describe('the environment the composer starts a session in', () => {
     expect(api.create).not.toHaveBeenCalled();
   });
 
+  it.each(['shortcut', 'menu', 'keyboard menu'])(
+    'can send a new Local task and stay here via %s',
+    async (method) => {
+      host = {};
+      localGroups = [folder()];
+      const api = createApi();
+      const user = userEvent.setup();
+      render(<CloudCodePage api={api} />);
+      const composer = await enabledComposer();
+      await user.type(composer, 'Read the project README');
+      if (method === 'shortcut') {
+        await user.keyboard('{Meta>}{Enter}{/Meta}');
+      } else if (method === 'keyboard menu') {
+        const trigger = screen.getByRole('button', { name: 'Send options' });
+        expect(composer).toHaveAttribute('aria-keyshortcuts', 'Enter Meta+Enter Control+Enter');
+        await user.tab();
+        expect(trigger).toHaveFocus();
+        await user.keyboard('{Enter}{ArrowDown}');
+        const sendAndStay = await screen.findByRole('menuitem', { name: 'Send and stay here' });
+        expect(sendAndStay).toHaveFocus();
+        await user.keyboard('{Escape}');
+        await waitFor(() => expect(trigger).toHaveFocus());
+        expect(composer).toHaveValue('Read the project README');
+        await user.tab();
+        expect(screen.getByRole('button', { name: 'Start the task' })).toHaveFocus();
+        await user.tab({ shift: true });
+        await user.keyboard('{Enter}{ArrowDown}{Enter}');
+        await waitFor(() => expect(composer).toHaveFocus());
+      } else {
+        await user.click(screen.getByRole('button', { name: 'Send options' }));
+        await user.click(await screen.findByRole('menuitem', { name: 'Send and stay here' }));
+      }
+
+      await waitFor(() =>
+        expect(startDeveloperTurn).toHaveBeenCalledExactlyOnceWith({
+          rootId: 'root-recent',
+          threadId: 'thread-1',
+          text: 'Read the project README',
+          model: 'qa-provider/qa-model',
+          agentMode: 'ask',
+        }),
+      );
+      await waitFor(() => expect(composer).toHaveValue(''));
+      expect(composer).toBeInTheDocument();
+      expect(screen.queryByTestId('local-code-composer')).toBeNull();
+      expect(api.create).not.toHaveBeenCalled();
+      expect(api.startAgentTurn).not.toHaveBeenCalled();
+    },
+  );
+
+  it('keeps the Local draft if the background turn cannot start', async () => {
+    host = {};
+    localGroups = [folder()];
+    startDeveloperTurn.mockRejectedValueOnce(new Error('The model could not start'));
+    const user = userEvent.setup();
+    render(<CloudCodePage api={createApi()} />);
+    const composer = await enabledComposer();
+    await user.type(composer, 'Read the project README{Control>}{Enter}{/Control}');
+
+    expect(await screen.findByText('The model could not start')).toBeVisible();
+    expect(composer).toHaveValue('Read the project README');
+    expect(screen.queryByTestId('local-code-composer')).toBeNull();
+  });
+
   it('keeps the cloud isolation claim off the screen while the environment is local', async () => {
     host = {};
     localGroups = [folder()];
@@ -4133,7 +5042,7 @@ describe('a cloud session open while the draft is local', () => {
     expect(startDeveloperSession).not.toHaveBeenCalled();
   });
 
-  it('reports a local start failure where the composer is, not only in the rail', async () => {
+  it('reports a local start failure once, above the composer', async () => {
     const user = userEvent.setup();
     host = {};
     localGroups = [folder()];
@@ -4146,6 +5055,102 @@ describe('a cloud session open while the draft is local', () => {
 
     const notices = await screen.findByTestId('code-notices');
     expect(await within(notices).findByRole('alert')).toHaveTextContent('the runtime refused');
+    expect(screen.getAllByText('the runtime refused')).toHaveLength(1);
+  });
+
+  it('explains rejected folder access and keeps the draft without starting a cloud task', async () => {
+    const user = userEvent.setup();
+    host = {};
+    localGroups = [folder()];
+    startDeveloperSession.mockRejectedValueOnce(
+      new DesktopRuntimeError({
+        code: 'permission-denied',
+        capability: 'shell.execute',
+        message: 'Permission to shell execute in qa-project was not granted.',
+      }),
+    );
+    const api = createApi();
+    render(<CloudCodePage api={api} />);
+
+    const notices = await screen.findByTestId('code-notices');
+    const composer = await enabledComposer();
+    await user.type(composer, 'quote the readme');
+    await user.click(screen.getByRole('button', { name: 'Start the task' }));
+
+    expect(await within(notices).findByRole('alert')).toHaveTextContent(
+      LOCAL_CODE_COPY.startCommandAccessDenied,
+    );
+    expect(screen.getAllByText(LOCAL_CODE_COPY.startCommandAccessDenied)).toHaveLength(1);
+    expect(composer).toHaveValue('quote the readme');
+    expect(startDeveloperTurn).not.toHaveBeenCalled();
+    expect(api.create).not.toHaveBeenCalled();
+    await user.click(
+      within(notices).getByRole('button', { name: LOCAL_CODE_COPY.reviewCommandAccess }),
+    );
+    expect(openSettings).toHaveBeenCalledWith('capabilities');
+  });
+
+  it('grants command access beside the composer and keeps the start action explicit', async () => {
+    const user = userEvent.setup();
+    host = {};
+    localGroups = [folder({ sessions: [], sessionsWithheld: true })];
+    const grant = codeDeferred<boolean>();
+    allowDeveloperSessions.mockImplementationOnce(() => grant.promise);
+    render(<CloudCodePage api={createApi()} />);
+
+    const notices = within(await screen.findByTestId('code-notices'));
+    const allow = await notices.findByRole('button', { name: LOCAL_CODE_COPY.allowSessions });
+    const composer = await enabledComposer();
+    await user.type(composer, 'quote the readme{Enter}');
+    expect(composer).toHaveAccessibleDescription(LOCAL_CODE_COPY.startNeedsCommandAccess);
+    expect(screen.getByRole('button', { name: 'Start the task' })).toBeDisabled();
+    expect(startDeveloperSession).not.toHaveBeenCalled();
+
+    await user.click(allow);
+    expect(allowDeveloperSessions).toHaveBeenCalledWith('root-recent');
+    expect(notices.getByRole('button', { name: LOCAL_CODE_COPY.allowingSessions })).toBeDisabled();
+    localGroups = [folder()];
+    grant.resolve(true);
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Start the task' })).toBeEnabled(),
+    );
+    expect(composer).toHaveValue('quote the readme');
+    expect(startDeveloperSession).not.toHaveBeenCalled();
+  });
+
+  it('keeps the microphone visible in Local Code without requesting Cloud audio capture', async () => {
+    const user = userEvent.setup();
+    host = {};
+    localGroups = [folder()];
+    const getUserMedia = vi.fn();
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: { getUserMedia },
+    });
+    render(<CloudCodePage api={createApi()} />);
+
+    await screen.findByRole('button', { name: 'Change the folder: qa-project' });
+    const microphone = screen.getByRole('button', { name: CODE_COPY.startDictation });
+    expect(microphone).toBeVisible();
+    expect(microphone).toBeDisabled();
+    expect(microphone).toHaveAccessibleDescription(CODE_COPY.dictationRequiresCloud);
+    await user.click(microphone);
+    expect(getUserMedia).not.toHaveBeenCalled();
+  });
+
+  it('routes a saved refusal to Capabilities without offering a blocked prompt', async () => {
+    const user = userEvent.setup();
+    host = {};
+    localGroups = [folder({ sessions: [], sessionsWithheld: true, commandAccessRefused: true })];
+    render(<CloudCodePage api={createApi()} />);
+
+    const notices = within(await screen.findByTestId('code-notices'));
+    expect(await notices.findByText(LOCAL_CODE_COPY.startCommandAccessDenied)).toBeInTheDocument();
+    expect(notices.queryByRole('button', { name: LOCAL_CODE_COPY.allowSessions })).toBeNull();
+    await user.click(notices.getByRole('button', { name: LOCAL_CODE_COPY.reviewCommandAccess }));
+    expect(openSettings).toHaveBeenCalledWith('capabilities');
+    expect(allowDeveloperSessions).not.toHaveBeenCalled();
   });
 });
 

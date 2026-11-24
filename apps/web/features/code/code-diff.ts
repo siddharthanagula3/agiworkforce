@@ -57,6 +57,33 @@ export function diffByPath(diff: string): Map<string, string> {
   return new Map(parseUnifiedDiff(diff).map((file) => [file.path, file.body]));
 }
 
+export function turnDiffByPath(diff: string, paths: readonly string[]): Map<string, string> {
+  const gitDiffs = diffByPath(diff);
+  if (gitDiffs.size > 0) return gitDiffs;
+
+  const files = new Map<string, string[]>();
+  const lines = diff.split('\n');
+  let nextPath = 0;
+  let section: string[] | undefined;
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index] ?? '';
+    const path = paths[nextPath];
+    if (
+      path &&
+      line === `${OLD_PATH_PREFIX}${path}` &&
+      lines[index + 1] === `${NEW_PATH_PREFIX}${path}`
+    ) {
+      section = files.get(path) ?? [];
+      files.set(path, section);
+      nextPath += 1;
+      index += 1;
+      continue;
+    }
+    section?.push(line);
+  }
+  return new Map([...files].map(([path, lines]) => [path, lines.join('\n')]));
+}
+
 export function diffLineKind(line: string): CodeDiffLineKind {
   if (
     line.startsWith(FILE_HEADER) ||
@@ -70,4 +97,16 @@ export function diffLineKind(line: string): CodeDiffLineKind {
   if (line.startsWith(ADDED_MARKER)) return 'added';
   if (line.startsWith(REMOVED_MARKER)) return 'removed';
   return 'context';
+}
+
+export function diffLineCounts(body: string): { added: number; removed: number } | null {
+  let hunk = false;
+  let added = 0;
+  let removed = 0;
+  for (const line of body.split('\n')) {
+    if (line.startsWith(HUNK_MARKER)) hunk = true;
+    else if (hunk && line.startsWith(ADDED_MARKER)) added += 1;
+    else if (hunk && line.startsWith(REMOVED_MARKER)) removed += 1;
+  }
+  return added || removed ? { added, removed } : null;
 }

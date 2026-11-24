@@ -16,7 +16,6 @@ import {
   PICTURE_NEEDLE,
   bytesOf,
   includesText,
-  jpegWithLocation,
   jpegWithLocationBytes,
 } from '@features/chat/lib/__tests__/picture-fixtures';
 
@@ -271,47 +270,52 @@ describe('uploadChatAttachments', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('puts a photo into storage without the camera and place it was taken', async () => {
-    const id = '32b71cf4-c0d1-4cc7-b6c4-776ece82f138';
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            storageKey: 'chat-attachments/user/key.jpg',
-            uploadUrl: 'https://upload.example.test/signed',
-            uploadMethod: 'PUT',
-            uploadHeaders: { 'Content-Type': 'image/jpeg' },
-          }),
-          { status: 200 },
-        ),
-      )
-      .mockResolvedValueOnce(new Response(null, { status: 200 }))
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            attachment: {
-              id,
-              name: 'beach.jpg',
-              mimeType: 'image/jpeg',
-              byteCount: 4,
-              type: 'image',
-              url: `/api/files/${id}`,
-            },
-          }),
-          { status: 200 },
-        ),
-      );
-    vi.stubGlobal('fetch', fetchMock);
+  it.each(['image/jpeg', '', 'application/octet-stream'])(
+    'puts a photo with browser type %j into storage without camera and location data',
+    async (browserType) => {
+      const id = '32b71cf4-c0d1-4cc7-b6c4-776ece82f138';
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              storageKey: 'chat-attachments/user/key.jpg',
+              uploadUrl: 'https://upload.example.test/signed',
+              uploadMethod: 'PUT',
+              uploadHeaders: { 'Content-Type': 'image/jpeg' },
+            }),
+            { status: 200 },
+          ),
+        )
+        .mockResolvedValueOnce(new Response(null, { status: 200 }))
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              attachment: {
+                id,
+                name: 'beach.jpg',
+                mimeType: 'image/jpeg',
+                byteCount: 4,
+                type: 'image',
+                url: `/api/files/${id}`,
+              },
+            }),
+            { status: 200 },
+          ),
+        );
+      vi.stubGlobal('fetch', fetchMock);
 
-    await uploadChatAttachments([jpegWithLocation('beach.jpg')]);
+      const photo = new File([jpegWithLocationBytes()], 'beach.jpg', { type: browserType });
+      await uploadChatAttachments([photo]);
 
-    const put = fetchMock.mock.calls[1]?.[1] as { body: Blob } | undefined;
-    if (!put) throw new Error('nothing was put into storage');
-    const stored = await bytesOf(put.body);
-    expect(includesText(stored, PICTURE_NEEDLE.camera)).toBe(false);
-    expect(includesText(stored, PICTURE_NEEDLE.pixels)).toBe(true);
-  });
+      const put = fetchMock.mock.calls[1]?.[1] as { body: Blob } | undefined;
+      if (!put) throw new Error('nothing was put into storage');
+      expect(put.body.type).toBe('image/jpeg');
+      const stored = await bytesOf(put.body);
+      expect(includesText(stored, PICTURE_NEEDLE.camera)).toBe(false);
+      expect(includesText(stored, PICTURE_NEEDLE.pixels)).toBe(true);
+    },
+  );
 
   it('refuses a picture it cannot clean before anything leaves the browser', async () => {
     const fetchMock = vi.fn();

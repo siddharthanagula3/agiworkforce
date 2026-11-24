@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 import {
-  CLOUD_CODE_TURN_STILL_RUNNING_CODE,
+  beginCloudCodeRequest,
+  isCloudCodeTurnStillRunning,
+  takeRefusedCloudCodeSend,
+  useCloudCodeRequests,
+} from './cloudCodeRequests';
+import {
   type StartCloudCodeAgentTurnRequest,
-  CloudCodeApiError,
   buildCodeTranscript,
   toCodeTurnRecord,
   type CloudCodeAgentApproval,
@@ -33,7 +37,7 @@ const EMPTY_TERMINAL_ENTRIES: CloudCodeTerminalEntry[] = [];
 
 export type CloudCodeTurnRequest = 'send' | CloudCodeApprovalDecision;
 
-export type CloudCodeTurnOptions = Pick<StartCloudCodeAgentTurnRequest, 'maxSteps' | 'mode'>;
+export type CloudCodeTurnOptions = Pick<StartCloudCodeAgentTurnRequest, 'mode'>;
 
 type SessionLoad = 'initial' | 'refresh' | 'background';
 
@@ -52,6 +56,7 @@ export interface CloudCodeSessionView {
   turnsTruncated: boolean;
   approvals: CloudCodeAgentApproval[];
   pendingGoal: string | null;
+  hasRefusedSend: boolean;
   turnRequest: CloudCodeTurnRequest | null;
   working: boolean;
   stopping: boolean;
@@ -66,6 +71,7 @@ export interface CloudCodeSessionActions {
   reload: () => void;
   retry: () => void;
   send: (goal: string, options?: CloudCodeTurnOptions) => Promise<boolean>;
+  recoverRefusedSend: () => string | null;
   stop: () => void;
   decide: (approval: CloudCodeAgentApproval, decision: CloudCodeApprovalDecision) => void;
   unarchive: () => void;
@@ -74,10 +80,6 @@ export interface CloudCodeSessionActions {
 
 function approvalKey(approval: Pick<CloudCodeAgentApproval, 'turnId' | 'stepIndex'>): string {
   return `${approval.turnId}:${approval.stepIndex}`;
-}
-
-function isTurnStillRunning(error: unknown): boolean {
-  return error instanceof CloudCodeApiError && error.code === CLOUD_CODE_TURN_STILL_RUNNING_CODE;
 }
 
 function isAbortError(error: unknown): boolean {
@@ -94,15 +96,18 @@ export function useCloudCodeSession(
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [turnRequest, setTurnRequest] = useState<CloudCodeTurnRequest | null>(null);
-  const [pendingGoal, setPendingGoal] = useState<string | null>(null);
-  const [sendBaseline, setSendBaseline] = useState<string | null>(null);
-  const [decidingKey, setDecidingKey] = useState<string | null>(null);
-  const [stopping, setStopping] = useState(false);
+  const [stopRequested, setStopRequested] = useState(false);
+  const stoppingRequest = useRef<symbol | null>(null);
   const [unarchiving, setUnarchiving] = useState(false);
   const [appState, setAppState] = useState<AppStateStatus>(AppState.currentState ?? 'active');
   const mounted = useRef(true);
   const readGeneration = useRef(0);
+  const requests = useCloudCodeRequests();
+  const pending = requests.pending.get(sessionId);
+  const ownRequest = useRef<typeof pending>(undefined);
+  const previousRequest = useRef(pending);
+  const turnRequest = pending?.kind ?? null;
+  const decidingKey = pending && pending.kind !== 'send' ? pending.approvalKey : null;
 
   useEffect(() => {
     mounted.current = true;
@@ -146,6 +151,12 @@ export function useCloudCodeSession(
   }, [load]);
 
   useEffect(() => {
+    const previous = previousRequest.current;
+    previousRequest.current = pending;
+    if (previous && !pending && previous !== ownRequest.current) void load('background');
+  }, [load, pending]);
+
+  useEffect(() => {
     const subscription = AppState.addEventListener('change', (next) => {
       setAppState(next);
       if (next === 'active') void load('background');
@@ -158,6 +169,8 @@ export function useCloudCodeSession(
   const latestTurnId = latestTurn?.turnId ?? null;
   const runningTurnId = latestTurn && latestTurn.stopReason === null ? latestTurn.turnId : null;
   const working = turnRequest !== null || runningTurnId !== null;
+  const stopping =
+    stopRequested || (runningTurnId !== null && Boolean(latestTurn?.cancelRequestedAt));
   const sessionBusy = detail ? cloudCodeSessionIsBusy(detail.session) : false;
   const shouldPoll = status === 'ready' && appState === 'active' && (working || sessionBusy);
 
@@ -180,7 +193,10 @@ export function useCloudCodeSession(
   }, [load, shouldPoll]);
 
   useEffect(() => {
-    if (!working) setStopping(false);
+    if (!working) {
+      stoppingRequest.current = null;
+      setStopRequested(false);
+    }
   }, [working]);
 
   const transcript = useMemo(
@@ -196,75 +212,94 @@ export function useCloudCodeSession(
 
   const send = useCallback(
     async (goal: string, options: CloudCodeTurnOptions = {}): Promise<boolean> => {
-      if (turnRequest !== null) return false;
-      setTurnRequest('send');
-      setPendingGoal(goal);
-      setSendBaseline(latestTurnId);
+      if (runningTurnId !== null) return false;
+      const operation = beginCloudCodeRequest(sessionId, {
+        kind: 'send',
+        goal,
+        baseline: latestTurnId,
+      });
+      if (!operation) return false;
+      ownRequest.current = operation.request;
       setActionError(null);
       let sent = true;
+      let refusedWhileAway: { goal: string; message: string } | undefined;
       try {
-        await cloudCodeApi.startAgentTurn(sessionId, {
-          goal,
-          model,
-          idempotencyKey: newCloudCodeIdempotencyKey(),
-          ...options,
-        });
+        await cloudCodeApi.startAgentTurn(
+          sessionId,
+          { goal, model, idempotencyKey: newCloudCodeIdempotencyKey(), ...options },
+          operation.signal,
+        );
       } catch (error) {
-        if (!isAbortError(error) && !isTurnStillRunning(error)) {
+        if (
+          !operation.signal.aborted &&
+          !isAbortError(error) &&
+          !isCloudCodeTurnStillRunning(error)
+        ) {
           sent = false;
-          if (mounted.current) setActionError(describeCloudCodeError(error, CLOUD_CODE_SEND_ERROR));
+          const message = describeCloudCodeError(error, CLOUD_CODE_SEND_ERROR);
+          if (mounted.current) setActionError(message);
+          else refusedWhileAway = { goal, message };
         }
-      }
-      if (mounted.current) {
-        setTurnRequest(null);
-        setPendingGoal(null);
-        void load('background');
+      } finally {
+        operation.finish(refusedWhileAway);
+        if (mounted.current && !operation.signal.aborted) void load('background');
       }
       return sent;
     },
-    [latestTurnId, load, model, sessionId, turnRequest],
+    [latestTurnId, load, model, runningTurnId, sessionId],
   );
 
+  const recoverRefusedSend = useCallback(() => {
+    const refused = takeRefusedCloudCodeSend(sessionId);
+    if (!refused) return null;
+    setActionError(refused.message);
+    return refused.goal;
+  }, [sessionId]);
+
   const stop = useCallback(() => {
-    if (stopping) return;
-    setStopping(true);
+    if (!working || stopping || stoppingRequest.current !== null) return;
+    const request = Symbol();
+    stoppingRequest.current = request;
+    setStopRequested(true);
     setActionError(null);
     void cloudCodeApi
       .cancelAgentTurn(sessionId, runningTurnId ?? undefined)
       .catch((error: unknown) => {
-        if (!mounted.current) return;
-        setStopping(false);
+        if (!mounted.current || stoppingRequest.current !== request) return;
+        stoppingRequest.current = null;
+        setStopRequested(false);
         setActionError(describeCloudCodeError(error, CLOUD_CODE_STOP_ERROR));
       })
       .finally(() => {
         if (mounted.current) void load('background');
       });
-  }, [load, runningTurnId, sessionId, stopping]);
+  }, [load, runningTurnId, sessionId, stopping, working]);
 
   const decide = useCallback(
     (approval: CloudCodeAgentApproval, decision: CloudCodeApprovalDecision) => {
-      if (turnRequest !== null) return;
-      setTurnRequest(decision);
-      setDecidingKey(approvalKey(approval));
+      const operation = beginCloudCodeRequest(sessionId, {
+        kind: decision,
+        approvalKey: approvalKey(approval),
+      });
+      if (!operation) return;
+      ownRequest.current = operation.request;
       setActionError(null);
       void cloudCodeApi
-        .decideApproval(sessionId, {
-          turnId: approval.turnId,
-          stepIndex: approval.stepIndex,
-          decision,
-        })
+        .decideApproval(
+          sessionId,
+          { turnId: approval.turnId, stepIndex: approval.stepIndex, decision },
+          operation.signal,
+        )
         .catch((error: unknown) => {
-          if (!mounted.current || isAbortError(error)) return;
+          if (!mounted.current || operation.signal.aborted || isAbortError(error)) return;
           setActionError(describeCloudCodeError(error, CLOUD_CODE_DECISION_ERROR));
         })
         .finally(() => {
-          if (!mounted.current) return;
-          setTurnRequest(null);
-          setDecidingKey(null);
-          void load('background');
+          operation.finish();
+          if (mounted.current && !operation.signal.aborted) void load('background');
         });
     },
-    [load, sessionId, turnRequest],
+    [load, sessionId],
   );
 
   const unarchive = useCallback(() => {
@@ -303,7 +338,9 @@ export function useCloudCodeSession(
     transcript,
     turnsTruncated: detail?.turnsTruncated === true,
     approvals: visibleApprovals,
-    pendingGoal: turnRequest === 'send' && latestTurnId === sendBaseline ? pendingGoal : null,
+    pendingGoal:
+      pending?.kind === 'send' && latestTurnId === pending.baseline ? pending.goal : null,
+    hasRefusedSend: requests.refused.has(sessionId),
     turnRequest,
     working,
     stopping,
@@ -315,6 +352,7 @@ export function useCloudCodeSession(
     reload,
     retry,
     send,
+    recoverRefusedSend,
     stop,
     decide,
     unarchive,

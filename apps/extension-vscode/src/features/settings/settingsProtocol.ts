@@ -48,6 +48,7 @@ export const SETTINGS_COMMANDS = [
   'openSubprocessors',
   'showPlugins',
   'showSkills',
+  'showHooks',
 ] as const;
 
 export type SettingsCommand = (typeof SETTINGS_COMMANDS)[number];
@@ -114,8 +115,13 @@ const settingValueSchemas = {
   cliPath: z.string().trim().min(1).max(4096),
   'composer.followUpBehavior': z.enum(['queue', 'steer']),
   'composer.enterBehavior': z.enum(['enter', 'modifierIfMultiline', 'modifier']),
+  'composer.escapeStops': z.boolean(),
+  'chat.focusView': z.boolean(),
   contextLines: z.number().int().min(0).max(500),
   'editorContext.autoAttach': z.boolean(),
+  'editorContext.attachOpenFile': z.boolean(),
+  'editorContext.saveOpenFileBeforeSend': z.boolean(),
+  'editorContext.attachSelection': z.boolean(),
   respectGitIgnore: z.boolean(),
   telemetryEnabled: z.boolean(),
   hoverEnabled: z.boolean(),
@@ -130,6 +136,9 @@ const settingValueSchemas = {
   'agent.thinking': z.boolean(),
   activateOnStartup: z.boolean(),
   useTerminal: z.boolean(),
+  'terminal.usePythonEnvironment': z.boolean(),
+  chatLocation: z.enum(['sidebar', 'editor']),
+  'chat.lockEditorGroups': z.boolean(),
 } satisfies {
   [K in MutableConfigKey]: z.ZodType<MutableConfigValues[K]>;
 };
@@ -214,6 +223,7 @@ export interface SettingsPanelState extends ExtensionSettingsSnapshot {
 export type SettingsHostMessage =
   | { type: 'settings.snapshot'; state: SettingsPanelState }
   | { type: 'settings.saved'; key: MutableConfigKey }
+  | { type: 'settings.capability.saved'; message: string }
   | { type: 'settings.instructions.saved'; scope: CustomInstructionScope }
   | { type: 'settings.error'; message: string }
   | { type: 'settings.navigate'; section: SettingsSection }

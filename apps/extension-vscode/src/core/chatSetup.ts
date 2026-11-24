@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { registerChatParticipant } from '../features/chat-participant';
 import { SidebarProvider } from '../features/sidebar-webview';
+import { registerDeveloperOutput } from '../features/sidebar-webview/developerOutput';
 import {
   ConversationTreeProvider,
   ContextPanelProvider,
@@ -41,6 +42,7 @@ export function setupChat(
   localRuntimes: LocalRuntimePool,
   diffDecorationProvider?: DiffDecorationProvider,
 ): ChatState {
+  registerDeveloperOutput(context);
   const conversationTreeProvider = new ConversationTreeProvider(localRuntimes);
 
   const chatParticipant = registerChatParticipant(context, conversationTreeProvider, localRuntimes);

@@ -427,6 +427,30 @@ describe('shortcuts section', () => {
     return { section, send };
   }
 
+  it('clears old recordings immediately and ignores a list response from the previous account', async () => {
+    let finishOldRead!: (value: { success: boolean; shortcuts: typeof saved }) => void;
+    const oldRead = new Promise<{ success: boolean; shortcuts: typeof saved }>((resolve) => {
+      finishOldRead = resolve;
+    });
+    const send = vi
+      .fn()
+      .mockResolvedValueOnce({ success: true, shortcuts: saved })
+      .mockReturnValueOnce(oldRead)
+      .mockResolvedValueOnce({ success: true, shortcuts: [] });
+    const { section } = build({ send });
+    section.setActive(true);
+    await flush();
+    expect(section.element.textContent).toContain('Check order');
+
+    const previous = section.refresh();
+    section.accountChanged();
+    expect(section.element.textContent).not.toContain('Check order');
+    finishOldRead({ success: true, shortcuts: saved });
+    await previous;
+    await flush();
+    expect(section.element.textContent).not.toContain('Check order');
+  });
+
   it('passes the remembered model only to a prompt Run and keeps recorded replay local', async () => {
     const selected = getRoutingSlotModel('general_fast');
     const getModelSelection = vi.fn(async () => selected);

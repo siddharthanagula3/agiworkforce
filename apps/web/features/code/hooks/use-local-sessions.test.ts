@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   DeveloperRuntimeModels,
   DeveloperSessionGroup,
+  DesktopRuntimeEvent,
   LocalDeveloperSession,
 } from '@agiworkforce/local-runtime-contract';
 import {
@@ -17,10 +18,12 @@ const listDeveloperSessions = vi.fn();
 const listDeveloperModels = vi.fn();
 const startDeveloperSession = vi.fn();
 const readDeveloperRuntimeStatus = vi.fn();
+const onRuntimeEvent = vi.fn((_listener: (event: DesktopRuntimeEvent) => void) => () => undefined);
+const host = { onRuntimeEvent };
 
 vi.mock('@/features/desktop-host', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  useDesktopHost: () => ({}),
+  useDesktopHost: () => host,
   useDeveloperCapabilities: () => new Set(),
   listDeveloperSessions: () => listDeveloperSessions(),
   listDeveloperModels: (...args: unknown[]) => listDeveloperModels(...args),
@@ -51,6 +54,30 @@ beforeEach(() => {
   vi.clearAllMocks();
   listDeveloperSessions.mockResolvedValue({ groups: [group('root-a'), group('root-b')] });
   readDeveloperRuntimeStatus.mockResolvedValue({ source: 'path', path: '/usr/local/bin/agi' });
+});
+
+it('reloads a refused folder when its command permission changes in Settings', async () => {
+  const refused = {
+    ...group('root-a'),
+    sessionsWithheld: true,
+    commandAccessRefused: true,
+  } as const;
+  listDeveloperSessions.mockResolvedValue({ groups: [refused] });
+  const { result } = renderHook(() => useLocalSessions());
+  await waitFor(() => expect(result.current.groups).toEqual([refused]));
+
+  const awaiting = { ...group('root-a'), sessionsWithheld: true } as const;
+  listDeveloperSessions.mockResolvedValue({ groups: [awaiting] });
+  const listener = onRuntimeEvent.mock.lastCall?.[0];
+  expect(listener).toBeDefined();
+  act(() =>
+    listener?.({
+      kind: 'permission-changed',
+      capability: 'shell.execute',
+      scope: { kind: 'workspace', target: refused.path },
+    }),
+  );
+  await waitFor(() => expect(result.current.groups).toEqual([awaiting]));
 });
 
 describe('the models each folder can run', () => {

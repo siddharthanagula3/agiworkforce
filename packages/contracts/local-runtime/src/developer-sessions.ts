@@ -37,6 +37,7 @@ export const DEVELOPER_SESSION_COMMANDS = [
   'developer_runtime_status',
   'developer_model_list',
   'developer_session_list',
+  'developer_session_lookup',
   'developer_session_read',
   'developer_sessions_allow',
   'developer_session_start',
@@ -86,6 +87,7 @@ export const DEVELOPER_SESSION_COMMANDS = [
   'developer_terminal_open',
   'developer_terminal_write',
   'developer_terminal_resize',
+  'developer_terminal_scroll',
   'developer_terminal_close',
   'developer_account_report',
 ] as const;
@@ -208,6 +210,8 @@ export interface DeveloperSessionGroup {
    * asks the user for that; a list read after it is granted carries them.
    */
   sessionsWithheld?: true;
+  /** A saved refusal still prevents a new command-access prompt for this folder. */
+  commandAccessRefused?: true;
   /**
    * The project servers waiting for the user's approval before the CLI will
    * start them here. Absent when there are none, and from a shell or a CLI
@@ -338,6 +342,7 @@ export interface DeveloperHostModel {
 export interface DeveloperRuntimeFeatures {
   maxTurns: boolean;
   memory: boolean;
+  terminalPty?: boolean;
 }
 
 export interface DeveloperRuntimeModels {
@@ -353,6 +358,15 @@ export interface DeveloperRuntimeModels {
 
 export interface DeveloperSessionList {
   groups: DeveloperSessionGroup[];
+}
+
+export interface DeveloperSessionListOptions {
+  includeArchived?: boolean;
+  titleQuery?: string;
+}
+
+export function sessionTitleMatches(title: string, query: string): boolean {
+  return title.toLowerCase().includes(query.trim().toLowerCase());
 }
 
 export interface DeveloperSessionTranscript {
@@ -658,6 +672,8 @@ export interface WorkingTreeChanges {
   diff: string;
   diffTruncated: boolean;
   folderPrefix: string;
+  comparison?: { branch: string | null; revision: string | null };
+  diffUnavailable?: true;
 }
 
 const PORCELAIN_PATH_INDEX = 3;
@@ -914,3 +930,12 @@ export const TERMINAL_WRITE_LIMIT = 65_536;
 export const TERMINAL_MIN_SIZE = 2;
 export const TERMINAL_MAX_COLUMNS = 1_000;
 export const TERMINAL_MAX_ROWS = 500;
+export const WORKSPACE_TERMINAL_MAX_COLUMNS = 160;
+export const WORKSPACE_TERMINAL_MAX_ROWS = 60;
+export const WORKSPACE_TERMINAL_SCROLLBACK_LINES = 512;
+
+export interface WorkspaceTerminalViewport {
+  scrollback: number;
+  scrollbackLength: number;
+  alternateScreen: boolean;
+}

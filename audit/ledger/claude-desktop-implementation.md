@@ -56,9 +56,15 @@ Use repository Node/pnpm/Rust pins. Build `cargo build -p agiworkforce-cli --bin
 ```sh
 node apps/desktop/electron/__tests__/native-acceptance.mjs
 node apps/desktop/electron/__tests__/native-acceptance.mjs --browser
+node apps/desktop/electron/__tests__/native-acceptance.mjs --code-ui
+node apps/desktop/electron/__tests__/native-acceptance.mjs --code-ui --nested-workspace
 ```
 
 The harness creates isolated project/config/app directories, serves the real hosted hook and local-routine component, uses a scripted loopback model, supplies native-dialog answers only inside its owned app and captures OS fallback. It does not register the app as a default protocol handler, alter login items or claim real model quality. It prints its report directory; `AGI_ACCEPTANCE_OUTPUT_DIR` selects another output directory. It is deliberately outside automatic unit discovery.
+
+The development-only `--code-ui` mode mounts the Code page with a fixture identity and the real Electron bridge. It selects an owned folder through the UI, checks that the first task produces one model request and one reply, compares the header and sidebar titles, and verifies draft preservation when reopening the session list at tablet and desktop widths. It also checks that a tracked fixture file stays unchanged until approval, the diff appears in both views, and the file is restored only after the discard confirmation. Set `AGI_ACCEPTANCE_CLI` to use an existing CLI build at a path other than `target/debug/agi`.
+
+The nested variant uses a fixture launcher to supply process-scoped CLI consent for the exact approved child folder. It checks that the Changes panel excludes a sibling edit, the sibling remains unchanged after discard, and the parent repository gains no persisted trust decision.
 
 The Office integration is explicit:
 

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, View, ScrollView } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import Constants from 'expo-constants';
 import { useUser } from '@clerk/expo';
 import { normalizeDisplayName } from '@agiworkforce/utils/display-name';
@@ -48,6 +48,14 @@ import { Text } from '@/components/ui/Text';
 import { useAuthStore } from '@/src/features/auth/store';
 import { ageGateStatus, getAgeThreshold } from '@/src/features/auth/services/ageGate';
 import type { PostAuthDestination } from '@/src/features/auth/services/postAuthIntent';
+import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
+import { ACCOUNT_PICKER_VIEW } from '@/src/features/accounts/accountNavigation';
+import {
+  CloudAccountRequired,
+  SettingsGroup,
+  SettingsRow as AccountSettingsRow,
+  SettingsScreenShell,
+} from './Common';
 import { useTierStore } from '@/src/features/billing/store';
 import { planCheckOf } from '@/src/features/billing/planCheck';
 import { getBillingPlanPricing } from '@agiworkforce/types';
@@ -490,6 +498,7 @@ function formatAccent(accent: string) {
 
 export default function SettingsTabScreen() {
   const router = useRouter();
+  const { view } = useLocalSearchParams<{ view?: string }>();
   const { colors, isDark } = useTheme();
   const pageBackground = isDark ? colors.background : colors.surfaceBase;
   const insets = useSafeAreaInsets();
@@ -956,6 +965,37 @@ export default function SettingsTabScreen() {
       }),
     [accountValue, appMode, openSearchResult, searchQuery, visibleSections],
   );
+
+  if (view === ACCOUNT_PICKER_VIEW) {
+    const canListAccounts =
+      isClerkSignedIn && deviceAccounts.multiSession && deviceAccounts.accounts.length > 0;
+    return (
+      <SettingsScreenShell
+        title="Switch account"
+        backHref="/(app)/(tabs)/chat"
+        overlay={<AccountSwitchOverlay />}
+      >
+        {canListAccounts ? (
+          <DeviceAccountsCard accounts={deviceAccounts} />
+        ) : !isClerkLoaded || (!isClerkSignedIn && !hasClerkSession) ? (
+          <CloudAccountRequired
+            isLoading={!isClerkLoaded}
+            onSignIn={() => router.push(beginCloudPostAuthIntent())}
+          />
+        ) : (
+          <SettingsGroup footnote="Log out on this phone, then sign in with the account you want to use.">
+            <AccountSettingsRow
+              label="Log Out"
+              icon={LogOut}
+              onPress={handleSignOut}
+              isLast
+              destructive
+            />
+          </SettingsGroup>
+        )}
+      </SettingsScreenShell>
+    );
+  }
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: pageBackground }}>

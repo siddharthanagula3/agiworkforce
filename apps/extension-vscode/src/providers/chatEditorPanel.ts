@@ -38,6 +38,13 @@ export class ChatEditorPanel {
   private readonly stateManager: ChatStateManager;
   private readonly origin = `chatPanel-${ChatEditorPanel.nextOriginNumber++}`;
 
+  static activePanel(): ChatEditorPanel | undefined {
+    for (const instance of ChatEditorPanel.instances) {
+      if (instance.panel.active) return instance;
+    }
+    return undefined;
+  }
+
   static __resetForTests(): void {
     ChatEditorPanel.instances.clear();
     ChatEditorPanel.mostRecent = undefined;
@@ -53,7 +60,10 @@ export class ChatEditorPanel {
     conversationTreeProvider: ConversationTreeProvider,
     diffDecorationProvider: DiffDecorationProvider,
   ): ChatEditorPanel {
-    const column = vscode.window.activeTextEditor?.viewColumn ?? vscode.ViewColumn.One;
+    const lockGroup = Config.lockChatEditorGroups();
+    const column = lockGroup
+      ? ChatEditorPanel.chatGroupColumn()
+      : (vscode.window.activeTextEditor?.viewColumn ?? vscode.ViewColumn.One);
     const panelNumber = ChatEditorPanel.nextPanelNumber++;
     const title = panelNumber === 1 ? 'AGI Chat' : `AGI Chat ${panelNumber}`;
     const panel = vscode.window.createWebviewPanel(ChatEditorPanel.viewType, title, column, {
@@ -73,7 +83,51 @@ export class ChatEditorPanel {
     );
     ChatEditorPanel.instances.add(instance);
     ChatEditorPanel.mostRecent = instance;
+    if (lockGroup) instance.lockChatGroupWhenReady();
     return instance;
+  }
+
+  private static isChatTab(tab: vscode.Tab): boolean {
+    return (
+      tab.input instanceof vscode.TabInputWebview &&
+      (tab.input.viewType === ChatEditorPanel.viewType ||
+        tab.input.viewType === `mainThreadWebview-${ChatEditorPanel.viewType}`)
+    );
+  }
+
+  private static chatGroupColumn(): vscode.ViewColumn {
+    const { activeTabGroup, all } = vscode.window.tabGroups;
+    if (activeTabGroup.tabs.every(ChatEditorPanel.isChatTab)) return activeTabGroup.viewColumn;
+    const dedicated = all.find((group) => group.tabs.every(ChatEditorPanel.isChatTab));
+    if (dedicated !== undefined) return dedicated.viewColumn;
+    const lastColumn = Math.max(...all.map((group) => group.viewColumn));
+    return lastColumn < vscode.ViewColumn.Nine ? lastColumn + 1 : vscode.ViewColumn.Beside;
+  }
+
+  private lockChatGroupWhenReady(): void {
+    let finished = false;
+    const lockWhenActive = (): void => {
+      if (finished || !Config.lockChatEditorGroups() || !this.panel.active) return;
+      const group = vscode.window.tabGroups.activeTabGroup;
+      if (
+        group.viewColumn !== this.panel.viewColumn ||
+        group.activeTab?.label !== this.panel.title ||
+        !group.tabs.every(ChatEditorPanel.isChatTab)
+      )
+        return;
+      finished = true;
+      listeners.forEach((listener) => listener.dispose());
+      void Promise.resolve(
+        vscode.commands.executeCommand('workbench.action.lockEditorGroup'),
+      ).catch(() => undefined);
+    };
+    const listeners = [
+      this.panel.onDidChangeViewState(lockWhenActive),
+      vscode.window.tabGroups.onDidChangeTabs(lockWhenActive),
+      vscode.window.tabGroups.onDidChangeTabGroups(lockWhenActive),
+    ];
+    this.disposables.push(...listeners);
+    lockWhenActive();
   }
 
   static registerSerializer(
@@ -118,8 +172,7 @@ export class ChatEditorPanel {
     diffDecorationProvider: DiffDecorationProvider,
   ): ChatEditorPanel {
     if (ChatEditorPanel.mostRecent !== undefined) {
-      const column = vscode.window.activeTextEditor?.viewColumn ?? vscode.ViewColumn.One;
-      ChatEditorPanel.mostRecent.panel.reveal(column);
+      ChatEditorPanel.mostRecent.panel.reveal();
       return ChatEditorPanel.mostRecent;
     }
     return ChatEditorPanel.createNew(
@@ -223,6 +276,14 @@ export class ChatEditorPanel {
     return this.stateManager.resumeConversation(threadId);
   }
 
+  checkpointsAvailable(): Promise<boolean> {
+    return this.stateManager.checkpointsAvailable();
+  }
+
+  showCheckpoints(): Promise<void> {
+    return this.stateManager.showCheckpoints();
+  }
+
   private dispose(): void {
     setChatFocus(this, false);
     ChatEditorPanel.instances.delete(this);
@@ -242,6 +303,12 @@ export class ChatEditorPanel {
     for (const instance of ChatEditorPanel.instances) {
       instance.stateManager.pushFollowUpBehavior();
     }
+  }
+
+  static protectsThreadFromArchive(id: string): boolean {
+    return [...ChatEditorPanel.instances].some((panel) =>
+      panel.stateManager.protectsThreadFromArchive(id),
+    );
   }
 
   static refreshRuntimeStatus(): void {

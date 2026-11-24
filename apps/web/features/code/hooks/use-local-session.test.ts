@@ -1187,9 +1187,24 @@ describe('cursor-owned reconnect replay', () => {
       inputTokens: 0,
       outputTokens: 0,
     });
-    await waitFor(() => expect(result.current.error).not.toBeNull());
+    await waitFor(() => expect(result.current.readError).toBe('read failed'));
     expect(result.current.turn.reply).toBe('complete result');
     expect(result.current.queued.map((item) => item.text)).toEqual(['keep queued']);
+
+    readDeveloperSession.mockResolvedValueOnce({
+      session,
+      messages: [{ role: 'assistant', text: 'complete result', turnId: 'turn-1' }],
+      truncated: false,
+      activeTurn: null,
+    });
+    await act(() => result.current.retryRead());
+
+    expect(result.current.readError).toBeNull();
+    expect(result.current.messages).toHaveLength(1);
+    expect(result.current.turn.reply).toBe('');
+    expect(result.current.queuePaused).toBe(true);
+    expect(result.current.queued.map((item) => item.text)).toEqual(['keep queued']);
+    expect(startDeveloperTurn).toHaveBeenCalledTimes(1);
   });
 
   it('bounds buffered event bytes and obtains a fresh snapshot after overflow', async () => {

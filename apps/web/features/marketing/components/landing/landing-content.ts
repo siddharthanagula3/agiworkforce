@@ -395,15 +395,6 @@ export const SURFACES_SECTION = {
   lede: 'Projects, memory and artifacts follow your account between surfaces. The release state beside each one is the same value the download page shows.',
 } as const;
 
-export const WEB_SHOT = {
-  light: '/product/projects-light-landing.png',
-  dark: '/product/projects-dark-landing.png',
-  alt: 'Chat showing the projects view, with chat, code, projects, library and schedules in the sidebar',
-  width: 2880,
-  height: 1300,
-  url: CONSOLE_URL,
-} as const;
-
 export const MOBILE_SHOT = {
   light: '/screenshots/mobile-light-v2.png',
   dark: '/screenshots/mobile-dark-v2.png',

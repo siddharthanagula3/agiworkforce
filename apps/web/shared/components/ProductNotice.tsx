@@ -72,20 +72,26 @@ export function ProductNoticeCard({
   return (
     <div
       role={tone === 'info' ? 'status' : 'alert'}
-      className="pointer-events-auto flex w-full max-w-3xl shrink-0 items-center gap-3 rounded-lg border border-border bg-popover px-4 py-3 text-sm text-foreground shadow-sm"
+      className="pointer-events-auto flex w-full max-w-3xl shrink-0 flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-border bg-popover px-4 py-3 text-sm text-foreground shadow-sm"
     >
-      <Icon className={`h-4 w-4 shrink-0 ${ICON_TONE[tone]}`} aria-hidden="true" />
-      <p className="min-w-0 flex-1">{message}</p>
-      {action}
-      {onDismiss ? (
-        <button
-          type="button"
-          aria-label="Dismiss this notice"
-          onClick={onDismiss}
-          className="flex min-h-6 min-w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground pointer-coarse:min-h-11 pointer-coarse:min-w-11"
-        >
-          <X className="h-4 w-4" aria-hidden="true" />
-        </button>
+      <div className="flex min-w-0 grow basis-80 items-start gap-3">
+        <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${ICON_TONE[tone]}`} aria-hidden="true" />
+        <p className="min-w-0 wrap-anywhere">{message}</p>
+      </div>
+      {action || onDismiss ? (
+        <div className="ms-auto flex max-w-full flex-wrap items-center justify-end gap-2">
+          {action}
+          {onDismiss ? (
+            <button
+              type="button"
+              aria-label="Dismiss this notice"
+              onClick={onDismiss}
+              className="flex min-h-6 min-w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground pointer-coarse:min-h-11 pointer-coarse:min-w-11"
+            >
+              <X className="h-4 w-4" aria-hidden="true" />
+            </button>
+          ) : null}
+        </div>
       ) : null}
     </div>
   );

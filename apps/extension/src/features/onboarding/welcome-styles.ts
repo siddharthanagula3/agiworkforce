@@ -3,133 +3,34 @@ import { getExtensionTokensCssAuto } from '../../tokens';
 export function welcomeStyles(): string {
   return `
     ${getExtensionTokensCssAuto()}
-
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      font-size: 14px;
-      line-height: 1.5;
-      color: var(--agi-ext-text);
-      background: var(--agi-ext-bg);
-    }
-
-    .wl-page {
-      max-width: 640px;
-      margin: 0 auto;
-      padding: 40px 16px 56px;
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-
-    .wl-title {
-      font-size: 24px;
-      line-height: 1.25;
-      font-weight: 700;
-    }
-
-    .wl-lead {
-      margin-top: 6px;
-      color: var(--agi-ext-text-muted);
-    }
-
-    .wl-card {
-      background: var(--agi-ext-surface);
-      border: 1px solid var(--agi-ext-border);
-      border-radius: 10px;
-      padding: 16px;
-      min-width: 0;
-    }
-
-    .wl-card-title {
-      font-size: 15px;
-      font-weight: 600;
-    }
-
-    .wl-card-body {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      margin-top: 8px;
-    }
-
-    .wl-columns {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-      gap: 16px;
-    }
-
-    .wl-text {
-      color: var(--agi-ext-text-muted);
-    }
-
-    .wl-warning {
-      color: var(--agi-ext-text);
-    }
-
-    .wl-list {
-      padding-left: 18px;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      color: var(--agi-ext-text-muted);
-    }
-
-    .wl-details summary {
-      cursor: pointer;
-      min-height: 24px;
-      font-weight: 500;
-    }
-
-    .wl-details p {
-      margin-top: 6px;
-    }
-
-    .wl-link {
-      color: var(--agi-ext-accent-text);
-    }
-
-    .wl-actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-
-    .wl-btn {
-      min-height: 32px;
-      padding: 6px 16px;
-      border-radius: 6px;
-      font: inherit;
-      font-weight: 500;
-      cursor: pointer;
-      align-self: flex-start;
-    }
-
-    .wl-btn-primary {
-      background: var(--agi-ext-primary);
-      color: var(--agi-ext-on-primary);
-      border: 0;
-    }
-
-    .wl-btn-primary:hover:not(:disabled) {
-      background: var(--agi-ext-primary-hover);
-    }
-
-    .wl-btn-secondary {
-      background: none;
-      color: var(--agi-ext-text);
-      border: 1px solid var(--agi-ext-border);
-    }
-
-    .wl-btn:disabled {
-      cursor: wait;
-      opacity: 0.7;
-    }
-
-    .wl-btn:focus-visible,
-    .wl-link:focus-visible,
-    .wl-details summary:focus-visible {
-      outline: 2px solid var(--agi-ext-focus);
-      outline-offset: 2px;
-    }
+    body { font: 1rem/1.55 system-ui, sans-serif; color: var(--agi-ext-text); background: var(--agi-ext-bg); }
+    .wl-page { width: min(100% - 2.5rem, 46rem); margin: auto; padding-bottom: 4rem; }
+    .wl-bar { display: flex; align-items: center; justify-content: space-between; padding-block: 1rem; border-bottom: 1px solid var(--agi-ext-border); }
+    .wl-settings, .wl-btn { font: inherit; font-weight: 550; cursor: pointer; }
+    .wl-settings { display: inline-flex; align-items: center; gap: .5rem; background: transparent; color: var(--agi-ext-text-muted); border: 0; min-height: 44px; }
+    .wl-settings:hover, summary:hover { color: var(--agi-ext-text); }
+    .wl-header { padding-block: clamp(2.5rem, 7vw, 5rem) 2.5rem; }
+    .wl-title { font-size: clamp(2.5rem, 6vw, 4rem); letter-spacing: -.055em; line-height: 1.06; font-weight: 620; }
+    .wl-lead { max-width: 48ch; margin-block: 1rem 1.5rem; font-size: 1.125rem; color: var(--agi-ext-text-muted); }
+    .wl-actions { display: flex; flex-wrap: wrap; gap: .65rem; }
+    .wl-btn { padding: .55rem 1.1rem; min-height: 44px; border-radius: var(--corner-menu); background: transparent; border: 1px solid var(--agi-ext-border-control); color: var(--agi-ext-text); }
+    .wl-btn-primary { color: var(--agi-ext-on-primary); background: var(--agi-ext-primary); border-color: transparent; }
+    .wl-btn-primary:hover { background: var(--agi-ext-primary-hover); }
+    .wl-btn:disabled { cursor: wait; opacity: .7; }
+    .wl-header [role=status]:not(:empty) { margin-top: .65rem; }
+    .wl-text, .wl-list { color: var(--agi-ext-text-muted); }
+    .wl-card, .wl-scope { border-top: 1px solid var(--agi-ext-border); padding-block: 1.2rem; }
+    .wl-card-title, .wl-scope > summary { font-size: 1.125rem; font-weight: 600; }
+    .wl-card-body { margin-top: .4rem; }
+    .wl-scope .wl-card { border: 0; padding-block: .8rem 0; }
+    .wl-scope .wl-card-title { font-size: 1rem; }
+    .wl-list { padding-inline-start: 1.2rem; }
+    summary { cursor: pointer; min-height: 44px; align-content: center; }
+    .wl-scope { padding-block: .5rem; }
+    .wl-warning { margin-bottom: 1rem; }
+    .wl-details { border-top: 1px solid var(--agi-ext-border); }
+    .wl-details p { padding-block: .25rem 1rem; }
+    .wl-link { color: var(--agi-ext-accent-text); text-underline-offset: .18em; }
+    .wl-page :focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 3px; }
   `;
 }

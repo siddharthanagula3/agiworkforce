@@ -221,6 +221,8 @@ const ACCOUNT_TOKEN_KEY = 'agiWorkforce.accountToken';
 const ACCOUNT_TOKEN_EXPIRES_AT_KEY = 'agiWorkforce.accountTokenExpiresAt';
 const ACCOUNT_TOKEN_EXPIRED_KEY = 'agiWorkforce.accountTokenExpired';
 const ACCOUNT_REFRESH_TOKEN_KEY = 'agiWorkforce.accountRefreshToken';
+const SHARED_ACCOUNT_SESSION_KEY = 'agiWorkforce.sharedAccountSession';
+const SHARED_ACCOUNT_DISABLED = 'disabled';
 const DEFAULT_ENDPOINT = __CONFIG_DEFAULTS.apiEndpoint;
 
 export async function getApiKey(secrets: vscode.SecretStorage): Promise<string | undefined> {
@@ -265,17 +267,49 @@ export function forgetSharedCredentialRefusal(): void {
   sharedCredentialRefusedAt = undefined;
 }
 
+interface SharedAccountSession {
+  ownerId: string;
+  token: string;
+  expiresAtMs?: number;
+}
+
+function parseSharedAccountSession(raw: string | undefined): SharedAccountSession | null {
+  try {
+    const value = JSON.parse(raw ?? 'null') as Partial<SharedAccountSession> | null;
+    return value &&
+      typeof value.ownerId === 'string' &&
+      value.ownerId !== '' &&
+      typeof value.token === 'string' &&
+      (value.expiresAtMs === undefined ||
+        (typeof value.expiresAtMs === 'number' && Number.isFinite(value.expiresAtMs)))
+      ? (value as SharedAccountSession)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function sharedTokenIsCurrent(session: SharedAccountSession): boolean {
+  return (
+    session.token !== '' && (session.expiresAtMs === undefined || session.expiresAtMs > Date.now())
+  );
+}
+
 async function adoptSharedAccountCredential(
   secrets: vscode.SecretStorage,
+  observed: string | undefined,
+  pinned: SharedAccountSession | null,
+  generation: number,
 ): Promise<string | undefined> {
-  if (sharedAccountCredentialSource === undefined) return undefined;
+  const source = sharedAccountCredentialSource;
+  if (!source || (observed !== undefined && pinned === null)) return undefined;
   if (
     sharedCredentialRefusedAt !== undefined &&
     Date.now() - sharedCredentialRefusedAt < SHARED_CREDENTIAL_REFUSAL_TTL_MS
   ) {
     return undefined;
   }
-  const credential = await sharedAccountCredentialSource().catch(() => undefined);
+  const credential = await source().catch(() => undefined);
   if (
     credential === undefined ||
     credential.token === rejectedAccountToken ||
@@ -284,31 +318,103 @@ async function adoptSharedAccountCredential(
     sharedCredentialRefusedAt = Date.now();
     return undefined;
   }
-  sharedCredentialRefusedAt = undefined;
-  await setAccountToken(secrets, credential.token, credential.expiresAtMs);
-  notifyAccountTierMayHaveChanged();
-  return credential.token;
+  if (source !== sharedAccountCredentialSource || generation !== custodyOf(secrets).generation) {
+    return undefined;
+  }
+  const url = new URL('/api/me?surface=vscode', getCloudWebOrigin()).toString();
+  const response = await getCloudJson(url, credential.token).catch(
+    () => ({ kind: 'unreachable' }) as const,
+  );
+  const identity = MeResponseSchema.pick({ id: true }).safeParse(
+    response.kind === 'ok' ? response.body : undefined,
+  );
+  const ownerId = identity.success ? identity.data.id.trim() : '';
+  if (!ownerId || (pinned && pinned.ownerId !== ownerId)) {
+    sharedCredentialRefusedAt = Date.now();
+    return undefined;
+  }
+  return runExclusive(secrets, async () => {
+    if (
+      (await secrets.get(SHARED_ACCOUNT_SESSION_KEY)) !== observed ||
+      (await secrets.get(ACCOUNT_TOKEN_KEY)) ||
+      (await secrets.get(ACCOUNT_TOKEN_EXPIRED_KEY)) === '1' ||
+      (await getAccountRefreshToken(secrets)) ||
+      source !== sharedAccountCredentialSource ||
+      generation !== custodyOf(secrets).generation
+    )
+      return undefined;
+    const session = { ...credential, ownerId };
+    if (!sharedTokenIsCurrent(session)) return undefined;
+    await secrets.store(SHARED_ACCOUNT_SESSION_KEY, JSON.stringify(session));
+    sharedCredentialRefusedAt = undefined;
+    notifyAccountTierMayHaveChanged();
+    return credential.token;
+  });
+}
+
+function borrowSharedAccountCredential(
+  secrets: vscode.SecretStorage,
+  observed: string | undefined,
+  pinned: SharedAccountSession | null,
+  generation: number,
+): Promise<string | undefined> {
+  const custody = custodyOf(secrets);
+  const pending = custody.sharedAdoption;
+  if (pending?.generation === generation && pending.observed === observed) return pending.promise;
+  const promise = adoptSharedAccountCredential(secrets, observed, pinned, generation).finally(
+    () => {
+      if (custody.sharedAdoption?.promise === promise) custody.sharedAdoption = undefined;
+    },
+  );
+  custody.sharedAdoption = { generation, observed, promise };
+  return promise;
 }
 
 export async function getAccountToken(
   secrets: vscode.SecretStorage,
-  options: { renew?: boolean } = {},
+  options: { renew?: boolean; includeShared?: boolean } = {},
 ): Promise<string | undefined> {
-  let state = await getAccountAuthState(secrets);
+  const generation = custodyOf(secrets).generation;
+  let state = await getEditorAccountAuthState(secrets);
   if (state.status === 'expired' && options.renew !== false) {
     const renewal = await renewAccountSession(secrets);
     if (renewal === 'renewed' || renewal === 'superseded') {
-      state = await getAccountAuthState(secrets);
+      state = await getEditorAccountAuthState(secrets);
     }
   }
   if (state.status === 'signed-in') return secrets.get(ACCOUNT_TOKEN_KEY);
+  if (
+    options.includeShared === false ||
+    state.status === 'expired' ||
+    (await getAccountRefreshToken(secrets))
+  )
+    return undefined;
+  const observed = await secrets.get(SHARED_ACCOUNT_SESSION_KEY);
+  if (generation !== custodyOf(secrets).generation) return undefined;
+  const shared = parseSharedAccountSession(observed);
+  if (shared && sharedTokenIsCurrent(shared)) return shared.token;
   if (options.renew === false) return undefined;
-  return adoptSharedAccountCredential(secrets);
+  return borrowSharedAccountCredential(secrets, observed, shared, generation);
+}
+
+export async function canBeginSharedAccountSignIn(secrets: vscode.SecretStorage): Promise<boolean> {
+  return (
+    (await getEditorAccountAuthState(secrets)).status === 'signed-out' &&
+    !(await getAccountRefreshToken(secrets)) &&
+    (await secrets.get(SHARED_ACCOUNT_SESSION_KEY)) === undefined
+  );
 }
 
 interface AccountSessionCustody {
   generation: number;
   renewal: { generation: number; promise: Promise<AccountSessionRenewal> } | undefined;
+  sharedAdoption:
+    | {
+        generation: number;
+        observed: string | undefined;
+        promise: Promise<string | undefined>;
+      }
+    | undefined;
   writes: Promise<void>;
 }
 
@@ -317,7 +423,12 @@ const accountSessionCustody = new WeakMap<vscode.SecretStorage, AccountSessionCu
 function custodyOf(secrets: vscode.SecretStorage): AccountSessionCustody {
   let custody = accountSessionCustody.get(secrets);
   if (custody === undefined) {
-    custody = { generation: 0, renewal: undefined, writes: Promise.resolve() };
+    custody = {
+      generation: 0,
+      renewal: undefined,
+      sharedAdoption: undefined,
+      writes: Promise.resolve(),
+    };
     accountSessionCustody.set(secrets, custody);
   }
   return custody;
@@ -353,9 +464,11 @@ async function storeAccountSession(
   } else {
     await secrets.delete(ACCOUNT_REFRESH_TOKEN_KEY);
   }
+  await secrets.delete(SHARED_ACCOUNT_SESSION_KEY);
 }
 
 async function wipeAccountSession(secrets: vscode.SecretStorage): Promise<void> {
+  await secrets.store(SHARED_ACCOUNT_SESSION_KEY, SHARED_ACCOUNT_DISABLED);
   await secrets.delete(ACCOUNT_TOKEN_KEY);
   await secrets.delete(ACCOUNT_TOKEN_EXPIRES_AT_KEY);
   await secrets.delete(ACCOUNT_TOKEN_EXPIRED_KEY);
@@ -396,7 +509,17 @@ async function invalidateAccountToken(
 ): Promise<void> {
   await runExclusive(secrets, async () => {
     const currentToken = await secrets.get(ACCOUNT_TOKEN_KEY);
-    if (currentToken !== observedToken) return;
+    if (currentToken !== observedToken) {
+      const shared = parseSharedAccountSession(await secrets.get(SHARED_ACCOUNT_SESSION_KEY));
+      if (shared?.token === observedToken) {
+        rejectedAccountToken = observedToken;
+        await secrets.store(
+          SHARED_ACCOUNT_SESSION_KEY,
+          JSON.stringify({ ownerId: shared.ownerId, token: '' }),
+        );
+      }
+      return;
+    }
     rejectedAccountToken = observedToken;
     await secrets.delete(ACCOUNT_TOKEN_KEY);
     await secrets.delete(ACCOUNT_TOKEN_EXPIRES_AT_KEY);
@@ -447,7 +570,7 @@ async function rotateAccountSession(
   if (heldAccountUnavailable !== undefined) return 'account-unavailable';
   const owns = (): boolean => custodyOf(secrets).generation === generation;
 
-  const state = await getAccountAuthState(secrets);
+  const state = await getEditorAccountAuthState(secrets);
   const observedToken = await secrets.get(ACCOUNT_TOKEN_KEY);
   const stillRejected =
     rejectedToken !== undefined && state.status === 'signed-in' && observedToken === rejectedToken;
@@ -549,9 +672,7 @@ export async function confirmAccountTokenRejected(
   await invalidateAccountToken(secrets, token);
 }
 
-export async function getAccountAuthState(
-  secrets: vscode.SecretStorage,
-): Promise<AccountAuthState> {
+async function getEditorAccountAuthState(secrets: vscode.SecretStorage): Promise<AccountAuthState> {
   const token = await secrets.get(ACCOUNT_TOKEN_KEY);
   if (token === undefined || token === '') {
     return (await secrets.get(ACCOUNT_TOKEN_EXPIRED_KEY)) === '1'
@@ -571,25 +692,30 @@ export async function getAccountAuthState(
   return { status: 'signed-in', expiresAt };
 }
 
+export async function getAccountAuthState(
+  secrets: vscode.SecretStorage,
+): Promise<AccountAuthState> {
+  const editor = await getEditorAccountAuthState(secrets);
+  if (editor.status !== 'signed-out') return editor;
+  if (await getAccountRefreshToken(secrets)) return { status: 'expired' };
+  const shared = parseSharedAccountSession(await secrets.get(SHARED_ACCOUNT_SESSION_KEY));
+  if (!shared) return editor;
+  if (!sharedTokenIsCurrent(shared)) return { status: 'expired' };
+  return shared.expiresAtMs === undefined
+    ? { status: 'signed-in' }
+    : { status: 'signed-in', expiresAt: shared.expiresAtMs };
+}
+
 type CloudCredential =
   | { kind: 'account'; token: string }
   | { kind: 'api-key'; token: string }
   | { kind: 'none'; accountStatus: 'signed-out' | 'expired' };
 
 async function getCloudCredential(secrets: vscode.SecretStorage): Promise<CloudCredential> {
-  let accountState = await getAccountAuthState(secrets);
-  if (accountState.status === 'expired') {
-    const renewal = await renewAccountSession(secrets);
-    if (renewal === 'renewed' || renewal === 'superseded') {
-      accountState = await getAccountAuthState(secrets);
-    }
-  }
-  if (accountState.status === 'signed-in') {
-    const accountToken = await secrets.get(ACCOUNT_TOKEN_KEY);
-    if (accountToken !== undefined && accountToken !== '') {
-      return { kind: 'account', token: accountToken };
-    }
-  }
+  const shared = parseSharedAccountSession(await secrets.get(SHARED_ACCOUNT_SESSION_KEY));
+  const accountToken = await getAccountToken(secrets, { includeShared: shared !== null });
+  if (accountToken) return { kind: 'account', token: accountToken };
+  const accountState = await getAccountAuthState(secrets);
   const apiKey = await getApiKey(secrets);
   if (apiKey !== undefined && apiKey !== '') return { kind: 'api-key', token: apiKey };
   return {

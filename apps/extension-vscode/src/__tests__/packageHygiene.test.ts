@@ -17,6 +17,7 @@ const {
 const EXPECTED_RUNTIME_OUTPUT = [
   'out/extension.js',
   'out/webview/render.js',
+  'out/webview/dictation.js',
   'out/codicons/codicon.css',
   'out/codicons/codicon.ttf',
 ];

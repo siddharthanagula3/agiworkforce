@@ -46,9 +46,9 @@ function mountInPagePanel(): void {
   document.body.appendChild(panel.host);
 
   const launcher = createLauncher(
-    () => {
+    (pointer) => {
       panel.setReturnFocus(launcher.button);
-      panel.toggle();
+      panel.toggle(pointer);
     },
     () => panel.close(),
   );

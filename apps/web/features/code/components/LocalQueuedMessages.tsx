@@ -9,7 +9,7 @@ export interface LocalQueuedMessagesProps {
   paused: boolean;
   onUpdate: (id: string, text: string) => void;
   onRemove: (id: string) => void;
-  onSendNow: (id: string) => void;
+  onSendNow: ((id: string) => void) | undefined;
   onEditingChange: (id: string, editing: boolean) => void;
 }
 
@@ -23,7 +23,7 @@ function QueuedRow({
   item: LocalQueuedMessage;
   onUpdate: (id: string, text: string) => void;
   onRemove: (id: string) => void;
-  onSendNow: (id: string) => void;
+  onSendNow: ((id: string) => void) | undefined;
   onEditingChange: (id: string, editing: boolean) => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -83,8 +83,8 @@ function QueuedRow({
         <button
           type="button"
           className={styles['secondaryButton']}
-          disabled={editing}
-          onClick={() => onSendNow(item.id)}
+          disabled={editing || !onSendNow}
+          onClick={() => onSendNow?.(item.id)}
         >
           {LOCAL_CODE_COPY.sendQueuedNow}
         </button>

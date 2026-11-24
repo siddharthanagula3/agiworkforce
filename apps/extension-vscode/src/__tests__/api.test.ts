@@ -1256,8 +1256,26 @@ describe('getCloudWebOrigin', () => {
 });
 
 describe('one sign-in shared with the AGI CLI', () => {
+  function identify(...ownerIds: string[]) {
+    vi.mocked(https.request).mockImplementation(((
+      options: https.RequestOptions,
+      callback: (response: EventEmitter) => void,
+    ) => {
+      expect(options.path).toBe('/api/me?surface=vscode');
+      const response = Object.assign(new EventEmitter(), { statusCode: 200, headers: {} });
+      const id = ownerIds.shift();
+      queueMicrotask(() => {
+        callback(response);
+        response.emit('data', Buffer.from(JSON.stringify({ id })));
+        response.emit('end');
+      });
+      return Object.assign(new EventEmitter(), { end: vi.fn(), setTimeout: vi.fn() });
+    }) as never);
+  }
+
   afterEach(() => {
     shareAccountCredentialFrom(undefined);
+    vi.mocked(https.request).mockReset();
     vi.restoreAllMocks();
   });
 
@@ -1267,6 +1285,7 @@ describe('one sign-in shared with the AGI CLI', () => {
     const now = 1_750_000_000_000;
     vi.spyOn(Date, 'now').mockReturnValue(now);
     shareAccountCredentialFrom(async () => ({ token: 'cli-token', expiresAtMs: now + 60_000 }));
+    identify('cli-owner');
 
     await expect(getAccountToken(secrets)).resolves.toBe('cli-token');
     await expect(getAccountAuthState(secrets)).resolves.toEqual({
@@ -1284,6 +1303,115 @@ describe('one sign-in shared with the AGI CLI', () => {
 
     await expect(getAccountToken(secrets)).resolves.toBe('editor-token');
     expect(source).not.toHaveBeenCalled();
+  });
+
+  it('does not adopt a CLI session as a side effect of a Cloud utility request', async () => {
+    const secrets = new ExtensionContext().secrets as unknown as vscode.SecretStorage;
+    const source = vi.fn(async () => ({ token: 'cli-token' }));
+    shareAccountCredentialFrom(source);
+
+    await fetchUsageHistory(secrets);
+
+    expect(source).not.toHaveBeenCalled();
+    await expect(getAccountAuthState(secrets)).resolves.toEqual({ status: 'signed-out' });
+  });
+
+  it.each(['unavailable', 'revoked', 'terms-required'] as const)(
+    'never replaces an expired editor session with a CLI credential after %s renewal',
+    async (kind) => {
+      const secrets = new ExtensionContext().secrets as unknown as vscode.SecretStorage;
+      const source = vi.fn(async () => ({ token: 'other-cli-account' }));
+      shareAccountCredentialFrom(source);
+      refreshDeviceSession.mockResolvedValueOnce({ kind });
+      await setAccountToken(secrets, 'expired-editor-token', Date.now() - 1, 'editor-refresh');
+
+      await expect(getAccountToken(secrets)).resolves.toBeUndefined();
+      expect(source).not.toHaveBeenCalled();
+      await expect(getAccountRefreshToken(secrets)).resolves.toBe(
+        kind === 'revoked' ? undefined : 'editor-refresh',
+      );
+      await expect(getAccountAuthState(secrets)).resolves.toEqual({ status: 'expired' });
+    },
+  );
+
+  it('can renew a borrowed CLI credential for the same verified account', async () => {
+    const secrets = new ExtensionContext().secrets as unknown as vscode.SecretStorage;
+    let now = 1_750_000_000_000;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    shareAccountCredentialFrom(
+      vi
+        .fn()
+        .mockResolvedValueOnce({ token: 'first', expiresAtMs: now + 10 })
+        .mockResolvedValueOnce({ token: 'second' }),
+    );
+    identify('same-owner', 'same-owner');
+    await expect(getAccountToken(secrets)).resolves.toBe('first');
+    now += 11;
+    await expect(getAccountToken(secrets)).resolves.toBe('second');
+    await expect(
+      getAccountToken(secrets, { renew: false, includeShared: false }),
+    ).resolves.toBeUndefined();
+  });
+
+  it('refuses a different CLI account after a borrowed session expires', async () => {
+    const secrets = new ExtensionContext().secrets as unknown as vscode.SecretStorage;
+    let now = 1_750_000_000_000;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    shareAccountCredentialFrom(
+      vi
+        .fn()
+        .mockResolvedValueOnce({ token: 'old-borrowed', expiresAtMs: now + 10 })
+        .mockResolvedValueOnce({ token: 'other-borrowed' }),
+    );
+    identify('first-owner', 'another-owner');
+    await expect(getAccountToken(secrets)).resolves.toBe('old-borrowed');
+    now += 11;
+    await expect(getAccountToken(secrets)).resolves.toBeUndefined();
+    await expect(getAccountAuthState(secrets)).resolves.toEqual({ status: 'expired' });
+  });
+
+  it('honors an explicit editor sign-out even if the CLI still has a token', async () => {
+    const secrets = new ExtensionContext().secrets as unknown as vscode.SecretStorage;
+    const source = vi.fn(async () => ({ token: 'cli-token' }));
+    shareAccountCredentialFrom(source);
+    identify('cli-owner');
+    await expect(getAccountToken(secrets)).resolves.toBe('cli-token');
+    await clearAccountToken(secrets);
+    await expect(getAccountToken(secrets)).resolves.toBeUndefined();
+    expect(source).toHaveBeenCalledOnce();
+  });
+
+  it('uses one CLI identity lookup for simultaneous credential requests', async () => {
+    const secrets = new ExtensionContext().secrets as unknown as vscode.SecretStorage;
+    const source = vi.fn(async () => ({ token: 'cli-token' }));
+    shareAccountCredentialFrom(source);
+    identify('cli-owner');
+
+    await expect(
+      Promise.all([getAccountToken(secrets), getAccountToken(secrets)]),
+    ).resolves.toEqual(['cli-token', 'cli-token']);
+    expect(source).toHaveBeenCalledOnce();
+    expect(https.request).toHaveBeenCalledOnce();
+  });
+
+  it('discards a CLI lookup that finishes after an explicit editor sign-in', async () => {
+    const secrets = new ExtensionContext().secrets as unknown as vscode.SecretStorage;
+    let finish!: (value: { token: string }) => void;
+    const source = vi.fn(
+      () =>
+        new Promise<{ token: string }>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    shareAccountCredentialFrom(source);
+    const borrowed = getAccountToken(secrets);
+    await vi.waitFor(() => expect(source).toHaveBeenCalledOnce());
+    await setAccountToken(secrets, 'new-editor-token', undefined, 'new-refresh');
+    finish({ token: 'cli-token' });
+
+    await expect(borrowed).resolves.toBeUndefined();
+    await expect(getAccountToken(secrets)).resolves.toBe('new-editor-token');
+    await expect(getAccountRefreshToken(secrets)).resolves.toBe('new-refresh');
   });
 
   it('does not ask the CLI again right after it had no session', async () => {

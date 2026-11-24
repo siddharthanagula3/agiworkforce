@@ -208,6 +208,7 @@ jest.mock('expo-constants', () => ({
 }));
 
 import OnboardingScreen from '../app/(public)/onboarding';
+import { getDefaultModel } from '@agiworkforce/local-llm';
 import {
   PRIVACY_POLICY_URL,
   TERMS_OF_USE_URL,
@@ -649,6 +650,37 @@ describe('Onboarding', () => {
     it('shows download button', async () => {
       const { getByTestId } = await renderAtDeviceTier();
       expect(getByTestId('device-tier-download-btn')).toBeTruthy();
+    });
+
+    it('offers model browsing and a skip path when the recommended download cannot run', async () => {
+      const defaultModel = getDefaultModel();
+      const unsupportedModel = {
+        ...defaultModel,
+        executorchPreset: {
+          modelName: 'test-preset',
+          modelSource: 'https://models.example.invalid/model.pte',
+          tokenizerSource: 'https://models.example.invalid/tokenizer.json',
+          tokenizerConfigSource: 'https://models.example.invalid/tokenizer_config.json',
+        },
+      };
+      jest
+        .mocked(getDefaultModel)
+        .mockReturnValueOnce(unsupportedModel)
+        .mockReturnValueOnce(unsupportedModel);
+      mockDetectCapabilities.mockResolvedValueOnce({
+        totalRAMMB: 3000,
+        tier1Available: false,
+        tier1Runtime: null,
+        tier2Available: false,
+      });
+
+      const { getByRole, getByText, queryByTestId } = await renderAtDeviceTier();
+      expect(getByText(`${defaultModel.displayName} is unavailable on this device.`)).toBeTruthy();
+      expect(queryByTestId('device-tier-download-btn')).toBeNull();
+      expect(queryByTestId('device-tier-cellular-toggle')).toBeNull();
+      expect(getByRole('button', { name: 'Browse local models' })).toBeTruthy();
+      fireEvent.press(getByRole('button', { name: 'Continue without a local model' }));
+      expect(mockReplace).toHaveBeenCalledWith({ pathname: '/(app)' });
     });
 
     it('shows model size without claiming a fixed download time', async () => {

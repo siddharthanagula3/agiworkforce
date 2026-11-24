@@ -68,14 +68,31 @@ export function ServiceNoticesBanner() {
         : colors.textSecondary;
 
   return (
-    <View pointerEvents="box-none" style={[styles.overlay, { top: insets.top + 8 }]}>
+    <View
+      testID="service-notice-container"
+      style={[
+        styles.container,
+        {
+          backgroundColor: colors.background,
+          paddingTop: insets.top + 8,
+          paddingLeft: insets.left + 12,
+          paddingRight: insets.right + 12,
+        },
+      ]}
+    >
       <View
         testID="service-notice"
-        accessibilityRole="alert"
         style={[styles.banner, { backgroundColor: colors.surfaceBase, borderColor: colors.border }]}
       >
         <Icon size={18} color={iconColor} />
-        <Text style={[styles.message, { color: colors.textPrimary }]}>{notice.message}</Text>
+        <Text
+          accessible
+          accessibilityRole="alert"
+          accessibilityLiveRegion="polite"
+          style={[styles.message, { color: colors.textPrimary }]}
+        >
+          {notice.message}
+        </Text>
         <Button
           title={notice.linkLabel}
           size="sm"
@@ -96,7 +113,7 @@ export function ServiceNoticesBanner() {
 }
 
 const styles = StyleSheet.create({
-  overlay: { position: 'absolute', left: 12, right: 12, alignItems: 'center' },
+  container: { alignItems: 'center', paddingBottom: 8 },
   banner: {
     width: '100%',
     maxWidth: 560,

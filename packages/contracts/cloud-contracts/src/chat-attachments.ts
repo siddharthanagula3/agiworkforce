@@ -303,8 +303,29 @@ export const CHAT_ATTACHMENT_MIME_TYPES: readonly string[] = attachmentPolicy.mi
 
 const CHAT_ATTACHMENT_EXTENSIONS: readonly string[] = attachmentPolicy.extensions;
 
+const CHAT_ATTACHMENT_EXTENSION_MIME_TYPES: ReadonlyMap<string, string> = new Map([
+  ['.png', 'image/png'],
+  ['.jpg', 'image/jpeg'],
+  ['.jpeg', 'image/jpeg'],
+  ['.gif', 'image/gif'],
+  ['.webp', 'image/webp'],
+  ['.pdf', 'application/pdf'],
+  ['.ipynb', 'application/x-ipynb+json'],
+  ['.json', 'application/json'],
+  ['.xml', 'application/xml'],
+  ['.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+  ['.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+  ['.pptx', 'application/vnd.openxmlformats-officedocument.presentationml.presentation'],
+]);
+
 export function chatAttachmentAcceptAttribute(): string {
-  return [...CHAT_ATTACHMENT_MIME_TYPES, ...CHAT_ATTACHMENT_EXTENSIONS].join(',');
+  return [
+    ...new Set([
+      ...CHAT_ATTACHMENT_MIME_TYPES,
+      ...CHAT_ATTACHMENT_EXTENSIONS,
+      ...CHAT_ATTACHMENT_EXTENSION_MIME_TYPES.keys(),
+    ]),
+  ].join(',');
 }
 
 export function isSupportedChatAttachment(fileName: string, mimeType: string): boolean {
@@ -317,25 +338,12 @@ export function isSupportedChatAttachment(fileName: string, mimeType: string): b
 
 export function resolveChatAttachmentMimeType(fileName: string, mimeType: string): string | null {
   const normalized = mimeType.trim().toLowerCase();
-  if (normalized) return isSupportedChatAttachment(fileName, normalized) ? normalized : null;
+  if (normalized && isSupportedChatAttachment(fileName, normalized)) return normalized;
+  if (normalized && normalized !== 'application/octet-stream') return null;
   const lowerName = fileName.trim().toLowerCase();
-  if (lowerName.endsWith('.png')) return 'image/png';
-  if (lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg')) return 'image/jpeg';
-  if (lowerName.endsWith('.gif')) return 'image/gif';
-  if (lowerName.endsWith('.webp')) return 'image/webp';
-  if (lowerName.endsWith('.pdf')) return 'application/pdf';
-  if (lowerName.endsWith('.ipynb')) return 'application/x-ipynb+json';
-  if (lowerName.endsWith('.json')) return 'application/json';
-  if (lowerName.endsWith('.xml')) return 'application/xml';
-  if (lowerName.endsWith('.docx')) {
-    return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-  }
-  if (lowerName.endsWith('.xlsx')) {
-    return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-  }
-  if (lowerName.endsWith('.pptx')) {
-    return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
-  }
+  const extension = lowerName.slice(lowerName.lastIndexOf('.'));
+  const inferred = CHAT_ATTACHMENT_EXTENSION_MIME_TYPES.get(extension);
+  if (inferred) return inferred;
   return CHAT_ATTACHMENT_EXTENSIONS.some((extension) => lowerName.endsWith(extension))
     ? 'text/plain'
     : null;

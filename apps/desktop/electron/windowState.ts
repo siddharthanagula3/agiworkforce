@@ -326,7 +326,7 @@ export function rememberRoute(
  * not-found page as the thing the app opens on.
  */
 export function shouldFallBackToRoot(httpStatusCode: number | null | undefined): boolean {
-  return typeof httpStatusCode === 'number' && httpStatusCode >= 400;
+  return typeof httpStatusCode === 'number' && httpStatusCode >= 400 && httpStatusCode < 500;
 }
 
 export function routeFromUrl(url: string, origin: string): string | null {

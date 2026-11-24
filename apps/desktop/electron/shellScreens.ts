@@ -1,6 +1,12 @@
 import { PRODUCT_BRAND, PRODUCT_NAMES } from '@agiworkforce/types';
 import { SHELL_STRIP_HTML, escapeHtml, shellBaseCss, shellDataUrl } from './shellPage';
 
+declare const AGI_SHELL_SYMBOL_URL: string;
+
+function shellSymbol(): string {
+  return `<img src="${AGI_SHELL_SYMBOL_URL}" width="40" height="40" alt="">`;
+}
+
 /**
  * The pages the shell itself draws when the window has nothing to show. They
  * name what happened in this app's own words: a Chromium error string and a
@@ -28,15 +34,13 @@ const DEVICE_OFFLINE_ERROR = -106;
  */
 const DEVICE_PATH_ERRORS = new Set([-21, -105, -109, -137, -138]);
 
-const ACCOUNT_UNCHANGED = 'Your account data is unchanged';
-
 export function offlineScreen(errorCode: number): ShellScreen {
   const reference = `net-${Math.abs(errorCode)}`;
   if (errorCode === DEVICE_OFFLINE_ERROR) {
     return {
       title: `${PRODUCT_NAMES.desktop}, offline`,
       heading: "You're offline",
-      body: `This device is not connected to the internet. ${ACCOUNT_UNCHANGED}, reconnect to continue.`,
+      body: 'This device is not connected to the internet. Reconnect and try again.',
       action: 'Try again',
       reference,
     };
@@ -45,7 +49,7 @@ export function offlineScreen(errorCode: number): ShellScreen {
     return {
       title: `${PRODUCT_NAMES.desktop}, not connected`,
       heading: `Can't connect to ${PRODUCT_BRAND}`,
-      body: `This device could not reach agiworkforce.com. Check the internet connection and any VPN, proxy or firewall, then try again. ${ACCOUNT_UNCHANGED}.`,
+      body: 'Check your internet connection and any VPN, proxy or firewall, then try again.',
       action: 'Try again',
       reference,
     };
@@ -53,9 +57,19 @@ export function offlineScreen(errorCode: number): ShellScreen {
   return {
     title: `${PRODUCT_NAMES.desktop}, unreachable`,
     heading: `Can't reach ${PRODUCT_BRAND}`,
-    body: `${PRODUCT_BRAND} did not answer. ${ACCOUNT_UNCHANGED} and nothing is wrong with your account. Try again in a moment.`,
+    body: 'The service did not respond. Try again in a moment.',
     action: 'Try again',
     reference,
+  };
+}
+
+export function serviceUnavailableScreen(status: number): ShellScreen {
+  return {
+    title: `${PRODUCT_NAMES.desktop}, page unavailable`,
+    heading: 'This page is temporarily unavailable',
+    body: 'The app will retry automatically. You can also try again now.',
+    action: 'Try again',
+    reference: `http-${status}`,
   };
 }
 
@@ -91,10 +105,11 @@ export function shellScreenUrl(screen: ShellScreen, retryUrl: string): string {
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="color-scheme" content="light dark"><title>{{title}}</title><style>
   ${shellBaseCss()}
-  main{max-width:32rem}
+  main{max-width:28rem;gap:16px}
   p{margin:0;color:var(--ink-2)}
-  code{color:var(--ink-2);font:14px/20px ui-monospace,SFMono-Regular,Menlo,monospace;word-break:break-all}
+  code{color:var(--ink-2);font:12px/18px ui-monospace,SFMono-Regular,Menlo,monospace;overflow-wrap:anywhere}
 </style></head><body>${SHELL_STRIP_HTML}<main>
+  ${shellSymbol()}
   <h1>{{heading}}</h1>
   <p>{{body}}</p>
   <div class="actions"><button id="retry" type="button" class="primary" data-retry-url="{{retryUrl}}" autofocus>{{action}}</button></div>
@@ -122,13 +137,19 @@ export function loadingScreenUrl(): string {
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="color-scheme" content="light dark"><title>${escapeHtml(PRODUCT_NAMES.desktop)}</title><style>
   ${shellBaseCss()}
-  .spinner{width:24px;height:24px;box-sizing:border-box;border-radius:50%;
+  main{gap:16px}
+  .loading-status{display:flex;align-items:center;gap:8px}
+  .loading-status h1{font:inherit}
+  .spinner{width:16px;height:16px;box-sizing:border-box;border-radius:50%;
     border:2px solid var(--ink-2);border-top-color:var(--ink);animation:spin .9s linear infinite}
   @keyframes spin{to{transform:rotate(360deg)}}
   @media (prefers-reduced-motion:reduce){.spinner{animation:none}}
 </style></head><body>${SHELL_STRIP_HTML}<main role="status" aria-live="polite">
-  <div class="spinner" aria-hidden="true"></div>
-  <h1>Loading ${escapeHtml(PRODUCT_BRAND)}</h1>
+  ${shellSymbol()}
+  <div class="loading-status">
+    <div class="spinner" aria-hidden="true"></div>
+    <h1>Opening ${escapeHtml(PRODUCT_NAMES.desktop)}</h1>
+  </div>
 </main></body></html>`;
   return shellDataUrl(html);
 }

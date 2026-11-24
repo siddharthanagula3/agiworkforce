@@ -19,6 +19,7 @@ const manifest = JSON.parse(readFileSync(join(APP_ROOT, 'manifest.json'), 'utf8'
 const LOCALIZED_SOURCES = [
   'src/side_panel.ts',
   'src/background.ts',
+  'src/features/content/browserRunOverlay.ts',
   'src/features/side-panel/artifactPanel.ts',
   'src/features/side-panel/schedulesSection.ts',
   'src/features/side-panel/voice.ts',

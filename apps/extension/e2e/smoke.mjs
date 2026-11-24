@@ -114,7 +114,15 @@ const FORM_HTML =
   '<input id="email" name="job_application[email]" type="email" />' +
   '<input id="phone" name="job_application[phone]" />' +
   '</form></body></html>';
-const server = createServer((_req, res) => {
+const server = createServer((req, res) => {
+  if (req.url === '/in-page-focus') {
+    res.writeHead(200, {
+      'content-type': 'text/html',
+      'content-security-policy': "default-src 'none'",
+    });
+    res.end('<!doctype html><html><head><title>Local fixture</title></head><body></body></html>');
+    return;
+  }
   res.writeHead(200, { 'content-type': 'text/html' });
   res.end(FORM_HTML);
 });
@@ -224,6 +232,27 @@ try {
         );
       }
       await captureScreenshot(page, 'agi-chrome-exact-computer-use-stop-running.png');
+      const typingFixture = 'synthetic-typing-secret-482913';
+      await sw.evaluate(
+        ({ runGeneration, typingFixture }) =>
+          chrome.runtime.sendMessage({
+            type: 'AGI_CU_STEP',
+            runId: 'e2e-computer-use-run',
+            runGeneration,
+            step: {
+              kind: 'tool_call',
+              stepNumber: 1,
+              toolName: 'type',
+              toolArgs: { index: 1, text: typingFixture },
+            },
+          }),
+        { runGeneration, typingFixture },
+      );
+      const typingStep = page.locator('.sp-cu-step.kind-tool_call').filter({ hasText: 'Typing' });
+      await typingStep.waitFor({ state: 'attached' });
+      if ((await typingStep.textContent()).includes(typingFixture))
+        fail('side_panel: typing activity exposed private text');
+      console.log('[side_panel] typing activity hides private text');
       await sw.evaluate(
         ({ runGeneration }) =>
           chrome.runtime.sendMessage({
@@ -361,8 +390,164 @@ try {
     console.log(
       `\n[history-owner] signedOutHidden=true stored=${ownerBoundary.storedCount} outboundBlocked=true`,
     );
+    const recordingBoundary = await page.evaluate(async () => {
+      const storageKey = 'agi_saved_shortcuts';
+      const recording = {
+        id: 'recording-owner-smoke',
+        name: 'Owner-only recording',
+        ownerAccountId: 'synthetic-recording-owner',
+        actions: [{ id: 'step-1', type: 'click', selector: '#fixture-button' }],
+        createdAt: 1,
+        createdByOrigin: '__extension_page__',
+        startUrl: 'https://recorded.example',
+      };
+      try {
+        await chrome.storage.local.set({ [storageKey]: [recording] });
+        const listed = await chrome.runtime.sendMessage({ type: 'LIST_SHORTCUTS' });
+        const removed = await chrome.runtime.sendMessage({
+          type: 'DELETE_SHORTCUT',
+          shortcutId: recording.id,
+        });
+        const stored = (await chrome.storage.local.get(storageKey))[storageKey];
+        return {
+          visible: listed?.shortcuts?.length,
+          removed: removed?.success,
+          retained: stored?.[0]?.id === recording.id,
+        };
+      } finally {
+        await chrome.storage.local.remove(storageKey);
+      }
+    });
+    if (
+      recordingBoundary.visible !== 0 ||
+      recordingBoundary.removed !== false ||
+      !recordingBoundary.retained
+    ) {
+      fail(`signed-out recording access crossed its owner: ${JSON.stringify(recordingBoundary)}`);
+    }
+    console.log('\n[recording-owner] hidden=true deleteDenied=true retained=true');
     await page.evaluate(() => chrome.storage.local.remove('agi_browser_conversations_v2'));
     await page.close();
+  }
+
+  {
+    const origin = `http://127.0.0.1:${formPort}`;
+    const oldSites = await sw.evaluate(
+      async () => (await chrome.storage.local.get('agi_site_allowlist')).agi_site_allowlist,
+    );
+    await sw.evaluate((value) => chrome.storage.local.set({ agi_site_allowlist: [value] }), origin);
+    const page = await context.newPage();
+    const cdp = await context.newCDPSession(page);
+    try {
+      await page.goto(`${origin}/in-page-focus`);
+      const launcherHost = page.locator('[data-agi-launcher]');
+      await launcherHost.waitFor({ state: 'visible' });
+      const launcher = await launcherHost.boundingBox();
+      if (!launcher) throw new Error('The in-page launcher did not render.');
+      await page.mouse.click(launcher.x + launcher.width / 2, launcher.y + launcher.height / 2);
+
+      const tree = (await cdp.send('DOM.getDocument', { depth: -1, pierce: true })).root;
+      const nodes = function* walk(node) {
+        yield node;
+        for (const child of [...(node.children ?? []), ...(node.shadowRoots ?? [])])
+          yield* walk(child);
+      };
+      const resolved = [];
+      for (const node of [...nodes(tree)].filter(({ localName }) =>
+        ['canvas', 'textarea'].includes(localName),
+      )) {
+        const { object } = await cdp.send('DOM.resolveNode', { backendNodeId: node.backendNodeId });
+        resolved.push([node.localName, object.objectId]);
+      }
+      const canvases = resolved.filter(([kind]) => kind === 'canvas');
+      const input = resolved.find(([kind]) => kind === 'textarea')?.[1];
+      if (canvases.length !== 2 || !input)
+        throw new Error('The in-page composer or brand marks are missing.');
+      const read = async (objectId, functionDeclaration) =>
+        (
+          await cdp.send('Runtime.callFunctionOn', {
+            objectId,
+            functionDeclaration,
+            awaitPromise: true,
+            returnByValue: true,
+          })
+        ).result.value;
+      const colorPresent = await Promise.all(
+        canvases.map(([, id]) =>
+          read(
+            id,
+            `function () {
+        const pixels = this.getContext('2d').getImageData(0, 0, this.width, this.height).data;
+        return pixels.some((value, i) => i % 4 === 2 && value > pixels[i - 2] + 50 && pixels[i + 1] > 0);
+      }`,
+          ),
+        ),
+      );
+      if (!colorPresent.every(Boolean))
+        fail('in-page assistant: the ribbon did not render under page CSP');
+
+      const focusStyle = () =>
+        read(
+          input,
+          `function () {
+        const style = getComputedStyle(this);
+        return {
+          outline: style.outlineStyle,
+          shadow: style.boxShadow,
+          border: style.borderColor,
+          pointer: this.hasAttribute('data-pointer-focus'),
+          focused: this === this.getRootNode().activeElement
+        };
+      }`,
+        );
+      const pointer = await focusStyle();
+      if (
+        !pointer.focused ||
+        !pointer.pointer ||
+        pointer.outline !== 'none' ||
+        pointer.shadow !== 'none'
+      )
+        fail(
+          `in-page assistant: pointer activation changed focus chrome ${JSON.stringify(pointer)}`,
+        );
+      await page.keyboard.press('Shift+Tab');
+      await page.keyboard.press('Tab');
+      const keyboard = await focusStyle();
+      if (
+        !keyboard.focused ||
+        keyboard.pointer ||
+        keyboard.outline !== 'solid' ||
+        keyboard.shadow !== 'none' ||
+        keyboard.border !== pointer.border
+      )
+        fail(
+          `in-page assistant: keyboard focus lacked its single outline ${JSON.stringify(keyboard)}`,
+        );
+      const center = await read(
+        input,
+        `async function () {
+        await Promise.allSettled(this.closest('.agi-panel').getAnimations().map((animation) => animation.finished));
+        const rect = this.getBoundingClientRect();
+        return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+      }`,
+      );
+      await page.mouse.click(center.x, center.y);
+      const clicked = await focusStyle();
+      if (JSON.stringify(clicked) !== JSON.stringify(pointer))
+        fail(
+          `in-page assistant: clicking the input changed focus chrome ${JSON.stringify(clicked)}`,
+        );
+      console.log(
+        '[in-page assistant] branded launcher and panel, quiet pointer focus, visible keyboard focus',
+      );
+    } finally {
+      await cdp.detach();
+      await page.close();
+      await sw.evaluate(async (previous) => {
+        if (previous === undefined) await chrome.storage.local.remove('agi_site_allowlist');
+        else await chrome.storage.local.set({ agi_site_allowlist: previous });
+      }, oldSites);
+    }
   }
 
   async function runWebMCPSmoke(control, target, baseUrl) {
@@ -858,6 +1043,44 @@ try {
       const input = document.getElementById('sp-input');
       if (input instanceof HTMLTextAreaElement) input.disabled = false;
     });
+    const composerFocus = () =>
+      page.locator('#sp-composer-shell').evaluate(async (shell) => {
+        await Promise.allSettled(shell.getAnimations().map((animation) => animation.finished));
+        const card = getComputedStyle(shell);
+        const input = getComputedStyle(document.getElementById('sp-input'));
+        return {
+          border: card.borderColor,
+          shadow: card.boxShadow,
+          outerOutline: card.outlineStyle,
+          innerOutline: input.outlineStyle,
+        };
+      });
+    await page.locator('#sp-input').blur();
+    const restingFocusStyles = await composerFocus();
+    await page.locator('#sp-input').click();
+    const pointerFocusStyles = await composerFocus();
+    if (JSON.stringify(pointerFocusStyles) !== JSON.stringify(restingFocusStyles))
+      fail(
+        `composer: clicking the draft field changed its chrome from ${JSON.stringify(restingFocusStyles)} to ${JSON.stringify(pointerFocusStyles)}`,
+      );
+    await page.keyboard.press('Shift+Tab');
+    await page.keyboard.press('Tab');
+    if (!(await page.locator('#sp-input').evaluate((el) => el === document.activeElement)))
+      fail('composer: Tab did not return focus to the draft field');
+    const keyboardFocusStyles = await composerFocus();
+    if (keyboardFocusStyles.outerOutline !== 'solid' || keyboardFocusStyles.innerOutline !== 'none')
+      fail('composer: keyboard focus should show one outline around the composer');
+    else if (JSON.stringify(pointerFocusStyles) === JSON.stringify(restingFocusStyles))
+      console.log('[composer] stable pointer focus and a single keyboard outline');
+
+    const composerHeight = () =>
+      page.locator('#sp-composer-shell').evaluate((el) => el.clientHeight);
+    const emptyHeight = await composerHeight();
+    await page.fill('#sp-input', 'A wrapped draft in the Chrome side panel. '.repeat(20));
+    if ((await composerHeight()) <= emptyHeight) fail('composer: wrapped draft did not grow');
+    await page.fill('#sp-input', '');
+    if ((await composerHeight()) !== emptyHeight)
+      fail('composer: clearing did not restore its empty height');
     await page.fill('#sp-input', 'hello from the smoke');
     const typed = await page.inputValue('#sp-input');
     if (typed !== 'hello from the smoke')

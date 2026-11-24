@@ -5,12 +5,20 @@ import userEvent from '@testing-library/user-event';
 type ScanModule0 = typeof import('next/navigation');
 type ScanModule1 = typeof import('@shared/stores/authentication-store');
 type ScanModule2 = typeof import('../../../services/global-search-service');
+type DesktopHostModule = typeof import('@/features/desktop-host');
 
 const service = vi.hoisted(() => ({
   search: vi.fn(),
   getRecentSearches: vi.fn(),
   getPopularSearches: vi.fn(),
   clearSearchHistory: vi.fn(),
+}));
+const desktop = vi.hoisted(() => ({ host: null as object | null, list: vi.fn() }));
+
+vi.mock('@/features/desktop-host', async (importOriginal) => ({
+  ...(await importOriginal<DesktopHostModule>()),
+  useDesktopHost: () => desktop.host,
+  listDeveloperSessions: desktop.list,
 }));
 
 vi.mock('next/navigation', async (importOriginal) => ({
@@ -34,6 +42,8 @@ const EMPTY_RESULTS = {
 };
 
 beforeEach(() => {
+  desktop.host = null;
+  desktop.list.mockReset();
   service.search.mockReset().mockResolvedValue(EMPTY_RESULTS);
   service.getRecentSearches.mockReset().mockResolvedValue([]);
   service.getPopularSearches.mockReset().mockResolvedValue([]);
@@ -42,6 +52,61 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('GlobalSearchDialog', () => {
+  it('searches Local Code session titles on the device and clears the query before Cloud search', async () => {
+    desktop.host = {};
+    const session = {
+      id: 'thread',
+      rootId: 'root',
+      title: 'Private workspace review',
+      createdAt: '2026-11-24T00:00:00Z',
+      updatedAt: '2026-11-24T00:00:00Z',
+    };
+    desktop.list.mockResolvedValue({
+      groups: [
+        {
+          name: 'Project',
+          sessions: [
+            session,
+            { ...session, id: 'archived', title: 'Private archived review', archivedAt: 1 },
+          ],
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    render(<GlobalSearchDialog open onOpenChange={() => {}} />);
+    await user.click(screen.getByRole('button', { name: 'Local Code' }));
+    const input = screen.getByRole('textbox', { name: 'Search Local Code session titles' });
+    await user.type(input, 'private');
+
+    expect(await screen.findByRole('button', { name: /Private workspace review/ })).toBeVisible();
+    expect(screen.queryByText('Private archived review')).toBeNull();
+    expect(desktop.list).toHaveBeenCalledExactlyOnceWith({ titleQuery: 'private' });
+    expect(service.search).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Code' }));
+    expect(screen.getByRole('textbox', { name: 'Search your workspace' })).toHaveValue('');
+    expect(screen.queryByText('Private workspace review')).toBeNull();
+    expect(service.search).not.toHaveBeenCalled();
+  });
+
+  it('searches the selected category without losing the typed query', async () => {
+    const user = userEvent.setup();
+    render(<GlobalSearchDialog open onOpenChange={() => {}} />);
+    const field = screen.getByRole('textbox', { name: 'Search your workspace' });
+    await user.type(field, 'quarterly forecast');
+    await user.click(screen.getByRole('button', { name: 'Code' }));
+
+    expect(field).toHaveValue('quarterly forecast');
+    expect(screen.getByRole('button', { name: 'Code' })).toHaveAttribute('aria-pressed', 'true');
+    await waitFor(() =>
+      expect(service.search).toHaveBeenLastCalledWith(
+        'fixture-user',
+        { query: 'quarterly forecast', category: 'code', limit: 50 },
+        expect.anything(),
+      ),
+    );
+  });
+
   it('returns to the page on Escape and hands focus back to the control that opened it', async () => {
     const user = userEvent.setup();
     const onOpenChange = vi.fn();
@@ -87,7 +152,7 @@ describe('GlobalSearchDialog', () => {
     const recent = await screen.findByRole('button', { name: /quarterly forecast/ });
     await user.click(recent);
 
-    expect(screen.getByRole('textbox', { name: /search messages and conversations/i })).toHaveValue(
+    expect(screen.getByRole('textbox', { name: /search your workspace/i })).toHaveValue(
       'quarterly forecast',
     );
     await waitFor(() =>
@@ -112,7 +177,7 @@ describe('GlobalSearchDialog', () => {
 
     render(<GlobalSearchDialog open onOpenChange={() => {}} />);
     await user.type(
-      screen.getByRole('textbox', { name: /search messages and conversations/i }),
+      screen.getByRole('textbox', { name: /search your workspace/i }),
       'nothing here matches',
     );
 
@@ -125,10 +190,7 @@ describe('GlobalSearchDialog', () => {
     const user = userEvent.setup();
 
     render(<GlobalSearchDialog open onOpenChange={() => {}} />);
-    await user.type(
-      screen.getByRole('textbox', { name: /search messages and conversations/i }),
-      'older chat',
-    );
+    await user.type(screen.getByRole('textbox', { name: /search your workspace/i }), 'older chat');
 
     expect(await screen.findByText('Search could not be completed')).toBeInTheDocument();
     expect(screen.queryByText('No results found')).not.toBeInTheDocument();

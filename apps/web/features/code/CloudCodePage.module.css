@@ -426,6 +426,30 @@ svg + .menuRowLabel {
   white-space: nowrap;
 }
 
+.localHeaderTitle {
+  min-width: min(12rem, 24%);
+}
+
+.sessionTitleEdit {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  min-width: 0;
+}
+
+.localHeader:has(.sessionTitleEdit) {
+  height: auto;
+  min-height: 48px;
+  padding-block: 6px;
+}
+
+.sessionTitleEdit .formHelp {
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
 .headerChip {
   display: inline-flex;
   overflow: hidden;
@@ -540,6 +564,15 @@ svg + .menuRowLabel {
   background: var(--chat-surface-hover);
 }
 
+.appBarToolsButton {
+  order: 0;
+  margin-inline-start: auto;
+}
+
+.appBarToolsButton[aria-pressed='true'] {
+  background: var(--chat-surface-hover);
+}
+
 .appBarButton:focus-visible {
   outline: 2px solid var(--chat-focus-ring);
   outline-offset: 2px;
@@ -621,6 +654,26 @@ svg + .menuRowLabel {
   text-align: center;
 }
 
+.localEmptySession {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding-block: min(12vh, 96px) 20px;
+}
+
+.localEmptySuggestions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.localEmptySuggestions .setupChip {
+  background: transparent;
+  cursor: pointer;
+}
+
 .upgradePanel {
   display: flex;
   flex-direction: column;
@@ -678,6 +731,11 @@ svg + .menuRowLabel {
   flex-direction: column;
 }
 
+.notice[data-code-command-access] {
+  flex-wrap: wrap;
+  align-items: center;
+}
+
 .questionOptions {
   display: flex;
   flex-wrap: wrap;
@@ -693,6 +751,16 @@ svg + .menuRowLabel {
   display: flex;
   gap: 6px;
   margin-left: auto;
+}
+
+.notice[data-code-command-access] .noticeActions {
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+
+.notice[data-code-command-access] .secondaryButton {
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 /* ---------- transcript ---------- */
@@ -1019,6 +1087,12 @@ svg + .menuRowLabel {
   padding: 8px 0 20px;
 }
 
+.followUpHint {
+  margin: 4px 0 0;
+  color: var(--chat-text-secondary);
+  font-size: 12px;
+}
+
 .chipRow {
   display: flex;
   flex-wrap: wrap;
@@ -1191,24 +1265,30 @@ svg + .menuRowLabel {
   border: 1px solid var(--chat-border-strong);
   border-radius: var(--chat-radius-2xl);
   background: var(--chat-input-bg);
-  transition:
-    border-color 180ms ease,
-    box-shadow 180ms ease;
 }
 
-.fieldFocused {
-  border-color: var(--chat-accent-primary);
-  box-shadow: 0 0 0 2px var(--chat-focus-ring);
+.field:has(> .fieldRow > .input:focus-visible:not([data-pointer-focused])) {
+  outline: 1px solid var(--chat-text-secondary);
+  outline-offset: 1px;
+}
+
+.field[data-image-drop-active] {
+  border-style: dashed;
 }
 
 .fieldRow {
   display: flex;
   align-items: flex-end;
   gap: 8px;
-  padding: 10px 10px 10px 16px;
+  padding: 7px 8px;
+}
+
+.fieldRow:has(> .input:first-child) {
+  padding-inline-start: 14px;
 }
 
 .input {
+  field-sizing: content;
   overflow-y: auto;
   flex: 1;
   min-width: 0;
@@ -1229,12 +1309,49 @@ svg + .menuRowLabel {
   color: var(--chat-text-placeholder);
 }
 
+.field > .fieldRow > .input:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+@media (forced-colors: active) {
+  .field > .fieldRow > .input {
+    border: 0 !important;
+    outline: none !important;
+  }
+
+  .field:has(> .fieldRow > .input:focus-visible:not([data-pointer-focused])) {
+    outline-color: CanvasText;
+  }
+}
+
 .controlRow {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   padding: 0 10px 10px 12px;
+}
+
+.composerFooter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  padding: 5px 0 0;
+}
+
+.composerFooter > .chipRow {
+  max-width: 100%;
+  min-width: 0;
+  margin: 0;
+}
+
+.composerFooter > .controlRow {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0;
 }
 
 .controlSpacer {
@@ -1292,6 +1409,15 @@ svg + .menuRowLabel {
 .controlIconButton:hover {
   background: var(--chat-surface-hover);
   color: var(--chat-text-primary);
+}
+
+.fieldRow > .controlIconButton {
+  flex: none;
+}
+
+.fieldRow > .controlIconButton:disabled {
+  color: var(--chat-text-muted);
+  cursor: not-allowed;
 }
 
 .sendButton {
@@ -1401,14 +1527,6 @@ svg + .menuRowLabel {
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.menuNote {
-  margin: 0;
-  padding: 6px 8px;
-  color: var(--chat-text-muted);
-  font-size: 12px;
-  line-height: 1.45;
 }
 
 .formField {
@@ -1735,6 +1853,20 @@ svg + .menuRowLabel {
   gap: 2px;
 }
 
+.changesComparison {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--chat-text-secondary);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.changesComparison strong {
+  color: var(--chat-text-primary);
+}
+
 .changesEmpty {
   margin: 0;
   padding: 24px 0;
@@ -1891,6 +2023,22 @@ svg + .menuRowLabel {
   white-space: nowrap;
 }
 
+.fileLineCounts {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 5px;
+  margin-inline-start: auto;
+  font-size: 12px;
+}
+
+.fileLineCounts > :first-child {
+  color: var(--chat-success-text);
+}
+
+.fileLineCounts > :last-child {
+  color: var(--chat-destructive-text);
+}
+
 .changesBody {
   display: flex;
   overflow-y: auto;
@@ -2000,6 +2148,53 @@ svg + .menuRowLabel {
   list-style: none;
 }
 
+.sideToolSwitcher {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--chat-border-subtle);
+}
+
+.sideToolButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 32px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: var(--chat-radius-sm);
+  background: transparent;
+  color: var(--chat-text-primary);
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.sideToolButton[aria-pressed='true'],
+.sideToolButton:not(:disabled):hover {
+  border-color: var(--chat-border-subtle);
+  background: var(--chat-surface-hover);
+}
+
+.sideToolButton:focus-visible {
+  outline: 2px solid var(--chat-focus-ring);
+  outline-offset: 2px;
+}
+
+.sideToolButton:disabled {
+  color: var(--chat-text-secondary);
+  cursor: not-allowed;
+}
+
+@media (pointer: coarse) {
+  .sideToolButton {
+    min-height: 44px;
+  }
+}
+
 .panelShortcutRow {
   display: flex;
   align-items: center;
@@ -2066,6 +2261,13 @@ svg + .menuRowLabel {
   flex: 0 0 auto;
   min-height: 44px;
   padding: 4px 8px;
+}
+
+.terminalMode {
+  flex: none;
+  padding: 0 4px;
+  color: var(--chat-text-secondary);
+  font-size: 12px;
 }
 
 .terminalTabs {
@@ -2352,6 +2554,34 @@ svg + .menuRowLabel {
     display: none;
   }
 
+  .localHeader {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    height: auto;
+    min-height: 48px;
+    padding-block: 8px;
+    row-gap: 4px;
+  }
+
+  .localHeader[data-window-edge='left'] {
+    grid-template-columns: auto auto minmax(0, 1fr) auto;
+  }
+
+  .localHeader .headerTitle {
+    grid-area: 1 / -3 / 2 / -2;
+    min-width: 0;
+  }
+
+  .localHeader .headerActions {
+    grid-area: 1 / -2 / 2 / -1;
+  }
+
+  .localHeader .headerChip {
+    grid-area: 2 / 1 / 3 / -1;
+    background: transparent;
+    padding-inline: 0;
+  }
+
   .changes,
   .panelShortcuts {
     max-width: none;
@@ -2383,8 +2613,7 @@ svg + .menuRowLabel {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .activityChevron,
-  .field {
+  .activityChevron {
     transition: none;
   }
 }
@@ -2665,12 +2894,13 @@ svg + .menuRowLabel {
   padding: 0 14px;
   border: 1px solid var(--chat-border-strong);
   border-radius: var(--corner-pill);
+  background: transparent;
   color: var(--chat-text-primary);
   font-size: 14px;
   text-decoration: none;
 }
 
-.setupChip:hover {
+.setupChip:hover:not(:disabled) {
   background: var(--chat-surface-hover);
 }
 
@@ -2901,6 +3131,7 @@ svg + .menuRowLabel {
 }
 
 .ptyScreen {
+  position: relative;
   display: flex;
   flex: 1;
   flex-direction: column;
@@ -2918,6 +3149,14 @@ svg + .menuRowLabel {
   padding: 4px 0 4px 16px;
 }
 
+.terminalLatestOutput {
+  position: absolute;
+  z-index: 1;
+  inset-block-start: 8px;
+  inset-inline-end: 12px;
+  background: var(--chat-input-bg);
+}
+
 .ptyStatus {
   display: flex;
   flex-wrap: wrap;
@@ -2927,6 +3166,21 @@ svg + .menuRowLabel {
 }
 
 @media (max-width: 767px) {
+  .localHeader .headerTitle {
+    grid-area: 1 / -3 / 2 / -1;
+  }
+
+  .localHeader .headerActions {
+    grid-area: 2 / 1 / 3 / -1;
+    flex-wrap: wrap;
+    min-width: 0;
+    margin-left: 0;
+  }
+
+  .localHeader .headerChip {
+    grid-area: 3 / 1 / 4 / -1;
+  }
+
   .center {
     width: calc(100% - 32px);
   }
@@ -2987,7 +3241,7 @@ svg + .menuRowLabel {
   }
 
   .fieldRow {
-    padding: 10px 8px 6px 14px;
+    gap: 6px;
   }
 
   .controlRow {
@@ -3021,11 +3275,11 @@ svg + .menuRowLabel {
   }
 }
 
-/* On the narrowest phones the placeholder is one size down so its whole
-   sentence fits beside the send button; the typed text keeps the field size. */
-@media (max-width: 339px) {
-  .input::placeholder {
-    font-size: 14px;
+@supports not (field-sizing: content) {
+  @media (max-width: 767px) {
+    .input:placeholder-shown {
+      min-height: calc(2lh + 6px);
+    }
   }
 }
 

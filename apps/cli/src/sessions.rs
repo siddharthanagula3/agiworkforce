@@ -66,16 +66,10 @@ static GITHUB_PR_SHORTHAND_RE: LazyLock<Regex> = LazyLock::new(|| {
 // Atomic write helpers (P1-7: concurrent CLI session safety)
 // ---------------------------------------------------------------------------
 
-/// Write `contents` to `target` atomically: write to a tempfile in the same
-/// directory, then rename into place.  An exclusive flock on a per-directory
-/// `.write.lock` file serializes concurrent CLI processes on Unix.
 fn atomic_write(target: &Path, contents: &[u8]) -> Result<()> {
     let dir = target
         .parent()
         .ok_or_else(|| anyhow::anyhow!("target path has no parent: {}", target.display()))?;
-    fs::create_dir_all(dir)
-        .with_context(|| format!("Failed to create directory {}", dir.display()))?;
-    let _lock = DirLock::acquire(dir)?;
     let tmp = tempfile::NamedTempFile::new_in(dir)
         .with_context(|| format!("Failed to create tempfile in {}", dir.display()))?;
     fs::write(tmp.path(), contents)
@@ -85,31 +79,19 @@ fn atomic_write(target: &Path, contents: &[u8]) -> Result<()> {
     Ok(())
 }
 
-struct DirLock {
-    #[cfg(unix)]
-    _guard: nix::fcntl::Flock<fs::File>,
-}
-
-impl DirLock {
-    #[cfg(unix)]
-    fn acquire(dir: &Path) -> Result<Self> {
-        use nix::fcntl::{Flock, FlockArg};
-        let lock_path = dir.join(".write.lock");
-        let file = fs::OpenOptions::new()
-            .create(true)
-            .truncate(false)
-            .write(true)
-            .open(&lock_path)
-            .with_context(|| format!("Failed to open lock file {}", lock_path.display()))?;
-        let guard = Flock::lock(file, FlockArg::LockExclusive)
-            .map_err(|(_, e)| anyhow::anyhow!("flock on {} failed: {}", lock_path.display(), e))?;
-        Ok(Self { _guard: guard })
-    }
-
-    #[cfg(not(unix))]
-    fn acquire(_dir: &Path) -> Result<Self> {
-        Ok(Self {})
-    }
+fn lock_session_directory(dir: &Path) -> Result<fs::File> {
+    fs::create_dir_all(dir)?;
+    let path = dir.join(".write.lock");
+    let file = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(&path)
+        .with_context(|| format!("Failed to open session lock {}", path.display()))?;
+    file.lock()
+        .with_context(|| format!("Failed to lock session directory {}", dir.display()))?;
+    Ok(file)
 }
 
 #[derive(Debug, Clone)]
@@ -131,6 +113,23 @@ struct SessionMetadata {
     git_branch: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     imported_from: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pinned: Option<bool>,
+}
+
+pub(crate) fn session_is_pinned(base_dir: &Path, session_id: &str) -> Result<bool> {
+    Ok(read_metadata(base_dir, session_id)?.and_then(|metadata| metadata.pinned) == Some(true))
+}
+
+pub(crate) fn set_session_pinned(base_dir: &Path, session_id: &str, pinned: bool) -> Result<()> {
+    validate_managed_session_id(session_id)?;
+    let _guard = lock_session_directory(&metadata_dir(base_dir))?;
+    let mut metadata = read_metadata(base_dir, session_id)?.unwrap_or_default();
+    if metadata.pinned.unwrap_or_default() != pinned {
+        metadata.pinned = pinned.then_some(true);
+        write_locked_metadata(base_dir, session_id, &metadata)?;
+    }
+    Ok(())
 }
 
 pub fn imported_from(conn: &Connection, session_id: &str) -> Option<String> {
@@ -174,6 +173,7 @@ pub struct SessionSummary {
     pub total_tokens: i64,
     pub message_count: i64,
     pub archived: bool,
+    pub pinned: bool,
 }
 
 impl SessionSummary {
@@ -188,7 +188,7 @@ impl SessionSummary {
         if self.archived {
             format!("{title} (archived)")
         } else {
-            title.to_string()
+            format!("{}{title}", crate::output::session_pin_label(self.pinned))
         }
     }
 }
@@ -261,10 +261,8 @@ fn save_session_to_default_path(base_dir: &Path, session: &ManagedSession) -> Re
         "{}.{}",
         session.session_id, MANAGED_SESSION_JSONL_EXTENSION
     ));
-    // Acquire an exclusive flock on the managed_sessions directory so
-    // concurrent CLI processes (e.g. session fork + parent) serialise writes.
     let dir = managed_sessions_dir(base_dir);
-    let _lock = DirLock::acquire(&dir)?;
+    let _lock = lock_session_directory(&dir)?;
     session.save_to_path(&path)?;
     Ok(path)
 }
@@ -272,13 +270,14 @@ fn save_session_to_default_path(base_dir: &Path, session: &ManagedSession) -> Re
 fn read_metadata(base_dir: &Path, session_id: &str) -> Result<Option<SessionMetadata>> {
     validate_managed_session_id(session_id)?;
     let path = metadata_path(base_dir, session_id);
-    if !path.exists() {
-        return Ok(None);
-    }
-
-    let metadata_size = fs::metadata(&path)
-        .with_context(|| format!("Failed to inspect session metadata {}", path.display()))?
-        .len();
+    let metadata_size = match fs::metadata(&path) {
+        Ok(metadata) => metadata.len(),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => {
+            return Err(error)
+                .with_context(|| format!("Failed to inspect session metadata {}", path.display()));
+        }
+    };
     if metadata_size > SESSION_METADATA_MAX_BYTES {
         bail!(
             "Session metadata {} exceeds the {} byte limit",
@@ -298,6 +297,17 @@ fn read_metadata(base_dir: &Path, session_id: &str) -> Result<Option<SessionMeta
 
 fn write_metadata(base_dir: &Path, session_id: &str, metadata: &SessionMetadata) -> Result<()> {
     validate_managed_session_id(session_id)?;
+    let _guard = lock_session_directory(&metadata_dir(base_dir))?;
+    let mut metadata = metadata.clone();
+    metadata.pinned = read_metadata(base_dir, session_id)?.and_then(|current| current.pinned);
+    write_locked_metadata(base_dir, session_id, &metadata)
+}
+
+fn write_locked_metadata(
+    base_dir: &Path,
+    session_id: &str,
+    metadata: &SessionMetadata,
+) -> Result<()> {
     validate_metadata(metadata)?;
     let path = metadata_path(base_dir, session_id);
     let contents =
@@ -477,8 +487,11 @@ fn summary_from_session(
     let model = metadata
         .and_then(|value| value.model.clone())
         .unwrap_or_default();
-    let cwd = metadata
-        .and_then(|value| value.cwd.clone())
+    let cwd = session
+        .workspace_root
+        .as_deref()
+        .map(|path| path.display().to_string())
+        .or_else(|| metadata.and_then(|value| value.cwd.clone()))
         .unwrap_or_default();
     let git_branch = metadata
         .and_then(|value| value.git_branch.clone())
@@ -497,6 +510,7 @@ fn summary_from_session(
         total_tokens: total_tokens(&session.messages),
         message_count: session.messages.len() as i64,
         archived: session.archived_at.is_some(),
+        pinned: metadata.and_then(|value| value.pinned) == Some(true),
     }
 }
 
@@ -954,6 +968,7 @@ pub fn fork_session(conn: &Connection, source_id: &str) -> Result<String> {
         cwd: source_metadata.cwd,
         git_branch: source_metadata.git_branch,
         imported_from: source_metadata.imported_from,
+        pinned: None,
     };
     write_metadata(&conn.base_dir, &new_id, &metadata)?;
 
@@ -1208,7 +1223,7 @@ fn format_session_rows(
         out.push_str(&format!("  {label}:\n"));
         for session in group {
             let title = session.display_title();
-            let short_id = &session.id[..session.id.len().min(8)];
+            let short_id: String = session.id.chars().take(8).collect();
             out.push_str(&format!(
                 "    {:<40} {:>9}  {}\n",
                 format!("{title} [{short_id}]"),
@@ -1578,6 +1593,24 @@ mod tests {
 
         assert_eq!(summary.title, "From the rename");
         drop(tempdir);
+    }
+
+    #[test]
+    fn stale_metadata_writes_preserve_the_current_pin() {
+        let (_dir, conn) = temp_connection();
+        let id = "pin-fixture";
+        save_session(&conn, id, "Original title", "model", "/tmp", "main").unwrap();
+        let mut stale = read_metadata(&conn.base_dir, id).unwrap().unwrap();
+        set_session_pinned(&conn.base_dir, id, true).unwrap();
+        stale.title = Some("Updated title".to_string());
+        write_metadata(&conn.base_dir, id, &stale).unwrap();
+        let stale_pin = read_metadata(&conn.base_dir, id).unwrap().unwrap();
+        assert_eq!(stale_pin.pinned, Some(true));
+        assert_eq!(stale_pin.title.as_deref(), Some("Updated title"));
+
+        set_session_pinned(&conn.base_dir, id, false).unwrap();
+        write_metadata(&conn.base_dir, id, &stale_pin).unwrap();
+        assert!(!session_is_pinned(&conn.base_dir, id).unwrap());
     }
 
     #[test]

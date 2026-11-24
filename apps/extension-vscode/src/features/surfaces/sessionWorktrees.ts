@@ -12,8 +12,11 @@ async function openWorktree(worktree: WorktreeSummary): Promise<void> {
   });
 }
 
-export async function newSessionInWorktree(cli: CliCapabilityAdapter): Promise<void> {
-  const created = await cli.call<WorktreeSummary>('worktreeCreate');
+export async function newSessionInWorktree(
+  cli: CliCapabilityAdapter,
+  name?: string,
+): Promise<void> {
+  const created = await cli.call<WorktreeSummary>('worktreeCreate', name);
   if (created.status !== 'ok') {
     void vscode.window.showWarningMessage(`${PRODUCT_NAMES.code}: ${created.reason}`);
     return;
@@ -57,12 +60,17 @@ export async function manageSessionWorktrees(adapter: CliCapabilityAdapter): Pro
     void vscode.window.showWarningMessage(`${PRODUCT_NAMES.code}: ${listed.reason}`);
     return;
   }
-  type Item = vscode.QuickPickItem & { worktree?: WorktreeSummary; create?: true };
+  type Item = vscode.QuickPickItem & { worktree?: WorktreeSummary; create?: 'automatic' | 'named' };
   const items: Item[] = [
     {
       label: '$(add) New session in a worktree',
       description: 'Its own folder and branch, opened in a new window',
-      create: true,
+      create: 'automatic',
+    },
+    {
+      label: '$(tag) Open or create a named worktree',
+      description: 'Reuse an existing checkout or choose a name for a new one',
+      create: 'named',
     },
     ...listed.value.map((worktree) => ({
       label: `$(git-branch) ${worktree.name}`,
@@ -79,8 +87,18 @@ export async function manageSessionWorktrees(adapter: CliCapabilityAdapter): Pro
         : 'Choose a worktree to open or remove',
   });
   if (picked === undefined) return;
-  if (picked.create) {
+  if (picked.create === 'automatic') {
     await newSessionInWorktree(cli);
+    return;
+  }
+  if (picked.create === 'named') {
+    const name = await vscode.window.showInputBox({
+      title: TITLE,
+      prompt: 'Enter a worktree name',
+      ignoreFocusOut: true,
+      validateInput: (value) => (value.trim() === '' ? 'Enter a worktree name.' : undefined),
+    });
+    if (name?.trim()) await newSessionInWorktree(cli, name.trim());
     return;
   }
   const worktree = picked.worktree;

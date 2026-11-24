@@ -255,6 +255,7 @@ let rememberedPairing: { code: string; secret: string } | null = null;
 
 function forgetPairingSecret(): void {
   rememberedPairing = null;
+  useRemoteCodeStore.getState().reset();
 }
 
 function detachSignalingClient(): void {
@@ -955,8 +956,11 @@ export const useConnectionStore = create<ConnectionState>()(
         const remembered =
           rememberedAtEntry && rememberedAtEntry.code === parsed.code ? rememberedAtEntry : null;
         const pairingSecret = parsed.pairingSecret ?? remembered?.secret ?? null;
+        const continuesPairing = remembered !== null && remembered.secret === pairingSecret;
         const suppliedPairToken =
-          parsed.code === currentState.pairingCode ? currentState.pairToken : null;
+          continuesPairing && parsed.code === currentState.pairingCode
+            ? currentState.pairToken
+            : null;
 
         if (!pairingSecret) {
           invalidateConnectionAttempt();
@@ -976,6 +980,11 @@ export const useConnectionStore = create<ConnectionState>()(
             reconnectStartedAt: null,
           });
           return;
+        }
+        if (!continuesPairing) {
+          pendingControlQueue.length = 0;
+          clearPendingControlAcks();
+          useRemoteCodeStore.getState().reset();
         }
         rememberedPairing = { code: parsed.code, secret: pairingSecret };
 
@@ -1357,7 +1366,6 @@ export const useConnectionStore = create<ConnectionState>()(
         });
         useAgentStore.getState().setAgents([]);
         useDispatchTaskStore.getState().reset();
-        useRemoteCodeStore.getState().reset();
       },
 
       sendControl: async (action: string, payload?: unknown): Promise<boolean> => {

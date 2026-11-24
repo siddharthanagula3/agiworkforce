@@ -1,7 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
+import { AttachmentPreview } from '@features/chat/components/Composer/AttachmentPreview';
+import { useCodeImages } from '../hooks/use-code-images';
 import {
   ArrowUp,
   ChevronDown,
@@ -11,6 +13,7 @@ import {
   Code2,
   Folder,
   GitBranch,
+  ImagePlus,
   Lightbulb,
   Lock,
   Mic,
@@ -44,18 +47,15 @@ import {
 import {
   CLOUD_CODE_DEFAULT_TURN_MODE,
   CLOUD_CODE_GOAL_COMMANDS,
-  CLOUD_CODE_TURN_STEP_BOUNDS,
   cloudCodeRepositoryLabel,
   describeCloudCodeRuntime,
   isBillingPlanTier,
-  isCloudCodeTurnStepBound,
   isFreeBillingPlanTier,
   selectUsageWarning,
   type CloudCodeNetworkAccess,
   type CloudCodeRepositoryReference,
   type CloudCodeRuntime,
   type CloudCodeTurnMode,
-  type CloudCodeTurnStepBound,
 } from '@agiworkforce/types';
 import {
   DEVELOPER_AGENT_MODE_LABELS,
@@ -71,7 +71,14 @@ import { isImeComposingKey } from '@agiworkforce/unified-chat/ime-composition';
 import { ComposerFooter } from '@features/chat/components/Composer/ComposerFooter';
 import { DictationStrip } from '@features/chat/components/Composer/DictationStrip';
 import { getProviderModeForModel } from '@shared/lib/provider-mode-for-model';
-import { useDictation } from '@features/chat/hooks/use-dictation';
+import {
+  DICTATION_DISABLED_IN_SETTINGS,
+  dictationSwitchedOffReason,
+  useDictation,
+} from '@features/chat/hooks/use-dictation';
+import { useSettingsStore } from '@shared/stores/web-settings-store';
+import { useBillingStore } from '@shared/stores/web-auth-store';
+import { safePlatform } from '@shared/utils/browser-utils';
 import {
   readManagedUsageBuckets,
   useManagedUsageSummary,
@@ -104,7 +111,6 @@ import {
   CODE_LIMITS,
   CODE_NETWORK_OPTIONS,
   CODE_ROUTES,
-  CODE_TURN_STEP_HINTS,
   githubInstallHref,
   DEFAULT_CODE_ENVIRONMENT,
   DEFAULT_NETWORK_ACCESS,
@@ -113,7 +119,6 @@ import {
   contextWindowLabel,
   environmentChipLabel,
   formatResetIn,
-  turnBudgetNote,
   type CodeEnvironment,
 } from '../code-surface';
 import {
@@ -146,6 +151,7 @@ const SEND_GLYPH_SIZE = 16;
 const POPOVER_WIDTH = 320;
 const POPOVER_OFFSET = 8;
 const ENTER_KEY = 'Enter';
+const SEND_AND_STAY_SHORTCUTS = 'Meta+Enter Control+Enter';
 const COMMAND_QUERY = /^\/[a-z-]*$/i;
 const FIRST_SHORTCUT = 1;
 const PLAN_TURN_MODE = 'plan' satisfies CloudCodeTurnMode;
@@ -1361,13 +1367,9 @@ function RepositoryChips({
 }
 
 function ApprovalModeControl({
-  turnSteps,
-  onTurnStepsChange,
   turnMode,
   onTurnModeChange,
 }: {
-  turnSteps: CloudCodeTurnStepBound | null;
-  onTurnStepsChange: (value: CloudCodeTurnStepBound) => void;
   turnMode: CloudCodeTurnMode | null;
   onTurnModeChange: (mode: CloudCodeTurnMode) => void;
 }) {
@@ -1465,31 +1467,6 @@ function ApprovalModeControl({
             </DropdownMenuRadioItem>
           )}
         </DropdownMenuRadioGroup>
-        {turnSteps !== null && (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuLabel>{CODE_COPY.turnStepsMenu}</DropdownMenuLabel>
-            <DropdownMenuRadioGroup
-              value={String(turnSteps)}
-              onValueChange={(value) => {
-                const bound = Number(value);
-                if (isCloudCodeTurnStepBound(bound)) onTurnStepsChange(bound);
-              }}
-            >
-              {CLOUD_CODE_TURN_STEP_BOUNDS.map((bound) => (
-                <DropdownMenuRadioItem key={bound} value={String(bound)}>
-                  <span className={styles['menuRowLabel']}>
-                    <span className={styles['optionLabel']}>
-                      {bound} {CODE_COPY.turnStepsUnit}
-                    </span>
-                    <span className={styles['optionHint']}>{CODE_TURN_STEP_HINTS[bound]}</span>
-                  </span>
-                </DropdownMenuRadioItem>
-              ))}
-            </DropdownMenuRadioGroup>
-            <p className={styles['menuNote']}>{turnBudgetNote()}</p>
-          </>
-        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -1497,7 +1474,13 @@ function ApprovalModeControl({
 
 const DEVELOPER_SETTINGS_SECTION = 'local-mcp';
 
-function AttachMenu() {
+function AttachMenu({
+  onAddImages,
+  imagesDisabled,
+}: {
+  onAddImages?: () => void;
+  imagesDisabled?: boolean;
+}) {
   const localMcp = useDeveloperCapabilities().has('mcp_servers');
   const { openSettings } = useSettingsModal();
   return (
@@ -1512,6 +1495,12 @@ function AttachMenu() {
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" side="top" className="w-56">
+        {onAddImages && (
+          <DropdownMenuItem disabled={imagesDisabled} onSelect={onAddImages}>
+            <ImagePlus size={CHIP_GLYPH_SIZE} aria-hidden="true" />
+            <span className={styles['menuRowLabel']}>{LOCAL_CODE_COPY.addImages}</span>
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem asChild>
           <Link href={CODE_ROUTES.connectors}>
             <Plug size={CHIP_GLYPH_SIZE} aria-hidden="true" />
@@ -1691,7 +1680,13 @@ export interface CodeComposerProps {
   dictationModel: string | null;
   value: string;
   onChange: (value: string) => void;
-  onSubmit: (text: string, repository: CodeRepositoryEntry | null) => void;
+  onSubmit: (text: string, repository: CodeRepositoryEntry | null, pictures?: File[]) => void;
+  onSubmitInBackground?: (
+    text: string,
+    repository: CodeRepositoryEntry | null,
+    pictures: File[],
+  ) => Promise<boolean>;
+  startBlockedBy?: string | undefined;
   disabled: boolean;
   busy: boolean;
   showChips: boolean;
@@ -1710,8 +1705,6 @@ export interface CodeComposerProps {
   contextTokens: number | null;
   contextWindow: number | null;
   turnControls: boolean;
-  turnSteps: CloudCodeTurnStepBound;
-  onTurnStepsChange: (value: CloudCodeTurnStepBound) => void;
   turnMode: CloudCodeTurnMode;
   onTurnModeChange: (mode: CloudCodeTurnMode) => void;
 }
@@ -1722,6 +1715,8 @@ export function CodeComposer({
   value,
   onChange,
   onSubmit,
+  onSubmitInBackground,
+  startBlockedBy,
   disabled,
   busy,
   showChips,
@@ -1740,20 +1735,76 @@ export function CodeComposer({
   contextTokens,
   contextWindow,
   turnControls,
-  turnSteps,
-  onTurnStepsChange,
   turnMode,
   onTurnModeChange,
 }: CodeComposerProps) {
   const [focused, setFocused] = useState(false);
+  const [pointerFocused, setPointerFocused] = useState(false);
   const folder = local.folders.find((choice) => choice.rootId === draft.localRootId) ?? null;
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const focusComposerAfterSend = useRef(false);
+  const imagePicker = useRef<HTMLInputElement>(null);
   const repositoryEntry = useRef<CodeRepositoryEntry>({ url: '', branch: '' });
-  const sendable = value.trim().length > 0 && !disabled && !busy;
-  const submitTask = (text: string) => {
+  const localDraft = showChips && draft.environment === 'local';
+  const [imageNotice, setImageNotice] = useState<string | null>(null);
+  const images = useCodeImages(
+    busy
+      ? LOCAL_CODE_COPY.imagesWhileStarting
+      : folder === null
+        ? LOCAL_CODE_COPY.imagesRequireFolder
+        : null,
+    setImageNotice,
+  );
+  const imageScope = localDraft
+    ? JSON.stringify([draft.localRootId, local.modelId, local.placement])
+    : null;
+  const previousImageScope = useRef(imageScope);
+  const { clearAll, preparing, attachments } = images;
+  useLayoutEffect(() => {
+    if (previousImageScope.current === imageScope) return;
+    previousImageScope.current = imageScope;
+    clearAll();
+    setImageNotice(
+      attachments.length > 0 || preparing ? LOCAL_CODE_COPY.imagesDestinationChanged : null,
+    );
+  }, [imageScope, clearAll, attachments.length, preparing]);
+  const hasDraft = value.trim().length > 0 || (localDraft && images.attachments.length > 0);
+  const maySubmit = !disabled && !startBlockedBy && !busy && !images.preparing;
+  const sendable = hasDraft && maySubmit;
+  const enteredRepository = () => {
     const url = repositoryEntry.current.url.trim();
-    onSubmit(text, url ? { url, branch: repositoryEntry.current.branch } : null);
+    return url ? { url, branch: repositoryEntry.current.branch } : null;
   };
+  const submitTask = (text: string) => {
+    if (!maySubmit) return;
+    const repository = enteredRepository();
+    if (localDraft && images.attachments.length > 0) {
+      onSubmit(text, repository, images.attachments);
+    } else {
+      onSubmit(text, repository);
+    }
+  };
+  const submitInBackground = async () => {
+    if (!sendable || !onSubmitInBackground) return;
+    if (await onSubmitInBackground(value.trim(), enteredRepository(), images.attachments)) {
+      clearAll();
+    }
+  };
+  const cloudTurn = !showChips || draft.environment === 'cloud';
+  const dictationDestinationReady = Boolean(
+    cloudTurn &&
+    dictationDestination &&
+    dictationModel &&
+    getProviderModeForModel(dictationModel) === 'ManagedGateway',
+  );
+  const dictationEnabled = useSettingsStore((state) => state.dictationEnabled);
+  const dictationSwitchedOff = useBillingStore((state) =>
+    dictationSwitchedOffReason(state.disabledFeatures),
+  );
+  const dictationUnavailableReason =
+    dictationSwitchedOff ??
+    (!dictationEnabled ? DICTATION_DISABLED_IN_SETTINGS : undefined) ??
+    (!dictationDestinationReady ? CODE_COPY.dictationRequiresCloud : undefined);
   const dictation = useDictation({
     scope: JSON.stringify([
       dictationDestination,
@@ -1764,15 +1815,7 @@ export function CodeComposer({
       draft.runtimeId,
       draft.harnessModelId,
     ]),
-    isAvailable: () =>
-      Boolean(
-        dictationDestination &&
-        dictationModel &&
-        getProviderModeForModel(dictationModel) === 'ManagedGateway' &&
-        (!showChips || draft.environment === 'cloud') &&
-        !disabled &&
-        !busy,
-      ),
+    isAvailable: () => dictationDestinationReady && !disabled && !busy,
     onInsert: (text) => onChange(value ? `${value} ${text}` : text),
     onSend: (text) => {
       const next = value ? `${value} ${text}` : text;
@@ -1785,7 +1828,6 @@ export function CodeComposer({
   const requestUpgrade = () => openUpgrade((href) => router.push(href));
   const [commandIndex, setCommandIndex] = useState(0);
   const [dismissedCommandQuery, setDismissedCommandQuery] = useState<string | null>(null);
-  const cloudTurn = !showChips || draft.environment === 'cloud';
   const commandQuery = cloudTurn && COMMAND_QUERY.test(value) ? value.toLowerCase() : null;
   const commandSuggestions: CommandSuggestion[] =
     commandQuery === null || commandQuery === dismissedCommandQuery
@@ -1798,6 +1840,9 @@ export function CodeComposer({
           }),
         );
   const commandsOpen = focused && commandSuggestions.length > 0;
+  const composerShortcuts = onSubmitInBackground
+    ? `${ENTER_KEY} ${SEND_AND_STAY_SHORTCUTS}`
+    : ENTER_KEY;
 
   useEffect(() => setCommandIndex(0), [commandQuery]);
 
@@ -1825,48 +1870,14 @@ export function CodeComposer({
     if (handleCommandKey(event)) return;
     if (event.key !== ENTER_KEY || event.shiftKey) return;
     event.preventDefault();
-    if (sendable) submitTask(value.trim());
+    if (!sendable) return;
+    if (onSubmitInBackground && (event.metaKey || event.ctrlKey)) void submitInBackground();
+    else submitTask(value.trim());
   };
 
   return (
     <div className={styles['composerArea']} data-testid="code-composer-area">
       <div className={styles['center']}>
-        {showChips && (
-          <div className={styles['chipRow']}>
-            {draft.environment === 'local' && folder && (
-              <LocalFolderChip folder={folder} local={local} onDraftChange={onDraftChange} />
-            )}
-            <EnvironmentChip
-              draft={draft}
-              runtimes={runtimes}
-              harnessModels={harnessModels ?? []}
-              local={local}
-              disabled={disabled || busy}
-              onDraftChange={onDraftChange}
-              onOpenEmpty={onOpenEmptyEnvironment}
-            />
-            {draft.environment === 'local' ? (
-              folder?.branch && (
-                <LocalBranchChip
-                  rootId={folder.rootId}
-                  branch={folder.branch}
-                  disabled={disabled || busy}
-                  onSwitched={local.onBranchSwitched}
-                />
-              )
-            ) : (
-              <RepositoryChips
-                draft={draft}
-                onDraftChange={onDraftChange}
-                onEntryChange={(entry) => {
-                  repositoryEntry.current = entry;
-                }}
-                api={api}
-              />
-            )}
-          </div>
-        )}
-
         {showHint && (
           <div className={styles['hint']}>
             <Lightbulb size={CHIP_GLYPH_SIZE} aria-hidden="true" />
@@ -1884,11 +1895,24 @@ export function CodeComposer({
 
         <CodeUsageWarning />
 
+        {imageNotice && (
+          <div className={styles['notice']} role="status">
+            {imageNotice}
+          </div>
+        )}
         <div
           id="chat-composer"
           data-testid="code-composer-field"
-          className={`${styles['field']} ${focused ? styles['fieldFocused'] : ''}`}
+          className={styles['field']}
+          {...(localDraft ? images.dropTarget : {})}
         >
+          {localDraft && images.previews.length > 0 && (
+            <AttachmentPreview
+              previews={images.previews}
+              onRemove={images.removeFile}
+              disableRemove={busy}
+            />
+          )}
           <SlashCommandMenu
             show={commandsOpen}
             suggestions={commandSuggestions}
@@ -1897,19 +1921,50 @@ export function CodeComposer({
             onHover={setCommandIndex}
           />
           <div className={styles['fieldRow']}>
+            {localDraft && folder !== null && (
+              <input
+                ref={imagePicker}
+                type="file"
+                accept="image/*"
+                multiple
+                hidden
+                onChange={(event) => {
+                  const files = Array.from(event.currentTarget.files ?? []);
+                  event.currentTarget.value = '';
+                  if (files.length > 0) images.addImages(files);
+                }}
+              />
+            )}
+            <AttachMenu
+              {...(localDraft
+                ? {
+                    onAddImages: () => imagePicker.current?.click(),
+                    imagesDisabled: disabled || busy || folder === null || !images.canAddMore,
+                  }
+                : {})}
+            />
             <textarea
               ref={inputRef}
               className={styles['input']}
               value={value}
               onChange={(event) => onChange(event.target.value)}
               onFocus={() => setFocused(true)}
-              onBlur={() => setFocused(false)}
+              onPointerDown={() => setPointerFocused(true)}
+              onBlur={() => {
+                setFocused(false);
+                setPointerFocused(false);
+              }}
               onKeyDown={handleKeyDown}
+              onPaste={localDraft ? images.onPaste : undefined}
               placeholder={busy ? CODE_COPY.runningPlaceholder : CODE_COPY.composerPlaceholder}
               maxLength={CODE_LIMITS.task}
               disabled={disabled}
               rows={1}
               aria-label={CODE_COPY.composerPlaceholder}
+              aria-keyshortcuts={sendable && !commandsOpen ? composerShortcuts : undefined}
+              data-composer-textarea
+              data-pointer-focused={pointerFocused || undefined}
+              aria-describedby={startBlockedBy}
             />
             {turnRunning ? (
               <button
@@ -1925,23 +1980,120 @@ export function CodeComposer({
                   <Square size={SEND_GLYPH_SIZE} aria-hidden="true" />
                 )}
               </button>
-            ) : (
+            ) : hasDraft ? (
+              <>
+                {onSubmitInBackground && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        className={styles['controlIconButton']}
+                        disabled={!sendable}
+                        aria-label={CODE_COPY.sendOptions}
+                        title={CODE_COPY.sendOptions}
+                      >
+                        <ChevronDown size={CHIP_GLYPH_SIZE} aria-hidden="true" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent
+                      align="end"
+                      side="top"
+                      onCloseAutoFocus={(event) => {
+                        if (!focusComposerAfterSend.current) return;
+                        focusComposerAfterSend.current = false;
+                        event.preventDefault();
+                        inputRef.current?.focus();
+                      }}
+                    >
+                      <DropdownMenuItem onSelect={() => submitTask(value.trim())}>
+                        {CODE_COPY.send}
+                        <DropdownMenuShortcut className="whitespace-nowrap ps-3" aria-hidden="true">
+                          Enter
+                        </DropdownMenuShortcut>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        aria-keyshortcuts={SEND_AND_STAY_SHORTCUTS}
+                        onSelect={() => {
+                          focusComposerAfterSend.current = true;
+                          void submitInBackground();
+                        }}
+                      >
+                        {CODE_COPY.sendAndStay}
+                        <DropdownMenuShortcut className="whitespace-nowrap ps-3" aria-hidden="true">
+                          {safePlatform.isMac() ? '⌘ Enter' : 'Ctrl Enter'}
+                        </DropdownMenuShortcut>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+                <button
+                  type="button"
+                  className={styles['sendButton']}
+                  disabled={!sendable}
+                  aria-label={CODE_COPY.send}
+                  aria-keyshortcuts="Enter"
+                  title={CODE_COPY.send}
+                  onClick={() => submitTask(value.trim())}
+                >
+                  {busy ? (
+                    <Spinner size="sm" aria-hidden="true" />
+                  ) : (
+                    <ArrowUp size={SEND_GLYPH_SIZE} aria-hidden="true" />
+                  )}
+                </button>
+              </>
+            ) : null}
+            {!dictation.isActive && (
               <button
                 type="button"
-                className={styles['sendButton']}
-                disabled={!sendable}
-                aria-label={CODE_COPY.send}
-                onClick={() => submitTask(value.trim())}
+                className={styles['controlIconButton']}
+                aria-label={CODE_COPY.startDictation}
+                aria-description={dictationUnavailableReason}
+                title={dictationUnavailableReason}
+                disabled={disabled || busy || dictationUnavailableReason !== undefined}
+                onClick={startDictation}
               >
-                {busy ? (
-                  <Spinner size="sm" aria-hidden="true" />
-                ) : (
-                  <ArrowUp size={SEND_GLYPH_SIZE} aria-hidden="true" />
-                )}
+                <Mic size={CONTROL_GLYPH_SIZE} aria-hidden="true" />
               </button>
             )}
           </div>
-
+        </div>
+        <div className={styles['composerFooter']} data-testid="code-composer-footer">
+          {showChips && (
+            <div className={styles['chipRow']}>
+              {draft.environment === 'local' && folder && (
+                <LocalFolderChip folder={folder} local={local} onDraftChange={onDraftChange} />
+              )}
+              <EnvironmentChip
+                draft={draft}
+                runtimes={runtimes}
+                harnessModels={harnessModels ?? []}
+                local={local}
+                disabled={disabled || busy}
+                onDraftChange={onDraftChange}
+                onOpenEmpty={onOpenEmptyEnvironment}
+              />
+              {draft.environment === 'local' ? (
+                folder?.branch && (
+                  <LocalBranchChip
+                    rootId={folder.rootId}
+                    branch={folder.branch}
+                    disabled={disabled || busy}
+                    onSwitched={local.onBranchSwitched}
+                  />
+                )
+              ) : (
+                <RepositoryChips
+                  draft={draft}
+                  onDraftChange={onDraftChange}
+                  onEntryChange={(entry) => {
+                    repositoryEntry.current = entry;
+                  }}
+                  api={api}
+                />
+              )}
+            </div>
+          )}
           <div className={styles['controlRow']}>
             {dictation.isActive ? (
               <DictationStrip
@@ -1973,23 +2125,11 @@ export function CodeComposer({
                 ) : (
                   turnControls && (
                     <ApprovalModeControl
-                      turnSteps={cloudTurn ? turnSteps : null}
-                      onTurnStepsChange={onTurnStepsChange}
                       turnMode={cloudTurn ? turnMode : null}
                       onTurnModeChange={onTurnModeChange}
                     />
                   )
                 )}
-                <AttachMenu />
-                <button
-                  type="button"
-                  className={styles['controlIconButton']}
-                  aria-label={CODE_COPY.startDictation}
-                  disabled={disabled}
-                  onClick={startDictation}
-                >
-                  <Mic size={CONTROL_GLYPH_SIZE} aria-hidden="true" />
-                </button>
                 <span className={styles['controlSpacer']} />
                 {draft.environment === 'local' ? (
                   (local.models.length > 0 || local.setups.length > 0) && (

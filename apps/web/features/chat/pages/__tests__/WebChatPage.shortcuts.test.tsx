@@ -380,14 +380,14 @@ describe('WebChatPage keyboard shortcut wiring', () => {
     openConversation();
     render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     await screen.findByTestId('message-list');
-    expect(screen.queryByRole('dialog', { name: 'Search Conversations' })).toBeNull();
+    expect(screen.queryByRole('dialog', { name: 'Search' })).toBeNull();
 
     await act(async () => {
       emitAppCommand('open-search');
     });
 
-    expect(await screen.findByRole('dialog', { name: 'Search Conversations' })).toBeVisible();
-    expect(screen.getByPlaceholderText('Search messages and conversations...')).toBeVisible();
+    expect(await screen.findByRole('dialog', { name: 'Search' })).toBeVisible();
+    expect(screen.getByPlaceholderText('Search your workspace')).toBeVisible();
   });
 
   it('opens the create dialog when File > New Project reaches the chat page', async () => {

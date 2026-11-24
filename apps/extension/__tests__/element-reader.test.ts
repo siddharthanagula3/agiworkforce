@@ -126,6 +126,15 @@ describe('shared portable DOM element observations', () => {
     expect(reader.controlState(document.querySelector('input')!)).toMatchObject({ checked: false });
   });
 
+  it('treats every native label as a protection cue even with an unrelated aria-label', () => {
+    document.body.innerHTML =
+      '<label for="entry">Profile data</label><label for="entry">Social security number</label><input id="entry" aria-label="Personal details">';
+    const field = document.querySelector('input')!;
+    const reader = createDomElementReader();
+    expect(reader.isSensitiveField(field)).toBe(true);
+    expect(reader.labelFor(field)).toBe('Personal details');
+  });
+
   it('preserves visible image-button labels used by protected-action classification', () => {
     document.body.innerHTML = '<label>Confirm<input type="image" alt="Pay now"></label>';
     const element = document.querySelector('input')!;

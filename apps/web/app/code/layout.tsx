@@ -2,6 +2,7 @@ import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { CODE_ROUTES } from '@/features/code/code-surface';
+import { CodeComposerDraftProvider } from '@/features/code/CodeComposerDrafts';
 import { requireAdultEligibility } from '@/lib/server/require-adult-eligibility';
 import { requireCurrentTermsAcceptance } from '@/lib/server/require-current-terms';
 import { getRequestIdentity } from '@/lib/server/identity';
@@ -26,5 +27,9 @@ export default async function CodeLayout({ children }: { children: ReactNode }) 
 
   await requireAdultEligibility(userId, redirectTo);
 
-  return <ProductRuntimeProviders>{children}</ProductRuntimeProviders>;
+  return (
+    <ProductRuntimeProviders>
+      <CodeComposerDraftProvider>{children}</CodeComposerDraftProvider>
+    </ProductRuntimeProviders>
+  );
 }

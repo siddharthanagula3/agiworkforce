@@ -79,6 +79,16 @@ describe('compact composer controls', () => {
     vi.restoreAllMocks();
   });
 
+  it('clears pointer focus suppression when the draft field loses focus', () => {
+    bootWebview();
+    const input = document.getElementById('userInput')!;
+    input.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    expect(input.hasAttribute('data-pointer-focus')).toBe(true);
+
+    input.dispatchEvent(new FocusEvent('blur'));
+    expect(input.hasAttribute('data-pointer-focus')).toBe(false);
+  });
+
   it('keeps the live mode and effort legible in one narrow control', () => {
     bootWebview();
 
@@ -173,11 +183,33 @@ describe('compact composer controls', () => {
       ).map((node) => node.textContent);
 
     expect(labels('mode')).toEqual(
-      DEVELOPER_AGENT_MODES.map((mode) => DEVELOPER_AGENT_MODE_LABELS[mode]),
+      DEVELOPER_AGENT_MODES.flatMap((mode) =>
+        mode === 'auto'
+          ? ['Edit automatically', DEVELOPER_AGENT_MODE_LABELS[mode]]
+          : [DEVELOPER_AGENT_MODE_LABELS[mode]],
+      ),
     );
     expect(labels('effort')).toEqual(
       DEVELOPER_REASONING_EFFORTS.map((effort) => DEVELOPER_REASONING_EFFORT_LABELS[effort]),
     );
+  });
+
+  it('chooses Edit automatically without widening the runtime agent mode', () => {
+    const { postMessage } = bootWebview();
+    const controls = document.getElementById('controlsSummary') as HTMLButtonElement;
+    controls.click();
+    const option = document.querySelector<HTMLButtonElement>(
+      '[data-control-value="edit-automatically"]',
+    )!;
+    option.click();
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'setMode',
+        payload: { mode: 'auto', editAutomatically: true },
+      }),
+    );
+    postHostMessage('modeChanged', { mode: 'auto', editAutomatically: true });
+    expect(controls.textContent).toBe('Edit automatically');
   });
 
   it('offers only the levels the selected model takes', () => {
@@ -203,7 +235,9 @@ describe('compact composer controls', () => {
     const popover = document.getElementById('controlsPopover');
     expect(popover?.textContent).toContain('This model does not take a reasoning effort.');
     expect(popover?.querySelectorAll('[data-control-key="effort"]').length).toBe(0);
-    expect(popover?.querySelectorAll('[data-control-key="mode"]').length).toBe(4);
+    expect(popover?.querySelectorAll('[data-control-key="mode"]').length).toBe(
+      DEVELOPER_AGENT_MODES.length + 1,
+    );
   });
 
   // Same contract the plus menu already honours: opening lands on the first

@@ -793,7 +793,34 @@ fn core_tool_definitions() -> Vec<ToolDefinition> {
         def(
             "ask_user",
             "Ask the user a clarifying question and wait for their response. Offer options when the answer is one of a few choices; the user can always type their own answer instead. With kind \"approval\", ask the user to approve or decline a plan or decision and wait for the answer.",
-            serde_json::json!({"type":"object","properties":{"question":{"type":"string","description":"The question to ask the user, or the plan or decision to approve"},"options":{"type":"array","items":{"type":"string"},"maxItems":6,"description":"Up to six short answers the user can pick from; they can also type their own"},"kind":{"type":"string","enum":["question","approval"],"description":"question for an answer (default); approval for an approve or decline decision"}},"required":["question"]}),
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "question": {"type": "string", "description": "The question to ask or the decision to approve"},
+                    "options": {
+                        "type": "array",
+                        "maxItems": 6,
+                        "description": "Short answers the user can choose. Give an option a description or a text preview when it helps explain the choice.",
+                        "items": {
+                            "anyOf": [
+                                {"type": "string"},
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "label": {"type": "string", "maxLength": 1000},
+                                        "description": {"type": "string", "maxLength": 2000},
+                                        "preview": {"type": "string", "maxLength": 4000, "description": "Plain text, such as a code snippet or sample output"},
+                                    },
+                                    "required": ["label"],
+                                    "additionalProperties": false,
+                                },
+                            ],
+                        },
+                    },
+                    "kind": {"type": "string", "enum": ["question", "approval"], "description": "question for an answer (default); approval for an approve or decline decision"},
+                },
+                "required": ["question"],
+            }),
         ).interactive().with_size_cap(2_000).deferred(),
         def(
             "memory",
@@ -968,14 +995,14 @@ fn core_tool_definitions() -> Vec<ToolDefinition> {
         ).read_only().deferred(),
         def(
             "notebook_edit",
-            "Edit a Jupyter .ipynb cell (insert / replace / delete by id or index).",
+            "Edit a Jupyter .ipynb cell (insert / replace / delete by id or index). Replacing code clears the cell's saved output and execution count without running it.",
             serde_json::json!({
                 "type": "object",
                 "properties": {
                     "path": {"type": "string", "description": "Path to .ipynb file"},
                     "mode": {"type": "string", "enum": ["insert", "replace", "delete"]},
-                    "cell_id": {"type": "string"},
-                    "index": {"type": "integer"},
+                    "cell_id": {"type": "string", "description": "Cell to replace, delete, or insert after"},
+                    "index": {"type": "integer", "description": "Zero-based cell index or insertion position when cell_id is omitted. Insert appends if neither is supplied."},
                     "kind": {"type": "string", "enum": ["code", "markdown", "raw"]},
                     "content": {"type": "string"}
                 },

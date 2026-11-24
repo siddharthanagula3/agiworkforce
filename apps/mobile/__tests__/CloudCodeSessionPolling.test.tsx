@@ -4,6 +4,8 @@ import { act, renderHook } from '@testing-library/react-native';
 const mockApi = {
   get: jest.fn(),
   listApprovals: jest.fn(),
+  startAgentTurn: jest.fn(),
+  cancelAgentTurn: jest.fn(),
 };
 
 jest.mock('@/src/features/cloud-code/service', () => ({
@@ -21,6 +23,10 @@ jest.mock('@/src/features/cloud-code/service', () => ({
 }));
 
 import { useCloudCodeSession } from '@/src/features/cloud-code/useCloudCodeSession';
+import {
+  activateCloudAccount,
+  invalidateCloudAccount,
+} from '@/src/features/auth/services/cloudAccountSession';
 
 const POLL_INTERVAL_MS = 4_000;
 const presetCurrentState: unknown = AppState.currentState;
@@ -112,5 +118,82 @@ describe('polling a busy Code session', () => {
     });
     await advance(POLL_INTERVAL_MS * 3);
     expect(mockApi.get).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps a task pending after the session reopens before the server records it', async () => {
+    const readyDetail = {
+      ...runningDetail,
+      session: { ...runningDetail.session, state: 'ready' },
+    };
+    mockApi.get.mockResolvedValue(readyDetail);
+    mockApi.cancelAgentTurn.mockResolvedValue({});
+    let finishSend!: () => void;
+    mockApi.startAgentTurn.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishSend = resolve;
+        }),
+    );
+    const first = renderHook(() => useCloudCodeSession('session-1', 'model-1'));
+    await advance(0);
+    let sent!: Promise<boolean>;
+    act(() => {
+      sent = first.result.current.send('Inspect the mobile fixture');
+    });
+    first.unmount();
+
+    const reopened = renderHook(() => useCloudCodeSession('session-1', 'model-1'));
+    await advance(0);
+    expect(reopened.result.current.working).toBe(true);
+    expect(reopened.result.current.pendingGoal).toBe('Inspect the mobile fixture');
+    await act(async () => {
+      expect(await reopened.result.current.send('Do not start a second turn')).toBe(false);
+      reopened.result.current.stop();
+      reopened.result.current.stop();
+    });
+    expect(mockApi.startAgentTurn).toHaveBeenCalledTimes(1);
+    expect(mockApi.cancelAgentTurn).toHaveBeenCalledTimes(1);
+    expect(mockApi.cancelAgentTurn).toHaveBeenCalledWith('session-1', undefined);
+
+    await act(async () => {
+      finishSend();
+      await sent;
+    });
+    await advance(0);
+    expect(reopened.result.current.pendingGoal).toBeNull();
+    expect(reopened.result.current.working).toBe(false);
+  });
+
+  it('retires pending Code requests when the Cloud account changes', async () => {
+    activateCloudAccount('fixture-owner-one');
+    mockApi.get.mockResolvedValue({ ...runningDetail, turns: [] });
+    let finishSend!: () => void;
+    mockApi.startAgentTurn.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishSend = resolve;
+        }),
+    );
+    const session = renderHook(() => useCloudCodeSession('session-1', 'model-1'));
+    await advance(0);
+    let sent!: Promise<boolean>;
+    act(() => {
+      sent = session.result.current.send('A prompt from the first account');
+    });
+    const signal = mockApi.startAgentTurn.mock.calls.at(-1)?.[2] as AbortSignal;
+    expect(signal.aborted).toBe(false);
+    expect(session.result.current.pendingGoal).toBe('A prompt from the first account');
+
+    act(() => {
+      activateCloudAccount('fixture-owner-two');
+    });
+    expect(signal.aborted).toBe(true);
+    expect(session.result.current.pendingGoal).toBeNull();
+    session.unmount();
+    await act(async () => {
+      finishSend();
+      await sent;
+    });
+    invalidateCloudAccount();
   });
 });

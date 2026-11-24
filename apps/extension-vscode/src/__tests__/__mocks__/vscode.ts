@@ -572,6 +572,7 @@ export const window = {
 
 export const workspace = {
   workspaceFolders: undefined as unknown,
+  notebookDocuments: [],
   name: undefined as string | undefined,
   isTrusted: true,
   registerFileSystemProvider: vi.fn(() => ({ dispose: vi.fn() })),

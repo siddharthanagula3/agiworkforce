@@ -5,6 +5,10 @@ import { create } from 'zustand';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useTermsAcceptanceStore } from '@/src/features/auth/store/termsAcceptanceStore';
 import {
+  adultEligibilityNeedsAnswer,
+  useAdultEligibilityStore,
+} from '@/src/features/auth/store/adultEligibilityStore';
+import {
   beginCloudPostAuthIntent,
   consumePostAuthDestination,
 } from '@/src/features/auth/services/postAuthIntent';
@@ -55,15 +59,18 @@ export function useDeviceAccounts(): DeviceAccounts {
   return accounts;
 }
 
-type AdoptionOutcome = 'ready' | 'terms' | 'pending';
+type AdoptionOutcome = 'ready' | 'confirmation' | 'pending';
 
 function adoptionOutcome(userId: string): AdoptionOutcome | null {
   const auth = useAuthStore.getState();
   if (auth.clerkUserId !== userId) return null;
   if (auth.isClerkSignedIn) return 'ready';
   const terms = useTermsAcceptanceStore.getState();
-  if (terms.userId === userId && (terms.status === 'required' || terms.status === 'error')) {
-    return 'terms';
+  if (
+    adultEligibilityNeedsAnswer(useAdultEligibilityStore.getState(), userId) ||
+    (terms.userId === userId && (terms.status === 'required' || terms.status === 'error'))
+  ) {
+    return 'confirmation';
   }
   return null;
 }
@@ -87,7 +94,11 @@ export function waitForAccountAdoption(
       if (outcome) finish(outcome);
     };
     const deadline = setTimeout(() => finish('pending'), timeoutMs);
-    unsubscribers.push(useAuthStore.subscribe(check), useTermsAcceptanceStore.subscribe(check));
+    unsubscribers.push(
+      useAuthStore.subscribe(check),
+      useTermsAcceptanceStore.subscribe(check),
+      useAdultEligibilityStore.subscribe(check),
+    );
     check();
   });
 }
@@ -104,7 +115,7 @@ export function useAccountSwitch() {
       try {
         await useAuthStore.getState().switchAccount(account.sessionId);
         const outcome = await waitForAccountAdoption(account.userId);
-        if (outcome === 'terms') {
+        if (outcome === 'confirmation') {
           router.push(beginCloudPostAuthIntent());
         } else if (outcome === 'ready') {
           consumePostAuthDestination();

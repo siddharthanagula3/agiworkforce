@@ -6,6 +6,8 @@ import {
 } from '../cloud-bridge/managedCloudAuthority';
 import { normalizeApprovedSiteOrigin } from '../options/site-allowlist';
 import { MAX_ELEMENT_NAME_CHARS } from '../content/pageElements';
+import { readPageDocument } from './documentBridge';
+import type { EditableSelectionFrame } from '../../types';
 
 export interface EditableSelectionTarget {
   id: string;
@@ -15,6 +17,41 @@ export interface EditableSelectionTarget {
   label: string;
   selectedText: string;
   owner: ManagedCloudOwner;
+  frame?: EditableSelectionFrame;
+}
+
+export function parseEditableSelectionFrame(
+  value: unknown,
+  pageUrl: string,
+): EditableSelectionFrame | null {
+  if (!value || typeof value !== 'object') return null;
+  const { id, url } = value as Record<string, unknown>;
+  if (
+    typeof id !== 'number' ||
+    !Number.isSafeInteger(id) ||
+    id <= 0 ||
+    typeof url !== 'string' ||
+    url.length > MAX_VALUE_LENGTH
+  )
+    return null;
+  const origin = normalizeApprovedSiteOrigin(url);
+  if (!origin || origin !== normalizeApprovedSiteOrigin(pageUrl)) return null;
+  const parsed = new URL(url);
+  return parsed.username || parsed.password ? null : { id, url };
+}
+
+export function readEditableSelectionDocument({
+  tabId,
+  url,
+  documentId,
+  frame,
+}: Pick<EditableSelectionTarget, 'tabId' | 'url' | 'frame'> & { documentId?: string }) {
+  return readPageDocument(
+    tabId,
+    frame?.url ?? url,
+    documentId,
+    frame ? { id: frame.id, topUrl: url } : undefined,
+  );
 }
 
 export function parseEditableSelectionTarget(value: unknown): EditableSelectionTarget | null {
@@ -42,6 +79,8 @@ export function parseEditableSelectionTarget(value: unknown): EditableSelectionT
     sanitizePageText(target['selectedText']) !== target['selectedText']
   )
     return null;
+  const frame = parseEditableSelectionFrame(target['frame'], target['url']);
+  if (target['frame'] !== undefined && !frame) return null;
   return {
     id: target['id'],
     tabId: target['tabId'],
@@ -50,5 +89,6 @@ export function parseEditableSelectionTarget(value: unknown): EditableSelectionT
     label: target['label'],
     selectedText: target['selectedText'],
     owner,
+    ...(frame ? { frame } : {}),
   };
 }

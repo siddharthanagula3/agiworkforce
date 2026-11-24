@@ -1,4 +1,4 @@
-import { View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { ArrowUp, Square, Clock } from 'lucide-react-native';
 import { useThemeColors, radii } from '@/src/ui/theme';
@@ -10,6 +10,7 @@ interface SendButtonProps {
   state: SendButtonState;
   onPress: () => void;
   disabled?: boolean;
+  stopPending?: boolean;
   accessibilityLabel?: string;
 }
 
@@ -23,9 +24,16 @@ function fillForState(state: SendButtonState, color: string) {
   return state === 'streaming' ? color : undefined;
 }
 
-export function SendButton({ state, onPress, disabled, accessibilityLabel }: SendButtonProps) {
+export function SendButton({
+  state,
+  onPress,
+  disabled,
+  stopPending,
+  accessibilityLabel,
+}: SendButtonProps) {
   const colors = useThemeColors();
-  const isDisabled = Boolean(disabled && state === 'idle');
+  const isStopping = state === 'streaming' && stopPending === true;
+  const isDisabled = isStopping || Boolean(disabled && state === 'idle');
   const iconColor = isDisabled ? colors.textSecondary : colors.surfaceBase;
   const Icon = iconForState(state);
 
@@ -45,7 +53,7 @@ export function SendButton({ state, onPress, disabled, accessibilityLabel }: Sen
         (state === 'idle' ? 'Send message' : state === 'streaming' ? 'Stop generating' : 'Queued')
       }
       accessibilityRole="button"
-      accessibilityState={{ disabled: isDisabled }}
+      accessibilityState={{ disabled: isDisabled, ...(isStopping ? { busy: true } : {}) }}
     >
       {({ pressed }) => (
         <View
@@ -63,7 +71,11 @@ export function SendButton({ state, onPress, disabled, accessibilityLabel }: Sen
                 : colors.textPrimary,
           }}
         >
-          <Icon size={16} color={iconColor} fill={fillForState(state, iconColor)} />
+          {isStopping ? (
+            <ActivityIndicator size="small" color={iconColor} accessible={false} />
+          ) : (
+            <Icon size={16} color={iconColor} fill={fillForState(state, iconColor)} />
+          )}
         </View>
       )}
     </PressableBox>

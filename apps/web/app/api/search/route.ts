@@ -19,12 +19,19 @@ import {
   isSearchSourceKind,
   parseSearchRetrievalStrategy,
   type SearchResidencyState,
+  type SearchSourceKind,
 } from '@agiworkforce/data-layer/search';
 import {
   createPostgresSearchProvider,
   resolveRetrievalResidency,
 } from '@/lib/services/retrieval-search-service';
 import { toSearchDocumentResults } from '@/lib/services/retrieval-search-results';
+import { buildWorkspaceAccessGateResponse } from '@/lib/managed-compute-gate';
+import { scheduleFocusHref } from '@/features/schedules/lib/schedule-links';
+import {
+  GLOBAL_SEARCH_CATEGORIES,
+  type GlobalSearchCategory,
+} from '@features/chat/lib/global-search-categories';
 import {
   buildNewChatHref,
   quoteForNewChatDraft,
@@ -36,6 +43,13 @@ const MAX_RESULT_LIMIT = 100;
 const DEFAULT_POPULAR_DAYS = 7;
 const MAX_POPULAR_DAYS = 365;
 const SearchRoleSchema = z.enum(['user', 'assistant', 'system']);
+const CATEGORY_INDEX_KINDS = {
+  artifacts: ['artifact'],
+  sessions: ['conversation'],
+  code: ['developer_session'],
+  projects: ['project_knowledge'],
+  scheduled: [],
+} as const satisfies Record<Exclude<GlobalSearchCategory, 'all'>, readonly SearchSourceKind[]>;
 
 const TrackSearchSchema = z.object({
   query: z.string().min(1).max(500),
@@ -53,6 +67,12 @@ const TrackSearchSchema = z.object({
 type SessionRow = {
   id: string;
   title: string | null;
+  created_at: string;
+  updated_at: string;
+};
+type ScheduleSearchRow = {
+  id: string;
+  name: string;
   created_at: string;
   updated_at: string;
 };
@@ -226,7 +246,7 @@ async function handleGet(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { db, userId, organizationId } = await getUserScopedDb(request);
+  const { db, userId, organizationId, surface } = await getUserScopedDb(request);
   const residency = await assertProductSearchRegion(db, organizationId);
 
   const url = new URL(request.url);
@@ -273,6 +293,17 @@ async function handleGet(request: NextRequest) {
 
   if (!q.trim()) throw createError.validation('q query param required for search');
 
+  const requestedCategory = url.searchParams.get('category') ?? 'all';
+  const category = GLOBAL_SEARCH_CATEGORIES.find((option) => option.id === requestedCategory)?.id;
+  if (!category) throw createError.validation('Invalid search category');
+  const searchSessions = category === 'all' || category === 'sessions';
+  const searchProjects = category === 'all' || category === 'projects';
+  const searchSchedules = category === 'all' || category === 'scheduled';
+  const scheduleAccess =
+    category === 'scheduled'
+      ? await buildWorkspaceAccessGateResponse(userId, request, surface ?? 'unknown')
+      : null;
+  if (scheduleAccess) return scheduleAccess;
   const includeArchived = url.searchParams.get('includeArchived') === 'true';
   const rawRole = url.searchParams.get('role');
   const parsedRole = rawRole === null ? null : SearchRoleSchema.safeParse(rawRole);
@@ -358,57 +389,69 @@ async function handleGet(request: NextRequest) {
     msgParams.push(endDate);
   }
 
-  const requestedKinds = url.searchParams.getAll('kind').filter(isSearchSourceKind);
+  const requestedKinds =
+    category === 'all'
+      ? url.searchParams.getAll('kind').filter(isSearchSourceKind)
+      : CATEGORY_INDEX_KINDS[category];
   const strategy =
     parseSearchRetrievalStrategy(url.searchParams.get('mode')) ?? DEFAULT_SEARCH_RETRIEVAL_STRATEGY;
   const rowFiltersApply = Boolean(role || startDate || endDate);
-  const indexSearch = rowFiltersApply
-    ? Promise.resolve({ hits: [], semantic: 'unavailable' as const })
-    : createPostgresSearchProvider({
-        db,
-        userId,
-        organizationId,
-        semantic: true,
-        residency,
-        includeHealthSpaces: true,
-        googleUserData: 'include',
-      }).search({
-        text: q,
-        kinds: requestedKinds.length > 0 ? requestedKinds : SEARCH_SOURCE_KINDS,
-        limit,
-        maxPerSource: 3,
-        match: 'all_terms',
-        mode: 'private_knowledge',
-        strategy,
-      });
+  const indexSearch =
+    rowFiltersApply || category === 'scheduled'
+      ? Promise.resolve({ hits: [], semantic: 'unavailable' as const })
+      : createPostgresSearchProvider({
+          db,
+          userId,
+          organizationId,
+          semantic: true,
+          residency,
+          includeHealthSpaces: true,
+          googleUserData: 'include',
+        }).search({
+          text: q,
+          kinds: requestedKinds.length > 0 ? requestedKinds : SEARCH_SOURCE_KINDS,
+          limit,
+          maxPerSource: 3,
+          match: 'all_terms',
+          mode: 'private_knowledge',
+          strategy,
+        });
 
-  const [sessionRows, projectRows, fileRows, messageRows, indexed] = await Promise.all([
-    db.query<SessionRow>(
-      `select id, title, created_at, updated_at
+  const [sessionRows, projectRows, fileRows, messageRows, indexed, scheduleRows] =
+    await Promise.all([
+      searchSessions
+        ? db.query<SessionRow>(
+            `select id, title, created_at, updated_at
        from web_conversations
        where ${sessionClauses.join(' and ')}
        order by updated_at desc
        limit $${sessionParams.length + 1}`,
-      [...sessionParams, limit],
-    ),
-    db.query<ProjectRow>(
-      `select id, name, description, created_at, updated_at
+            [...sessionParams, limit],
+          )
+        : [],
+      searchProjects
+        ? db.query<ProjectRow>(
+            `select id, name, description, created_at, updated_at
        from user_projects
        where ${projectClauses.join(' and ')}
        order by updated_at desc
        limit $${projectParams.length + 1}`,
-      [...projectParams, limit],
-    ),
-    db.query<FileRow>(
-      `select id, kind, prompt, metadata, created_at
+            [...projectParams, limit],
+          )
+        : [],
+      category === 'all'
+        ? db.query<FileRow>(
+            `select id, kind, prompt, metadata, created_at
        from media_assets
        where ${fileClauses.join(' and ')}
        order by created_at desc
        limit $${fileParams.length + 1}`,
-      [...fileParams, limit],
-    ),
-    db.query<MessageRow>(
-      `select
+            [...fileParams, limit],
+          )
+        : [],
+      searchSessions
+        ? db.query<MessageRow>(
+            `select
          m.id,
          m.conversation_id,
          m.role,
@@ -421,10 +464,41 @@ async function handleGet(request: NextRequest) {
        where ${msgClauses.join(' and ')}
        order by m.created_at desc
        limit 100`,
-      msgParams,
-    ),
-    indexSearch,
-  ]);
+            msgParams,
+          )
+        : [],
+      indexSearch,
+      searchSchedules
+        ? db.query<ScheduleSearchRow>(
+            `select id, name, created_at, updated_at
+           from scheduled_tasks
+           where user_id = $1 and organization_id is not distinct from $2::uuid
+             and name ilike $3
+             and ($4::timestamptz is null or created_at >= $4::timestamptz)
+             and ($5::timestamptz is null or created_at <= $5::timestamptz)
+           order by updated_at desc, id
+           limit $6`,
+            [userId, organizationId, `%${q}%`, startDate, endDate, limit],
+          )
+        : [],
+    ]);
+  const scheduleListingDenied =
+    category === 'all' &&
+    scheduleRows.length > 0 &&
+    (await buildWorkspaceAccessGateResponse(userId, request, surface ?? 'unknown'));
+  const schedules = (scheduleListingDenied ? [] : scheduleRows).map((schedule) => {
+    const match = extractMatch(schedule.name, q);
+    return {
+      id: schedule.id,
+      name: schedule.name,
+      href: scheduleFocusHref(schedule.id),
+      createdAt: schedule.created_at,
+      updatedAt: schedule.updated_at,
+      matchedText: match.matched,
+      contextBefore: match.before,
+      contextAfter: match.after,
+    };
+  });
   const documents = toSearchDocumentResults(indexed.hits).map((doc) => ({
     ...doc,
     newChatHref: buildNewChatHref({
@@ -533,7 +607,11 @@ async function handleGet(request: NextRequest) {
       userId,
       organizationId,
       q,
-      stats.totalResults,
+      stats.totalResults +
+        stats.projectMatches +
+        stats.fileMatches +
+        stats.documentMatches +
+        schedules.length,
     ]).catch((error: unknown) => {
       logger.warn({ error, userId }, 'search history write failed');
     });
@@ -543,6 +621,7 @@ async function handleGet(request: NextRequest) {
     results: allResults,
     projects: projectResults,
     files: fileResults,
+    schedules,
     documents,
     semantic: indexed.semantic,
     strategy,

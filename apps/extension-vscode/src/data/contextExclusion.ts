@@ -126,6 +126,17 @@ type IgnoreCheck =
   | { kind: 'no-repository' }
   | { kind: 'failed' };
 
+function ignoreGitEnvironment(): NodeJS.ProcessEnv {
+  return Object.fromEntries(
+    Object.entries(process.env).filter(
+      ([key]) =>
+        !/^GIT_(?:CONFIG_(?:COUNT|PARAMETERS|(?:KEY|VALUE)_\d+)|DIR|WORK_TREE|COMMON_DIR)$/iu.test(
+          key,
+        ),
+    ),
+  );
+}
+
 function runCheckIgnore(
   cwd: string,
   paths: readonly string[],
@@ -135,7 +146,7 @@ function runCheckIgnore(
     const child = execFile(
       'git',
       [...gitDirArgs, 'check-ignore', '--no-index', '-z', '--stdin'],
-      { cwd, timeout: GIT_CHECK_TIMEOUT_MS, windowsHide: true },
+      { cwd, env: ignoreGitEnvironment(), timeout: GIT_CHECK_TIMEOUT_MS, windowsHide: true },
       (error, stdout) => {
         if (error === null) {
           resolve({
@@ -174,7 +185,7 @@ function emptyGitDir(): Promise<string | undefined> {
       execFile(
         'git',
         ['-c', 'init.templateDir=', 'init', '--bare', '-q', dir],
-        { timeout: GIT_CHECK_TIMEOUT_MS, windowsHide: true },
+        { env: ignoreGitEnvironment(), timeout: GIT_CHECK_TIMEOUT_MS, windowsHide: true },
         (error) => resolve(error === null),
       );
     });

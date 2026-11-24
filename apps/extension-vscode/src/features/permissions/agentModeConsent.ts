@@ -197,9 +197,10 @@ export function enforceAgentModeConsent(mode: ExtensionAgentMode): ExtensionAgen
 export async function setAgentModeWithConsent(
   context: vscode.ExtensionContext,
   mode: ExtensionAgentMode,
+  effort: ExtensionAgentEffort = configuredAgentEffort(),
 ): Promise<boolean> {
   const current = configuredAgentMode();
-  const targetUsesMaxBypass = mode === 'bypass' && configuredAgentEffort() === 'max';
+  const targetUsesMaxBypass = mode === 'bypass' && effort === 'max';
   const needsBypassConsent = mode === 'bypass' && (current !== 'bypass' || !hasBypassConsent());
 
   if (needsBypassConsent) {
@@ -216,18 +217,33 @@ export async function setAgentModeWithConsent(
   return true;
 }
 
-export async function setAgentEffortWithConsent(
+export async function approveAgentEffortForMode(
   context: vscode.ExtensionContext,
   effort: ExtensionAgentEffort,
+  mode: ExtensionAgentMode,
 ): Promise<boolean> {
-  const targetUsesMaxBypass =
-    effort === 'max' && enforceAgentModeConsent(configuredAgentMode()) === 'bypass';
+  const targetUsesMaxBypass = effort === 'max' && enforceAgentModeConsent(mode) === 'bypass';
 
   if (targetUsesMaxBypass && !hasMaxBypassConsent()) {
     if (!(await confirmMaxBypassCombination())) return false;
   }
 
   await persistMaxBypassConsent(context, targetUsesMaxBypass);
+  return true;
+}
+
+export function allowedAgentEffort(
+  effort: ExtensionAgentEffort,
+  mode: ExtensionAgentMode,
+): ExtensionAgentEffort {
+  return effort === 'max' && mode === 'bypass' && !hasMaxBypassConsent() ? 'high' : effort;
+}
+
+export async function setAgentEffortWithConsent(
+  context: vscode.ExtensionContext,
+  effort: ExtensionAgentEffort,
+): Promise<boolean> {
+  if (!(await approveAgentEffortForMode(context, effort, configuredAgentMode()))) return false;
   await writeAgentEffort(effort);
   return true;
 }

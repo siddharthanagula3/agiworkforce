@@ -26,13 +26,15 @@ export function describeComputerUseAction(
       return `Run website tool "${truncate(a['name'], 64)}" with arguments ${truncate(JSON.stringify(a['arguments'] ?? {}), 500)}.`;
     case 'click': {
       const action =
-        a['button'] === 'right'
-          ? 'Right-click'
-          : a['button'] === 'middle'
-            ? 'Middle-click'
-            : a['clickCount'] === 2
-              ? 'Double-click'
-              : 'Click';
+        a['pointerType'] === 'touch'
+          ? 'Tap'
+          : a['button'] === 'right'
+            ? 'Right-click'
+            : a['button'] === 'middle'
+              ? 'Middle-click'
+              : a['clickCount'] === 2
+                ? 'Double-click'
+                : 'Click';
       const selector = a['selector'];
       if (typeof selector === 'string' && selector.length > 0) {
         return `${action} "${truncate(selector, 60)}" on this page.`;

@@ -84,11 +84,14 @@ function harness() {
       async (_owner: unknown, item: ConversationEntry, _options?: { signal?: AbortSignal }) => item,
     ),
     hasUnconfirmedStreamCancellation: () => false,
+    hasUnstartedComposerDraft: vi.fn(() => false),
+    bindComposerDraft: vi.fn(),
     document: {
       getElementById: (_id: string): { value?: string; hidden?: boolean } | null => null,
     },
     cloudHistoryOwnerAbort: new AbortController(),
     showHistoryStatus: vi.fn(),
+    t: (key: string) => key,
     CloudHistoryTrustBoundaryError: class extends Error {},
     CloudHistoryWorkspaceChangedError: class extends Error {},
     CloudHistoryCacheWindowError: class extends Error {},
@@ -183,6 +186,18 @@ function returnRefreshHarness(recentsVisible: boolean) {
 }
 
 describe('background refresh and explicit history selection', () => {
+  it('keeps an unstarted draft when a different saved chat is selected', async () => {
+    const h = harness();
+    h.dependencies.hasUnstartedComposerDraft.mockReturnValue(true);
+
+    await expect(h.restoreHistoryEntry(h.entry.id)).resolves.toBe(false);
+
+    expect(h.context.conversationId).toBe('local-before');
+    expect(h.dependencies.showHistoryStatus).toHaveBeenCalledWith('spUnstartedDraftKeep');
+    expect(h.dependencies.bindComposerDraft).not.toHaveBeenCalled();
+    expect(h.forkConversationForHistory).not.toHaveBeenCalled();
+  });
+
   it('does not start a current-chat refresh while recent chats is open', () => {
     const h = returnRefreshHarness(true);
     h.refresh();

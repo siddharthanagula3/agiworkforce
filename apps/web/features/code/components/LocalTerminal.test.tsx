@@ -1,4 +1,5 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
+import { useEffect, useId } from 'react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 type ScanModule0 = typeof import('@/features/desktop-host');
@@ -6,16 +7,31 @@ type ScanModule0 = typeof import('@/features/desktop-host');
 const startBackgroundLocalCommand = vi.fn();
 const startLocalCommand = vi.fn();
 const cancelLocalCommand = vi.fn();
+const closeDeveloperTerminal = vi.fn();
 
 vi.mock('@/features/desktop-host', async (importOriginal) => ({
   ...(await importOriginal<ScanModule0>()),
   startBackgroundLocalCommand,
   startLocalCommand,
   cancelLocalCommand,
+  closeDeveloperTerminal,
 }));
 
 vi.mock('./LocalPtyTerminal', () => ({
-  LocalPtyTerminal: ({ rootId }: { rootId: string }) => <div data-testid="pty">{rootId}</div>,
+  LocalPtyTerminal: ({
+    rootId,
+    onTerminalId,
+  }: {
+    rootId: string;
+    onTerminalId?: (terminalId: string | null) => void;
+  }) => {
+    const id = useId();
+    useEffect(() => {
+      onTerminalId?.(id);
+      return () => onTerminalId?.(null);
+    }, [id, onTerminalId]);
+    return <div data-testid="pty">{rootId}</div>;
+  },
 }));
 
 const { LocalTerminal, LocalTerminalDock } = await import('./LocalTerminal');
@@ -23,6 +39,7 @@ const { LocalTerminal, LocalTerminalDock } = await import('./LocalTerminal');
 beforeEach(() => {
   vi.clearAllMocks();
   cancelLocalCommand.mockResolvedValue(undefined);
+  closeDeveloperTerminal.mockReset().mockResolvedValue(true);
 });
 
 function renderDock(open = true, pty = false) {
@@ -217,6 +234,42 @@ describe('the local terminal', () => {
 });
 
 describe('the terminal dock', () => {
+  it('explains the fallback command mode before a user enters shell syntax', () => {
+    renderDock();
+    expect(screen.getByText('Command mode')).toBeVisible();
+    expect(screen.getByRole('region', { name: 'Terminal panel' })).toHaveAccessibleDescription(
+      'Run one program at a time. Pipes, redirects, and shell variables are unavailable.',
+    );
+  });
+
+  it('leaves out the command mode label for an interactive terminal', () => {
+    renderDock(true, true);
+    expect(screen.getByTestId('pty')).toBeVisible();
+    expect(screen.queryByText('Command mode')).toBeNull();
+  });
+
+  it('asks before closing an interactive shell tab', async () => {
+    renderDock(true, true);
+    await userEvent.click(screen.getByRole('button', { name: 'Close agiworkforce' }));
+    const dialog = await screen.findByRole('alertdialog', { name: 'Close this terminal?' });
+    expect(dialog).toHaveTextContent(
+      'Closing this terminal stops its shell and any jobs running in it.',
+    );
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(screen.getByTestId('pty')).toBeVisible();
+  });
+
+  it('keeps an interactive tab when the host cannot confirm that its shell stopped', async () => {
+    closeDeveloperTerminal.mockRejectedValueOnce(new Error('Could not stop the shell'));
+    renderDock(true, true);
+    await userEvent.click(screen.getByRole('button', { name: 'Close agiworkforce' }));
+    const dialog = await screen.findByRole('alertdialog', { name: 'Close this terminal?' });
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Stop and close' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not stop the shell');
+    expect(screen.getByRole('tab', { name: 'agiworkforce' })).toBeVisible();
+  });
+
   it('gives each tab a real shell when the CLI hosts one, and the command line otherwise', async () => {
     const shell = renderDock(true, true);
     expect(screen.getByTestId('pty')).toHaveTextContent('root-1');

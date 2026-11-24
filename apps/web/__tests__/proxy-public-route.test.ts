@@ -71,7 +71,12 @@ describe('web proxy', () => {
   it('keeps the anonymous waitlist sign up and the public downloads off the identity proxy', async () => {
     const { proxy } = await import('../proxy');
 
-    for (const pathname of ['/api/waitlist/public', '/api/download', '/api/download/checksums']) {
+    for (const pathname of [
+      '/api/waitlist/public',
+      '/api/download',
+      '/api/download/checksums',
+      '/api/og',
+    ]) {
       clerkState.clerkPaths = [];
       await proxy(new NextRequest(`http://localhost${pathname}`, { method: 'POST' }), {} as never);
       expect(clerkState.clerkPaths, pathname).toEqual([]);

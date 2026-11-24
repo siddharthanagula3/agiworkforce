@@ -81,10 +81,16 @@ import { deriveDispatchSecret, signMessage, type HmacSessionState } from '../lib
 import { useConnectionStore } from '../stores/connectionStore';
 import { useAgentStore } from '../stores/agentStore';
 import { notifyCompanionMessage } from '../services/companionNotifications';
+import {
+  beginCodeDraftSend,
+  finishCodeDraftSend,
+  remoteCodeThreadKey,
+  updateCodeDraft,
+  useRemoteCodeStore,
+} from '../src/features/companion/remote-code/store';
 
 const PAIRING_CODE = 'ABCDEFGHIJKL';
 const PAIRING_SECRET = '9f'.repeat(32);
-const PAIRING_PAYLOAD = `agiw3:${PAIRING_CODE}:${PAIRING_SECRET}`;
 
 function holdNextDigest() {
   let entered!: () => void;
@@ -103,9 +109,9 @@ async function drainControlWork(): Promise<void> {
   await new Promise<void>((resolve) => setImmediate(resolve));
 }
 
-async function connectSession() {
+async function connectSession(secret = PAIRING_SECRET) {
   const callIndex = mockSignalingClient.mock.calls.length;
-  useConnectionStore.getState().connect(PAIRING_PAYLOAD);
+  useConnectionStore.getState().connect(`agiw3:${PAIRING_CODE}:${secret}`);
   await waitFor(() => expect(mockSignalingClient).toHaveBeenCalledTimes(callIndex + 1));
   const options = mockSignalingClient.mock.calls[callIndex]![0] as SignalingClientOptions;
   const client = mockSignalingClient.mock.results[callIndex]!.value as {
@@ -116,7 +122,7 @@ async function connectSession() {
   emit({ type: 'peer_ready', role: 'desktop', metadata: { deviceName: 'Test desktop' } });
   const salt = options.metadata!['dispatchSalt'] as string;
   const sender: HmacSessionState = {
-    secret: await deriveDispatchSecret(PAIRING_CODE, salt, PAIRING_SECRET),
+    secret: await deriveDispatchSecret(PAIRING_CODE, salt, secret),
     nonceCache: new Map(),
   };
   return { emit, client, sender };
@@ -211,6 +217,27 @@ describe('Connection control session ownership', () => {
       expect(notifyCompanionMessage).not.toHaveBeenCalled();
     },
   );
+
+  it('keeps Code drafts on reconnect and isolates them from a replacement pairing', async () => {
+    const first = await connectSession();
+    const key = remoteCodeThreadKey('folder-1', 'thread-1');
+    updateCodeDraft(key, 'Draft for the first computer');
+    const attempt = beginCodeDraftSend(key, 'earlier-request');
+    expect(attempt).not.toBeNull();
+    first.emit({ type: 'peer_left', role: 'desktop' });
+
+    const reconnected = await connectSession();
+    expect(useRemoteCodeStore.getState().drafts[key]?.text).toBe('Draft for the first computer');
+    reconnected.emit({ type: 'peer_left', role: 'desktop' });
+    await connectSession('ab'.repeat(32));
+    expect(useRemoteCodeStore.getState().drafts[key]).toBeUndefined();
+
+    updateCodeDraft(key, 'Draft for the replacement computer');
+    finishCodeDraftSend(key, attempt!.requestId, 'settled');
+    expect(useRemoteCodeStore.getState().drafts[key]?.text).toBe(
+      'Draft for the replacement computer',
+    );
+  });
 
   it('rejects an old control after session replacement and accepts the replacement control', async () => {
     const oldSession = await connectSession();

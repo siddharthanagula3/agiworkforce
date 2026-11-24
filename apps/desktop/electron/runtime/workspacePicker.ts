@@ -1,6 +1,6 @@
 import type { WorkspaceRoot, WorkspaceRootKind } from '@agiworkforce/local-runtime-contract';
 import { findRepositoryRoot } from './gitService';
-import { WorkspaceGrantRefused, getRoot, grantRoot, setRootGit } from './workspaceStore';
+import { WorkspaceGrantRefused, grantRoot } from './workspaceStore';
 
 export const WORKSPACE_PICKER_COPY: Record<
   WorkspaceRootKind,
@@ -28,7 +28,5 @@ export async function grantPickedRoot(
   if (kind === 'folder') return grantRoot(selected);
   const repository = await findRepositoryRoot(selected);
   if (!repository) throw new WorkspaceGrantRefused(NOT_A_REPOSITORY);
-  const root = await grantRoot(repository);
-  setRootGit(root.id, root.path);
-  return getRoot(root.id) ?? { ...root, gitRoot: root.path };
+  return grantRoot(repository, 'repository');
 }

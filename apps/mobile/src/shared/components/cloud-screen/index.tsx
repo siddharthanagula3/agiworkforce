@@ -19,11 +19,13 @@ export function ScreenHeader({
   onBack,
   onTitlePress,
   trailing,
+  stackTitle = false,
 }: {
   title: string;
   onBack: () => void;
   onTitlePress?: () => void;
   trailing?: ReactNode;
+  stackTitle?: boolean;
 }) {
   const colors = useThemeColors();
   const [slotWidth, setSlotWidth] = useState(HEADER_SLOT_MIN_WIDTH);
@@ -35,19 +37,73 @@ export function ScreenHeader({
     <Text
       accessibilityRole={onTitlePress ? undefined : 'header'}
       numberOfLines={1}
-      adjustsFontSizeToFit={title.length <= HEADER_TITLE_SHRINK_MAX_LENGTH}
-      maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
+      adjustsFontSizeToFit={stackTitle || title.length <= HEADER_TITLE_SHRINK_MAX_LENGTH}
+      maxFontSizeMultiplier={stackTitle ? undefined : HEADER_TEXT_SCALE_LIMIT}
       style={{
-        ...(onTitlePress ? { flexShrink: 1 } : { flex: 1 }),
+        ...(stackTitle || onTitlePress ? { flexShrink: 1 } : { flex: 1 }),
         color: colors.textPrimary,
         fontSize: typeScale.headline,
         fontWeight: '600',
-        textAlign: 'center',
+        textAlign: stackTitle ? 'left' : 'center',
       }}
     >
       {title}
     </Text>
   );
+  const back = (
+    <PressableBox
+      onPress={onBack}
+      accessibilityRole="button"
+      accessibilityLabel="Go back"
+      hitSlop={8}
+      style={{
+        width: HEADER_SLOT_MIN_WIDTH,
+        height: HEADER_SLOT_MIN_WIDTH,
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <ArrowLeft size={21} color={colors.textPrimary} />
+    </PressableBox>
+  );
+  const titleControl = onTitlePress ? (
+    <PressableBox
+      onPress={onTitlePress}
+      accessibilityRole="button"
+      accessibilityLabel={`${title}, switch section`}
+      style={{
+        ...(stackTitle ? {} : { flex: 1 }),
+        minHeight: HEADER_SLOT_MIN_WIDTH,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: stackTitle ? 'flex-start' : 'center',
+        gap: 4,
+      }}
+    >
+      {titleText}
+      <ChevronDown size={16} color={colors.textMuted} />
+    </PressableBox>
+  ) : (
+    titleText
+  );
+  if (stackTitle) {
+    return (
+      <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
+        <View
+          style={{
+            minHeight: 52,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          {back}
+          {trailing}
+        </View>
+        {titleControl}
+      </View>
+    );
+  }
   return (
     <View
       style={{
@@ -58,41 +114,9 @@ export function ScreenHeader({
       }}
     >
       <View style={{ minWidth: slotWidth, alignItems: 'flex-start' }} onLayout={growSlots}>
-        <PressableBox
-          onPress={onBack}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          hitSlop={8}
-          style={{
-            width: HEADER_SLOT_MIN_WIDTH,
-            height: HEADER_SLOT_MIN_WIDTH,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <ArrowLeft size={21} color={colors.textPrimary} />
-        </PressableBox>
+        {back}
       </View>
-      {onTitlePress ? (
-        <PressableBox
-          onPress={onTitlePress}
-          accessibilityRole="button"
-          accessibilityLabel={`${title}, switch section`}
-          style={{
-            flex: 1,
-            minHeight: HEADER_SLOT_MIN_WIDTH,
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 4,
-          }}
-        >
-          {titleText}
-          <ChevronDown size={16} color={colors.textMuted} />
-        </PressableBox>
-      ) : (
-        titleText
-      )}
+      {titleControl}
       <View style={{ minWidth: slotWidth, alignItems: 'flex-end' }} onLayout={growSlots}>
         {trailing}
       </View>

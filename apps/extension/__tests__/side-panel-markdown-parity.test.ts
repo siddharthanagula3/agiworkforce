@@ -55,6 +55,37 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+describe('task lists', () => {
+  it('renders checked, unchecked and nested tasks while preserving escaped and fenced examples', async () => {
+    const root = await render(
+      [
+        '- [x] Ready',
+        '  - [ ] Follow up',
+        '- Plain text',
+        String.raw`- \[x] Literal`,
+        '',
+        '```md',
+        '- [x] Example',
+        '```',
+      ].join('\n'),
+    );
+    const tasks = root.querySelectorAll('li[data-task-item]');
+    expect(tasks).toHaveLength(2);
+    expect(tasks[0]?.querySelector('[role="checkbox"]')?.getAttribute('aria-checked')).toBe('true');
+    expect(tasks[1]?.querySelector('[role="checkbox"]')?.getAttribute('aria-checked')).toBe(
+      'false',
+    );
+    expect(root.textContent).toContain('[x] Literal');
+    expect(root.querySelector('pre code')?.textContent).toBe('- [x] Example');
+  });
+});
+
+it('preserves backslash-escaped Markdown and dollar delimiters as literal characters', async () => {
+  const root = await render(String.raw`\*literal\* costs \$5 and uses \_ as a separator.`);
+  expect(root.textContent?.trim()).toBe('*literal* costs $5 and uses _ as a separator.');
+  expect(root.querySelector('em, [data-math]')).toBeNull();
+});
+
 describe('lazy maths', () => {
   it('loads the maths renderer only once an answer contains maths', async () => {
     const styles = (): number => document.head.querySelectorAll('style').length;

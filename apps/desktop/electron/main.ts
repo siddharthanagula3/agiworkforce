@@ -11,6 +11,7 @@ import {
   desktopCapturer,
   dialog,
   ipcMain,
+  nativeImage,
   nativeTheme,
   net,
   powerMonitor,
@@ -174,7 +175,9 @@ import {
   crashScreen,
   offlineScreen,
   retryUrlAfterFailedLoad,
+  serviceUnavailableScreen,
   shellScreenUrl,
+  type ShellScreen,
 } from './shellScreens';
 import { installAboutPanel } from './aboutPanel';
 import { applicationsFolderStore, offerMoveToApplications } from './applicationsFolder';
@@ -451,6 +454,9 @@ async function startPairingBridge(): Promise<void> {
 
   try {
     await startBrowserBridge({
+      ...(!app.isPackaged && process.argv.includes('--agi-browser-bridge-ephemeral')
+        ? { port: 0 }
+        : {}),
       onStateChanged: (state: BrowserPairingState) =>
         sendRuntimeEvent({ kind: 'browser-pairing-changed', state }),
       onPairRequest: (prompt: BrowserPairRequestPrompt) => {
@@ -1181,9 +1187,9 @@ function createShellWindow(options: { primary: boolean; route?: string | null })
   const rootUrl = windowUrlFor(null);
   const entryUrl = windowUrlFor(entryRoute);
 
-  const showUnreachable = (errorCode: number, failedUrl: string): void => {
+  const showRecovery = (screen: ShellScreen, failedUrl: string): void => {
     const retryUrl = retryUrlAfterFailedLoad(failedUrl, entryUrl);
-    void win.loadURL(shellScreenUrl(offlineScreen(errorCode), retryUrl)).catch(() => undefined);
+    void win.loadURL(shellScreenUrl(screen, retryUrl)).catch(() => undefined);
     screenRetry.watch(win.id, (isCurrent) => reloadOnceReachable(win, retryUrl, isCurrent));
   };
 
@@ -1201,9 +1207,15 @@ function createShellWindow(options: { primary: boolean; route?: string | null })
       removeLoadingOverlay?.();
       removeLoadingOverlay = null;
     },
-    giveUp: () => showUnreachable(LOAD_TIMED_OUT_ERROR, entryUrl),
+    giveUp: () => showRecovery(offlineScreen(LOAD_TIMED_OUT_ERROR), entryUrl),
   });
-  win.once('ready-to-show', firstLoad.settled);
+  const settleFirstPage = () => {
+    const url = win.webContents.getURL();
+    // Showing the loading overlay can make Chromium paint its empty window first.
+    if (url && url !== 'about:blank') firstLoad.settled();
+  };
+  win.on('ready-to-show', settleFirstPage);
+  win.webContents.on('did-finish-load', settleFirstPage);
   win.on('page-title-updated', () => installMenu());
   win.on('closed', firstLoad.cancel);
 
@@ -1275,6 +1287,15 @@ function createShellWindow(options: { primary: boolean; route?: string | null })
 
   win.webContents.on('did-navigate', (event, url, httpStatusCode) => {
     if (!url.startsWith('data:')) signInScreens.forget(win);
+    if (
+      httpStatusCode >= 500 &&
+      httpStatusCode < 600 &&
+      isSignedInProductPage(url, CLOUD_APP_ORIGIN)
+    ) {
+      recordDesktopEvent({ domain: 'cloud_request', outcome: 'failed' });
+      showRecovery(serviceUnavailableScreen(httpStatusCode), url);
+      return;
+    }
     if (/^https?:/u.test(url) || signInScreens.isShowing(win)) screenRetry.release(win.id);
     if (leaveDisallowedPage(url)) return;
     followRoute(event, url, httpStatusCode);
@@ -1296,7 +1317,7 @@ function createShellWindow(options: { primary: boolean; route?: string | null })
       if (errorCode === -3) return;
       if (validatedURL.startsWith('data:')) return;
       recordDesktopEvent({ domain: 'cloud_request', outcome: 'failed', cause: 'network' });
-      showUnreachable(errorCode, validatedURL);
+      showRecovery(offlineScreen(errorCode), validatedURL);
     },
   );
 
@@ -2567,6 +2588,10 @@ if (!hasSingleInstanceLock) {
   });
 
   void app.whenReady().then(() => {
+    if (!app.isPackaged && app.dock) {
+      const icon = nativeImage.createFromPath(path.join(__dirname, 'assets', 'app-icon.png'));
+      if (!icon.isEmpty()) app.dock.setIcon(icon);
+    }
     // `isTrustedSender` decides who may call these handlers.
     recordDesktopEvent({ domain: 'launch', outcome: 'started' });
     registerIpcHandlers();

@@ -80,6 +80,92 @@ afterEach(() => {
 });
 
 describe('approval card', () => {
+  it('shows a question answer only after the runtime accepts it', () => {
+    const post = boot();
+    deliver({
+      type: 'approvalRequested',
+      payload: {
+        requestId: 'question-1',
+        question: { text: 'When should we release?', options: ['Tuesday', 'Thursday'] },
+      },
+    });
+    const card = document.querySelector('.approval-card')!;
+    const answer = Array.from(card.querySelectorAll<HTMLButtonElement>('button')).find(
+      (button) => button.textContent === 'Thursday',
+    )!;
+    answer.click();
+    expect(answer.disabled).toBe(true);
+    expect(card.querySelector('.approval-card__outcome')).toBeNull();
+    expect(post).toHaveBeenCalledWith({
+      type: 'respondToApproval',
+      origin: 'chat',
+      epoch: 0,
+      payload: { requestId: 'question-1', decision: 'once', answer: 'Thursday' },
+    });
+    deliver({
+      type: 'approvalResolved',
+      payload: { requestId: 'question-1', outcome: 'once', answer: 'Thursday' },
+    });
+    expect(card.querySelector('.approval-card__outcome')?.textContent).toBe('Answered: Thursday');
+    expect(card.querySelector('input')).toBeNull();
+  });
+
+  it('sends no answer when the user skips a question', () => {
+    const post = boot();
+    deliver({
+      type: 'approvalRequested',
+      payload: {
+        requestId: 'question-1',
+        question: { text: 'Any other requirements?', options: [] },
+      },
+    });
+    const card = document.querySelector('.approval-card')!;
+    card.querySelector<HTMLButtonElement>('button')!.click();
+    expect(post).toHaveBeenCalledWith({
+      type: 'respondToApproval',
+      origin: 'chat',
+      epoch: 0,
+      payload: { requestId: 'question-1', decision: 'deny' },
+    });
+    deliver({ type: 'approvalResolved', payload: { requestId: 'question-1', outcome: 'deny' } });
+    expect(card.querySelector('.approval-card__outcome')?.textContent).toBe('Skipped.');
+  });
+
+  it('keeps option previews separate from the submitted answer', () => {
+    const post = boot();
+    const snippet = '  <button>Continue</button>\n  <p>Preview only</p>';
+    deliver({
+      type: 'approvalRequested',
+      payload: {
+        requestId: 'question-1',
+        question: {
+          text: 'Which layout?',
+          options: ['Plain', 'Detailed'],
+          optionDetails: [
+            { label: 'Detailed', description: 'Includes release notes.', preview: snippet },
+          ],
+        },
+      },
+    });
+    const card = document.querySelector('.approval-card')!;
+    const preview = card.querySelector('details')!;
+    expect(preview.open).toBe(false);
+    expect(preview.querySelector('pre')?.textContent).toBe(snippet);
+    expect(preview.querySelector('button')).toBeNull();
+    preview.querySelector('summary')?.click();
+    expect(post.mock.calls.some(([message]) => message.type === 'respondToApproval')).toBe(false);
+    const choice = Array.from(card.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Detailed',
+    )!;
+    choice.click();
+    expect(post).toHaveBeenCalledWith({
+      type: 'respondToApproval',
+      origin: 'chat',
+      epoch: 0,
+      payload: { requestId: 'question-1', decision: 'once', answer: 'Detailed' },
+    });
+  });
+
   it('renders one card in the transcript with all four choices', () => {
     boot();
     requestApproval();
@@ -109,6 +195,14 @@ describe('approval card', () => {
     expect(document.querySelector('.approval-card__outcome')?.textContent).toBe(
       `${TOOL_APPROVAL_ACTION_LABELS.denied}.`,
     );
+  });
+
+  it('shows why an approval was denied when the editor supplies a reason', () => {
+    boot();
+    requestApproval();
+    const reason = 'This notebook has unsaved edits. Save your changes and ask AGI to retry.';
+    deliver({ type: 'approvalResolved', payload: { requestId: 'req-1', outcome: 'deny', reason } });
+    expect(document.querySelector('.approval-card__outcome')?.textContent).toBe(reason);
   });
 
   it('says in words how risky the call is and whether it can be taken back', () => {

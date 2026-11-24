@@ -78,6 +78,16 @@ import {
   announceReplyReadyInBackground,
 } from '../services/replyReadyNotice';
 import { setFocusedConversation } from '../services/conversationFocus';
+import { sha256 } from '@noble/hashes/sha256';
+import { bytesToHex } from '@noble/hashes/utils';
+import {
+  PUSH_ACCOUNT_BINDING_DOMAIN,
+  PUSH_ACCOUNT_BINDING_FIELD,
+} from '@agiworkforce/cloud-contracts';
+import {
+  activateCloudAccount,
+  captureCloudAccountEpoch,
+} from '@/src/features/auth/services/cloudAccountSession';
 import {
   useNotificationPrefsStore,
   DEFAULT_CATEGORY_ENABLED,
@@ -101,16 +111,27 @@ const mockCaptured: {
 const CLOUD_CONVERSATION = '0190a000-0000-7000-8000-000000000099';
 const LOCAL_CONVERSATION = 'conv_1763000000000_abc1234';
 const DEFAULT_ACTION = 'expo.modules.notifications.actions.DEFAULT';
+const OWNER = 'reply-notification-owner';
+const ownerData = {
+  [PUSH_ACCOUNT_BINDING_FIELD]: bytesToHex(sha256(PUSH_ACCOUNT_BINDING_DOMAIN + OWNER)),
+};
 
 function reply(conversationId: string) {
-  return { request: { content: { data: { type: 'chat_message', conversationId } } } };
+  return { request: { content: { data: { type: 'chat_message', conversationId, ...ownerData } } } };
 }
 
 function tap(data: Record<string, unknown>): void {
   if (!mockCaptured.response) throw new Error('response listener was not captured');
   mockCaptured.response({
     actionIdentifier: DEFAULT_ACTION,
-    notification: { request: { identifier: `tap-${Math.random()}`, content: { data } } },
+    notification: {
+      request: {
+        identifier: `tap-${Math.random()}`,
+        content: {
+          data: data.conversationId === LOCAL_CONVERSATION ? data : { ...data, ...ownerData },
+        },
+      },
+    },
   });
 }
 
@@ -130,6 +151,7 @@ beforeAll(async () => {
 });
 
 beforeEach(() => {
+  activateCloudAccount(OWNER);
   mockRouterPush.mockReset();
   mockSchedule.mockClear();
   mockOpenUntrusted.mockClear();
@@ -140,6 +162,18 @@ beforeEach(() => {
 });
 
 describe('a reply notice while the app is open', () => {
+  it('keeps a previous account’s reply out of the foreground and the in-app list', async () => {
+    activateCloudAccount('previous-reply-owner');
+    const payload = reply(CLOUD_CONVERSATION);
+    expect((await mockCaptured.handler!(payload)).shouldShowBanner).toBe(false);
+    mockCaptured.received!({
+      request: {
+        identifier: 'previous-owner-reply',
+        content: { title: REPLY_READY_TITLE, body: REPLY_READY_BODY, ...payload.request.content },
+      },
+    });
+    expect(notificationCenterStore.getAll()).toHaveLength(0);
+  });
   it('is not shown while that chat is open in the foreground', async () => {
     setFocusedConversation(CLOUD_CONVERSATION);
 
@@ -185,6 +219,14 @@ describe('a reply notice while the app is open', () => {
 });
 
 describe('announceReplyReadyInBackground', () => {
+  it('does not schedule a Cloud reply for an account that is no longer active', async () => {
+    mockAppState.currentState = 'background';
+    const owner = captureCloudAccountEpoch();
+    expect(owner).not.toBeNull();
+    activateCloudAccount('different-active-owner');
+    await expect(announceReplyReadyInBackground(CLOUD_CONVERSATION, owner)).resolves.toBe(false);
+    expect(mockSchedule).not.toHaveBeenCalled();
+  });
   it('schedules one on-device notice that names the chat when the app is in the background', async () => {
     mockAppState.currentState = 'background';
 

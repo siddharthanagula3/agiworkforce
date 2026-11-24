@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { CLOUD_CODE_SCREEN_TITLE } from '../presentation';
 
 interface CloudCodeGateProps {
   signedIn: boolean;
@@ -22,7 +23,7 @@ export function CloudCodeGate({ signedIn, onBack, onContinue }: CloudCodeGatePro
         <PressableBox
           onPress={onBack}
           accessibilityRole="button"
-          accessibilityLabel="Go back"
+          accessibilityLabel="Back to chat"
           hitSlop={8}
           style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
         >
@@ -45,6 +46,7 @@ export function CloudCodeGate({ signedIn, onBack, onContinue }: CloudCodeGatePro
           <Code2 size={32} color={colors.textPrimary} />
         </View>
         <Text
+          accessibilityRole="header"
           style={{
             marginTop: 20,
             color: colors.textPrimary,
@@ -53,7 +55,7 @@ export function CloudCodeGate({ signedIn, onBack, onContinue }: CloudCodeGatePro
             textAlign: 'center',
           }}
         >
-          AGI Code sessions run in AGI Cloud
+          {CLOUD_CODE_SCREEN_TITLE}
         </Text>
         <Text
           style={{
@@ -64,7 +66,7 @@ export function CloudCodeGate({ signedIn, onBack, onContinue }: CloudCodeGatePro
             textAlign: 'center',
           }}
         >
-          Switch to AGI Cloud to follow your coding sessions.
+          Start a cloud coding task or follow a session on a paired computer.
         </Text>
         <Button
           title={signedIn ? 'Switch to AGI Cloud' : 'Sign in to AGI Cloud'}

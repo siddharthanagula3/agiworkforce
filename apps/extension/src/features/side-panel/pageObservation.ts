@@ -19,13 +19,14 @@ export function formObservationReference(capture: {
 export async function readTabObservation(
   tabId: number,
   expectedUrl: string,
+  expectedDocumentId?: string,
 ): Promise<{
   text: string;
   truncated: boolean;
   documentId: string;
   formSnapshotId?: string;
 }> {
-  const reference = await readPageDocument(tabId, expectedUrl);
+  const reference = await readPageDocument(tabId, expectedUrl, expectedDocumentId);
   const response = (await sendPageDocumentMessage(
     reference,
     { type: 'GET_PAGE_OBSERVATION', pageUrl: expectedUrl },

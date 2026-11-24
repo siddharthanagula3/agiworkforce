@@ -3,6 +3,8 @@ import * as vscode from 'vscode';
 export interface FocusableChat {
   resetConversation(): void;
   resumeConversation(threadId: string): Promise<boolean>;
+  checkpointsAvailable(): Promise<boolean>;
+  showCheckpoints(): Promise<void>;
 }
 
 let focused: FocusableChat | undefined;

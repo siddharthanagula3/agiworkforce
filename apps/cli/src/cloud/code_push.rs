@@ -70,8 +70,8 @@ pub fn local_session(reference: Option<&str>, workspace: &Path) -> Result<Manage
 
 pub fn admit(session: &ManagedSession) -> Result<(), String> {
     let mode = session
-        .routing_authority
-        .as_ref()
+        .require_routing_authority()
+        .ok()
         .map(|authority| authority.privacy_mode);
     let recorded = session.code.as_ref().map(|code| code.trust_mode);
     match (mode, recorded) {
@@ -196,7 +196,12 @@ mod tests {
 
     #[test]
     fn only_a_managed_session_is_handed_to_the_cloud() {
-        assert!(admit(&session_in(Some(PrivacyMode::Managed))).is_ok());
+        let managed = session_in(Some(PrivacyMode::Managed));
+        assert!(admit(&managed).is_ok());
+        assert_eq!(
+            record(&managed).posture.trust_mode,
+            DeveloperSessionTrustMode::Managed
+        );
 
         for mode in [PrivacyMode::Local, PrivacyMode::Byok] {
             let refused = admit(&session_in(Some(mode))).unwrap_err();

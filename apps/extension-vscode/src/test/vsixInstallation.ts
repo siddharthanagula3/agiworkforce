@@ -275,6 +275,7 @@ export function writeExtensionHostTestRunner(
     'localModelFixture.js',
     path.join('suite', 'extension.smoke.test.js'),
     path.join('suite', 'inlineEdit.test.js'),
+    path.join('suite', 'sidebarSurfaces.test.js'),
     path.join('suite', 'index.js'),
   ];
   const copiedTestRoot = path.join(root, 'out', 'test');

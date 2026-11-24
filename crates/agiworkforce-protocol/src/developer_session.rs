@@ -71,7 +71,9 @@ pub mod method {
         pub const THREAD_HANDOFF: &str = "thread/handoff";
         pub const THREAD_HANDOFF_ACCEPT: &str = "thread/handoff/accept";
         pub const THREAD_ARCHIVE: &str = "thread/archive";
+        pub const THREAD_ARCHIVE_INACTIVE: &str = "thread/archiveInactive";
         pub const THREAD_UNARCHIVE: &str = "thread/unarchive";
+        pub const THREAD_PIN: &str = "thread/pin";
         pub const THREAD_SEARCH: &str = "thread/search";
         pub const THREAD_CHECKPOINTS: &str = "thread/checkpoints";
         pub const THREAD_REWIND: &str = "thread/rewind";
@@ -97,6 +99,9 @@ pub mod method {
         pub const TERMINAL_WRITE: &str = "terminal/write";
         pub const TERMINAL_RESIZE: &str = "terminal/resize";
         pub const TERMINAL_CLOSE: &str = "terminal/close";
+        pub const BACKGROUND_COMMAND_LIST: &str = "backgroundCommand/list";
+        pub const BACKGROUND_COMMAND_READ: &str = "backgroundCommand/read";
+        pub const BACKGROUND_COMMAND_STOP: &str = "backgroundCommand/stop";
         pub const THREAD_RECONNECT: &str = "thread/reconnect";
         pub const THREAD_WRITER_RELEASE: &str = "thread/writer/release";
         pub const THREAD_WRITER_TAKEOVER: &str = "thread/writer/takeover";
@@ -111,6 +116,9 @@ pub mod method {
         pub const TURN_FAILED: &str = "turn/failed";
         pub const TURN_INTERRUPTED: &str = "turn/interrupted";
         pub const TURN_AGENT_EVENT: &str = "turn/agent_event";
+        pub const TURN_CHILD_TASK: &str = "turn/childTask";
+        pub const CHILD_TASK_STOP: &str = "childTask/stop";
+        pub const CHILD_TASK_TRANSCRIPT: &str = "childTask/transcript";
         pub const APPROVAL_REQUESTED: &str = "approval/requested";
         pub const SERVER_WARNING: &str = "server/warning";
         pub const APPROVAL_RESPOND: &str = "approval/respond";
@@ -176,6 +184,8 @@ pub mod method {
         pub const PLUGINS_INSTALL: &str = "plugins/install";
         pub const PLUGINS_REMOVE: &str = "plugins/remove";
         pub const PLUGINS_UPDATE: &str = "plugins/update";
+        pub const PLUGINS_SETTINGS_READ: &str = "plugins/settings/read";
+        pub const PLUGINS_SETTINGS_SET: &str = "plugins/settings/set";
         pub const MCP_LIST: &str = "mcp/list";
         pub const MCP_LOGIN: &str = "mcp/login";
         pub const MCP_TEST: &str = "mcp/test";
@@ -265,6 +275,7 @@ pub mod method {
         TURN_FAILED,
         TURN_INTERRUPTED,
         TURN_AGENT_EVENT,
+        TURN_CHILD_TASK,
         APPROVAL_REQUESTED,
         SERVER_WARNING,
         USER_INPUT_REQUESTED,
@@ -674,6 +685,8 @@ pub struct AppServerCapabilities {
     pub workspace_file_recovery_browser: bool,
     #[serde(default, skip_serializing_if = "is_false")]
     pub workspace_terminal: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub background_commands: bool,
     pub worktrees: bool,
     pub models: bool,
     /// v8 surfaces. Each is false on a host that does not implement that
@@ -746,9 +759,15 @@ pub struct AppServerCapabilities {
     #[serde(default, skip_serializing_if = "is_false")]
     pub thread_unarchive: bool,
     #[serde(default, skip_serializing_if = "is_false")]
+    pub thread_pin: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
     pub thread_search: bool,
     #[serde(default, skip_serializing_if = "is_false")]
+    pub thread_title_search: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
     pub fork_at_message: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub fork_and_rewind: bool,
     #[serde(default, skip_serializing_if = "is_false")]
     pub prompt_commands: bool,
     #[serde(default, skip_serializing_if = "is_false")]
@@ -819,6 +838,10 @@ pub struct AppServerCapabilities {
     pub side_question: bool,
     #[serde(default, skip_serializing_if = "is_false")]
     pub thread_rename: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub inactive_thread_archive: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub require_shell_approval: bool,
     /// `reasoningEffort` takes every [`DeveloperReasoningEffort`] level. A
     /// host without it accepts only low, medium, high and max, and answers
     /// invalid params for the others, so a client offers none, minimal and
@@ -898,6 +921,9 @@ pub struct ThreadSummary {
     pub updated_at: String,
     pub created_by: DeveloperSessionSource,
     pub status: ThreadStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub pinned: Option<bool>,
     /// Checked-out branch as the host last persisted it. Listing never
     /// recomputes it, so a long list costs no git invocations.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1084,6 +1110,60 @@ pub struct DeveloperChildTask {
     pub parent_session_id: String,
     pub title: String,
     pub state: DeveloperChildTaskState,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub created_at: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub updated_at: Option<String>,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub transcript_available: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct TurnChildTaskNotification {
+    pub thread_id: String,
+    pub turn_id: String,
+    pub task: DeveloperChildTask,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub can_stop: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ChildTaskStopParams {
+    pub thread_id: String,
+    pub turn_id: String,
+    pub task_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ChildTaskStopResponse {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub stopped_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ChildTaskTranscriptParams {
+    pub thread_id: String,
+    pub task_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ChildTaskTranscriptResponse {
+    pub title: String,
+    pub lines: Vec<String>,
+    pub truncated: bool,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -1106,6 +1186,9 @@ impl From<&crate::code_domain::CodeTask> for DeveloperChildTask {
             id: task.id.as_str().to_string(),
             parent_session_id: task.session_id.as_str().to_string(),
             title: task.title.chars().take(200).collect(),
+            created_at: Some(task.created_at.to_rfc3339()),
+            updated_at: Some(task.updated_at.to_rfc3339()),
+            transcript_available: false,
             state: match task.state {
                 CodeTaskState::Queued => DeveloperChildTaskState::Queued,
                 CodeTaskState::Running => DeveloperChildTaskState::Running,
@@ -1207,6 +1290,7 @@ pub enum ThreadRewindRestore {
     Both,
     Conversation,
     Code,
+    ForkAndCode,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -1270,6 +1354,9 @@ pub struct DeveloperSessionApproval {
     pub outcome: DeveloperApprovalOutcome,
     pub requested_at: String,
     pub decided_at: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub question_answer: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -1373,6 +1460,30 @@ pub struct DeveloperSessionFileChange {
     pub notices: Vec<FileChangeNotice>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ApprovalQuestionOption {
+    pub label: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub description: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub preview: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ApprovalQuestion {
+    pub question: String,
+    pub options: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub option_details: Option<Vec<ApprovalQuestionOption>>,
+}
+
 /// A pending approval as `approval/requested` announced it.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
@@ -1399,12 +1510,17 @@ pub struct PendingApprovalSnapshot {
     pub proposed_content: Option<String>,
     #[serde(default)]
     pub always_allow_saved: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub requires_explicit_decision: bool,
     /// The command rule the host offers for an "always allow" answer. That
     /// answer must send exactly this prefix; absent, the command can only be
     /// approved once or for the session.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub proposed_execpolicy_amendment: Option<ExecPolicyAmendment>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub question: Option<ApprovalQuestion>,
 }
 
 /// Everything a client needs to render a turn it joined mid-flight.
@@ -1480,6 +1596,8 @@ pub struct ApprovalRequestedNotification {
     pub reversible: Option<bool>,
     pub proposed_content: Option<String>,
     pub always_allow_saved: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub requires_explicit_decision: bool,
     pub proposed_execpolicy_amendment: Option<ExecPolicyAmendment>,
     pub editable: bool,
     pub question: Option<Value>,
@@ -1504,8 +1622,9 @@ impl ApprovalRequestedNotification {
             editable: request.proposed_content.is_some(),
             proposed_content: request.proposed_content,
             always_allow_saved: request.always_allow_saved,
+            requires_explicit_decision: request.requires_explicit_decision,
             proposed_execpolicy_amendment: request.proposed_execpolicy_amendment,
-            question,
+            question: question.or_else(|| serde_json::to_value(request.question?).ok()),
         }
     }
 }
@@ -1553,6 +1672,9 @@ pub struct ThreadListParams {
     /// threads on the first page.
     #[serde(default, skip_serializing_if = "is_false")]
     pub include_cloud: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub title_query: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -1770,6 +1892,33 @@ pub struct LocalServerStatus {
 #[ts(rename_all = "camelCase")]
 pub struct ThreadIdParams {
     pub thread_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ThreadArchiveInactiveParams {
+    pub thread_id: String,
+    /// RFC 3339 cutoff. Only sessions last updated before this instant are eligible.
+    pub inactive_before: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+pub struct ThreadArchiveInactiveResponse {
+    pub archived: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ThreadPinParams {
+    pub thread_id: String,
+    pub pinned: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+pub struct ThreadPinResponse {
+    pub pinned: bool,
 }
 
 /// Ask a thread for the record another surface needs to carry it on.
@@ -2034,6 +2183,9 @@ pub struct TurnStartParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub agent_mode: Option<DeveloperAgentMode>,
+    /// Require a fresh approval for shell execution, even for a safe command.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub require_shell_approval: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub reasoning_effort: Option<DeveloperReasoningEffort>,
@@ -2415,6 +2567,10 @@ pub struct TurnEndedNotification {
     pub response: String,
     pub input_tokens: u32,
     pub output_tokens: u32,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub cache_read_tokens: u32,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub cache_write_tokens: u32,
     pub error: Option<String>,
     pub failure: Option<TurnFailure>,
     #[serde(default)]
@@ -2798,6 +2954,9 @@ pub struct PluginSummary {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub format: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub configurable: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -2815,6 +2974,39 @@ pub struct PluginListResponse {
 pub struct PluginSetEnabledParams {
     pub id: String,
     pub enabled: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginSettingsReadParams {
+    pub id: String,
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginSettingSetParams {
+    pub id: String,
+    pub key: String,
+    pub value: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginSettingSummary {
+    pub key: String,
+    pub title: String,
+    pub description: String,
+    pub required: bool,
+    pub configured: bool,
+    pub sensitive: bool,
+    pub multiple: bool,
+    pub options: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginSettingsResponse {
+    pub settings: Vec<PluginSettingSummary>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -5338,7 +5530,9 @@ mod tests {
                 reversible: Some(false),
                 proposed_content: None,
                 always_allow_saved: false,
+                requires_explicit_decision: false,
                 proposed_execpolicy_amendment: None,
+                question: None,
             }],
             last_turn: Some(HandoffLastTurn {
                 turn_id: "turn-9".to_string(),

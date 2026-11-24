@@ -166,6 +166,54 @@ describe('sidebar action status', () => {
     expect(activityMeta(group)).toBe(`1 action · ${toolCallStatusLabel('completed')}`);
   });
 
+  it('keeps activity compact in Focus view while preserving progress and manual expansion', () => {
+    boot();
+    post({ type: 'focusViewChanged', payload: { enabled: true } });
+    expect(document.getElementById('toggleFocusView')?.getAttribute('aria-checked')).toBe('true');
+    post({
+      type: 'toolCallStart',
+      payload: {
+        toolUseId: 'tool-1',
+        name: 'read_file',
+        category: 'filesystem',
+        summary: 'Read source',
+        input: { path: 'src/index.ts' },
+      },
+    });
+    const first = activity();
+    const firstSummary = first.querySelector<HTMLButtonElement>('.activity-group__summary')!;
+    expect(firstSummary.getAttribute('aria-expanded')).toBe('false');
+    expect(activityMeta(first)).toContain('1 running');
+    firstSummary.click();
+    post({
+      type: 'toolCallEnd',
+      payload: { toolUseId: 'tool-1', output: 'Could not read file', isError: true },
+    });
+    post({ type: 'done', payload: {} });
+    expect(firstSummary.getAttribute('aria-expanded')).toBe('true');
+    expect(activityMeta(first)).toContain('1 error');
+
+    post({
+      type: 'toolCallStart',
+      payload: {
+        toolUseId: 'tool-2',
+        name: 'read_file',
+        category: 'filesystem',
+        summary: 'Read configuration',
+        input: { path: 'package.json' },
+      },
+    });
+    const second = activity(1);
+    const secondSummary = second.querySelector<HTMLButtonElement>('.activity-group__summary')!;
+    firstSummary.click();
+    expect(activityMeta(second)).toContain('Read configuration');
+    expect(secondSummary.getAttribute('aria-expanded')).toBe('false');
+
+    post({ type: 'focusViewChanged', payload: { enabled: false } });
+    expect(firstSummary.getAttribute('aria-expanded')).toBe('false');
+    expect(secondSummary.getAttribute('aria-expanded')).toBe('true');
+  });
+
   it('separates a terminally failed action stack from the next successful turn', () => {
     boot();
     post({

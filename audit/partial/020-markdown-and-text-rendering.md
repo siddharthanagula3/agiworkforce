@@ -10,12 +10,10 @@ nothing is left.
 
 - Done when: GFM task items (- [ ] / - [x]) render as checkboxes reflecting their state.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
 
 ## S20.13: Autolinks.
 
@@ -43,12 +41,10 @@ nothing is left.
 
 - Done when: A table wider than the answer column scrolls horizontally instead of overflowing or being cut off.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: web, desktop, mobile, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
 
 ## S20.18: Download-table action.
 
@@ -67,35 +63,30 @@ nothing is left.
 
 - Done when: Inline LaTeX ($…$ or \(…\)) renders as typeset math inside the sentence.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
 
 ## S20.20: Block mathematical notation.
 
 - Done when: Display LaTeX ($$…$$ or \[…\]) renders as a centred typeset block.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
 
 ## S20.21: Escaped delimiters.
 
 - Done when: Backslash-escaped Markdown/math delimiters (\*, \$, \_) display as the literal character without the backslash.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
+- Already works on: web, desktop, mobile, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| chrome | missing | Not built on this surface. |  |
 
 ## S20.26: Text selection across rendered blocks.
 

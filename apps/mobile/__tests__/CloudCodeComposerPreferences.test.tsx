@@ -7,6 +7,7 @@ const mockApi = {
   listApprovals: jest.fn(),
   changes: jest.fn(),
   startAgentTurn: jest.fn(),
+  cancelAgentTurn: jest.fn(),
 };
 
 jest.mock('@/src/features/cloud-code/service', () => ({
@@ -135,6 +136,63 @@ describe('AGI Code composer preferences in a session', () => {
     dismiss.mockRestore();
   });
 
+  it('shows Send only for a nonempty draft and shows Stop for an active turn', async () => {
+    const screen = await openSession();
+    const input = screen.getByLabelText('Message for this session');
+    const send = () => screen.queryByRole('button', { name: 'Send to this session' });
+
+    expect(send()).toBeNull();
+    fireEvent.changeText(input, '  ');
+    expect(send()).toBeNull();
+    fireEvent.changeText(input, 'Read the notes.\nSummarize the changes.');
+    expect(send()).toBeEnabled();
+    fireEvent.changeText(input, '');
+    expect(send()).toBeNull();
+
+    mockApi.get.mockResolvedValue(detail([turn('1'), { ...turn('2'), stopReason: null }]));
+    await act(async () => {
+      screen.UNSAFE_getByType(RefreshControl).props.onRefresh();
+    });
+    expect(await screen.findByRole('button', { name: 'Stop the task' })).toBeEnabled();
+  });
+
+  it('marks Stop unavailable during cancellation and restores it if cancellation fails', async () => {
+    mockApi.get.mockResolvedValue(detail([turn('1'), { ...turn('2'), stopReason: null }]));
+    let failCancellation!: (error: Error) => void;
+    mockApi.cancelAgentTurn.mockReturnValueOnce(
+      new Promise((_resolve, reject) => {
+        failCancellation = reject;
+      }),
+    );
+    const screen = await openSession();
+    const stop = await screen.findByRole('button', { name: 'Stop the task' });
+    fireEvent.press(stop);
+
+    const stopping = screen.getByRole('button', { name: 'Stopping the task' });
+    expect(stopping).toBeDisabled();
+    expect(stopping).toHaveProp('accessibilityState', expect.objectContaining({ busy: true }));
+    fireEvent.press(stopping);
+    expect(mockApi.cancelAgentTurn).toHaveBeenCalledTimes(1);
+
+    await act(async () => failCancellation(new Error('Stop could not reach the service')));
+    expect(await screen.findByRole('button', { name: 'Stop the task' })).toBeEnabled();
+  });
+
+  it('shows a pending stop acknowledged by the server when reopening the session', async () => {
+    mockApi.get.mockResolvedValue(
+      detail([
+        turn('1'),
+        { ...turn('2'), stopReason: null, cancelRequestedAt: '2026-10-22T00:00:03Z' },
+      ]),
+    );
+    const screen = await openSession();
+    const stopping = await screen.findByRole('button', { name: 'Stopping the task' });
+
+    expect(stopping).toBeDisabled();
+    fireEvent.press(stopping);
+    expect(mockApi.cancelAgentTurn).not.toHaveBeenCalled();
+  });
+
   it('leaves the keyboard up after a send by default', async () => {
     mockApi.startAgentTurn.mockResolvedValue({});
     const screen = await openSession();
@@ -157,7 +215,13 @@ describe('AGI Code composer preferences in a session', () => {
 
   it('dismisses the keyboard when the turn starts although the request is still open', async () => {
     useCodePreferences.setState({ dismissKeyboardAfterSend: true });
-    mockApi.startAgentTurn.mockImplementation(() => new Promise(() => undefined));
+    let finishSend!: () => void;
+    mockApi.startAgentTurn.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishSend = resolve;
+        }),
+    );
     const screen = await openSession();
 
     await sendMessage(screen, 'first request');
@@ -169,11 +233,18 @@ describe('AGI Code composer preferences in a session', () => {
     });
 
     await waitFor(() => expect(dismiss).toHaveBeenCalledTimes(1));
+    await act(async () => finishSend());
   });
 
   it('dismisses the keyboard when a full window of turns slides to include the new one', async () => {
     useCodePreferences.setState({ dismissKeyboardAfterSend: true });
-    mockApi.startAgentTurn.mockImplementation(() => new Promise(() => undefined));
+    let finishSend!: () => void;
+    mockApi.startAgentTurn.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishSend = resolve;
+        }),
+    );
     const firstWindow = Array.from({ length: 50 }, (_, index) => numberedTurn(index + 1));
     mockApi.get.mockResolvedValue(detail(firstWindow));
     const screen = render(<CloudCodeSessionScreen sessionId="session-1" />);
@@ -191,6 +262,7 @@ describe('AGI Code composer preferences in a session', () => {
     });
 
     await waitFor(() => expect(dismiss).toHaveBeenCalledTimes(1));
+    await act(async () => finishSend());
   });
 
   it('keeps the keyboard up when the send is refused and the draft comes back', async () => {

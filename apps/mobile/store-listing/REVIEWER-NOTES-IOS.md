@@ -117,10 +117,12 @@ set and must already hold an 18 and over decision on the server (confirmed once
 on the web at `/login/complete`, or in this build); if it does not, the
 reviewer is asked **Your age** after sign-in and enters 18 or more.
 
-**The age step comes first, on every path.** AGI is for people 18 and over
-(since 2026-11-20). Before onboarding, before Local Mode and before Cloud
-sign-in, `resolveRootRedirect` (`src/features/auth/services/rootRouting.ts`)
-sends the app to `app/(public)/age-gate.tsx`. On iOS 26 and later, where
+**Age is checked before entry.** AGI is for people 18 and over
+(since 2026-11-20). If the device has no current result and the app restores
+an account with a current 18 and over decision, the app uses that account's
+decision for the signed-in session. A device that recorded an age under 18
+stays blocked. Without a current result, the age screen comes before
+onboarding, Local Mode and Cloud sign-in. On iOS 26 and later, where
 iOS offers age features, the app asks the Declared Age Range API
 (`expo-age-range`) only whether the person is 18 or over
 (`src/features/age-assurance/ageAssurance.ts`); an unavailable, declined or
@@ -128,8 +130,8 @@ inconclusive answer falls through to **Your age**: "This service is for
 adults. You must be at least 18 years old to use it. Enter your age to
 continue.", a number field and **Continue**. The device keeps the outcome
 and the threshold, never the age, and does not ask again; a result stored
-under the earlier 13 or 16 rule is not accepted, so an upgrade asks once
-more. An age under 18 shows **Age requirement** ("This device recorded an
+under the earlier 13 or 16 rule is not accepted. An age under 18 shows
+**Age requirement** ("This device recorded an
 age under 18. Only erasing AGI’s data on this device resets it.") on every
 path, Local Mode included, with **Export this device’s data** and **Erase
 this device’s data**, and, when signed in, **Sign out** and **Account data

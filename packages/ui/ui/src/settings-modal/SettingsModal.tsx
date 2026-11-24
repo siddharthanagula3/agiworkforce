@@ -74,6 +74,11 @@ function scrollNavItemIntoView(region: HTMLElement, item: HTMLElement) {
   region.scrollLeft += itemBox.left - regionBox.left - (regionBox.width - itemBox.width) / 2;
 }
 
+function revealCurrentNavItem(region: HTMLElement) {
+  const item = region.querySelector<HTMLElement>('[aria-current="page"]');
+  if (item) scrollNavItemIntoView(region, item);
+}
+
 const UNKNOWN_VERSION_PLACEHOLDER = '\u2013';
 
 const DIRECTORY_SECTIONS = ['skills', 'connectors', 'plugins'] as const;
@@ -1905,7 +1910,14 @@ function useNavScrollEdges(dependency: unknown): NavScrollEdgesResult {
 
     measure();
     node.addEventListener('scroll', measure, { passive: true });
-    const resizeObserver = new ResizeObserver(measure);
+    let width = node.clientWidth;
+    const resizeObserver = new ResizeObserver(() => {
+      if (node.clientWidth !== width) {
+        width = node.clientWidth;
+        revealCurrentNavItem(node);
+      }
+      measure();
+    });
     resizeObserver.observe(node);
 
     return () => {
@@ -2158,9 +2170,7 @@ export function SettingsModal({
   } = useNavScrollEdges(navScrollDependency);
 
   useEffect(() => {
-    if (!navScrollNode) return;
-    const item = navScrollNode.querySelector<HTMLElement>('[aria-current="page"]');
-    if (item) scrollNavItemIntoView(navScrollNode, item);
+    if (navScrollNode) revealCurrentNavItem(navScrollNode);
   }, [activeSection, navScrollNode]);
 
   useEffect(() => {

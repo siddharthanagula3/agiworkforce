@@ -422,7 +422,7 @@ async function runExternalScanner(bytes: Uint8Array): Promise<UploadScanFinding[
     if (status.required) {
       return [
         {
-          code: 'external_scanner',
+          code: 'scan_unavailable',
           detail: 'A malware scanner is required for uploads and none is configured',
         },
       ];
@@ -450,7 +450,7 @@ async function runExternalScanner(bytes: Uint8Array): Promise<UploadScanFinding[
       signal: AbortSignal.timeout(15_000),
     });
     if (!response.ok) {
-      return [{ code: 'external_scanner', detail: `Scanner returned ${response.status}` }];
+      return [{ code: 'scan_unavailable', detail: `Scanner returned ${response.status}` }];
     }
     const verdict = (await response.json()) as {
       safe?: unknown;
@@ -468,7 +468,7 @@ async function runExternalScanner(bytes: Uint8Array): Promise<UploadScanFinding[
   } catch (error) {
     return [
       {
-        code: 'external_scanner',
+        code: 'scan_unavailable',
         detail: `Scanner unreachable: ${error instanceof Error ? error.message : 'unknown error'}`,
       },
     ];

@@ -28,7 +28,7 @@ export function planShortcutReplay(
   return { kind: 'empty' };
 }
 
-export async function loadShortcuts(): Promise<SavedShortcut[]> {
+async function readShortcutStore(): Promise<SavedShortcut[]> {
   return new Promise((resolve, reject) => {
     chrome.storage.local.get(SHORTCUTS_STORAGE_KEY, (result) => {
       if (chrome.runtime.lastError) {
@@ -47,7 +47,7 @@ async function saveShortcuts(shortcuts: SavedShortcut[]): Promise<void> {
 }
 
 function mutateShortcuts<T>(operation: (shortcuts: SavedShortcut[]) => Promise<T>): Promise<T> {
-  const result = mutationQueue.then(async () => operation(await loadShortcuts()));
+  const result = mutationQueue.then(async () => operation(await readShortcutStore()));
   mutationQueue = result.then(
     () => undefined,
     () => undefined,
@@ -55,46 +55,59 @@ function mutateShortcuts<T>(operation: (shortcuts: SavedShortcut[]) => Promise<T
   return result;
 }
 
-function isRecording(shortcut: SavedShortcut): boolean {
+export function isRecording(shortcut: SavedShortcut): boolean {
   return Array.isArray(shortcut.actions) && shortcut.actions.length > 0;
+}
+
+function visibleShortcuts(
+  shortcuts: SavedShortcut[],
+  accountId: string | null | undefined,
+): SavedShortcut[] {
+  return shortcuts.filter(
+    (shortcut) =>
+      !isRecording(shortcut) ||
+      (accountId !== undefined && (shortcut.ownerAccountId ?? null) === accountId),
+  );
+}
+
+export async function loadShortcuts(accountId?: string | null): Promise<SavedShortcut[]> {
+  return visibleShortcuts(await readShortcutStore(), accountId);
 }
 
 /**
  * Recordings can carry what the user typed, so they belong to the account
- * that made them. One made while signed out goes to the first account seen;
- * every other recording is removed on a sign-out or a switch of account.
+ * that made them. One made while signed out goes to the first authenticated account.
  */
-export function releaseRecordingsOfOtherAccounts(signedInAccountId: string | null): Promise<void> {
+export function claimUnownedRecordings(signedInAccountId: string): Promise<void> {
   return mutateShortcuts(async (shortcuts) => {
     let changed = false;
-    const kept: SavedShortcut[] = [];
-    for (const shortcut of shortcuts) {
-      const owner = shortcut.ownerAccountId ?? null;
-      if (!isRecording(shortcut) || owner === signedInAccountId) {
-        kept.push(shortcut);
-      } else if (owner === null) {
-        kept.push({ ...shortcut, ownerAccountId: signedInAccountId });
-        changed = true;
-      } else {
-        changed = true;
-      }
-    }
-    if (changed) await saveShortcuts(kept);
+    const owned = shortcuts.map((shortcut) => {
+      if (!isRecording(shortcut) || shortcut.ownerAccountId != null) return shortcut;
+      changed = true;
+      return { ...shortcut, ownerAccountId: signedInAccountId };
+    });
+    if (changed) await saveShortcuts(owned);
   });
 }
 
 export async function handleSaveShortcut(
   message: SaveShortcutMessage,
-  ownerAccountId: string | null = null,
+  ownerAccountId?: string | null,
 ): Promise<ExtensionResponse> {
   return mutateShortcuts(async (shortcuts) => {
-    if (shortcuts.length >= MAX_SHORTCUTS) {
+    const actions = Array.isArray(message.actions) ? message.actions : [];
+    if (actions.length > 0 && ownerAccountId === undefined) {
+      return {
+        success: false,
+        error: 'Could not confirm which account owns this recording. Try saving again.',
+      } as ExtensionResponse;
+    }
+    if (visibleShortcuts(shortcuts, ownerAccountId).length >= MAX_SHORTCUTS) {
       return {
         success: false,
         error: `Maximum ${MAX_SHORTCUTS} shortcuts reached`,
       } as ExtensionResponse;
     }
-    const actions = Array.isArray(message.actions) ? message.actions : [];
     if (!validateShortcutActions(actions)) {
       return {
         success: false,
@@ -122,17 +135,21 @@ export async function handleSaveShortcut(
     };
     shortcuts.push(shortcut);
     await saveShortcuts(shortcuts);
-    return { success: true, shortcuts } as ExtensionResponse;
+    return {
+      success: true,
+      shortcuts: visibleShortcuts(shortcuts, ownerAccountId),
+    } as ExtensionResponse;
   });
 }
 
 export async function handleUpdateShortcut(
   message: UpdateShortcutMessage,
+  accountId?: string | null,
 ): Promise<ExtensionResponse> {
   return mutateShortcuts(async (shortcuts) => {
     const index = shortcuts.findIndex((shortcut) => shortcut.id === message.shortcutId);
     const current = shortcuts[index];
-    if (!current) {
+    if (!current || !visibleShortcuts([current], accountId).length) {
       return { success: false, error: 'Shortcut not found' } as ExtensionResponse;
     }
     if (planShortcutReplay(current).kind !== 'prompt') {
@@ -151,21 +168,33 @@ export async function handleUpdateShortcut(
     }
     shortcuts[index] = { ...current, name, prompt };
     await saveShortcuts(shortcuts);
-    return { success: true, shortcuts } as ExtensionResponse;
+    return {
+      success: true,
+      shortcuts: visibleShortcuts(shortcuts, accountId),
+    } as ExtensionResponse;
   });
 }
 
-export async function handleListShortcuts(): Promise<ExtensionResponse> {
-  const shortcuts = await loadShortcuts();
+export async function handleListShortcuts(accountId?: string | null): Promise<ExtensionResponse> {
+  const shortcuts = await loadShortcuts(accountId);
   return { success: true, shortcuts } as ExtensionResponse;
 }
 
 export async function handleDeleteShortcut(
   message: DeleteShortcutMessage,
+  accountId?: string | null,
 ): Promise<ExtensionResponse> {
   return mutateShortcuts(async (shortcuts) => {
+    if (
+      !visibleShortcuts(shortcuts, accountId).some((shortcut) => shortcut.id === message.shortcutId)
+    ) {
+      return { success: false, error: 'Shortcut not found' } as ExtensionResponse;
+    }
     const remaining = shortcuts.filter((shortcut) => shortcut.id !== message.shortcutId);
     await saveShortcuts(remaining);
-    return { success: true, shortcuts: remaining } as ExtensionResponse;
+    return {
+      success: true,
+      shortcuts: visibleShortcuts(remaining, accountId),
+    } as ExtensionResponse;
   });
 }

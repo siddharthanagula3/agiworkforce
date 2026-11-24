@@ -7,13 +7,19 @@ import { Spinner, useConfirmAction } from '@agiworkforce/ui';
 import { SHELL_TIMEOUT_MAX_MS } from '@agiworkforce/local-runtime-contract';
 import {
   cancelLocalCommand,
+  closeDeveloperTerminal,
   startBackgroundLocalCommand,
   startLocalCommand,
   type LocalCommandRun,
 } from '@/features/desktop-host';
 import { toUserMessage } from '@/lib/user-error-message';
 import { CODE_COPY, CODE_LIMITS } from '../code-surface';
-import { LOCAL_CODE_COPY, LOCAL_PANEL_COPY, localTerminalTabLabel } from '../local-code';
+import {
+  LOCAL_CODE_COPY,
+  LOCAL_PANEL_COPY,
+  LOCAL_TERMINAL_COPY,
+  localTerminalTabLabel,
+} from '../local-code';
 import { LocalPtyTerminal } from './LocalPtyTerminal';
 import styles from '../CloudCodePage.module.css';
 
@@ -38,7 +44,7 @@ interface CancellableRun {
 export interface LocalTerminalProps {
   rootId: string;
   folder: string;
-  onCommandFinished: () => void;
+  onCommandFinished?: () => void;
   onBackgroundStarted?: () => void;
   onRunningChange?: (command: string | null) => void;
 }
@@ -142,7 +148,7 @@ export function LocalTerminal({
     } finally {
       run.current = null;
       stopRequested.current.delete(started.runId);
-      onCommandFinished();
+      onCommandFinished?.();
     }
   };
 
@@ -267,11 +273,84 @@ export interface LocalTerminalDockProps {
   /** The CLI hosts a real shell, so each tab is a terminal instead of a command line. */
   pty?: boolean;
   onClose: () => void;
-  onCommandFinished: () => void;
-  onBackgroundStarted: () => void;
+  onCommandFinished?: () => void;
+  onBackgroundStarted?: () => void;
 }
 
 const FIRST_TAB: readonly TerminalTab[] = [{ id: 1, ordinal: 1 }];
+
+interface WorkspaceTerminalTarget {
+  rootId: string;
+  folder: string;
+  pty: boolean;
+}
+
+interface WorkspaceTerminalEntry extends WorkspaceTerminalTarget {
+  open: boolean;
+  completedCommands: number;
+  backgroundCommands: number;
+}
+
+export type WorkspaceTerminalController = ReturnType<typeof useWorkspaceTerminalDocks>;
+
+export function useWorkspaceTerminalDocks() {
+  const [entries, setEntries] = useState(() => new Map<string, WorkspaceTerminalEntry>());
+  const show = useCallback((target: WorkspaceTerminalTarget) => {
+    setEntries((current) => {
+      const existing = current.get(target.rootId);
+      if (existing?.open && existing.folder === target.folder) return current;
+      const entry = existing
+        ? { ...existing, folder: target.folder, open: true }
+        : { ...target, open: true, completedCommands: 0, backgroundCommands: 0 };
+      return new Map(current).set(target.rootId, entry);
+    });
+  }, []);
+  const hide = useCallback((rootId: string) => {
+    setEntries((current) => {
+      const entry = current.get(rootId);
+      if (!entry?.open) return current;
+      return new Map(current).set(rootId, { ...entry, open: false });
+    });
+  }, []);
+  const retainRoots = useCallback((keep: (rootId: string) => boolean) => {
+    setEntries((current) => {
+      const retained = [...current].filter(([rootId]) => keep(rootId));
+      return retained.length === current.size ? current : new Map(retained);
+    });
+  }, []);
+  const recordCommand = useCallback(
+    (rootId: string, counter: 'completedCommands' | 'backgroundCommands') => {
+      setEntries((current) => {
+        const entry = current.get(rootId);
+        if (!entry) return current;
+        return new Map(current).set(rootId, { ...entry, [counter]: entry[counter] + 1 });
+      });
+    },
+    [],
+  );
+  return { entries, show, hide, retainRoots, recordCommand };
+}
+
+export function WorkspaceTerminalDocks({
+  terminals,
+  activeRootId,
+}: {
+  terminals: WorkspaceTerminalController;
+  activeRootId: string | null;
+}) {
+  return Array.from(terminals.entries.values(), (entry) => (
+    <LocalTerminalDock
+      key={entry.rootId}
+      rootId={entry.rootId}
+      folder={entry.folder}
+      pty={entry.pty}
+      open={entry.open && entry.rootId === activeRootId}
+      onClose={() => terminals.hide(entry.rootId)}
+      onCommandFinished={() => terminals.recordCommand(entry.rootId, 'completedCommands')}
+      onBackgroundStarted={() => terminals.recordCommand(entry.rootId, 'backgroundCommands')}
+    />
+  ));
+}
 
 export function LocalTerminalDock({
   rootId,
@@ -285,6 +364,8 @@ export function LocalTerminalDock({
   const [tabs, setTabs] = useState<readonly TerminalTab[]>(FIRST_TAB);
   const [activeId, setActiveId] = useState(FIRST_TAB[0]?.id ?? 1);
   const [runningByTab, setRunningByTab] = useState<Readonly<Record<number, string | null>>>({});
+  const [closeError, setCloseError] = useState<string | null>(null);
+  const terminalIds = useRef(new Map<number, string>());
   const nextId = useRef(FIRST_TAB.length + 1);
   const panelsRef = useRef<HTMLDivElement>(null);
   const tabRefs = useRef(new Map<number, HTMLButtonElement>());
@@ -338,17 +419,33 @@ export function LocalTerminalDock({
   };
 
   const closeTab = (tab: TerminalTab) => {
+    setCloseError(null);
     const command = runningByTab[tab.id] ?? null;
-    if (command === null) {
+    if (command === null && !pty) {
       removeTab(tab.id);
       return;
     }
     confirm({
       title: LOCAL_PANEL_COPY.stopTabTitle,
-      description: LOCAL_PANEL_COPY.stopTabDescription(command),
+      description: command
+        ? LOCAL_PANEL_COPY.stopTabDescription(command)
+        : LOCAL_PANEL_COPY.stopShellTabDescription,
       confirmLabel: LOCAL_PANEL_COPY.stopTabConfirm,
       destructive: true,
-      onConfirm: () => removeTab(tab.id),
+      onConfirm: async () => {
+        const terminalId = terminalIds.current.get(tab.id);
+        if (terminalId) {
+          try {
+            if (!(await closeDeveloperTerminal(rootId, terminalId))) {
+              throw new Error(LOCAL_TERMINAL_COPY.closeFailed);
+            }
+          } catch (error) {
+            setCloseError(toUserMessage(error, LOCAL_TERMINAL_COPY.closeFailed));
+            return;
+          }
+        }
+        removeTab(tab.id);
+      },
     });
   };
 
@@ -366,10 +463,19 @@ export function LocalTerminalDock({
     <section
       className={styles['terminalDock']}
       aria-label={LOCAL_PANEL_COPY.bottomPanel}
+      aria-describedby={pty ? undefined : `${baseId}-command-mode`}
       hidden={!open}
       data-testid="local-terminal-dock"
     >
       <div className={styles['terminalDockBar']}>
+        {!pty && (
+          <span className={styles['terminalMode']} title={LOCAL_TERMINAL_COPY.commandModeHint}>
+            {LOCAL_TERMINAL_COPY.commandMode}
+            <span className="sr-only" id={`${baseId}-command-mode`}>
+              {LOCAL_TERMINAL_COPY.commandModeHint}
+            </span>
+          </span>
+        )}
         <div
           className={styles['terminalTabs']}
           role="tablist"
@@ -433,6 +539,11 @@ export function LocalTerminalDock({
           <X size={GLYPH_SIZE} aria-hidden="true" />
         </button>
       </div>
+      {closeError && (
+        <p role="alert" className={styles['terminalError']}>
+          {closeError}
+        </p>
+      )}
       <div className={styles['terminalPanels']} ref={panelsRef}>
         {tabs.map((tab) => (
           <div
@@ -445,7 +556,13 @@ export function LocalTerminalDock({
             hidden={tab.id !== activeId}
           >
             {pty ? (
-              <LocalPtyTerminal rootId={rootId} />
+              <LocalPtyTerminal
+                rootId={rootId}
+                onTerminalId={(terminalId) => {
+                  if (terminalId) terminalIds.current.set(tab.id, terminalId);
+                  else terminalIds.current.delete(tab.id);
+                }}
+              />
             ) : (
               <LocalTerminal
                 rootId={rootId}

@@ -39,6 +39,7 @@ import { canAccessCloudModelForTier } from '../src/features/model-picker/service
 import * as artifactStore from '../src/features/artifacts/store';
 import {
   activateCloudAccount,
+  captureCloudAccountEpoch,
   invalidateCloudAccount,
 } from '../src/features/auth/services/cloudAccountSession';
 
@@ -115,6 +116,7 @@ function convDelta(id: string, title: string, deletedAt: string | null) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockDelete.mockReset();
   invalidateCloudAccount();
   activateCloudAccount('history-test-owner');
   useCloudSyncStateStore.getState().reset();
@@ -129,9 +131,18 @@ beforeEach(() => {
 describe('cloud conversation delete durability', () => {
   it('removes locally only after the server acknowledges the delete', async () => {
     seedCloud('c1');
-    mockDelete.mockResolvedValueOnce(undefined as never);
+    let finish!: () => void;
+    mockDelete.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
 
-    await useChatMessageStore.getState().deleteConversation('c1');
+    const deletion = useChatMessageStore.getState().deleteConversation('c1');
+    expect(convExists('c1')).toBe(true);
+    finish();
+    await expect(deletion).resolves.toBe(true);
 
     expect(convExists('c1')).toBe(false);
     expect(Alert.alert).not.toHaveBeenCalled();
@@ -141,13 +152,57 @@ describe('cloud conversation delete durability', () => {
     seedCloud('c1');
     mockDelete.mockRejectedValue(new Error('HTTP 500: boom'));
 
-    await useChatMessageStore.getState().deleteConversation('c1');
+    await expect(useChatMessageStore.getState().deleteConversation('c1')).resolves.toBe(false);
 
     expect(convExists('c1')).toBe(true);
     expect(Alert.alert).toHaveBeenCalledTimes(1);
     expect(mockDelete).toHaveBeenCalledTimes(3);
   });
 
+  it('does not delete a replacement account chat when an earlier request settles', async () => {
+    seedCloud('c1');
+    let finish!: () => void;
+    mockDelete.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const deletion = useChatMessageStore.getState().deleteConversation('c1');
+    const signal = mockDelete.mock.calls[0]?.[1]?.signal;
+
+    invalidateCloudAccount();
+    activateCloudAccount('replacement-account');
+    useChatCloudMessageStore.getState().clearCloudData();
+    seedCloud('c1', 'Replacement account chat');
+    finish();
+
+    expect(signal?.aborted).toBe(true);
+    await expect(deletion).resolves.toBe(false);
+    expect(convTitle('c1')).toBe('Replacement account chat');
+    expect(Alert.alert).not.toHaveBeenCalled();
+  });
+
+  it('cancels a retry scheduled by the previous account', async () => {
+    jest.useFakeTimers();
+    try {
+      seedCloud('c1');
+      mockDelete.mockRejectedValueOnce(new Error('HTTP 503: down'));
+      const deletion = useChatMessageStore.getState().deleteConversation('c1');
+      await jest.advanceTimersByTimeAsync(0);
+      expect(mockDelete).toHaveBeenCalledTimes(1);
+
+      invalidateCloudAccount();
+      activateCloudAccount('replacement-account');
+      await jest.advanceTimersByTimeAsync(300);
+
+      await expect(deletion).resolves.toBe(false);
+      expect(mockDelete).toHaveBeenCalledTimes(1);
+      expect(Alert.alert).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
   it('treats a 404 as an already-deleted success (idempotent, no retry)', async () => {
     seedCloud('c1');
     mockDelete.mockRejectedValue(new Error('HTTP 404: not found'));
@@ -157,6 +212,21 @@ describe('cloud conversation delete durability', () => {
     expect(convExists('c1')).toBe(false);
     expect(Alert.alert).not.toHaveBeenCalled();
     expect(mockDelete).toHaveBeenCalledTimes(1);
+  });
+
+  it('can delete a linked Cloud chat without removing a Local chat with the same ID', async () => {
+    seedLocal('c1');
+    useChatMessageStore.setState({ currentConversationId: 'c1' });
+    mockDelete.mockResolvedValueOnce(undefined);
+    const account = captureCloudAccountEpoch()!;
+
+    await expect(useChatMessageStore.getState().deleteConversation('c1', account)).resolves.toBe(
+      true,
+    );
+
+    expect(mockDelete).toHaveBeenCalledWith('c1', { signal: expect.anything() });
+    expect(useChatMessageStore.getState().conversations[0]?.id).toBe('c1');
+    expect(useChatMessageStore.getState().currentConversationId).toBe('c1');
   });
 
   it('recovers from a transient failure via retry', async () => {
@@ -189,7 +259,7 @@ describe('a chat abandoned before its first message', () => {
 
     expect(convExists('c1')).toBe(false);
     expect(useChatMessageStore.getState().currentConversationId).toBeNull();
-    expect(mockDelete).toHaveBeenCalledWith('c1');
+    expect(mockDelete).toHaveBeenCalledWith('c1', { signal: expect.anything() });
     expect(Alert.alert).not.toHaveBeenCalled();
   });
 

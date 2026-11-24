@@ -913,6 +913,7 @@ async fn checkpoint_revision_private_namespace_refuses_actual_reader_and_writer(
         },
         &crate::tools::ToolExecOptions {
             require_confirmation: false,
+            require_shell_approval: false,
             auto_approve_safe: true,
             auto_approve_edits: true,
             quiet: true,
@@ -939,6 +940,7 @@ async fn checkpoint_revision_private_namespace_refuses_actual_reader_and_writer(
         },
         &crate::tools::ToolExecOptions {
             require_confirmation: false,
+            require_shell_approval: false,
             auto_approve_safe: true,
             auto_approve_edits: true,
             quiet: true,

@@ -822,9 +822,10 @@ async function runClaimedAgentTurn(
         ...(input.preApproved ? { preApproved: input.preApproved } : {}),
         approvalPolicy,
         mode,
-        ...(stepBound !== null
-          ? { maxSteps: Math.max(MIN_REMAINING_STEPS, stepBound - initialStepIndex) }
-          : {}),
+        maxSteps: Math.max(
+          MIN_REMAINING_STEPS,
+          (stepBound ?? CLOUD_CODE_AGENT_MAX_STEPS) - initialStepIndex,
+        ),
         onStepCommitted: async (step: number) => {
           await reserveManagedUsageProviderStep({
             reservation,

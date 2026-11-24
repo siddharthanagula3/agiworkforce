@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState, type ReactNode } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import {
   ADULT_ELIGIBILITY_ERROR_CODES,
   ADULT_ELIGIBILITY_PATH,
@@ -50,6 +50,7 @@ export function AgeConfirmationStep({
   const copy = useAuthCopy();
   const router = useRouter();
   const gate = useSignupAgeGate();
+  const noticeId = useId();
   const [sending, setSending] = useState(false);
   const [failed, setFailed] = useState(false);
 
@@ -81,7 +82,7 @@ export function AgeConfirmationStep({
   return (
     <AuthStepFrame
       heading={copy.text('flow.age.heading', 'Confirm your age')}
-      detail={<p>{copy.text('flow.age.notice', ACCOUNT_AGE_REQUIREMENT_NOTICE)}</p>}
+      detail={<p id={noticeId}>{copy.text('flow.age.notice', ACCOUNT_AGE_REQUIREMENT_NOTICE)}</p>}
       footer={footer}
     >
       <form
@@ -92,7 +93,7 @@ export function AgeConfirmationStep({
           gate.admit(() => void send());
         }}
       >
-        <AuthAgeField gate={gate} disabled={sending} />
+        <AuthAgeField gate={gate} disabled={sending} noticeId={noticeId} />
         <div className={AUTH_FIELD_AID_CLASS}>
           <PageLink href={TERMS_ELIGIBILITY_HREF} className={AUTH_FIELD_AID_LINK_CLASS}>
             {copy.text('flow.age.terms', 'Age requirements')}

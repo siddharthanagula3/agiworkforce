@@ -79,7 +79,7 @@ SEND SELECTED TEXT TO A LOCAL APP
 With AGI Desktop linked, right-click selected text and choose Send selected text to a local app. The side panel shows what would be sent, and nothing leaves the browser until you approve it.
 
 RECORD STEPS AND SCHEDULE TASKS
-In the extension's settings, under Shortcuts, record the steps you take on a page of a site you approved and replay them later in the browser. Recording stops when the page loads a new address. Choose Schedule from a chat's menu to have your AGI account run that chat's prompt again on a schedule you set.
+In the extension's settings, under Shortcuts, record the steps you take on a page of a site you approved and replay them later in the browser. By default, recording stops on navigation. You can choose to continue on approved pages and replay the workflow from its original starting page. Choose Schedule from a chat's menu to have your AGI account run that chat's prompt again on a schedule you set.
 
 KEEP TRACK OF THE TABS IT WORKS IN
 While the assistant controls a tab that is not already in a tab group, it puts that tab in a group named AGI so you can see where it is working, and takes it out again when the run ends. When you have finished, choose Close tabs from the side panel's More menu, pick the tabs and close them together. The tab you are on and pinned tabs are kept, and page contents are not read.

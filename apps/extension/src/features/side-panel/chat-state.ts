@@ -1,3 +1,4 @@
+import { type BrowserReviewFrame } from '../computer-use/reviewFrames';
 import {
   applyAgentActivityEvent,
   agentActivityStatusForTaskState,
@@ -13,7 +14,10 @@ import { type AgentEventSource, type InteractiveCard } from '@agiworkforce/types
 import type { AgentEventEnvelope, AgentEventStopReason } from '@agiworkforce/types/protocol';
 import { normalizeSourceUrlKey } from '@agiworkforce/utils/source-url';
 import type { ManagedCodeExecution, ManagedQuotaRecovery } from '../cloud-bridge/freeTrialClient';
-import { browserActivityEnvelope } from '../computer-use/browserTurnActivity';
+import {
+  browserActivityEnvelope,
+  redactBrowserTypingActivity,
+} from '../computer-use/browserTurnActivity';
 import { t, tPlural } from '../../i18n';
 import type { CallerBrowserContext } from '../cloud-bridge/callerBrowserContext';
 import type { FormObservationReference } from '../browser-tools/documentBridge';
@@ -60,6 +64,7 @@ export interface SidePanelChatMessage {
   browserContext?: CallerBrowserContext;
   browserObservation?: FormObservationReference;
   browserEvents?: AgentEventEnvelope[];
+  browserReviewFrames?: BrowserReviewFrame[];
   cloudAgentRun?: ManagedCloudAgentRunReference;
   cloudApprovalDecisions?: Record<string, 'approved' | 'rejected'>;
   cloudApprovalError?: string;
@@ -73,6 +78,7 @@ export interface SidePanelChatMessage {
   interactiveCards?: InteractiveCard[];
   codeExecution?: ManagedCodeExecution;
   videoTaskId?: string;
+  videoStartId?: string;
   attachments?: SidePanelMessageAttachment[];
   pages?: SidePanelPageReference[];
   sources?: SidePanelSource[];
@@ -100,6 +106,7 @@ export interface StoredSidePanelChatMessage {
   streaming?: boolean;
   agentEvents?: AgentEventEnvelope[];
   browserEvents?: AgentEventEnvelope[];
+  browserReviewFrames?: BrowserReviewFrame[];
   cloudAgentRun?: ManagedCloudAgentRunReference;
   cloudApprovalDecisions?: Record<string, 'approved' | 'rejected'>;
   cloudApprovalError?: string;
@@ -113,6 +120,7 @@ export interface StoredSidePanelChatMessage {
   interactiveCards?: InteractiveCard[];
   codeExecution?: ManagedCodeExecution;
   videoTaskId?: string;
+  videoStartId?: string;
   attachments?: SidePanelMessageAttachment[];
   pages?: SidePanelPageReference[];
   sources?: SidePanelSource[];
@@ -258,6 +266,10 @@ export function hydrateStoredChatMessage(
     event: { ...event.event },
   })) as AgentEventEnvelope[] | undefined;
   const agentActivity = projectCanonicalAgentActivity(agentEvents);
+  const browserEvents = message.browserEvents?.map((envelope) => ({
+    ...envelope,
+    event: redactBrowserTypingActivity(envelope.event),
+  }));
 
   const hydrated: SidePanelChatMessage = {
     id,
@@ -270,13 +282,13 @@ export function hydrateStoredChatMessage(
           agentActivity,
         }
       : {}),
-    ...(message.browserEvents?.length
+    ...(message.browserReviewFrames?.length
+      ? { browserReviewFrames: message.browserReviewFrames }
+      : {}),
+    ...(browserEvents?.length
       ? {
-          browserEvents: message.browserEvents.map((event) => ({
-            ...event,
-            event: { ...event.event },
-          })) as AgentEventEnvelope[],
-          browserActivity: projectCanonicalAgentActivity(message.browserEvents),
+          browserEvents,
+          browserActivity: projectCanonicalAgentActivity(browserEvents),
         }
       : {}),
     ...(message.cloudAgentRun ? { cloudAgentRun: { ...message.cloudAgentRun } } : {}),
@@ -298,6 +310,7 @@ export function hydrateStoredChatMessage(
       : {}),
     ...(message.codeExecution ? { codeExecution: { ...message.codeExecution } } : {}),
     ...(message.videoTaskId ? { videoTaskId: message.videoTaskId } : {}),
+    ...(message.videoStartId ? { videoStartId: message.videoStartId } : {}),
     ...(message.attachments
       ? { attachments: message.attachments.map((attachment) => ({ ...attachment })) }
       : {}),
@@ -605,6 +618,7 @@ export function shouldRenderTextBubble(input: {
 export interface PageContextSource {
   tabId?: number;
   windowId?: number;
+  documentId?: string;
   url: string;
   title?: string;
   chosen?: boolean;

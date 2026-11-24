@@ -20,6 +20,7 @@ import {
 import { getIdentityProvider } from './lib/server/identity';
 import { hasBrowserSessionCookie as isBrowserSessionCookiePresent } from './lib/session-cookie';
 import { plaidLinkContentSecurityOrigins } from './lib/connectors/plaid-config';
+import { OG_IMAGE_PATH } from './lib/seo/site';
 
 const CHAT_ROOT_PATH = '/chat';
 const AGI_WORK_PATH = '/agi-work';
@@ -157,6 +158,7 @@ export const PUBLIC_API_ROUTE_PATTERNS = [
   '/api/download/(.*)',
   '/api/models',
   '/api/waitlist/public',
+  OG_IMAGE_PATH,
 ] as const;
 
 const isPublicApiRoute = identityMiddleware.createRouteMatcher([...PUBLIC_API_ROUTE_PATTERNS]);

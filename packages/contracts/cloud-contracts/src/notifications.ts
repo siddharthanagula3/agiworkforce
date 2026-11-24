@@ -3,6 +3,8 @@ import { NOTIFICATION_CATEGORIES, NOTIFICATION_SEVERITIES } from '@agiworkforce/
 
 export const NOTIFICATIONS_PATH = '/api/notifications';
 export const NOTIFICATION_FEED_MAX_LIMIT = 100;
+export const PUSH_ACCOUNT_BINDING_FIELD = 'accountBinding';
+export const PUSH_ACCOUNT_BINDING_DOMAIN = 'agiworkforce:push-recipient:v1:';
 
 export const NotificationFeedItemSchema = z.object({
   id: z.string().min(1),

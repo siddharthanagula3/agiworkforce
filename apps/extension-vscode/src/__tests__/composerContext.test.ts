@@ -7,10 +7,12 @@ import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import {
   buildContextAttachment,
+  captureEditorContext,
   resolveContextMenuState,
   resolveEditorContext,
 } from '../data/composerContext';
 import { getContextBuilder } from '../data/contextBuilder';
+import { Config } from '../platform/config';
 import { setTerminalOutputSource } from '../data/terminalOutput';
 
 vi.mock('../data/contextBuilder', () => ({
@@ -72,6 +74,28 @@ beforeEach(() => {
 });
 
 describe('selection item', () => {
+  it.each([
+    'agi-subagent-transcript',
+    'agi-background-command',
+    'agi-skill-review',
+    'agi-turn-review',
+  ])('keeps %s out of editor context', async (scheme) => {
+    Object.defineProperty(vscode.window, 'activeTextEditor', {
+      configurable: true,
+      value: {
+        document: { uri: vscode.Uri.parse(`${scheme}:/Private%20task.txt`) },
+        selection: { isEmpty: false },
+      },
+    });
+    expect(await captureEditorContext(new Set())).toEqual({
+      chips: [],
+      contextFiles: [],
+      texts: [],
+    });
+    expect(await buildContextAttachment('selection')).toBeUndefined();
+    expect(builder.getActiveFileContext).not.toHaveBeenCalled();
+  });
+
   it('is unavailable with its reason when nothing is selected', async () => {
     expect(await stateFor('selection')).toEqual({
       kind: 'selection',
@@ -328,6 +352,27 @@ describe('editor context chips', () => {
     expect(snapshot.texts).toEqual([
       'Selected from src/app.ts (typescript), lines 1-3:\nexport function add(a, b) {\n  return a + b;\n}',
     ]);
+  });
+
+  it.each([
+    { open: false, selection: true, kinds: ['selection'] },
+    { open: true, selection: false, kinds: ['active-file'] },
+  ])('respects independent automatic context switches ($kinds)', ({ open, selection, kinds }) => {
+    setActiveEditor({ empty: false, from: 1, to: 3 });
+    activeFile('selected code');
+    const openSetting = vi.spyOn(Config, 'editorContextAttachOpenFile').mockReturnValue(open);
+    const selectionSetting = vi
+      .spyOn(Config, 'editorContextAttachSelection')
+      .mockReturnValue(selection);
+    try {
+      const snapshot = resolveEditorContext(new Set());
+      expect(snapshot.chips.map((chip) => chip.kind)).toEqual(kinds);
+      expect(snapshot.contextFiles).toEqual(open ? ['/workspace/src/app.ts'] : []);
+      expect(snapshot.texts.some((text) => text.includes('selected code'))).toBe(selection);
+    } finally {
+      openSetting.mockRestore();
+      selectionSetting.mockRestore();
+    }
   });
 
   it('counts the problems reported for the active file', () => {

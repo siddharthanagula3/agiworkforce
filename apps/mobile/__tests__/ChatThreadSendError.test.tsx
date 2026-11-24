@@ -1,9 +1,11 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
 import { act, fireEvent, render } from '@testing-library/react-native';
+import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 
 const mockReplace = jest.fn();
 const mockPush = jest.fn();
+let mockIsOnline = true;
 
 jest.mock('@clerk/expo', () => ({
   ...jest.requireActual('@clerk/expo'),
@@ -32,7 +34,7 @@ jest.mock('react-native-safe-area-context', () => ({
 }));
 
 jest.mock('@/hooks/useNetworkStatus', () => ({
-  useNetworkStatus: () => ({ isOnline: true, isReconnecting: false, queueSize: 0 }),
+  useNetworkStatus: () => ({ isOnline: mockIsOnline, isReconnecting: false, queueSize: 0 }),
 }));
 
 jest.mock('@/src/navigation/openNearestDrawer', () => ({
@@ -43,7 +45,7 @@ jest.mock('@clerk/expo', () => ({ useSession: () => ({ session: null }) }));
 
 interface MockComposerProps {
   attachRef?: { current: unknown };
-  onSend: (text: string) => Promise<unknown> | unknown;
+  onSend: (text: string, attachments?: Attachment[]) => Promise<unknown> | unknown;
   onRefusedSendChange: (refused: boolean) => void;
 }
 let mockComposerProps = {} as MockComposerProps;
@@ -170,6 +172,7 @@ jest.mock('@/src/features/chat/actions/runImageGenerationTurn', () => ({
 }));
 
 import { Alert } from 'react-native';
+import { OfflineQueueAdmissionError, offlineQueue } from '@/services/offlineQueue';
 import ChatScreen from '../app/(app)/chat/[id]';
 import { REDUCED_SENSITIVE_CONTENT_REFUSAL } from '../lib/contentFilter';
 import { useSettingsStore } from '../stores/settingsStore';
@@ -195,6 +198,7 @@ import {
 } from '../src/features/auth/services/cloudAccountSession';
 import { useAuthStore } from '../src/features/auth/store';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
+import { useWaitlistStore } from '../src/features/waitlist';
 import { installCloudModeDoor } from '../src/features/chat/store/cloudModeDoor';
 import {
   CLOUD_PROVIDER_CONSENT_ALLOW_LABEL,
@@ -216,7 +220,7 @@ const QUESTION = {
   createdAt: '2026-06-20T00:00:00.000Z',
 };
 
-function seedThread(messages: unknown[] = []): void {
+function seedThread(messages: unknown[] = [], executionMode: 'local' | 'cloud' = 'local'): void {
   useChatStore.setState({
     conversations: [
       {
@@ -226,7 +230,7 @@ function seedThread(messages: unknown[] = []): void {
         updatedAt: '2026-06-20T00:00:00.000Z',
         messageCount: messages.length,
         pinned: false,
-        executionMode: 'local',
+        executionMode,
       },
     ],
     messages: { 'thread-1': messages },
@@ -235,6 +239,7 @@ function seedThread(messages: unknown[] = []): void {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockIsOnline = true;
   mockEnsureCloudSendConsent.mockResolvedValue(undefined);
   mockComposerProps = {} as MockComposerProps;
   mockMessageListProps = {} as MockMessageListProps;
@@ -443,7 +448,7 @@ describe('a Local reply the built-in model could not give', () => {
   const SYSTEM_FAILED =
     'Apple Intelligence could not finish this reply on this device. Try again, or choose another on-device model.';
 
-  function seedSystemModelThread(): void {
+  function seedSystemModelThread(includeFailedReply = true): void {
     useChatStore.setState({
       conversations: [
         {
@@ -457,7 +462,21 @@ describe('a Local reply the built-in model could not give', () => {
           executionMode: 'local',
         },
       ],
-      messages: { 'thread-1': [QUESTION] },
+      messages: {
+        'thread-1': includeFailedReply
+          ? [
+              QUESTION,
+              {
+                id: 'failed-system-reply',
+                role: 'assistant',
+                content: '',
+                model: SYSTEM_MODEL_ID,
+                createdAt: '2026-06-20T00:00:01.000Z',
+                metadata: { streamError: { message: SYSTEM_FAILED } },
+              },
+            ]
+          : [QUESTION],
+      },
     } as never);
     useModelStore.setState({ selectedModel: SYSTEM_MODEL_ID, selectedProvider: 'local' });
     useChatExecutionStore.getState().setSendError(SYSTEM_FAILED, {
@@ -491,8 +510,31 @@ describe('a Local reply the built-in model could not give', () => {
     expect(screen.getByLabelText(`Use ${name}`)).toBeTruthy();
   });
 
-  it('keeps the plain failure while the built-in model has not failed this session', () => {
+  it('retains recovery for the failed reply after the composer changes models', () => {
+    const retryMessage = jest.fn();
+    useSystemModelSession.setState({ failedModelIds: [SYSTEM_MODEL_ID] });
     seedSystemModelThread();
+    useModelStore.setState({ selectedModel: DEFAULT_LOCAL_MODEL_ID, selectedProvider: 'local' });
+    useChatExecutionStore.setState({ retryMessage });
+    const screen = render(<ChatScreen />);
+
+    fireEvent.press(screen.getByLabelText('Open Models'));
+    expect(mockPush).toHaveBeenCalledWith('/(app)/models');
+    act(() => useChatExecutionStore.getState().clearErrorFor('thread-1'));
+    expect(screen.getByLabelText('Open Models')).toBeTruthy();
+
+    act(() => useModelInstallStore.setState({ installedModelIds: [DOWNLOADED_MODEL.id] }));
+    const name = getShortDisplayName(DOWNLOADED_MODEL.id, useTierStore.getState().tier);
+    fireEvent.press(screen.getByLabelText(`Use ${name}`));
+    expect(retryMessage).toHaveBeenCalledWith(
+      'thread-1',
+      'failed-system-reply',
+      DOWNLOADED_MODEL.id,
+    );
+  });
+
+  it('keeps the plain failure while the built-in model has not failed this session', () => {
+    seedSystemModelThread(false);
     const screen = render(<ChatScreen />);
 
     expect(screen.getByText(SYSTEM_FAILED)).toBeTruthy();
@@ -602,13 +644,58 @@ describe('a picture or video asked for inside a chat before sharing with AI prov
     mockVideoRequest = { status: 'ready', prompt, model: 'fixture-video-model', ownerId: 'user-1' };
   }
 
-  async function send(text: string): Promise<unknown> {
+  async function send(text: string, attachments?: Attachment[]): Promise<unknown> {
     let accepted: unknown;
     await act(async () => {
-      accepted = await mockComposerProps.onSend(text);
+      accepted = await mockComposerProps.onSend(text, attachments);
     });
     return accepted;
   }
+
+  it('reports a declined attachment send in an existing Cloud chat without recording a turn', async () => {
+    mockEnsureCloudSendConsent.mockRejectedValue(new CloudProviderConsentDeclinedError());
+    const { selectedModel, selectedProvider } = useModelStore.getState();
+    const { appMode } = useChatAppModeStore.getState();
+    const { cloudUnlocked } = useWaitlistStore.getState();
+    const { isClerkLoaded, isClerkSignedIn, clerkUserId } = useAuthStore.getState();
+    __resetCloudAccountSessionForTests();
+    activateCloudAccount('send-owner');
+    useAuthStore.setState({
+      isClerkLoaded: true,
+      isClerkSignedIn: true,
+      clerkUserId: 'send-owner',
+    });
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    useTierStore.setState({ tier: 'pro' });
+    useModelStore.getState().setModel(requireMobileCloudModel().id);
+    seedThread([QUESTION], 'cloud');
+    try {
+      render(<ChatScreen />);
+
+      await expect(
+        send('Keep this draft', [
+          {
+            id: 'photo',
+            uri: 'file:///fixture.jpg',
+            mimeType: 'image/jpeg',
+            fileName: 'fixture.jpg',
+          },
+        ]),
+      ).resolves.toBe('declined');
+
+      expect(mockEnsureCloudSendConsent).toHaveBeenCalledTimes(1);
+      expect(useChatStore.getState().messages['thread-1']).toEqual([QUESTION]);
+      expect(useChatExecutionStore.getState().error).toBeNull();
+      expect(alertSpy).not.toHaveBeenCalled();
+    } finally {
+      useAuthStore.setState({ isClerkLoaded, isClerkSignedIn, clerkUserId });
+      useWaitlistStore.setState({ cloudUnlocked });
+      useChatAppModeStore.setState({ appMode });
+      useModelStore.setState({ selectedModel, selectedProvider });
+      __resetCloudAccountSessionForTests();
+    }
+  });
 
   it.each([
     ['picture', readyImage, mockRunImageGenerationTurn],
@@ -624,7 +711,7 @@ describe('a picture or video asked for inside a chat before sharing with AI prov
       const accepted = await send('A lighthouse at dawn');
 
       expect(mockEnsureCloudSendConsent).toHaveBeenCalledTimes(1);
-      expect(accepted).toBe(false);
+      expect(accepted).toBe('declined');
       expect(run).not.toHaveBeenCalled();
       expect(useChatExecutionStore.getState().error).toBeNull();
       expect(useChatStore.getState().messages['thread-1']).toEqual([QUESTION]);
@@ -753,6 +840,72 @@ describe('a send in a Cloud chat this account has not allowed to share with AI p
     await settle();
     return accepted;
   }
+
+  it.each([
+    ['storage-unavailable', 'Could not save the message offline'],
+    ['queue-full', 'Offline queue is full'],
+  ] as const)('leaves the draft in place when offline admission is %s', async (reason, title) => {
+    const view = render(<ChatScreen />);
+    await settle();
+    await answerLastQuestion(CLOUD_PROVIDER_CONSENT_ALLOW_LABEL);
+    expect(useChatAppModeStore.getState().appMode).toBe('cloud');
+    const enqueue = jest.spyOn(offlineQueue, 'enqueue').mockImplementation(() => {
+      throw new OfflineQueueAdmissionError(reason);
+    });
+    try {
+      mockIsOnline = false;
+      view.rerender(<ChatScreen />);
+      expect(await sendFromComposer('Keep this draft.')).toBe(false);
+      expect(enqueue).toHaveBeenCalled();
+      expect(alert).toHaveBeenCalledWith(title, expect.stringContaining('still in the composer'));
+    } finally {
+      enqueue.mockRestore();
+    }
+  });
+
+  it('keeps temporary chat drafts out of persisted offline storage', async () => {
+    useChatStore.setState((state) => ({
+      conversations: state.conversations.map((conversation) =>
+        conversation.id === 'thread-1' ? { ...conversation, temporary: true } : conversation,
+      ),
+    }));
+    const view = render(<ChatScreen />);
+    await settle();
+    await answerLastQuestion(CLOUD_PROVIDER_CONSENT_ALLOW_LABEL);
+    expect(useChatAppModeStore.getState().appMode).toBe('cloud');
+    const enqueue = jest.spyOn(offlineQueue, 'enqueue');
+    try {
+      mockIsOnline = false;
+      view.rerender(<ChatScreen />);
+      expect(await sendFromComposer('Keep this temporary draft.')).toBe(false);
+      expect(enqueue).not.toHaveBeenCalled();
+      expect(alert).toHaveBeenCalledWith(
+        'Connect to send in a temporary chat',
+        expect.stringContaining('still in the composer'),
+      );
+    } finally {
+      enqueue.mockRestore();
+    }
+  });
+
+  it('shows one waiting message for a prompt the offline queue already holds', async () => {
+    const view = render(<ChatScreen />);
+    await settle();
+    await answerLastQuestion(CLOUD_PROVIDER_CONSENT_ALLOW_LABEL);
+    expect(useChatAppModeStore.getState().appMode).toBe('cloud');
+    try {
+      mockIsOnline = false;
+      view.rerender(<ChatScreen />);
+      expect(await sendFromComposer('One saved prompt.')).toBe(true);
+      expect(await sendFromComposer('One saved prompt.')).toBe(true);
+      const [queued] = offlineQueue.getQueue();
+      expect(offlineQueue.getQueueSize()).toBe(1);
+      const messages = useChatStore.getState().messages['thread-1'] ?? [];
+      expect(messages.filter((message) => message.offlineQueueId === queued?.id)).toHaveLength(1);
+    } finally {
+      offlineQueue.clear();
+    }
+  });
 
   it('asks again on Send after Not now, keeps the draft, and sends once AGI Cloud is open', async () => {
     const sendMessage = jest.fn().mockResolvedValue(true);

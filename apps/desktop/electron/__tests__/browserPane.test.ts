@@ -232,6 +232,24 @@ describe('the browser pane', () => {
     expect(view.visible).toBe(false);
   });
 
+  it('keeps a collapsed pane hidden when site approval finishes', async () => {
+    const pane = await load();
+    const window = fakeWindow() as never;
+    await pane.openBrowserPane(window, BOUNDS, 'localhost:3000');
+    const response = Promise.withResolvers<{ response: number }>();
+    showMessageBox.mockReturnValueOnce(response.promise);
+    const navigation = pane.navigateBrowserPane(window, 'example.com');
+
+    pane.hideBrowserPane(window);
+    response.resolve({ response: 1 });
+    await navigation;
+
+    expect(views[0]?.webContents.getURL()).toBe('https://example.com/');
+    expect(views[0]?.visible).toBe(false);
+    await pane.openBrowserPane(window, BOUNDS, null);
+    expect(views[0]?.visible).toBe(true);
+  });
+
   it('opens no new windows: a link that wants one is shown in the pane', async () => {
     const pane = await load();
     await pane.openBrowserPane(fakeWindow() as never, BOUNDS, 'localhost:3000');

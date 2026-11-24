@@ -743,6 +743,32 @@ describe('executeChromeManagedChat', () => {
     expect(deps.onText).toHaveBeenCalledWith('hello');
   });
 
+  it('continues an Auto turn when only a fallback model is admitted', async () => {
+    const admittedModel = getRoutingSlotModel('vision_fast');
+    const deps = dependencies({
+      getModelAccess: vi.fn(async () => ({
+        subscriptionTier: 'max',
+        modelIds: [admittedModel],
+        allowedAutoModes: ['auto'],
+      })),
+    });
+
+    const result = await executeChromeManagedChat(
+      {
+        id: 'stream-only-admitted',
+        text: 'Give me a short answer.',
+        modelSelection: 'auto',
+        currentModelKey: getRoutingSlotModel('workhorse_general'),
+        previousTaskType: 'simple_chat',
+      },
+      deps,
+    );
+
+    expect(result).toMatchObject({ status: 'success', routing: { modelKey: admittedModel } });
+    expect(vi.mocked(deps.streamChat).mock.calls[0]?.[2].model).toBe('auto');
+    expect(deps.onText).toHaveBeenCalledWith('hello');
+  });
+
   // `agiwork` makes the server force web_search, web_fetch and code_execution on
   // and prepend "always call a tool before responding", so a trivial prompt
   // planned steps and paused on approvals. The panel offers a chat, not a run.

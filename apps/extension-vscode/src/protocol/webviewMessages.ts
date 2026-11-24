@@ -1,3 +1,4 @@
+import { DICTATION_MIME_TYPES, MAX_DICTATION_BASE64_CHARS } from './dictationLimits';
 import { z } from 'zod';
 import { REMOTE_CODE_LIMITS } from '@agiworkforce/types';
 
@@ -69,6 +70,21 @@ const manageBilling = z.object({ type: z.literal('manageBilling') });
 const openModelPopover = z.object({ type: z.literal('openModelPopover') });
 const openFilePicker = z.object({ type: z.literal('openFilePicker') });
 const newChat = z.object({ type: z.literal('newChat') });
+const openOutputStyles = z.object({ type: z.literal('openOutputStyles') });
+const openNextEffort = z.object({ type: z.literal('openNextEffort') });
+const clearNextEffort = z.object({ type: z.literal('clearNextEffort') });
+const toggleFocusView = z.object({ type: z.literal('toggleFocusView') });
+const stopChildTask = z.object({
+  type: z.literal('stopChildTask'),
+  payload: z.object({ taskId: z.string().min(1).max(200) }),
+});
+const openChildTaskTranscript = z.object({
+  type: z.literal('openChildTaskTranscript'),
+  payload: z.object({ taskId: z.string().min(1).max(200) }),
+});
+const openBackgroundCommands = z.object({ type: z.literal('openBackgroundCommands') });
+const openReplyBookmarks = z.object({ type: z.literal('openReplyBookmarks') });
+const openAnsweredQuestions = z.object({ type: z.literal('openAnsweredQuestions') });
 const openArchivedSessions = z.object({ type: z.literal('openArchivedSessions') });
 const composerBinding = z.object({
   instance: z.string().min(1).max(64),
@@ -76,13 +92,33 @@ const composerBinding = z.object({
   attachments: z.number().int().nonnegative(),
 });
 export type ComposerBinding = z.infer<typeof composerBinding>;
+export const DictationAudioSchema = z.object({
+  mimeType: z.enum(DICTATION_MIME_TYPES),
+  base64: z
+    .string()
+    .min(4)
+    .max(MAX_DICTATION_BASE64_CHARS)
+    .regex(/^[A-Za-z0-9+/]+={0,2}$/u),
+  language: z.string().max(35).optional(),
+});
+export type DictationAudio = z.infer<typeof DictationAudioSchema>;
+const startDictation = z.object({
+  type: z.literal('startDictation'),
+  payload: z.object({ id: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER) }),
+});
+const cancelDictation = z.object({
+  type: z.literal('cancelDictation'),
+  payload: startDictation.shape.payload,
+});
 const composerState = z.object({ type: z.literal('composerState'), payload: composerBinding });
 const messageAction = z.object({
   type: z.literal('messageAction'),
   payload: z.object({
-    action: z.enum(['resend', 'branch', 'branchAnswer']),
+    action: z.enum(['resend', 'branch', 'branchAnswer', 'bookmarkAnswer']),
     text: z.string().min(1).max(1_000_000),
     occurrence: z.number().int().nonnegative().max(10_000),
+    messageIndex: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
+    bookmarkButtonId: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
     composer: composerBinding.optional(),
   }),
 });
@@ -132,6 +168,9 @@ const openPathReference = z.object({
   }),
 });
 
+export const MAX_COMPOSER_ATTACHMENT_BYTES = 10_000_000;
+export const MAX_COMPOSER_ATTACHMENT_BATCH = 8;
+
 const attachFiles = z.object({
   type: z.literal('attachFiles'),
   payload: z.object({
@@ -146,7 +185,7 @@ const attachFiles = z.object({
               message: 'Filename must not contain path separators',
             }),
           mimeType: z.string().min(1).max(200),
-          sizeBytes: z.number().int().min(0).max(10_000_000),
+          sizeBytes: z.number().int().min(0).max(MAX_COMPOSER_ATTACHMENT_BYTES),
           dataUrl: z
             .string()
             .min(1)
@@ -157,7 +196,7 @@ const attachFiles = z.object({
         }),
       )
       .min(1)
-      .max(8),
+      .max(MAX_COMPOSER_ATTACHMENT_BATCH),
   }),
 });
 
@@ -170,7 +209,9 @@ const fileSearch = z.object({
 
 const setMode = z.object({
   type: z.literal('setMode'),
-  payload: z.object({ mode: AgentModeSchema }),
+  payload: z
+    .object({ mode: AgentModeSchema, editAutomatically: z.literal(true).optional() })
+    .refine((value) => !value.editAutomatically || value.mode === 'auto'),
 });
 
 const setEffort = z.object({
@@ -202,6 +243,24 @@ const requestSessions = z.object({
   type: z.literal('requestSessions'),
   payload: z.object({ source: z.enum(['local', 'cloud']) }),
 });
+const setSessionUnread = z.object({
+  type: z.literal('setSessionUnread'),
+  payload: z.object({ id: z.string().min(1).max(256), unread: z.boolean() }),
+});
+const setSessionPinned = z.object({
+  type: z.literal('setSessionPinned'),
+  payload: z.object({ id: z.string().min(1).max(256), pinned: z.boolean() }),
+});
+export const MAX_SESSION_GROUP_SELECTION = 100;
+const groupedSessionId = z.string().min(1).max(200);
+const chooseSessionGroup = z.object({
+  type: z.literal('chooseSessionGroup'),
+  payload: z.union([
+    z.object({ id: groupedSessionId }),
+    z.object({ ids: z.array(groupedSessionId).min(1).max(MAX_SESSION_GROUP_SELECTION) }),
+  ]),
+});
+const manageSessionGroups = z.object({ type: z.literal('manageSessionGroups') });
 
 const openSessionRow = z.object({
   type: z.literal('openSessionRow'),
@@ -331,6 +390,17 @@ export const WebviewToExtSchema = z.discriminatedUnion('type', [
   openFilePicker,
   newChat,
   openArchivedSessions,
+  openReplyBookmarks,
+  openAnsweredQuestions,
+  openOutputStyles,
+  openNextEffort,
+  clearNextEffort,
+  toggleFocusView,
+  stopChildTask,
+  openChildTaskTranscript,
+  openBackgroundCommands,
+  startDictation,
+  cancelDictation,
   searchSessions,
   messageAction,
   composerState,
@@ -354,6 +424,10 @@ export const WebviewToExtSchema = z.discriminatedUnion('type', [
   clearActiveProject,
   openSurface,
   requestSessions,
+  setSessionUnread,
+  setSessionPinned,
+  chooseSessionGroup,
+  manageSessionGroups,
   openSessionRow,
   requestSlashCommands,
   runSlashCommand,

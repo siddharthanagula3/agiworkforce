@@ -88,9 +88,16 @@ import { useAuthStore } from '../src/features/auth/store';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { API_URL } from '../lib/constants';
 import {
-  MULTILINE_FIELD_MAX_HEIGHT,
   fieldRevealOffset,
+  personalizationFieldHeight,
 } from '../src/features/settings/personalization/personalizationFieldReveal';
+import { LARGEST_IOS_TEXT_SCALE, setTextScale } from '@/test-utils/textScale';
+
+const standardFieldHeight = personalizationFieldHeight(1, true, null);
+const originalFontScale = Dimensions.get('window').fontScale;
+
+beforeEach(() => setTextScale(1));
+afterEach(() => setTextScale(originalFontScale));
 
 const defaultPersonalization = {
   fullName: '',
@@ -559,8 +566,8 @@ describe('Personalization multiline fields', () => {
     const { getByLabelText } = render(<PersonalizationScreen />);
     const style = (label: string) => StyleSheet.flatten(getByLabelText(label).props.style);
 
-    expect(style('Custom Instructions').maxHeight).toBe(MULTILINE_FIELD_MAX_HEIGHT);
-    expect(style('More about you').maxHeight).toBe(MULTILINE_FIELD_MAX_HEIGHT);
+    expect(style('Custom Instructions').maxHeight).toBe(standardFieldHeight.maxHeight);
+    expect(style('More about you').maxHeight).toBe(standardFieldHeight.maxHeight);
     for (const label of ['Full Name', 'Nickname', 'Occupation']) {
       expect(style(label).maxHeight).toBeUndefined();
     }
@@ -571,9 +578,43 @@ describe('Personalization multiline fields', () => {
     const input = getByLabelText('Custom Instructions');
 
     expect(input.props.multiline).toBe(true);
-    expect(MULTILINE_FIELD_MAX_HEIGHT).toBeGreaterThan(100);
-    expect(MULTILINE_FIELD_MAX_HEIGHT).toBeLessThanOrEqual(160);
-    expect(StyleSheet.flatten(input.props.style).maxHeight).toBe(MULTILINE_FIELD_MAX_HEIGHT);
+    expect(standardFieldHeight.maxHeight).toBeGreaterThan(100);
+    expect(standardFieldHeight.maxHeight).toBeLessThanOrEqual(160);
+    expect(StyleSheet.flatten(input.props.style).maxHeight).toBe(standardFieldHeight.maxHeight);
+  });
+
+  it('grows the fields and gives the examples and title room at the largest size', () => {
+    const original = Dimensions.get('window').fontScale;
+    setTextScale(LARGEST_IOS_TEXT_SCALE);
+    try {
+      const { getByLabelText, getByRole, getByText } = render(<PersonalizationScreen />);
+      const header = getByRole('header', { name: 'Personalization' });
+      expect(header.props.adjustsFontSizeToFit).toBe(true);
+      expect(header.props.maxFontSizeMultiplier).toBeUndefined();
+      expect(StyleSheet.flatten(header.props.style).textAlign).toBe('left');
+      const occupation = getByLabelText('Occupation');
+      expect(occupation.props.placeholder).toBeUndefined();
+      expect(getByText('e.g. Founder & Engineer')).toBeTruthy();
+      expect(StyleSheet.flatten(occupation.props.style).minHeight).toBeGreaterThan(48);
+      const instructions = getByLabelText('Custom Instructions');
+      expect(StyleSheet.flatten(instructions.props.style).maxHeight).toBeGreaterThan(
+        standardFieldHeight.maxHeight,
+      );
+    } finally {
+      setTextScale(original);
+    }
+  });
+
+  it('fits a large editor inside the keyboard space while preserving a readable line', () => {
+    const single = personalizationFieldHeight(LARGEST_IOS_TEXT_SCALE, false, null).minHeight;
+    const room = single * 2;
+    const multiline = personalizationFieldHeight(LARGEST_IOS_TEXT_SCALE, true, room);
+    expect(multiline.maxHeight).toBe(room);
+    expect(multiline.minHeight).toBeLessThanOrEqual(room);
+    expect(personalizationFieldHeight(LARGEST_IOS_TEXT_SCALE, true, 20)).toEqual({
+      minHeight: single,
+      maxHeight: single,
+    });
   });
 });
 
@@ -728,6 +769,32 @@ describe('Personalization focused field reveal', () => {
 
     keyboardEvent('keyboardDidChangeFrame');
     expect(scrollTo).toHaveBeenCalledWith({ y: expectedOffset(), animated: true });
+  });
+
+  it('caps the focused editor to the measured space at the largest size and restores it on hide', () => {
+    setOS('ios');
+    const original = Dimensions.get('window').fontScale;
+    setTextScale(LARGEST_IOS_TEXT_SCALE);
+    try {
+      const screen = render(<PersonalizationScreen />);
+      const height = () =>
+        StyleSheet.flatten(screen.getByLabelText('Custom Instructions').props.style).maxHeight;
+      const expanded = height();
+      focus('Custom Instructions', screen);
+      const keyboardTop = 260;
+      act(() =>
+        listeners.get('keyboardDidChangeFrame')?.({
+          endCoordinates: { screenY: keyboardTop, height: 500 },
+        }),
+      );
+      flushFrames();
+      expect(height()).toBe(keyboardTop - SCROLL_FRAME.y - 2 * MARGIN);
+      expect(height()).toBeLessThan(expanded);
+      act(() => listeners.get('keyboardDidHide')?.({}));
+      expect(height()).toBe(expanded);
+    } finally {
+      setTextScale(original);
+    }
   });
 
   it('waits for the keyboard when focus lands before it appears, on Android', () => {

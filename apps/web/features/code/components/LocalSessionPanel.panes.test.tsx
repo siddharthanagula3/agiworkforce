@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -166,12 +166,38 @@ afterEach(() => {
 });
 
 describe('the iOS Simulator pane of a local session', () => {
+  it('opens supported tools from the Side panel without adding shortcuts for unsupported tools', async () => {
+    const user = userEvent.setup();
+    onDesktop({ simulator: true });
+    renderPanel();
+
+    await screen.findByRole('button', { name: 'iOS Simulator' });
+    const sidePanel = screen.getByRole('button', { name: 'Side panel' });
+    await user.click(sidePanel);
+    const shortcuts = within(screen.getByRole('complementary', { name: 'Panel shortcuts' }));
+    expect(shortcuts.getByRole('button', { name: /^Terminal/u })).toBeInTheDocument();
+    await user.click(shortcuts.getByRole('button', { name: 'Browser' }));
+    expect(screen.getByRole('complementary', { name: 'Browser' })).toBeInTheDocument();
+
+    await user.click(sidePanel);
+    await user.click(sidePanel);
+    await user.click(
+      within(screen.getByRole('complementary', { name: 'Panel shortcuts' })).getByRole('button', {
+        name: 'iOS Simulator',
+      }),
+    );
+    expect(screen.getByRole('complementary', { name: 'iOS Simulator' })).toBeInTheDocument();
+  });
+
   it('is not offered where the desktop app cannot run it', async () => {
     onDesktop({ simulator: false });
     renderPanel();
 
     expect(await screen.findByRole('button', { name: 'Browser' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'iOS Simulator' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Side panel' }));
+    const shortcuts = within(screen.getByRole('complementary', { name: 'Panel shortcuts' }));
+    expect(shortcuts.queryByRole('button', { name: 'iOS Simulator' })).not.toBeInTheDocument();
   });
 
   it('is not offered outside the desktop app', async () => {

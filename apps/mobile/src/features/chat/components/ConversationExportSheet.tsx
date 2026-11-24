@@ -157,12 +157,12 @@ export function ConversationExportSheet({
         accessibilityRole="button"
         accessible={false}
       >
-        <SafeAreaView edges={['bottom']} style={styles.safeArea}>
-          <PressableBox
-            style={[styles.sheet, { backgroundColor: colors.surfaceElevated }]}
-            onPress={() => undefined}
-            accessible={false}
-          >
+        <PressableBox
+          style={[styles.sheet, { backgroundColor: colors.surfaceElevated }]}
+          onPress={() => undefined}
+          accessible={false}
+        >
+          <SafeAreaView edges={['bottom']} style={styles.content}>
             <View
               style={{
                 flexDirection: 'row',
@@ -296,8 +296,8 @@ export function ConversationExportSheet({
                 );
               })}
             </View>
-          </PressableBox>
-        </SafeAreaView>
+          </SafeAreaView>
+        </PressableBox>
       </PressableBox>
     </Modal>
   );
@@ -308,10 +308,12 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'flex-end',
   },
-  safeArea: contentColumn('reading'),
   sheet: {
+    ...contentColumn('reading'),
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
+  },
+  content: {
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 8,

@@ -543,3 +543,23 @@ h3[data-markdown-heading] {
 .artifact-document-editor__content .selectedCell {
   background: var(--chat-surface-hover);
 }
+
+.chat-composer-focus [data-composer-textarea]:focus-visible {
+  outline: none;
+}
+
+.chat-composer-focus:has([data-composer-textarea]:focus-visible:not([data-pointer-focus])) {
+  outline: 2px solid var(--chat-text-primary);
+  outline-offset: 2px;
+}
+
+@media (forced-colors: active) {
+  .chat-composer-focus [data-composer-textarea] {
+    border: 0 !important;
+    outline: none !important;
+  }
+
+  .chat-composer-focus:has([data-composer-textarea]:focus-visible:not([data-pointer-focus])) {
+    outline-color: Highlight;
+  }
+}

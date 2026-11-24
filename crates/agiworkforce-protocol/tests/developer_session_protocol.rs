@@ -128,6 +128,7 @@ fn thread_response_keeps_cli_and_vscode_on_one_session_identity() {
         client: None,
         repository: None,
         writer: None,
+        pinned: None,
         location: None,
     };
     let response = AppServerResponse::success(
@@ -166,6 +167,7 @@ fn thread_read_reports_when_only_a_bounded_transcript_window_is_returned() {
             client: None,
             repository: None,
             writer: None,
+            pinned: None,
             location: None,
         },
         messages: vec![DeveloperMessage {
@@ -219,6 +221,7 @@ fn the_wider_thread_summary_stays_additive() {
         client: None,
         repository: None,
         writer: None,
+        pinned: None,
         location: None,
     };
     let value = serde_json::to_value(&bare).expect("serialize bare summary");
@@ -228,6 +231,7 @@ fn the_wider_thread_summary_stays_additive() {
         "client",
         "repository",
         "writer",
+        "pinned",
     ] {
         assert!(
             value.get(absent).is_none(),
@@ -237,6 +241,7 @@ fn the_wider_thread_summary_stays_additive() {
     assert_eq!(value["createdBy"], "cli");
 
     let widened = ThreadSummary {
+        pinned: Some(true),
         git_branch: Some("main".to_string()),
         worktree_root: Some("/workspace/project".to_string()),
         client: Some("agi-desktop".to_string()),
@@ -248,6 +253,7 @@ fn the_wider_thread_summary_stays_additive() {
     assert_eq!(value["worktreeRoot"], "/workspace/project");
     assert_eq!(value["client"], "agi-desktop");
     assert_eq!(value["createdBy"], "desktop");
+    assert_eq!(value["pinned"], true);
     assert_eq!(
         serde_json::from_value::<ThreadSummary>(value).expect("round trip"),
         widened
@@ -280,6 +286,8 @@ fn a_turn_ends_with_a_typed_failure_or_an_explicit_null() {
         response: "done".to_string(),
         input_tokens: 10,
         output_tokens: 3,
+        cache_read_tokens: 0,
+        cache_write_tokens: 0,
         error: None,
         failure: None,
         managed_request_ids: Vec::new(),
@@ -331,6 +339,8 @@ fn a_turn_states_its_context_occupancy_apart_from_what_it_consumed() {
         response: "done".to_string(),
         input_tokens: 20_100,
         output_tokens: 200,
+        cache_read_tokens: 8_000,
+        cache_write_tokens: 500,
         error: None,
         failure: None,
         managed_request_ids: Vec::new(),
@@ -340,6 +350,8 @@ fn a_turn_states_its_context_occupancy_apart_from_what_it_consumed() {
     let value = serde_json::to_value(&measured).expect("serialize measured");
     assert_eq!(value["contextTokens"], 10_200);
     assert_eq!(value["inputTokens"], 20_100);
+    assert_eq!(value["cacheReadTokens"], 8_000);
+    assert_eq!(value["cacheWriteTokens"], 500);
     assert_eq!(
         serde_json::from_value::<TurnEndedNotification>(value).expect("round trip"),
         measured
@@ -347,9 +359,13 @@ fn a_turn_states_its_context_occupancy_apart_from_what_it_consumed() {
 
     let unmeasured = TurnEndedNotification {
         context_tokens: None,
+        cache_read_tokens: 0,
+        cache_write_tokens: 0,
         ..measured
     };
     let value = serde_json::to_value(&unmeasured).expect("serialize unmeasured");
+    assert!(value.get("cacheReadTokens").is_none());
+    assert!(value.get("cacheWriteTokens").is_none());
     assert!(
         value.get("contextTokens").is_none(),
         "a host that did not measure occupancy says nothing: {value}"

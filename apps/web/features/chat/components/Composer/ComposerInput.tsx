@@ -100,7 +100,6 @@ export interface ComposerInputProps {
   onSubmit: () => void;
   /** Cmd/Ctrl+Shift+Enter in the editor arm; the textarea arm reads it in `onKeyDown`. */
   onAlternateSubmit: () => void;
-  onFocusChange: (focused: boolean) => void;
   placeholder: string | undefined;
   disabled: boolean;
   maxLength: number;
@@ -120,7 +119,6 @@ function ComposerTextarea({
   onChange,
   onKeyDown,
   onPaste,
-  onFocusChange,
   placeholder,
   disabled,
   maxLength,
@@ -141,8 +139,6 @@ function ComposerTextarea({
       onChange={onChange}
       onKeyDown={onKeyDown}
       onPaste={onPaste}
-      onFocus={() => onFocusChange(true)}
-      onBlur={() => onFocusChange(false)}
       placeholder={placeholder}
       disabled={disabled}
       className={cn(
@@ -170,7 +166,6 @@ function ComposerRichEditor({
   onDropFiles,
   onSubmit,
   onAlternateSubmit,
-  onFocusChange,
   placeholder,
   disabled,
   maxLength,
@@ -229,7 +224,6 @@ function ComposerRichEditor({
       onTextChange={onTextChange}
       onSubmit={onSubmit}
       onAlternateSubmit={onAlternateSubmit}
-      onFocusChange={onFocusChange}
       onPasteDecision={onPasteDecision}
       onPasteCode={onPasteCode}
       onDropFiles={onDropFiles}

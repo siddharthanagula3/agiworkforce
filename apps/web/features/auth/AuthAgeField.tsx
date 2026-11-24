@@ -1,9 +1,7 @@
 'use client';
 
-import { useId } from 'react';
 import {
   ACCOUNT_AGE_FIELD_LABEL,
-  ACCOUNT_AGE_REQUIREMENT_NOTICE,
   accountAgeRefusalMessage,
   type AccountAgeRefusal,
 } from '@agiworkforce/types';
@@ -18,9 +16,16 @@ const REFUSAL_COPY_KEY: Readonly<Record<AccountAgeRefusal, string>> = {
   too_young: 'flow.age.ineligible',
 };
 
-export function AuthAgeField({ gate, disabled }: { gate: SignupAgeGate; disabled: boolean }) {
+export function AuthAgeField({
+  gate,
+  disabled,
+  noticeId,
+}: {
+  gate: SignupAgeGate;
+  disabled: boolean;
+  noticeId: string;
+}) {
   const copy = useAuthCopy();
-  const noticeId = useId();
   const describesRule = gate.verdict !== 'eligible' && gate.refusedAs !== 'too_young';
   const refusalText = gate.refusedAs === null ? null : accountAgeRefusalMessage(gate.refusedAs);
   const refusal =
@@ -46,11 +51,6 @@ export function AuthAgeField({ gate, disabled }: { gate: SignupAgeGate; disabled
         disabled={disabled}
         onChange={(event) => gate.enter(event.target.value)}
       />
-      {describesRule ? (
-        <p id={noticeId} className="sr-only">
-          {copy.text('flow.age.notice', ACCOUNT_AGE_REQUIREMENT_NOTICE)}
-        </p>
-      ) : null}
     </div>
   );
 }

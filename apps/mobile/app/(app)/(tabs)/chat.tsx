@@ -1,4 +1,7 @@
-import { runComposerAttachmentPick } from '@/src/features/chat/utils/runComposerAttachmentPick';
+import {
+  attachmentFromPickedDocument,
+  runComposerAttachmentPick,
+} from '@/src/features/chat/utils/runComposerAttachmentPick';
 import {
   agreeToCloudUploadAhead,
   takeCloudUploadAgreedAhead,
@@ -92,6 +95,7 @@ import { useModelStore } from '@/src/features/model-picker/store';
 import {
   DEFAULT_CLOUD_MODEL_ID,
   DEFAULT_LOCAL_MODEL_ID,
+  LOCAL_MODEL_LIST,
   getSelectableModelById,
   getShortDisplayName,
   isSelectableModelIdForAccess,
@@ -148,6 +152,7 @@ import {
   captureCloudAccountEpoch,
   isCloudAccountEpochCurrent,
 } from '@/src/features/auth/services/cloudAccountSession';
+import { resolveLocalModelRef } from '@/src/features/model-picker/localModelRuntime';
 import { ComposerApprovalModeControl } from '@/src/features/chat/components/ComposerApprovalModeControl';
 import { pickableDocumentMimeTypes } from '@/services/docParser';
 import { useMobileSkillSelectionStore } from '@/src/features/skills/selectionStore';
@@ -166,8 +171,14 @@ const HEADER_SIDE_SLOT = 44;
 const NEW_CHAT_SYMBOL_SIZE = 40;
 const GREETING_MINIMUM_FONT_SCALE = 0.6;
 
-async function sharingAllowedWhile(isStillCurrent: () => boolean): Promise<boolean> {
-  return (await sharingWithProvidersAllowed()) && isStillCurrent();
+async function sharingAllowedWhile(
+  isStillCurrent: () => boolean,
+  onConsentDeclined?: () => void,
+): Promise<boolean> {
+  const allowed = await sharingWithProvidersAllowed(() => {
+    if (isStillCurrent()) onConsentDeclined?.();
+  });
+  return allowed && isStillCurrent();
 }
 
 export default function ChatTabScreen() {
@@ -252,6 +263,14 @@ export default function ChatTabScreen() {
   const grantedCapabilities = useTierStore((s) => s.grantedCapabilities);
   const installedModelIds = useModelInstallStore((s) => s.installedModelIds);
   const readySystemModelIds = useModelInstallStore((s) => s.readySystemModelIds);
+  const noCompatibleLocalModels = useModelInstallStore(
+    (state) =>
+      state.tier2Available === false &&
+      LOCAL_MODEL_LIST.every((model) => {
+        const { status } = state.statusForModel(model);
+        return status === 'unavailable' || status === 'locked';
+      }),
+  );
   const defaultLocalModelDownloading = useModelInstallStore(
     (s) => s.jobs[DEFAULT_LOCAL_MODEL_ID]?.status === 'downloading',
   );
@@ -477,6 +496,19 @@ export default function ChatTabScreen() {
   const mediaModelId = mediaKind ? resolveMediaModelId(mediaKind, selectedMediaModel) : null;
   const mediaModelName = mediaModelId ? getModelMetadataById(mediaModelId)?.name : undefined;
 
+  const pushFromComposer = useCallback(
+    (href: RouterHref) => {
+      startNewChatComposerRoundTrip();
+      router.push(href);
+    },
+    [router],
+  );
+
+  const openLocalModels = useCallback(
+    () => pushFromComposer('/(app)/models' as RouterHref),
+    [pushFromComposer],
+  );
+
   const handleSend = useCallback(
     async (
       text: string,
@@ -485,6 +517,7 @@ export default function ChatTabScreen() {
         awaitCompletion?: boolean;
         onAccepted?: () => void;
         onOpenConversation?: (conversationId: string) => void;
+        onConsentDeclined?: () => void;
       },
     ): Promise<boolean> => {
       const openCreatedConversation = (conversationId: string) => {
@@ -531,7 +564,8 @@ export default function ChatTabScreen() {
             videoRequest.prompt.length > 40
               ? videoRequest.prompt.slice(0, 40).trim() + '...'
               : videoRequest.prompt;
-          if (!(await sharingAllowedWhile(entryAccountCurrent))) return false;
+          if (!(await sharingAllowedWhile(entryAccountCurrent, dispatchOptions?.onConsentDeclined)))
+            return false;
           const conversationId = await createConversation(title);
           openCreatedConversation(conversationId);
           useChatViewStore.getState().resetMediaChoice('video');
@@ -624,7 +658,8 @@ export default function ChatTabScreen() {
           }
           const title =
             offer.prompt.length > 40 ? offer.prompt.slice(0, 40).trim() + '...' : offer.prompt;
-          if (!(await sharingAllowedWhile(isRequestCurrent))) return false;
+          if (!(await sharingAllowedWhile(isRequestCurrent, dispatchOptions?.onConsentDeclined)))
+            return false;
           const conversationId = await createConversation(title, projectId ?? undefined);
           if (!isRequestCurrent()) return false;
           const accepted = dispatchOptions?.awaitCompletion
@@ -648,7 +683,8 @@ export default function ChatTabScreen() {
             imageRequest.prompt.length > 40
               ? imageRequest.prompt.slice(0, 40).trim() + '...'
               : imageRequest.prompt;
-          if (!(await sharingAllowedWhile(entryAccountCurrent))) return false;
+          if (!(await sharingAllowedWhile(entryAccountCurrent, dispatchOptions?.onConsentDeclined)))
+            return false;
           const conversationId = await createConversation(title);
           openCreatedConversation(conversationId);
           useChatViewStore.getState().resetMediaChoice('image');
@@ -682,6 +718,40 @@ export default function ChatTabScreen() {
         }
 
         if (!modelForSend) return false;
+        if (activeMode === 'local' && !hasReadyLocalModel) {
+          const focusGeneration = composerFocusGenerationRef.current;
+          const isSameDraft = () =>
+            composerFocusedRef.current &&
+            composerFocusGenerationRef.current === focusGeneration &&
+            useChatAppModeStore.getState().appMode === 'local';
+          const modelReady =
+            !noCompatibleLocalModels &&
+            (await resolveLocalModelRef(modelForSend).then(
+              () => true,
+              () => false,
+            ));
+          if (!modelReady) {
+            if (isSameDraft()) {
+              Alert.alert(
+                noCompatibleLocalModels ? 'No compatible local models' : 'Download a model to chat',
+                noCompatibleLocalModels
+                  ? 'Your draft stays on this device. Switch to Cloud from the menu to use a hosted model.'
+                  : 'Your draft stays here while you choose an on-device model.',
+                [
+                  { text: 'Keep drafting', style: 'cancel' },
+                  {
+                    text: 'Open Models',
+                    onPress: () => {
+                      if (isSameDraft()) openLocalModels();
+                    },
+                  },
+                ],
+              );
+            }
+            return false;
+          }
+          if (!isSameDraft()) return false;
+        }
         if (activeMode === 'cloud' && !isOnline) {
           Alert.alert(OFFLINE_NEW_CLOUD_CHAT_ALERT.title, OFFLINE_NEW_CLOUD_CHAT_ALERT.message);
           return false;
@@ -690,7 +760,10 @@ export default function ChatTabScreen() {
         const titleSource = trimmed || fallbackTitle;
         const title =
           titleSource.length > 40 ? titleSource.slice(0, 40).trim() + '...' : titleSource;
-        if (activeMode === 'cloud' && !(await sharingAllowedWhile(entryAccountCurrent))) {
+        if (
+          activeMode === 'cloud' &&
+          !(await sharingAllowedWhile(entryAccountCurrent, dispatchOptions?.onConsentDeclined))
+        ) {
           return false;
         }
         const needingUpload =
@@ -718,9 +791,14 @@ export default function ChatTabScreen() {
         discardAbandoned = () => {
           if (!opened) void discardUnsentConversation(conversationId);
         };
-        const sendOptions = skillNameForTurn
-          ? { skillName: skillNameForTurn, skillTools: selectedSkillTools(skillSelection) }
-          : {};
+        const sendOptions = {
+          ...(skillNameForTurn
+            ? { skillName: skillNameForTurn, skillTools: selectedSkillTools(skillSelection) }
+            : {}),
+          ...(dispatchOptions?.onConsentDeclined
+            ? { onConsentDeclined: dispatchOptions.onConsentDeclined }
+            : {}),
+        };
         if (dispatchOptions?.awaitCompletion) {
           const accepted = await sendMessage(conversationId, trimmed, modelForSend, attachments, {
             ...sendOptions,
@@ -772,6 +850,9 @@ export default function ChatTabScreen() {
       discardUnsentConversation,
       sendMessage,
       modelForSend,
+      hasReadyLocalModel,
+      noCompatibleLocalModels,
+      openLocalModels,
       subscriptionTier,
       grantedCapabilities,
       imageGenerationEnabled,
@@ -808,12 +889,17 @@ export default function ChatTabScreen() {
   const handleComposerSend = useCallback(
     async (text: string, attachments?: Attachment[]): Promise<ComposerSendOutcome> => {
       const opened: { conversationId?: string } = {};
+      let declined = false;
       const accepted = await handleSend(text, attachments, {
+        onConsentDeclined: () => {
+          declined = true;
+        },
         onOpenConversation: (conversationId) => {
           opened.conversationId = conversationId;
           chatInputAttachRef.current?.handOverTypingTo?.(conversationId);
         },
       });
+      if (!accepted && declined) return 'declined';
       return accepted && opened.conversationId
         ? { openedConversationId: opened.conversationId }
         : accepted;
@@ -847,14 +933,6 @@ export default function ChatTabScreen() {
       setProjectPickerOpenSignal((value) => value + 1);
     }, STYLE_SHEET_HANDOFF_DELAY_MS);
   }, []);
-
-  const pushFromComposer = useCallback(
-    (href: RouterHref) => {
-      startNewChatComposerRoundTrip();
-      router.push(href);
-    },
-    [router],
-  );
 
   const handleOpenCloudAccess = useCallback(() => {
     pushFromComposer(beginCloudPostAuthIntent());
@@ -959,13 +1037,7 @@ export default function ChatTabScreen() {
           multiple: true,
         });
         if (!scope.isCurrent() || result.canceled) return [];
-        return result.assets.map((asset) => ({
-          id: `doc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          uri: asset.uri,
-          mimeType: asset.mimeType ?? 'application/octet-stream',
-          fileName: asset.name ?? 'document',
-          fileSize: asset.size,
-        }));
+        return result.assets.map(attachmentFromPickedDocument);
       },
       () => {
         Alert.alert('Error', 'Failed to pick document. Please try again.');
@@ -1310,7 +1382,8 @@ export default function ChatTabScreen() {
                 style={{ ...contentColumn('reading'), marginTop: 16 }}
               >
                 <DownloadModelBanner
-                  onPress={() => pushFromComposer('/(app)/models' as RouterHref)}
+                  onPress={openLocalModels}
+                  noCompatibleModels={noCompatibleLocalModels}
                 />
               </View>
             ) : null}
@@ -1413,16 +1486,18 @@ export default function ChatTabScreen() {
 
 interface DownloadModelBannerProps {
   onPress: () => void;
+  noCompatibleModels: boolean;
 }
 
-function DownloadModelBanner({ onPress }: DownloadModelBannerProps) {
+function DownloadModelBanner({ onPress, noCompatibleModels }: DownloadModelBannerProps) {
   const c = useThemeColors();
+  const title = noCompatibleModels ? 'No compatible local models' : 'Download a model to chat';
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel="Download a model to chat"
-      accessibilityHint="Opens the model library to download a local AI model"
+      accessibilityLabel={title}
+      accessibilityHint="Opens the model library"
       testID="download-model-banner"
       className="active:opacity-80"
       style={{
@@ -1452,10 +1527,12 @@ function DownloadModelBanner({ onPress }: DownloadModelBannerProps) {
       </View>
       <View style={{ flex: 1 }}>
         <Text style={{ fontSize: typeScale.footnote, fontWeight: '600', color: c.textPrimary }}>
-          Download a model to chat
+          {title}
         </Text>
         <Text style={{ fontSize: typeScale.caption, color: c.textMuted, marginTop: 2 }}>
-          Run AI privately on this device, no account needed.
+          {noCompatibleModels
+            ? 'Switch to Cloud from the menu to use a hosted model.'
+            : 'Run AI privately on this device, no account needed.'}
         </Text>
       </View>
     </Pressable>

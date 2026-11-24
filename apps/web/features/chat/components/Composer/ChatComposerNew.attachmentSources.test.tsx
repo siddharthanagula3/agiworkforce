@@ -203,6 +203,22 @@ describe('ChatComposerNew attachment sources', () => {
     expect(input.value).toBe('');
   });
 
+  it.each(['', 'application/octet-stream'])(
+    'shows picked images and PDFs with browser type %j',
+    async (type) => {
+      render(<ChatComposerNew onSend={vi.fn()} />);
+      const input = screen.getByLabelText('File upload') as HTMLInputElement;
+      const pdf = new File(['%PDF-1.7'], 'brief.PDF', { type });
+      const photo = new File([jpegWithLocationBytes()], 'beach.JPG', { type });
+
+      fireEvent.change(input, { target: { files: [photo, pdf] } });
+
+      expect(await screen.findByRole('button', { name: 'Remove beach.JPG' })).toBeTruthy();
+      expect(await screen.findByRole('button', { name: 'Remove brief.PDF' })).toBeTruthy();
+      expect(input.value).toBe('');
+    },
+  );
+
   it('offers every attachment type the shared contract allows, and no others', () => {
     render(<ChatComposerNew onSend={vi.fn()} />);
     const input = screen.getByLabelText('File upload') as HTMLInputElement;

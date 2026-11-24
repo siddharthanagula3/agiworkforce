@@ -2,6 +2,7 @@ import { scheduleLocalNotification } from './notifications';
 import { notificationAllowedOnceReadable } from './notificationGate';
 import type { NotificationEventType, NotificationPriority } from './notifications';
 import { FEATURES } from '@/lib/v1FeatureFlags';
+import { captureCloudAccountEpoch } from '@/src/features/auth/services/cloudAccountSession';
 
 interface ControlPayload {
   action: string;
@@ -84,6 +85,8 @@ const ACTION_MAP: Record<string, NotificationSpec> = {
 export async function dispatchCompanionNotification(payload: ControlPayload): Promise<void> {
   const spec = ACTION_MAP[payload.action];
   if (!spec) return;
+  const account = captureCloudAccountEpoch();
+  if (!account) return;
 
   if (!(await notificationAllowedOnceReadable(spec.type))) return;
 
@@ -92,6 +95,7 @@ export async function dispatchCompanionNotification(payload: ControlPayload): Pr
     body: spec.body(payload),
     type: spec.type,
     priority: spec.priority,
+    account,
     agentId: typeof payload.agentId === 'string' ? payload.agentId : undefined,
     route: spec.route,
     ...(typeof payload.rootId === 'string' ? { rootId: payload.rootId } : {}),

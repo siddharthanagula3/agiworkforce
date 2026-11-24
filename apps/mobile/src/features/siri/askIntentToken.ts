@@ -46,6 +46,7 @@ let modeGeneration = 0;
 let accountGeneration = 0;
 let lifecycleGeneration = 0;
 let ordinaryTail: Promise<void> | null = null;
+let keychainTail = Promise.resolve();
 let rotationAttempt: OrdinaryOperationOwner | null = null;
 let rotatedOwner: OrdinaryOperationOwner | null = null;
 
@@ -103,6 +104,12 @@ function enqueueOrdinaryOperation(
   return result;
 }
 
+function updateKeychain(operation: () => Promise<void>): Promise<void> {
+  const result = keychainTail.then(operation);
+  keychainTail = result.catch(() => undefined);
+  return result;
+}
+
 export function askFromSiriSupported(): boolean {
   return Platform.OS === 'ios';
 }
@@ -148,23 +155,28 @@ async function storeFreshToken(owner: OrdinaryOperationOwner): Promise<void> {
       { accountEpoch: owner.account },
     ),
   );
-  assertOrdinaryOwnerCurrent(owner);
-  const replacingEnabledToken = isAskFromSiriEnabled();
-  await SecureStore.setItemAsync(ASK_INTENT_KEYCHAIN_KEY, response.token, KEYCHAIN_OPTIONS);
-  if (!replacingEnabledToken && !isOrdinaryOwnerCurrent(owner)) {
-    storage.set(PENDING_REVOKE_KEY, REVOKE_WHOLE_INSTALL);
-    await SecureStore.deleteItemAsync(ASK_INTENT_KEYCHAIN_KEY, KEYCHAIN_OPTIONS);
-  }
-  assertOrdinaryOwnerCurrent(owner);
-  storage.set(TOKEN_ID_KEY, response.tokenId);
-  storage.delete(PENDING_REVOKE_KEY);
-  storage.set(ENABLED_KEY, true);
+  await updateKeychain(async () => {
+    assertOrdinaryOwnerCurrent(owner);
+    const replacingEnabledToken = isAskFromSiriEnabled();
+    await SecureStore.setItemAsync(ASK_INTENT_KEYCHAIN_KEY, response.token, KEYCHAIN_OPTIONS);
+    if (!replacingEnabledToken && !isOrdinaryOwnerCurrent(owner)) {
+      storage.set(PENDING_REVOKE_KEY, REVOKE_WHOLE_INSTALL);
+      await SecureStore.deleteItemAsync(ASK_INTENT_KEYCHAIN_KEY, KEYCHAIN_OPTIONS);
+    }
+    assertOrdinaryOwnerCurrent(owner);
+    storage.set(TOKEN_ID_KEY, response.tokenId);
+    storage.delete(PENDING_REVOKE_KEY);
+    storage.set(ENABLED_KEY, true);
+  });
 }
 
-async function forgetLocalToken(): Promise<void> {
-  storage.set(ENABLED_KEY, false);
-  storage.delete(TOKEN_ID_KEY);
-  await SecureStore.deleteItemAsync(ASK_INTENT_KEYCHAIN_KEY, KEYCHAIN_OPTIONS);
+function forgetLocalToken(isCurrent: () => boolean): Promise<void> {
+  return updateKeychain(async () => {
+    if (!isCurrent()) return;
+    storage.set(ENABLED_KEY, false);
+    storage.delete(TOKEN_ID_KEY);
+    await SecureStore.deleteItemAsync(ASK_INTENT_KEYCHAIN_KEY, KEYCHAIN_OPTIONS);
+  });
 }
 
 async function revokePath(tokenId: string | undefined): Promise<string> {
@@ -203,7 +215,7 @@ export async function disableAskFromSiri(): Promise<void> {
       }
       throw error;
     } finally {
-      if (isOrdinaryOwnerCurrent(owner)) await forgetLocalToken();
+      await forgetLocalToken(() => isOrdinaryOwnerCurrent(owner));
     }
   });
 }
@@ -290,10 +302,14 @@ export async function settleAskIntentOnLaunch(): Promise<void> {
   }
 }
 
-async function revokeWithCapturedSession(token: string): Promise<boolean> {
-  const endpoint = new URL(MOBILE_INTENT_TOKEN_PATH, API_URL);
-  endpoint.searchParams.set('installId', await getDeviceId());
+async function revokeWithCapturedSession(
+  token: string,
+  tokenId: string | undefined,
+  isCurrent: () => boolean,
+): Promise<boolean> {
+  const endpoint = new URL(await revokePath(tokenId), API_URL);
   for (let attempt = 0; attempt < SIGN_OUT_REVOKE_ATTEMPTS; attempt += 1) {
+    if (!isCurrent()) return true;
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), TIMEOUTS.SIGN_OUT_CLEANUP);
     try {
@@ -312,18 +328,24 @@ async function revokeWithCapturedSession(token: string): Promise<boolean> {
   return false;
 }
 
-export async function revokeAskIntentForSignOut(capturedClerkToken: string): Promise<void> {
-  lifecycleGeneration += 1;
+export async function revokeAskIntentForSignOut(
+  capturedClerkToken: string,
+  stillEndingSession: () => boolean = () => true,
+): Promise<void> {
+  if (!stillEndingSession()) return;
+  const generation = ++lifecycleGeneration;
+  const isCurrent = () => generation === lifecycleGeneration && stillEndingSession();
   rotationAttempt = null;
   rotatedOwner = null;
-  const hadToken = isAskFromSiriEnabled() || readString(PENDING_REVOKE_KEY) !== undefined;
+  const tokenId = readString(TOKEN_ID_KEY) ?? readString(PENDING_REVOKE_KEY);
+  const hadToken = isAskFromSiriEnabled() || tokenId !== undefined;
   const token = capturedClerkToken.trim();
   try {
-    if (hadToken && token && !(await revokeWithCapturedSession(token))) {
+    if (hadToken && token && !(await revokeWithCapturedSession(token, tokenId, isCurrent))) {
       throw new Error('The Ask from Siri token could not be revoked on sign-out');
     }
-    storage.delete(PENDING_REVOKE_KEY);
+    if (isCurrent()) storage.delete(PENDING_REVOKE_KEY);
   } finally {
-    await forgetLocalToken();
+    await forgetLocalToken(isCurrent);
   }
 }

@@ -21,16 +21,30 @@ export class ConversationTreeItem extends vscode.TreeItem {
     super(thread.title, vscode.TreeItemCollapsibleState.None);
     const cloud = isCloudThread(thread);
     const updated = formatSessionAge(Date.parse(thread.updatedAt), Date.now());
-    this.description = cloud ? `${t('conversationTree.cloudLabel')} · ${updated}` : updated;
+    this.description = cloud
+      ? `${t('conversationTree.cloudLabel')} · ${updated}`
+      : thread.pinned
+        ? `${t('webview.sessionPinned')} · ${updated}`
+        : updated;
     const branch = thread.gitBranch === undefined ? '' : ` · ${thread.gitBranch}`;
     this.tooltip = cloud
       ? `${t('chatNotice.cloudSessionReadOnly')}${branch}`
       : `${thread.model ?? 'Configured model'} · ${thread.cwd ?? 'workspace'}${branch}`;
     this.iconPath = new vscode.ThemeIcon(
-      thread.status === 'running' ? 'loading~spin' : cloud ? 'cloud' : 'comment',
+      thread.status === 'running'
+        ? 'loading~spin'
+        : cloud
+          ? 'cloud'
+          : thread.pinned
+            ? 'pinned'
+            : 'comment',
     );
     this.accessibilityInformation = {
-      label: cloud ? `${thread.title}, ${t('conversationTree.cloudLabel')}` : thread.title,
+      label: cloud
+        ? `${thread.title}, ${t('conversationTree.cloudLabel')}`
+        : thread.pinned
+          ? `${thread.title}, ${t('webview.sessionPinned')}`
+          : thread.title,
       role: 'treeitem',
     };
     this.contextValue = cloud ? 'cloudConversation' : 'conversation';
@@ -49,14 +63,21 @@ export class ConversationTreeErrorItem extends vscode.TreeItem {
     public readonly folderName: string,
     public readonly reason: string,
     public readonly restricted = false,
+    partial = false,
   ) {
-    const label = restricted ? t('webview.restrictedMode') : SESSION_LISTING_FAILURE_LABEL;
+    const label = restricted
+      ? t('webview.restrictedMode')
+      : partial
+        ? 'Session history incomplete'
+        : SESSION_LISTING_FAILURE_LABEL;
     super(label, vscode.TreeItemCollapsibleState.None);
     this.description = folderName;
     this.tooltip = new vscode.MarkdownString(
       restricted
         ? `${reason}\n\nSelect this item to manage workspace trust.`
-        : `${reason}\n\nThe AGI CLI could not list this workspace's developer sessions, so this list is incomplete. Select this item to open runtime setup.`,
+        : partial
+          ? `${reason}\n\nSessions already loaded are shown below. Select this item to retry loading the history.`
+          : `${reason}\n\nThe AGI CLI could not list this workspace's developer sessions. Select this item to open runtime setup.`,
     );
     this.iconPath = new vscode.ThemeIcon(restricted ? 'shield' : 'warning');
     this.accessibilityInformation = {
@@ -66,11 +87,13 @@ export class ConversationTreeErrorItem extends vscode.TreeItem {
     this.contextValue = 'conversationListingFailure';
     this.command = restricted
       ? { command: MANAGE_WORKSPACE_TRUST_COMMAND, title: t('webview.manageTrust') }
-      : {
-          command: 'agi-workforce.openSettings',
-          title: 'Open Runtime Setup',
-          arguments: ['configuration'],
-        };
+      : partial
+        ? { command: 'agi-workforce.refreshConversations', title: t('webview.retry') }
+        : {
+            command: 'agi-workforce.openSettings',
+            title: 'Open Runtime Setup',
+            arguments: ['configuration'],
+          };
   }
 }
 
@@ -84,6 +107,7 @@ export interface SessionListingFailure {
   folderName: string;
   reason: string;
   restricted?: boolean;
+  partial?: true;
 }
 
 export type SessionSearchHit = ThreadSearchResults['hits'][number];
@@ -91,27 +115,34 @@ export type SessionSearchHit = ThreadSearchResults['hits'][number];
 export interface SessionListing<T> {
   items: T[];
   failures: SessionListingFailure[];
+  pinSupportedIds?: ReadonlySet<string>;
 }
 
-async function listEveryThread(
+async function listThreadPages(
   runtime: LocalRuntimeClient,
   params: ThreadListParams,
-): Promise<ThreadSummary[]> {
-  const threads: ThreadSummary[] = [];
+): Promise<{ threads: ThreadSummary[]; failure?: { cause: unknown } }> {
+  const threads = new Map<string, ThreadSummary>();
   const seenCursors = new Set<string>();
   let cursor: string | undefined;
-  do {
-    const page = await runtime.listThreads(cursor === undefined ? params : { ...params, cursor });
-    threads.push(...page.threads);
-    cursor = page.nextCursor;
-    if (cursor !== undefined) {
-      if (seenCursors.has(cursor)) {
-        throw new Error('The session list did not advance past its continuation.');
+  try {
+    do {
+      const page = await runtime.listThreads(cursor === undefined ? params : { ...params, cursor });
+      cursor = page.nextCursor;
+      if (cursor !== undefined) {
+        if (seenCursors.has(cursor)) {
+          throw new Error('The session list did not advance past its continuation.');
+        }
+        seenCursors.add(cursor);
       }
-      seenCursors.add(cursor);
-    }
-  } while (cursor !== undefined);
-  return threads;
+      for (const thread of page.threads) {
+        if (!threads.has(thread.id)) threads.set(thread.id, thread);
+      }
+    } while (cursor !== undefined);
+    return { threads: [...threads.values()] };
+  } catch (cause) {
+    return { threads: [...threads.values()], failure: { cause } };
+  }
 }
 
 export class ConversationTreeProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
@@ -125,7 +156,6 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<vscode.
     string,
     { runtime: LocalRuntimeClient; cwd: string }
   >();
-  private listingFailures: SessionListingFailure[] = [];
 
   constructor(private readonly runtimes: LocalRuntimePool) {}
 
@@ -139,14 +169,15 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<vscode.
 
   async getChildren(element?: vscode.TreeItem): Promise<vscode.TreeItem[]> {
     if (element !== undefined) return [];
-    const threads = await this.getThreads();
+    const { items: threads, failures } = await this.listThreads();
     return [
-      ...this.listingFailures.map(
+      ...failures.map(
         (failure) =>
           new ConversationTreeErrorItem(
             failure.folderName,
             failure.reason,
             failure.restricted === true,
+            failure.partial === true,
           ),
       ),
       ...threads.map((thread) => new ConversationTreeItem(thread)),
@@ -157,23 +188,26 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<vscode.
     return (await this.listThreads()).items;
   }
 
-  async listThreads(): Promise<SessionListing<ThreadSummary>> {
+  async listThreads(
+    options: { includePinActions?: boolean } = {},
+  ): Promise<SessionListing<ThreadSummary>> {
+    await this.runtimes.waitForRestart();
     const folders = getAllWorkspaceFolders();
     this.runtimeByThread.clear();
     const failures: SessionListingFailure[] = [];
-    this.listingFailures = failures;
+    const pinSupportedIds = new Set<string>();
     if (folders.length === 0) return { items: [], failures };
     const pages = await Promise.all(
       folders.map(async (folder) => {
         try {
           const runtime = this.runtimes.forWorkspace(folder.uri.fsPath);
-          const listed = await listEveryThread(runtime, {
+          const { threads, failure } = await listThreadPages(runtime, {
             cwd: folder.uri.fsPath,
             limit: 100,
             includeArchived: false,
             includeCloud: true,
           });
-          const ownedThreads = listed.filter((thread) => {
+          const ownedThreads = threads.filter((thread) => {
             const owned =
               isCloudThread(thread) || isSameWorkspacePath(folder.uri.fsPath, thread.cwd);
             if (!owned) {
@@ -183,8 +217,26 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<vscode.
             }
             return owned;
           });
+          if (failure) {
+            if (ownedThreads.length === 0) throw failure.cause;
+            failures.push({
+              folderName: folder.name,
+              reason: describeListingFailure(failure.cause),
+              partial: true,
+            });
+          }
           for (const thread of ownedThreads) {
             this.runtimeByThread.set(thread.id, { runtime, cwd: folder.uri.fsPath });
+          }
+          if (
+            options.includePinActions &&
+            ownedThreads.length > 0 &&
+            (await runtime.offers('threadPin').catch(() => false))
+          ) {
+            for (const thread of ownedThreads) {
+              if (!isCloudThread(thread) && thread.status !== 'archived')
+                pinSupportedIds.add(thread.id);
+            }
           }
           return ownedThreads;
         } catch (error) {
@@ -202,26 +254,56 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<vscode.
       }),
     );
     return {
-      items: pages.flat().sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)),
+      items: pages
+        .flat()
+        .sort(
+          (a, b) =>
+            Number(!isCloudThread(b) && b.pinned === true) -
+              Number(!isCloudThread(a) && a.pinned === true) ||
+            Date.parse(b.updatedAt) - Date.parse(a.updatedAt),
+        ),
       failures,
+      ...(options.includePinActions ? { pinSupportedIds } : {}),
     };
   }
 
+  async setThreadPinned(threadId: string, pinned: boolean): Promise<boolean> {
+    const owner = this.runtimeByThread.get(threadId);
+    if (
+      !owner ||
+      !getAllWorkspaceFolders().some((folder) => isSameWorkspacePath(folder.uri.fsPath, owner.cwd))
+    ) {
+      return false;
+    }
+    await owner.runtime.setThreadPinned({ threadId, pinned });
+    this.refresh();
+    return true;
+  }
+
   async getArchivedThreads(): Promise<SessionListing<ThreadSummary>> {
+    await this.runtimes.waitForRestart();
     const failures: SessionListingFailure[] = [];
     const pages = await Promise.all(
       getAllWorkspaceFolders().map(async (folder) => {
         try {
           const runtime = this.runtimes.forWorkspace(folder.uri.fsPath);
-          const listed = await listEveryThread(runtime, {
+          const { threads, failure } = await listThreadPages(runtime, {
             cwd: folder.uri.fsPath,
             limit: 100,
             includeArchived: true,
           });
-          const archived = listed.filter(
+          const archived = threads.filter(
             (thread) =>
               thread.status === 'archived' && isSameWorkspacePath(folder.uri.fsPath, thread.cwd),
           );
+          if (failure) {
+            if (archived.length === 0) throw failure.cause;
+            failures.push({
+              folderName: folder.name,
+              reason: describeListingFailure(failure.cause),
+              partial: true,
+            });
+          }
           for (const thread of archived) {
             this.runtimeByThread.set(thread.id, { runtime, cwd: folder.uri.fsPath });
           }
@@ -239,6 +321,7 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<vscode.
   }
 
   async searchThreads(query: string): Promise<SessionListing<SessionSearchHit>> {
+    await this.runtimes.waitForRestart();
     const failures: SessionListingFailure[] = [];
     const pages = await Promise.all(
       getAllWorkspaceFolders().map(async (folder) => {
@@ -302,10 +385,17 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<vscode.
     return true;
   }
 
-  async resolveThread(threadId: string): Promise<ResolvedDeveloperSession | undefined> {
+  async resolveThread(
+    threadId: string,
+    options?: { includeArchived?: boolean },
+  ): Promise<ResolvedDeveloperSession | undefined> {
     let owner = this.runtimeByThread.get(threadId);
     if (owner === undefined) {
       await this.getThreads();
+      owner = this.runtimeByThread.get(threadId);
+    }
+    if (owner === undefined && options?.includeArchived) {
+      await this.getArchivedThreads();
       owner = this.runtimeByThread.get(threadId);
     }
     if (owner === undefined) return undefined;
@@ -356,6 +446,66 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<vscode.
     this.refresh();
     this._onDidRemoveThread.fire(threadId);
     return true;
+  }
+
+  async archiveInactiveSessions(
+    cutoff: Date,
+    canContinue: () => boolean,
+    isProtected: (id: string) => boolean,
+  ): Promise<number> {
+    const inactiveBefore = cutoff.toISOString();
+    let archived = 0;
+    workspaces: for (const { uri } of getAllWorkspaceFolders()) {
+      if (!canContinue()) break;
+      const cwd = uri.fsPath;
+      const runtime = this.runtimes.peekWorkspace(cwd);
+      if (runtime === undefined) continue;
+      try {
+        if (!(await runtime.offers('inactiveThreadArchive')) || !canContinue()) continue;
+        const { threads, failure } = await listThreadPages(runtime, {
+          cwd,
+          limit: 100,
+          includeArchived: false,
+          includeCloud: false,
+        });
+        if (failure) throw failure.cause;
+        for (const thread of threads) {
+          if (!canContinue()) break workspaces;
+          if (
+            !getAllWorkspaceFolders().some((folder) =>
+              isSameWorkspacePath(cwd, folder.uri.fsPath),
+            ) ||
+            !isSameWorkspacePath(cwd, thread.cwd) ||
+            isCloudThread(thread) ||
+            thread.pinned === true ||
+            thread.status !== 'idle' ||
+            thread.trustMode === 'unknown' ||
+            !(Date.parse(thread.updatedAt) < cutoff.getTime()) ||
+            isProtected(thread.id)
+          )
+            continue;
+          try {
+            const outcome = await runtime.archiveInactiveThread({
+              threadId: thread.id,
+              inactiveBefore,
+            });
+            if (!outcome?.archived) continue;
+            archived += 1;
+            this.runtimeByThread.delete(thread.id);
+            this._onDidRemoveThread.fire(thread.id);
+          } catch (error) {
+            console.warn(`[${PRODUCT_NAMES.code}] Could not archive an inactive session`, error);
+          }
+        }
+      } catch (error) {
+        console.warn(
+          `[${PRODUCT_NAMES.code}] Could not check sessions for automatic archiving`,
+          error,
+        );
+      }
+    }
+    if (archived > 0) this.refresh();
+    return archived;
   }
 
   async deleteThread(threadId: string): Promise<boolean> {

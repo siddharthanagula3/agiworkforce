@@ -6,6 +6,8 @@ import { setAccountMemoryStore, type AccountMemoryStore } from '../memory/accoun
 import { setChatFocus } from '../features/sidebar-webview/chatFocus';
 import { setupCommands, type CommandDeps } from '../core/commandSetup';
 import { __resetSubsystemHealthForTests } from '../core/subsystemHealth';
+import { ChatEditorPanel } from '../providers/chatEditorPanel';
+import { Config } from '../platform/config';
 
 type Handler = (...args: unknown[]) => unknown;
 
@@ -52,37 +54,51 @@ describe('open developer session command', () => {
     );
   });
 
-  it("opens the AGI chat, never the editor's built-in chat", async () => {
-    const handlers = new Map<string, Handler>();
-    vi.mocked(vscode.commands.registerCommand).mockImplementation(((
-      id: string,
-      handler: Handler,
-    ) => {
-      handlers.set(id, handler);
-      return new vscode.Disposable(() => undefined);
-    }) as never);
-    const sidebarProvider = { reveal: vi.fn() };
-    const unused = new Proxy({}, { get: () => vi.fn() });
-    setupCommands(
-      { subscriptions: [], secrets: {} } as unknown as vscode.ExtensionContext,
-      {
-        sidebarProvider,
-        conversationTreeProvider: unused,
-        localRuntimes: unused,
-        contextPanelProvider: unused,
-        memoryTreeProvider: unused,
-        diffDecorationProvider: unused,
-        diagnosticsProvider: unused,
-        nativeChatAvailable: true,
-      } as unknown as CommandDeps,
-    );
+  it.each(['sidebar', 'editor'] as const)(
+    'opens AGI chat in the preferred %s location',
+    async (location) => {
+      const handlers = new Map<string, Handler>();
+      vi.mocked(vscode.commands.registerCommand).mockImplementation(((
+        id: string,
+        handler: Handler,
+      ) => {
+        handlers.set(id, handler);
+        return new vscode.Disposable(() => undefined);
+      }) as never);
+      const sidebarProvider = { reveal: vi.fn() };
+      const unused = new Proxy({}, { get: () => vi.fn() });
+      setupCommands(
+        { subscriptions: [], secrets: {} } as unknown as vscode.ExtensionContext,
+        {
+          sidebarProvider,
+          conversationTreeProvider: unused,
+          localRuntimes: unused,
+          contextPanelProvider: unused,
+          memoryTreeProvider: unused,
+          diffDecorationProvider: unused,
+          diagnosticsProvider: unused,
+          nativeChatAvailable: true,
+        } as unknown as CommandDeps,
+      );
 
-    await handlers.get('agi-workforce.chat')?.();
+      const preference = vi.spyOn(Config, 'chatLocation').mockReturnValue(location);
+      const editor = vi
+        .spyOn(ChatEditorPanel, 'revealMostRecentOrCreate')
+        .mockReturnValue({} as never);
+      try {
+        await handlers.get('agi-workforce.chat')?.();
 
-    expect(vscode.commands.executeCommand).toHaveBeenCalledWith('agi-workforce.sidebar.focus');
-    expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith('workbench.action.chat.open');
-    expect(sidebarProvider.reveal).toHaveBeenCalledOnce();
-  });
+        expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith(
+          'workbench.action.chat.open',
+        );
+        expect(sidebarProvider.reveal).toHaveBeenCalledTimes(location === 'sidebar' ? 1 : 0);
+        expect(editor).toHaveBeenCalledTimes(location === 'editor' ? 1 : 0);
+      } finally {
+        preference.mockRestore();
+        editor.mockRestore();
+      }
+    },
+  );
 });
 
 describe('palette entries that a tree row usually fills in', () => {
@@ -197,6 +213,8 @@ describe('palette entries that a tree row usually fills in', () => {
     const panel = {
       resetConversation: vi.fn(),
       resumeConversation: vi.fn().mockResolvedValue(true),
+      checkpointsAvailable: vi.fn(),
+      showCheckpoints: vi.fn(),
     };
     const sidebarProvider = { reveal: vi.fn(), resumeConversation: vi.fn() };
     const handlers = register({
@@ -215,5 +233,24 @@ describe('palette entries that a tree row usually fills in', () => {
 
     expect(panel.resumeConversation).toHaveBeenCalledWith('fork-1');
     expect(sidebarProvider.resumeConversation).not.toHaveBeenCalled();
+  });
+
+  it('opens checkpoints for the chat that has focus', async () => {
+    const panel = {
+      resetConversation: vi.fn(),
+      resumeConversation: vi.fn(),
+      checkpointsAvailable: vi.fn().mockResolvedValue(true),
+      showCheckpoints: vi.fn().mockResolvedValue(undefined),
+    };
+    const sidebarProvider = { showCheckpoints: vi.fn() };
+    const handlers = register({ sidebarProvider });
+    setChatFocus(panel, true);
+    try {
+      await handlers.get('agi-workforce.showCheckpoints')?.();
+    } finally {
+      setChatFocus(panel, false);
+    }
+    expect(panel.showCheckpoints).toHaveBeenCalledOnce();
+    expect(sidebarProvider.showCheckpoints).not.toHaveBeenCalled();
   });
 });

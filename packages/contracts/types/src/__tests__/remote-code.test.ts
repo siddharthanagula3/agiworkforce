@@ -201,6 +201,43 @@ describe('host messages the phone accepts', () => {
     ).toBeNull();
   });
 
+  it('reads only a bounded set of confirmed follow-ups from a snapshot', () => {
+    const confirmed = { ...snapshot, confirmedGuidanceIds: ['phone-1'] };
+    expect(parseRemoteCodeSnapshot(confirmed)?.confirmedGuidanceIds).toEqual(['phone-1']);
+    expect(parseRemoteCodeSnapshot({ ...confirmed, confirmedGuidanceIds: [null] })).toBeNull();
+    expect(
+      parseRemoteCodeSnapshot({
+        ...confirmed,
+        confirmedGuidanceIds: Array.from(
+          { length: REMOTE_CODE_LIMITS.confirmedGuidance + 1 },
+          (_, i) => `phone-${i}`,
+        ),
+      }),
+    ).toBeNull();
+  });
+
+  it('reads only bounded replayable refusal records from a snapshot', () => {
+    const refusal = { requestId: 'phone-1', reason: 'start-failed', text: 'Keep the follow-up' };
+    expect(
+      parseRemoteCodeSnapshot({ ...snapshot, rejectedGuidance: [refusal] })?.rejectedGuidance,
+    ).toEqual([refusal]);
+    expect(
+      parseRemoteCodeSnapshot({
+        ...snapshot,
+        rejectedGuidance: [{ ...refusal, requestId: '' }],
+      }),
+    ).toBeNull();
+    expect(
+      parseRemoteCodeSnapshot({
+        ...snapshot,
+        rejectedGuidance: Array.from(
+          { length: REMOTE_CODE_LIMITS.rejectedGuidance + 1 },
+          (_, i) => ({ ...refusal, requestId: `phone-${i}` }),
+        ),
+      }),
+    ).toBeNull();
+  });
+
   it('reads a snapshot from a host that predates pending questions as having none', () => {
     const { pendingQuestions: _pendingQuestions, ...older } = snapshot;
     expect(parseRemoteCodeSnapshot(older)).toEqual({ ...older, pendingQuestions: [], tools: [] });
@@ -402,16 +439,49 @@ describe('host messages the phone accepts', () => {
       model: null,
       updatedAt: SENT_AT,
     };
-    const read = (location: unknown) =>
+    const read = (location: unknown, pinned?: unknown) =>
       parseRemoteCodeSessions({
         action: 'code.sessions',
         version: 1,
-        sessions: [{ ...entry, location }],
+        sessions: [{ ...entry, location, pinned }],
         unavailable: [],
         syncedAt: SENT_AT,
       })?.sessions[0];
     expect(read('cloud')?.location).toBe('cloud');
     expect(read('mars')).toEqual(entry);
+    expect(read(undefined, true)).toEqual({ ...entry, pinned: true });
+    expect(read(undefined, false)).toEqual(entry);
+    expect(read(undefined, 'true')).toEqual(entry);
+    expect(read('cloud', true)).toEqual({ ...entry, location: 'cloud' });
+  });
+
+  it('accepts only a bounded list of rejected follow-ups with a recognized reason', () => {
+    const event = {
+      type: 'guidance-rejected',
+      reason: 'start-failed',
+      rejectedGuidance: ['Keep this follow-up'],
+      queuedGuidance: [],
+    };
+    const read = (body: unknown) =>
+      parseRemoteCodeEvent({
+        action: 'code.session.event',
+        version: 1,
+        rootId: 'root-1',
+        threadId: 'thread-1',
+        event: body,
+        sentAt: SENT_AT,
+      });
+    expect(read(event)?.event).toEqual(event);
+    expect(read({ ...event, requestIds: ['phone-1'] })?.event).toEqual({
+      ...event,
+      requestIds: ['phone-1'],
+    });
+    expect(read({ ...event, requestIds: [''] })).toBeNull();
+    expect(read({ ...event, reason: 'unknown' })).toBeNull();
+    expect(read({ ...event, rejectedGuidance: [] })).toBeNull();
+    expect(
+      read({ ...event, rejectedGuidance: ['x'.repeat(REMOTE_CODE_LIMITS.guidanceLength + 1)] }),
+    ).toBeNull();
   });
 
   it('reads live diff and test events and refuses an oversized diff', () => {

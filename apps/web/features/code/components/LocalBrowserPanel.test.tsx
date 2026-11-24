@@ -63,6 +63,42 @@ describe('the browser panel in a coding session', () => {
     expect(screen.getByText('Browse the web')).toBeInTheDocument();
   });
 
+  it('preserves an address being typed when the current page reports a load update', async () => {
+    render(<LocalBrowserPanel address={null} addressKey={0} onClose={vi.fn()} />);
+    await act(async () => undefined);
+    const field = screen.getByLabelText('Web address');
+    const nextUrl = 'http://localhost:3000/next';
+    fireEvent.change(field, { target: { value: nextUrl } });
+    act(() => emitState({ ...OPEN, title: 'Current page finished loading' }));
+
+    expect(field).toHaveValue(nextUrl);
+    navigateBrowserPane.mockResolvedValue({ ...OPEN, url: nextUrl });
+    await act(async () => fireEvent.submit(field));
+    expect(navigateBrowserPane).toHaveBeenCalledWith(nextUrl);
+    act(() => emitState(OPEN));
+    expect(field).toHaveValue(OPEN.url);
+  });
+
+  it('reveals the native browser without asking it to load the original address again', async () => {
+    const props = { address: 'http://localhost:3000/', addressKey: 1, onClose: vi.fn() };
+    const { rerender } = render(<LocalBrowserPanel {...props} />);
+    await act(async () => undefined);
+    fireEvent.change(screen.getByRole('textbox', { name: 'Web address' }), {
+      target: { value: 'http://localhost:3000/unsent' },
+    });
+    rerender(<LocalBrowserPanel {...props} visible={false} />);
+    expect(screen.queryByRole('textbox', { name: 'Web address' })).toBeNull();
+    expect(hideBrowserPane).toHaveBeenCalledTimes(1);
+    rerender(<LocalBrowserPanel {...props} />);
+
+    await act(async () => undefined);
+    expect(openBrowserPane).toHaveBeenCalledTimes(2);
+    expect(openBrowserPane).toHaveBeenLastCalledWith(expect.anything(), null);
+    expect(screen.getByRole('textbox', { name: 'Web address' })).toHaveValue(
+      'http://localhost:3000/unsent',
+    );
+  });
+
   it('refuses what is not a web address before asking the shell', async () => {
     render(<LocalBrowserPanel address={null} addressKey={0} onClose={vi.fn()} />);
     await act(async () => undefined);

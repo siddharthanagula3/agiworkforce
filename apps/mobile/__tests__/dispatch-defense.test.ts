@@ -211,6 +211,7 @@ jest.mock('react-native-webrtc', () => ({
 
 jest.mock('@/lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb) => cb()),
+  storage: { getString: jest.fn(), set: jest.fn(), delete: jest.fn() },
   rehydrateWhenMmkvReady: jest.fn((store, _name) => {
     if (store && store.persist && typeof store.persist.rehydrate === 'function')
       store.persist.rehydrate();
@@ -956,6 +957,13 @@ describe('Companion Notifications, dispatchCompanionNotification', () => {
   const { dispatchCompanionNotification: realDispatch } = jest.requireActual(
     '../services/companionNotifications',
   ) as typeof import('../services/companionNotifications');
+
+  beforeEach(() => {
+    const { activateCloudAccount } = jest.requireActual<
+      typeof import('@/src/features/auth/services/cloudAccountSession')
+    >('@/src/features/auth/services/cloudAccountSession');
+    activateCloudAccount('companion-notification-owner');
+  });
 
   it('does nothing for an unknown action type', async () => {
     await realDispatch({ action: 'unknown_action_xyz' });

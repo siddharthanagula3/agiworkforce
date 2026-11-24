@@ -267,7 +267,7 @@ export async function signOutOfAgiCloud(
   secrets: vscode.SecretStorage,
   post: DeviceAuthPost = postJson,
 ): Promise<boolean> {
-  const token = await getAccountToken(secrets, { renew: false });
+  const token = await getAccountToken(secrets, { renew: false, includeShared: false });
   const refreshToken = await getAccountRefreshToken(secrets);
   const revoked =
     token === undefined && refreshToken === undefined

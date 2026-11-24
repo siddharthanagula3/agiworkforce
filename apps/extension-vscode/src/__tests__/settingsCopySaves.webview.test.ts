@@ -206,7 +206,10 @@ describe('settings helper copy', () => {
     }
 
     const hooks = document.getElementById('section-hooks')!;
-    expect(hooks.querySelector('h3')?.textContent).toBe('No hooks found');
+    expect(hooks.querySelector('h3')?.textContent).toBe('Local automation');
+    expect(hooks.querySelector('[data-command="showHooks"]')?.textContent).toContain(
+      'Manage hooks',
+    );
     expect(sentences(hooks.querySelector('p')?.textContent)).toBe(1);
   });
 });

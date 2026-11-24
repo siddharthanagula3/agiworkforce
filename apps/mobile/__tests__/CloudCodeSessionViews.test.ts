@@ -141,6 +141,19 @@ describe('merged code session list', () => {
       ['cloud', 'c2'],
     ]);
   });
+
+  it('surfaces pinned computer sessions in the flat and grouped lists', () => {
+    const entries = visibleCodeListEntries(
+      [cloud('new', '2026-11-12T00:00:00.000Z')],
+      [
+        { ...computer('recent', 'idle', '2026-11-11T00:00:00.000Z'), folder: 'web' },
+        { ...computer('pinned', 'idle', '2026-11-10T00:00:00.000Z'), folder: 'api', pinned: true },
+      ],
+      { view: 'open', sort: 'recent', query: '' },
+    );
+    expect(entries.map((entry) => entry.session.title)).toEqual(['pinned', 'new', 'recent']);
+    expect(groupCodeListEntries(entries)[0]?.data[0]?.session.title).toBe('pinned');
+  });
 });
 
 describe('grouping the code list by repository', () => {

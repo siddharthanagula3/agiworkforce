@@ -75,6 +75,8 @@ export interface LocalSessionState {
   sending: boolean;
   stopping: boolean;
   error: string | null;
+  readError: string | null;
+  storedTurnFailed: boolean;
   contextTokens: number | null;
   notice: string | null;
   /**
@@ -111,6 +113,7 @@ export interface LocalSessionState {
   answerQuestion: (question: LocalQuestion, answer: string | null) => Promise<void>;
   /** Read the stored transcript again, as after a rewind cut it short. */
   reload: () => Promise<void>;
+  retryRead: () => Promise<void>;
 }
 
 function asMessage(message: string | LocalMessage): LocalMessage {
@@ -174,10 +177,12 @@ export function useLocalSession(
   const [approvals, setApprovals] = useState<LocalApproval[]>([]);
   const [questions, setQuestions] = useState<LocalQuestion[]>([]);
   const [queuePaused, setQueuePausedState] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(session !== null);
   const [sending, setSending] = useState(false);
   const [stopping, setStopping] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [readError, setReadError] = useState<string | null>(null);
+  const [storedTurnFailed, setStoredTurnFailed] = useState(false);
   const [contextTokens, setContextTokens] = useState<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [heldBy, setHeldBy] = useState<string | null>(null);
@@ -225,7 +230,9 @@ export function useLocalSession(
   const queued = useMemo(() => snapshot.map(queuedMessage), [snapshot]);
 
   const load = useCallback(
-    async function readCurrentSession(): Promise<{ turnRunning: boolean } | null> {
+    async function readCurrentSession(
+      recoverCompletedTurn = false,
+    ): Promise<{ turnRunning: boolean } | null> {
       loadsRef.current += 1;
       const request = loadsRef.current;
       if (!rootId || !threadId) {
@@ -242,9 +249,11 @@ export function useLocalSession(
         setChildTasks(transcript.childTasks ?? []);
         setTruncated(transcript.truncated);
         setError(null);
+        setReadError(null);
         const active = transcript.activeTurn;
         const newerLocalTurn =
           turnRef.current.turnId !== null && turnRef.current.turnId !== turnAtRead;
+        if (!newerLocalTurn) setStoredTurnFailed(!active && transcript.session.status === 'failed');
         if (active && !newerLocalTurn) {
           const replay = replayRef.current;
           const snapshotBehind =
@@ -287,7 +296,8 @@ export function useLocalSession(
           const storedTurn = turnRef.current.turnId;
           if (
             storedTurn &&
-            turnRef.current.outcome === null &&
+            (turnRef.current.outcome === null ||
+              (recoverCompletedTurn && turnRef.current.outcome === 'completed')) &&
             transcript.messages.some(
               (message) => message.role === 'assistant' && message.turnId === storedTurn,
             )
@@ -299,7 +309,7 @@ export function useLocalSession(
         return { turnRunning: active != null || newerLocalTurn };
       } catch (cause: unknown) {
         if (request === loadsRef.current) {
-          setError(toUserMessage(cause, LOCAL_CODE_COPY.readFailed));
+          setReadError(toUserMessage(cause, LOCAL_CODE_COPY.readFailed));
         }
         return null;
       } finally {
@@ -310,7 +320,7 @@ export function useLocalSession(
           bufferedBytesRef.current = 0;
           if (overflowedRef.current) {
             overflowedRef.current = false;
-            void readCurrentSession();
+            void readCurrentSession(recoverCompletedTurn);
           } else {
             for (const event of buffered) dispatchEventRef.current(event);
           }
@@ -335,6 +345,8 @@ export function useLocalSession(
     setQuestions([]);
     setQueuePausedState(memory.paused);
     setError(null);
+    setReadError(null);
+    setStoredTurnFailed(false);
     setContextTokens(null);
     setNotice(null);
     setHeldBy(null);
@@ -353,6 +365,11 @@ export function useLocalSession(
     setChanges(null);
     await load();
   }, [load]);
+
+  const retryRead = useCallback(async () => {
+    const read = await load(true);
+    if (read && !read.turnRunning && queue.size() > 0) pauseQueue(true);
+  }, [load, pauseQueue, queue]);
 
   const enqueueFirst = useCallback(
     (messages: LocalMessage[]) => {
@@ -405,6 +422,7 @@ export function useLocalSession(
           ...(message.images.length > 0 ? { images: message.images } : {}),
         });
         turnRef.current = { ...turnRef.current, turnId, outcome: null };
+        setStoredTurnFailed(false);
         setTurn((current) => ({ ...current, turnId }));
         return 'started';
       } catch (cause: unknown) {
@@ -560,6 +578,7 @@ export function useLocalSession(
       }
 
       if (kind === 'status' && event.type === 'turn-started') {
+        setStoredTurnFailed(false);
         if (replayRef.current.turnId !== event.turnId) {
           replayRef.current = { turnId: event.turnId, nextDeltaIndex: 0, nextEventSequence: 0 };
         }
@@ -955,6 +974,8 @@ export function useLocalSession(
     sending,
     stopping,
     error,
+    readError,
+    storedTurnFailed,
     contextTokens,
     notice,
     heldBy,
@@ -972,5 +993,6 @@ export function useLocalSession(
     decideApproval,
     answerQuestion,
     reload,
+    retryRead,
   };
 }

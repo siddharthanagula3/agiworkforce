@@ -990,6 +990,33 @@ describe('ChatInput', () => {
       ]);
     });
 
+    it('keeps an attachment neutral when the composer receives a declined sharing outcome', async () => {
+      const attachRef = React.createRef<ChatInputHandle>();
+      const onSend = jest.fn().mockResolvedValue('declined');
+      const { getByLabelText, getByTestId } = renderInput({
+        onSend,
+        attachRef,
+        draftKey: 'cloud-conversation-1',
+        draftProvenance: { scope: 'cloud', ownerId: 'account-a' },
+      });
+      await act(async () => {
+        attachRef.current?.addAttachments([photo]);
+      });
+      fireEvent.changeText(getByLabelText('Message input'), 'Keep this draft');
+      await act(async () => {
+        fireEvent.press(getByTestId('send-button'));
+      });
+
+      expect(onSend).toHaveBeenCalledTimes(1);
+      expect(getByLabelText('Message input')).toHaveDisplayValue('Keep this draft');
+      expect(capturedAttachmentPreviewProps?.attachments[0]).toMatchObject({
+        id: photo.id,
+        fileName: photo.fileName,
+      });
+      expect(capturedAttachmentPreviewProps?.attachments[0]?.sendFailed).not.toBe(true);
+      expect(mockDraftStore.clearDraft).not.toHaveBeenCalled();
+    });
+
     it('puts a queued message back in the composer, unmarked, when its upload is declined later', async () => {
       const attachRef = React.createRef<ChatInputHandle>();
       const props = {

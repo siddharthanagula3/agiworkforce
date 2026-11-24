@@ -24,8 +24,10 @@ function setup(t, browserOnly = false) {
   const loaded = [],
     fetched = [],
     paths = [];
+  const activeProfile = path.join(profile, 'shell-data');
+  fs.writeFileSync(path.join(profile, 'settings.json'), '{"showInMenuBar":false}');
   const electron = {
-    app: { setPath: (...args) => paths.push(args) },
+    app: { setPath: (...args) => paths.push(args), getPath: () => activeProfile },
     dialog: {},
     globalShortcut: {},
     shell: {},
@@ -37,7 +39,7 @@ function setup(t, browserOnly = false) {
     },
   };
   bootstrapOwnedNative(electron, environment, target, (file) => loaded.push(file));
-  return { environment, loaded, fetched, paths, electron, target };
+  return { environment, loaded, fetched, paths, electron, target, activeProfile };
 }
 
 test('repository paths remain data and the original fetch runs once', async (t) => {
@@ -49,7 +51,11 @@ test('repository paths remain data and the original fetch runs once', async (t) 
     'fixture reply',
   );
   assert.equal(state.fetched.length, 1);
-  assert.deepEqual(state.paths[0], ['userData', state.environment.AGI_OWNED_PROFILE]);
+  assert.deepEqual(state.paths[0], ['appData', state.environment.AGI_OWNED_PROFILE]);
+  assert.equal(
+    fs.readFileSync(path.join(state.activeProfile, 'settings.json'), 'utf8'),
+    '{"showInMenuBar":false}',
+  );
 });
 
 test('lookalike origins and embedded credentials cannot leave the fixture', async (t) => {
@@ -62,6 +68,23 @@ test('lookalike origins and embedded credentials cannot leave the fixture', asyn
     await assert.rejects(state.target.fetch(url), /outside this owned fixture/);
   }
   assert.equal(state.fetched.length, 0);
+});
+
+test('restart preserves settings already written to the active profile', (t) => {
+  const { environment, target, activeProfile, electron } = setup(t);
+  const settings = path.join(activeProfile, 'settings.json');
+  fs.writeFileSync(settings, '{"showInMenuBar":false,"zoomLevel":1}');
+  bootstrapOwnedNative(electron, environment, target, () => {});
+  assert.equal(fs.readFileSync(settings, 'utf8'), '{"showInMenuBar":false,"zoomLevel":1}');
+});
+
+test('a profile resolved outside the owned directory is rejected', (t) => {
+  const { environment, target, electron } = setup(t);
+  electron.app.getPath = () => path.dirname(environment.AGI_OWNED_PROFILE);
+  assert.throws(
+    () => bootstrapOwnedNative(electron, environment, target, () => {}),
+    /outside the owned acceptance directory/,
+  );
 });
 
 test('URL and Request inputs keep the same exact-origin restriction', async (t) => {

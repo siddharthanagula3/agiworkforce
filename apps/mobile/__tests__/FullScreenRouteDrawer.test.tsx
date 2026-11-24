@@ -1,5 +1,6 @@
 import React from 'react';
 import { render } from '@testing-library/react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 let mockViewportWidth = 402;
 jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
@@ -80,7 +81,16 @@ function focusedOptions(name: string): ScreenOptions {
 function layoutAt(width: number) {
   mockViewportWidth = width;
   mockDrawer.screens = {};
-  render(<AppLayout />);
+  render(
+    <SafeAreaProvider
+      initialMetrics={{
+        frame: { x: 0, y: 0, width, height: 1366 },
+        insets: { top: 0, right: 0, bottom: 0, left: 0 },
+      }}
+    >
+      <AppLayout />
+    </SafeAreaProvider>,
+  );
 }
 
 describe('full-screen routes beside the permanent sidebar', () => {

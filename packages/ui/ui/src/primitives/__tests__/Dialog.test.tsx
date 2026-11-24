@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { Dialog, DialogContent, DialogTitle } from '../Dialog';
 import { AlertDialog, AlertDialogContent, AlertDialogTitle } from '../AlertDialog';
 import { PromptDialog } from '../PromptDialog';
@@ -24,6 +24,36 @@ describe('Dialog', () => {
       </Dialog>,
     );
     expect(screen.getByRole('button', { name: 'Close dialog' })).toBeTruthy();
+  });
+
+  it('returns focus to the replacement control when the opener remounts', async () => {
+    function Harness({ open, layout }: { open: boolean; layout: string }) {
+      return (
+        <>
+          <button key={layout} id="open-settings" type="button">
+            Open settings
+          </button>
+          <Dialog open={open}>
+            <DialogContent>
+              <DialogTitle>Settings</DialogTitle>
+            </DialogContent>
+          </Dialog>
+        </>
+      );
+    }
+
+    const { rerender } = render(<Harness open={false} layout="wide" />);
+    const opener = screen.getByRole('button', { name: 'Open settings' });
+    opener.focus();
+    rerender(<Harness open layout="wide" />);
+    await screen.findByRole('dialog');
+    rerender(<Harness open layout="narrow" />);
+    expect(opener.isConnected).toBe(false);
+    rerender(<Harness open={false} layout="narrow" />);
+
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Open settings' })),
+    );
   });
 
   it('hides the close button when hideCloseButton is set', () => {

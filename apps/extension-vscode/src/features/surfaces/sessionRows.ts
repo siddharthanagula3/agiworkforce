@@ -1,6 +1,7 @@
 export type SessionSource = 'local' | 'cloud' | 'cloud-code';
 
 export type SessionListSource = Exclude<SessionSource, 'cloud-code'>;
+export const UNREAD_SESSIONS_KEY = 'agiWorkforce.unreadSessions';
 
 /** Which surface started the session, as the protocol's `createdBy` reports it. */
 export type SessionOrigin = 'cli' | 'vscode' | 'desktop' | 'unknown';
@@ -12,6 +13,10 @@ export interface SessionRowInput {
   source: SessionSource;
   origin?: SessionOrigin;
   branch?: string;
+  unread?: boolean;
+  groupId?: string;
+  pinned?: boolean;
+  canPin?: boolean;
 }
 
 export interface SessionRow {
@@ -21,6 +26,10 @@ export interface SessionRow {
   source: SessionSource;
   sourceLabel: string;
   branch?: string;
+  unread?: boolean;
+  groupId?: string;
+  pinned?: true;
+  canPin?: true;
 }
 
 const SOURCE_LABELS: Record<SessionSource, string> = {
@@ -65,13 +74,22 @@ export function mergeSessionRows(
   return inputs
     .map((input) => ({ input, updatedAt: Date.parse(input.updatedAt) }))
     .filter((entry) => Number.isFinite(entry.updatedAt))
-    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .sort(
+      (a, b) =>
+        Number(b.input.source === 'local' && b.input.pinned === true) -
+          Number(a.input.source === 'local' && a.input.pinned === true) ||
+        b.updatedAt - a.updatedAt,
+    )
     .map(({ input, updatedAt }) => ({
       id: input.id,
       title: input.title.trim() === '' ? 'Untitled session' : input.title.trim(),
       age: formatSessionAge(updatedAt, now),
       source: input.source,
       sourceLabel: sourceLabelFor(input),
+      ...(input.unread ? { unread: true } : {}),
+      ...(input.source === 'local' && input.pinned ? { pinned: true } : {}),
+      ...(input.source === 'local' && input.canPin ? { canPin: true } : {}),
+      ...(input.groupId === undefined ? {} : { groupId: input.groupId }),
       ...(input.branch === undefined || input.branch.trim() === ''
         ? {}
         : { branch: input.branch.trim() }),

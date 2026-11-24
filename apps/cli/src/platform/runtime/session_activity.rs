@@ -8,10 +8,10 @@ use super::session::{
     activity_text, push_bounded, ManagedSession, ManagedSessionApproval,
     ManagedSessionApprovalOutcome, ManagedSessionFileChange, ManagedSessionFileChangeKind,
     ManagedSessionValidation, ManagedSessionValidationOutcome, MANAGED_SESSION_MAX_APPROVALS,
-    MANAGED_SESSION_MAX_FILE_CHANGES, MANAGED_SESSION_MAX_VALIDATIONS,
+    MANAGED_SESSION_MAX_FILE_CHANGES, MANAGED_SESSION_MAX_VALIDATIONS, MAX_APPROVAL_NOTE_CHARS,
 };
 use super::validation_run::{classify_validation, ValidationKind};
-use crate::tui::approval_broker::{ApprovalDecision, ApprovalRequest};
+use crate::tui::approval_broker::{ApprovalDecision, ApprovalRequest, ApprovalRequestKind};
 
 const PATH_ARGUMENT_TOOLS: [&str; 4] = ["write_file", "edit_file", "multiedit", "notebook_edit"];
 
@@ -118,15 +118,27 @@ impl SessionActivity {
         requested_at: chrono::DateTime<Utc>,
         decision: ApprovalDecision,
     ) {
+        let is_question = matches!(request.kind, ApprovalRequestKind::Question { .. });
+        let question_answer = if is_question && crate::tools::approval_allows(decision) {
+            crate::tools::recorded_question_answer()
+                .filter(|answer| answer.chars().count() <= MAX_APPROVAL_NOTE_CHARS)
+        } else {
+            None
+        };
         push_bounded(
             &mut self.approvals,
             ManagedSessionApproval {
                 request_id: request.id.to_string(),
-                kind: activity_text(&format!("{:?}", request.kind)),
+                kind: if is_question {
+                    "Question".into()
+                } else {
+                    activity_text(&format!("{:?}", request.kind))
+                },
                 summary: activity_text(&request.summary),
                 outcome: approval_outcome(decision),
                 requested_at,
                 decided_at: Utc::now(),
+                question_answer,
             },
             MANAGED_SESSION_MAX_APPROVALS,
         );
@@ -701,6 +713,34 @@ mod tests {
             ManagedSessionApprovalOutcome::Deny
         );
         assert!(!session.approvals[0].summary.contains('\n'));
+    }
+
+    #[tokio::test]
+    async fn records_the_accepted_question_answer_without_consuming_it() {
+        let activity: SharedSessionActivity = Arc::default();
+        let inner: crate::tools::ApprovalCallback = Arc::new(|_request| {
+            Box::pin(async {
+                crate::tools::record_approval_note("Thursday".to_string());
+                ApprovalDecision::AllowOnce
+            })
+        });
+        let callback = recording_approval_callback(activity.clone(), inner);
+        let (_, notes) = crate::tools::collect_approval_notes(callback(ApprovalRequest::new(
+            ApprovalRequestKind::Question {
+                question: "When should we release?".to_string(),
+                options: Vec::new(),
+            },
+            "When should we release?",
+            Vec::new(),
+        )))
+        .await;
+        let mut session = ManagedSession::new("questions", Utc::now());
+        activity.lock().unwrap().write_to(&mut session);
+        assert_eq!(notes, ["Thursday"]);
+        assert_eq!(
+            session.approvals[0].question_answer.as_deref(),
+            Some("Thursday")
+        );
     }
 
     #[test]

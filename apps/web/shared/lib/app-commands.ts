@@ -9,6 +9,7 @@
  */
 export const APP_COMMANDS = [
   'open-search',
+  'toggle-sidebar',
   'open-shortcuts',
   'open-upgrade',
   'find',

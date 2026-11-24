@@ -41,7 +41,6 @@ function props(overrides: Partial<ComposerInputProps> = {}): ComposerInputProps 
     onDropFiles: vi.fn(),
     onSubmit: vi.fn(),
     onAlternateSubmit: vi.fn(),
-    onFocusChange: vi.fn(),
     placeholder: PLACEHOLDER,
     disabled: false,
     maxLength: MAX_LENGTH,

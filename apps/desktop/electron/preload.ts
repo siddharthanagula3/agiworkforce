@@ -215,34 +215,27 @@ window.addEventListener('drop', (event) => {
   void ipcRenderer.invoke(ELECTRON_IPC_CHANNELS.workspaceDrop, paths);
 });
 
-/**
- * The shell's dialogs are drawn by macOS, which takes their appearance from
- * the process rather than the page's stylesheet. `data-theme` carries the
- * page's choice, and is absent on "system", where macOS is already right.
- */
-function reportResolvedTheme(): void {
-  const declared = document.documentElement.getAttribute('data-theme');
-  const theme = declared === 'dark' || declared === 'light' ? declared : 'system';
-  void ipcRenderer.invoke(ELECTRON_IPC_CHANNELS.rendererTheme, theme).catch(() => undefined);
-}
-
-function watchResolvedTheme(): void {
-  reportResolvedTheme();
-  new MutationObserver(reportResolvedTheme).observe(document.documentElement, {
+function watchThemePreference(): void {
+  if (window.top !== window || location.origin !== argValue('--agi-app-origin=')) return;
+  const root = document.documentElement;
+  let reported: string | undefined;
+  const report = () => {
+    const preference =
+      root.getAttribute('data-theme-preference') ?? root.getAttribute('data-theme');
+    if (preference !== 'system' && preference !== 'light' && preference !== 'dark') return;
+    if (preference === reported) return;
+    reported = preference;
+    void ipcRenderer.invoke(ELECTRON_IPC_CHANNELS.rendererTheme, preference).catch(() => undefined);
+  };
+  report();
+  new MutationObserver(report).observe(root, {
     attributes: true,
-    attributeFilter: ['data-theme'],
+    attributeFilter: ['data-theme-preference', 'data-theme'],
   });
 }
 
-/**
- * Pages the shell draws itself are `data:` documents that follow the appearance
- * through `prefers-color-scheme`. They have no theme to report, and the main
- * process rightly refuses their calls, so they make none.
- */
-if (location.protocol !== 'data:') {
-  if (document.readyState === 'loading') {
-    window.addEventListener('DOMContentLoaded', watchResolvedTheme, { once: true });
-  } else {
-    watchResolvedTheme();
-  }
+if (document.readyState === 'loading') {
+  window.addEventListener('DOMContentLoaded', watchThemePreference, { once: true });
+} else {
+  watchThemePreference();
 }

@@ -11,6 +11,7 @@ import {
   type AgeGateRecord,
 } from '@/src/features/auth/services/ageGate';
 import AgeGateScreen, { resolveReturnPath } from '@/app/(public)/age-gate';
+import { useAdultEligibilityStore } from '@/src/features/auth/store/adultEligibilityStore';
 import {
   beginCloudPostAuthIntent,
   clearPostAuthIntent,
@@ -52,6 +53,8 @@ jest.mock('expo-router', () => {
 });
 
 let mockSignedIn = false;
+let mockClerkLoaded = true;
+let mockClerkUserId: string | null = null;
 const mockSignOut = jest.fn(() => Promise.resolve());
 const mockSignOutAllAccounts = jest.fn(() => Promise.resolve());
 
@@ -59,6 +62,8 @@ jest.mock('@/src/features/auth/store', () => ({
   useAuthStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
       isClerkSignedIn: mockSignedIn,
+      isClerkLoaded: mockClerkLoaded,
+      clerkUserId: mockClerkUserId,
       signOut: mockSignOut,
       signOutAllAccounts: mockSignOutAllAccounts,
     }),
@@ -186,6 +191,9 @@ describe('the age screen', () => {
     mockSignOutAllAccounts.mockClear();
     mockOpenWebContentPage.mockClear();
     mockSignedIn = false;
+    mockClerkLoaded = true;
+    mockClerkUserId = null;
+    useAdultEligibilityStore.getState().reset();
     mockSearchParams = {};
     mockTimeZone = DEFAULT_TIME_ZONE;
   });
@@ -198,6 +206,47 @@ describe('the age screen', () => {
       { exact: false },
     );
     expect(screen.queryByLabelText('Go back')).toBeNull();
+  });
+
+  it('waits for the restored account and uses its confirmed age without asking again', () => {
+    mockClerkLoaded = false;
+    const page = render(<AgeGateScreen />);
+    expect(screen.queryByTestId('age-gate-input')).toBeNull();
+    expect(mockReplace).not.toHaveBeenCalled();
+
+    mockClerkLoaded = true;
+    mockSignedIn = true;
+    mockClerkUserId = 'returning-user';
+    act(() => {
+      useAdultEligibilityStore.setState({ userId: mockClerkUserId, status: 'confirmed' });
+      page.rerender(<AgeGateScreen />);
+    });
+
+    expect(screen.queryByTestId('age-gate-input')).toBeNull();
+    expect(mockReplace).toHaveBeenCalledWith('/');
+    expect(isAgeGateConfirmed()).toBe(false);
+  });
+
+  it('does not offer a different account’s age result to the active person', () => {
+    mockSignedIn = true;
+    mockClerkUserId = 'new-user';
+    useAdultEligibilityStore.setState({ userId: 'previous-user', status: 'confirmed' });
+    render(<AgeGateScreen />);
+
+    expect(screen.getByTestId('age-gate-input')).toBeTruthy();
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  it('keeps the device refusal even if the current account has a confirmed age', () => {
+    confirmAgeGate(ACCOUNT_MINIMUM_AGE - 1);
+    mockSignedIn = true;
+    mockClerkUserId = 'returning-user';
+    useAdultEligibilityStore.setState({ userId: mockClerkUserId, status: 'confirmed' });
+    render(<AgeGateScreen />);
+
+    expect(screen.getByTestId('age-gate-refused')).toBeTruthy();
+    expect(mockReplace).not.toHaveBeenCalled();
+    expect(isAgeGateConfirmed(true)).toBe(false);
   });
 
   it('returns to the requested Cloud sign-in after an adult confirms age', () => {

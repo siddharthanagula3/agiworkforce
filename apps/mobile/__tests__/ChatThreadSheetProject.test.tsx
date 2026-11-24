@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
-import { act, fireEvent, render } from '@testing-library/react-native';
+import { KeyboardAvoidingView } from 'react-native';
+import { act, fireEvent, render, within } from '@testing-library/react-native';
 
 let mockSearchParams: Record<string, string> = { id: 'thread-1' };
 const mockReplace = jest.fn();
@@ -75,7 +76,7 @@ jest.mock('@/src/features/chat/components/AddToChatSheet', () => {
   return {
     AddToChatSheet: (props: { conversationProjectId?: string | null }) => {
       mockSheetProps = props;
-      return <View />;
+      return <View testID="add-to-chat-overlay" />;
     },
   };
 });
@@ -86,7 +87,7 @@ jest.mock('@/src/features/model-picker/components/ModelPickerSheet', () => {
   return {
     ModelPickerSheet: (props: { openSignal?: number; modelScope?: unknown }) => {
       mockPickerProps = props;
-      return <View />;
+      return <View testID="model-picker-overlay" />;
     },
   };
 });
@@ -240,6 +241,18 @@ beforeEach(() => {
 });
 
 describe('the Add to chat sheet in a thread', () => {
+  it('hosts the sheets outside the keyboard-adjusted conversation', () => {
+    seedThread();
+    const screen = render(<ChatScreen />);
+    const conversation = within(screen.UNSAFE_getByType(KeyboardAvoidingView));
+
+    expect(conversation.getByTestId('composer')).toBeTruthy();
+    expect(conversation.queryByTestId('add-to-chat-overlay')).toBeNull();
+    expect(conversation.queryByTestId('model-picker-overlay')).toBeNull();
+    expect(screen.getByTestId('add-to-chat-overlay')).toBeTruthy();
+    expect(screen.getByTestId('model-picker-overlay')).toBeTruthy();
+  });
+
   it('is told the project the conversation belongs to', () => {
     seedThread('project-1');
     render(<ChatScreen />);

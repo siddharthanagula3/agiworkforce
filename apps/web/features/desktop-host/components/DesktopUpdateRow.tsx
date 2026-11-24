@@ -13,6 +13,8 @@ const CHECKING_LABEL = 'Checking…';
 const INSTALL_LABEL = 'Download installer';
 const RESTART_LABEL = 'Relaunch to update';
 const UP_TO_DATE = 'This is the latest version.';
+const NO_PUBLISHED_INSTALLER = 'No installer is published for this update channel.';
+const NO_NEWER_VERSION = 'No newer version is available.';
 const CHECK_FAILED = 'The update check did not complete.';
 
 const rowStyle: CSSProperties = {
@@ -65,18 +67,31 @@ export function DesktopUpdateRow() {
   const host = useDesktopHost();
   const [checking, setChecking] = useState(false);
   const [result, setResult] = useState<HostUpdateAvailability | null>(null);
+  const [stagedVersion, setStagedVersion] = useState<string | null>();
   const [error, setError] = useState<string | null>(null);
   const [installStatus, setInstallStatus] = useState<string | null>(null);
   const requestGeneration = useRef(0);
 
   useEffect(() => {
+    let retired = false;
     requestGeneration.current += 1;
     setResult(null);
+    setStagedVersion(undefined);
     setError(null);
     setInstallStatus(null);
     setChecking(false);
-    return () => {
+    const unsubscribe = host?.onRuntimeEvent((event) => {
+      if (retired || event.kind !== 'update-ready') return;
       requestGeneration.current += 1;
+      setStagedVersion(event.version || null);
+      setChecking(false);
+      setError(null);
+      setInstallStatus(null);
+    });
+    return () => {
+      retired = true;
+      requestGeneration.current += 1;
+      unsubscribe?.();
     };
   }, [host]);
 
@@ -113,9 +128,14 @@ export function DesktopUpdateRow() {
   if (!host) return null;
 
   const updateAvailable = result?.available === true;
-  const readyToInstall = result?.readyToInstall === true;
+  const readyToInstall = stagedVersion !== undefined || result?.readyToInstall === true;
   const canRestart = readyToInstall && host.restartToUpdate !== undefined;
-  const readyVersion = result?.stagedVersion === undefined ? result?.version : result.stagedVersion;
+  const readyVersion =
+    stagedVersion !== undefined
+      ? stagedVersion
+      : result?.stagedVersion === undefined
+        ? result?.version
+        : result.stagedVersion;
   const downloading = !readyToInstall && result?.downloading === true;
   const lastChecked = result?.checkedAt ? formatCheckedAt(result.checkedAt) : null;
 
@@ -148,7 +168,11 @@ export function DesktopUpdateRow() {
           </p>
         ) : result ? (
           <p role="status" style={hintStyle}>
-            {UP_TO_DATE}
+            {result.latestVersion === result.currentVersion
+              ? UP_TO_DATE
+              : result.latestVersion === undefined && result.downloadUrl === ''
+                ? NO_PUBLISHED_INSTALLER
+                : NO_NEWER_VERSION}
           </p>
         ) : null}
         {result?.metadataError ? (
@@ -158,7 +182,7 @@ export function DesktopUpdateRow() {
         ) : null}
         {lastChecked ? <p style={hintStyle}>{`Last checked ${lastChecked}`}</p> : null}
       </div>
-      <div style={{ display: 'flex', flexShrink: 0, gap: 'var(--space-2)' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', maxWidth: '100%', gap: 'var(--space-2)' }}>
         <button
           type="button"
           style={buttonStyle}

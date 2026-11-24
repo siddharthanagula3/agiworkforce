@@ -216,6 +216,12 @@ export const BROWSER_TOOL_DEFINITIONS: ToolDefinition[] = [
             description:
               'Y coordinate to click (pixels from top). Use with x when only coords are known.',
           },
+          pointerType: {
+            type: 'string',
+            enum: ['mouse', 'touch'],
+            description:
+              'Use touch for a tap with a finger, including touch-only controls. Mouse is the default for clicks.',
+          },
           button: {
             type: 'string',
             enum: ['left', 'right', 'middle'],
@@ -311,7 +317,7 @@ export const BROWSER_TOOL_DEFINITIONS: ToolDefinition[] = [
     function: {
       name: 'drag',
       description:
-        'Drag the native mouse from one element or viewport point to another. Prefer fresh startIndex and endIndex. Useful for sliders, reorderable items and drag-and-drop.',
+        'Drag the native mouse from one element or viewport point to another. Prefer fresh startIndex and endIndex. For a native range slider, use its fresh startIndex to grab the actual thumb, then endX/endY from the current screenshot to set the desired position. Use screen points for custom handles.',
       parameters: {
         type: 'object',
         properties: {

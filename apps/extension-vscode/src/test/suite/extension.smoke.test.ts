@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as http from 'node:http';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { E2E_COMPLETE_RESPONSE, E2E_PROMPT_MARKER } from '../localModelFixture';
+import { E2E_COMPLETE_RESPONSE, E2E_FIRST_DELTA, E2E_PROMPT_MARKER } from '../localModelFixture';
 
 declare function suite(name: string, fn: () => void): void;
 declare function test(name: string, fn: () => void | Promise<void>): void;
@@ -121,7 +121,7 @@ async function waitForPersistedTurn(
     }
     await new Promise((resolve) => setTimeout(resolve, 50));
   } while (Date.now() < deadline);
-  throw new Error(`managed session ${threadId} did not persist the completed response`);
+  throw new Error(`managed session ${threadId} did not persist the expected response`);
 }
 
 suite('AGI Code extension, smoke', () => {
@@ -271,6 +271,40 @@ suite('AGI Code extension, smoke', () => {
         'agi-workforce.restartLocalRuntime',
       );
       assert.deepStrictEqual(result, { ok: true, restartedWorkspaces: 1 });
+    });
+
+    test('persists a Local session pin through a real CLI restart', async () => {
+      const workspace = vscode.workspace.workspaceFolders?.[0];
+      assert.ok(workspace, 'Local session pin probe requires a workspace');
+      const version = vscode.extensions.getExtension('agiworkforce.agi-workforce')?.packageJSON
+        .version;
+      assert.ok(
+        typeof version === 'string',
+        'Local session pin probe requires an installed extension',
+      );
+      const cwd = workspace.uri.fsPath;
+      const { LocalRuntimeClient } = await import('../../integrations/localRuntimeClient');
+      const client = new LocalRuntimeClient({
+        cliPath: packagedCliPath,
+        workspaceTrusted: () => vscode.workspace.isTrusted,
+        workspaceConsentAtMs: () => Date.now(),
+        cwd,
+        clientVersion: version,
+      });
+      try {
+        const session = await client.startThread({ cwd, title: 'Local session pin probe' });
+        await client.setThreadPinned({ threadId: session.id, pinned: true });
+        await client.restart();
+        const listed = await client.listThreads({ cwd });
+        assert.strictEqual(listed.threads.find(({ id }) => id === session.id)?.pinned, true);
+        await client.setThreadPinned({ threadId: session.id, pinned: false });
+        const unpinned = await client.listThreads({ cwd });
+        const updated = unpinned.threads.find(({ id }) => id === session.id);
+        assert.ok(updated, 'the Local session is still listed');
+        assert.notStrictEqual(updated.pinned, true);
+      } finally {
+        await client.dispose();
+      }
     });
 
     const fixtureModel = process.env.AGI_VSCODE_E2E_FIXTURE_MODEL;
@@ -447,6 +481,101 @@ suite('AGI Code extension, smoke', () => {
           'persisted assistant turn does not contain the combined streamed response',
         );
       });
+
+      const releaseUrl = process.env.AGI_VSCODE_E2E_FIXTURE_RELEASE_URL;
+      if (releaseUrl && Number(process.env.AGI_VSCODE_E2E_FIXTURE_HOLD_MS) > 0) {
+        test('reopens an interrupted native @agi session after restarting the runtime', async () => {
+          const agiHome = process.env.AGIWORKFORCE_HOME;
+          assert.ok(agiHome && path.isAbsolute(agiHome), 'requires an isolated AGI home');
+          const extension = vscode.extensions.getExtension('agiworkforce.agi-workforce');
+          assert.ok(extension, 'requires the installed AGI Code extension');
+          await extension.activate();
+          assert.ok((await vscode.lm.selectChatModels({})).length, 'requires a VS Code model');
+          const config = vscode.workspace.getConfiguration('agiWorkforce');
+          await config.update('cliPath', packagedCliPath, vscode.ConfigurationTarget.Global);
+          await config.update('model', fixtureModel, vscode.ConfigurationTarget.Global);
+          await vscode.commands.executeCommand('workbench.action.chat.newChat');
+
+          const runTurn = (query: string) =>
+            withTimeout(
+              vscode.commands.executeCommand<unknown>('workbench.action.chat.open', {
+                blockOnResponse: true,
+                isPartialQuery: false,
+                query: `@agi ${E2E_PROMPT_MARKER} ${query}`,
+              }),
+              COMPLETE_TURN_TIMEOUT_MS,
+              'native @agi turn',
+            );
+          const before = await getFixtureState(fixtureStateUrl, fixtureControlToken);
+          let completedBeforeRestart: { result: unknown } | undefined;
+          const initial = runTurn('interrupted reply');
+          void initial.then(
+            (result) => {
+              completedBeforeRestart = { result };
+            },
+            (error: unknown) => {
+              completedBeforeRestart = { result: String(error) };
+            },
+          );
+          const deadline = Date.now() + 10_000;
+          let first = await getFixtureState(fixtureStateUrl, fixtureControlToken);
+          while (
+            first.firstDeltaWrites === before.firstDeltaWrites &&
+            completedBeforeRestart === undefined &&
+            Date.now() < deadline
+          ) {
+            await new Promise((resolve) => setTimeout(resolve, 50));
+            first = await getFixtureState(fixtureStateUrl, fixtureControlToken);
+          }
+          assert.strictEqual(completedBeforeRestart, undefined, 'turn completed before restart');
+          assert.strictEqual(first.chatRequests, Number(before.chatRequests) + 1);
+          assert.strictEqual(first.firstDeltaWrites, Number(before.firstDeltaWrites) + 1);
+          assert.strictEqual(
+            first.secondDeltaWrites,
+            before.secondDeltaWrites,
+            'fixture must still be holding the reply',
+          );
+
+          const restart = await vscode.commands.executeCommand('agi-workforce.restartLocalRuntime');
+          assert.deepStrictEqual(restart, { ok: true, restartedWorkspaces: 1 });
+          const stopped = requireRecord(await initial, 'interrupted chat result');
+          const metadata = requireRecord(stopped.metadata, 'interrupted chat metadata');
+          const threadId = metadata.localThreadId;
+          assert.ok(typeof threadId === 'string', 'interrupted turn lost its session id');
+          const stoppedText = `${E2E_FIRST_DELTA}\n\n[stopped]`;
+          const saved = await waitForPersistedTurn(agiHome, threadId, stoppedText);
+          assert.ok(saved.some((record) => messageText(record)?.includes('interrupted reply')));
+          assert.strictEqual(
+            saved.some((record) => messageText(record) === E2E_COMPLETE_RESPONSE),
+            false,
+          );
+          const interrupted = await getFixtureState(fixtureStateUrl, fixtureControlToken);
+          assert.strictEqual(interrupted.closedResponses, Number(before.closedResponses) + 1);
+          assert.strictEqual(interrupted.secondDeltaWrites, before.secondDeltaWrites);
+
+          const released = await fetch(releaseUrl, {
+            method: 'POST',
+            headers: { 'x-agi-e2e-token': fixtureControlToken },
+            signal: AbortSignal.timeout(5_000),
+          });
+          assert.strictEqual(released.status, 200);
+          const followUp = requireRecord(await runTurn('follow-up reply'), 'follow-up chat result');
+          assert.strictEqual(followUp.errorDetails, undefined);
+          assert.strictEqual(
+            requireRecord(followUp.metadata, 'follow-up metadata').localThreadId,
+            threadId,
+          );
+          const recovered = await waitForPersistedTurn(agiHome, threadId, E2E_COMPLETE_RESPONSE);
+          assert.ok(recovered.some((record) => messageText(record) === stoppedText));
+          assert.ok(recovered.some((record) => messageText(record)?.includes('follow-up reply')));
+          const completed = await waitForCompletedFixtureState(
+            fixtureStateUrl,
+            fixtureControlToken,
+          );
+          assert.strictEqual(completed.secondDeltaWrites, Number(before.secondDeltaWrites) + 1);
+          assert.deepStrictEqual(completed.errors, []);
+        });
+      }
     }
   }
 });

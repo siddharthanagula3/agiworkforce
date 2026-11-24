@@ -401,7 +401,7 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 - Done when: The user sets a goal and a bound (turns/time) and the agent loops until done or the bound is hit.
 - Wave: 3
-- Already works on: desktop, mobile, cli
+- Already works on: mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |

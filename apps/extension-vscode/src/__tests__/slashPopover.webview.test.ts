@@ -309,4 +309,18 @@ describe('the slash popover opened from the composer button', () => {
     expect(document.querySelectorAll('.slash-menu-action')).toHaveLength(0);
     expect(document.querySelectorAll('.slash-menu-item')).toHaveLength(1);
   });
+
+  it('runs a built-in command while runtime command discovery is still pending', () => {
+    const post = boot();
+    const composer = document.getElementById('userInput') as HTMLTextAreaElement;
+    composer.value = '/mcp';
+    composer.dispatchEvent(new Event('input'));
+    composer.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+
+    expect(messagesOfType(post, 'requestSlashCommands')).toHaveLength(1);
+    expect(messagesOfType(post, 'runSlashCommand')).toEqual([
+      expect.objectContaining({ payload: { name: '/mcp' } }),
+    ]);
+    expect(messagesOfType(post, 'sendMessage')).toHaveLength(0);
+  });
 });

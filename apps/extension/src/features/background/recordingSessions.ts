@@ -1,12 +1,7 @@
+import { recordedPageKey } from '../shortcuts/recordedPages';
 import type { RunPageAction } from '../../types';
 import { validateShortcutActions } from '../../background/policy';
 
-/**
- * A recording kept by the worker rather than the page, so the steps taken
- * before a page loads a new document are not lost with it. Replay runs inside
- * one document, so a recording ends there: the steps so far are kept and the
- * recording says it stopped.
- */
 const STORAGE_KEY = 'agi_recording_sessions';
 export const MAX_RECORDED_ACTIONS = 500;
 
@@ -16,6 +11,9 @@ export interface RecordingSession {
   origin: string;
   state: RecordingSessionState;
   actions: RunPageAction[];
+  followPages?: boolean;
+  captureValues?: boolean;
+  pageOrigin?: string;
 }
 
 type Sessions = Record<string, RecordingSession>;
@@ -60,12 +58,22 @@ function recordedAction(raw: unknown): RunPageAction | null {
   return validateShortcutActions([action]) ? action : null;
 }
 
-export function beginRecordingSession(tabId: number, tabUrl: string | undefined): Promise<boolean> {
+export function beginRecordingSession(
+  tabId: number,
+  tabUrl: string | undefined,
+  followPages = false,
+  captureValues = false,
+): Promise<boolean> {
   return serialized(async () => {
     const origin = originOf(tabUrl);
     if (!origin) return false;
     const sessions = await readSessions();
-    sessions[String(tabId)] = { origin, state: 'recording', actions: [] };
+    sessions[String(tabId)] = {
+      origin,
+      state: 'recording',
+      actions: [],
+      ...(followPages ? { followPages, captureValues, pageOrigin: origin } : {}),
+    };
     await writeSessions(sessions);
     return true;
   });
@@ -76,15 +84,27 @@ export function appendRecordedAction(
   tabId: number,
   senderUrl: string | undefined,
   raw: unknown,
+  targetDescription?: string,
 ): Promise<boolean> {
   return serialized(async () => {
     const sessions = await readSessions();
     const session = sessions[String(tabId)];
     if (!session || session.state !== 'recording') return false;
-    if (originOf(senderUrl) !== session.origin) return false;
+    if (!senderUrl || originOf(senderUrl) !== (session.pageOrigin ?? session.origin)) return false;
     const action = recordedAction(raw);
     if (!action) return true;
     if (session.actions.length >= MAX_RECORDED_ACTIONS) return true;
+    if (session.followPages) {
+      if (action.type === 'navigate') return true;
+      if (
+        typeof targetDescription === 'string' &&
+        targetDescription.length > 0 &&
+        targetDescription.length <= 1024
+      )
+        action.targetFingerprint = await recordedPageKey(targetDescription);
+      action.recordedPage = await recordedPageKey(senderUrl);
+      action.recordedOrigin = session.pageOrigin ?? session.origin;
+    }
     session.actions.push(action);
     await writeSessions(sessions);
     return true;
@@ -123,4 +143,18 @@ export function discardRecordingSession(tabId: number): Promise<void> {
 
 export function discardAllRecordingSessions(): Promise<void> {
   return serialized(() => chrome.storage.session.remove(STORAGE_KEY));
+}
+
+export function resumeRecordingOrigin(
+  tabId: number,
+  origin: string,
+): Promise<RecordingSession | null> {
+  return serialized(async () => {
+    const sessions = await readSessions();
+    const session = sessions[String(tabId)];
+    if (!session?.followPages || session.state !== 'recording') return null;
+    session.pageOrigin = origin;
+    await writeSessions(sessions);
+    return session;
+  });
 }

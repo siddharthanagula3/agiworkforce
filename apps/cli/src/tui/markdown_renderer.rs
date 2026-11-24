@@ -146,7 +146,7 @@ pub fn render_markdown(text: &str) -> Vec<Line<'static>> {
     let text = sanitize_terminal_text(text);
     let parser = Parser::new_ext(
         text.as_ref(),
-        Options::ENABLE_TABLES | Options::ENABLE_STRIKETHROUGH,
+        Options::ENABLE_TABLES | Options::ENABLE_STRIKETHROUGH | Options::ENABLE_TASKLISTS,
     );
 
     let mut in_code_block = false;
@@ -321,6 +321,13 @@ pub fn render_markdown(text: &str) -> Vec<Line<'static>> {
                 };
                 current_spans.push(Span::styled(bullet, Style::default().fg(ui_accent())));
                 item_fresh = true;
+            }
+            Event::TaskListMarker(checked) => {
+                let marker = if checked { "☑ " } else { "☐ " };
+                if let Some(level) = lists.last_mut() {
+                    level.content += display_width(marker);
+                }
+                current_spans.push(Span::raw(marker));
             }
             Event::End(TagEnd::Item) => {
                 flush_line(&mut lines, &mut current_spans);
@@ -674,6 +681,16 @@ mod tests {
         assert!(!joined.contains('\u{1b}'), "escape survived: {joined:?}");
         assert!(!joined.contains("pwned"), "OSC title survived: {joined:?}");
         assert!(joined.contains("echo ok"), "code was mangled: {joined:?}");
+    }
+
+    #[test]
+    fn renders_checked_and_open_tasks_while_preserving_code_examples() {
+        let source = "- [x] Review the diff\n- [ ] Run the checks\n  - [ ] Confirm the preview\n\n```md\n- [x] Example\n```";
+        let rendered = lines_to_strings(&render_markdown(source)).join("\n");
+        assert!(rendered.contains("☑ Review the diff"));
+        assert!(rendered.contains("☐ Run the checks"));
+        assert!(rendered.contains("☐ Confirm the preview"));
+        assert!(rendered.contains("- [x] Example"));
     }
 
     #[test]

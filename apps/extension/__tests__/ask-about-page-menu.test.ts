@@ -153,7 +153,6 @@ describe('right-click Ask AGI about this page', () => {
         updateAttachmentPreview: vi.fn(),
         updateContextButton: vi.fn(),
         sendMessage,
-        pendingChatPrompt: (value: { text: string }) => value.text,
         replaceComposerText: vi.fn((element: HTMLTextAreaElement, text: string) => {
           element.value = text;
         }),
@@ -363,13 +362,18 @@ describe('selected-text Ask in the browser', () => {
     expect(open).toHaveBeenCalledWith({ tabId: 4, windowId: 2 });
   });
 
-  function selectionHarness(url = 'https://example.com/a', blocked = false) {
+  function selectionHarness(
+    url = 'https://example.com/a',
+    blocked = false,
+    type = 'ask-selection',
+    draft = 'Keep my unsent question',
+  ) {
     const input = document.createElement('textarea');
     input.id = 'sp-input';
-    input.value = 'Keep my unsent question';
+    input.value = draft;
     document.body.appendChild(input);
     const pending = {
-      type: 'ask-selection',
+      type,
       text: `Selected phrase sk-ant-${'A'.repeat(60)}`,
       url: 'https://example.com/a',
       tabId: 4,
@@ -384,11 +388,12 @@ describe('selected-text Ask in the browser', () => {
     const sendMessage = vi.fn();
     const remove = vi.fn(async () => undefined);
     const api = run<{ check: () => void }>(
-      `let composerContextNotice = null; let composerDraftRevision = 0; let pendingSelectionText = null; let pendingBrowserContextTabs = [];\n${slice(panelSource, 'interface PendingComposerChat', 'async function checkPendingContextHandoff')}`,
+      `let composerContextNotice = null; let composerDraftRevision = 0; let pendingSelectionText = null; let pendingBrowserContextTabs = []; let composerGeneratedSelectionPrompt = null;\n${slice(panelSource, 'interface PendingComposerChat', 'async function checkPendingContextHandoff')}`,
       '{ check: checkPendingChat }',
       {
         _ctx: ctx,
         document,
+        managedCloudChatState: 'ready',
         sameManagedCloudOwner,
         pendingDocuments: [],
         composerAttachmentIntakes: new Set(),
@@ -400,8 +405,11 @@ describe('selected-text Ask in the browser', () => {
           tabs: { get: async () => ({ id: 4, url }) },
           storage: {
             session: {
-              get: (_key: string, callback: (result: unknown) => void) =>
-                callback({ agi_pending_chat: pending }),
+              get: (_key: string, callback?: (result: unknown) => void) => {
+                const stored = { agi_pending_chat: pending };
+                if (callback) callback(stored);
+                else return Promise.resolve(stored);
+              },
               remove,
             },
           },
@@ -410,11 +418,19 @@ describe('selected-text Ask in the browser', () => {
         isUserBlockedSite: async () => blocked,
         PENDING_CHAT_TTL_MS: 60_000,
         canAdmitComposerMessage: () => false,
+        pendingAttachmentCount: () => 0,
+        browserLanguageName: () => 'English',
+        showSelectionNotice: vi.fn(),
+        replaceComposerText: (element: HTMLTextAreaElement, value: string) => {
+          element.value = value;
+        },
         PAGE_CONTEXT_CHANGED_REASON: 'The page changed.',
-        t: (_key: string, values: string[]) => values.join(' '),
+        t: (key: string, values: string[] = []) =>
+          (manifestCatalog[key]?.message ?? key).replaceAll('$LANGUAGE$', values[0] ?? ''),
         pageChipLabel: (value: string) => value,
         updateAttachmentPreview: vi.fn(),
         updateContextButton: vi.fn(),
+        updateSendButton: vi.fn(),
         sendMessage,
       },
     );
@@ -445,6 +461,29 @@ describe('selected-text Ask in the browser', () => {
     h.check();
     await Promise.resolve();
     await Promise.resolve();
+    expect(h.ctx.pendingPageContext).toBeNull();
+    expect(h.sendMessage).not.toHaveBeenCalled();
+    h.input.remove();
+  });
+
+  it.each([
+    ['explain', 'Explain the selected text.'],
+    ['translate', 'Translate the selected text into English.'],
+  ])('stages a reviewable %s prompt with only redacted selection context', async (type, prompt) => {
+    const h = selectionHarness(undefined, false, type, '');
+    h.check();
+    await vi.waitFor(() => expect(h.input.value).toContain(prompt));
+    expect(h.ctx.pendingPageContext).toContain('[REDACTED_ANTHROPIC_KEY]');
+    expect(h.input.value).not.toContain('Selected phrase');
+    expect(h.sendMessage).not.toHaveBeenCalled();
+    h.input.remove();
+  });
+
+  it('keeps an existing draft intact when Translate is requested', async () => {
+    const h = selectionHarness(undefined, false, 'translate');
+    h.check();
+    await vi.waitFor(() => expect(h.remove).toHaveBeenCalled());
+    expect(h.input.value).toBe('Keep my unsent question');
     expect(h.ctx.pendingPageContext).toBeNull();
     expect(h.sendMessage).not.toHaveBeenCalled();
     h.input.remove();

@@ -259,7 +259,7 @@ describe('Chrome side-panel slash commands', () => {
 describe('Chrome side-panel composer input state', () => {
   it('recomputes the visible Send control when the textarea changes', () => {
     expect(source).toMatch(
-      /inputEl\.addEventListener\('input', \(\) => \{[\s\S]*autoResizeInput\(inputEl\);[\s\S]*updateSendButton\(\);[\s\S]*\}\);/,
+      /inputEl\.addEventListener\('input', \(\) => \{[\s\S]*updateSendButton\(\);[\s\S]*\}\);/,
     );
   });
 

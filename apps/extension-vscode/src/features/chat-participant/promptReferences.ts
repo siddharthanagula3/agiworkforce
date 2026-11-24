@@ -75,7 +75,18 @@ function lineLabel(range: vscode.Range | undefined): string {
 export async function buildPromptReferenceInputs(
   references: readonly vscode.ChatPromptReference[] = [],
 ): Promise<UserInput[]> {
-  const inputs: UserInput[] = [];
+  return (await buildPromptReferenceEntries(references)).map(({ input }) => input);
+}
+
+interface PromptReferenceEntry {
+  label: string;
+  input: Extract<UserInput, { type: 'text' }>;
+}
+
+async function buildPromptReferenceEntries(
+  references: readonly vscode.ChatPromptReference[],
+): Promise<PromptReferenceEntry[]> {
+  const entries: PromptReferenceEntry[] = [];
   const seen = new Set<string>();
   let remainingChars = MAX_TOTAL_REFERENCE_CHARS;
 
@@ -113,13 +124,16 @@ export async function buildPromptReferenceInputs(
         `<untrusted_file_reference path="${escapeAttribute(relativePath)}"${lineLabel(range)}>\n` +
         `${escapeReferenceContent(boundedContent)}\n` +
         '</untrusted_file_reference>';
-      inputs.push({ type: 'text', text, text_elements: [] });
+      entries.push({
+        label: relativePath,
+        input: { type: 'text', text, text_elements: [] },
+      });
     } catch {
       // A reference may disappear between selection and submission. Skip it.
     }
   }
 
-  return inputs;
+  return entries;
 }
 
 function isValidSerializedRange(range: WorkspaceFileReference['range']): boolean {
@@ -154,7 +168,7 @@ export function isFolderReference(reference: WorkspaceFileReference): boolean {
 async function buildFolderReferenceInput(
   workspaceUri: vscode.Uri,
   reference: WorkspaceFileReference,
-): Promise<UserInput | undefined> {
+): Promise<PromptReferenceEntry | undefined> {
   const folder = vscode.Uri.joinPath(workspaceUri, reference.path);
   const resolved = await safeResolveWorkspacePath(folder.fsPath, { allowAbsolute: true });
   if (!resolved.ok || settingsWithholdReason(resolved.uri.fsPath) !== undefined) return undefined;
@@ -189,15 +203,22 @@ async function buildFolderReferenceInput(
     `<untrusted_folder_reference path="${escapeAttribute(relativeFolder)}"${complete ? '' : ' partial="true"'}>\n` +
     `${escapeReferenceContent(listing === '' ? '(no files the workspace context policy allows)\n' : listing)}` +
     '</untrusted_folder_reference>';
-  return { type: 'text', text, text_elements: [] };
+  return { label: relativeFolder, input: { type: 'text', text, text_elements: [] } };
 }
 
 export async function buildWorkspaceReferenceInputs(
   workspaceUri: vscode.Uri,
   references: readonly WorkspaceFileReference[] = [],
 ): Promise<UserInput[]> {
+  return (await buildWorkspaceReferenceEntries(workspaceUri, references)).map(({ input }) => input);
+}
+
+export async function buildWorkspaceReferenceEntries(
+  workspaceUri: vscode.Uri,
+  references: readonly WorkspaceFileReference[],
+): Promise<PromptReferenceEntry[]> {
   const nativeReferences: vscode.ChatPromptReference[] = [];
-  const folderInputs: UserInput[] = [];
+  const folderInputs: PromptReferenceEntry[] = [];
   for (const rawReference of references.slice(0, MAX_REFERENCE_COUNT)) {
     if (!isWorkspaceFileReference(rawReference)) continue;
     const reference = rawReference;
@@ -221,5 +242,5 @@ export async function buildWorkspaceReferenceInputs(
           };
     nativeReferences.push({ id: 'workspace-file', value: nativeValue });
   }
-  return [...folderInputs, ...(await buildPromptReferenceInputs(nativeReferences))];
+  return [...folderInputs, ...(await buildPromptReferenceEntries(nativeReferences))];
 }

@@ -1,4 +1,4 @@
-import { getModelsForRole, tier2LoadModel } from '@agiworkforce/local-llm';
+import { getCapabilities, getModelsForRole, tier2LoadModel } from '@agiworkforce/local-llm';
 import { downloadModel, cancelDownload, ModelDownloadError } from '@/services/modelDownload';
 import { getInstalledModel } from '@/storage/installedModels';
 import { useModelInstallStore } from '@/src/features/model-picker/installStore';
@@ -102,6 +102,23 @@ describe('download consent reaches every local-model path', () => {
 
   it('defaults to Wi-Fi only', () => {
     expect(useModelInstallStore.getState().allowCellularDownloads).toBe(false);
+  });
+
+  it('refuses the download and overrides a stale Ready state if the runtime is unavailable', async () => {
+    resetStore({ jobs: { [PRESET_MODEL.id]: { status: 'ready', progress: 1 } } });
+    jest.mocked(getCapabilities).mockResolvedValueOnce({
+      ...(await getCapabilities()),
+      totalRAMMB: 3000,
+      tier2Available: false,
+    });
+
+    await expect(useModelInstallStore.getState().prepareModel(PRESET_MODEL)).rejects.toThrow(
+      'This device cannot run this on-device model.',
+    );
+    expect(tier2LoadModel).not.toHaveBeenCalled();
+    expect(useModelInstallStore.getState().statusForModel(PRESET_MODEL)).toMatchObject({
+      status: 'unavailable',
+    });
   });
 
   it('passes Wi-Fi-only to the GGUF path while the consent is off', async () => {

@@ -56,10 +56,23 @@ export async function readPageDocument(
   tabId: number,
   expectedUrl: string,
   expectedDocumentId?: string,
+  frame?: { id: number; topUrl: string },
 ): Promise<PageDocumentReference> {
   const [observed] = await chrome.scripting.executeScript({
-    target: { tabId },
-    func: () => location.href,
+    target: frame ? { tabId, frameIds: [frame.id] } : { tabId },
+    func: (topUrl?: string) => {
+      if (topUrl !== undefined) {
+        for (let ancestor = window.parent; ; ancestor = ancestor.parent) {
+          if (ancestor.location.origin !== location.origin) return null;
+          if (ancestor === window.top) {
+            if (ancestor.location.href !== topUrl) return null;
+            break;
+          }
+        }
+      }
+      return location.href;
+    },
+    ...(frame ? { args: [frame.topUrl] } : {}),
   });
   if (
     !isPageDocumentId(observed?.documentId) ||

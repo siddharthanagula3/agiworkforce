@@ -47,6 +47,18 @@ const AUTO_TASK_TYPES = Object.keys(
 ) as AutoTaskType[];
 
 describe('resolveAutoRoute', () => {
+  it.each(['auto', FAST_MODEL_ID])('refuses %s when the account offered no models', (selection) => {
+    expect(
+      resolveAutoRoute({
+        selection,
+        taskType: 'simple_chat',
+        subscriptionTier: 'max',
+        trustMode: 'managed_cloud',
+        admittedModelKeys: new Set(),
+      }),
+    ).toMatchObject({ status: 'unavailable' });
+  });
+
   it('honors the requested economy profile even when the tier allows premium', () => {
     const result = resolveAutoRoute({
       selection: 'auto-economy',

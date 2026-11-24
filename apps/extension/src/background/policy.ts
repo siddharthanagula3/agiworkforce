@@ -45,6 +45,7 @@ export const MESSAGE_POLICY: Record<string, MessageTypePolicy> = {
   SAVE_SHORTCUT: { senderClass: 'extension-page-only', allowsCrossTab: true },
   DELETE_SHORTCUT: { senderClass: 'extension-page-only', allowsCrossTab: true },
   UPDATE_SHORTCUT: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  LIST_SHORTCUTS: { senderClass: 'extension-page-only', allowsCrossTab: true },
   REPLAY_SHORTCUT: { senderClass: 'extension-page-only', allowsCrossTab: true },
   SET_RECORDING_VALUE_CAPTURE: { senderClass: 'extension-page-only', allowsCrossTab: true },
   CANCEL_STREAM: { senderClass: 'extension-page-only', allowsCrossTab: true },
@@ -114,7 +115,6 @@ export const MESSAGE_POLICY: Record<string, MessageTypePolicy> = {
   STOP_RECORDING: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
   GET_RECORDED_ACTIONS: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
   RECORDING_ACTION: { senderClass: 'allowlisted-tab', allowsCrossTab: false },
-  LIST_SHORTCUTS: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
   AGI_CU_USER_INPUT: { senderClass: 'allowlisted-tab', allowsCrossTab: false },
   LIST_SCHEDULED_TASKS: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
   BRIDGE_URL_CHANGED: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
@@ -373,6 +373,22 @@ export function validateShortcutActions(actions: ReadonlyArray<RunPageAction>): 
     if (!ALLOWED_SHORTCUT_ACTION_TYPES.has(t.toLowerCase())) return false;
 
     const rec = action as Record<string, unknown>;
+    if (
+      rec['targetFingerprint'] !== undefined &&
+      (typeof rec['targetFingerprint'] !== 'string' ||
+        !/^[0-9a-f]{64}$/.test(rec['targetFingerprint']))
+    )
+      return false;
+    if (rec['recordedPage'] !== undefined || rec['recordedOrigin'] !== undefined) {
+      if (
+        typeof rec['recordedPage'] !== 'string' ||
+        !/^[0-9a-f]{64}$/.test(rec['recordedPage']) ||
+        typeof rec['recordedOrigin'] !== 'string' ||
+        !isSafeActionUrl(rec['recordedOrigin']) ||
+        new URL(rec['recordedOrigin']).origin !== rec['recordedOrigin']
+      )
+        return false;
+    }
     const selector = rec['selector'];
     if (selector !== undefined && selector !== null) {
       if (typeof selector !== 'string') return false;

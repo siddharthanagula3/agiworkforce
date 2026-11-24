@@ -21,6 +21,14 @@ export function pluginInstallationPath(pluginId: string): string {
   return `${PLUGIN_INSTALLATIONS_PATH}/${encodeURIComponent(pluginId)}`;
 }
 
+export function pluginMarketplaceSourcePath(sourceId: string): string {
+  return `${PLUGIN_MARKETPLACES_PATH}/${encodeURIComponent(sourceId)}`;
+}
+
+export function pluginMarketplaceRefreshPath(sourceId: string): string {
+  return `${pluginMarketplaceSourcePath(sourceId)}/refresh`;
+}
+
 const StringList = z.array(z.string());
 
 export const PluginDirectoryPublisherSchema = z.object({

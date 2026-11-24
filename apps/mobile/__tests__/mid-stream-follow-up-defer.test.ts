@@ -66,6 +66,7 @@ jest.mock('../lib/mmkv', () => ({
   },
 }));
 
+import { ensureCloudSendConsent } from '../services/llmGate';
 import { streamChat, type StreamCallbacks } from '../services/streaming';
 import { useChatExecutionStore } from '../stores/chat/chatExecutionStore';
 import { useChatCloudMessageStore } from '../stores/chat/chatCloudMessageStore';
@@ -169,6 +170,159 @@ describe('sending while a turn is still streaming', () => {
       'follow-up typed mid-response',
     ]);
     expect(messages.some((message) => message.content === 'first answer')).toBe(true);
+  });
+
+  it('leaves an offline replay with its durable queue while the conversation is busy', async () => {
+    let release!: () => void;
+    let entered!: () => void;
+    const running = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    mockStreamChat.mockImplementationOnce(async (_body, callbacks: StreamCallbacks) => {
+      entered();
+      await new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      callbacks.onDelta({ content: 'first answer' });
+      callbacks.onDone();
+    });
+
+    const first = send('already running');
+    await running;
+    const onOfflineReplayBusy = jest.fn();
+    const onAccepted = jest.fn();
+    try {
+      const result = await useChatExecutionStore
+        .getState()
+        .sendMessage(CONV_ID, 'saved offline', CLOUD_MODEL, undefined, {
+          onOfflineReplayBusy,
+          onAccepted,
+        });
+
+      expect(result).toBe(false);
+      expect(onOfflineReplayBusy).toHaveBeenCalledTimes(1);
+      expect(onAccepted).not.toHaveBeenCalled();
+    } finally {
+      release();
+      await first;
+    }
+    expect(mockStreamChat).toHaveBeenCalledTimes(1);
+  });
+
+  it('postpones a replay when a foreground turn starts during its preflight', async () => {
+    let resumePreflight!: () => void;
+    let releaseForeground!: () => void;
+    let foregroundStarted!: () => void;
+    const foregroundRunning = new Promise<void>((resolve) => {
+      foregroundStarted = resolve;
+    });
+    jest.mocked(ensureCloudSendConsent).mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resumePreflight = resolve;
+        }),
+    );
+    mockStreamChat.mockImplementationOnce(async (_body, callbacks: StreamCallbacks) => {
+      foregroundStarted();
+      await new Promise<void>((resolve) => {
+        releaseForeground = resolve;
+      });
+      callbacks.onDelta({ content: 'foreground answer' });
+      callbacks.onDone();
+    });
+
+    const onOfflineReplayBusy = jest.fn();
+    const onAccepted = jest.fn();
+    const replay = useChatExecutionStore
+      .getState()
+      .sendMessage(CONV_ID, 'saved offline', CLOUD_MODEL, undefined, {
+        onOfflineReplayBusy,
+        onAccepted,
+      });
+    const foreground = send('foreground question');
+    await foregroundRunning;
+    try {
+      resumePreflight();
+      await expect(replay).resolves.toBe(false);
+      expect(onOfflineReplayBusy).toHaveBeenCalledTimes(1);
+      expect(onAccepted).not.toHaveBeenCalled();
+      expect(mockStreamChat).toHaveBeenCalledTimes(1);
+    } finally {
+      releaseForeground();
+      await foreground;
+    }
+  });
+
+  it('keeps the queue’s identity across the turn and reuses the existing question on replay', async () => {
+    const identity = {
+      questionId: '0190a000-0000-7000-8000-0000000000a1',
+      assistantMessageId: '0190a000-0000-7000-8000-0000000000a2',
+    };
+    mockStreamChat.mockImplementationOnce(async (_body, callbacks: StreamCallbacks) => {
+      callbacks.onDelta({ content: 'answer to the saved prompt' });
+      callbacks.onDone();
+    });
+    const onAccepted = jest.fn();
+    const replay = () =>
+      useChatExecutionStore
+        .getState()
+        .sendMessage(CONV_ID, 'saved prompt', CLOUD_MODEL, undefined, {
+          offlineReplayIdentity: identity,
+          onAccepted,
+        });
+
+    await expect(replay()).resolves.toBe(true);
+    expect(mockStreamChat.mock.calls[0]?.[0]).toMatchObject({
+      operationId: identity.assistantMessageId,
+    });
+    expect(
+      useChatCloudMessageStore
+        .getState()
+        .messages[CONV_ID]?.find((row) => row.id === identity.assistantMessageId),
+    ).toMatchObject({ content: 'answer to the saved prompt' });
+    await expect(replay()).resolves.toBe(true);
+    expect(mockStreamChat).toHaveBeenCalledTimes(1);
+    expect(
+      useChatCloudMessageStore.getState().messages[CONV_ID]?.filter((row) => row.role === 'user'),
+    ).toMatchObject([{ id: identity.questionId, content: 'saved prompt' }]);
+    expect(onAccepted).toHaveBeenCalledTimes(2);
+  });
+
+  it('offers recovery of the recorded question instead of resending after an uncertain shutdown', async () => {
+    const identity = {
+      questionId: '0190a000-0000-7000-8000-0000000000b1',
+      assistantMessageId: '0190a000-0000-7000-8000-0000000000b2',
+    };
+    useChatCloudMessageStore.setState({
+      messages: {
+        [CONV_ID]: [
+          {
+            id: identity.questionId,
+            conversationId: CONV_ID,
+            role: 'user',
+            content: 'saved before shutdown',
+            createdAt: '2026-11-01T00:00:00.000Z',
+          },
+        ],
+      },
+    });
+    const onAccepted = jest.fn();
+
+    await expect(
+      useChatExecutionStore
+        .getState()
+        .sendMessage(CONV_ID, 'saved before shutdown', CLOUD_MODEL, undefined, {
+          offlineReplayIdentity: identity,
+          onAccepted,
+        }),
+    ).resolves.toBe(true);
+
+    expect(mockStreamChat).not.toHaveBeenCalled();
+    expect(onAccepted).toHaveBeenCalledTimes(1);
+    expect(useChatExecutionStore.getState().errorRetry).toEqual({
+      kind: 'regenerate',
+      messageId: identity.questionId,
+    });
   });
 
   it('refuses a sixth waiting follow-up rather than growing the queue without bound', async () => {

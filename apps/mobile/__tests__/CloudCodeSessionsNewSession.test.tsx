@@ -1,11 +1,14 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
 import { StyleSheet } from 'react-native';
-import { fireEvent, render } from '@testing-library/react-native';
+import { act, fireEvent, render } from '@testing-library/react-native';
+import type { CloudCodeSession } from '@agiworkforce/types';
 
 const mockPush = jest.fn();
 const mockInsetBottom = 34;
 let mockNewSessionSheetVisible = false;
+let mockOnSendAndStay: ((session: CloudCodeSession, goal: string) => void) | undefined;
+const mockStartBackgroundGoal = jest.fn();
 
 let mockIsDark = false;
 
@@ -95,12 +98,22 @@ jest.mock('../src/features/cloud-code/useCloudCodeSessions', () => ({
 }));
 
 jest.mock('../src/features/cloud-code/components/NewCloudCodeSessionSheet', () => ({
-  NewCloudCodeSessionSheet: ({ visible }: { visible: boolean }) => {
+  NewCloudCodeSessionSheet: ({
+    visible,
+    onSendAndStay,
+  }: {
+    visible: boolean;
+    onSendAndStay: (session: CloudCodeSession, goal: string) => void;
+  }) => {
     mockNewSessionSheetVisible = visible;
+    mockOnSendAndStay = onSendAndStay;
     return null;
   },
 }));
 
+jest.mock('../src/features/cloud-code/backgroundCloudCodeGoal', () => ({
+  startBackgroundCloudCodeGoal: (...args: unknown[]) => mockStartBackgroundGoal(...args),
+}));
 import { CloudCodeSessionsScreen } from '../src/features/cloud-code/CloudCodeSessionsScreen';
 import { lightColors } from '../src/ui/theme/tokens';
 import { FLOATING_PRIMARY_ACTION_GAP } from '../src/shared/components/FloatingPrimaryAction';
@@ -118,6 +131,9 @@ function pageBackground(screen: ReturnType<typeof render>) {
 describe('Cloud code sessions new session action', () => {
   beforeEach(() => {
     mockNewSessionSheetVisible = false;
+    mockOnSendAndStay = undefined;
+    mockStartBackgroundGoal.mockClear();
+    mockPush.mockClear();
   });
 
   it('floats a labelled ink pill at the bottom right instead of a header icon', () => {
@@ -144,6 +160,22 @@ describe('Cloud code sessions new session action', () => {
     fireEvent.press(screen.getByTestId('cloud-code-new-session'));
 
     expect(mockNewSessionSheetVisible).toBe(true);
+  });
+
+  it('starts a background goal without opening the new session route', () => {
+    const screen = render(<CloudCodeSessionsScreen />);
+    fireEvent.press(screen.getByTestId('cloud-code-new-session'));
+    const session = { id: 'fixture-session' } as CloudCodeSession;
+    act(() => {
+      mockOnSendAndStay?.(session, 'Inspect the README');
+    });
+
+    expect(mockStartBackgroundGoal).toHaveBeenCalledWith(
+      session,
+      'Inspect the README',
+      expect.any(String),
+    );
+    expect(mockPush).not.toHaveBeenCalled();
   });
 
   it('points the empty state at the labelled action rather than a plus button', () => {

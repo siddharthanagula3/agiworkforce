@@ -2,15 +2,17 @@
 
 import { SshConnectionControl } from './components/SshConnectionControl';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSession } from '@/lib/identity/client';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { toast } from 'sonner';
 import {
   Code2,
   PanelLeft,
   PanelsTopLeft,
   RefreshCw,
+  Search,
   TerminalSquare,
   TriangleAlert,
   X,
@@ -23,12 +25,12 @@ import type {
   CloudCodeShareVisibility,
   CloudCodeTerminalEntry,
   CloudCodeTurnMode,
-  CloudCodeTurnStepBound,
 } from '@agiworkforce/types';
 import {
   agiCodeMinimumPlan,
   CLOUD_CODE_DEFAULT_TURN_MODE,
-  CLOUD_CODE_DEFAULT_TURN_STEPS,
+  CLOUD_CODE_SESSION_READY_POLLS,
+  CLOUD_CODE_SESSION_READY_POLL_INTERVAL_MS,
   cloudCodeStopReasonIsRetryable,
   getBillingPlanPricing,
   normalizeBillingPlanTier,
@@ -46,10 +48,11 @@ import {
   type CodeTurnRecord,
 } from '@agiworkforce/cloud-contracts';
 import { isImeComposingKey } from '@agiworkforce/unified-chat/ime-composition';
+import { SEARCH_INPUT_DEBOUNCE_MS } from '@agiworkforce/utils';
 import { AgiMark } from '@shared/components/agi/AgiMark';
 import { useShellLayout } from '@shared/components/layout/app-shell-layout';
 import { useGuardedRouter } from '@shared/hooks/use-guarded-router';
-import { openUpgrade } from '@shared/lib/app-commands';
+import { emitAppCommand, onAppCommand, openUpgrade } from '@shared/lib/app-commands';
 import { useSettingsModal } from '@/features/settings/components/SettingsModalProvider';
 import { useGreeting } from '@features/chat/components/GreetingBanner/useGreeting';
 import { useModelStore } from '@shared/stores/model-store';
@@ -59,6 +62,10 @@ import { GITHUB_RECONNECT_REQUIRED_REASON } from '@/lib/github-installation-acce
 import { NotebookPanel } from '@/features/notebook/NotebookPanel';
 import { useNotebookWorkspace } from '@/features/notebook/hooks/useNotebookWorkspace';
 import { useCloudCodeAuthority } from './hooks/use-cloud-code-authority';
+import {
+  runCloudCodeBackgroundTurn,
+  useCloudCodeBackgroundTurns,
+} from './services/cloud-code-background-turns';
 import { useSessionSnapshot } from '@/lib/identity/useSessionSnapshot';
 import {
   canonicalGitHubRepositoryBranch,
@@ -81,6 +88,7 @@ import {
   parseExtraHosts,
   REPOSITORY_MINIMUM_NETWORK_ACCESS,
   sessionContextChip,
+  sessionTitleMatches,
   type CodeSessionFilters,
 } from './code-surface';
 import { harnessModelChoices } from './code-runtime';
@@ -88,12 +96,17 @@ import {
   approvedRootId,
   localSessionFromSearch,
   localSessionPath,
+  type DeveloperSessionGroup,
   type LocalDeveloperSession,
 } from '@agiworkforce/local-runtime-contract';
 import type { ThreadDeleteResponse } from '@agiworkforce/types/protocol';
 import {
   ContinueOnDesktop,
   deleteDeveloperThread,
+  listDeveloperModels,
+  listDeveloperSessions,
+  lookupDeveloperSession,
+  startDeveloperTurn,
   useDesktopHost,
   useLocalModeHost,
 } from '@/features/desktop-host';
@@ -101,6 +114,7 @@ import { helpArticlePath } from '@/lib/support/help-paths';
 import { LOCAL_MODELS_SETTINGS_SECTION } from '@/features/settings/lib/web-settings-sections';
 import {
   LOCAL_CODE_COPY,
+  LOCAL_PANEL_COPY,
   LOCAL_FALLBACK_AGENT_MODE,
   LOCAL_MODELS_HELP_ARTICLE,
   localCloudModelsPlanLine,
@@ -111,6 +125,7 @@ import {
   localModelChoices,
   localModelSetup,
   localProviderSetups,
+  localRouteCommandAccessGroup,
   localSessionArchivedLine,
   localSessionDeletedLine,
   localWorktreeRemovedLine,
@@ -121,9 +136,12 @@ import {
   type LocalPlacement,
 } from './local-code';
 import { useLocalSessions } from './hooks/use-local-sessions';
+import { codeImageDataUrl } from './hooks/use-code-images';
 import { forgetLocalSession } from './local-session-memory';
 import { LocalSessionsSection } from './components/LocalSessionsSection';
-import { LocalSessionPanel } from './components/LocalSessionPanel';
+import { LocalSessionPanel, type LocalOpeningPrompt } from './components/LocalSessionPanel';
+import { WorkspaceTerminalDocks, useWorkspaceTerminalDocks } from './components/LocalTerminal';
+import { useShowTerminal } from './use-show-terminal';
 import { LocalListNotice } from './components/LocalListNotice';
 import { CodeRail } from './components/CodeRail';
 import {
@@ -143,7 +161,13 @@ import { useCodePanes } from './hooks/use-code-panes';
 import { useCodeFirstRun } from './hooks/use-code-first-run';
 import { CodeFirstRunWizard } from './components/CodeFirstRunWizard';
 import { CodeUsageDashboard } from './components/CodeUsageDashboard';
+import {
+  CodeDraftSidePanel,
+  useCodeSideTools,
+  type DraftSideTool,
+} from './components/CodeDraftSidePanel';
 import styles from './CloudCodePage.module.css';
+import { CodeComposerDraftProvider, useCodeComposerDrafts } from './CodeComposerDrafts';
 
 const HEADER_GLYPH_SIZE = 16;
 const NOTICE_GLYPH_SIZE = 16;
@@ -155,6 +179,8 @@ const UPGRADE_PLAN_SLOT = '{plan}';
 const UPGRADE_PATH = '/upgrade';
 const DOCUMENT_TITLE_SEPARATOR = ' · ';
 const MISSING_SESSION_STATUSES = new Set([403, 404]);
+const ACTIVE_CLOUD_TURN_POLL_INTERVAL_MS = 4_000;
+const TRANSCRIPT_FOLLOW_DISTANCE_PX = 48;
 const RENAME_COMMIT_KEY = 'Enter';
 const RENAME_CANCEL_KEY = 'Escape';
 
@@ -175,9 +201,6 @@ function friendlyError(error: unknown): string {
 function requiresGitHubReconnect(error: unknown): boolean {
   return error instanceof CloudCodeApiError && error.code === GITHUB_RECONNECT_REQUIRED_REASON;
 }
-
-const READY_POLLS = 20;
-const READY_POLL_MS = 1000;
 
 function titleFromTask(task: string): string {
   const words = task.trim().split(/\s+/).slice(0, DEFAULT_SESSION_TITLE_WORDS).join(' ');
@@ -215,11 +238,15 @@ export interface CloudCodePageProps {
 
 export function CloudCodePage(props: CloudCodePageProps) {
   const { isLoaded, isSignedIn, userId, sessionId } = useSession();
-  return <OwnedCloudCodePage key={`${isLoaded}:${isSignedIn}:${userId}:${sessionId}`} {...props} />;
+  return (
+    <CodeComposerDraftProvider>
+      <OwnedCloudCodePage key={`${isLoaded}:${isSignedIn}:${userId}:${sessionId}`} {...props} />
+    </CodeComposerDraftProvider>
+  );
 }
 
 function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePageProps) {
-  const { api, capture } = useCloudCodeAuthority(injectedApi);
+  const { api, backgroundApi, capture } = useCloudCodeAuthority(injectedApi);
   const sessionSnapshot = useSessionSnapshot();
   const notebookWorkspace = useNotebookWorkspace();
   const paneRef = useRef(pane);
@@ -237,11 +264,19 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
   const [pageLoading, setPageLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [localStartError, setLocalStartError] = useState<{
+    rootId: string;
+    message: string;
+  } | null>(null);
   const [reconnectError, setReconnectError] = useState<string | null>(null);
   const [routeNotice, setRouteNotice] = useState<string | null>(null);
   const [draft, setDraft] = useState<CodeDraft>(EMPTY_CODE_DRAFT);
-  const [task, setTask] = useState('');
-  const [turnSteps, setTurnSteps] = useState<CloudCodeTurnStepBound>(CLOUD_CODE_DEFAULT_TURN_STEPS);
+  const { drafts, setDraftText } = useCodeComposerDrafts();
+  const task = drafts.get(selectedId) ?? '';
+  const setTask = useCallback(
+    (text: string) => setDraftText(selectedId, text),
+    [selectedId, setDraftText],
+  );
   const [turnMode, setTurnMode] = useState<CloudCodeTurnMode>(CLOUD_CODE_DEFAULT_TURN_MODE);
   const [shareOpen, setShareOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -260,18 +295,47 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
   const [verbose, setVerbose] = useState(false);
   const [busySince, setBusySince] = useState<string | null>(null);
   const [turnRunning, setTurnRunning] = useState(false);
-  const [stopping, setStopping] = useState(false);
+  const [stopRequested, setStopping] = useState(false);
+  const stopLock = useRef<symbol | null>(null);
+  const [observedTurn, setObservedTurn] = useState<{
+    sessionId: string;
+    turnId: string;
+    startedAt: string;
+    cancelRequestedAt: string | null;
+  } | null>(null);
   const [hiddenSessionsExist, setHiddenSessionsExist] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
   const [hintDismissed, setHintDismissed] = useState(false);
   const [railDrawerOpen, setRailDrawerOpen] = useState(false);
   const [railCollapsed, setRailCollapsed] = useState(false);
+  const collapseRailRef = useRef<HTMLButtonElement>(null);
+  const expandRailRef = useRef<HTMLButtonElement>(null);
+  const restoreRailToggleFocus = useRef(false);
+  useEffect(() => {
+    if (!restoreRailToggleFocus.current) return;
+    restoreRailToggleFocus.current = false;
+    (railCollapsed ? expandRailRef : collapseRailRef).current?.focus();
+  }, [railCollapsed]);
   const [narrow, setNarrow] = useState(false);
+  const [draftSideTool, setDraftSideTool] = useState<DraftSideTool | null>(null);
+  const lastDraftSideTool = useRef<DraftSideTool>('launcher');
+  const [draftSideExpanded, setDraftSideExpanded] = useState(false);
+  const terminals = useWorkspaceTerminalDocks();
+  const toggleSessionRail = useCallback(() => {
+    if (narrow) {
+      setRailDrawerOpen((open) => !open);
+    } else {
+      restoreRailToggleFocus.current = true;
+      setRailCollapsed((collapsed) => !collapsed);
+    }
+  }, [narrow]);
   const phone = useShellLayout().tier === 'compact';
   const [localEditorDirty, setLocalEditorDirty] = useState(false);
   const [localSession, publishLocalSession] = useState<LocalDeveloperSession | null>(null);
-  const [localPrompt, setLocalPrompt] = useState('');
+  const [localPrompt, setLocalPrompt] = useState<
+    (LocalOpeningPrompt & { sessionId: string }) | null
+  >(null);
   const [localPlacement, setLocalPlacement] = useState<LocalPlacement>('local');
   const [localDeletion, setLocalDeletion] = useState<{
     rootId: string;
@@ -281,6 +345,7 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
   const [localArchivedThread, setLocalArchivedThread] = useState<string | null>(null);
   const [localWorktreeRemovedRef, setLocalWorktreeRemovedRef] = useState<string | null>(null);
   const submitLock = useRef<symbol | null>(null);
+  const followTranscript = useRef(true);
   const selectionRevision = useRef(0);
   const draftRevision = useRef(0);
   const selectionRef = useRef<string | null>(sessionId ?? null);
@@ -292,10 +357,13 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
   }
   const resetSelectionWork = useCallback(() => {
     submitLock.current = null;
+    stopLock.current = null;
+    followTranscript.current = true;
     setBusy(false);
     setBusySince(null);
     setTurnRunning(false);
     setStopping(false);
+    setObservedTurn(null);
     setRunning(false);
     setCommitting(false);
     setPullRequestBusy(false);
@@ -375,9 +443,6 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
   const hiddenProbeRef = useRef(false);
   const routeSessionRef = useRef<string | null>(sessionId ?? null);
   const routeWaitingNotice = useRef<string | null>(null);
-  const routeLocalRef = useRef<{ rootId: string; threadId: string } | null>(
-    typeof window === 'undefined' || pane ? null : localSessionFromSearch(window.location.search),
-  );
   const titleInputRef = useRef<HTMLInputElement>(null);
   const titleEditedRef = useRef(false);
 
@@ -386,6 +451,12 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
   const { openSettings } = useSettingsModal();
   const routerRef = useRef(router);
   const searchParams = useSearchParams();
+  const routeSearch = searchParams.toString();
+  const localRoute = useMemo(
+    () => (pane || sessionId ? null : localSessionFromSearch(routeSearch)),
+    [pane, routeSearch, sessionId],
+  );
+  const routeLocalRef = useRef(localRoute);
   const githubNotice = searchParams.get('github');
   const { firstName, nameResolved } = useGreeting();
   const selectedModelId = useModelStore((state) => state.selectedModelId);
@@ -406,6 +477,14 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
   const desktopHost = useDesktopHost();
   const localModeHost = useLocalModeHost();
   const firstRun = useCodeFirstRun(!pane && !sessionId && desktopHost === null, api, capture);
+  useEffect(() => {
+    routeLocalRef.current = localRoute;
+  }, [localRoute]);
+
+  useEffect(() => {
+    if (pane || firstRun.state === 'checking' || firstRun.state === 'show') return;
+    return onAppCommand('toggle-sidebar', toggleSessionRail);
+  }, [firstRun.state, pane, toggleSessionRail]);
 
   const leaveLocalEdits = useCallback(
     (proceed: () => void) => {
@@ -558,6 +637,8 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
   const handleDraftChange = useCallback((patch: Partial<CodeDraft>) => {
     draftRevision.current += 1;
     if (patch.environment !== undefined) environmentChosen.current = true;
+    if (patch.localRootId !== undefined || patch.environment !== undefined)
+      setLocalStartError(null);
     setDraft((current) => ({
       ...current,
       ...(patch.localRootId !== undefined && patch.localRootId !== current.localRootId
@@ -568,6 +649,7 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
   }, []);
 
   const draftGroup = local.groups.find((group) => group.rootId === draft.localRootId) ?? null;
+  const commandAccessNoticeId = useId();
   const draftRuntime = draft.localRootId === null ? null : local.modelsFor(draft.localRootId);
   const localChoices = localModelChoices(draftRuntime, draftGroup?.sessions ?? [], accountPlanTier);
   const localModelId =
@@ -585,6 +667,14 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
     () => sessions.find((session) => session.id === selectedId) ?? null,
     [selectedId, sessions],
   );
+  const backgroundTurns = useCloudCodeBackgroundTurns();
+  const selectedBackgroundTurn = selectedId ? backgroundTurns.get(selectedId) : undefined;
+  const activeStoredTurn = observedTurn?.sessionId === selectedId ? observedTurn : null;
+  const localTurnPending = turnRunning || selectedBackgroundTurn !== undefined;
+  const localTurnPendingRef = useRef(localTurnPending);
+  localTurnPendingRef.current = localTurnPending;
+  const selectedTurnRunning = localTurnPending || activeStoredTurn !== null;
+  const stopping = stopRequested || Boolean(activeStoredTurn?.cancelRequestedAt);
   const runtimeRunsOwnAgent = useCallback(
     (runtimeId: string | null) =>
       runtimes.some((runtime) => runtime.id === runtimeId && runtime.runsOwnAgent === true),
@@ -605,12 +695,26 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
     const controller = new AbortController();
     const owner = captureView();
     const current = () => owner.isCurrent() && !controller.signal.aborted;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let polling = false;
     setDetailLoading(true);
     setError(null);
-    void api
-      .get(selectedId, controller.signal)
-      .then((body) => {
+    const read = async (initial: boolean) => {
+      try {
+        if (!initial && localTurnPendingRef.current) return;
+        const body = await api.get(selectedId, controller.signal);
         if (!current()) return;
+        const latest = body.turns.at(-1);
+        const active = latest?.stopReason === null ? latest : null;
+        polling = active !== null;
+        setObservedTurn(
+          active && {
+            sessionId: selectedId,
+            turnId: active.turnId,
+            startedAt: active.createdAt,
+            cancelRequestedAt: active.cancelRequestedAt,
+          },
+        );
         replaceSession(body.session, owner);
         setEntries(body.terminalEntries);
         setTruncatedSessionId(body.turnsTruncated === true ? body.session.id : null);
@@ -625,14 +729,14 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
             ...current.filter((record) => !record.turnId || !storedIds.has(record.turnId)),
           ];
         });
-      })
-      .catch((detailError) => {
+      } catch (detailError) {
         if (!current()) return;
         if (detailError instanceof DOMException && detailError.name === 'AbortError') return;
         if (
           detailError instanceof CloudCodeApiError &&
           MISSING_SESSION_STATUSES.has(detailError.status)
         ) {
+          polling = false;
           if (paneRef.current) {
             paneRef.current.onClose();
             return;
@@ -642,13 +746,21 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
           routerRef.current.replace(codeHomeAfterMissingSession());
           return;
         }
-        setError(friendlyError(detailError));
-      })
-      .finally(() => {
-        if (current()) setDetailLoading(false);
-      });
-    return () => controller.abort();
-  }, [api, captureView, replaceSession, selectedId, setSelectedId]);
+        if (initial) setError(friendlyError(detailError));
+      } finally {
+        if (current()) {
+          if (initial) setDetailLoading(false);
+          if (polling)
+            timer = setTimeout(() => void read(false), ACTIVE_CLOUD_TURN_POLL_INTERVAL_MS);
+        }
+      }
+    };
+    void read(true);
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [api, captureView, replaceSession, selectedBackgroundTurn, selectedId, setSelectedId]);
 
   // Approvals outlive the tab that created them (the backend persists them with a
   // 30-minute expiry), so a reload or a session switch has to re-read them or a
@@ -670,7 +782,14 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
         setError(friendlyError(approvalsError));
       });
     return () => controller.abort();
-  }, [api, canRun, captureView, selectedId]);
+  }, [api, canRun, captureView, selectedBackgroundTurn, selectedId]);
+
+  useEffect(() => {
+    if (!selectedTurnRunning) {
+      stopLock.current = null;
+      setStopping(false);
+    }
+  }, [selectedTurnRunning]);
 
   useEffect(() => {
     if (!changesOpen || !selectedId) return;
@@ -717,11 +836,86 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
   }, [selectedSession]);
 
   useEffect(() => {
+    if (!followTranscript.current) return;
     const end = transcriptEndRef.current;
     if (typeof end?.scrollIntoView === 'function') end.scrollIntoView({ block: 'nearest' });
   }, [transcript, busy]);
 
-  const railSessions = useMemo(() => filterAndSortSessions(sessions, filters), [sessions, filters]);
+  const railSessions = useMemo(
+    () =>
+      filterAndSortSessions(sessions, filters).map((session) =>
+        backgroundTurns.has(session.id) ? { ...session, state: 'running' as const } : session,
+      ),
+    [backgroundTurns, filters, sessions],
+  );
+  const sessionSearchQuery = filters.query.trim();
+  const [localTitleSearch, setLocalTitleSearch] = useState<{
+    query: string;
+    includeArchived: boolean;
+    groups: DeveloperSessionGroup[] | null;
+    error: string | null;
+  } | null>(null);
+  const includeArchived = local.showArchived;
+  const searchSupported = local.supported;
+  useEffect(() => {
+    if (!searchSupported || !sessionSearchQuery) {
+      setLocalTitleSearch(null);
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      void listDeveloperSessions({ titleQuery: sessionSearchQuery, includeArchived })
+        .then(({ groups }) => {
+          if (!cancelled) {
+            setLocalTitleSearch({
+              query: sessionSearchQuery,
+              includeArchived,
+              groups,
+              error: null,
+            });
+          }
+        })
+        .catch((error: unknown) => {
+          if (!cancelled) {
+            setLocalTitleSearch({
+              query: sessionSearchQuery,
+              includeArchived,
+              groups: null,
+              error: toUserMessage(error, LOCAL_CODE_COPY.searchFailed),
+            });
+          }
+        });
+    }, SEARCH_INPUT_DEBOUNCE_MS);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [searchSupported, sessionSearchQuery, includeArchived, local.groups]);
+  const matchingLocalSearch =
+    localTitleSearch?.query === sessionSearchQuery &&
+    localTitleSearch.includeArchived === includeArchived
+      ? localTitleSearch
+      : null;
+  const searchedLocalGroups = matchingLocalSearch?.groups ?? local.groups;
+  const railLocalGroups = useMemo(() => {
+    if (sessionSearchQuery === '') return local.groups;
+    return searchedLocalGroups
+      .map((group) => ({
+        ...group,
+        sessions: group.sessions.filter((session) =>
+          sessionTitleMatches(session.title, sessionSearchQuery),
+        ),
+      }))
+      .filter((group) => group.sessions.length > 0 || group.sessionsWithheld || group.unavailable);
+  }, [local.groups, searchedLocalGroups, sessionSearchQuery]);
+  const loadingLocalSearch = searchSupported && sessionSearchQuery !== '' && !matchingLocalSearch;
+  const showLocalSearchSection =
+    railLocalGroups.length > 0 ||
+    !local.settled ||
+    local.loading ||
+    loadingLocalSearch ||
+    local.error !== null ||
+    matchingLocalSearch?.error != null;
 
   const applyTurn = useCallback((recordId: string, turn: CloudCodeAgentTurn, goal: string) => {
     setTurns((current) =>
@@ -754,6 +948,19 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
     );
   }, []);
 
+  const requestTurn = useCallback(
+    (client: CloudCodeApi, session: CloudCodeSession, goal: string, mode: CloudCodeTurnMode) => {
+      const ownAgent = runtimeRunsOwnAgent(session.runtimeId);
+      return client.startAgentTurn(session.id, {
+        goal,
+        model: (ownAgent ? sessionModelsRef.current[session.id] : undefined) ?? agentModel,
+        idempotencyKey: makeRequestId(),
+        ...(ownAgent ? {} : { mode }),
+      });
+    },
+    [agentModel, runtimeRunsOwnAgent],
+  );
+
   const startTurn = useCallback(
     async (
       session: CloudCodeSession,
@@ -764,6 +971,7 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
       if (!owner.isCurrent()) return;
       const taskRevision = draftRevision.current;
       owner.followSelection();
+      followTranscript.current = true;
       const ownAgent = runtimeRunsOwnAgent(session.runtimeId);
       const recordId = makeRequestId();
       setTurns((current) => [
@@ -786,12 +994,7 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
       setTurnRunning(true);
       setError(null);
       try {
-        const turn = await api.startAgentTurn(session.id, {
-          goal,
-          model: (ownAgent ? sessionModelsRef.current[session.id] : undefined) ?? agentModel,
-          idempotencyKey: makeRequestId(),
-          ...(ownAgent ? {} : { maxSteps: turnSteps, mode }),
-        });
+        const turn = await requestTurn(api, session, goal, mode);
         if (owner.accountCurrent()) void loadSessions(statusFilterRef.current, undefined, owner);
         if (!owner.isCurrent()) return;
         applyTurn(recordId, turn, goal);
@@ -812,7 +1015,7 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
               : record,
           ),
         );
-        if (taskRevision === draftRevision.current) setTask(goal);
+        if (taskRevision === draftRevision.current) setDraftText(session.id, goal);
         void loadSessions(statusFilterRef.current, undefined, owner);
       } finally {
         if (owner.isSelected()) {
@@ -823,7 +1026,7 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
         }
       }
     },
-    [agentModel, api, applyTurn, loadSessions, runtimeRunsOwnAgent, turnSteps],
+    [api, applyTurn, loadSessions, requestTurn, runtimeRunsOwnAgent, setDraftText],
   );
 
   const createSession = useCallback(
@@ -831,6 +1034,7 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
       title: string,
       patch: Partial<CodeDraft> = {},
       owner = captureView(true),
+      stayHere = false,
     ): Promise<CloudCodeSession | null> => {
       if (!owner.isCurrent()) return null;
       const next = { ...draft, ...patch };
@@ -859,8 +1063,10 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
             : {}),
         });
         replaceSession(body.session, owner);
-        if (!owner.select(body.session.id)) return null;
+        if (!owner.isCurrent()) return null;
         if (next.harnessModelId) sessionModelsRef.current[body.session.id] = next.harnessModelId;
+        if (stayHere) return body.session;
+        if (!owner.select(body.session.id)) return null;
         setEntries(body.terminalEntries);
         setTurns([]);
         setDraft((current) => ({
@@ -904,17 +1110,45 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
       setRouteNotice(resolution.notice);
       return;
     }
-    routeLocalRef.current = null;
-    if (resolution.kind === 'found') {
+    const finish = (session: LocalDeveloperSession | null) => {
+      routeLocalRef.current = null;
       const waiting = routeWaitingNotice.current;
       routeWaitingNotice.current = null;
-      setRouteNotice((current) => (current === waiting ? null : current));
-      setLocalSession(resolution.session);
+      if (session) {
+        setRouteNotice((current) => (current === waiting ? null : current));
+        setLocalSession(session);
+      } else {
+        setRouteNotice(LOCAL_CODE_COPY.sessionNotFound);
+        routerRef.current.replace(CODE_ROUTES.root);
+      }
+    };
+    if (resolution.kind === 'found') {
+      finish(resolution.session);
       return;
     }
-    setRouteNotice(LOCAL_CODE_COPY.sessionNotFound);
-    routerRef.current.replace(CODE_ROUTES.root);
-  }, [local.settled, local.loading, local.groups, local.error, setLocalSession]);
+    if (!local.groups.some((group) => group.rootId === wanted.rootId)) {
+      finish(null);
+      return;
+    }
+    let current = true;
+    void lookupDeveloperSession(wanted.rootId, wanted.threadId)
+      .then((session) => {
+        if (!current || routeLocalRef.current !== wanted) return;
+        if (session && (session.rootId !== wanted.rootId || session.id !== wanted.threadId)) {
+          throw new Error(LOCAL_CODE_COPY.sessionUnreadable);
+        }
+        finish(session);
+      })
+      .catch((error: unknown) => {
+        if (!current || routeLocalRef.current !== wanted) return;
+        const notice = toUserMessage(error, LOCAL_CODE_COPY.sessionUnreadable);
+        routeWaitingNotice.current = notice;
+        setRouteNotice(notice);
+      });
+    return () => {
+      current = false;
+    };
+  }, [localRoute, local.settled, local.loading, local.groups, local.error, setLocalSession]);
 
   const dismissRouteNotice = useCallback(() => {
     routeLocalRef.current = null;
@@ -952,8 +1186,8 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
     (session: LocalDeveloperSession) => {
       setLocalArchivedThread(session.id);
       local.dismissCleanupFailures(session.id);
-      local.refresh();
-      closeLocalSession();
+      const selected = localSelectionRef.current;
+      if (selected?.rootId === session.rootId && selected.id === session.id) closeLocalSession();
     },
     [closeLocalSession, local],
   );
@@ -995,20 +1229,82 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
   }, [confirm, localDeletion]);
 
   const startLocalSession = useCallback(
-    async (rootId: string, text: string, model: string) => {
+    async (rootId: string, text: string, model: string, pictures: File[], stayHere: boolean) => {
+      const owner = captureView(true);
+      setLocalStartError(null);
       setBusy(true);
       try {
-        const started = await local.startSession(rootId, model || undefined, localPlacement);
-        if (!started) return;
+        let images: string[];
+        try {
+          images = await Promise.all(pictures.map(codeImageDataUrl));
+        } catch {
+          if (owner.isCurrent())
+            setLocalStartError({ rootId, message: LOCAL_CODE_COPY.imageReadFailed });
+          return false;
+        }
+        if (!owner.isCurrent()) return false;
+        const started = await local.startSession(
+          rootId,
+          model || undefined,
+          localPlacement,
+          (message) => {
+            if (owner.isCurrent()) setLocalStartError({ rootId, message });
+          },
+        );
+        if (!started || !owner.isCurrent()) return false;
+        if (stayHere) {
+          const runtime = local.modelsFor(started.rootId) ?? local.modelsFor(rootId);
+          try {
+            await startDeveloperTurn({
+              rootId: started.rootId,
+              threadId: started.id,
+              text,
+              agentMode: runtime?.defaultAgentMode ?? LOCAL_FALLBACK_AGENT_MODE,
+              ...(runtime?.defaultReasoningEffort
+                ? { reasoningEffort: runtime.defaultReasoningEffort }
+                : {}),
+              ...(model ? { model } : {}),
+              ...(images.length > 0 ? { images } : {}),
+            });
+          } catch (cause) {
+            if (owner.isCurrent()) {
+              setLocalStartError({
+                rootId,
+                message: toUserMessage(cause, LOCAL_CODE_COPY.turnFailed),
+              });
+            }
+            return false;
+          }
+          if (owner.accountCurrent()) {
+            toast.success(CODE_COPY.backgroundTaskStarted, {
+              action: {
+                label: CODE_COPY.openBackgroundTask,
+                onClick: () => {
+                  if (owner.accountCurrent()) {
+                    guardedRouter.push(localSessionPath(started.rootId, started.id));
+                  }
+                },
+              },
+            });
+          }
+          if (!owner.isCurrent()) return false;
+          setTask('');
+          return true;
+        }
         setTask('');
-        setLocalPrompt(text);
+        setLocalPrompt({
+          sessionId: started.id,
+          message: { text, images, contextFiles: [] },
+          pictures,
+        });
         openLocalSession(started);
         setRailDrawerOpen(false);
+        return true;
       } finally {
         setBusy(false);
       }
     },
-    [local, openLocalSession, localPlacement],
+    [captureView, guardedRouter, local, openLocalSession, localPlacement, setTask],
   );
 
   const waitForReady = useCallback(
@@ -1019,11 +1315,14 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
       let current = initial;
       for (
         let attempt = 0;
-        current.state === 'provisioning' && attempt < READY_POLLS;
+        current.state === 'provisioning' && attempt < CLOUD_CODE_SESSION_READY_POLLS;
         attempt += 1
       ) {
         if (!owner.isCurrent()) return null;
-        if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, READY_POLL_MS));
+        if (attempt > 0)
+          await new Promise((resolve) =>
+            setTimeout(resolve, CLOUD_CODE_SESSION_READY_POLL_INTERVAL_MS),
+          );
         if (!owner.isCurrent()) return null;
         try {
           const detail = await api.get(current.id);
@@ -1039,21 +1338,77 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
     [api, replaceSession],
   );
 
+  const startBackgroundTurn = useCallback(
+    (
+      session: CloudCodeSession,
+      text: string,
+      mode: CloudCodeTurnMode,
+      owner: ReturnType<typeof captureView>,
+    ) => {
+      const identity = sessionSnapshot();
+      if (!identity?.isCurrent() || !owner.isCurrent()) return false;
+      const action = {
+        label: CODE_COPY.openBackgroundTask,
+        onClick: () => {
+          if (identity.isCurrent()) guardedRouter.push(codeSessionPath(session.id));
+        },
+      };
+      const options = { action, description: session.title };
+      const running = runCloudCodeBackgroundTurn(session.id, () =>
+        requestTurn(backgroundApi, session, text, mode),
+      );
+      setTask('');
+      toast.info(CODE_COPY.cloudBackgroundTaskSubmitted, options);
+      void running.then(
+        (result) => {
+          if (owner.accountCurrent()) void loadSessions(statusFilterRef.current, undefined, owner);
+          if (!identity.isCurrent()) return;
+          if (result.stopReason === 'awaiting_approval') {
+            toast.info(CODE_COPY.backgroundTaskNeedsApproval, options);
+          } else if (result.stopReason !== 'done' && result.stopReason !== 'cancelled') {
+            toast.error(CODE_COPY.backgroundTaskNeedsAttention, options);
+          }
+        },
+        async (cause: unknown) => {
+          if (!identity.isCurrent()) return;
+          toast.error(friendlyError(cause), options);
+          if (!owner.isCurrent()) return;
+          const saved = await api.get(session.id).catch(() => null);
+          if (!saved) return;
+          replaceSession(saved.session, owner);
+          if (owner.isCurrent() && saved.turns.length === 0) setTask(text);
+        },
+      );
+      return true;
+    },
+    [
+      api,
+      backgroundApi,
+      guardedRouter,
+      loadSessions,
+      replaceSession,
+      requestTurn,
+      sessionSnapshot,
+      setTask,
+    ],
+  );
+
   const handleSubmit = useCallback(
     async (
       text: string,
       mode: CloudCodeTurnMode = turnMode,
       entry: CodeRepositoryEntry | null = null,
-    ) => {
-      if (submitLock.current || busy) return;
+      pictures: File[] = [],
+      stayHere = false,
+    ): Promise<boolean | void> => {
+      if (submitLock.current || busy || selectedTurnRunning) return;
       const submission = Symbol();
       submitLock.current = submission;
       const owner = captureView(true);
       try {
         if (draft.environment === 'local' && !selectedSession) {
-          if (draft.localRootId === null) return;
-          await startLocalSession(draft.localRootId, text, localModelId);
-          return;
+          if (draft.localRootId === null || draftGroup?.sessionsWithheld) return;
+          return await startLocalSession(draft.localRootId, text, localModelId, pictures, stayHere);
         }
 
         if (!canCreate || !owner.isCurrent()) return;
@@ -1085,7 +1440,7 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
           return;
         }
 
-        const created = await createSession(titleFromTask(text), selection.patch, owner);
+        const created = await createSession(titleFromTask(text), selection.patch, owner, stayHere);
         if (!owner.isCurrent()) return;
         if (!created) {
           setTask(text);
@@ -1095,15 +1450,19 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
           created.state === 'provisioning' ? await waitForReady(created, owner) : created;
         if (!owner.isCurrent() || !ready) return;
         if (ready.state !== 'ready') {
-          setTask(text);
+          if (!stayHere) {
+            setTask('');
+            setDraftText(created.id, text);
+          }
           setError(
             ready.lastError ||
               (ready.state === 'failed' ? CODE_COPY.sessionFailed : CODE_COPY.environmentNotReady),
           );
           return;
         }
+        if (stayHere) return startBackgroundTurn(ready, text, mode, owner);
         setTask('');
-        await startTurn(ready, text, mode, owner);
+        return await startTurn(ready, text, mode, owner);
       } finally {
         if (submitLock.current === submission) submitLock.current = null;
       }
@@ -1114,8 +1473,13 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
       captureView,
       createSession,
       draft,
+      draftGroup?.sessionsWithheld,
       localModelId,
       selectedSession,
+      selectedTurnRunning,
+      setDraftText,
+      setTask,
+      startBackgroundTurn,
       startLocalSession,
       startTurn,
       turnMode,
@@ -1190,18 +1554,22 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
   );
 
   const handleStopTurn = useCallback(async () => {
-    if (!selectedSession || !turnRunning || stopping) return;
+    if (!selectedSession || !selectedTurnRunning || stopping || stopLock.current) return;
     const owner = captureView();
     if (!owner.isCurrent()) return;
+    const request = Symbol();
+    stopLock.current = request;
     setStopping(true);
     try {
-      await api.cancelAgentTurn(selectedSession.id);
+      if (activeStoredTurn) await api.cancelAgentTurn(selectedSession.id, activeStoredTurn.turnId);
+      else await api.cancelAgentTurn(selectedSession.id);
     } catch (stopError) {
-      if (!owner.isCurrent()) return;
+      if (!owner.isCurrent() || stopLock.current !== request) return;
+      stopLock.current = null;
       setStopping(false);
       setError(friendlyError(stopError));
     }
-  }, [api, captureView, selectedSession, stopping, turnRunning]);
+  }, [activeStoredTurn, api, captureView, selectedSession, selectedTurnRunning, stopping]);
 
   const handleRunCommand = useCallback(
     async (command: string) => {
@@ -1435,11 +1803,41 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
     openPrimary: openSession,
   });
 
+  const renameLocalSession = async (session: LocalDeveloperSession, title: string) => {
+    const accountCurrent = capture();
+    const result = await local.renameSession(session, title);
+    if ('error' in result) return result.error;
+    if (!accountCurrent()) return LOCAL_CODE_COPY.renameFailed;
+    publishLocalSession((current) =>
+      current?.rootId === session.rootId && current.id === session.id
+        ? { ...current, title: result.renamed.title }
+        : current,
+    );
+    return null;
+  };
+
+  const changeLocalArchive = async (session: LocalDeveloperSession, archived: boolean) => {
+    const accountCurrent = capture();
+    if (!(await local.setSessionArchived(session, archived)) || !accountCurrent()) return false;
+    if (archived) {
+      localSessionArchived(session);
+    } else {
+      setLocalArchivedThread((current) => (current === session.id ? null : current));
+      publishLocalSession((current) => {
+        if (current?.rootId !== session.rootId || current.id !== session.id) return current;
+        const { archivedAt: _archivedAt, ...restored } = current;
+        return { ...restored, status: restored.status === 'archived' ? 'idle' : restored.status };
+      });
+    }
+    return true;
+  };
+
   const railProps = {
     sessions: railSessions,
     hiddenSessionsExist,
     selectedId,
     loading: pageLoading,
+    showLocalSearchSection: local.supported && showLocalSearchSection,
     filters,
     onFiltersChange: (patch: Partial<CodeSessionFilters>) => {
       if (patch.status !== undefined && patch.status !== statusFilterRef.current) {
@@ -1455,87 +1853,200 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
         if (panes.select(id, options?.split === true)) return;
         openSession(id);
       }),
-    localSection: local.supported ? (
-      <>
-        <SshConnectionControl
-          onConnected={(session) => {
-            local.refresh();
-            leaveLocalEdits(() => {
-              setRailDrawerOpen(false);
-              setLocalPrompt('');
-              openLocalSession(session);
-            });
-          }}
-          onDisconnected={(rootId) => {
-            local.refresh();
-            if (localSession?.rootId === rootId) closeLocalSession();
-          }}
-        />
-        <LocalSessionsSection
-          groups={local.groups}
-          loading={local.loading}
-          adding={local.adding}
-          error={local.error}
-          unavailable={local.unavailable}
-          selectedId={localSession?.id ?? null}
-          activity={local.activity}
-          onSelect={(session) => {
-            if (session.id === localSession?.id) return;
-            leaveLocalEdits(() => {
-              setRailDrawerOpen(false);
-              setLocalPrompt('');
-              openLocalSession(session);
-            });
-          }}
-          onNewSession={(rootId) =>
-            leaveLocalEdits(() => {
-              const model = planStartingModelId(
-                local.modelsFor(rootId),
-                local.groups.find((group) => group.rootId === rootId)?.sessions ?? [],
-                accountPlanTier,
-              );
-              if (model === null) {
-                showLocalDraft(rootId);
-                return;
-              }
-              void local.startSession(rootId, model).then((session) => {
-                if (session) {
-                  setRailDrawerOpen(false);
-                  setLocalPrompt('');
-                  openLocalSession(session);
-                }
+    localSection:
+      local.supported && (sessionSearchQuery === '' || showLocalSearchSection) ? (
+        <>
+          <SshConnectionControl
+            onConnected={(session) => {
+              local.refresh();
+              leaveLocalEdits(() => {
+                setRailDrawerOpen(false);
+                setLocalPrompt(null);
+                openLocalSession(session);
               });
-            })
-          }
-          onAddFolder={() => void local.addFolder('folder')}
-          onAddRepository={() => void local.addFolder('repository')}
-          allowing={local.allowing}
-          allowRefusals={local.allowRefusals}
-          onAllowSessions={(rootId) => void local.allowSessions(rootId)}
-          reviewingMcp={local.reviewingMcp}
-          mcpRefusals={local.mcpRefusals}
-          onReviewMcpServer={(rootId, server) => void local.reviewMcpServer(rootId, server)}
-          showArchived={local.showArchived}
-          onToggleArchived={() => local.setShowArchived(!local.showArchived)}
-          sessionActions={local.sessionActions}
-          actionError={local.actionError}
-          onRename={local.renameSession}
-          onSetArchived={(session, archived) => void local.setSessionArchived(session, archived)}
-          onSetPinned={(session, pinned) => void local.setSessionPinned(session, pinned)}
-        />
-      </>
-    ) : null,
+            }}
+            onDisconnected={(rootId) => {
+              local.refresh();
+              if (localSession?.rootId === rootId) closeLocalSession();
+            }}
+          />
+          <LocalSessionsSection
+            groups={railLocalGroups}
+            loading={local.loading || loadingLocalSearch}
+            adding={local.adding}
+            error={matchingLocalSearch?.error ?? local.error}
+            unavailable={local.unavailable}
+            selectedId={localSession?.id ?? null}
+            activity={local.activity}
+            onSelect={(session) => {
+              if (session.id === localSession?.id) return;
+              leaveLocalEdits(() => {
+                setRailDrawerOpen(false);
+                setLocalPrompt(null);
+                openLocalSession(session);
+              });
+            }}
+            onNewSession={(rootId) =>
+              leaveLocalEdits(() => {
+                const model = planStartingModelId(
+                  local.modelsFor(rootId),
+                  local.groups.find((group) => group.rootId === rootId)?.sessions ?? [],
+                  accountPlanTier,
+                );
+                if (model === null) {
+                  showLocalDraft(rootId);
+                  return;
+                }
+                void local.startSession(rootId, model).then((session) => {
+                  if (session) {
+                    setRailDrawerOpen(false);
+                    setLocalPrompt(null);
+                    openLocalSession(session);
+                  }
+                });
+              })
+            }
+            onAddFolder={() => void local.addFolder('folder')}
+            onAddRepository={() => void local.addFolder('repository')}
+            allowing={local.allowing}
+            allowRefusals={local.allowRefusals}
+            onAllowSessions={(rootId) => void local.allowSessions(rootId)}
+            onReviewCommandAccess={() => openSettings('capabilities')}
+            reviewingMcp={local.reviewingMcp}
+            mcpRefusals={local.mcpRefusals}
+            onReviewMcpServer={(rootId, server) => void local.reviewMcpServer(rootId, server)}
+            showArchived={local.showArchived}
+            onToggleArchived={() => local.setShowArchived(!local.showArchived)}
+            sessionActions={local.sessionActions}
+            actionError={local.actionError}
+            onRename={renameLocalSession}
+            selectedHasUnsavedEdits={localEditorDirty}
+            onSetArchived={changeLocalArchive}
+            onSetPinned={(session, pinned) => void local.setSessionPinned(session, pinned)}
+          />
+        </>
+      ) : null,
   };
 
   const localGroup = local.groups.find((group) => group.rootId === localSession?.rootId) ?? null;
+  const { retainRoots } = terminals;
+  useEffect(() => {
+    if (!local.settled || local.loading || local.error !== null) return;
+    const allowed = local.groups.filter((group) => !group.sessionsWithheld);
+    const listedRoots = new Set(allowed.map((group) => group.rootId));
+    const incompleteRoots = new Set(
+      allowed
+        .filter((group) => group.unavailable || group.worktreesUnavailable)
+        .map((group) => group.rootId),
+    );
+    retainRoots((rootId) => listedRoots.has(rootId) || incompleteRoots.has(approvedRootId(rootId)));
+  }, [local.error, local.groups, local.loading, local.settled, retainRoots]);
+  const listedLocalTitle = localGroup?.sessions.find(
+    (session) => session.id === localSession?.id,
+  )?.title;
   const draftFolder = localFolderChoice(local.groups, draft.localRootId);
+  const folderChoices = localFolderChoices(local.groups);
+  const desktopCode = desktopHost?.shell === 'electron';
+  const showDraftTools = desktopCode && !pane && !localSession && !selectedSession;
+  const draftTools = useCodeSideTools(showDraftTools);
+  const changeDraftSideTool = (tool: DraftSideTool | null) => {
+    if (tool !== null) lastDraftSideTool.current = tool;
+    setDraftSideExpanded(false);
+    setDraftSideTool(tool);
+  };
+  const needsLocalFolder = desktopCode && local.settled && folderChoices.length === 0;
   const isLocalDraft = draft.environment === 'local';
   const localDraftBlocked = isLocalDraft ? (draftFolder?.unavailable ?? null) : null;
+  const localDraftStartError =
+    isLocalDraft && localStartError?.rootId === draft.localRootId ? localStartError.message : null;
+  const commandAccessGroup =
+    isLocalDraft && !selectedSession && !localDraftBlocked && draftGroup?.sessionsWithheld
+      ? draftGroup
+      : null;
+  const draftTerminalFolder =
+    isLocalDraft && !localDraftBlocked && !commandAccessGroup ? draftFolder : null;
+  const activeDraftTerminalRoot = useRef(draftTerminalFolder?.rootId);
+  activeDraftTerminalRoot.current = draftTerminalFolder?.rootId;
+  const draftTerminalReason =
+    !isLocalDraft || !draftFolder
+      ? LOCAL_CODE_COPY.chooseFolder
+      : (localDraftBlocked ??
+        (commandAccessGroup ? LOCAL_CODE_COPY.startNeedsCommandAccess : undefined));
+  const openDraftTerminal = async () => {
+    if (!showDraftTools || !draftTerminalFolder) return;
+    const { rootId, name } = draftTerminalFolder;
+    const owner = captureView();
+    const knownPty = terminals.entries.get(rootId)?.pty ?? draftRuntime?.features?.terminalPty;
+    const pty =
+      knownPty ??
+      (await listDeveloperModels(rootId)
+        .then((runtime) => runtime.features?.terminalPty ?? local.terminalPty)
+        .catch(() => local.terminalPty));
+    if (!owner.isCurrent() || activeDraftTerminalRoot.current !== rootId) return;
+    terminals.show({ rootId, folder: name, pty });
+    setDraftSideTool((current) => (current === 'launcher' ? null : current));
+  };
+  const draftTerminalRootId = showDraftTools ? draftTerminalFolder?.rootId : undefined;
+  const draftTerminalOpen =
+    draftTerminalRootId !== undefined && terminals.entries.get(draftTerminalRootId)?.open === true;
+  useShowTerminal(
+    draftTerminalFolder !== null,
+    draftTerminalOpen,
+    () => {
+      if (draftTerminalOpen) terminals.hide(draftTerminalRootId);
+      else void openDraftTerminal();
+    },
+    showDraftTools,
+  );
+  const activeTerminalRootId =
+    localSession &&
+    localSession.environment !== 'ssh' &&
+    localGroup &&
+    !localGroup.unavailable &&
+    !localGroup.sessionsWithheld
+      ? localSession.rootId
+      : (draftTerminalRootId ?? null);
+  const linkedCommandAccessGroup =
+    routeNotice === LOCAL_CODE_COPY.sessionWithheld && localRoute !== null
+      ? localRouteCommandAccessGroup(local.groups, localRoute.rootId)
+      : undefined;
+  const linkedUsesDraftNotice =
+    linkedCommandAccessGroup !== undefined &&
+    linkedCommandAccessGroup.rootId === commandAccessGroup?.rootId;
+  const commandAccessWasRefused = (group: DeveloperSessionGroup) =>
+    group.commandAccessRefused ||
+    local.allowRefusals[group.rootId] === LOCAL_CODE_COPY.sessionsRefused;
+  const commandAccessMessage = (group: DeveloperSessionGroup, message: string) =>
+    commandAccessWasRefused(group)
+      ? LOCAL_CODE_COPY.startCommandAccessDenied
+      : (local.allowRefusals[group.rootId] ?? message);
+  const commandAccessAction = (group: DeveloperSessionGroup, label: string) =>
+    commandAccessWasRefused(group) ? (
+      <button
+        type="button"
+        className={styles['secondaryButton']}
+        onClick={() => openSettings('capabilities')}
+      >
+        {LOCAL_CODE_COPY.reviewCommandAccess}
+      </button>
+    ) : (
+      <button
+        type="button"
+        className={styles['secondaryButton']}
+        disabled={local.allowing !== null}
+        onClick={() => {
+          setLocalStartError((current) => (current?.rootId === group.rootId ? null : current));
+          void local.allowSessions(group.rootId);
+        }}
+      >
+        {local.allowing === group.rootId ? LOCAL_CODE_COPY.allowingSessions : label}
+      </button>
+    );
   const composerLocal: CodeLocalState = {
     agentMode: draftRuntime?.defaultAgentMode ?? LOCAL_FALLBACK_AGENT_MODE,
     supported: local.supported,
     worktrees: local.worktrees,
-    folders: localFolderChoices(local.groups),
+    folders: folderChoices,
     models: localChoices,
     setups: localProviderSetups(draftRuntime, local.cliProgram),
     modelId: localModelId,
@@ -1547,7 +2058,11 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
     onAddFolder: () => void local.addFolder(),
     onModelChange: (modelId) => handleDraftChange({ localModelId: modelId }),
     onBranchSwitched: local.refresh,
-    onPlacementChange: setLocalPlacement,
+    onPlacementChange: (placement) => {
+      if (placement === localPlacement) return;
+      draftRevision.current += 1;
+      setLocalPlacement(placement);
+    },
   };
 
   const unavailableNotice = availability
@@ -1601,44 +2116,84 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
           <span>{localDraftBlocked}</span>
         </div>
       )}
-      {isLocalDraft && !selectedSession && !localDraftBlocked && localDraftPlanRequired && (
-        <div className={styles['notice']} role="status" data-testid="local-plan-required">
-          <span>{localCloudModelsPlanLine()}</span>
-          <span className={styles['noticeActions']}>
-            <button
-              type="button"
-              className={styles['secondaryButton']}
-              onClick={() => openUpgrade((href) => guardedRouter.push(href))}
-            >
-              {CODE_COPY.upgradeAction}
-            </button>
-            {localModeHost ? (
+      {isLocalDraft &&
+        !selectedSession &&
+        !localDraftBlocked &&
+        !commandAccessGroup &&
+        localDraftPlanRequired && (
+          <div className={styles['notice']} role="status" data-testid="local-plan-required">
+            <span>{localCloudModelsPlanLine()}</span>
+            <span className={styles['noticeActions']}>
               <button
                 type="button"
                 className={styles['secondaryButton']}
-                onClick={() => openSettings(LOCAL_MODELS_SETTINGS_SECTION)}
+                onClick={() => openUpgrade((href) => guardedRouter.push(href))}
               >
-                {LOCAL_CODE_COPY.setUpLocalModel}
+                {CODE_COPY.upgradeAction}
               </button>
-            ) : (
-              <a
-                className={styles['secondaryButton']}
-                href={helpArticlePath(LOCAL_MODELS_HELP_ARTICLE)}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                {LOCAL_CODE_COPY.setUpLocalModel}
-              </a>
+              {localModeHost ? (
+                <button
+                  type="button"
+                  className={styles['secondaryButton']}
+                  onClick={() => openSettings(LOCAL_MODELS_SETTINGS_SECTION)}
+                >
+                  {LOCAL_CODE_COPY.setUpLocalModel}
+                </button>
+              ) : (
+                <a
+                  className={styles['secondaryButton']}
+                  href={helpArticlePath(LOCAL_MODELS_HELP_ARTICLE)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {LOCAL_CODE_COPY.setUpLocalModel}
+                </a>
+              )}
+            </span>
+          </div>
+        )}
+      {isLocalDraft &&
+        !selectedSession &&
+        localDraftStartError &&
+        !(
+          commandAccessGroup && localDraftStartError === LOCAL_CODE_COPY.startCommandAccessDenied
+        ) && (
+          <div className={`${styles['notice']} ${styles['noticeError']}`} role="alert">
+            <TriangleAlert size={NOTICE_GLYPH_SIZE} aria-hidden="true" />
+            <span>{localDraftStartError}</span>
+            {localDraftStartError === LOCAL_CODE_COPY.startCommandAccessDenied && (
+              <span className={styles['noticeActions']}>
+                <button
+                  type="button"
+                  className={styles['secondaryButton']}
+                  onClick={() => openSettings('capabilities')}
+                >
+                  {LOCAL_CODE_COPY.reviewCommandAccess}
+                </button>
+              </span>
             )}
+          </div>
+        )}
+      {commandAccessGroup && !linkedUsesDraftNotice && (
+        <div className={styles['notice']} data-code-command-access>
+          <span id={commandAccessNoticeId} role="status">
+            {commandAccessMessage(commandAccessGroup, LOCAL_CODE_COPY.startNeedsCommandAccess)}
+          </span>
+          <span className={styles['noticeActions']}>
+            {commandAccessAction(commandAccessGroup, LOCAL_CODE_COPY.allowSessions)}
           </span>
         </div>
       )}
-      {isLocalDraft && !selectedSession && local.error !== null && (
-        <div className={`${styles['notice']} ${styles['noticeError']}`} role="alert">
-          <TriangleAlert size={NOTICE_GLYPH_SIZE} aria-hidden="true" />
-          <span>{local.error}</span>
-        </div>
-      )}
+      {(isLocalDraft || needsLocalFolder) &&
+        !selectedSession &&
+        local.error !== null &&
+        !localDraftStartError &&
+        !(commandAccessGroup && local.error === LOCAL_CODE_COPY.startCommandAccessDenied) && (
+          <div className={`${styles['notice']} ${styles['noticeError']}`} role="alert">
+            <TriangleAlert size={NOTICE_GLYPH_SIZE} aria-hidden="true" />
+            <span>{local.error}</span>
+          </div>
+        )}
       {localDeletion && !selectedSession && (
         <LocalListNotice
           line={localSessionDeletedLine(localDeletion.outcome)}
@@ -1701,10 +2256,23 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
         </div>
       )}
       {routeNotice && (
-        <div className={styles['notice']} role="status">
+        <div
+          className={styles['notice']}
+          role="status"
+          data-code-command-access={linkedCommandAccessGroup ? true : undefined}
+        >
           <TriangleAlert size={NOTICE_GLYPH_SIZE} aria-hidden="true" />
-          <span>{routeNotice}</span>
+          <span id={linkedUsesDraftNotice ? commandAccessNoticeId : undefined}>
+            {linkedCommandAccessGroup
+              ? commandAccessMessage(linkedCommandAccessGroup, routeNotice)
+              : routeNotice}
+          </span>
           <span className={styles['noticeActions']}>
+            {linkedCommandAccessGroup &&
+              commandAccessAction(
+                linkedCommandAccessGroup,
+                LOCAL_CODE_COPY.allowLinkedSession(linkedCommandAccessGroup.name),
+              )}
             {routeNotice === routeWaitingNotice.current &&
               routeNotice !== LOCAL_CODE_COPY.sessionWithheld && (
                 <button type="button" className={styles['secondaryButton']} onClick={local.refresh}>
@@ -1754,20 +2322,61 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
     </>
   );
 
-  const narrowHeaderSlot = narrow ? (
+  const sessionListInAppHeader = !pane && narrow && phone;
+  const sessionListInCodeHeader = !pane && (narrow ? !phone : railCollapsed);
+  const sessionListButton = (
+    <button
+      ref={narrow ? railTriggerRef : expandRailRef}
+      type="button"
+      className={styles[sessionListInAppHeader ? 'appBarButton' : 'headerButton']}
+      aria-label={narrow ? CODE_COPY.openSessionList : CODE_COPY.expandRail}
+      aria-expanded={narrow ? railDrawerOpen : false}
+      aria-controls={narrow ? CODE_RAIL_DRAWER_ID : undefined}
+      onClick={toggleSessionRail}
+    >
+      <PanelLeft size={HEADER_GLYPH_SIZE} aria-hidden="true" />
+    </button>
+  );
+  const sessionHeaderControls = (
+    <>
+      {sessionListButton}
+      {!narrow && railCollapsed && (
+        <button
+          type="button"
+          className={styles['headerButton']}
+          aria-label={CODE_COPY.search}
+          title={CODE_COPY.search}
+          onClick={() => emitAppCommand('open-search')}
+        >
+          <Search size={HEADER_GLYPH_SIZE} aria-hidden="true" />
+        </button>
+      )}
+    </>
+  );
+  const draftPanelButtonClass = sessionListInAppHeader
+    ? `${styles['appBarButton']} ${styles['appBarToolsButton']}`
+    : styles['headerButton'];
+  const draftPanelButton = showDraftTools ? (
+    <button
+      type="button"
+      className={`${draftPanelButtonClass} ${draftSideTool ? styles['headerButtonActive'] : ''}`}
+      aria-label={LOCAL_PANEL_COPY.rightPanel}
+      aria-pressed={draftSideTool !== null}
+      title={LOCAL_PANEL_COPY.rightPanel}
+      onClick={() => changeDraftSideTool(draftSideTool ? null : lastDraftSideTool.current)}
+    >
+      <PanelLeft
+        className={styles['glyphPanelRight']}
+        size={HEADER_GLYPH_SIZE}
+        aria-hidden="true"
+      />
+    </button>
+  ) : null;
+  const narrowHeaderSlot = sessionListInAppHeader ? (
     <div className={styles['appBarSlot']} data-testid="code-app-bar">
-      <button
-        ref={railTriggerRef}
-        type="button"
-        className={styles['appBarButton']}
-        aria-label={CODE_COPY.recents}
-        aria-expanded={railDrawerOpen}
-        aria-controls={CODE_RAIL_DRAWER_ID}
-        onClick={() => setRailDrawerOpen(true)}
-      >
-        <PanelLeft size={HEADER_GLYPH_SIZE} aria-hidden="true" />
-      </button>
+      {sessionListButton}
       <span className={styles['appBarTitle']}>{CODE_COPY.surface}</span>
+      {draftPanelButton}
     </div>
   ) : null;
 
@@ -1803,16 +2412,24 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
     !hiddenSessionsExist;
 
   return (
-    <CodePageFrame pane={pane} narrowHeaderSlot={narrowHeaderSlot}>
+    <CodePageFrame
+      pane={pane}
+      narrowHeaderSlot={narrowHeaderSlot}
+      onToggleSidebar={toggleSessionRail}
+    >
       {confirmDialog}
       <div
         className={styles['surface']}
         data-pane-layout={panes.active ? panes.layout : undefined}
         data-pane-count={panes.active ? panes.panes.length + 1 : undefined}
       >
-        {!railCollapsed && !pane && (
+        {!narrow && !railCollapsed && !pane && (
           <div className={`${styles['rail']} ${styles['railDocked']}`} data-sidebar-region="header">
-            <CodeRail {...railProps} onCollapse={() => setRailCollapsed(true)} />
+            <CodeRail
+              {...railProps}
+              collapseButtonRef={collapseRailRef}
+              onCollapse={toggleSessionRail}
+            />
           </div>
         )}
 
@@ -1847,7 +2464,12 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
           {localSession && localGroup ? (
             <LocalSessionPanel
               key={`${localSession.rootId}:${localSession.id}`}
-              session={localSession}
+              terminals={terminals}
+              session={
+                listedLocalTitle === undefined || listedLocalTitle === localSession.title
+                  ? localSession
+                  : { ...localSession, title: listedLocalTitle }
+              }
               group={localGroup}
               runtimeModels={local.modelsFor(localGroup.rootId)}
               planTier={accountPlanTier}
@@ -1862,13 +2484,22 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
               }
               modelsStale={local.modelsStale(localGroup.rootId)}
               verbose={verbose}
-              initialPrompt={localPrompt}
-              onPromptSent={() => setLocalPrompt('')}
+              sessionListControl={sessionListInCodeHeader ? sessionHeaderControls : undefined}
+              initialPrompt={localPrompt?.sessionId === localSession.id ? localPrompt : undefined}
+              onPromptSent={() => setLocalPrompt(null)}
               onSessionsChanged={local.refresh}
+              onRename={
+                local.sessionActions.rename
+                  ? (title) => renameLocalSession(localSession, title)
+                  : undefined
+              }
               cleanupFailures={local.cleanupFailures[localSession.id]}
               onDismissCleanupFailures={() => local.dismissCleanupFailures(localSession.id)}
               onDeleted={(outcome) => localSessionDeleted(localSession, outcome)}
-              onArchived={() => localSessionArchived(localSession)}
+              onArchived={() => {
+                local.refresh();
+                localSessionArchived(localSession);
+              }}
               onWorktreeRemoved={(snapshotRef) => {
                 setLocalWorktreeRemovedRef(snapshotRef);
                 forgetLocalSession(localSession.rootId, localSession.id);
@@ -1882,24 +2513,18 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
             />
           ) : (
             <>
-              {(selectedSession || (railCollapsed && !narrow)) && (
+              {(selectedSession ||
+                sessionListInCodeHeader ||
+                (showDraftTools && !sessionListInAppHeader)) && (
                 <header
                   className={styles['header']}
-                  data-window-edge={railCollapsed && !narrow ? 'left' : undefined}
+                  data-window-edge={sessionListInCodeHeader ? 'left' : undefined}
                 >
-                  {!narrow && railCollapsed && (
-                    <button
-                      type="button"
-                      className={styles['headerButton']}
-                      aria-label={CODE_COPY.expandRail}
-                      onClick={() => setRailCollapsed(false)}
-                    >
-                      <PanelLeft size={HEADER_GLYPH_SIZE} aria-hidden="true" />
-                    </button>
-                  )}
-                  {!selectedSession && railCollapsed && (
+                  {sessionListInCodeHeader && sessionHeaderControls}
+                  {!selectedSession && (
                     <h1 className={styles['headerTitle']}>{CODE_COPY.surface}</h1>
                   )}
+                  {!sessionListInAppHeader && draftPanelButton}
                   {selectedSession && (
                     <>
                       <span className={styles['headerGlyph']}>
@@ -1985,10 +2610,24 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
                 </header>
               )}
 
-              <div className={styles['body']}>
-                <div className={styles['column']}>
+              <div
+                className={`${styles['body']} ${showDraftTools && draftSideTool === 'simulator' ? styles['bodyFloatHost'] : ''}`}
+              >
+                <div
+                  className={
+                    styles[showDraftTools && draftSideExpanded ? 'columnHidden' : 'column']
+                  }
+                >
                   {selectedSession ? (
-                    <div className={styles['scroll']} data-testid="code-scroll">
+                    <div
+                      className={styles['scroll']}
+                      data-testid="code-scroll"
+                      onScroll={(event) => {
+                        const { scrollHeight, scrollTop, clientHeight } = event.currentTarget;
+                        followTranscript.current =
+                          scrollHeight - scrollTop - clientHeight <= TRANSCRIPT_FOLLOW_DISTANCE_PX;
+                      }}
+                    >
                       <div className={styles['center']}>
                         {detailLoading && (
                           <div className={styles['notice']} role="status">
@@ -2008,8 +2647,13 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
                             session={selectedSession}
                             items={transcript}
                             approvals={approvals}
-                            busy={busy}
-                            busySince={busySince}
+                            busy={busy || selectedTurnRunning}
+                            busySince={
+                              busySince ??
+                              selectedBackgroundTurn ??
+                              activeStoredTurn?.startedAt ??
+                              null
+                            }
                             verbose={verbose}
                             onDecideApproval={(approval, decision) =>
                               void handleApproval(approval, decision)
@@ -2067,7 +2711,31 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
                               ? CODE_COPY.greeting
                               : null}
                         </h1>
-                        {showSetupLinks && (
+                        {needsLocalFolder && (
+                          <div className={styles['setupLinks']}>
+                            <button
+                              type="button"
+                              className={styles['setupChip']}
+                              disabled={local.adding || busy}
+                              onClick={() => {
+                                const owner = captureView(true);
+                                void local.addFolder().then((root) => {
+                                  if (root && owner.isCurrent()) {
+                                    handleDraftChange({
+                                      environment: 'local',
+                                      localRootId: root.id,
+                                    });
+                                  }
+                                });
+                              }}
+                            >
+                              {local.adding
+                                ? LOCAL_CODE_COPY.addingFolder
+                                : LOCAL_CODE_COPY.chooseFolder}
+                            </button>
+                          </div>
+                        )}
+                        {showSetupLinks && !needsLocalFolder && (
                           <nav className={styles['setupLinks']} aria-label={CODE_COPY.setupLabel}>
                             <span className={styles['setupLabel']}>{CODE_COPY.setupLabel}</span>
                             <div className={styles['setupChips']} data-testid="code-setup-chips">
@@ -2092,8 +2760,9 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
                           </nav>
                         )}
                         <CodeUsageDashboard
-                          planTier={availability?.planTier ?? null}
+                          planTier={accountPlanTier}
                           linkOnly={phone}
+                          collapsed={desktopCode}
                         />
                       </div>
                     </div>
@@ -2155,15 +2824,25 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
                         draftRevision.current += 1;
                         setTask(value);
                       }}
-                      onSubmit={(text, repository) => void handleSubmit(text, turnMode, repository)}
+                      onSubmit={(text, repository, pictures) =>
+                        void handleSubmit(text, turnMode, repository, pictures)
+                      }
+                      {...(!selectedId
+                        ? {
+                            onSubmitInBackground: async (text, repository, pictures) =>
+                              (await handleSubmit(text, turnMode, repository, pictures, true)) ===
+                              true,
+                          }
+                        : {})}
+                      startBlockedBy={commandAccessGroup ? commandAccessNoticeId : undefined}
                       disabled={
                         isLocalDraft && !selectedSession
                           ? draftFolder === null ||
                             localDraftBlocked !== null ||
-                            localDraftPlanRequired
+                            (localDraftPlanRequired && !commandAccessGroup)
                           : !canCreate
                       }
-                      busy={busy}
+                      busy={busy || selectedTurnRunning}
                       showChips={!selectedSession}
                       showHint={
                         !selectedSession && !isLocalDraft && sessions.length === 0 && !hintDismissed
@@ -2176,7 +2855,7 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
                       harnessModels={harnessModels}
                       local={composerLocal}
                       api={api}
-                      turnRunning={turnRunning}
+                      turnRunning={selectedTurnRunning}
                       stopping={stopping}
                       onStop={() => void handleStopTurn()}
                       contextTokens={
@@ -2186,14 +2865,23 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
                       }
                       contextWindow={agentContextWindow}
                       turnControls={turnControls}
-                      turnSteps={turnSteps}
-                      onTurnStepsChange={setTurnSteps}
                       turnMode={turnMode}
                       onTurnModeChange={setTurnMode}
                     />
                   )}
                 </div>
 
+                {showDraftTools && draftSideTool && (
+                  <CodeDraftSidePanel
+                    tool={draftSideTool}
+                    available={draftTools}
+                    expanded={draftSideExpanded}
+                    terminalUnavailableReason={draftTerminalReason}
+                    onOpenTerminal={openDraftTerminal}
+                    onExpandedChange={setDraftSideExpanded}
+                    onToolChange={changeDraftSideTool}
+                  />
+                )}
                 {selectedSession && changesOpen && !localSession && (
                   <CodeChangesPanel
                     key={renderedSelectionRevision}
@@ -2220,6 +2908,7 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
               </div>
             </>
           )}
+          <WorkspaceTerminalDocks terminals={terminals} activeRootId={activeTerminalRootId} />
         </div>
         {panes.active &&
           panes.panes.map((entry) => (

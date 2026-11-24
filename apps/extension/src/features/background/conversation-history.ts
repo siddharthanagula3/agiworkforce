@@ -1,3 +1,5 @@
+import { storedReviewFrames, type BrowserReviewFrame } from '../computer-use/reviewFrames';
+import { redactBrowserTypingActivity } from '../computer-use/browserTurnActivity';
 import {
   AgentEventEnvelopeSchema,
   ManagedCloudAgentRunReferenceSchema,
@@ -86,6 +88,7 @@ export interface HistoryMessage {
   backgroundDeliveryId?: string;
   agentEvents?: AgentEventEnvelope[];
   browserEvents?: AgentEventEnvelope[];
+  browserReviewFrames?: BrowserReviewFrame[];
   cloudAgentRun?: ManagedCloudAgentRunReference;
   cloudApprovalDecisions?: Record<string, 'approved' | 'rejected'>;
   cloudApprovalError?: string;
@@ -99,6 +102,7 @@ export interface HistoryMessage {
   interactiveCards?: InteractiveCard[];
   codeExecution?: ManagedCodeExecution;
   videoTaskId?: string;
+  videoStartId?: string;
   attachments?: SidePanelMessageAttachment[];
   pages?: SidePanelPageReference[];
   sources?: SidePanelSource[];
@@ -336,7 +340,14 @@ function normalizeHistoryMessage(
     const agentEvents = normalizeStoredAgentEvents(message['agentEvents'], budget);
     if (agentEvents) normalized.agentEvents = agentEvents;
     const browserEvents = normalizeStoredAgentEvents(message['browserEvents'], budget);
-    if (browserEvents) normalized.browserEvents = browserEvents;
+    if (browserEvents) {
+      normalized.browserEvents = browserEvents.map((envelope) => ({
+        ...envelope,
+        event: redactBrowserTypingActivity(envelope.event),
+      }));
+      const frames = storedReviewFrames(message['browserReviewFrames']);
+      if (frames.length) normalized.browserReviewFrames = frames;
+    }
   }
   if (message['role'] === 'assistant') {
     const run = ManagedCloudAgentRunReferenceSchema.safeParse(message['cloudAgentRun']);
@@ -405,6 +416,9 @@ function normalizeHistoryMessage(
     if (codeExecution) normalized.codeExecution = codeExecution;
     if (isChromeVideoTaskId(message['videoTaskId']))
       normalized.videoTaskId = message['videoTaskId'];
+    if (typeof message['videoStartId'] === 'string' && UUID_PATTERN.test(message['videoStartId'])) {
+      normalized.videoStartId = message['videoStartId'];
+    }
     const sources = readStoredSources(message['sources']);
     if (sources.length > 0) normalized.sources = sources;
     const citations = readStoredSources(message['citations']);
@@ -1028,9 +1042,19 @@ function serializedByteLength(value: unknown): number {
   }
 }
 
+function withoutReviewFrames(entry: ConversationEntry): ConversationEntry {
+  if (!entry.messages.some((message) => message.browserReviewFrames?.length)) return entry;
+  return {
+    ...entry,
+    messages: entry.messages.map(({ browserReviewFrames: _frames, ...message }) => message),
+  };
+}
+
 function fitConversationEntryToBudget(entry: ConversationEntry): ConversationEntry | undefined {
   if (serializedByteLength(entry) <= MAX_CONVERSATION_ENTRY_BYTES) return entry;
 
+  entry = withoutReviewFrames(entry);
+  if (serializedByteLength(entry) <= MAX_CONVERSATION_ENTRY_BYTES) return entry;
   let low = 0;
   let high = entry.messages.length;
   while (low < high) {
@@ -1051,6 +1075,16 @@ function boundConversationStoreForWrite(store: BrowserConversationStore): Browse
     .slice(0, MAX_CONVERSATIONS)
     .map(fitConversationEntryToBudget)
     .filter((entry): entry is ConversationEntry => entry !== undefined);
+  if (serializedByteLength(candidates) + 1024 > MAX_CONVERSATION_STORE_BYTES) {
+    let size = serializedByteLength(candidates) + 1024;
+    for (let i = candidates.length - 1; i >= 0 && size > MAX_CONVERSATION_STORE_BYTES; i--) {
+      const entry = candidates[i]!;
+      const plain = withoutReviewFrames(entry);
+      if (plain === entry) continue;
+      size -= serializedByteLength(entry) - serializedByteLength(plain);
+      candidates[i] = plain;
+    }
+  }
   const active =
     store.activeConversationId && store.activeOwner
       ? candidates.find(
@@ -1286,6 +1320,39 @@ export async function settleDetachedAssistantTurn(
     };
     store.conversations = store.conversations.map((candidate) =>
       candidate === entry ? updated : candidate,
+    );
+    await writeStore(store);
+    return true;
+  });
+}
+
+export async function settleStoredVideoStart(
+  owner: ManagedCloudOwner,
+  conversationId: string,
+  operationId: string,
+  result: { taskId: string } | { errorText: string },
+): Promise<boolean> {
+  assertManagedCloudOwner(owner);
+  if (!isSafeConversationId(conversationId) || !UUID_PATTERN.test(operationId)) return false;
+  if ('taskId' in result && !isChromeVideoTaskId(result.taskId)) return false;
+  return mutateStore(async (store) => {
+    const entry = store.conversations.find(
+      (item) => item.id === conversationId && sameManagedCloudOwner(item.owner, owner),
+    );
+    const turn = entry?.messages.find(
+      (item) => item.role === 'assistant' && item.videoStartId === operationId,
+    );
+    if (!entry || !turn || turn.videoTaskId) return false;
+    const { error: _error, errorText: _errorText, ...pending } = turn;
+    const settled =
+      'taskId' in result
+        ? { ...pending, videoTaskId: result.taskId }
+        : { ...pending, error: true, errorText: result.errorText };
+    const messages = normalizeMessages(
+      entry.messages.map((item) => (item === turn ? settled : item)),
+    );
+    store.conversations = store.conversations.map((item) =>
+      item === entry ? { ...entry, messages } : item,
     );
     await writeStore(store);
     return true;
@@ -1634,6 +1701,7 @@ function retainDeviceActivity(
     ...(message.agentEvents === undefined && local.agentEvents
       ? { agentEvents: local.agentEvents }
       : {}),
+    ...(local.browserReviewFrames ? { browserReviewFrames: local.browserReviewFrames } : {}),
     ...(message.browserEvents === undefined && local.browserEvents
       ? { browserEvents: local.browserEvents }
       : {}),

@@ -2,10 +2,13 @@ import { useEffect, useState } from 'react';
 import NetInfo from '@react-native-community/netinfo';
 import { useChatStore } from '@/stores/chatStore';
 import { offlineQueue } from '@/services/offlineQueue';
+import { hasActiveConversationSend, useChatExecutionStore } from '@/stores/chat/chatExecutionStore';
 import {
   captureCloudAccountEpoch,
   isCloudAccountEpochCurrent,
+  subscribeCloudAccountEpochChange,
 } from '@/src/features/auth/services/cloudAccountSession';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 
 type ReachabilityState = {
   isConnected: boolean | null;
@@ -19,6 +22,7 @@ export interface NetworkStatus {
 }
 
 let launchReplayStarted = false;
+const waitingForTurn = new Set<string>();
 let observedOnline = false;
 let networkObservationVersion = 0;
 let nextNetworkObservationVersion = 0;
@@ -46,19 +50,26 @@ export function useNetworkStatus(): NetworkStatus {
       if (active) setQueueSize(offlineQueue.getQueueSize());
     };
     const handleReconnect = async () => {
-      if (!active || reconnectInFlight) return;
-      if (offlineQueue.getQueueSize() > 0) launchReplayStarted = true;
+      if (!active || reconnectInFlight || offlineQueue.getQueueSize() === 0) return;
       reconnectInFlight = true;
       setIsReconnecting(true);
 
       try {
         await offlineQueue.processQueue(
           async (msg) => {
+            launchReplayStarted = true;
+            waitingForTurn.delete(msg.id);
             const account = msg.provenance.scope === 'cloud' ? captureCloudAccountEpoch() : null;
             let accepted = false;
+            let busy = false;
             try {
               await sendMessage(msg.conversationId, msg.content, msg.model, undefined, {
                 ...(msg.skillName ? { skillName: msg.skillName } : {}),
+                ...(msg.replayIdentity ? { offlineReplayIdentity: msg.replayIdentity } : {}),
+                onOfflineReplayBusy: () => {
+                  busy = true;
+                  waitingForTurn.add(msg.id);
+                },
                 onAccepted: () => {
                   accepted = true;
                   if (
@@ -73,6 +84,7 @@ export function useNetworkStatus(): NetworkStatus {
               if (!accepted) throw error;
               return;
             }
+            if (busy) return 'conversation-busy';
             if (!accepted) throw new Error('The queued message was not accepted for sending.');
           },
           () => observedOnline,
@@ -82,8 +94,45 @@ export function useNetworkStatus(): NetworkStatus {
         if (active) {
           setIsReconnecting(false);
           refreshQueueSize();
+          if (waitingForTurn.size > 0) replayAfterReadinessChange();
         }
       }
+    };
+    const replayWhenReady = () => {
+      if (
+        !active ||
+        !wasOnline ||
+        !observedOnline ||
+        reconnectInFlight ||
+        offlineQueue.isProcessing
+      )
+        return;
+      const entries = offlineQueue.getQueue();
+      if (waitingForTurn.size > 0) {
+        const queuedIds = new Set(entries.map((entry) => entry.id));
+        for (const waiting of waitingForTurn) {
+          if (!queuedIds.has(waiting)) waitingForTurn.delete(waiting);
+        }
+      }
+      if (entries.length === 0) return;
+      if (launchReplayStarted) {
+        const mode = useChatAppModeStore.getState().appMode;
+        const account = captureCloudAccountEpoch();
+        const ready = entries.some(
+          (entry) =>
+            waitingForTurn.has(entry.id) &&
+            entry.provenance.scope === mode &&
+            (entry.provenance.scope === 'local' || entry.provenance.ownerId === account?.ownerId) &&
+            !hasActiveConversationSend(entry.conversationId),
+        );
+        if (!ready) return;
+      }
+      void handleReconnect().catch((error) => {
+        console.warn('[useNetworkStatus] Queue replay failed:', error);
+      });
+    };
+    const replayAfterReadinessChange = () => {
+      void Promise.resolve().then(replayWhenReady);
     };
     const observeNetwork = (
       state: ReachabilityState,
@@ -103,15 +152,12 @@ export function useNetworkStatus(): NetworkStatus {
         if (networkObservationVersion > fetchVersion) {
           setIsOnline(observedOnline);
           wasOnline = observedOnline;
+          replayWhenReady();
           return;
         }
         const online = observeNetwork(state, fetchVersion);
         wasOnline = online;
-        if (online && !launchReplayStarted && offlineQueue.getQueueSize() > 0) {
-          void handleReconnect().catch((error) => {
-            console.warn('[useNetworkStatus] Launch queue replay failed:', error);
-          });
-        }
+        replayWhenReady();
       })
       .catch((err) => {
         if (active) console.warn('[useNetworkStatus] Initial network fetch failed:', err);
@@ -131,7 +177,23 @@ export function useNetworkStatus(): NetworkStatus {
     });
 
     refreshQueueSize();
-    const unsubscribeQueue = offlineQueue.subscribe(refreshQueueSize);
+    const unsubscribeQueue = offlineQueue.subscribe(() => {
+      refreshQueueSize();
+      replayAfterReadinessChange();
+    });
+    const unsubscribeAccount = subscribeCloudAccountEpochChange(replayAfterReadinessChange);
+    const unsubscribeMode = useChatAppModeStore.subscribe((state, previous) => {
+      if (state.appMode !== previous.appMode) replayAfterReadinessChange();
+    });
+    const unsubscribeExecution = useChatExecutionStore.subscribe((state, previous) => {
+      if (
+        waitingForTurn.size > 0 &&
+        state.streamingConversationIds !== previous.streamingConversationIds &&
+        previous.streamingConversationIds.some((id) => !state.streamingConversationIds.includes(id))
+      ) {
+        replayAfterReadinessChange();
+      }
+    });
     const unsubscribeFailures = offlineQueue.onEntryFailed((entry) => {
       if (active) failOfflineMessage(entry.conversationId, entry.id);
     });
@@ -140,6 +202,9 @@ export function useNetworkStatus(): NetworkStatus {
       active = false;
       unsubscribeNetwork();
       unsubscribeQueue();
+      unsubscribeAccount();
+      unsubscribeMode();
+      unsubscribeExecution();
       unsubscribeFailures();
     };
   }, [sendMessage, resolveOfflineMessage, failOfflineMessage]);

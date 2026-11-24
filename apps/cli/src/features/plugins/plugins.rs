@@ -450,7 +450,11 @@ pub fn describe_plugin(plugin: &LoadedPlugin, policy: &PluginSignaturePolicy) ->
     ));
     if let Some(manifest) = manifest.as_ref() {
         rows.extend(plugin_contents(manifest));
-        let values = super::settings::current_values(&plugin.config_name, &manifest.user_config);
+        let key = super::settings::storage_key(
+            &plugin.config_name,
+            plugin.from_project_dir.then_some(plugin.root.as_path()),
+        );
+        let values = super::settings::current_values(&key, &manifest.user_config);
         rows.extend(
             super::settings::describe(&manifest.user_config, &values)
                 .into_iter()
@@ -767,7 +771,7 @@ impl PluginsManager {
             let Some((mut m, fmt)) = load_manifest_for(&path) else {
                 continue;
             };
-            resolve_server_settings(&mut m, &path, &name);
+            resolve_server_settings(&mut m, &path, &name, from_project_dir);
             // Validate MCP server commands in stdio entries, reject shell
             // metacharacters that could enable command injection. HTTP/SSE
             // entries (no command, url in `extra`) are passed through
@@ -1673,8 +1677,14 @@ pub fn set_plugin_enabled(id: &str, enabled: bool) -> std::io::Result<()> {
 /// Fill each MCP server's `${...}` references from the plugin's root and
 /// settings. A server that names a setting with no value is left out until
 /// the user sets it.
-fn resolve_server_settings(manifest: &mut PluginManifest, root: &Path, plugin: &str) {
-    let values = super::settings::current_values(plugin, &manifest.user_config);
+fn resolve_server_settings(
+    manifest: &mut PluginManifest,
+    root: &Path,
+    plugin: &str,
+    from_project_dir: bool,
+) {
+    let key = super::settings::storage_key(plugin, from_project_dir.then_some(root));
+    let values = super::settings::current_values(&key, &manifest.user_config);
     manifest
         .mcp_servers
         .retain(|server, cfg| match substitute_server(cfg, root, &values) {

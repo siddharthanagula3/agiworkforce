@@ -39,6 +39,7 @@ const EMPTY_TRANSCRIPT_ERROR = 'Nothing was heard in that recording. Try again.'
 const DICTATION_SWITCHED_OFF =
   'Dictation is temporarily switched off while we investigate a problem with it.';
 const DICTATION_SWITCHED_OFF_FOR_VERSION = 'Dictation is switched off for this version.';
+export const DICTATION_DISABLED_IN_SETTINGS = 'Dictation is off in Voice settings';
 
 export function dictationSwitchedOffReason(
   disabledFeatures: readonly MeDisabledFeature[],

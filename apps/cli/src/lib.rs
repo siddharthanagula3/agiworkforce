@@ -1929,7 +1929,7 @@ enum ApprovalsSubcommand {
 
 #[derive(Subcommand, Debug, Clone)]
 enum SessionAction {
-    /// List recent sessions, newest first.
+    /// List sessions, with pinned sessions first.
     List {
         #[arg(long, default_value = "20")]
         limit: usize,
@@ -1937,6 +1937,10 @@ enum SessionAction {
         #[arg(long)]
         archived: bool,
     },
+    /// Pin a session to the top of the resume list.
+    Pin { session_id: String },
+    /// Return a pinned session to its usual position.
+    Unpin { session_id: String },
     /// Show the turn-by-turn transcript of a session.
     Show { session_id: String },
     /// Fork a session at a specific turn into a new named session.
@@ -5589,9 +5593,14 @@ async fn handle_session_action(action: SessionAction) -> Result<()> {
                     .filter(|summary| summary.archived_at.is_some())
                     .collect()
             } else {
-                runtime::session_control::list_active_managed_sessions().unwrap_or_default()
+                runtime::session_control::list_active_managed_sessions()?
             };
-            summaries.sort_by_key(|summary| std::cmp::Reverse(summary.created_at));
+            summaries.sort_by_key(|summary| {
+                (
+                    summary.pinned != Some(true),
+                    std::cmp::Reverse(summary.created_at),
+                )
+            });
             summaries.truncate(limit);
             if summaries.is_empty() {
                 println!(
@@ -5613,8 +5622,15 @@ async fn handle_session_action(action: SessionAction) -> Result<()> {
                 })
             );
             for s in summaries {
+                let pin = output::session_pin_label(s.pinned.unwrap_or_default());
+                let title = s
+                    .title
+                    .as_deref()
+                    .filter(|title| !title.trim().is_empty())
+                    .map(|title| format!("  {}", terminal_text::sanitize_single_line(title)))
+                    .unwrap_or_default();
                 println!(
-                    "  {}  {:>9}  {}",
+                    "  {pin}{}  {:>9}  {}{title}",
                     s.session_id.dimmed(),
                     output::format_message_count(s.message_count as i64),
                     s.created_at.format("%Y-%m-%d %H:%M:%S"),
@@ -5627,6 +5643,8 @@ async fn handle_session_action(action: SessionAction) -> Result<()> {
             }
             Ok(())
         }
+        SessionAction::Pin { session_id } => set_session_pin_from_cli(session_id, true),
+        SessionAction::Unpin { session_id } => set_session_pin_from_cli(session_id, false),
         SessionAction::Show { session_id } => {
             // Inspection remains available for legacy/unknown sessions even
             // though executing them is fail-closed.
@@ -5803,6 +5821,17 @@ async fn handle_session_action(action: SessionAction) -> Result<()> {
             Ok(())
         }
     }
+}
+
+fn set_session_pin_from_cli(session_id: String, pinned: bool) -> Result<()> {
+    use runtime::session_control::{ManagedSessionReference, ManagedSessionStore};
+
+    let store = ManagedSessionStore::user_config()?;
+    let session = store.resolve(ManagedSessionReference::SessionId(session_id))?;
+    store.set_pinned(&session, pinned)?;
+    let action = if pinned { "Pinned" } else { "Unpinned" };
+    println!("{action} session {}.", session.summary.session_id);
+    Ok(())
 }
 
 /// Classify a `agi plugin install <source>` argument as a git remote or a
@@ -6877,7 +6906,7 @@ async fn run_cli(mut cli: Cli) -> Result<()> {
                                         "{}",
                                         terminal_text::sanitize_terminal_text(
                                             &installs::describe_plugin_settings(
-                                                &root, &settings, false
+                                                &root, &root, &settings, false
                                             )
                                         )
                                     );
@@ -6972,14 +7001,17 @@ async fn run_cli(mut cli: Cli) -> Result<()> {
                             && std::io::stdin().is_terminal()
                             && std::io::stdout().is_terminal();
                         if interactive {
-                            let (plugin, settings) = installs::plugin_settings(name)?;
+                            let (plugin, storage_key, settings) = installs::plugin_settings(name)?;
                             if !settings.is_empty() {
-                                features::plugins::settings::prompt_all(&plugin, &settings)?;
+                                features::plugins::settings::prompt_all(&storage_key, &settings)?;
                                 println!(
                                     "{}",
                                     terminal_text::sanitize_terminal_text(
                                         &installs::describe_plugin_settings(
-                                            &plugin, &settings, true
+                                            &plugin,
+                                            &storage_key,
+                                            &settings,
+                                            true,
                                         )
                                     )
                                 );
@@ -8392,6 +8424,7 @@ pub fn load_document_attachment(path: &str) -> Result<models::ContentBlock> {
         mime: kind.mime(file),
         data_b64: base64::engine::general_purpose::STANDARD.encode(&bytes),
         asset_id: None,
+        context_tokens: None,
     })
 }
 

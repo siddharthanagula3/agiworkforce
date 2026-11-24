@@ -48,6 +48,10 @@ export class LocalRuntimePool<T extends RestartableLocalRuntime = LocalRuntimeCl
     return [...this.clients.values()].some(({ client }) => client.requiresPermissionRestart());
   }
 
+  async waitForRestart(): Promise<void> {
+    await this.restartPromise?.catch(() => undefined);
+  }
+
   restartAll(): Promise<LocalRuntimeRestartResult> {
     if (this.restartPromise !== undefined) return this.restartPromise;
     if (this.shutdownPromise !== undefined) {

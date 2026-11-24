@@ -73,7 +73,7 @@ export interface CombinedChatState {
     sourceConversationId: string,
     options?: ForkConversationOptions,
   ) => Promise<string>;
-  deleteConversation: (id: string) => Promise<void>;
+  deleteConversation: ReturnType<typeof useChatMessageStore.getState>['deleteConversation'];
   discardUnsentConversation: (id: string) => Promise<void>;
   loadMessages: (conversationId: string) => Promise<void>;
   renameConversation: (id: string, title: string) => Promise<void>;

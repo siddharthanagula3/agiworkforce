@@ -17,13 +17,13 @@ function makeMockContext(): vscode.ExtensionContext {
     extensionUri: vscode.Uri.file('/mock/extension'),
     extensionPath: '/mock/extension',
     globalState: {
-      get: vi.fn().mockReturnValue(undefined),
+      get: vi.fn((_key: string, fallback?: unknown) => fallback),
       update: vi.fn().mockResolvedValue(undefined),
       keys: vi.fn().mockReturnValue([]),
       setKeysForSync: vi.fn(),
     },
     workspaceState: {
-      get: vi.fn().mockReturnValue(undefined),
+      get: vi.fn((_key: string, fallback?: unknown) => fallback),
       update: vi.fn().mockResolvedValue(undefined),
       keys: vi.fn().mockReturnValue([]),
     },

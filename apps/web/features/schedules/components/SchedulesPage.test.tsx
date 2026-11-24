@@ -197,6 +197,17 @@ describe('SchedulesPage', () => {
     expect(scrollIntoView).toHaveBeenCalledTimes(1);
   });
 
+  it('fetches a linked schedule outside the first page and opens its history', async () => {
+    const other: ScheduleTask = { ...schedule, id: 'schedule-2', name: 'Evening wrap' };
+    const api = createApi({ listSchedules: vi.fn(async () => page([other])) });
+    render(<SchedulesPage api={api} onOpenChat={() => undefined} focusScheduleId={schedule.id} />);
+
+    await waitFor(() => expect(api.listRuns).toHaveBeenCalledTimes(1));
+    expect(api.getSchedule).toHaveBeenCalledExactlyOnceWith(schedule.id, expect.any(AbortSignal));
+    expect(vi.mocked(api.listRuns).mock.calls[0]?.[0]).toBe(schedule.id);
+    expect(api.listSchedules).toHaveBeenCalledTimes(1);
+  });
+
   it('opens a prefilled create dialog for a prompt handed over from a chat, and creates nothing yet', async () => {
     const api = createApi();
     const prompt = 'Summarise the overnight support tickets\nand list the three most urgent.';

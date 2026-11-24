@@ -1,10 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
-const mocks = vi.hoisted(() => ({ query: vi.fn() }));
+const mocks = vi.hoisted(() => ({ query: vi.fn(), scheduleAccess: vi.fn() }));
 
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn().mockResolvedValue(null) }));
+vi.mock('@/lib/managed-compute-gate', () => ({
+  buildWorkspaceAccessGateResponse: mocks.scheduleAccess,
+}));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
@@ -75,6 +78,7 @@ function indexCall(): [string, unknown[]] {
 }
 
 beforeEach(() => {
+  mocks.scheduleAccess.mockReset().mockResolvedValue(null);
   mocks.query.mockReset();
   mocks.query.mockImplementation(async (sql: string) =>
     sql.includes('from retrieval_chunks c') ? INDEX_ROWS : [],
@@ -117,6 +121,80 @@ describe('GET /api/search over the retrieval index', () => {
     expect(params.slice(0, 3)).toEqual(['user-abc', null, ['artifact']]);
     expect(params[5]).toBe('quarterly & plan:*');
     expect(mocks.query.mock.calls.some(([sql]) => String(sql).includes('as present'))).toBe(false);
+  });
+
+  it('restricts a Code category search to indexed Code sessions before applying the limit', async () => {
+    mocks.query.mockImplementation(async (sql: string, parameters: unknown[]) =>
+      sql.includes('from retrieval_chunks c')
+        ? INDEX_ROWS.filter(
+            (row) => Array.isArray(parameters[2]) && parameters[2].includes(row.source_kind),
+          )
+        : [],
+    );
+    const response = await GET(
+      new NextRequest('http://localhost/api/search?q=quarterly&category=code&limit=1'),
+    );
+
+    expect(response.status).toBe(200);
+    expect(indexCall()[1].slice(0, 3)).toEqual(['user-abc', null, ['developer_session']]);
+    expect(
+      mocks.query.mock.calls.some(([sql]) =>
+        /from (web_conversations|web_messages|media_assets|user_projects)/u.test(String(sql)),
+      ),
+    ).toBe(false);
+    const result = (await response.json()) as { documents: Array<{ href: string }> };
+    expect(result.documents.map((document) => document.href)).toEqual(['/code/code-1']);
+  });
+
+  it('searches schedule names in the active workspace and links to the exact schedule', async () => {
+    const scheduleId = '11111111-1111-4111-8111-111111111111';
+    mocks.query.mockImplementation(async (sql: string) =>
+      sql.includes('from scheduled_tasks')
+        ? [{ id: scheduleId, name: 'Quarterly report', created_at: null, updated_at: null }]
+        : [],
+    );
+    const response = await GET(
+      new NextRequest('http://localhost/api/search?q=quarterly&category=scheduled&limit=1'),
+    );
+    expect(response.status).toBe(200);
+    const { schedules } = (await response.json()) as { schedules: Array<{ href: string }> };
+    expect(schedules[0]?.href).toBe(`/chat/schedules?schedule=${scheduleId}`);
+    const [sql, params] =
+      mocks.query.mock.calls.find(([sql]) => String(sql).includes('from scheduled_tasks')) ?? [];
+    expect(sql).toContain('user_id = $1 and organization_id is not distinct from $2::uuid');
+    expect(params).toEqual(['user-abc', null, '%quarterly%', null, null, 1]);
+    expect(
+      mocks.query.mock.calls.some(([sql]) => String(sql).includes('from retrieval_chunks c')),
+    ).toBe(false);
+  });
+
+  it('honors the schedules workspace denial before a selected category reads schedules', async () => {
+    mocks.scheduleAccess.mockResolvedValue(Response.json({ error: 'Forbidden' }, { status: 403 }));
+    const response = await GET(
+      new NextRequest('http://localhost/api/search?q=quarterly&category=scheduled'),
+    );
+    expect(response.status).toBe(403);
+    expect(
+      mocks.query.mock.calls.some(([sql]) => String(sql).includes('from scheduled_tasks')),
+    ).toBe(false);
+  });
+
+  it('keeps other results in All while omitting schedules denied by workspace policy', async () => {
+    mocks.scheduleAccess.mockResolvedValue(Response.json({ error: 'Forbidden' }, { status: 403 }));
+    mocks.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('from scheduled_tasks')) return [{ id: 'schedule-1' }];
+      if (sql.includes('from retrieval_chunks c')) return INDEX_ROWS;
+      return [];
+    });
+    const response = await GET(new NextRequest('http://localhost/api/search?q=quarterly'));
+    expect(response.status).toBe(200);
+
+    const { schedules, documents } = (await response.json()) as {
+      schedules: unknown[];
+      documents: unknown[];
+    };
+    expect(schedules).toEqual([]);
+    expect(documents).toHaveLength(INDEX_ROWS.length);
   });
 
   it.each([['role=user'], ['startDate=2026-01-01'], ['endDate=2026-02-01']])(

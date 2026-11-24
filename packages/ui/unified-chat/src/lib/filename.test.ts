@@ -2,11 +2,18 @@ import { describe, expect, it } from 'vitest';
 import {
   FALLBACK_FILENAME,
   MAX_FILENAME_CHARS,
+  appendFilenameExtension,
   filenameIsUnsafe,
   sanitizeFilename,
 } from './filename';
 
 describe('filename', () => {
+  it('cleans punctuation at the extension boundary while preserving internal dots', () => {
+    expect(appendFilenameExtension('Résumé v2.1. ... ', 'pdf')).toBe('Résumé v2.1.pdf');
+    expect(appendFilenameExtension('... ', 'md')).toBe('file.md');
+    expect(appendFilenameExtension('.env', 'txt')).toBe('.env.txt');
+  });
+
   it('keeps one safe path segment', () => {
     expect(sanitizeFilename('C:\\Users\\me\\re:port?.pdf')).toBe('re_port_.pdf');
     expect(sanitizeFilename('../../etc/passwd')).toBe('passwd');

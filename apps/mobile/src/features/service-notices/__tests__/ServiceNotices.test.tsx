@@ -4,7 +4,7 @@ jest.mock('@/lib/safeOpenURL', () => ({
 }));
 
 import React from 'react';
-import { AppState } from 'react-native';
+import { AppState, StyleSheet } from 'react-native';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { api } from '@/services/api';
@@ -58,6 +58,10 @@ describe('ServiceNoticesBanner', () => {
     renderBanner();
 
     expect(await screen.findByText('Planned maintenance from Oct 20 to Oct 20.')).toBeTruthy();
+    expect(screen.getByRole('alert')).toHaveTextContent(NOTICE_RESPONSE.notices[0]!.message);
+    const layout = StyleSheet.flatten(screen.getByTestId('service-notice-container').props.style);
+    expect(layout).toMatchObject({ paddingTop: METRICS.insets.top + 8 });
+    expect(layout.position).toBeUndefined();
     expect(api.get).toHaveBeenCalledWith('/api/status/notices', expect.anything());
     fireEvent.press(screen.getByText('Details'));
     expect(openUntrustedUrlInAppBrowser).toHaveBeenCalledWith(

@@ -2,7 +2,6 @@ import {
   BILLING_PLAN_PRICING,
   canUseBillingPlanCapability,
   modelsCatalog,
-  PRODUCT_NAMES,
   type BillingPlanTier,
 } from '@agiworkforce/types';
 import { hostBridgeStub } from '@/test/host-bridge-stub';
@@ -10,6 +9,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  CLOSED_BROWSER_PANE,
   DEVELOPER_RUNTIME_CAPABILITIES,
   DesktopRuntimeError,
   type DeveloperRuntimeCapability,
@@ -42,6 +42,9 @@ const compactDeveloperThread = vi.fn();
 const cancelDeveloperThreadSummary = vi.fn();
 const archiveDeveloperThread = vi.fn();
 const takeOverDeveloperThread = vi.fn();
+const browserPaneSupported = vi.fn();
+const openBrowserPane = vi.fn();
+const hideBrowserPane = vi.fn();
 const listeners = new Set<(rootId: string, event: DeveloperSessionEvent) => void>();
 let capabilities: ReadonlySet<DeveloperRuntimeCapability> = new Set(DEVELOPER_RUNTIME_CAPABILITIES);
 const capabilityReads: unknown[] = [];
@@ -66,6 +69,9 @@ vi.mock('@/features/desktop-host', async (importOriginal) => ({
   cancelDeveloperThreadSummary,
   archiveDeveloperThread,
   takeOverDeveloperThread,
+  browserPaneSupported,
+  openBrowserPane,
+  hideBrowserPane,
   cancelLocalCommand: vi.fn(),
   readWorkspaceText: vi.fn(),
   startLocalCommand: vi.fn(),
@@ -122,8 +128,12 @@ function renderPanel(
       | 'planTier'
       | 'cliProgram'
       | 'onNewSessionWith'
+      | 'onRename'
+      | 'initialPrompt'
+      | 'onPromptSent'
     >
   > = {},
+  reactStrictMode = false,
 ) {
   return render(
     <LocalSessionPanel
@@ -134,6 +144,7 @@ function renderPanel(
       onClose={vi.fn()}
       {...extra}
     />,
+    { reactStrictMode },
   );
 }
 
@@ -145,6 +156,15 @@ function send(event: DeveloperSessionEvent) {
 
 function composer() {
   return within(screen.getByTestId('local-code-composer'));
+}
+
+async function openSessionActions(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('button', { name: CODE_COPY.sessionMenu }));
+  return within(await screen.findByRole('menu'));
+}
+
+async function chooseSessionAction(user: ReturnType<typeof userEvent.setup>, name: string) {
+  await user.click((await openSessionActions(user)).getByRole('menuitem', { name }));
 }
 
 async function startRunningTurn(user: ReturnType<typeof userEvent.setup>) {
@@ -171,6 +191,171 @@ beforeEach(() => {
   answerDeveloperApproval.mockResolvedValue(true);
   answerDeveloperUserInput.mockResolvedValue(true);
   listWorkspaceFiles.mockResolvedValue([]);
+  browserPaneSupported.mockResolvedValue(false);
+  openBrowserPane.mockResolvedValue(CLOSED_BROWSER_PANE);
+  hideBrowserPane.mockResolvedValue(CLOSED_BROWSER_PANE);
+});
+
+it('explains a stopped turn read from disk and clears the notice after a follow-up starts', async () => {
+  const user = userEvent.setup();
+  readDeveloperSession.mockResolvedValue({
+    session: { ...session, status: 'failed' },
+    messages: [{ role: 'user', text: 'Inspect the failing build' }],
+    truncated: false,
+    activeTurn: null,
+  });
+  renderPanel();
+
+  expect(await screen.findByText('Inspect the failing build')).toBeVisible();
+  const notice = await screen.findByText('The previous turn stopped early. You can continue here.');
+  expect(notice.closest('[role="status"]')).toBeTruthy();
+  await startRunningTurn(user);
+  expect(notice).not.toBeInTheDocument();
+  expect(startDeveloperTurn).toHaveBeenCalledWith(
+    expect.objectContaining({ threadId: session.id, text: 'long job' }),
+  );
+});
+
+it('uses the saved transcript status instead of a stale failed row in the sidebar', async () => {
+  renderPanel({ session: { ...session, status: 'failed' } });
+  await waitFor(() => expect(composer().getByRole('textbox')).toBeEnabled());
+
+  expect(screen.queryByText('The previous turn stopped early. You can continue here.')).toBeNull();
+});
+
+describe('the Local session side panel', () => {
+  it('reopens Browser with the address still being typed after a collapse', async () => {
+    browserPaneSupported.mockResolvedValue(true);
+    const user = userEvent.setup();
+    renderPanel();
+
+    await user.click(await screen.findByRole('button', { name: 'Browser' }));
+    const address = screen.getByRole('textbox', { name: 'Web address' });
+    await user.type(address, 'http://localhost:3000/next');
+    const sidePanel = screen.getByRole('button', { name: 'Side panel' });
+    await user.click(sidePanel);
+    expect(sidePanel).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByRole('textbox', { name: 'Web address' })).toBeNull();
+    expect(hideBrowserPane).toHaveBeenCalled();
+
+    await user.click(sidePanel);
+    expect(screen.getByRole('textbox', { name: 'Web address' })).toHaveValue(
+      'http://localhost:3000/next',
+    );
+    expect(screen.queryByRole('complementary', { name: 'Panel shortcuts' })).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Close browser' }));
+    await user.click(sidePanel);
+    expect(screen.getByRole('complementary', { name: 'Panel shortcuts' })).toBeVisible();
+  });
+});
+
+describe('the first prompt from the Code home composer', () => {
+  it('starts once when React replays the session effects', async () => {
+    const onPromptSent = vi.fn();
+    renderPanel(
+      {
+        initialPrompt: {
+          message: { text: 'Read the project README', images: [], contextFiles: [] },
+          pictures: [],
+        },
+        onPromptSent,
+      },
+      true,
+    );
+
+    await waitFor(() =>
+      expect(startDeveloperTurn).toHaveBeenCalledWith(
+        expect.objectContaining({ text: 'Read the project README' }),
+      ),
+    );
+    expect(onPromptSent).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('local-queued-message')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: LOCAL_CODE_COPY.emptySessionHeading })).toBeNull();
+  });
+});
+
+describe('the empty local session', () => {
+  it('leaves the step count to the Local runtime even when it supports a turn limit', async () => {
+    const user = userEvent.setup();
+    renderPanel({ runtimeModels: { ...runtime, features: { maxTurns: true, memory: false } } });
+
+    expect(composer().queryByRole('button', { name: /Steps per task/iu })).toBeNull();
+    await user.type(composer().getByRole('textbox'), 'Read the project README{Enter}');
+
+    await waitFor(() => expect(startDeveloperTurn).toHaveBeenCalledTimes(1));
+    const input = startDeveloperTurn.mock.calls[0]?.[0];
+    expect(input).toEqual(expect.objectContaining({ text: 'Read the project README' }));
+    expect(input).not.toHaveProperty('maxTurns');
+  });
+
+  it('places a suggested task in the focused composer and waits for Send', async () => {
+    const user = userEvent.setup();
+    renderPanel();
+
+    const suggestion = await screen.findByRole('button', { name: LOCAL_CODE_COPY.exploreProject });
+    expect(
+      screen.getByRole('heading', { name: LOCAL_CODE_COPY.emptySessionHeading }),
+    ).toBeVisible();
+    expect(composer().queryByRole('button', { name: LOCAL_CODE_COPY.send })).toBeNull();
+    await user.click(suggestion);
+
+    const input = composer().getByRole('textbox', { name: CODE_COPY.composerPlaceholder });
+    expect(input).toHaveFocus();
+    expect(input).toHaveValue(LOCAL_CODE_COPY.exploreProjectPrompt);
+    expect(startDeveloperTurn).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: LOCAL_CODE_COPY.findTests })).toBeNull();
+
+    await user.click(composer().getByRole('button', { name: LOCAL_CODE_COPY.send }));
+    expect(startDeveloperTurn).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ text: LOCAL_CODE_COPY.exploreProjectPrompt }),
+    );
+    expect(screen.queryByRole('heading', { name: LOCAL_CODE_COPY.emptySessionHeading })).toBeNull();
+  });
+
+  it('lets the user retry a failed transcript read without sending their draft', async () => {
+    const user = userEvent.setup();
+    readDeveloperSession.mockRejectedValueOnce(new Error('Could not open the local transcript'));
+    renderPanel();
+
+    expect(await screen.findByText('Could not open the local transcript')).toBeVisible();
+    expect(screen.queryByRole('heading', { name: LOCAL_CODE_COPY.emptySessionHeading })).toBeNull();
+    const input = composer().getByRole('textbox');
+    await user.type(input, 'Keep my draft{Enter}');
+    expect(composer().getByRole('button', { name: LOCAL_CODE_COPY.send })).toBeDisabled();
+    expect(startDeveloperTurn).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Retry loading session' }));
+
+    await waitFor(() =>
+      expect(composer().getByRole('button', { name: LOCAL_CODE_COPY.send })).toBeEnabled(),
+    );
+    expect(input).toHaveValue('Keep my draft');
+    expect(startDeveloperTurn).not.toHaveBeenCalled();
+  });
+});
+
+it('keeps the proposed title in the header until the rename succeeds', async () => {
+  const user = userEvent.setup();
+  const onRename = vi
+    .fn<(title: string) => Promise<string | null>>()
+    .mockResolvedValueOnce(LOCAL_CODE_COPY.renameFailed)
+    .mockResolvedValueOnce(null);
+  renderPanel({ onRename });
+
+  const title = screen.getByRole('button', { name: 'Rename: Fix the build' });
+  await user.click(title);
+  const input = screen.getByRole('textbox', { name: 'Session name' });
+  await user.clear(input);
+  await user.type(input, 'Release build{Enter}');
+
+  expect(await screen.findByRole('alert')).toHaveTextContent(LOCAL_CODE_COPY.renameFailed);
+  expect(input).toHaveValue('Release build');
+  expect(input).toHaveFocus();
+  expect(onRename).toHaveBeenCalledExactlyOnceWith('Release build');
+  await user.keyboard('{Enter}');
+  expect(await screen.findByRole('button', { name: 'Rename: Fix the build' })).toHaveFocus();
+  expect(onRename).toHaveBeenCalledTimes(2);
 });
 
 describe('Show Terminal on the public window', () => {
@@ -363,7 +548,7 @@ describe('summarizing a local session', () => {
     renderPanel();
     await waitFor(() => expect(readDeveloperSession).toHaveBeenCalledTimes(1));
 
-    await user.click(screen.getByRole('button', { name: 'Summarize conversation' }));
+    await chooseSessionAction(user, 'Summarize conversation');
     const dialog = await screen.findByRole('alertdialog');
     expect(dialog).toHaveTextContent('You still see every message here');
     expect(dialog).toHaveTextContent('cannot be undone');
@@ -399,7 +584,7 @@ describe('summarizing a local session', () => {
     renderPanel();
     await waitFor(() => expect(readDeveloperSession).toHaveBeenCalledTimes(1));
 
-    await user.click(screen.getByRole('button', { name: 'Summarize conversation' }));
+    await chooseSessionAction(user, 'Summarize conversation');
     await user.click(
       within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Summarize' }),
     );
@@ -420,7 +605,7 @@ describe('summarizing a local session', () => {
     const user = userEvent.setup();
     renderPanel();
 
-    await user.click(await screen.findByRole('button', { name: 'Summarize conversation' }));
+    await chooseSessionAction(user, 'Summarize conversation');
     await user.click(await screen.findByRole('button', { name: 'Cancel' }));
 
     expect(compactDeveloperThread).not.toHaveBeenCalled();
@@ -433,7 +618,11 @@ describe('summarizing a local session', () => {
     renderPanel();
     await waitFor(() => expect(readDeveloperSession).toHaveBeenCalled());
 
-    expect(screen.queryByRole('button', { name: 'Summarize conversation' })).toBeNull();
+    expect(
+      (await openSessionActions(userEvent.setup())).queryByRole('menuitem', {
+        name: 'Summarize conversation',
+      }),
+    ).toBeNull();
   });
 });
 
@@ -533,6 +722,7 @@ describe('local session follow-ups', () => {
 
     const textbox = composer().getByRole('textbox');
     expect(textbox).toBeEnabled();
+    expect(textbox).toHaveAccessibleDescription(/Press .+Enter to queue this follow-up/);
     await user.type(textbox, 'use the other file{Enter}');
     await waitFor(() =>
       expect(steerDeveloperTurn).toHaveBeenCalledWith({
@@ -557,7 +747,9 @@ describe('local session follow-ups', () => {
     renderPanel();
     await startRunningTurn(user);
 
-    await user.type(composer().getByRole('textbox'), 'first draft{Enter}');
+    const textbox = composer().getByRole('textbox');
+    expect(textbox).toHaveAccessibleDescription(/Press .+Enter to send to the running turn/);
+    await user.type(textbox, 'first draft{Enter}');
     const row = await screen.findByTestId('local-queued-message');
     await user.click(within(row).getByRole('button', { name: 'Edit' }));
     const field = within(row).getByRole('textbox', { name: 'Queued message' });
@@ -905,37 +1097,51 @@ describe('local session questions', () => {
 });
 
 describe('local session changes', () => {
-  it('renders the turn diff file by file and keeps it after the turn completes', async () => {
-    const user = userEvent.setup();
-    renderPanel();
-    await startRunningTurn(user);
+  it.each([
+    {
+      format: 'Git',
+      path: 'src/a.ts',
+      header: 'diff --git a/src/a.ts b/src/a.ts\n--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1 +1 @@',
+    },
+    {
+      format: 'CLI',
+      path: '/work/qa-project/src/a.ts',
+      header: '--- a//work/qa-project/src/a.ts\n+++ b//work/qa-project/src/a.ts',
+    },
+  ])(
+    'renders a $format turn diff and keeps it after the turn completes',
+    async ({ path, header }) => {
+      const user = userEvent.setup();
+      renderPanel();
+      await startRunningTurn(user);
 
-    send({
-      type: 'turn-diff',
-      threadId: 'thread-1',
-      turnId: 'turn-1',
-      unifiedDiff:
-        'diff --git a/src/a.ts b/src/a.ts\n--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1 +1 @@\n-old\n+new',
-      paths: ['src/a.ts'],
-    });
-    send({
-      type: 'turn-finished',
-      threadId: 'thread-1',
-      turnId: 'turn-1',
-      outcome: 'completed',
-      response: 'done',
-      failure: null,
-      inputTokens: 0,
-      outputTokens: 0,
-    });
+      send({
+        type: 'turn-diff',
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        unifiedDiff: `${header}\n-old\n+new`,
+        paths: [path],
+      });
+      send({
+        type: 'turn-finished',
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        outcome: 'completed',
+        response: 'done',
+        failure: null,
+        inputTokens: 0,
+        outputTokens: 0,
+      });
 
-    const changes = await screen.findByTestId('local-turn-changes');
-    await waitFor(() => expect(readDeveloperSession).toHaveBeenCalledTimes(2));
-    expect(changes).toHaveTextContent('Changed 1 file');
-    expect(changes).toHaveTextContent('src/a.ts');
-    expect(changes).toHaveTextContent('+new');
-    expect(screen.getByTestId('local-turn-changes')).toBeInTheDocument();
-  });
+      const changes = await screen.findByTestId('local-turn-changes');
+      await waitFor(() => expect(readDeveloperSession).toHaveBeenCalledTimes(2));
+      expect(changes).toHaveTextContent('Changed 1 file');
+      expect(within(changes).getByRole('button', { name: 'Edited src/a.ts' })).toBeVisible();
+      expect(changes).toHaveTextContent('+new');
+      expect(changes).not.toHaveTextContent('/work/qa-project');
+      expect(screen.getByTestId('local-turn-changes')).toBeInTheDocument();
+    },
+  );
 });
 
 describe('local session attachments', () => {
@@ -974,8 +1180,9 @@ describe('local session attachments', () => {
 
     await user.click(composer().getByRole('button', { name: 'Add a file from this folder' }));
     await user.click(await screen.findByRole('menuitem', { name: 'README.md' }));
-    expect(composer().getByRole('textbox')).toHaveAccessibleName('Queue a follow-up');
-    await user.type(composer().getByRole('textbox'), 'read this too{Enter}');
+    const textbox = composer().getByRole('textbox', { name: 'Queue a follow-up' });
+    expect(textbox).not.toHaveAccessibleDescription();
+    await user.type(textbox, 'read this too{Enter}');
 
     expect(await screen.findByTestId('local-queue')).toHaveTextContent('read this too');
     expect(steerDeveloperTurn).not.toHaveBeenCalled();
@@ -1012,11 +1219,7 @@ describe('local session attachments', () => {
       files: [new File(['x'], 'notes.pdf', { type: 'application/pdf' })],
     } as unknown as DataTransfer);
 
-    expect(
-      await screen.findByText(
-        'Only images can be pasted into a coding session. Add other files from this folder.',
-      ),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(LOCAL_CODE_COPY.imagesOnly)).toBeInTheDocument();
   });
 
   it('refuses a pasted image on a shell that does not report images, saying to update', async () => {
@@ -1032,11 +1235,21 @@ describe('local session attachments', () => {
       files: [new File(['x'], 'shot.png', { type: 'image/png' })],
     } as unknown as DataTransfer);
 
-    expect(
-      await screen.findByText(
-        `Pasting images into a coding session needs a newer version of ${PRODUCT_NAMES.desktop}. Update the app, then try again.`,
-      ),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(LOCAL_CODE_COPY.imagesNeedUpdate)).toBeInTheDocument();
+  });
+
+  it('keeps a rejected file drop out of the draft and allows ordinary text drops', async () => {
+    renderPanel();
+    const textbox = composer().getByRole('textbox');
+    const files = [new File(['notes'], 'notes.pdf', { type: 'application/pdf' })];
+
+    expect(fireEvent.drop(textbox, { dataTransfer: { types: ['text/plain'], files: [] } })).toBe(
+      true,
+    );
+    expect(fireEvent.drop(textbox, { dataTransfer: { types: ['Files'], files } })).toBe(false);
+    expect(await screen.findByText(LOCAL_CODE_COPY.imagesOnly)).toBeInTheDocument();
+    expect(composer().queryByRole('button', { name: 'Remove notes.pdf' })).not.toBeInTheDocument();
+    expect(startDeveloperTurn).not.toHaveBeenCalled();
   });
 });
 
@@ -1066,7 +1279,7 @@ describe('deleting a local session', () => {
     deleteDeveloperThread.mockResolvedValue(outcome);
     const onDeleted = renderDeletable();
 
-    await user.click(screen.getByRole('button', { name: 'Delete session' }));
+    await chooseSessionAction(user, 'Delete session');
     const dialog = await screen.findByRole('alertdialog');
     expect(dialog).toHaveTextContent('Fix the build is deleted from this computer');
     expect(dialog).toHaveTextContent('cannot be recovered');
@@ -1083,7 +1296,7 @@ describe('deleting a local session', () => {
     deleteDeveloperThread.mockRejectedValue(new Error('A turn is running in this thread.'));
     const onDeleted = renderDeletable();
 
-    await user.click(screen.getByRole('button', { name: 'Delete session' }));
+    await chooseSessionAction(user, 'Delete session');
     await user.click(
       within(await screen.findByRole('alertdialog')).getByRole('button', {
         name: 'Delete session',
@@ -1094,13 +1307,17 @@ describe('deleting a local session', () => {
     expect(onDeleted).not.toHaveBeenCalled();
   });
 
-  it('offers no delete on a shell or CLI that cannot delete a session', () => {
+  it('offers no delete on a shell or CLI that cannot delete a session', async () => {
     capabilities = new Set(
       DEVELOPER_RUNTIME_CAPABILITIES.filter((capability) => capability !== 'thread_delete'),
     );
     renderDeletable();
 
-    expect(screen.queryByRole('button', { name: 'Delete session' })).not.toBeInTheDocument();
+    expect(
+      (await openSessionActions(userEvent.setup())).queryByRole('menuitem', {
+        name: 'Delete session',
+      }),
+    ).not.toBeInTheDocument();
   });
 });
 
@@ -1123,7 +1340,7 @@ describe('archiving a local session', () => {
     const user = userEvent.setup();
     renderArchivable();
 
-    await user.click(screen.getByRole('button', { name: 'Archive session' }));
+    await chooseSessionAction(user, 'Archive session');
     const dialog = await screen.findByRole('alertdialog');
     expect(dialog).toHaveTextContent('Fix the build is archived.');
     expect(dialog).toHaveTextContent('choose Show archived in the sidebar, then Restore');
@@ -1138,7 +1355,7 @@ describe('archiving a local session', () => {
     archiveDeveloperThread.mockResolvedValue(true);
     const onArchived = renderArchivable();
 
-    await user.click(screen.getByRole('button', { name: 'Archive session' }));
+    await chooseSessionAction(user, 'Archive session');
     const dialog = await screen.findByRole('alertdialog');
     expect(dialog).toHaveTextContent('Fix the build leaves this list');
     expect(dialog).toHaveTextContent('agi session unarchive thread-1');
@@ -1154,7 +1371,7 @@ describe('archiving a local session', () => {
     archiveDeveloperThread.mockRejectedValue(new Error('Interrupt the running turn first.'));
     const onArchived = renderArchivable();
 
-    await user.click(screen.getByRole('button', { name: 'Archive session' }));
+    await chooseSessionAction(user, 'Archive session');
     await user.click(
       within(await screen.findByRole('alertdialog')).getByRole('button', {
         name: 'Archive session',
@@ -1165,13 +1382,17 @@ describe('archiving a local session', () => {
     expect(onArchived).not.toHaveBeenCalled();
   });
 
-  it('offers no archive until the CLI has said it serves sessions', () => {
+  it('offers no archive until the CLI has said it serves sessions', async () => {
     capabilities = new Set(
       DEVELOPER_RUNTIME_CAPABILITIES.filter((capability) => capability !== 'thread_archive'),
     );
     renderArchivable();
 
-    expect(screen.queryByRole('button', { name: 'Archive session' })).not.toBeInTheDocument();
+    expect(
+      (await openSessionActions(userEvent.setup())).queryByRole('menuitem', {
+        name: 'Archive session',
+      }),
+    ).not.toBeInTheDocument();
   });
 });
 
@@ -1664,7 +1885,7 @@ describe('the sign-in command the session offers to copy', () => {
       cliProgram: program,
     });
 
-    await user.click(await screen.findByRole('button', { name: CODE_COPY.continueElsewhere }));
+    await chooseSessionAction(user, CODE_COPY.continueElsewhere);
     const handoff = screen.getByRole('group', { name: CODE_COPY.continueElsewhere });
     expect(handoff).toHaveTextContent(`${program} --resume ${local.id}`);
     await user.click(

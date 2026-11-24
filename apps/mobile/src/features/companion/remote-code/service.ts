@@ -7,7 +7,7 @@ import {
 import { useConnectionStore } from '@/stores/connectionStore';
 import { beginCodeSessionStart, forgetCodeSessionStart } from './store';
 
-function requestId(): string | null {
+export function createCodeRequestId(): string | null {
   const globalCrypto = globalThis.crypto as { randomUUID?: () => string } | undefined;
   return globalCrypto?.randomUUID?.() ?? Crypto.randomUUID?.() ?? null;
 }
@@ -15,7 +15,7 @@ function requestId(): string | null {
 async function sendCodeRequest(
   action: RemoteCodeRequestAction,
   fields: Record<string, unknown> = {},
-  id: string | null = requestId(),
+  id: string | null = createCodeRequestId(),
 ): Promise<boolean> {
   const { sendControl, status } = useConnectionStore.getState();
   if (status !== 'connected' || !id) return false;
@@ -44,10 +44,11 @@ export function steerCodeSession(
   threadId: string,
   guidance: string,
   interrupt: boolean,
+  requestId: string | null = createCodeRequestId(),
 ): Promise<boolean> {
   const text = guidance.trim();
   if (!text || text.length > REMOTE_CODE_LIMITS.guidanceLength) return Promise.resolve(false);
-  return sendCodeRequest('code.session.steer', { rootId, threadId, text, interrupt });
+  return sendCodeRequest('code.session.steer', { rootId, threadId, text, interrupt }, requestId);
 }
 
 export function interruptCodeTurn(
@@ -60,7 +61,7 @@ export function interruptCodeTurn(
 
 export async function startCodeSession(rootId: string, task: string): Promise<string | null> {
   const text = task.trim();
-  const id = requestId();
+  const id = createCodeRequestId();
   if (!id || !text || text.length > REMOTE_CODE_LIMITS.taskLength) return null;
   beginCodeSessionStart(id, rootId);
   const sent = await sendCodeRequest('code.session.start', { rootId, text }, id);

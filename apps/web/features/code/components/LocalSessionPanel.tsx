@@ -3,20 +3,22 @@
 import { onAppCommand } from '@shared/lib/app-commands';
 import {
   useEffect,
+  useId,
+  useLayoutEffect,
   useRef,
   useState,
-  type ClipboardEvent,
   type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
 } from 'react';
 import {
   Archive,
   ArrowRight,
   ArrowUp,
-  ChevronDown,
   ChevronLeft,
   Code2,
   GitBranch,
   ListChecks,
+  MoreHorizontal,
   FolderOpen,
   Globe,
   PanelLeft,
@@ -31,19 +33,12 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
   Spinner,
   useConfirmAction,
 } from '@agiworkforce/ui';
-import {
-  CLOUD_CODE_DEFAULT_TURN_STEPS,
-  CLOUD_CODE_TURN_STEP_BOUNDS,
-  isCloudCodeTurnStepBound,
-  type CloudCodeTurnStepBound,
-} from '@agiworkforce/types';
 import {
   DEVELOPER_AGENT_MODE_LABELS,
   DEVELOPER_CHILD_TASK_STATE_LABELS,
@@ -63,12 +58,12 @@ import type {
 } from '@agiworkforce/types/protocol';
 import {
   COMPOSER_FOLLOW_UP_INVERT_SHORTCUT,
+  formatShortcutKeys,
   matchesShortcut,
   resolveFollowUpState,
 } from '@agiworkforce/unified-chat';
 import { isImeComposingKey } from '@agiworkforce/unified-chat/ime-composition';
 import { AttachmentPreview } from '@features/chat/components/Composer/AttachmentPreview';
-import { useAttachments } from '@features/chat/hooks/use-attachments';
 import {
   CODE_AGENT_MODE_CYCLE_SHORTCUT,
   archiveDeveloperThread,
@@ -85,12 +80,7 @@ import { toUserMessage } from '@/lib/user-error-message';
 import { getModelMetadata } from '@shared/config/llm';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { safePlatform } from '@shared/utils/browser-utils';
-import {
-  CODE_COPY,
-  CODE_LIMITS,
-  CODE_TURN_STEP_HINTS,
-  continueLocalSessionInVsCodeHref,
-} from '../code-surface';
+import { CODE_COPY, CODE_LIMITS, continueLocalSessionInVsCodeHref } from '../code-surface';
 import {
   LOCAL_CLI_PROGRAM,
   LOCAL_CODE_COPY,
@@ -102,7 +92,6 @@ import {
   LOCAL_REVIEW_SHORTCUT,
   LOCAL_TERMINAL_SHORTCUT,
   isLocalFilesShortcut,
-  isLocalTerminalShortcut,
   isLocalReviewShortcut,
   localFolderName,
   localShortcutBadge,
@@ -117,6 +106,7 @@ import {
   localProviderSetups,
   localRetryPrompt,
   localSessionContext,
+  localSessionIsArchived,
   localSessionResumeCommand,
   localSkippedFilesLine,
   localSessionModels,
@@ -130,11 +120,8 @@ import {
 import { openUpgrade } from '@shared/lib/app-commands';
 import { useGuardedRouter } from '@shared/hooks/use-guarded-router';
 import { SIMULATOR_PANE_COPY } from '../simulator-pane';
-import {
-  useLocalSession,
-  type LocalMessage,
-  type LocalSessionState,
-} from '../hooks/use-local-session';
+import { useLocalSession, type LocalMessage } from '../hooks/use-local-session';
+import { codeImageDataUrl, useCodeImages } from '../hooks/use-code-images';
 import { useLocalReview } from '../hooks/use-local-review';
 import { useLocalTests } from '../hooks/use-local-tests';
 import { useLocalTurnOptions } from '../hooks/use-local-turn-options';
@@ -142,7 +129,11 @@ import { localSessionMemory } from '../local-session-memory';
 import { runThreadSummary, useThreadSummarizing } from '../local-summaries';
 import { UsageRing } from './CodeComposer';
 import { LocalChangesPanel } from './LocalChangesPanel';
-import { LocalTerminalDock } from './LocalTerminal';
+import {
+  WorkspaceTerminalDocks,
+  useWorkspaceTerminalDocks,
+  type WorkspaceTerminalController,
+} from './LocalTerminal';
 import { useShowTerminal } from '../use-show-terminal';
 import { LocalFilesPanel } from './LocalFilesPanel';
 import { LocalBrowserPanel } from './LocalBrowserPanel';
@@ -158,16 +149,14 @@ import { LocalQueuedMessages } from './LocalQueuedMessages';
 import { LocalReviewPane } from './LocalReviewPane';
 import { LocalTurnChangesView } from './LocalTurnChangesView';
 import { LocalTurnControls } from './LocalTurnControls';
+import { LocalSessionTitleInput } from './LocalSessionTitleInput';
 import { CodeTranscriptBody } from './CodeTranscript';
 import { codeReadAloudUnavailable } from '@/lib/read-aloud-policy';
 import styles from '../CloudCodePage.module.css';
 
 const HEADER_GLYPH_SIZE = 16;
 const SEND_GLYPH_SIZE = 16;
-const MODE_GLYPH_SIZE = 14;
 const SUBMIT_KEY = 'Enter';
-const IMAGE_TYPE_PREFIX = 'image/';
-const MEGABYTE = 1_000_000;
 
 const SUBAGENT_STATE_ORDER = Object.keys(
   DEVELOPER_CHILD_TASK_STATE_LABELS,
@@ -213,21 +202,18 @@ function LocalSubagents({ tasks }: { tasks: readonly DeveloperChildTask[] }) {
   );
 }
 
-function fileDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () =>
-      typeof reader.result === 'string'
-        ? resolve(reader.result)
-        : reject(new Error(LOCAL_CODE_COPY.turnFailed));
-    reader.onerror = () => reject(reader.error ?? new Error(LOCAL_CODE_COPY.turnFailed));
-    reader.readAsDataURL(file);
-  });
+export interface LocalOpeningPrompt {
+  message: LocalMessage;
+  pictures: File[];
 }
 
 export interface LocalSessionPanelProps {
   session: LocalDeveloperSession;
-  group: Pick<DeveloperSessionGroup, 'name' | 'branch' | 'sessions' | 'worktree'>;
+  group: Pick<
+    DeveloperSessionGroup,
+    'name' | 'branch' | 'sessions' | 'worktree' | 'unavailable' | 'sessionsWithheld'
+  >;
+  terminals?: WorkspaceTerminalController;
   runtimeModels: DeveloperRuntimeModels | null;
   /** The account's plan, when the page knows it, so a refusal it causes is said as one. */
   planTier?: string | null;
@@ -242,11 +228,13 @@ export interface LocalSessionPanelProps {
   /** The models are the last ones read for this folder: the latest read failed. */
   modelsStale?: boolean;
   verbose: boolean;
+  sessionListControl?: ReactNode;
   /** The task typed into the main composer, which opened this session. */
-  initialPrompt?: string;
+  initialPrompt?: LocalOpeningPrompt;
   onPromptSent?: () => void;
   /** The folder's session list changed under this panel, as when its worktree is removed. */
   onSessionsChanged?: () => void;
+  onRename?: (title: string) => Promise<string | null>;
   /** Older worktrees the CLI could not archive while making this session's. */
   cleanupFailures?: readonly WorktreeCleanupFailure[];
   onDismissCleanupFailures?: () => void;
@@ -265,58 +253,6 @@ export interface LocalSessionPanelProps {
   onEditorDirtyChange?: (dirty: boolean) => void;
 }
 
-function LocalTurnStepsControl({
-  turnSteps,
-  disabled,
-  onChange,
-}: {
-  turnSteps: CloudCodeTurnStepBound;
-  disabled: boolean;
-  onChange: (steps: CloudCodeTurnStepBound) => void;
-}) {
-  const label = `${turnSteps} ${CODE_COPY.turnStepsUnit}`;
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          className={styles['controlButton']}
-          aria-label={`${CODE_COPY.turnStepsMenu}: ${label}`}
-          disabled={disabled}
-        >
-          <span>{label}</span>
-          <ChevronDown size={MODE_GLYPH_SIZE} aria-hidden="true" />
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" side="top" className="w-80">
-        <DropdownMenuLabel>{CODE_COPY.turnStepsMenu}</DropdownMenuLabel>
-        <DropdownMenuRadioGroup
-          value={String(turnSteps)}
-          onValueChange={(value) => {
-            const bound = Number(value);
-            if (isCloudCodeTurnStepBound(bound)) onChange(bound);
-          }}
-        >
-          {CLOUD_CODE_TURN_STEP_BOUNDS.map((bound) => (
-            <DropdownMenuRadioItem key={bound} value={String(bound)}>
-              <span className={styles['menuRowLabel']}>
-                <span className={styles['optionLabel']}>
-                  {bound} {CODE_COPY.turnStepsUnit}
-                </span>
-                <span className={styles['optionHint']}>{CODE_TURN_STEP_HINTS[bound]}</span>
-              </span>
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
-
-/**
- * A choice the agent asked for. Allow and Deny cannot carry an answer, so the
- * options are the buttons, and declining lets the agent go on without one.
- */
 function QuestionPrompt({
   question,
   onAnswer,
@@ -423,18 +359,43 @@ function CopyOffer({
   );
 }
 
-export function LocalSessionPanel({
+export function LocalSessionPanel(props: LocalSessionPanelProps) {
+  return props.terminals ? (
+    <LocalSessionView {...props} terminals={props.terminals} />
+  ) : (
+    <StandaloneLocalSession {...props} />
+  );
+}
+
+function StandaloneLocalSession(props: LocalSessionPanelProps) {
+  const terminals = useWorkspaceTerminalDocks();
+  const activeRootId =
+    props.session.environment !== 'ssh' && !props.group.unavailable && !props.group.sessionsWithheld
+      ? props.session.rootId
+      : null;
+  return (
+    <>
+      <LocalSessionView {...props} terminals={terminals} />
+      <WorkspaceTerminalDocks terminals={terminals} activeRootId={activeRootId} />
+    </>
+  );
+}
+
+function LocalSessionView({
   session,
   group,
+  terminals,
   runtimeModels,
   planTier = null,
   cliProgram = LOCAL_CLI_PROGRAM,
   onNewSessionWith,
   modelsStale = false,
   verbose,
+  sessionListControl,
   initialPrompt,
   onPromptSent,
   onSessionsChanged,
+  onRename,
   cleanupFailures = [],
   onDismissCleanupFailures,
   onDeleted,
@@ -443,11 +404,12 @@ export function LocalSessionPanel({
   onWorktreeRemoved,
   onClose,
   onEditorDirtyChange,
-}: LocalSessionPanelProps) {
+}: LocalSessionPanelProps & { terminals: WorkspaceTerminalController }) {
   const [model, setModel] = useState(session.model ?? '');
   const [loadsFinished, setLoadsFinished] = useState(0);
   const capabilities = useDeveloperCapabilities(loadsFinished);
   const remoteSsh = session.environment === 'ssh';
+  const archived = localSessionIsArchived(session);
   const [browserPaneAvailable, setBrowserPaneAvailable] = useState(false);
   useEffect(() => {
     let cancelled = false;
@@ -474,17 +436,18 @@ export function LocalSessionPanel({
   const canSteer = capabilities.has('steer');
   const canAnswerQuestions = capabilities.has('user_input');
   const canChooseDecision = !remoteSsh && capabilities.has('approval_decisions');
-  const canRewind = !remoteSsh && capabilities.has('checkpoints');
+  const canRewind = !archived && !remoteSsh && capabilities.has('checkpoints');
   const canReview = canRewind && capabilities.has('review');
   const canDelete = !remoteSsh && onDeleted !== undefined && capabilities.has('thread_delete');
-  const canArchive = onArchived !== undefined && capabilities.has('thread_archive');
-  const canTakeOver = capabilities.has('thread_takeover');
-  const canPasteImages = !remoteSsh && capabilities.has('images');
-  const canFork = onForked !== undefined && !group.worktree && capabilities.has('thread_fork');
+  const canArchive = !archived && onArchived !== undefined && capabilities.has('thread_archive');
+  const canTakeOver = !archived && capabilities.has('thread_takeover');
+  const canAttachImages = !remoteSsh && capabilities.has('images');
+  const canFork =
+    !archived && onForked !== undefined && !group.worktree && capabilities.has('thread_fork');
   const [forking, setForking] = useState(false);
   const [forkError, setForkError] = useState<string | null>(null);
   const [modeAnnouncement, setModeAnnouncement] = useState('');
-  const canCompact = capabilities.has('thread_compact');
+  const canCompact = !archived && capabilities.has('thread_compact');
   const compacting = useThreadSummarizing(session.rootId, session.id);
   const cancelledSummary = useRef(false);
   const [cancellingSummary, setCancellingSummary] = useState(false);
@@ -493,8 +456,6 @@ export function LocalSessionPanel({
   );
   const { confirm, dialog: confirmDialog } = useConfirmAction();
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [turnSteps, setTurnSteps] = useState<CloudCodeTurnStepBound>(CLOUD_CODE_DEFAULT_TURN_STEPS);
-  const boundedTurns = runtimeModels?.features?.maxTurns === true;
   const memoryAvailable = !remoteSsh && runtimeModels?.features?.memory === true;
   const options = useLocalTurnOptions(session.id, runtimeModels);
   const effortLadder = developerEffortLadder(capabilities.has('reasoning_effort_ladder'));
@@ -506,7 +467,6 @@ export function LocalSessionPanel({
     ...(model === '' || model === session.model ? {} : { model }),
     ...(canChooseMode ? { agentMode: options.agentMode } : {}),
     ...(canChooseEffort && turnEffort ? { reasoningEffort: turnEffort } : {}),
-    ...(boundedTurns ? { maxTurns: turnSteps } : {}),
   });
   useEffect(() => {
     if (!state.loading) setLoadsFinished((count) => count + 1);
@@ -514,6 +474,15 @@ export function LocalSessionPanel({
   const followUpMode = useSettingsStore((settings) => settings.codeFollowUpQueueMode);
   const tests = useLocalTests(session.rootId);
   const [editorError, setEditorError] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const renameTrigger = useRef<HTMLButtonElement>(null);
+  const restoreTitleFocus = useRef(false);
+  useLayoutEffect(() => {
+    if (!editingTitle && restoreTitleFocus.current) {
+      renameTrigger.current?.focus();
+      restoreTitleFocus.current = false;
+    }
+  }, [editingTitle]);
   const [handoffOpen, setHandoffOpen] = useState(false);
   const [changesOpen, setChangesOpen] = useState(false);
   const [editorDirty, setEditorDirty] = useState(false);
@@ -524,7 +493,10 @@ export function LocalSessionPanel({
   const [simulatorOpen, setSimulatorOpen] = useState(false);
   const [simulatorExpanded, setSimulatorExpanded] = useState(false);
   const [simulatorFloating, setSimulatorFloating] = useState(false);
-  const simulatorDocked = simulatorOpen && !simulatorFloating;
+  const [workspaceCollapsed, setWorkspaceCollapsed] = useState(false);
+  const browserVisible = browserOpen && !workspaceCollapsed;
+  const simulatorVisible = simulatorOpen && (simulatorFloating || !workspaceCollapsed);
+  const simulatorDocked = simulatorVisible && !simulatorFloating;
   const closeDockedSimulator = () => {
     if (!simulatorFloating) setSimulatorOpen(false);
   };
@@ -577,11 +549,15 @@ export function LocalSessionPanel({
       setReviewOpen(false);
       return;
     }
-    setBrowserOpen(false);
-    closeDockedSimulator();
-    if (changesOpen) closeChanges(() => setReviewOpen(true));
-    else if (filesOpen) closeFiles(() => setReviewOpen(true));
-    else setReviewOpen(true);
+    const show = () => {
+      setWorkspaceCollapsed(false);
+      setBrowserOpen(false);
+      closeDockedSimulator();
+      setReviewOpen(true);
+    };
+    if (changesOpen) closeChanges(show);
+    else if (filesOpen) closeFiles(show);
+    else show();
   };
   const toggleChanges = () => {
     if (changesOpen) {
@@ -589,6 +565,7 @@ export function LocalSessionPanel({
       return;
     }
     const show = () => {
+      setWorkspaceCollapsed(false);
       setReviewOpen(false);
       setBrowserOpen(false);
       closeDockedSimulator();
@@ -599,6 +576,7 @@ export function LocalSessionPanel({
   };
   const openFiles = (focusSearch: boolean) => {
     const show = () => {
+      setWorkspaceCollapsed(false);
       setReviewOpen(false);
       setBrowserOpen(false);
       closeDockedSimulator();
@@ -618,6 +596,7 @@ export function LocalSessionPanel({
   };
   const openBrowser = (address: string | null) => {
     const show = () => {
+      setWorkspaceCollapsed(false);
       setReviewOpen(false);
       closeDockedSimulator();
       setBrowserAddress(address);
@@ -629,11 +608,13 @@ export function LocalSessionPanel({
     else show();
   };
   const toggleBrowser = () => {
-    if (browserOpen) setBrowserOpen(false);
+    if (browserVisible) setBrowserOpen(false);
+    else if (browserOpen) setWorkspaceCollapsed(false);
     else openBrowser(null);
   };
   const dockSimulator = (dock: () => void) => {
     const show = () => {
+      setWorkspaceCollapsed(false);
       setReviewOpen(false);
       setBrowserOpen(false);
       dock();
@@ -643,7 +624,8 @@ export function LocalSessionPanel({
     else show();
   };
   const toggleSimulator = () => {
-    if (simulatorOpen) setSimulatorOpen(false);
+    if (simulatorVisible) setSimulatorOpen(false);
+    else if (simulatorOpen) setWorkspaceCollapsed(false);
     else if (simulatorFloating) setSimulatorOpen(true);
     else dockSimulator(() => setSimulatorOpen(true));
   };
@@ -658,8 +640,13 @@ export function LocalSessionPanel({
   const simulatorFillsBody = simulatorDocked && simulatorExpanded;
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const sidePanelOpen =
-    shortcutsOpen || changesOpen || filesOpen || reviewOpen || browserOpen || simulatorDocked;
+    !workspaceCollapsed &&
+    (shortcutsOpen || changesOpen || filesOpen || reviewOpen || browserVisible || simulatorDocked);
   const toggleSidePanel = () => {
+    if (workspaceCollapsed || browserVisible || simulatorDocked) {
+      setWorkspaceCollapsed(!workspaceCollapsed);
+      return;
+    }
     if (!sidePanelOpen) {
       setShortcutsOpen(true);
       return;
@@ -667,42 +654,43 @@ export function LocalSessionPanel({
     const hide = () => {
       setShortcutsOpen(false);
       setReviewOpen(false);
-      setBrowserOpen(false);
-      closeDockedSimulator();
     };
     if (changesOpen) closeChanges(hide);
     else if (filesOpen) closeFiles(hide);
     else hide();
   };
-  const canUseTerminal = !remoteSsh;
-  const [terminalOpen, setTerminalOpen] = useState(false);
-  const [terminalMounted, setTerminalMounted] = useState(false);
-  const [terminalRuns, setTerminalRuns] = useState(0);
-  const [backgroundRuns, setBackgroundRuns] = useState(0);
+  const canUseTerminal = !remoteSsh && !group.unavailable && !group.sessionsWithheld;
+  const terminal = terminals.entries.get(session.rootId);
+  const terminalOpen = canUseTerminal && terminal?.open === true;
   const toggleTerminal = () => {
-    setTerminalMounted(true);
-    setTerminalOpen((open) => !open);
+    if (terminalOpen) terminals.hide(session.rootId);
+    else openTerminal();
   };
   const openTerminal = () => {
-    setTerminalMounted(true);
-    setTerminalOpen(true);
+    if (!canUseTerminal) return;
+    terminals.show({
+      rootId: session.rootId,
+      folder,
+      pty: runtimeModels?.features?.terminalPty ?? capabilities.has('terminals'),
+    });
   };
-  const toggleTerminalRef = useRef(toggleTerminal);
-  toggleTerminalRef.current = toggleTerminal;
   useShowTerminal(canUseTerminal, terminalOpen, toggleTerminal);
-  useEffect(() => {
-    if (!canUseTerminal) return undefined;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || !isLocalTerminalShortcut(event, safePlatform.isMac())) return;
-      event.preventDefault();
-      toggleTerminalRef.current();
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [canUseTerminal]);
   const isMac = safePlatform.isMac();
   const terminalBadge = localShortcutBadge(LOCAL_TERMINAL_SHORTCUT, isMac);
   const panelShortcuts = [
+    ...(!remoteSsh && browserPaneAvailable
+      ? [{ id: 'browser', label: LOCAL_CODE_COPY.browser, icon: Globe, onSelect: toggleBrowser }]
+      : []),
+    ...(!remoteSsh && simulatorAvailable
+      ? [
+          {
+            id: 'simulator',
+            label: SIMULATOR_PANE_COPY.pane,
+            icon: Smartphone,
+            onSelect: toggleSimulator,
+          },
+        ]
+      : []),
     ...(canReview
       ? [
           {
@@ -734,7 +722,13 @@ export function LocalSessionPanel({
       : []),
   ];
   const showShortcuts =
-    shortcutsOpen && !changesOpen && !filesOpen && !reviewOpen && !browserOpen && !simulatorDocked;
+    !workspaceCollapsed &&
+    shortcutsOpen &&
+    !changesOpen &&
+    !filesOpen &&
+    !reviewOpen &&
+    !browserVisible &&
+    !simulatorDocked;
   const folder = localFolderName(session.cwd, group.name);
   const toggleReviewRef = useRef(toggleReview);
   toggleReviewRef.current = toggleReview;
@@ -798,9 +792,11 @@ export function LocalSessionPanel({
     });
   }, []);
   const [composerNotice, setComposerNotice] = useState<string | null>(null);
+  const [pointerFocused, setPointerFocused] = useState(false);
   const testsRunning = tests.status === 'running';
   const memory = localSessionMemory(session.rootId, session.id);
   const [draft, setDraft] = useState(() => memory.draft);
+  const composerInputRef = useRef<HTMLTextAreaElement>(null);
   const [contextFiles, setContextFiles] = useState<string[]>(() => memory.contextFiles);
   useEffect(() => {
     memory.draft = draft;
@@ -813,12 +809,14 @@ export function LocalSessionPanel({
     );
     if (prompt) setDraft((current) => (current.trim() === '' ? prompt.text : current));
   };
-  const [focused, setFocused] = useState(false);
-  const images = useAttachments({
-    maxFiles: DEVELOPER_TURN_LIMITS.images,
-    maxFileSize: DEVELOPER_TURN_LIMITS.imageBytes,
-    onError: setComposerNotice,
-  });
+  const images = useCodeImages(
+    remoteSsh
+      ? LOCAL_CODE_COPY.imagesUnavailableOverSsh
+      : canAttachImages
+        ? null
+        : LOCAL_CODE_COPY.imagesNeedUpdate,
+    setComposerNotice,
+  );
   // One press is one send: reading pictures is awaited before the composer is
   // cleared, so the press stays claimed until the cleared composer has rendered.
   const attached = images.attachments;
@@ -843,11 +841,33 @@ export function LocalSessionPanel({
 
   const running = localTurnIsRunning(state.turn);
   const busy = running || state.sending;
+  const waitingForTranscript = state.loading || state.readError !== null;
+  const showStoredTurnNotice =
+    !archived && !waitingForTranscript && !busy && state.error === null && state.storedTurnFailed;
   const hasDraft = draft.trim() !== '' || images.attachments.length > 0;
   const [firstApproval] = state.approvals;
   const [firstQuestion] = state.questions;
   const turn = withPlanTurnFailure(state.turn, planTier);
   const items = localTranscriptItems(state.messages, turn, cliProgram);
+  const emptySession =
+    !archived &&
+    !waitingForTranscript &&
+    !state.truncated &&
+    !busy &&
+    initialPrompt === undefined &&
+    items.length === 0 &&
+    firstApproval === undefined &&
+    firstQuestion === undefined &&
+    state.changes === null &&
+    state.queued.length === 0 &&
+    state.error === null &&
+    !showStoredTurnNotice &&
+    state.heldBy === null &&
+    activeSetup === null;
+  const seedDraft = (prompt: string) => {
+    setDraft((current) => (current.trim() === '' ? prompt : current));
+    composerInputRef.current?.focus();
+  };
   const failureAction = turn.failure ? localFailureAction(turn.failure, cliProgram) : null;
   const retryPrompt = localRetryPrompt(state.turn, state.messages);
   const queueKeys = (event: ReactKeyboardEvent<HTMLTextAreaElement>): boolean => {
@@ -869,25 +889,13 @@ export function LocalSessionPanel({
     endRef.current?.scrollIntoView({ block: 'end' });
   }, [items.length, state.turn.reply]);
 
-  const opening = useRef<{ send: LocalSessionState['send']; sent: () => void }>({
-    send: state.send,
-    sent: () => undefined,
-  });
-  opening.current = { send: state.send, sent: onPromptSent ?? (() => undefined) };
-
-  useEffect(() => {
-    const text = initialPrompt?.trim() ?? '';
-    if (text === '') return;
-    opening.current.sent();
-    void opening.current.send(text);
-  }, [session.id, initialPrompt]);
-
   const { leaveBypass } = options;
   useEffect(() => {
     if (state.bypassDeclines > 0) leaveBypass();
   }, [state.bypassDeclines, leaveBypass]);
 
   const sendOrRestore = async (message: string | LocalMessage, pictures: File[] = []) => {
+    if (archived) return;
     if ((await state.send(message)) !== 'declined') return;
     const text = typeof message === 'string' ? message : message.text;
     const files = typeof message === 'string' ? [] : message.contextFiles;
@@ -897,12 +905,31 @@ export function LocalSessionPanel({
     setComposerNotice(LOCAL_CODE_COPY.bypassDeclined);
   };
 
+  const opening = useRef({ send: sendOrRestore, sent: onPromptSent });
+  const openingSentFor = useRef<string | null>(null);
+  opening.current = { send: sendOrRestore, sent: onPromptSent };
+
+  useEffect(() => {
+    if (archived || !initialPrompt || waitingForTranscript || openingSentFor.current === session.id)
+      return;
+    openingSentFor.current = session.id;
+    opening.current.sent?.();
+    void opening.current.send(initialPrompt.message, initialPrompt.pictures);
+  }, [archived, session.id, initialPrompt, waitingForTranscript]);
+
   const submit = async (invert: boolean) => {
-    if (submitting.current || !hasDraft || state.sending || images.preparing) return;
+    if (
+      submitting.current ||
+      !hasDraft ||
+      waitingForTranscript ||
+      state.sending ||
+      images.preparing
+    )
+      return;
     submitting.current = true;
     let dataUrls: string[];
     try {
-      dataUrls = await Promise.all(images.attachments.map(fileDataUrl));
+      dataUrls = await Promise.all(images.attachments.map(codeImageDataUrl));
     } catch (cause: unknown) {
       submitting.current = false;
       setComposerNotice(toUserMessage(cause, LOCAL_CODE_COPY.turnFailed));
@@ -929,30 +956,6 @@ export function LocalSessionPanel({
     else state.enqueue(message);
   };
 
-  const pasteImages = (event: ClipboardEvent<HTMLTextAreaElement>) => {
-    const files = Array.from(event.clipboardData.files);
-    if (files.length === 0) return;
-    event.preventDefault();
-    if (!canPasteImages) {
-      setComposerNotice(LOCAL_CODE_COPY.imagesNeedUpdate);
-      return;
-    }
-    const pictures = files.filter((file) => file.type.startsWith(IMAGE_TYPE_PREFIX));
-    if (pictures.length < files.length) setComposerNotice(LOCAL_CODE_COPY.imagesOnly);
-    if (pictures.length === 0) return;
-    if (images.attachments.length + pictures.length > DEVELOPER_TURN_LIMITS.images) {
-      setComposerNotice(LOCAL_CODE_COPY.tooManyImages(DEVELOPER_TURN_LIMITS.images));
-      return;
-    }
-    if (pictures.some((file) => file.size > DEVELOPER_TURN_LIMITS.imageBytes)) {
-      setComposerNotice(
-        LOCAL_CODE_COPY.imageTooLarge(`${DEVELOPER_TURN_LIMITS.imageBytes / MEGABYTE} MB`),
-      );
-      return;
-    }
-    images.addFiles(pictures);
-  };
-
   const attachCapture = (file: File) => {
     setSimulatorExpanded(false);
     if (images.attachments.length >= DEVELOPER_TURN_LIMITS.images) {
@@ -970,7 +973,7 @@ export function LocalSessionPanel({
   };
 
   const requestReview = () => {
-    if (busy) return;
+    if (busy || archived) return;
     void sendOrRestore(LOCAL_REVIEW_COMMAND);
   };
 
@@ -992,22 +995,34 @@ export function LocalSessionPanel({
     }
   };
 
+  const canChooseFollowUp = canSteer && !(canAttachFiles && contextFiles.length > 0);
   const steersByDefault =
-    resolveFollowUpState(
-      followUpMode,
-      false,
-      canSteer && !(canAttachFiles && contextFiles.length > 0),
-    ) === 'steering';
+    resolveFollowUpState(followUpMode, false, canChooseFollowUp) === 'steering';
   const followUpLabel = steersByDefault ? LOCAL_CODE_COPY.steer : LOCAL_CODE_COPY.queue;
+  const followUpHintId = useId();
+  const followUpHint =
+    running && canChooseFollowUp
+      ? (steersByDefault ? LOCAL_CODE_COPY.queueShortcutHint : LOCAL_CODE_COPY.steerShortcutHint)(
+          formatShortcutKeys(COMPOSER_FOLLOW_UP_INVERT_SHORTCUT, safePlatform.isMac()).join('+'),
+        )
+      : null;
   const placeholder = !running
-    ? LOCAL_CODE_COPY.composerPlaceholder
+    ? emptySession
+      ? CODE_COPY.composerPlaceholder
+      : LOCAL_CODE_COPY.composerPlaceholder
     : steersByDefault
       ? LOCAL_CODE_COPY.steerPlaceholder
       : LOCAL_CODE_COPY.queuePlaceholder;
+  const headerTitleClass = `${styles['headerTitle']} ${styles['localHeaderTitle']}`;
+  const sessionContext = localSessionContext(session, group);
 
   return (
     <>
-      <header className={styles['header']}>
+      <header
+        className={`${styles['header']} ${styles['localHeader']}`}
+        data-window-edge={sessionListControl ? 'left' : undefined}
+      >
+        {sessionListControl}
         <button
           type="button"
           className={styles['headerButton']}
@@ -1016,12 +1031,37 @@ export function LocalSessionPanel({
         >
           <ChevronLeft size={HEADER_GLYPH_SIZE} aria-hidden="true" />
         </button>
-        <span className={styles['headerGlyph']}>
-          <TerminalSquare size={HEADER_GLYPH_SIZE} aria-hidden="true" />
-        </span>
-        <h1 className={styles['headerTitle']}>{session.title}</h1>
-        <span className={styles['headerChip']}>
-          <span className={styles['headerChipText']}>{localSessionContext(session, group)}</span>
+        {editingTitle && onRename ? (
+          <LocalSessionTitleInput
+            title={session.title}
+            formClassName={headerTitleClass}
+            inputClassName={`w-full ${styles['headerTitleInput']}`}
+            onFinish={(restoreFocus) => {
+              restoreTitleFocus.current = restoreFocus;
+              setEditingTitle(false);
+            }}
+            onSave={onRename}
+          />
+        ) : (
+          <h1 className={headerTitleClass} aria-label={onRename ? session.title : undefined}>
+            {onRename ? (
+              <button
+                ref={renameTrigger}
+                type="button"
+                className="block max-w-full truncate text-left hover:underline focus-visible:underline"
+                aria-label={`${LOCAL_CODE_COPY.renameSession}: ${session.title}`}
+                title={LOCAL_CODE_COPY.renameSession}
+                onClick={() => setEditingTitle(true)}
+              >
+                {session.title}
+              </button>
+            ) : (
+              session.title
+            )}
+          </h1>
+        )}
+        <span className={styles['headerChip']} title={sessionContext}>
+          <span className={styles['headerChipText']}>{sessionContext}</span>
         </span>
         <div className={styles['headerActions']}>
           <LocalExtensionsControl rootId={session.rootId} />
@@ -1042,9 +1082,9 @@ export function LocalSessionPanel({
           {!remoteSsh && browserPaneAvailable && (
             <button
               type="button"
-              className={`${styles['headerButton']} ${browserOpen ? styles['headerButtonActive'] : ''}`}
+              className={`${styles['headerButton']} ${browserVisible ? styles['headerButtonActive'] : ''}`}
               aria-label={LOCAL_CODE_COPY.browser}
-              aria-pressed={browserOpen}
+              aria-pressed={browserVisible}
               title={LOCAL_CODE_COPY.browser}
               onClick={toggleBrowser}
             >
@@ -1054,9 +1094,9 @@ export function LocalSessionPanel({
           {!remoteSsh && simulatorAvailable && (
             <button
               type="button"
-              className={`${styles['headerButton']} ${simulatorOpen ? styles['headerButtonActive'] : ''}`}
+              className={`${styles['headerButton']} ${simulatorVisible ? styles['headerButtonActive'] : ''}`}
               aria-label={SIMULATOR_PANE_COPY.pane}
-              aria-pressed={simulatorOpen}
+              aria-pressed={simulatorVisible}
               title={SIMULATOR_PANE_COPY.pane}
               onClick={toggleSimulator}
             >
@@ -1101,155 +1141,6 @@ export function LocalSessionPanel({
               )}
             </button>
           )}
-          {!remoteSsh && (
-            <button
-              type="button"
-              className={styles['headerButton']}
-              aria-label={LOCAL_CODE_COPY.openInEditor}
-              title={LOCAL_CODE_COPY.openInEditor}
-              onClick={() => {
-                setEditorError(null);
-                openWorkspaceInEditor(session.rootId).catch((cause: unknown) =>
-                  setEditorError(toUserMessage(cause, LOCAL_CODE_COPY.editorFailed)),
-                );
-              }}
-            >
-              <Code2 size={HEADER_GLYPH_SIZE} aria-hidden="true" />
-            </button>
-          )}
-          <button
-            type="button"
-            className={`${styles['headerButton']} ${handoffOpen ? styles['headerButtonActive'] : ''}`}
-            aria-label={CODE_COPY.continueElsewhere}
-            aria-expanded={handoffOpen}
-            aria-controls="local-session-handoff"
-            title={CODE_COPY.continueElsewhere}
-            onClick={() => setHandoffOpen((open) => !open)}
-          >
-            <ArrowRight size={HEADER_GLYPH_SIZE} aria-hidden="true" />
-          </button>
-          {canCompact && (
-            <button
-              type="button"
-              className={styles['headerButton']}
-              aria-label={LOCAL_CODE_COPY.compactSession}
-              title={
-                running
-                  ? LOCAL_CODE_COPY.compactSessionWhileRunning
-                  : LOCAL_CODE_COPY.compactSession
-              }
-              disabled={busy || compacting}
-              onClick={() => {
-                setCompactNotice(null);
-                confirm({
-                  title: LOCAL_CODE_COPY.compactTitle,
-                  description: LOCAL_CODE_COPY.compactBody,
-                  confirmLabel: LOCAL_CODE_COPY.compactConfirm,
-                  destructive: true,
-                  onConfirm: () => {
-                    cancelledSummary.current = false;
-                    void runThreadSummary(session.rootId, session.id, () =>
-                      compactDeveloperThread({
-                        rootId: session.rootId,
-                        threadId: session.id,
-                      }),
-                    )
-                      .then((outcome) => {
-                        setCompactNotice({
-                          text: outcome.compacted
-                            ? LOCAL_CODE_COPY.compacted(outcome.tokensBefore, outcome.tokensAfter)
-                            : LOCAL_CODE_COPY.compactNothing,
-                          failed: false,
-                        });
-                        if (outcome.compacted) void state.reload();
-                      })
-                      .catch((cause: unknown) => {
-                        if (cancelledSummary.current) return;
-                        setCompactNotice({
-                          text: toUserMessage(cause, LOCAL_CODE_COPY.compactFailed),
-                          failed: true,
-                        });
-                      });
-                  },
-                });
-              }}
-            >
-              {compacting ? (
-                <Spinner size="sm" aria-hidden="true" />
-              ) : (
-                <Minimize2 size={HEADER_GLYPH_SIZE} aria-hidden="true" />
-              )}
-            </button>
-          )}
-          {canArchive && (
-            <button
-              type="button"
-              className={styles['headerButton']}
-              aria-label={LOCAL_CODE_COPY.archiveSession}
-              title={
-                running
-                  ? LOCAL_CODE_COPY.archiveSessionWhileRunning
-                  : LOCAL_CODE_COPY.archiveSession
-              }
-              disabled={busy}
-              onClick={() => {
-                setDeleteError(null);
-                confirm({
-                  title: LOCAL_CODE_COPY.archiveSessionTitle,
-                  description: localArchiveSessionConsequence(
-                    session.title,
-                    session.id,
-                    capabilities.has('thread_unarchive'),
-                  ),
-                  confirmLabel: LOCAL_CODE_COPY.archiveSessionConfirm,
-                  onConfirm: async () => {
-                    try {
-                      await archiveDeveloperThread(session.rootId, session.id);
-                      onArchived?.();
-                    } catch (cause: unknown) {
-                      setDeleteError(toUserMessage(cause, LOCAL_CODE_COPY.archiveFailed));
-                    }
-                  },
-                });
-              }}
-            >
-              <Archive size={HEADER_GLYPH_SIZE} aria-hidden="true" />
-            </button>
-          )}
-          {canDelete && (
-            <button
-              type="button"
-              className={styles['headerButton']}
-              aria-label={LOCAL_CODE_COPY.deleteSession}
-              title={
-                running ? LOCAL_CODE_COPY.deleteSessionWhileRunning : LOCAL_CODE_COPY.deleteSession
-              }
-              disabled={busy}
-              onClick={() => {
-                setDeleteError(null);
-                confirm({
-                  title: LOCAL_CODE_COPY.deleteSessionTitle,
-                  description: localDeleteSessionConsequence(session.title),
-                  confirmLabel: LOCAL_CODE_COPY.deleteSessionConfirm,
-                  destructive: true,
-                  onConfirm: async () => {
-                    try {
-                      onDeleted?.(
-                        await deleteDeveloperThread({
-                          rootId: session.rootId,
-                          threadId: session.id,
-                        }),
-                      );
-                    } catch (cause: unknown) {
-                      setDeleteError(toUserMessage(cause, LOCAL_CODE_COPY.deleteFailed));
-                    }
-                  },
-                });
-              }}
-            >
-              <Trash2 size={HEADER_GLYPH_SIZE} aria-hidden="true" />
-            </button>
-          )}
           {canUseTerminal && (
             <button
               type="button"
@@ -1283,6 +1174,155 @@ export function LocalSessionPanel({
               />
             </button>
           )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className={styles['headerButton']}
+                aria-label={CODE_COPY.sessionMenu}
+              >
+                <MoreHorizontal size={HEADER_GLYPH_SIZE} aria-hidden="true" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64">
+              {!remoteSsh && (
+                <DropdownMenuItem
+                  onSelect={() => {
+                    setEditorError(null);
+                    openWorkspaceInEditor(session.rootId).catch((cause: unknown) =>
+                      setEditorError(toUserMessage(cause, LOCAL_CODE_COPY.editorFailed)),
+                    );
+                  }}
+                >
+                  <Code2 size={HEADER_GLYPH_SIZE} aria-hidden="true" />
+                  <span className={styles['menuRowLabel']}>{LOCAL_CODE_COPY.openInEditor}</span>
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem onSelect={() => setHandoffOpen((open) => !open)}>
+                <ArrowRight size={HEADER_GLYPH_SIZE} aria-hidden="true" />
+                <span className={styles['menuRowLabel']}>{CODE_COPY.continueElsewhere}</span>
+              </DropdownMenuItem>
+              {canCompact && (
+                <DropdownMenuItem
+                  disabled={busy || compacting}
+                  aria-description={
+                    running ? LOCAL_CODE_COPY.compactSessionWhileRunning : undefined
+                  }
+                  onSelect={() => {
+                    setCompactNotice(null);
+                    confirm({
+                      title: LOCAL_CODE_COPY.compactTitle,
+                      description: LOCAL_CODE_COPY.compactBody,
+                      confirmLabel: LOCAL_CODE_COPY.compactConfirm,
+                      destructive: true,
+                      onConfirm: () => {
+                        cancelledSummary.current = false;
+                        void runThreadSummary(session.rootId, session.id, () =>
+                          compactDeveloperThread({
+                            rootId: session.rootId,
+                            threadId: session.id,
+                          }),
+                        )
+                          .then((outcome) => {
+                            setCompactNotice({
+                              text: outcome.compacted
+                                ? LOCAL_CODE_COPY.compacted(
+                                    outcome.tokensBefore,
+                                    outcome.tokensAfter,
+                                  )
+                                : LOCAL_CODE_COPY.compactNothing,
+                              failed: false,
+                            });
+                            if (outcome.compacted) void state.reload();
+                          })
+                          .catch((cause: unknown) => {
+                            if (cancelledSummary.current) return;
+                            setCompactNotice({
+                              text: toUserMessage(cause, LOCAL_CODE_COPY.compactFailed),
+                              failed: true,
+                            });
+                          });
+                      },
+                    });
+                  }}
+                >
+                  {compacting ? (
+                    <Spinner size="sm" aria-hidden="true" />
+                  ) : (
+                    <Minimize2 size={HEADER_GLYPH_SIZE} aria-hidden="true" />
+                  )}
+                  <span className={styles['menuRowLabel']}>{LOCAL_CODE_COPY.compactSession}</span>
+                </DropdownMenuItem>
+              )}
+              {(canArchive || canDelete) && <DropdownMenuSeparator />}
+              {canArchive && (
+                <DropdownMenuItem
+                  disabled={busy}
+                  aria-description={
+                    running ? LOCAL_CODE_COPY.archiveSessionWhileRunning : undefined
+                  }
+                  onSelect={() => {
+                    setDeleteError(null);
+                    const description = localArchiveSessionConsequence(
+                      session.title,
+                      session.id,
+                      capabilities.has('thread_unarchive'),
+                    );
+                    confirm({
+                      title: LOCAL_CODE_COPY.archiveSessionTitle,
+                      description:
+                        editorDirty || filesDirty
+                          ? `${description} ${LOCAL_CODE_COPY.discardLocalEditsDescription}`
+                          : description,
+                      confirmLabel: LOCAL_CODE_COPY.archiveSessionConfirm,
+                      onConfirm: async () => {
+                        try {
+                          await archiveDeveloperThread(session.rootId, session.id);
+                          onArchived?.();
+                        } catch (cause: unknown) {
+                          setDeleteError(toUserMessage(cause, LOCAL_CODE_COPY.archiveFailed));
+                        }
+                      },
+                    });
+                  }}
+                >
+                  <Archive size={HEADER_GLYPH_SIZE} aria-hidden="true" />
+                  <span className={styles['menuRowLabel']}>{LOCAL_CODE_COPY.archiveSession}</span>
+                </DropdownMenuItem>
+              )}
+              {canDelete && (
+                <DropdownMenuItem
+                  className={styles['menuRowDestructive']}
+                  disabled={busy}
+                  aria-description={running ? LOCAL_CODE_COPY.deleteSessionWhileRunning : undefined}
+                  onSelect={() => {
+                    setDeleteError(null);
+                    confirm({
+                      title: LOCAL_CODE_COPY.deleteSessionTitle,
+                      description: localDeleteSessionConsequence(session.title),
+                      confirmLabel: LOCAL_CODE_COPY.deleteSessionConfirm,
+                      destructive: true,
+                      onConfirm: async () => {
+                        try {
+                          onDeleted?.(
+                            await deleteDeveloperThread({
+                              rootId: session.rootId,
+                              threadId: session.id,
+                            }),
+                          );
+                        } catch (cause: unknown) {
+                          setDeleteError(toUserMessage(cause, LOCAL_CODE_COPY.deleteFailed));
+                        }
+                      },
+                    });
+                  }}
+                >
+                  <Trash2 size={HEADER_GLYPH_SIZE} aria-hidden="true" />
+                  <span className={styles['menuRowLabel']}>{LOCAL_CODE_COPY.deleteSession}</span>
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </header>
 
@@ -1303,7 +1343,33 @@ export function LocalSessionPanel({
                 <p className={styles['statusLine']}>{LOCAL_CODE_COPY.transcriptTruncated}</p>
               )}
 
-              {!state.loading && (
+              {emptySession && (
+                <section className={styles['localEmptySession']}>
+                  <h2 className={styles['greeting']}>{LOCAL_CODE_COPY.emptySessionHeading}</h2>
+                  {!hasDraft && (
+                    <div className={styles['localEmptySuggestions']}>
+                      <button
+                        type="button"
+                        className={styles['setupChip']}
+                        onClick={() => seedDraft(LOCAL_CODE_COPY.exploreProjectPrompt)}
+                      >
+                        <FolderOpen size={HEADER_GLYPH_SIZE} aria-hidden="true" />
+                        {LOCAL_CODE_COPY.exploreProject}
+                      </button>
+                      <button
+                        type="button"
+                        className={styles['setupChip']}
+                        onClick={() => seedDraft(LOCAL_CODE_COPY.findTestsPrompt)}
+                      >
+                        <ListChecks size={HEADER_GLYPH_SIZE} aria-hidden="true" />
+                        {LOCAL_CODE_COPY.findTests}
+                      </button>
+                    </div>
+                  )}
+                </section>
+              )}
+
+              {!state.loading && !emptySession && (
                 <CodeTranscriptBody
                   readAloudScope={JSON.stringify([session.rootId, session.id])}
                   readAloudUnavailableReason={codeReadAloudUnavailable(session.trustMode)}
@@ -1313,7 +1379,9 @@ export function LocalSessionPanel({
                   busySince={running ? session.updatedAt : null}
                   verbose={verbose}
                   onDecideApproval={() => undefined}
-                  onRetryTask={(goal) => void sendOrRestore(goal)}
+                  {...(!archived
+                    ? { onRetryTask: (goal: string) => void sendOrRestore(goal) }
+                    : {})}
                   onRewindTask={running || !canRewind ? undefined : review.rewindById}
                   rewindLabel={LOCAL_REVIEW_COPY.rewindHere}
                   onForkTask={
@@ -1324,9 +1392,11 @@ export function LocalSessionPanel({
                 />
               )}
 
-              {state.changes !== null && <LocalTurnChangesView changes={state.changes} />}
+              {state.changes !== null && (
+                <LocalTurnChangesView changes={state.changes} workspace={session.cwd} />
+              )}
 
-              {canAnswerQuestions && firstQuestion !== undefined && (
+              {!archived && canAnswerQuestions && firstQuestion !== undefined && (
                 <LocalQuestionCard
                   key={firstQuestion.requestId}
                   question={firstQuestion}
@@ -1335,7 +1405,8 @@ export function LocalSessionPanel({
                 />
               )}
 
-              {firstApproval !== undefined &&
+              {!archived &&
+                firstApproval !== undefined &&
                 (firstApproval.question ? (
                   <QuestionPrompt
                     key={firstApproval.requestId}
@@ -1356,14 +1427,16 @@ export function LocalSessionPanel({
                   />
                 ))}
 
-              {failureAction && (failureAction.kind !== 'retry' || retryPrompt !== null) && (
-                <FailureAction
-                  action={failureAction}
-                  onRetry={() => {
-                    if (retryPrompt !== null) void sendOrRestore(retryPrompt);
-                  }}
-                />
-              )}
+              {!archived &&
+                failureAction &&
+                (failureAction.kind !== 'retry' || retryPrompt !== null) && (
+                  <FailureAction
+                    action={failureAction}
+                    onRetry={() => {
+                      if (retryPrompt !== null) void sendOrRestore(retryPrompt);
+                    }}
+                  />
+                )}
 
               <div ref={endRef} />
             </div>
@@ -1423,9 +1496,31 @@ export function LocalSessionPanel({
                 </div>
               )}
 
+              {state.readError !== null && (
+                <div className={styles['notice']} role="alert">
+                  <span>{state.readError}</span>
+                  <span className={styles['noticeActions']}>
+                    <button
+                      type="button"
+                      className={styles['secondaryButton']}
+                      onClick={() => void state.retryRead()}
+                      disabled={state.loading}
+                    >
+                      {LOCAL_CODE_COPY.retryRead}
+                    </button>
+                  </span>
+                </div>
+              )}
+
               {state.error !== null && (
                 <div className={styles['notice']} role="alert">
                   <span>{state.error}</span>
+                </div>
+              )}
+
+              {showStoredTurnNotice && (
+                <div className={styles['notice']} role="status">
+                  <span>{LOCAL_CODE_COPY.storedTurnStopped}</span>
                 </div>
               )}
 
@@ -1515,7 +1610,7 @@ export function LocalSessionPanel({
                 paused={state.queuePaused}
                 onUpdate={state.updateQueued}
                 onRemove={state.removeQueued}
-                onSendNow={(id) => void state.sendQueuedNow(id)}
+                onSendNow={waitingForTranscript ? undefined : (id) => void state.sendQueuedNow(id)}
                 onEditingChange={state.setQueuedEditing}
               />
 
@@ -1626,9 +1721,25 @@ export function LocalSessionPanel({
             </div>
           </div>
 
-          <div className={styles['composerArea']} data-testid="local-code-composer">
+          {archived && (
+            <div className={styles['composerArea']}>
+              <div className={styles['center']}>
+                <div className={styles['closedBanner']} role="status">
+                  <span className={styles['closedBannerText']}>
+                    {LOCAL_CODE_COPY.archivedSessionReadOnly}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+          <div
+            className={styles['composerArea']}
+            hidden={archived}
+            style={archived ? { display: 'none' } : undefined}
+            data-testid="local-code-composer"
+          >
             <div className={styles['center']}>
-              <div className={`${styles['field']} ${focused ? styles['fieldFocused'] : ''}`}>
+              <div className={styles['field']} {...images.dropTarget}>
                 {images.previews.length > 0 && (
                   <AttachmentPreview previews={images.previews} onRemove={images.removeFile} />
                 )}
@@ -1641,17 +1752,34 @@ export function LocalSessionPanel({
                   />
                 )}
                 <div className={styles['fieldRow']}>
+                  {canAttachFiles && (
+                    <LocalContextFilePicker
+                      rootId={session.rootId}
+                      files={contextFiles}
+                      disabled={state.sending}
+                      full={contextFiles.length >= DEVELOPER_TURN_LIMITS.contextFiles}
+                      onAdd={(path) =>
+                        setContextFiles((current) =>
+                          current.includes(path) ? current : [...current, path],
+                        )
+                      }
+                    />
+                  )}
                   <textarea
+                    ref={composerInputRef}
                     className={styles['input']}
                     value={draft}
                     rows={1}
                     maxLength={CODE_LIMITS.task}
                     placeholder={placeholder}
                     aria-label={placeholder}
+                    data-composer-textarea
+                    data-pointer-focused={pointerFocused || undefined}
+                    aria-describedby={followUpHint ? followUpHintId : undefined}
                     onChange={(event) => setDraft(event.target.value)}
-                    onFocus={() => setFocused(true)}
-                    onBlur={() => setFocused(false)}
-                    onPaste={pasteImages}
+                    onPointerDown={() => setPointerFocused(true)}
+                    onBlur={() => setPointerFocused(false)}
+                    onPaste={images.onPaste}
                     onKeyDown={(event) => {
                       if (isImeComposingKey(event.nativeEvent)) return;
                       if (
@@ -1686,7 +1814,7 @@ export function LocalSessionPanel({
                     <button
                       type="button"
                       className={styles['sendButton']}
-                      disabled={images.preparing}
+                      disabled={waitingForTranscript || images.preparing}
                       aria-label={followUpLabel}
                       title={followUpLabel}
                       onClick={() => void submit(false)}
@@ -1710,12 +1838,14 @@ export function LocalSessionPanel({
                         <Square size={SEND_GLYPH_SIZE} aria-hidden="true" />
                       )}
                     </button>
-                  ) : (
+                  ) : hasDraft ? (
                     <button
                       type="button"
                       className={styles['sendButton']}
-                      disabled={!hasDraft || busy || images.preparing}
+                      disabled={waitingForTranscript || busy || images.preparing}
                       aria-label={LOCAL_CODE_COPY.send}
+                      aria-keyshortcuts="Enter"
+                      title={LOCAL_CODE_COPY.send}
                       onClick={() => void submit(false)}
                     >
                       {state.sending ? (
@@ -1724,23 +1854,11 @@ export function LocalSessionPanel({
                         <ArrowUp size={SEND_GLYPH_SIZE} aria-hidden="true" />
                       )}
                     </button>
-                  )}
+                  ) : null}
                 </div>
-
+              </div>
+              <div className={styles['composerFooter']}>
                 <div className={styles['controlRow']}>
-                  {canAttachFiles && (
-                    <LocalContextFilePicker
-                      rootId={session.rootId}
-                      files={contextFiles}
-                      disabled={state.sending}
-                      full={contextFiles.length >= DEVELOPER_TURN_LIMITS.contextFiles}
-                      onAdd={(path) =>
-                        setContextFiles((current) =>
-                          current.includes(path) ? current : [...current, path],
-                        )
-                      }
-                    />
-                  )}
                   {(choices.length > 0 || setups.length > 0 || elsewhere.length > 0) && (
                     <LocalModelChip
                       choices={choices}
@@ -1763,13 +1881,6 @@ export function LocalSessionPanel({
                     onModeChange={options.chooseMode}
                     onEffortChange={options.chooseEffort}
                   />
-                  {boundedTurns && (
-                    <LocalTurnStepsControl
-                      turnSteps={turnSteps}
-                      disabled={state.sending}
-                      onChange={setTurnSteps}
-                    />
-                  )}
                   <span className={styles['controlSpacer']} />
                   <UsageRing
                     contextTokens={state.contextTokens}
@@ -1780,6 +1891,11 @@ export function LocalSessionPanel({
                   </span>
                 </div>
               </div>
+              {followUpHint && (
+                <p id={followUpHintId} className={styles['followUpHint']}>
+                  {followUpHint}
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -1789,16 +1905,16 @@ export function LocalSessionPanel({
           <LocalChangesPanel
             rootId={session.rootId}
             title={session.title}
-            refreshKey={state.messages.length + terminalRuns}
-            runningCommandsKey={backgroundRuns}
-            sessionBusy={busy}
+            refreshKey={state.messages.length + (terminal?.completedCommands ?? 0)}
+            runningCommandsKey={terminal?.backgroundCommands ?? 0}
+            sessionBusy={busy || archived}
             onReview={requestReview}
             onClose={() => {
               setEditorDirty(false);
               setChangesOpen(false);
             }}
             onDirtyChange={setEditorDirty}
-            onSendToAgent={sendTextToAgent}
+            {...(!archived ? { onSendToAgent: sendTextToAgent } : {})}
             {...(browserPaneAvailable ? { onOpenPreview: (url: string) => openBrowser(url) } : {})}
           />
         )}
@@ -1806,17 +1922,19 @@ export function LocalSessionPanel({
           <LocalBrowserPanel
             address={browserAddress}
             addressKey={browserKey}
+            visible={browserVisible}
             onClose={() => setBrowserOpen(false)}
           />
         )}
         {!remoteSsh && simulatorAvailable && simulatorOpen && (
           <LocalSimulatorPane
+            visible={simulatorVisible}
             expanded={simulatorExpanded}
             onToggleExpanded={() => setSimulatorExpanded((expanded) => !expanded)}
             floating={simulatorFloating}
             onToggleFloating={toggleSimulatorFloating}
             onClose={() => setSimulatorOpen(false)}
-            {...(canPasteImages ? { onAttachImage: attachCapture } : {})}
+            {...(canAttachImages ? { onAttachImage: attachCapture } : {})}
           />
         )}
         {filesOpen && (
@@ -1835,7 +1953,7 @@ export function LocalSessionPanel({
             review={review}
             worktree={worktree}
             onClose={() => setReviewOpen(false)}
-            onSendComments={sendTextToAgent}
+            {...(!archived ? { onSendComments: sendTextToAgent } : {})}
           />
         )}
         {showShortcuts && (
@@ -1850,7 +1968,9 @@ export function LocalSessionPanel({
                   >
                     <shortcut.icon size={HEADER_GLYPH_SIZE} aria-hidden="true" />
                     <span className={styles['panelShortcutLabel']}>{shortcut.label}</span>
-                    <kbd className={styles['panelShortcutBadge']}>{shortcut.badge}</kbd>
+                    {'badge' in shortcut && (
+                      <kbd className={styles['panelShortcutBadge']}>{shortcut.badge}</kbd>
+                    )}
                   </button>
                 </li>
               ))}
@@ -1858,17 +1978,6 @@ export function LocalSessionPanel({
           </aside>
         )}
       </div>
-      {canUseTerminal && terminalMounted && (
-        <LocalTerminalDock
-          rootId={session.rootId}
-          folder={folder}
-          open={terminalOpen}
-          pty={capabilities.has('terminals')}
-          onClose={() => setTerminalOpen(false)}
-          onCommandFinished={() => setTerminalRuns((count) => count + 1)}
-          onBackgroundStarted={() => setBackgroundRuns((count) => count + 1)}
-        />
-      )}
     </>
   );
 }

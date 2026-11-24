@@ -309,7 +309,7 @@ export interface CodeTranscriptProps {
   busySince: string | null;
   verbose: boolean;
   onDecideApproval: (approval: CodeApprovalPrompt, decision: 'approve' | 'reject') => void;
-  onRetryTask: (goal: string, mode: CloudCodeTurnMode) => void;
+  onRetryTask?: (goal: string, mode: CloudCodeTurnMode) => void;
 }
 
 export function CodeTranscript({ session, ...rest }: CodeTranscriptProps) {
@@ -439,7 +439,7 @@ export function CodeTranscriptBody({
                 {CLOUD_CODE_STOP_REASON_LABELS[item.stopReason]}
               </p>
             )}
-            {item.retryGoal && (
+            {item.retryGoal && onRetryTask && (
               <button
                 type="button"
                 className={`${styles['secondaryButton']} ${styles['retryButton']}`}

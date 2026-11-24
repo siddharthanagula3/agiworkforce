@@ -10,6 +10,7 @@ export interface CloudCodeAccess {
   signedIn: boolean;
   accountKey: string;
   activate: () => void;
+  returnToChat: () => void;
 }
 
 export function useCloudCodeAccess(): CloudCodeAccess {
@@ -27,10 +28,15 @@ export function useCloudCodeAccess(): CloudCodeAccess {
     setAppMode('cloud');
   }, [cloudUnlocked, router, setAppMode]);
 
+  const returnToChat = useCallback(() => {
+    router.replace('/(app)/(tabs)/chat');
+  }, [router]);
+
   return {
     ready: appMode === 'cloud' && cloudUnlocked,
     signedIn: cloudUnlocked,
     accountKey: clerkUserId ?? 'signed-out',
     activate,
+    returnToChat,
   };
 }

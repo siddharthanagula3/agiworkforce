@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { createMessageQueue, LANE_CAP, QueueFullError } from '@agiworkforce/client-runtime';
 import { isImeComposingKey } from '@agiworkforce/unified-chat/ime-composition';
 import ts from 'typescript';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const source = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), '../src/side_panel.ts'),
@@ -15,7 +15,12 @@ const functions = program.statements
   .filter(
     (node) =>
       ts.isFunctionDeclaration(node) &&
-      ['submitComposerText', 'sendNextFollowUp'].includes(node.name?.text ?? ''),
+      [
+        'submitComposerText',
+        'sendNextFollowUp',
+        'restoreTurnToComposer',
+        'composerAvailableForContext',
+      ].includes(node.name?.text ?? ''),
   )
   .map((node) => node.getText(program))
   .join('\n');
@@ -35,9 +40,18 @@ function harness() {
     LANE_CAP,
     t: vi.fn((key: string) => key),
     updateAttachmentPreview: vi.fn(),
+    replaceComposerText: (input: HTMLTextAreaElement, text: string) => {
+      input.value = text;
+    },
+    _ctx: { pendingPageContext: null },
+    pendingBrowserContextTabs: [],
+    pendingAttachmentCount: vi.fn(() => 0),
+    composerAttachmentIntakes: new Set(),
+    composerVideoMode: false,
+    composerSkill: null,
   };
   const compiled = ts.transpileModule(
-    `${queueState}\nlet composerContextNotice = null;\n${functions}\nreturn { submitComposerText, sendNextFollowUp };`,
+    `${queueState}\nlet composerContextNotice = null;\n${functions}\nreturn { submitComposerText, sendNextFollowUp, restoreTurnToComposer, notice: () => composerContextNotice };`,
     { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } },
   ).outputText;
   // llm-guardrail-allow: runs only repository-owned TypeScript functions in this isolated unit fixture.
@@ -46,9 +60,46 @@ function harness() {
   ) as {
     submitComposerText(text: string): boolean;
     sendNextFollowUp(): void;
+    restoreTurnToComposer(message: { content: string }): void;
+    notice(): string | null;
   };
   return { ...dependencies, ...api, queue };
 }
+
+describe('retry when the earlier message needs attachments again', () => {
+  afterEach(() => document.body.replaceChildren());
+
+  it('keeps a new draft instead of overwriting it with the previous prompt', () => {
+    document.body.innerHTML = '<textarea id="sp-input">New draft</textarea>';
+    const h = harness();
+
+    h.restoreTurnToComposer({ content: 'Earlier prompt' });
+
+    expect(document.querySelector('textarea')?.value).toBe('New draft');
+    expect(h.notice()).toBe('spRetryKeepDraft');
+  });
+
+  it('keeps attachments staged for another turn even when its draft text is empty', () => {
+    document.body.innerHTML = '<textarea id="sp-input"></textarea>';
+    const h = harness();
+    h.pendingAttachmentCount.mockReturnValue(1);
+
+    h.restoreTurnToComposer({ content: 'Earlier prompt' });
+
+    expect(document.querySelector('textarea')?.value).toBe('');
+    expect(h.notice()).toBe('spRetryKeepDraft');
+  });
+
+  it('restores the earlier prompt into an empty composer', () => {
+    document.body.innerHTML = '<textarea id="sp-input"></textarea>';
+    const h = harness();
+
+    h.restoreTurnToComposer({ content: 'Earlier prompt' });
+
+    expect(document.querySelector('textarea')?.value).toBe('Earlier prompt');
+    expect(h.notice()).toBe('spRetryNeedsAttachments');
+  });
+});
 
 describe('composer synchronous admission retention', () => {
   it.each([false, true])('propagates the send result %s without modifying raw text', (admitted) => {
@@ -190,6 +241,7 @@ describe('composer input clearing', () => {
     let listener!: (event: Record<string, unknown>) => void;
     const inputEl = {
       value: 'draft',
+      dispatchEvent: vi.fn(),
       addEventListener: (_type: string, callback: typeof listener) => {
         listener = callback;
       },
@@ -208,21 +260,68 @@ describe('composer input clearing', () => {
       'sendBtn',
       'sendMessage',
       'submitComposerText',
-      'autoResizeInput',
       'updateSendButton',
       'cancelCurrentManagedStream',
       'handleUnattendedCommand',
       'isImeComposingKey',
       compiled,
-    )(inputEl, sendBtn, send, send, vi.fn(), vi.fn(), vi.fn(), () => false, isImeComposingKey);
+    )(inputEl, sendBtn, send, send, vi.fn(), vi.fn(), () => false, isImeComposingKey);
     const event = { key: 'Enter', preventDefault: vi.fn() };
     listener(event);
     expect(inputEl.value).toBe('draft');
+    expect(inputEl.dispatchEvent).not.toHaveBeenCalled();
     send.mockImplementation(() => {
       expect(inputEl.value).toBe('draft');
       return true;
     });
     listener(event);
     expect(inputEl.value).toBe('');
+    expect(inputEl.dispatchEvent).toHaveBeenCalledOnce();
   });
+});
+
+it('ignores a delayed draft read after the user edits and clears the composer', async () => {
+  const input = document.createElement('textarea');
+  const context = {
+    managedCloudOwner: { accountId: 'owner', authIncarnation: 'session' },
+    conversationId: 'chat',
+    temporaryChat: false,
+  };
+  let resolveRead!: (value: Record<string, string>) => void;
+  const read = new Promise<Record<string, string>>((resolve) => {
+    resolveRead = resolve;
+  });
+  const storage = { get: vi.fn(() => read), remove: vi.fn(async () => {}) };
+  const draftFunctions = program.statements
+    .filter(
+      (node) =>
+        ts.isFunctionDeclaration(node) &&
+        ['saveComposerDraft', 'bindComposerDraft'].includes(node.name?.text ?? ''),
+    )
+    .map((node) => node.getText(program))
+    .join('\n');
+  const compiled = ts.transpileModule(
+    `let composerDraftRevision = 0;
+     let composerDraftKey = null;
+     let composerContextNotice = null;
+     let composerGeneratedSelectionPrompt = null;
+     ${draftFunctions}
+     bindComposerDraft();
+     composerDraftRevision += 1;
+     saveComposerDraft('');`,
+    { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } },
+  ).outputText;
+  // llm-guardrail-allow: executes the repository-owned draft functions with an isolated storage fixture.
+  new Function('_ctx', 'document', 'chrome', 'updateSendButton', compiled)(
+    context,
+    { getElementById: () => input },
+    { storage: { session: storage } },
+    vi.fn(),
+  );
+  const key = JSON.stringify(['composer-draft', 'owner', 'session', 'chat']);
+  expect(storage.get).toHaveBeenCalledWith(key);
+  expect(storage.remove).toHaveBeenCalledWith(key);
+  resolveRead({ [key]: 'Earlier text' });
+  await read;
+  expect(input.value).toBe('');
 });

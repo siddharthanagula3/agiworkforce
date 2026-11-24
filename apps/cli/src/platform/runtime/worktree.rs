@@ -112,8 +112,8 @@ pub struct SessionWorktree {
 }
 
 async fn git_text(dir: &Path, args: &[&str]) -> Result<String> {
-    let mut command = Command::new("git");
-    command.current_dir(dir).args(args);
+    let mut command = agiworkforce_worktree::repository_git_command(dir).await?;
+    command.args(args);
     let output = crate::process_tree::output(command, None, Some(GIT_WORKTREE_TIMEOUT))
         .await
         .with_context(|| format!("invoke git {}", args.join(" ")))?;
@@ -277,21 +277,25 @@ pub async fn open_session_worktree(
     )
     .await
     .is_ok();
-    let mut command = Command::new("git");
-    command.current_dir(&root).args(["worktree", "add"]);
     if branch_exists {
-        command.arg("--").arg(&path).arg(&branch);
+        agiworkforce_worktree::checkout_existing_worktree(
+            &BookkeepingRunner,
+            &root,
+            branch.clone(),
+            path.clone(),
+        )
+        .await?;
     } else {
-        command.args(["-b", &branch, "--"]).arg(&path).arg(&base);
-    }
-    let output = crate::process_tree::output(command, None, Some(GIT_WORKTREE_TIMEOUT))
-        .await
-        .context("invoke git worktree add")?;
-    if !output.status.success() {
-        anyhow::bail!(
-            "git worktree add failed: {}",
-            String::from_utf8_lossy(&output.stderr).trim()
-        );
+        agiworkforce_worktree::enter_worktree(
+            &BookkeepingRunner,
+            &root,
+            WorktreeOptions {
+                branch: branch.clone(),
+                base: Some(base.clone()),
+                target_dir: Some(path.clone()),
+            },
+        )
+        .await?;
     }
     let included = agiworkforce_worktree::copy_included_files(&ProcessTreeRunner, &root, &path)
         .await

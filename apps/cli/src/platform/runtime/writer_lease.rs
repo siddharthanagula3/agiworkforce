@@ -154,7 +154,7 @@ fn beside(session_path: &Path, extension: &str) -> PathBuf {
 
 /// Every claim, takeover and release of one session's lease runs while this
 /// is held, so two processes never both decide the lease is theirs.
-fn lock_arbiter(session_path: &Path) -> Result<fs::File> {
+pub(crate) fn lock_arbiter(session_path: &Path) -> Result<fs::File> {
     let path = arbiter_path(session_path);
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)

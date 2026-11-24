@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import ts from 'typescript';
 import type { InteractiveCard } from '@agiworkforce/types';
 import {
   ChromeVideoError,
@@ -61,6 +62,140 @@ function json(status: number, body: unknown): Response {
     headers: { 'Content-Type': 'application/json' },
   });
 }
+
+function videoStartHarness() {
+  const source = ts.createSourceFile(
+    'side_panel.ts',
+    readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../src/side_panel.ts'), 'utf8'),
+    ts.ScriptTarget.Latest,
+    true,
+  );
+  const handlers = source.statements.filter(
+    (node) =>
+      ts.isFunctionDeclaration(node) &&
+      ['runVideoTurn', 'pollVideoTurn'].includes(node.name?.text ?? ''),
+  );
+  if (handlers.length !== 2) throw new Error('Video handlers were not found');
+  const owner = { accountId: 'account-a', authIncarnation: 'session-a' };
+  const operationId = '0190a000-0000-7000-8000-000000000001';
+  const assistant: SidePanelChatMessage = {
+    id: 'video-turn',
+    role: 'assistant',
+    content: '',
+    timestamp: 2,
+    videoStartId: operationId,
+  };
+  const context = {
+    managedCloudOwner: owner,
+    conversationId: 'video-conversation',
+    conversationGeneration: 1,
+    temporaryChat: false,
+    messages: [assistant],
+  };
+  let complete!: (task: { taskId: string }) => void;
+  const result = new Promise<{ taskId: string }>((resolve) => {
+    complete = resolve;
+  });
+  const deps = {
+    _ctx: context,
+    videoStarts: new Set<string>(),
+    videoPolls: new WeakSet<SidePanelChatMessage>(),
+    VIDEO_POLL_TIMEOUT_MS: 100,
+    VIDEO_POLL_INTERVAL_MS: 5,
+    t: (key: string) => key,
+    persistMessages: vi.fn(async () => undefined),
+    requestCloudConversationSync: vi.fn(),
+    sameManagedCloudOwner: (current: typeof owner, expected: typeof owner) =>
+      current.accountId === expected.accountId &&
+      current.authIncarnation === expected.authIncarnation,
+    videoAccountToken: () => async () => 'fixture-token',
+    startChromeVideo: vi.fn(() => result),
+    readChromeVideoStatus: vi.fn(async () => ({
+      status: 'completed',
+      videoUrl: '/api/files/example',
+    })),
+    finishVideoTurn: vi.fn(),
+    failVideoTurn: vi.fn(),
+    settleStoredVideoStart: vi.fn(async () => true),
+  };
+  const code = ts.transpileModule(
+    `${handlers.map((handler) => handler.getText(source)).join('\n')}\nreturn { run: runVideoTurn, poll: pollVideoTurn };`,
+    {
+      compilerOptions: { target: ts.ScriptTarget.ES2022 },
+    },
+  ).outputText;
+  // llm-guardrail-allow: Executes only the repository-owned video handler against isolated dependencies.
+  const api = new Function(...Object.keys(deps), code)(...Object.values(deps)) as {
+    run: (message: SidePanelChatMessage, prompt: string, account: typeof owner) => Promise<void>;
+    poll: (
+      message: SidePanelChatMessage,
+      account: typeof owner,
+      conversationId: string,
+    ) => Promise<void>;
+  };
+  return { ...deps, context, owner, assistant, operationId, complete, ...api };
+}
+
+describe('video start ownership', () => {
+  it('keeps a video start attached to its message after the model or composer turn changes', async () => {
+    const h = videoStartHarness();
+    const running = h.run(h.assistant, 'a lighthouse', h.owner);
+    await vi.waitFor(() => expect(h.startChromeVideo).toHaveBeenCalledOnce());
+    h.context.conversationGeneration += 2;
+    h.context.messages.push({ role: 'user', content: 'follow-up text', id: 'later', timestamp: 3 });
+    h.complete({ taskId: 'vid_started' });
+    await running;
+    expect(h.assistant.videoTaskId).toBe('vid_started');
+    expect(h.finishVideoTurn).toHaveBeenCalledOnce();
+    expect(h.settleStoredVideoStart).not.toHaveBeenCalled();
+  });
+
+  it('keeps polling an admitted video after a follow-up changes the conversation generation', async () => {
+    const h = videoStartHarness();
+    h.assistant.videoTaskId = 'vid_started';
+    const polling = h.poll(h.assistant, h.owner, h.context.conversationId);
+    h.context.conversationGeneration += 1;
+    await polling;
+    expect(h.readChromeVideoStatus).toHaveBeenCalledOnce();
+    expect(h.assistant.generatedFiles).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: 'vid_started', kind: 'video' })]),
+    );
+  });
+
+  it('settles the original conversation when a video starts after the user moves away', async () => {
+    const h = videoStartHarness();
+    const running = h.run(h.assistant, 'a lighthouse', h.owner);
+    await vi.waitFor(() => expect(h.startChromeVideo).toHaveBeenCalledOnce());
+    h.context.conversationId = 'another-conversation';
+    h.context.messages = [];
+    h.complete({ taskId: 'vid_started' });
+    await running;
+    expect(h.settleStoredVideoStart).toHaveBeenCalledWith(
+      h.owner,
+      'video-conversation',
+      h.operationId,
+      { taskId: 'vid_started' },
+    );
+    expect(h.finishVideoTurn).not.toHaveBeenCalled();
+  });
+
+  it('drops the late result when the account has changed', async () => {
+    const h = videoStartHarness();
+    const running = h.run(h.assistant, 'a lighthouse', h.owner);
+    await vi.waitFor(() => expect(h.startChromeVideo).toHaveBeenCalledOnce());
+    h.context.managedCloudOwner = { accountId: 'account-b', authIncarnation: 'session-b' };
+    h.complete({ taskId: 'vid_started' });
+    await running;
+    expect(h.assistant.videoTaskId).toBeUndefined();
+    expect(h.settleStoredVideoStart).not.toHaveBeenCalled();
+  });
+
+  it('shows starting progress in the original video message', () => {
+    const h = videoStartHarness();
+    const bubble = buildBubbleWithTools(h.assistant);
+    expect(bubble.querySelector('[role="status"]')?.textContent).toContain('Starting your video');
+  });
+});
 
 describe('video generation client', () => {
   it('starts a video on the managed route with a chrome media key and the bearer token', async () => {
@@ -319,6 +454,7 @@ describe('produced media in an answer', () => {
   it('names a download from what the server actually sent', () => {
     expect(savedFileName('Generated video', 'video/mp4')).toBe('Generated video.mp4');
     expect(savedFileName('Generated image 1', 'image/webp')).toBe('Generated image 1.webp');
+    expect(savedFileName('Generated image 1.', 'image/webp')).toBe('Generated image 1.webp');
     expect(savedFileName('report.pdf', 'application/pdf')).toBe('report.pdf');
   });
 

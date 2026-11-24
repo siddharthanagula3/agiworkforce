@@ -24,23 +24,34 @@ exports[`Mobile SendPreview snapshots locks the Cloud invite rendered tree for l
     }
   >
     <View
-      color="#64a8fa"
-      size={14}
-      testID="icon-cloud"
-    />
-    <Text
-      numberOfLines={1}
       style={
         {
-          "color": "#f4f4f4",
+          "alignItems": "center",
           "flex": 1,
-          "fontSize": 14,
-          "fontWeight": "600",
+          "flexDirection": "row",
+          "gap": 8,
+          "minWidth": 0,
         }
       }
     >
-      Sign in for AGI Cloud
-    </Text>
+      <View
+        color="#64a8fa"
+        size={14}
+        testID="icon-cloud"
+      />
+      <Text
+        style={
+          {
+            "color": "#f4f4f4",
+            "flexShrink": 1,
+            "fontSize": 14,
+            "fontWeight": "600",
+          }
+        }
+      >
+        Sign in for AGI Cloud
+      </Text>
+    </View>
     <View
       style={
         {
@@ -65,6 +76,7 @@ exports[`Mobile SendPreview snapshots locks the Cloud invite rendered tree for l
         style={
           {
             "color": "rgba(244, 244, 244, 0.74)",
+            "flexShrink": 1,
             "fontSize": 14,
             "fontWeight": "700",
             "letterSpacing": 0.5,
@@ -81,7 +93,6 @@ exports[`Mobile SendPreview snapshots locks the Cloud invite rendered tree for l
       {
         "color": "rgba(244, 244, 244, 0.74)",
         "fontSize": 14,
-        "lineHeight": 15,
       }
     }
   >
@@ -114,23 +125,34 @@ exports[`Mobile SendPreview snapshots locks the Local turn rendered tree 1`] = `
     }
   >
     <View
-      color="#11ad87"
-      size={14}
-      testID="icon-hard-drive"
-    />
-    <Text
-      numberOfLines={1}
       style={
         {
-          "color": "#f4f4f4",
+          "alignItems": "center",
           "flex": 1,
-          "fontSize": 14,
-          "fontWeight": "600",
+          "flexDirection": "row",
+          "gap": 8,
+          "minWidth": 0,
         }
       }
     >
-      Stays on this device
-    </Text>
+      <View
+        color="#11ad87"
+        size={14}
+        testID="icon-hard-drive"
+      />
+      <Text
+        style={
+          {
+            "color": "#f4f4f4",
+            "flexShrink": 1,
+            "fontSize": 14,
+            "fontWeight": "600",
+          }
+        }
+      >
+        Stays on this device
+      </Text>
+    </View>
     <View
       style={
         {
@@ -155,6 +177,7 @@ exports[`Mobile SendPreview snapshots locks the Local turn rendered tree 1`] = `
         style={
           {
             "color": "rgba(244, 244, 244, 0.74)",
+            "flexShrink": 1,
             "fontSize": 14,
             "fontWeight": "700",
             "letterSpacing": 0.5,
@@ -181,7 +204,6 @@ exports[`Mobile SendPreview snapshots locks the Local turn rendered tree 1`] = `
       {
         "color": "rgba(244, 244, 244, 0.74)",
         "fontSize": 14,
-        "lineHeight": 15,
       }
     }
   >
@@ -195,7 +217,7 @@ exports[`Mobile SendPreview snapshots locks the Local turn rendered tree 1`] = `
         "busy": undefined,
         "checked": undefined,
         "disabled": undefined,
-        "expanded": undefined,
+        "expanded": false,
         "selected": undefined,
       }
     }
@@ -274,23 +296,34 @@ exports[`Mobile SendPreview snapshots locks the Managed turn rendered tree 1`] =
     }
   >
     <View
-      color="#64a8fa"
-      size={14}
-      testID="icon-cloud"
-    />
-    <Text
-      numberOfLines={1}
       style={
         {
-          "color": "#f4f4f4",
+          "alignItems": "center",
           "flex": 1,
-          "fontSize": 14,
-          "fontWeight": "600",
+          "flexDirection": "row",
+          "gap": 8,
+          "minWidth": 0,
         }
       }
     >
-      Sent to agiworkforce.com
-    </Text>
+      <View
+        color="#64a8fa"
+        size={14}
+        testID="icon-cloud"
+      />
+      <Text
+        style={
+          {
+            "color": "#f4f4f4",
+            "flexShrink": 1,
+            "fontSize": 14,
+            "fontWeight": "600",
+          }
+        }
+      >
+        Sent to agiworkforce.com
+      </Text>
+    </View>
     <View
       style={
         {
@@ -315,6 +348,7 @@ exports[`Mobile SendPreview snapshots locks the Managed turn rendered tree 1`] =
         style={
           {
             "color": "rgba(244, 244, 244, 0.74)",
+            "flexShrink": 1,
             "fontSize": 14,
             "fontWeight": "700",
             "letterSpacing": 0.5,
@@ -341,7 +375,6 @@ exports[`Mobile SendPreview snapshots locks the Managed turn rendered tree 1`] =
       {
         "color": "rgba(244, 244, 244, 0.74)",
         "fontSize": 14,
-        "lineHeight": 15,
       }
     }
   >

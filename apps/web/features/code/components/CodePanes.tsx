@@ -25,15 +25,21 @@ export interface CodePaneControls {
 export function CodePageFrame({
   pane,
   narrowHeaderSlot,
+  onToggleSidebar,
   children,
 }: {
   pane: CodePaneControls | undefined;
   narrowHeaderSlot: ReactNode;
+  onToggleSidebar?: () => void;
   children: ReactNode;
 }) {
   if (!pane) {
     return (
-      <WebAppShell narrowHeaderSlot={narrowHeaderSlot} rail={false}>
+      <WebAppShell
+        narrowHeaderSlot={narrowHeaderSlot}
+        rail={false}
+        {...(onToggleSidebar ? { onToggleSidebar } : {})}
+      >
         {children}
       </WebAppShell>
     );

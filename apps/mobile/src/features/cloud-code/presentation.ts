@@ -9,7 +9,6 @@ import {
   type CloudCodeSessionState,
   type CloudCodeSessionStatusFilter,
   type CloudCodeTurnMode,
-  type CloudCodeTurnStepBound,
   type RemoteCodeSessionStatus,
   type RemoteCodeSessionSummary,
 } from '@agiworkforce/types';
@@ -211,7 +210,13 @@ export function visibleCodeListEntries(
       updatedAt: session.updatedAt,
       session,
     }));
-  return sortCloudCodeSessions([...cloud, ...computer], options.sort);
+  return sortCloudCodeSessions([...cloud, ...computer], options.sort).sort(
+    (left, right) => Number(isPinnedCodeListEntry(right)) - Number(isPinnedCodeListEntry(left)),
+  );
+}
+
+function isPinnedCodeListEntry(entry: CodeListEntry): boolean {
+  return entry.kind === 'computer' && entry.session.pinned === true;
 }
 
 export const CLOUD_CODE_GROUP_BY_REPOSITORY_LABEL = 'Group by repository';
@@ -261,7 +266,10 @@ export function groupCodeListEntries(entries: readonly CodeListEntry[]): CodeLis
     section.newest = Math.max(section.newest, time);
   }
   const named = [...byRepository.values()].sort(
-    (a, b) => b.newest - a.newest || a.title.localeCompare(b.title),
+    (a, b) =>
+      Number(b.data.some(isPinnedCodeListEntry)) - Number(a.data.some(isPinnedCodeListEntry)) ||
+      b.newest - a.newest ||
+      a.title.localeCompare(b.title),
   );
   return [...named, ...(unassigned ? [unassigned] : [])].map(({ key, title, data }) => ({
     key,
@@ -291,12 +299,6 @@ export const CLOUD_CODE_TURN_MODE_OPTIONS: ReadonlyArray<{
     description: 'Reads the code and proposes changes without making any',
   },
 ];
-
-export const CLOUD_CODE_TURN_STEP_HINTS: Readonly<Record<CloudCodeTurnStepBound, string>> = {
-  12: 'Quick fixes and questions',
-  24: 'Most tasks',
-  48: 'Larger changes that take longer and use more',
-};
 
 export const CLOUD_CODE_CHANGES_COPY = Object.freeze({
   open: 'Changes',
@@ -343,9 +345,7 @@ export const CLOUD_CODE_OPTIONS_COPY = Object.freeze({
   heading: 'Task options',
   close: 'Close task options',
   mode: 'Mode',
-  steps: 'Steps per task',
-  stepsUnit: 'steps',
-  ownAgent: 'This environment runs its own agent, so it sets its own mode and steps.',
+  ownAgent: 'This environment runs its own agent and manages its mode.',
   usage: 'Usage',
   contextWindow: 'Context window',
   usageUnavailable: 'Usage is not available right now.',

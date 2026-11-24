@@ -1,9 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 
 let userData = '';
+const beforeRename = vi.hoisted(() => vi.fn<(target: string) => void>());
+
+vi.mock('node:fs', async (importOriginal) => {
+  const fs = await importOriginal<typeof import('node:fs')>();
+  return {
+    ...fs,
+    renameSync: (...args: Parameters<typeof fs.renameSync>) => {
+      beforeRename(String(args[1]));
+      fs.renameSync(...args);
+    },
+  };
+});
 
 vi.mock('electron', () => ({
   app: { getPath: () => userData },
@@ -52,6 +64,40 @@ describe('the workspaces the app has been given', () => {
     ) as { id: string }[];
 
     expect(stored.map((root) => root.id).sort()).toEqual([first.id, second.id].sort());
+  });
+
+  it('preserves the last saved folder approvals if a replacement fails', async () => {
+    const first = await grantRoot(project('ledger'));
+    const other = project('atlas');
+    const file = path.join(userData, 'desktop-workspaces.json');
+    const original = readFileSync(file, 'utf8');
+    const valuesBeforeReplacement: string[] = [];
+    const failReplacement = () =>
+      beforeRename.mockImplementationOnce((target) => {
+        valuesBeforeReplacement.push(readFileSync(target, 'utf8'));
+        throw new Error('simulated rename failure');
+      });
+
+    failReplacement();
+    await expect(grantRoot(other)).rejects.toThrow('Could not save approved folders.');
+    failReplacement();
+    expect(() => revokeRoot(first.id)).toThrow('Could not save approved folders.');
+
+    expect(valuesBeforeReplacement).toEqual([original, original]);
+    expect(listRoots()).toEqual([first]);
+    expect(readFileSync(file, 'utf8')).toBe(original);
+    expect(readdirSync(userData).filter((entry) => entry.endsWith('.tmp'))).toEqual([]);
+    expect((await grantRoot(other)).name).toBe('atlas');
+    expect(revokeRoot(first.id)).toBe(true);
+  });
+
+  it('saves repository metadata together with the approval', async () => {
+    const folder = await grantRoot(project('ledger'));
+    const repository = await grantRoot(folder.path, 'repository');
+    expect(repository).toMatchObject({ id: folder.id, gitRoot: folder.path });
+    expect(
+      JSON.parse(readFileSync(path.join(userData, 'desktop-workspaces.json'), 'utf8')),
+    ).toEqual([repository]);
   });
 
   it('are withdrawn everywhere at once when one is revoked', async () => {

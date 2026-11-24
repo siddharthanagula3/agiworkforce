@@ -24,6 +24,7 @@ export function useHostCommands(host: HostBridge | null): void {
 
     return host.onHostCommand((command: HostCommand) => {
       if (command === 'toggle-sidebar') {
+        if (emitAppCommand('toggle-sidebar')) return;
         const { sidebarCollapsed, setSidebarCollapsed } = useUIStore.getState();
         setSidebarCollapsed(!sidebarCollapsed);
         return;

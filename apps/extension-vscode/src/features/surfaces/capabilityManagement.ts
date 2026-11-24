@@ -1,11 +1,17 @@
 import { PRODUCT_NAMES } from '@agiworkforce/types';
-import { DEVELOPER_AGENT_MODE_LABELS } from '@agiworkforce/local-runtime-contract';
+import {
+  DEVELOPER_AGENT_MODE_LABELS,
+  DEVELOPER_AUTO_MODE_DESCRIPTION,
+  DEVELOPER_ASK_MODE_DESCRIPTION,
+} from '@agiworkforce/local-runtime-contract';
 import * as vscode from 'vscode';
+import * as path from 'node:path';
 import type {
   HookListResponse,
   McpServerListResponse,
   McpServerToolsResponse,
   PluginListResponse,
+  PluginSettingsResponse,
   SkillListResponse,
 } from '@agiworkforce/types/protocol';
 import type {
@@ -27,6 +33,7 @@ import type {
   SettingsToggleRow,
 } from '../settings/settingsProtocol';
 import { createSkill } from './skillAuthoring';
+import { showSkillReview } from '../sidebar-webview/developerOutput';
 import type { McpServerDetailsProvider } from './mcpServerDetails';
 import { t, tPlural } from '../../l10n';
 import {
@@ -215,7 +222,7 @@ export async function manageSkills(adapter: CliCapabilityAdapter): Promise<void>
   return showManagedSurface(
     {
       title: `${PRODUCT_NAMES.code}, Skills`,
-      placeholder: 'Pick a skill to turn it on or off',
+      placeholder: 'Select a skill to see its actions',
       empty: 'No skills are loaded in this workspace',
       load: async () => {
         const result = await adapter.call<SkillListResponse>('skills');
@@ -248,23 +255,56 @@ export async function manageSkills(adapter: CliCapabilityAdapter): Promise<void>
           });
         }
         for (const skill of result.value.skills) {
+          const actions: ManagedAction[] = [];
+          if (path.isAbsolute(skill.path) && path.extname(skill.path) === '.md') {
+            actions.push({
+              button: {
+                iconPath: new vscode.ThemeIcon('go-to-file'),
+                tooltip: skill.consented ? 'Open skill file' : 'Review skill file',
+              },
+              followUp: {
+                run: async () => {
+                  const file = vscode.Uri.file(skill.path);
+                  if (skill.consented) await vscode.window.showTextDocument(file);
+                  else await showSkillReview(skill.name, file);
+                  return undefined;
+                },
+                reopen: false,
+              },
+            });
+          }
+          if (skill.consented) {
+            actions.push({
+              button: {
+                iconPath: new vscode.ThemeIcon(skill.enabled ? 'circle-slash' : 'pass'),
+                tooltip: skill.enabled ? 'Turn off' : 'Turn on',
+              },
+              followUp: {
+                run: () => adapter.call('skillsSetEnabled', skill.name, !skill.enabled),
+                reopen: true,
+              },
+            });
+          }
+          if (installs && skill.scope === 'user') {
+            actions.push(
+              removeAction(async () =>
+                (await confirmRemoval(
+                  `Remove the skill “${skill.name}”?`,
+                  'Its folder is deleted from your skills, and it stops loading in every workspace. This cannot be undone.',
+                ))
+                  ? adapter.call('skillsRemove', skill.name)
+                  : undefined,
+              ),
+            );
+          }
           items.push({
             label: toggleLabel(skill.name, skill.enabled && skill.consented),
             description: `${skill.scope}${skill.consented ? '' : ', not allowed yet'}`,
             detail: [skill.description, ...skillRequirements(skill)].join(' · '),
-            run: () => adapter.call('skillsSetEnabled', skill.name, !skill.enabled),
-            ...(installs && skill.scope === 'user'
+            ...(actions.length > 0
               ? {
-                  actions: [
-                    removeAction(async () =>
-                      (await confirmRemoval(
-                        `Remove the skill “${skill.name}”?`,
-                        'Its folder is deleted from your skills, and it stops loading in every workspace. This cannot be undone.',
-                      ))
-                        ? adapter.call('skillsRemove', skill.name)
-                        : undefined,
-                    ),
-                  ],
+                  actions,
+                  followUp: { run: () => pickManagedAction(skill.name, actions), reopen: false },
                 }
               : {}),
           });
@@ -334,7 +374,51 @@ async function updatePlugin(
   return undefined;
 }
 
-export async function managePlugins(adapter: CliCapabilityAdapter): Promise<void> {
+async function configurePluginOptions(
+  adapter: CliCapabilityAdapter,
+  plugin: PluginListResponse['plugins'][number],
+): ReturnType<ManagedRun> {
+  let result = await adapter.call<PluginSettingsResponse>('pluginsReadSettings', plugin.id);
+  const title = `${PRODUCT_NAMES.code}, ${plugin.name} options`;
+  while (result.status === 'ok') {
+    const selected = await vscode.window.showQuickPick(
+      result.value.settings.map((setting) => ({
+        label: setting.title || setting.key,
+        description: setting.configured ? 'Set' : setting.required ? 'Required' : 'Optional',
+        detail: setting.description,
+        setting,
+      })),
+      { title, placeHolder: 'Choose a setting', matchOnDetail: true },
+    );
+    if (selected === undefined) return undefined;
+    const { setting } = selected;
+    const value =
+      !setting.sensitive && !setting.multiple && setting.options.length > 0
+        ? await vscode.window.showQuickPick(setting.options, { title, placeHolder: setting.title })
+        : await vscode.window.showInputBox({
+            title,
+            prompt: setting.description || setting.title || setting.key,
+            password: setting.sensitive,
+            ignoreFocusOut: true,
+            ...(setting.multiple ? { placeHolder: 'Enter values separated by commas' } : {}),
+          });
+    if (value === undefined) continue;
+    const saved = await adapter.call<PluginSettingsResponse>(
+      'pluginsSetSetting',
+      plugin.id,
+      setting.key,
+      value,
+    );
+    if (saved.status === 'ok') result = saved;
+    else reportFailure(saved);
+  }
+  return result;
+}
+
+export async function managePlugins(
+  adapter: CliCapabilityAdapter,
+  browseMarketplace: () => Promise<void>,
+): Promise<void> {
   const [installs, updates] = await Promise.all([
     adapter.offers('installs'),
     adapter.offers('pluginUpdates'),
@@ -342,32 +426,74 @@ export async function managePlugins(adapter: CliCapabilityAdapter): Promise<void
   return showManagedSurface(
     {
       title: `${PRODUCT_NAMES.code}, Plugins`,
-      placeholder: 'Pick a plugin to turn it on or off',
-      empty: installs
-        ? 'No plugins are installed yet'
-        : 'No plugins are installed. Install one with agi plugin install.',
+      placeholder: 'Select an action or a plugin',
+      empty: 'No plugins are installed yet',
       load: async () => {
         const [result, skills] = await Promise.all([
           adapter.call<PluginListResponse>('plugins'),
           adapter.call<SkillListResponse>('skills'),
         ]);
-        if (result.status !== 'ok') return result;
+        const items: ManagedItem[] = [
+          {
+            label: '$(globe) Browse AGI Cloud Marketplace',
+            followUp: {
+              run: async () => {
+                await browseMarketplace();
+                return undefined;
+              },
+              reopen: true,
+            },
+          },
+        ];
+        if (result.status !== 'ok') {
+          items.push({
+            label: unavailableLabel(result.reason, 'installed plugins'),
+            alwaysShow: true,
+          });
+          return { status: 'ok', value: items };
+        }
         const pluginSkills = skills.status === 'ok' ? skills.value.skills : [];
         const includedSkills = (pluginPath: string): string[] =>
           pluginSkills
-            .filter((skill) => skill.scope === 'plugin' && skill.path.startsWith(pluginPath))
+            .filter((skill) => {
+              if (skill.scope !== 'plugin') return false;
+              const relative = path.relative(pluginPath, skill.path);
+              return (
+                relative !== '..' &&
+                !relative.startsWith(`..${path.sep}`) &&
+                !path.isAbsolute(relative)
+              );
+            })
             .map((skill) => skill.name);
-        const items: ManagedItem[] = installs
-          ? [
-              {
-                label: '$(cloud-download) Install a plugin',
-                detail: 'From a Git URL or a folder, signed by its publisher or pinned by sha256',
-                followUp: { run: () => installPlugin(adapter), reopen: true },
-              },
-            ]
-          : [];
+        if (installs) {
+          items.push({
+            label: '$(cloud-download) Install a plugin',
+            detail: 'From a Git URL or a folder, signed by its publisher or pinned by sha256',
+            followUp: { run: () => installPlugin(adapter), reopen: true },
+          });
+        }
         for (const plugin of result.value.plugins) {
-          const actions: ManagedAction[] = [];
+          const actions: ManagedAction[] = [
+            {
+              button: {
+                iconPath: new vscode.ThemeIcon(plugin.enabled ? 'circle-slash' : 'pass'),
+                tooltip: plugin.enabled ? 'Turn off' : 'Turn on',
+              },
+              followUp: {
+                run: () => adapter.call('pluginsSetEnabled', plugin.id, !plugin.enabled),
+                reopen: true,
+              },
+            },
+          ];
+          if (plugin.configurable === true) {
+            actions.unshift({
+              button: {
+                iconPath: new vscode.ThemeIcon('settings-gear'),
+                tooltip: 'Configure options',
+              },
+              followUp: { run: () => configurePluginOptions(adapter, plugin), reopen: true },
+            });
+          }
           if (updates && plugin.source === 'user') {
             actions.push({
               button: {
@@ -396,8 +522,8 @@ export async function managePlugins(adapter: CliCapabilityAdapter): Promise<void
               includedSkills(plugin.path).length === 0
                 ? plugin.path
                 : `Skills: ${includedSkills(plugin.path).join(', ')}`,
-            run: () => adapter.call('pluginsSetEnabled', plugin.id, !plugin.enabled),
-            ...(actions.length === 0 ? {} : { actions }),
+            actions,
+            followUp: { run: () => pickManagedAction(plugin.name, actions), reopen: true },
           });
         }
         return { status: 'ok', value: items };
@@ -628,6 +754,19 @@ async function showMcpServerDetails(
   return undefined;
 }
 
+async function pickManagedAction(
+  name: string,
+  actions: readonly ManagedAction[],
+): ReturnType<ManagedRun> {
+  const picked = await vscode.window.showQuickPick(
+    actions.flatMap(({ button, followUp }) =>
+      button.tooltip ? [{ label: button.tooltip, followUp }] : [],
+    ),
+    { title: `${PRODUCT_NAMES.code}, ${name}`, placeHolder: 'Choose an action' },
+  );
+  return picked?.followUp.run();
+}
+
 export async function manageMcpServers(
   adapter: CliCapabilityAdapter,
   details: McpServerDetailsProvider,
@@ -640,7 +779,7 @@ export async function manageMcpServers(
   return showManagedSurface(
     {
       title: `${PRODUCT_NAMES.code}, MCP servers`,
-      placeholder: 'Pick a server that needs sign-in to sign in',
+      placeholder: 'Select a server for available actions',
       empty: installs
         ? 'No MCP servers are configured yet'
         : 'No MCP servers are configured. Add one with agi mcp add.',
@@ -712,7 +851,14 @@ export async function manageMcpServers(
               : { detail: [server.policyRefusal, server.url].filter(Boolean).join(' · ') }),
             ...(server.status === 'needs_auth'
               ? { run: () => adapter.call('mcpLogin', server.name) }
-              : {}),
+              : actions.length > 0
+                ? {
+                    followUp: {
+                      run: () => pickManagedAction(server.name, actions),
+                      reopen: false,
+                    },
+                  }
+                : {}),
             ...(actions.length === 0 ? {} : { actions }),
           });
         }
@@ -844,7 +990,7 @@ async function addHook(adapter: CliCapabilityAdapter): ReturnType<ManagedRun> {
   if (command === undefined) return undefined;
   const confirmed = await confirmInstall(
     `Add this ${event.trim()} hook?`,
-    `${command.trim()} runs on this computer, with your permissions, every time ${event.trim()} happens.`,
+    `The AGI CLI can run “${command.trim()}” when ${event.trim()} fires, subject to your hook policy.`,
     'Add',
   );
   if (!confirmed) return undefined;
@@ -856,7 +1002,7 @@ export async function manageHooks(adapter: CliCapabilityAdapter): Promise<void> 
   return showManagedSurface(
     {
       title: `${PRODUCT_NAMES.code}, Hooks`,
-      placeholder: 'Commands the AGI CLI runs on agent events',
+      placeholder: 'Search hook commands or select one for actions',
       empty: 'No hooks are configured',
       load: async () => {
         const result = await adapter.call<HookListResponse>('hooks');
@@ -870,24 +1016,52 @@ export async function manageHooks(adapter: CliCapabilityAdapter): Promise<void> 
               },
             ]
           : [];
-        for (const hook of result.value.hooks) {
+        const hooks = [...result.value.hooks].sort((a, b) => a.event.localeCompare(b.event));
+        let previousEvent: string | undefined;
+        for (const hook of hooks) {
+          if (hook.event !== previousEvent) {
+            items.push({ label: hook.event, kind: vscode.QuickPickItemKind.Separator });
+            previousEvent = hook.event;
+          }
+          const actions: ManagedAction[] = [];
+          const source = hook.source;
           const position = hook.position;
+          if (source !== undefined && path.isAbsolute(source)) {
+            actions.push({
+              button: { iconPath: new vscode.ThemeIcon('go-to-file'), tooltip: 'Open hooks file' },
+              followUp: {
+                run: async () => {
+                  await vscode.window.showTextDocument(vscode.Uri.file(source));
+                  return undefined;
+                },
+                reopen: false,
+              },
+            });
+          }
+          if (installs && hook.scope === 'user' && position !== undefined) {
+            actions.push(
+              removeAction(async () =>
+                (await confirmRemoval(
+                  `Remove this ${hook.event} hook?`,
+                  `“${hook.command}” stops running and is deleted from your hooks file.`,
+                ))
+                  ? adapter.call('hooksRemove', { event: hook.event, position })
+                  : undefined,
+              ),
+            );
+          }
           items.push({
-            label: `$(symbol-event) ${hook.event}`,
-            description: `${hook.scope}${hook.trusted ? '' : ', does not run'}`,
-            detail: hook.command,
-            ...(installs && hook.scope === 'user' && position !== undefined
+            label: hook.trusted ? hook.command : `Blocked · ${hook.command}`,
+            description:
+              hook.scope === 'user' ? 'Personal' : hook.trusted ? 'Plugin' : 'Workspace plugin',
+            ...(source === undefined ? {} : { detail: source }),
+            ...(actions.length > 0
               ? {
-                  actions: [
-                    removeAction(async () =>
-                      (await confirmRemoval(
-                        `Remove this ${hook.event} hook?`,
-                        `“${hook.command}” stops running and is deleted from your hooks file.`,
-                      ))
-                        ? adapter.call('hooksRemove', { event: hook.event, position })
-                        : undefined,
-                    ),
-                  ],
+                  actions,
+                  followUp: {
+                    run: () => pickManagedAction(hook.event, actions),
+                    reopen: false,
+                  },
                 }
               : {}),
           });
@@ -912,8 +1086,8 @@ export interface SessionPermissions {
 }
 
 const MODE_DETAILS: Record<ExtensionAgentMode, string> = {
-  ask: 'Every edit and command asks you first',
-  auto: 'Reads and edits files without asking. Asks before running commands or changing git hooks and MCP settings.',
+  ask: DEVELOPER_ASK_MODE_DESCRIPTION,
+  auto: DEVELOPER_AUTO_MODE_DESCRIPTION,
   plan: 'Reads only; nothing changes until you approve the plan',
   bypass: 'Nothing asks first, including commands',
 };

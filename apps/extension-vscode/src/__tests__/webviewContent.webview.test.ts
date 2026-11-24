@@ -260,15 +260,14 @@ describe('getWebviewContent, structural smoke', () => {
     const html = render();
     const doc = new DOMParser().parseFromString(html, 'text/html');
 
-    expect(doc.querySelector('#emptyState .empty-state-mark')).not.toBeNull();
     expect(doc.querySelector('#emptyState .empty-state-headline')?.textContent).toContain(
-      'Build with AGI',
+      'Start a conversation',
     );
     expect(doc.querySelector('#emptyState .empty-state-copy')?.textContent).toContain(
-      'edit files, run commands and tests',
+      'Ask about your code or describe a change.',
     );
-    expect(doc.querySelector('#plusMenuLabel')?.textContent).toBe('Add workspace context');
-    expect(doc.querySelector('#plusMenuUpload')?.textContent).toContain('Workspace files');
+    expect(doc.querySelector('#plusMenuLabel')?.textContent).toBe('Add context');
+    expect(doc.querySelector('#plusMenuUpload')?.textContent).toContain('Attach workspace files');
     expect(doc.querySelector('#plusMenuBrowse')?.textContent).toContain('Browse the web');
     expect(doc.querySelector('#plusMenuBrowse')?.textContent).toContain(
       'Local privacy mode refuses network',
@@ -302,13 +301,12 @@ describe('getWebviewContent, structural smoke', () => {
     expect(styles).toContain('.composer-card.is-streaming .controls-summary { display: none; }');
     // Narrow widths shrink the chips; they never remove one of the controls.
     expect(styles).not.toMatch(/(?:^|\n)\s*\.controls-summary \{ display: none; \}/);
-    expect(styles).toMatch(/\.model-pill \{[^}]*min-width: 72px;/);
-    expect(styles).toMatch(/\.controls-summary \{\n\s*flex-shrink: 4;\n\s*min-width: 36px;/);
-    expect(styles).toContain('.controls-summary { max-width: 70px; }');
-    expect(styles).toContain('.controls-summary { max-width: 54px; }');
-    expect(styles).toContain('.composer-card.is-streaming .controls-summary { display: none; }');
-    // The model name is the chip a user cannot reconstruct from anywhere else.
+    expect(styles).toMatch(
+      /@media \(max-width: 280px\) \{\s*\.composer-bottom \{ flex-wrap: wrap; \}/,
+    );
     expect(styles).toContain('.model-pill-effort { display: none; }');
+    expect(doc.querySelector('#modelPill')?.tagName).toBe('BUTTON');
+    expect(doc.querySelector('#sendBtn')?.tagName).toBe('BUTTON');
     expect(doc.querySelector('#controlsSummary')).not.toBeNull();
     expect(doc.querySelector('#plusMenuActions')).toBeNull();
   });

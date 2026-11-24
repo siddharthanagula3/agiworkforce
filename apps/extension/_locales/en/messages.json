@@ -19,6 +19,25 @@
     "message": "Explain this",
     "description": "Context menu on a text selection"
   },
+  "spExplainSelectionPrompt": {
+    "message": "Explain the selected text.",
+    "description": "Draft prompt for explaining selected browser text"
+  },
+  "spTranslateSelectionPrompt": {
+    "message": "Translate the selected text into $LANGUAGE$. If it is already in $LANGUAGE$, ask which language to use.",
+    "description": "Draft prompt for translating selected browser text",
+    "placeholders": {
+      "language": { "content": "$1" }
+    }
+  },
+  "spSelectionDraftOccupied": {
+    "message": "Finish your current draft or remove its attachments, then select the text again.",
+    "description": "Shown when a selection action would replace an existing draft or its context"
+  },
+  "spSelectionNotAvailable": {
+    "message": "This selection couldn’t be attached. Select text on the page and try again.",
+    "description": "Shown when selected browser text is unavailable for the composer"
+  },
   "menuTranslateSelection": {
     "message": "Translate this",
     "description": "Context menu on a text selection"
@@ -381,25 +400,50 @@
     "message": "Tabs could not be attached. Try again.",
     "description": "Composer notice when reading the chosen tabs failed without a more specific reason"
   },
-  "spTabSnapshotsAttached_one": {
-    "message": "$COUNT$ tab snapshot attached.",
-    "description": "Composer notice after the chosen tabs were read into the next message, one plural form",
+  "spAttachmentTabClosed": {
+    "message": "A tab closed before it could be read.",
+    "description": "Composer notice when a chosen browser tab closes while it is being read"
+  },
+  "spAttachTabsSkipped_one": {
+    "message": "$count$ tab could not be attached. Open Attach tabs to try again.",
     "placeholders": {
-      "count": {
+      "count": { "content": "$1" }
+    }
+  },
+  "spAttachTabsSkipped_other": {
+    "message": "$count$ tabs could not be attached. Open Attach tabs to try again.",
+    "placeholders": {
+      "count": { "content": "$1" }
+    }
+  },
+  "spPageSnapshotFrom": {
+    "message": "Snapshot · $HOST$",
+    "description": "Indicates the attached page was captured at a point in time",
+    "placeholders": {
+      "host": {
         "content": "$1",
-        "example": "1"
+        "example": "example.com"
       }
     }
   },
-  "spTabSnapshotsAttached_other": {
-    "message": "$COUNT$ tab snapshots attached.",
-    "description": "Composer notice after the chosen tabs were read into the next message, every other plural form",
+  "spPageSnapshotRefresh": {
+    "message": "Refresh",
+    "description": "Button that updates the captured text for an attached browser tab"
+  },
+  "spPageSnapshotRefreshLabel": {
+    "message": "Refresh snapshot of $PAGE$",
+    "description": "Accessible name of the button that updates one attached browser tab",
     "placeholders": {
-      "count": {
-        "content": "$1",
-        "example": "3"
-      }
+      "page": { "content": "$1" }
     }
+  },
+  "spPageSnapshotRefreshed": {
+    "message": "Snapshot refreshed.",
+    "description": "Confirmation after replacing an attached snapshot with the page’s current text"
+  },
+  "spPageSnapshotRefreshFailed": {
+    "message": "The snapshot couldn’t be refreshed. The previous capture is still attached.",
+    "description": "Shown when refreshing an attached tab fails"
   },
   "spAutofillFilled_one": {
     "message": "Filled $COUNT$ field. Check it before you submit.",
@@ -938,11 +982,11 @@
     "description": "Shown when the account chat list could not be refreshed."
   },
   "spAttachedTabChanged": {
-    "message": "An attached tab changed. Choose the tabs again before sending.",
+    "message": "An attached tab changed, so its snapshot was removed.",
     "description": "Shown when a tab attached as context navigates before the message is sent."
   },
   "spAttachedTabClosed": {
-    "message": "An attached tab closed. Choose the tabs again before sending.",
+    "message": "An attached tab closed, so its snapshot was removed.",
     "description": "Shown when a tab attached as context is closed before the message is sent."
   },
   "spStreamCancellationUnconfirmed": {
@@ -1379,6 +1423,30 @@
     "message": "The images or page from this message are no longer attached. Attach them again, then send.",
     "description": "Shown when a message is sent again after its images or page were cleared by a reload"
   },
+  "spRetryKeepDraft": {
+    "message": "Finish your current draft, then retry the earlier message.",
+    "description": "Shown when retrying an earlier message would overwrite the current composer draft"
+  },
+  "spDraftRestored": {
+    "message": "Restored your unsent text.",
+    "description": "Shown after the composer restores saved text for this chat"
+  },
+  "spDraftSaveFailed": {
+    "message": "Chrome couldn’t save your draft. Keep this panel open to retain your text.",
+    "description": "Shown when Chrome rejects a composer storage change"
+  },
+  "spDraftRestoreFailed": {
+    "message": "Chrome couldn’t restore your draft. Reopen the panel to try again.",
+    "description": "Shown when Chrome cannot read a draft for this chat"
+  },
+  "spTemporaryDraftKeep": {
+    "message": "Send or clear your draft before leaving Temporary Chat.",
+    "description": "Shown when leaving an empty Temporary Chat would discard its unsent text"
+  },
+  "spUnstartedDraftKeep": {
+    "message": "Send or clear your draft before leaving this unsent chat.",
+    "description": "Shown when leaving a chat without a history entry would make its draft unreachable"
+  },
   "spStoredReplyFailed": {
     "message": "This reply did not finish. Retry to run it again.",
     "description": "Failed turn text restored from account history when the original error text was not saved"
@@ -1732,6 +1800,26 @@
   "spMentionProjectDetail": {
     "message": "Start the chat in this project",
     "description": "Second line of a project in the @ menu"
+  },
+  "spMentionAfterReply": {
+    "message": "Wait for the reply to finish before attaching a tab.",
+    "description": "Shown when a tab mention is selected during a reply"
+  },
+  "spMentionCurrentContext": {
+    "message": "Remove the current page or selection before attaching tabs.",
+    "description": "Shown when adding a tab snapshot would replace a different kind of page attachment"
+  },
+  "spMentionTabLimit": {
+    "message": "Remove an attachment before adding another tab.",
+    "description": "Shown when the composer has reached the attachment limit"
+  },
+  "spMentionAttachmentBusy": {
+    "message": "Wait for the current attachment to finish, then choose the tab again.",
+    "description": "Shown when another attachment is still being prepared"
+  },
+  "spMentionDraftChanged": {
+    "message": "Your text changed while the tab was being read. Choose the tab again to attach it.",
+    "description": "Shown when a pending tab mention no longer matches the typed text"
   },
   "spSiteAccessRefused": {
     "message": "AGI can read $SITE$ only after you allow it. Nothing from that page was attached.",
@@ -3298,7 +3386,11 @@
   },
   "spVideoStarting": {
     "message": "Starting your video…",
-    "description": "Thinking label while a video request is being started"
+    "description": "Status beside the video reply while its request is being started"
+  },
+  "spVideoStartInterrupted": {
+    "message": "The video start was interrupted. Retry to recover it.",
+    "description": "Error shown after reopening a chat with an unfinished video start"
   },
   "spVideoCreating": {
     "message": "Creating your video. This usually takes a minute or two.",
@@ -3598,7 +3690,7 @@
     "description": "Row title for recording a workflow."
   },
   "optRecordHint": {
-    "message": "Records your clicks and typing on the website you used most recently, so you can replay them later. Only approved sites can be recorded, and recording stops when the page loads a new address.",
+    "message": "Records your clicks and typing on the website you used most recently, so you can replay them later. Recording stops on navigation unless you choose to continue on approved pages.",
     "description": "Row hint for recording a workflow."
   },
   "optRecordStart": {
@@ -3608,6 +3700,9 @@
   "optRecordStop": {
     "message": "Stop recording",
     "description": "Button that stops recording."
+  },
+  "optRecordFollowPages": {
+    "message": "Continue recording when this tab navigates to another approved site or page."
   },
   "optRecordCaptureValues": {
     "message": "Capture typed values (passwords, card numbers, one-time codes, PINs and ID numbers are never recorded)",
@@ -3714,12 +3809,15 @@
     "message": "Keep paired",
     "description": "Button that dismisses the unpair question and leaves the desktop app paired."
   },
+  "welcomeScope": {
+    "message": "Browser actions and limits"
+  },
   "welcomeTitle": {
-    "message": "Welcome to AGI",
+    "message": "AGI in Chrome",
     "description": "Heading of the post-install page."
   },
   "welcomeLead": {
-    "message": "Your AI workforce now lives in Chrome. A few things to know before you start.",
+    "message": "Open the side panel beside a page to ask about a passage, compare tabs, or fill in a form. You choose which sites AGI can use.",
     "description": "Intro under the post-install heading."
   },
   "welcomePinTitle": {
@@ -3729,14 +3827,6 @@
   "welcomePinBody": {
     "message": "Select the puzzle icon in Chrome's toolbar, then the pin next to AGI. One click then opens the side panel on any page.",
     "description": "Post-install pin instructions."
-  },
-  "welcomeSignInTitle": {
-    "message": "Sign in",
-    "description": "Post-install step heading."
-  },
-  "welcomeSignInBody": {
-    "message": "Sign in to chat with your AGI account and keep your conversations in sync across devices.",
-    "description": "Post-install sign-in text."
   },
   "welcomeSignInAction": {
     "message": "Sign in",
@@ -3778,16 +3868,8 @@
     "message": "Keep going when you press Stop.",
     "description": "Post-install limit."
   },
-  "welcomeTryTitle": {
-    "message": "Try it",
-    "description": "Post-install step heading."
-  },
-  "welcomeTryBody": {
-    "message": "Open the side panel and ask your first question. On any website you approve, AGI can read the page and act on it.",
-    "description": "Post-install try-it text."
-  },
   "welcomeTryAction": {
-    "message": "Get started",
+    "message": "Open side panel",
     "description": "Post-install button that confirms the page was read and opens the side panel."
   },
   "welcomeTryFailed": {
@@ -4116,6 +4198,9 @@
     "message": "Looking at the page",
     "description": "Activity step while AGI takes a screenshot"
   },
+  "spBrowserStepTapping": { "message": "Tapping" },
+  "spBrowserStepDragging": { "message": "Dragging" },
+  "spBrowserStepSwiping": { "message": "Swiping" },
   "spBrowserStepClicking": {
     "message": "Clicking",
     "description": "Activity step while AGI clicks on the page"
@@ -4302,6 +4387,7 @@
       }
     }
   },
+  "spBrowserRunControls": { "message": "Browser task controls" },
   "spBrowserTakeOver": {
     "message": "Take over",
     "description": "Button that pauses AGI so the user can use the page"
@@ -4360,9 +4446,41 @@
       }
     }
   },
-  "spBrowserScreenshotAlt": {
-    "message": "The page AGI is working on",
-    "description": "Alt text of the latest browser task screenshot"
+  "spBrowserFailedAttempts_one": {
+    "message": "$COUNT$ failed attempt",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "spBrowserFailedAttempts_other": {
+    "message": "$COUNT$ failed attempts",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "spBrowserOutcomeUnverified": {
+    "message": "Outcome unverified"
+  },
+  "spPreviousScreenshot": {
+    "message": "Previous screenshot"
+  },
+  "spNextScreenshot": {
+    "message": "Next screenshot"
+  },
+  "spScreenshotPosition": {
+    "message": "Screenshot $POSITION$ of $TOTAL$",
+    "placeholders": {
+      "position": {
+        "content": "$1"
+      },
+      "total": {
+        "content": "$2"
+      }
+    }
   },
   "spReadAloud": {
     "message": "Read aloud",
@@ -4891,7 +5009,7 @@
     "description": "Selected-text rewrite and insertion flow."
   },
   "spRewriteFrameUnsupported": {
-    "message": "This field is inside a frame. You can copy a draft into it yourself.",
+    "message": "This editor is embedded from a different site or its source could not be verified.",
     "description": "Selected-text rewrite and insertion flow."
   },
   "spRewriteSignIn": {

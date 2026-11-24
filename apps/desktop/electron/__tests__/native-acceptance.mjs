@@ -10,32 +10,54 @@ import { createRequire } from 'node:module';
 import { execFileSync, spawn } from 'node:child_process';
 import net from 'node:net';
 import { clearTimeout, setTimeout } from 'node:timers';
+import {
+  CODE_UI_EDITED,
+  CODE_UI_EDIT_FILE,
+  CODE_UI_EDIT_REPLY,
+  CODE_UI_EDIT_TASK,
+  CODE_UI_ORIGINAL,
+  CODE_UI_PREPARED_IMAGE_URL,
+  CODE_UI_REPLY,
+  CODE_UI_TASK,
+  codeUiAliases,
+  codeUiEntry,
+  exerciseCodeUi,
+  prepareCodeUiProject,
+  prepareScopedCli,
+} from './fixtures/code-ui.mjs';
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const req = createRequire(path.join(repo, 'package.json'));
 const browserOnly = process.argv.includes('--browser');
+const codeUi = process.argv.includes('--code-ui');
+const nestedWorkspace = process.argv.includes('--nested-workspace');
 const packageIndex = process.argv.indexOf('--packaged');
 const packaged = packageIndex < 0 ? null : fs.realpathSync(process.argv[packageIndex + 1]);
 if (packaged && browserOnly)
   throw new Error('Packaged browser opening needs its own OS destination fixture.');
-const { _electron: electron, chromium } = req('@playwright/test');
+if (codeUi && (browserOnly || packaged)) throw new Error('Select the Code UI fixture on its own.');
+if (nestedWorkspace && !codeUi) throw new Error('Select --code-ui to test a nested workspace.');
+const { chromium } = req('@playwright/test');
 const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agi-electron-harness-'))),
   owned = fs.realpathSync(
     fs.mkdtempSync(
       path.join(packaged ? path.join(os.homedir(), 'Desktop') : os.tmpdir(), 'agi-electron-owned-'),
     ),
   ),
-  project = path.join(owned, 'project'),
+  repository = nestedWorkspace ? path.join(owned, 'repository') : path.join(owned, 'project'),
+  project = nestedWorkspace ? path.join(repository, 'project') : repository,
   home = path.join(owned, 'cli'),
   profile = path.join(owned, 'profile');
-[project, home, profile].forEach((p) => fs.mkdirSync(p));
+[project, home, profile].forEach((p) => fs.mkdirSync(p, { recursive: true }));
 const agi = packaged
   ? path.join(packaged, 'Contents/Resources/agi-cli/agi')
-  : path.join(repo, 'target/debug/agi');
+  : path.resolve(repo, process.env.AGI_ACCEPTANCE_CLI || 'target/debug/agi');
 const safeEnvironment = () =>
   Object.fromEntries(
     Object.entries(process.env).filter(
       ([key]) =>
-        !/(TOKEN|SECRET|API_KEY|PASSWORD|PRIVATE_KEY|DATABASE|REDIS|^KV_|^CSC_|^APPLE_)/i.test(key),
+        !/(TOKEN|SECRET|API_KEY|PASSWORD|PRIVATE_KEY|DATABASE|REDIS|^KV_|^CSC_|^APPLE_|^AGI(WORKFORCE)?_)/i.test(
+          key,
+        ),
     ),
   );
 if (packaged)
@@ -52,7 +74,9 @@ const css = (fs.existsSync(cssdir) ? fs.readdirSync(cssdir) : [])
 
 fs.writeFileSync(
   path.join(dir, 'entry.tsx'),
-  String.raw`import React,{useState} from 'react';
+  codeUi
+    ? codeUiEntry
+    : String.raw`import React,{useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {useLocalSession} from '@/features/code/hooks/use-local-session';
 import {LocalRoutinesSection} from '@/features/schedules/components/LocalRoutinesSection';
@@ -73,15 +97,21 @@ req('esbuild').buildSync({
   platform: 'browser',
   outfile: path.join(dir, 'bundle.js'),
   jsx: 'automatic',
+  loader: { '.png': 'dataurl', '.woff': 'dataurl', '.woff2': 'dataurl', '.ttf': 'dataurl' },
+  logLimit: 5,
   nodePaths: [path.join(repo, 'node_modules')],
   alias: {
     '@': path.join(repo, 'apps/web'),
-    '@/features/desktop-host': path.join(
-      repo,
-      'apps/web/features/desktop-host/lib/runtime-client.ts',
-    ),
+    ...(codeUi
+      ? codeUiAliases(dir)
+      : {
+          '@/features/desktop-host': path.join(
+            repo,
+            'apps/web/features/desktop-host/lib/runtime-client.ts',
+          ),
+        }),
   },
-  define: { 'process.env.NODE_ENV': '"production"' },
+  define: { 'process.env.NODE_ENV': codeUi ? '"development"' : '"production"' },
 });
 if (process.argv.includes('--check-bundle')) {
   console.log(
@@ -97,6 +127,7 @@ if (process.argv.includes('--check-bundle')) {
   fs.rmSync(owned, { recursive: true, force: true });
   process.exit(0);
 }
+const bundledCss = fs.readFileSync(path.join(dir, 'bundle.css'), 'utf8');
 const server = http.createServer(async (q, s) => {
   const u = new URL(q.url, 'http://localhost');
   if (u.pathname.startsWith('/api/releases/desktop-cloud/update/')) {
@@ -126,7 +157,65 @@ const server = http.createServer(async (q, s) => {
     calls.push({ child, routine, hasResult });
     let message,
       finish = 'stop';
-    if (browserOnly) {
+    if (codeUi) {
+      if (users.includes(CODE_UI_EDIT_TASK)) {
+        const editIndex = messages.findLastIndex(
+          (entry) =>
+            entry.role === 'user' && JSON.stringify(entry.content).includes(CODE_UI_EDIT_TASK),
+        );
+        const results = messages.slice(editIndex + 1).filter((entry) => entry.role === 'tool');
+        const file = path.join(project, CODE_UI_EDIT_FILE);
+        if (results.length >= 2) {
+          if (fs.readFileSync(file, 'utf8') !== `${CODE_UI_EDITED}\n`) {
+            s.writeHead(400);
+            return s.end('The Code UI fixture edit did not reach the owned file.');
+          }
+          message = { role: 'assistant', content: CODE_UI_EDIT_REPLY };
+        } else {
+          const readFirst = results.length === 0;
+          if (!readFirst && !JSON.stringify(results[0].content).includes(CODE_UI_ORIGINAL)) {
+            s.writeHead(400);
+            return s.end('The Code UI fixture did not read the expected original file.');
+          }
+          message = {
+            role: 'assistant',
+            content: null,
+            tool_calls: [
+              {
+                index: 0,
+                id: 'call_' + crypto.randomUUID(),
+                type: 'function',
+                function: {
+                  name: readFirst ? 'read_file' : 'write_file',
+                  arguments: JSON.stringify(
+                    readFirst ? { path: file } : { path: file, content: `${CODE_UI_EDITED}\n` },
+                  ),
+                },
+              },
+            ],
+          };
+          finish = 'tool_calls';
+        }
+      } else if (users.includes(CODE_UI_TASK)) {
+        const firstTask = messages.find(
+          (entry) => entry.role === 'user' && JSON.stringify(entry.content).includes(CODE_UI_TASK),
+        );
+        if (
+          !Array.isArray(firstTask?.content) ||
+          !firstTask.content.some(
+            (part) =>
+              part.type === 'image_url' && part.image_url?.url === CODE_UI_PREPARED_IMAGE_URL,
+          )
+        ) {
+          s.writeHead(400);
+          return s.end('The Code UI first task is missing the metadata-stripped fixture image.');
+        }
+        message = { role: 'assistant', content: CODE_UI_REPLY };
+      } else {
+        s.writeHead(400);
+        return s.end('Unexpected Code UI fixture task.');
+      }
+    } else if (browserOnly) {
       if (hasResult) message = { role: 'assistant', content: 'Browser relay completed.' };
       else {
         message = {
@@ -194,7 +283,7 @@ const server = http.createServer(async (q, s) => {
   }
   if (u.pathname === '/styles.css') {
     s.setHeader('Content-Type', 'text/css');
-    return s.end(css);
+    return s.end(css + bundledCss);
   }
   if (u.pathname.endsWith('.woff2')) {
     const f = path.join(repo, 'apps/web/.next/dev/static/media', path.basename(u.pathname));
@@ -220,7 +309,15 @@ async function launch(origin) {
     await new Promise((resolve) => socket.listen(0, '127.0.0.1', resolve));
     const port = socket.address().port;
     await new Promise((resolve) => socket.close(resolve));
-    const executable = path.join(packaged, 'Contents/MacOS/AGI Desktop');
+    const executableName = execFileSync(
+      '/usr/bin/plutil',
+      ['-extract', 'CFBundleExecutable', 'raw', path.join(packaged, 'Contents/Info.plist')],
+      { encoding: 'utf8' },
+    ).trim();
+    if (!executableName || executableName !== path.basename(executableName)) {
+      throw new Error('The packaged bundle has an invalid executable name.');
+    }
+    const executable = path.join(packaged, 'Contents/MacOS', executableName);
     const log = fs.openSync(path.join(dir, 'packaged.log'), 'a');
     const child = spawn(
       executable,
@@ -288,41 +385,117 @@ async function launch(origin) {
       },
     };
   }
-  return electron.launch({
-    args: [dir],
-    env: {
-      ...env,
-      AGI_CLOUD_APP_ORIGIN: origin,
-      AGIWORKFORCE_HOME: home,
-      ...(browserOnly ? { AGI_OWNED_FIXTURE_KEY: 'test-only-owned-fixture' } : {}),
-      AGI_OWNED_PROFILE: profile,
-      AGI_OWNED_BOOTSTRAP_FIXTURE: fileURLToPath(
-        new URL('./fixtures/native-bootstrap.cjs', import.meta.url),
-      ),
-      AGI_OWNED_MAIN: path.join(repo, 'apps/desktop/electron/dist/main.cjs'),
-      AGI_OWNED_BROWSER_ONLY: browserOnly ? '1' : '0',
-      AGI_OWNED_PROJECT: project,
-      AGI_OWNED_ORIGIN: origin,
+  const socket = net.createServer();
+  await new Promise((resolve) => socket.listen(0, '127.0.0.1', resolve));
+  const port = socket.address().port;
+  await new Promise((resolve) => socket.close(resolve));
+  const desktopRequire = createRequire(path.join(repo, 'apps/desktop/package.json'));
+  const child = spawn(
+    desktopRequire('electron'),
+    [dir, `--remote-debugging-port=${port}`, '--agi-browser-bridge-ephemeral'],
+    {
+      env: {
+        ...env,
+        AGI_CLOUD_APP_ORIGIN: origin,
+        AGIWORKFORCE_HOME: home,
+        AGIWORKFORCE_NO_KEYRING: '1',
+        ...(browserOnly ? { AGI_OWNED_FIXTURE_KEY: 'test-only-owned-fixture' } : {}),
+        AGI_OWNED_PROFILE: profile,
+        AGI_OWNED_BOOTSTRAP_FIXTURE: fileURLToPath(
+          new URL('./fixtures/native-bootstrap.cjs', import.meta.url),
+        ),
+        AGI_OWNED_MAIN: path.join(repo, 'apps/desktop/electron/dist/main.cjs'),
+        AGI_OWNED_BROWSER_ONLY: browserOnly ? '1' : '0',
+        AGI_OWNED_PROJECT: project,
+        AGI_OWNED_ORIGIN: origin,
+      },
+      stdio: ['ignore', 'inherit', 'inherit'],
     },
-    timeout: 30000,
+  );
+  let browser;
+  let spawnError;
+  child.on('error', (error) => {
+    spawnError = error;
   });
+  const close = async () => {
+    if (child.pid && child.exitCode === null && child.signalCode === null) {
+      await new Promise((resolve) => {
+        const forceQuit = setTimeout(() => child.kill('SIGKILL'), 5000);
+        child.once('exit', () => {
+          clearTimeout(forceQuit);
+          resolve();
+        });
+        child.kill('SIGTERM');
+      });
+    }
+    await browser?.close().catch(() => undefined);
+  };
+  const deadline = Date.now() + 30_000;
+  const waitFor = async (read, label) => {
+    while (Date.now() < deadline) {
+      if (spawnError) throw spawnError;
+      if (child.exitCode !== null || child.signalCode !== null) {
+        throw new Error('The owned Electron application exited before its renderer started.');
+      }
+      const result = await read();
+      if (result) return result;
+      await new Promise((resolve) => setTimeout(resolve, 150));
+    }
+    throw new Error(`Timed out waiting for ${label}.`);
+  };
+  try {
+    const endpoint = `http://127.0.0.1:${port}`;
+    await waitFor(
+      () =>
+        globalThis
+          .fetch(`${endpoint}/json/version`)
+          .then((response) => response.ok)
+          .catch(() => false),
+      'the owned Electron debugging endpoint',
+    );
+    browser = await chromium.connectOverCDP(endpoint, { timeout: 5000 });
+    return {
+      close,
+      firstWindow: () =>
+        waitFor(
+          () =>
+            browser
+              .contexts()[0]
+              ?.pages()
+              .find((page) => page.url() === `${origin}/chat`),
+          'the owned Code window',
+        ),
+    };
+  } catch (error) {
+    await close();
+    throw error;
+  }
 }
 (async () => {
+  if (!fs.existsSync(agi)) {
+    throw new Error(`The AGI CLI was not found at ${agi}. Build it or set AGI_ACCEPTANCE_CLI.`);
+  }
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const origin = 'http://127.0.0.1:' + server.address().port;
   fs.writeFileSync(
     path.join(home, 'config.toml'),
     `[default]\nmodel="owned-fixture-model"\nprovider="${browserOnly ? 'owned-fixture' : 'lmstudio'}"\nstream=true\n[providers.${browserOnly ? 'owned-fixture' : 'lmstudio'}]\n${browserOnly ? 'api_key_env="AGI_OWNED_FIXTURE_KEY"\n' : ''}base_url="${origin}/v1"\n[telemetry]\nproduct_analytics=false\n[updates]\ncheck_on_startup=false\n`,
   );
-  execFileSync(agi, ['init'], {
-    cwd: project,
-    env: { ...safeEnvironment(), AGIWORKFORCE_HOME: home },
-    stdio: 'pipe',
-  });
+  if (!nestedWorkspace) {
+    execFileSync(agi, ['init'], {
+      cwd: project,
+      env: { ...safeEnvironment(), AGIWORKFORCE_HOME: home, AGIWORKFORCE_NO_KEYRING: '1' },
+      stdio: 'pipe',
+    });
+  }
+  if (codeUi) {
+    prepareCodeUiProject(project, safeEnvironment(), repository);
+  }
+  const cli = nestedWorkspace ? prepareScopedCli(dir, agi, project) : agi;
   fs.writeFileSync(
     path.join(profile, 'settings.json'),
     JSON.stringify({
-      cliPath: packaged ? '' : agi,
+      cliPath: packaged ? '' : cli,
       showInMenuBar: false,
       launchAtLogin: false,
       quickAskShortcut: '',
@@ -377,9 +550,13 @@ bootstrapOwnedNative(require('electron'), process.env, globalThis, require);
     app = await launch(origin);
     let page = await app.firstWindow();
     page.on('pageerror', (e) => errors.push(e.message));
-    await page.waitForFunction(() => globalThis.window.agiHost && globalThis.window.__state, {
-      timeout: 30000,
-    });
+    await page.waitForFunction(
+      (codeUi) => globalThis.window.agiHost && (codeUi || globalThis.window.__state),
+      codeUi,
+      {
+        timeout: 30000,
+      },
+    );
     const invoke = (command, args = {}) =>
       page.evaluate(
         async ({ command, args }) => {
@@ -389,6 +566,43 @@ bootstrapOwnedNative(require('electron'), process.env, globalThis, require);
         },
         { command, args },
       );
+    if (codeUi) {
+      const settings = fs
+        .readdirSync(profile, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => path.join(profile, entry.name, 'settings.json'))
+        .find((candidate) => fs.existsSync(candidate));
+      if (!settings) throw new Error('The owned Electron settings were not found.');
+      for (const preference of ['light', 'system']) {
+        await page.evaluate((selection) => {
+          globalThis.document.documentElement.setAttribute('data-theme', 'light');
+          globalThis.document.documentElement.setAttribute('data-theme-preference', selection);
+        }, preference);
+        const deadline = Date.now() + 5000;
+        while (JSON.parse(fs.readFileSync(settings, 'utf8')).appearance !== preference) {
+          if (Date.now() >= deadline) {
+            throw new Error(`The owned Electron app did not save the ${preference} theme.`);
+          }
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+      }
+      receipt.codeUi = await exerciseCodeUi({
+        page,
+        origin,
+        project,
+        repository,
+        cliHome: home,
+        invoke,
+        modelCalls: () => calls.length,
+        reportDir,
+      });
+      receipt.codeUi.systemThemePreferencePreserved = true;
+      if (errors.length) throw new Error(`Code renderer errors: ${errors.join(', ')}`);
+      fs.writeFileSync(path.join(reportDir, 'code-ui-live.json'), JSON.stringify(receipt, null, 2));
+      console.log(JSON.stringify(receipt.codeUi, null, 2));
+      completed = true;
+      return;
+    }
     if (packaged && process.argv.includes('--operator-ready')) {
       console.log('PACKAGED_NATIVE_OPERATOR_READY: focus the owned app, then send a newline.');
       await new Promise((resolve) => {
@@ -611,6 +825,7 @@ bootstrapOwnedNative(require('electron'), process.env, globalThis, require);
   } finally {
     if (app) await app.close();
     server.close();
+    server.closeAllConnections();
     console.log('Acceptance reports:', reportDir);
     if (completed) {
       fs.rmSync(owned, { recursive: true, force: true });
@@ -621,5 +836,6 @@ bootstrapOwnedNative(require('electron'), process.env, globalThis, require);
 })().catch((e) => {
   console.error(e);
   server.close();
+  server.closeAllConnections();
   process.exitCode = 1;
 });

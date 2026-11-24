@@ -100,6 +100,35 @@ impl AgentSession {
         self.checkpoint_log.summaries(&self.messages)
     }
 
+    pub(crate) fn forked_at_checkpoint(
+        &self,
+        index: usize,
+        source_path: std::path::PathBuf,
+    ) -> anyhow::Result<crate::runtime::session::ManagedSession> {
+        let checkpoint = self
+            .checkpoint_log
+            .checkpoints()
+            .get(index)
+            .ok_or_else(|| anyhow::anyhow!("there is no checkpoint at that point"))?;
+        anyhow::ensure!(
+            checkpoints::prompt_position_matches(&self.messages, checkpoint),
+            "The conversation before that prompt is no longer available to fork"
+        );
+        let source = self
+            .managed_session
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("This thread has no persisted session to fork"))?;
+        let mut fork = crate::runtime::session::ManagedSession::forked_from(
+            source,
+            uuid::Uuid::new_v4().to_string(),
+            chrono::Utc::now(),
+            Some(source_path),
+        );
+        fork.messages = self.messages[..checkpoint.message_count].to_vec();
+        fork.context_truncated_to(checkpoint.message_count);
+        Ok(fork)
+    }
+
     pub fn rewind_to(&mut self, index: usize, mode: RewindMode) -> anyhow::Result<RewindOutcome> {
         let Some(checkpoint) = self.checkpoint_log.checkpoints().get(index) else {
             anyhow::bail!("there is no checkpoint at that point");

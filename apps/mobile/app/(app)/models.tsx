@@ -32,7 +32,7 @@ import {
 import type { ModelDef } from '@/src/features/model-picker/service';
 import { useGoBack } from '@/src/shared/hooks/useGoBack';
 
-function installLabel(status: ModelInstallJob['status']): string {
+function installLabel(status: ModelInstallJob['status'], systemModel: boolean): string {
   switch (status) {
     case 'ready':
       return 'Ready';
@@ -41,7 +41,7 @@ function installLabel(status: ModelInstallJob['status']): string {
     case 'failed':
       return 'Retry download';
     case 'unavailable':
-      return 'Package pending';
+      return systemModel ? 'Unavailable on this device' : 'Package pending';
     case 'locked':
       return 'Locked';
     case 'download_required':
@@ -65,6 +65,7 @@ export default function ModelsScreen() {
   const installJobs = useModelInstallStore((s) => s.jobs);
   const installedModelIds = useModelInstallStore((s) => s.installedModelIds);
   const readySystemModelIds = useModelInstallStore((s) => s.readySystemModelIds);
+  const systemModelStates = useModelInstallStore((s) => s.systemModelStates);
   const hydrateInstalledModels = useModelInstallStore((s) => s.hydrateInstalledModels);
   const statusForModel = useModelInstallStore((s) => s.statusForModel);
 
@@ -97,16 +98,21 @@ export default function ModelsScreen() {
     cloudUnlocked,
     subscriptionTier,
   );
-  const statusLabelFor = useCallback(
-    (model: (typeof LOCAL_MODEL_LIST)[number]) => {
+  const localStatusFor = useCallback(
+    (model: ModelDef): ModelInstallJob['status'] => {
+      if (systemModelStates[model.id] === 'failed') return 'unavailable';
       const job = installJobs[model.id];
-      if (job) return installLabel(job.status);
+      if (job) return job.status;
       if (installedModelIds.includes(model.id) || readySystemModelIds.includes(model.id)) {
-        return 'Ready';
+        return 'ready';
       }
-      return installLabel(statusForModel(model).status);
+      return statusForModel(model).status;
     },
-    [installJobs, installedModelIds, readySystemModelIds, statusForModel],
+    [installJobs, installedModelIds, readySystemModelIds, statusForModel, systemModelStates],
+  );
+  const statusLabelFor = useCallback(
+    (model: ModelDef) => installLabel(localStatusFor(model), (model.fileSizeBytes ?? 0) <= 0),
+    [localStatusFor],
   );
   const selectedDetail =
     selectedAutoMode?.description ??
@@ -126,16 +132,23 @@ export default function ModelsScreen() {
     [statusLabelFor],
   );
 
+  const canSelectModel = useCallback(
+    (model: ModelDef) =>
+      isSelectableModelIdForAccess(model.id, cloudUnlocked, subscriptionTier) &&
+      (model.surface !== 'local' || localStatusFor(model) === 'ready'),
+    [cloudUnlocked, localStatusFor, subscriptionTier],
+  );
+
   const selectModel = useCallback(
     (model: ModelDef) => {
-      if (!isSelectableModelIdForAccess(model.id, cloudUnlocked, subscriptionTier)) {
+      if (!canSelectModel(model)) {
         openPicker();
         return;
       }
       claimModelSelection();
       setModel(model.id);
     },
-    [cloudUnlocked, openPicker, setModel, subscriptionTier],
+    [canSelectModel, openPicker, setModel],
   );
 
   return (
@@ -182,11 +195,8 @@ export default function ModelsScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Card>
-          <Text
-            className="text-sm uppercase font-semibold mb-3"
-            style={{ color: c.textMuted, letterSpacing: 0 }}
-          >
-            Active Model
+          <Text className="text-sm font-semibold mb-3" style={{ color: c.textMuted }}>
+            Selected model
           </Text>
           <Pressable
             onPress={openPicker}
@@ -222,7 +232,7 @@ export default function ModelsScreen() {
         {favoriteModels.length > 0 && (
           <Card>
             <Text
-              className="text-sm uppercase font-semibold mb-3"
+              className="text-sm font-semibold mb-3"
               style={{ color: c.textMuted, letterSpacing: 0 }}
             >
               Favorites
@@ -238,7 +248,11 @@ export default function ModelsScreen() {
                   })}
                   accessibilityRole="button"
                   accessibilityState={{ selected: m.id === selectedModel }}
-                  accessibilityLabel={`Select ${m.name}`}
+                  accessibilityLabel={
+                    canSelectModel(m)
+                      ? `Select ${m.name}`
+                      : `Browse models. ${m.name}, ${statusForRow(m)}`
+                  }
                 >
                   <Text className="text-[14px]" style={{ color: c.textPrimary }}>
                     {m.name}
@@ -255,7 +269,7 @@ export default function ModelsScreen() {
         {recentModelDefs.length > 0 && (
           <Card>
             <Text
-              className="text-sm uppercase font-semibold mb-3"
+              className="text-sm font-semibold mb-3"
               style={{ color: c.textMuted, letterSpacing: 0 }}
             >
               Recent
@@ -271,7 +285,11 @@ export default function ModelsScreen() {
                   })}
                   accessibilityRole="button"
                   accessibilityState={{ selected: m.id === selectedModel }}
-                  accessibilityLabel={`Select ${m.name}`}
+                  accessibilityLabel={
+                    canSelectModel(m)
+                      ? `Select ${m.name}`
+                      : `Browse models. ${m.name}, ${statusForRow(m)}`
+                  }
                 >
                   <Text className="text-[14px]" style={{ color: c.textPrimary }}>
                     {m.name}

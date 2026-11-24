@@ -34,7 +34,10 @@ function age(updatedAt: string): string | null {
   return Number.isNaN(Date.parse(updatedAt)) ? null : formatRelativeTime(updatedAt);
 }
 
-function describe(entry: CodeListEntry): {
+function describe(
+  entry: CodeListEntry,
+  taskNotSent: boolean,
+): {
   title: string;
   detail: string;
   badge: { label: string; tone: BadgeTone };
@@ -50,8 +53,14 @@ function describe(entry: CodeListEntry): {
       badge: {
         label: archived
           ? CLOUD_CODE_SESSION_STATUS_FILTER_LABELS.archived
-          : CLOUD_CODE_SESSION_STATE_LABELS[session.state],
-        tone: archived ? 'gray' : CLOUD_CODE_STATE_BADGE_COLORS[session.state],
+          : taskNotSent
+            ? 'Task not sent'
+            : CLOUD_CODE_SESSION_STATE_LABELS[session.state],
+        tone: archived
+          ? 'gray'
+          : taskNotSent
+            ? 'red'
+            : CLOUD_CODE_STATE_BADGE_COLORS[session.state],
       },
     };
   }
@@ -59,6 +68,7 @@ function describe(entry: CodeListEntry): {
   return {
     title: session.title,
     detail: [
+      session.pinned === true ? 'Pinned' : null,
       age(session.updatedAt),
       session.origin ? REMOTE_SESSION_ORIGIN_LABELS[session.origin] : null,
       session.folder,
@@ -77,15 +87,17 @@ export function CodeSessionListRow({
   entry,
   computerName,
   computerConnected,
+  taskNotSent = false,
   onOpen,
 }: {
   entry: CodeListEntry;
   computerName: string | null;
   computerConnected: boolean;
+  taskNotSent?: boolean;
   onOpen: (entry: CodeListEntry) => void;
 }) {
   const colors = useThemeColors();
-  const { title, detail, badge } = describe(entry);
+  const { title, detail, badge } = describe(entry, taskNotSent);
   const onComputer = entry.kind === 'computer';
   const location = onComputer ? computerLocationLabel(computerName) : CLOUD_LOCATION_LABEL;
   const LocationIcon = onComputer ? Laptop : Cloud;

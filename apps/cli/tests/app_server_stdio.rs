@@ -5,6 +5,38 @@ use tempfile::tempdir;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
 
+#[test]
+fn init_binds_workspace_trust_to_the_persistent_device_id() {
+    let workspace = tempdir().expect("workspace");
+    let home = tempdir().expect("home");
+    let config = home.path().join(".agiworkforce");
+    let result = std::process::Command::new(env!("CARGO_BIN_EXE_agi"))
+        .arg("init")
+        .current_dir(workspace.path())
+        .env("HOME", home.path())
+        .env("AGIWORKFORCE_HOME", &config)
+        .env("AGIWORKFORCE_NO_KEYRING", "1")
+        .output()
+        .expect("run agi init");
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+
+    let device_id = std::fs::read_to_string(config.join("device-id")).expect("device identity");
+    let registry: Value = serde_json::from_slice(
+        &std::fs::read(config.join("projects.json")).expect("workspace trust registry"),
+    )
+    .expect("read workspace trust registry");
+    let workspace = workspace
+        .path()
+        .canonicalize()
+        .expect("canonical workspace");
+    let decision = &registry[workspace.to_str().expect("workspace path")];
+    assert_eq!(decision["trusted_on"], device_id.trim());
+}
+
 #[tokio::test]
 async fn thread_start_does_not_wait_for_a_stalled_mcp_server() {
     let workspace = tempdir().expect("workspace");

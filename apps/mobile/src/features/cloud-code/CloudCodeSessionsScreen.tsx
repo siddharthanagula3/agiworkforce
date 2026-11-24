@@ -1,11 +1,11 @@
 import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, RefreshControl, ScrollView, SectionList, View } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { ArrowLeft, ArrowUpDown, Check, Code2, Plus, RefreshCw, Search } from 'lucide-react-native';
-import type { CloudCodeSession } from '@agiworkforce/types';
+import { resolveCloudCodeAgentModel, type CloudCodeSession } from '@agiworkforce/types';
 import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
 import { BottomSearchBar } from '@/src/shared/components/BottomSearchBar';
@@ -14,6 +14,8 @@ import {
   FloatingPrimaryAction,
 } from '@/src/shared/components/FloatingPrimaryAction';
 import { useCodePreferences } from '@/src/features/settings/code/store';
+import { useTierStore } from '@/src/features/billing/store';
+import { useModelStore } from '@/src/features/model-picker/store';
 import { useTheme, useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { CloudCodeGate } from './components/CloudCodeGate';
@@ -25,6 +27,8 @@ import { codeSessionHref } from '@/src/features/companion/components/CodeSession
 import { NewCloudCodeSessionSheet } from './components/NewCloudCodeSessionSheet';
 import { useCloudCodeAccess } from './useCloudCodeAccess';
 import { useCloudCodeSessions } from './useCloudCodeSessions';
+import { useCloudCodeRequests } from './cloudCodeRequests';
+import { startBackgroundCloudCodeGoal } from './backgroundCloudCodeGoal';
 import {
   CLOUD_CODE_DEFAULT_SESSION_SORT,
   CLOUD_CODE_DEFAULT_SESSION_VIEW,
@@ -279,10 +283,21 @@ function SessionList({ accountKey, onBack }: { accountKey: string; onBack: () =>
   const [query, setQuery] = useState('');
   const { status, sessions, availability, runtimes, error, refreshing, load } =
     useCloudCodeSessions(cloudCodeViewStatusFilter(view));
+  const { pending: requests, refused } = useCloudCodeRequests();
+  const previousRequests = useRef(requests);
   const computer = useComputerCodeSessions();
   const visibleSessions = useMemo(
-    () => visibleCodeListEntries(sessions, computer.sessions, { view, sort, query }),
-    [sessions, computer.sessions, view, sort, query],
+    () =>
+      visibleCodeListEntries(
+        sessions.map((session) =>
+          requests.has(session.id) && session.state === 'ready' && !session.archivedAt
+            ? { ...session, state: 'running' }
+            : session,
+        ),
+        computer.sessions,
+        { view, sort, query },
+      ),
+    [sessions, requests, computer.sessions, view, sort, query],
   );
   const sections = useMemo(
     () => (grouped ? groupCodeListEntries(visibleSessions) : []),
@@ -295,6 +310,14 @@ function SessionList({ accountKey, onBack }: { accountKey: string; onBack: () =>
   refreshComputerRef.current = computer.refresh;
   const focusedOnce = useRef(false);
   const [focused, setFocused] = useState(false);
+
+  useEffect(() => {
+    const previous = previousRequests.current;
+    previousRequests.current = requests;
+    if (focused && [...previous.keys()].some((sessionId) => !requests.has(sessionId))) {
+      void loadRef.current('background');
+    }
+  }, [focused, requests]);
 
   useFocusEffect(
     useCallback(() => {
@@ -345,6 +368,18 @@ function SessionList({ accountKey, onBack }: { accountKey: string; onBack: () =>
     void load('background');
   }, [load]);
 
+  const handleSendAndStay = useCallback(
+    (session: CloudCodeSession, goal: string) => {
+      const model = resolveCloudCodeAgentModel(
+        useModelStore.getState().selectedModel,
+        useTierStore.getState().tier,
+      );
+      void startBackgroundCloudCodeGoal(session, goal, model);
+      void load('background');
+    },
+    [load],
+  );
+
   const handleStartedOnComputer = useCallback(
     (rootId: string, threadId: string) => {
       setNewSessionOpen(false);
@@ -367,6 +402,7 @@ function SessionList({ accountKey, onBack }: { accountKey: string; onBack: () =>
         entry={item}
         computerName={computer.computerName}
         computerConnected={computer.connected}
+        taskNotSent={item.kind === 'cloud' && refused.has(item.session.id)}
         onOpen={handleOpen}
       />
     ),
@@ -503,6 +539,7 @@ function SessionList({ accountKey, onBack }: { accountKey: string; onBack: () =>
         onClose={() => setNewSessionOpen(false)}
         onCreated={handleCreated}
         onCreatedInBackground={handleCreatedInBackground}
+        onSendAndStay={handleSendAndStay}
         onStartedOnComputer={handleStartedOnComputer}
       />
       {newSessionOpen || !focused ? null : <CodeApprovalNotice accountKey={accountKey} />}
@@ -554,7 +591,11 @@ export function CloudCodeSessionsScreen() {
 
   if (!access.ready) {
     return (
-      <CloudCodeGate signedIn={access.signedIn} onBack={handleBack} onContinue={access.activate} />
+      <CloudCodeGate
+        signedIn={access.signedIn}
+        onBack={access.returnToChat}
+        onContinue={access.activate}
+      />
     );
   }
 

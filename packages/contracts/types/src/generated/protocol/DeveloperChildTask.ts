@@ -6,4 +6,7 @@ export type DeveloperChildTask = {
   parentSessionId: string;
   title: string;
   state: DeveloperChildTaskState;
+  createdAt?: string;
+  updatedAt?: string;
+  transcriptAvailable?: boolean;
 };

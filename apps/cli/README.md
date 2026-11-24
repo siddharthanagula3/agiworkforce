@@ -224,6 +224,14 @@ agi session fork <id> --at-turn 2 --as refactor-alt
 agi --resume refactor-alt
 ```
 
+Pinned sessions appear first in `agi session list` and the interactive
+`/resume` picker. Use the session ID from the list to change its pin.
+
+```bash
+agi session pin <id>
+agi session unpin <id>
+```
+
 `-c` (also `--continue`) picks up the newest session started in this project,
 archived ones left out, in the interactive interface and with `--print` or
 `agi "<prompt>"` alike. `--session-id <id>` starts a new session under that id,

@@ -5,6 +5,7 @@ import { CONTEXT_ATTACHMENT_KINDS, type ContextAttachmentKind } from '../protoco
 import { Config } from '../platform/config';
 import { tPlural } from '../l10n';
 import { MAX_TOTAL_REFERENCE_CHARS } from '../features/chat-participant/promptReferences';
+import { isPrivateDeveloperOutput } from '../features/sidebar-webview/developerOutput';
 import { latestTerminalOutput } from './terminalOutput';
 import { workingTextEditor } from '../platform/lastTextEditor';
 import {
@@ -54,7 +55,13 @@ function activeSelection(
 
 async function shareableSelection(): Promise<ContextAttachment | { withheld: true } | undefined> {
   const editor = vscode.window.activeTextEditor;
-  if (editor === undefined || editor.selection.isEmpty) return undefined;
+  if (
+    editor === undefined ||
+    editor.selection.isEmpty ||
+    isPrivateDeveloperOutput(editor.document.uri)
+  ) {
+    return undefined;
+  }
   const resolved = await resolveContextEditor(editor);
   if (typeof resolved === 'string') return { withheld: true };
   const selection = activeSelection(resolved);
@@ -142,6 +149,8 @@ async function shareableProblems(): Promise<
 > {
   const editor = vscode.window.activeTextEditor;
   if (editor === undefined) return problems(editor);
+  if (isPrivateDeveloperOutput(editor.document.uri))
+    return { name: '', text: '', count: 0, file: '' };
   const resolved = await resolveContextEditor(editor);
   if (typeof resolved === 'string') return { name: '', text: '', count: 0, file: '' };
   return {
@@ -509,11 +518,19 @@ function resolveEachPathOnce(resolve: ContextFileResolver): ContextFileResolver 
 export async function captureEditorContext(
   dismissed: ReadonlySet<string>,
   resolve: ContextFileResolver = resolveContextFile,
+  editor: EditorContextSource | undefined = workingTextEditor(),
 ): Promise<EditorContextSnapshot> {
-  const editor = workingTextEditor();
-  if (editor === undefined || !Config.editorContextAutoAttach()) return EMPTY_EDITOR_CONTEXT;
+  if (
+    editor === undefined ||
+    isPrivateDeveloperOutput(editor.document.uri) ||
+    !Config.editorContextAutoAttach()
+  ) {
+    return EMPTY_EDITOR_CONTEXT;
+  }
   const relative = vscode.workspace.asRelativePath(editor.document.uri);
-  const keepFile = !dismissed.has(editorContextChipId('active-file', relative));
+  const keepFile =
+    Config.editorContextAttachOpenFile() &&
+    !dismissed.has(editorContextChipId('active-file', relative));
   const resolveOnce = resolveEachPathOnce(resolve);
   try {
     const resolved = await resolveContextEditor(editor, resolveOnce);
@@ -537,13 +554,14 @@ export function resolveEditorContext(
   if (context === undefined) return EMPTY_EDITOR_CONTEXT;
 
   const fileId = editorContextChipId('active-file', context.relativePath);
+  const keepFile = Config.editorContextAttachOpenFile() && !dismissed.has(fileId);
   const withheld = settingsWithholdReason(context.filePath);
   if (withheld !== undefined) {
-    return pathOnlyContext(!dismissed.has(fileId), context.relativePath, withheld);
+    return pathOnlyContext(keepFile, context.relativePath, withheld);
   }
 
   const snapshot: EditorContextSnapshot = { chips: [], contextFiles: [], texts: [] };
-  if (!dismissed.has(fileId)) {
+  if (keepFile) {
     snapshot.chips.push({
       id: fileId,
       kind: 'active-file',
@@ -556,7 +574,11 @@ export function resolveEditorContext(
 
   const selection = activeSelection(editor);
   const selectionId = editorContextChipId('selection', context.relativePath);
-  if (selection !== undefined && !dismissed.has(selectionId)) {
+  if (
+    Config.editorContextAttachSelection() &&
+    selection !== undefined &&
+    !dismissed.has(selectionId)
+  ) {
     snapshot.chips.push({
       id: selectionId,
       kind: 'selection',

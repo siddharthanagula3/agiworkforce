@@ -375,7 +375,10 @@ const MEDIA_TYPES_BY_EXTENSION: Readonly<Record<string, string>> = {
  * without this each one guessed, and the same `.xlsx` was three types.
  */
 export function fileMediaTypeForName(fileName: string): string {
-  return MEDIA_TYPES_BY_EXTENSION[fileExtension(fileName)] ?? 'application/octet-stream';
+  const extension = fileExtension(fileName);
+  return Object.prototype.hasOwnProperty.call(MEDIA_TYPES_BY_EXTENSION, extension)
+    ? MEDIA_TYPES_BY_EXTENSION[extension]!
+    : 'application/octet-stream';
 }
 
 export const LOCAL_DEVICE_FILE_ID_PREFIX = 'localfile_';

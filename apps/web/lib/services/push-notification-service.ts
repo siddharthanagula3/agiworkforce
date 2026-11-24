@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 import { enqueueJob } from '@/lib/jobs/job-service';
 import { logger } from '@/lib/logger';
@@ -10,6 +10,8 @@ import { sendWebPushToUser } from './web-push-service';
 import { QuietHoursUnreadableError, heldByQuietHours } from './quiet-hours-service';
 import {
   MobilePushPreferencesSchema,
+  PUSH_ACCOUNT_BINDING_DOMAIN,
+  PUSH_ACCOUNT_BINDING_FIELD,
   isOptInPushEvent,
   mobilePushWantsEvent,
   type MobilePushPreferences,
@@ -163,6 +165,10 @@ async function sendExpoPushToUser(
 
   if (tokens.length === 0) return { sent: 0, invalidated: 0 };
 
+  const binding = createHash('sha256')
+    .update(PUSH_ACCOUNT_BINDING_DOMAIN + userId)
+    .digest('hex');
+
   let sent = 0;
   let transportFailures = 0;
   const invalid: string[] = [];
@@ -179,7 +185,7 @@ async function sendExpoPushToUser(
             to,
             title: message.title,
             body: message.body,
-            ...(message.data ? { data: message.data } : {}),
+            data: { ...message.data, [PUSH_ACCOUNT_BINDING_FIELD]: binding },
             sound: 'default',
           })),
         ),

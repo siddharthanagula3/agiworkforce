@@ -148,7 +148,7 @@ export const BUILT_IN_SLASH_COMMANDS: readonly SlashCommandItem[] = [
   },
   {
     name: '/memory',
-    description: 'Your account memory',
+    description: 'Account memory and repository notes',
     command: 'agi-workforce.memory',
     aliases: ['mem'],
   },

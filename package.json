@@ -84,7 +84,6 @@
       "react-dom": "19.2.6",
       "react-test-renderer": "19.2.6",
       "typescript": "5.9.3",
-      "@wdio/native-utils": "2.5.0",
       "@workflow/world-vercel": "4.7.4",
       "@workflow/world-local": "4.4.0",
       "@hono/node-server": ">=1.19.15",

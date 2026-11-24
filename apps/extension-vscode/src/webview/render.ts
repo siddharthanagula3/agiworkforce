@@ -1,4 +1,7 @@
 import markdownit from 'markdown-it';
+import { markdownItTaskLists } from '@agiworkforce/unified-chat/markdown-it-task-lists';
+import { markdownItMath } from '@agiworkforce/unified-chat/markdown-it-math';
+import { renderMathMarkup } from '@agiworkforce/unified-chat/math-markup';
 import {
   markdownItFenceSource,
   normalizeMarkdownSource,
@@ -16,6 +19,9 @@ const md = markdownit({
   breaks: false,
   typographer: false,
 });
+
+md.use(markdownItMath);
+md.use(markdownItTaskLists);
 
 const DIFF_LANGUAGES = new Set(['diff', 'patch']);
 
@@ -63,6 +69,10 @@ md.renderer.rules.fence = (tokens, index) => {
   return renderCodeBlock(token.content, language);
 };
 
+md.renderer.rules.table_open = () =>
+  '<div class="message-table-scroll" role="region" aria-label="Table" tabindex="0"><table>';
+md.renderer.rules.table_close = () => '</table></div>\n';
+
 md.renderer.rules.code_block = (tokens, index) => {
   const token = tokens[index];
   return token ? renderCodeBlock(token.content) : '';
@@ -90,7 +100,8 @@ export const PURIFY_CONFIG: Config = {
   FORBID_ATTR: ['style', 'formaction', 'srcdoc', 'onload', 'onerror', 'onclick'],
   ALLOWED_URI_REGEXP: /^(?:https?|mailto):/i,
   ALLOW_DATA_ATTR: false,
-  ADD_ATTR: ['target', 'rel'],
+  ADD_ATTR: ['target', 'rel', 'data-math', 'data-task-item'],
+  ADD_URI_SAFE_ATTR: ['data-math', 'data-task-item', 'role'],
 };
 
 export interface AnswerSurfaceActions {
@@ -160,7 +171,7 @@ function linkifyPathReferences(root: DocumentFragment): void {
   }
   for (const textNode of textNodes) {
     const parent = textNode.parentElement;
-    if (parent === null || parent.closest('a') !== null) continue;
+    if (parent === null || parent.closest('a, [data-math]') !== null) continue;
     const references = findPathReferences(textNode.data);
     if (references.length === 0) continue;
     const fragment = document.createDocumentFragment();
@@ -185,6 +196,23 @@ function linkifyPathReferences(root: DocumentFragment): void {
   }
 }
 
+function renderMath(root: DocumentFragment): void {
+  for (const node of root.querySelectorAll<HTMLElement>('[data-math]')) {
+    const tex = node.textContent ?? '';
+    const display = node.dataset['math'] === 'display';
+    const result = renderMathMarkup(tex, display);
+    if (result.ok) {
+      node.innerHTML = DOMPurify.sanitize(result.mathml, {
+        USE_PROFILES: { mathMl: true },
+        FORBID_ATTR: ['href', 'xlink:href', 'style'],
+      });
+    } else {
+      const delimiter = display ? '$$' : '$';
+      node.textContent = delimiter + tex + delimiter;
+    }
+  }
+}
+
 function render(markdown: string): string {
   if (typeof markdown !== 'string') return '';
   const html = md.render(normalizeMarkdownSource(markdown));
@@ -192,6 +220,7 @@ function render(markdown: string): string {
   const template = document.createElement('template');
   template.innerHTML = sanitized;
   linkifyPathReferences(template.content);
+  renderMath(template.content);
   return template.innerHTML;
 }
 

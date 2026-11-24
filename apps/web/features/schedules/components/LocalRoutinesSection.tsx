@@ -32,6 +32,12 @@ import {
   pickWorkspaceRoot,
 } from '@/features/desktop-host';
 import { toUserMessage } from '@/lib/user-error-message';
+import { zonedLocalInputToIso } from '@agiworkforce/utils/scheduling/local-input';
+import { buildCronExpression } from '@agiworkforce/utils/scheduling/schedule-time';
+import { INITIAL_SCHEDULE_DRAFT } from '../lib/schedule-form';
+import { DAYS_OF_WEEK, formatDateTime } from '../types';
+
+type LocalRoutineCadence = LocalRoutineInput['schedule']['type'] | 'daily' | 'weekly' | 'monthly';
 
 async function invoke<T>(command: string, args: Record<string, unknown> = {}): Promise<T> {
   const bridge = getHostBridge();
@@ -53,10 +59,13 @@ export function LocalRoutinesSection() {
   const [prompt, setPrompt] = useState('');
   const [rootId, setRootId] = useState('');
   const [model, setModel] = useState('');
-  const [cadence, setCadence] = useState<'interval' | 'once' | 'cron'>('interval');
+  const [cadence, setCadence] = useState<LocalRoutineCadence>('interval');
   const [minutes, setMinutes] = useState('60');
   const [executeAt, setExecuteAt] = useState('');
   const [cron, setCron] = useState('');
+  const [timeOfDay, setTimeOfDay] = useState(INITIAL_SCHEDULE_DRAFT.timeOfDay);
+  const [daysOfWeek, setDaysOfWeek] = useState<number[]>([]);
+  const [dayOfMonth, setDayOfMonth] = useState(INITIAL_SCHEDULE_DRAFT.dayOfMonth?.toString() ?? '');
   const [timezone, setTimezone] = useState('');
   const [missed, setMissed] = useState<'run_once' | 'skip'>('run_once');
   const [keepAwake, setKeepAwake] = useState(false);
@@ -141,15 +150,24 @@ export function LocalRoutinesSection() {
   }
   async function create() {
     await act(async () => {
+      const timeZone = timezone.trim();
       const schedule: LocalRoutineInput['schedule'] = {
-        type: cadence,
         enabled: true,
-        timezone,
+        timezone: timeZone,
         ...(cadence === 'interval'
-          ? { intervalMs: Number(minutes) * 60_000 }
-          : cadence === 'cron'
-            ? { cron }
-            : { executeAt: new Date(executeAt).toISOString() }),
+          ? { type: 'interval', intervalMs: Number(minutes) * 60_000 }
+          : cadence === 'once'
+            ? { type: 'once', executeAt: zonedLocalInputToIso(executeAt, timeZone) }
+            : {
+                type: 'cron',
+                cron: buildCronExpression({
+                  recurrence: cadence === 'cron' ? 'custom' : cadence,
+                  cronExpression: cron,
+                  timeOfDay,
+                  daysOfWeek,
+                  dayOfMonth: Number(dayOfMonth),
+                }),
+              }),
       };
       const input: LocalRoutineInput = {
         name,
@@ -208,6 +226,7 @@ export function LocalRoutinesSection() {
       <ul className="space-y-3">
         {state?.routines.map((routine) => {
           const latest = routine.runs.at(-1);
+          const timeZone = routine.schedule.timezone ?? 'UTC';
           const active = latest && ['starting', 'running', 'awaiting_input'].includes(latest.state);
           const canResume =
             (routine.schedule.type !== 'once' ||
@@ -215,18 +234,29 @@ export function LocalRoutinesSection() {
             (!routine.schedule.expiresAt || Date.parse(routine.schedule.expiresAt) > Date.now()) &&
             (routine.schedule.maxExecutions === undefined ||
               routine.executionCount < routine.schedule.maxExecutions);
+          const paused = !routine.schedule.enabled && !active && canResume;
+          const runStatus = latest?.state.replaceAll('_', ' ');
           return (
             <li key={routine.id} className="space-y-2 rounded-lg border border-border p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="min-w-0">
                   <h3 className="break-words text-sm font-medium">{routine.name}</h3>
                   <p className="text-xs text-muted-foreground">
-                    {latest?.state.replaceAll('_', ' ') ??
-                      (routine.schedule.enabled ? 'Scheduled' : 'Paused')}
-                    {routine.nextExecutionAt && routine.schedule.enabled
-                      ? ` · Next: ${new Date(routine.nextExecutionAt).toLocaleString()}`
-                      : ''}
+                    {paused
+                      ? 'Paused'
+                      : (runStatus ?? (routine.schedule.enabled ? 'Scheduled' : 'Ended'))}
+                    {routine.nextExecutionAt && routine.schedule.enabled && (
+                      <>
+                        {' · Next: '}
+                        <time dateTime={routine.nextExecutionAt}>
+                          {formatDateTime(routine.nextExecutionAt, timeZone)} ({timeZone})
+                        </time>
+                      </>
+                    )}
                   </p>
+                  {paused && runStatus && (
+                    <p className="text-xs text-muted-foreground">Last run: {runStatus}</p>
+                  )}
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {latest?.threadId && (
@@ -402,6 +432,9 @@ export function LocalRoutinesSection() {
                   >
                     <option value="interval">Every interval</option>
                     <option value="once">Once</option>
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
                     <option value="cron">Cron schedule</option>
                   </select>
                 </div>
@@ -429,7 +462,7 @@ export function LocalRoutinesSection() {
                         required
                       />
                     </>
-                  ) : (
+                  ) : cadence === 'cron' ? (
                     <>
                       <Label htmlFor="local-routine-cron">Cron expression</Label>
                       <Input
@@ -439,9 +472,74 @@ export function LocalRoutinesSection() {
                         required
                       />
                     </>
+                  ) : (
+                    <>
+                      <Label htmlFor="local-routine-time-of-day">Time of day</Label>
+                      <Input
+                        id="local-routine-time-of-day"
+                        type="time"
+                        value={timeOfDay}
+                        onChange={(event) => setTimeOfDay(event.target.value)}
+                        required
+                      />
+                    </>
                   )}
                 </div>
               </div>
+              {cadence === 'weekly' && (
+                <fieldset className="space-y-2">
+                  <legend className="text-sm font-medium">Days of week</legend>
+                  <div className="flex flex-wrap gap-2">
+                    {DAYS_OF_WEEK.map(({ value, label, longLabel }) => {
+                      const selected = daysOfWeek.includes(value);
+                      return (
+                        <Button
+                          key={value}
+                          type="button"
+                          size="sm"
+                          variant={selected ? 'default' : 'outline'}
+                          className="pointer-coarse:min-h-11 pointer-coarse:min-w-11"
+                          aria-label={longLabel}
+                          aria-pressed={selected}
+                          onClick={() =>
+                            setDaysOfWeek((current) =>
+                              current.includes(value)
+                                ? current.filter((day) => day !== value)
+                                : [...current, value],
+                            )
+                          }
+                        >
+                          {label}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                  {daysOfWeek.length === 0 && (
+                    <p className="text-xs text-muted-foreground">Choose at least one day.</p>
+                  )}
+                </fieldset>
+              )}
+              {cadence === 'monthly' && (
+                <div className="space-y-2">
+                  <Label htmlFor="local-routine-day-of-month">Day of month</Label>
+                  <Input
+                    id="local-routine-day-of-month"
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    max={31}
+                    step={1}
+                    value={dayOfMonth}
+                    onChange={(event) => setDayOfMonth(event.target.value)}
+                    required
+                  />
+                  {Number(dayOfMonth) > 28 && (
+                    <p className="text-xs text-muted-foreground">
+                      Runs only in months with this day.
+                    </p>
+                  )}
+                </div>
+              )}
               <div className="space-y-2">
                 <Label htmlFor="local-routine-timezone">Time zone</Label>
                 <Input
@@ -490,7 +588,13 @@ export function LocalRoutinesSection() {
                   />
                 </div>
               ))}
-              <Button type="submit" className="w-full" disabled={busy || !rootId || !model}>
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={
+                  busy || !rootId || !model || (cadence === 'weekly' && daysOfWeek.length === 0)
+                }
+              >
                 {busy ? 'Saving…' : 'Allow and create routine'}
               </Button>
             </fieldset>

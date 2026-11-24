@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { signIn } from './qa-capability-harness';
+import { signInAsDevAccount } from './qa-capability-harness';
 
 /**
  * A phone browser shows less height than the phone has: its own bars take a
@@ -19,7 +19,7 @@ test.describe('Code home on a short phone screen', () => {
     test(`keeps the home content clear of the composer at ${viewport.width}x${viewport.height}`, async ({
       page,
     }) => {
-      await signIn(page);
+      await signInAsDevAccount(page, 'lane-desktop');
       await page.setViewportSize(viewport);
       await page.goto('/code', { waitUntil: 'domcontentloaded' });
       await expect(page.getByTestId('code-home')).toBeVisible();
@@ -30,12 +30,15 @@ test.describe('Code home on a short phone screen', () => {
         const home = document.querySelector('[data-testid="code-home"]')!;
         const notices = document.querySelector('[data-testid="code-notices"]');
         const composer = document.querySelector('[data-testid="code-composer-area"]')!;
+        const input = composer.querySelector('textarea')!;
         return {
           overflowY: getComputedStyle(home).overflowY,
           homeBottom: Math.round(home.getBoundingClientRect().bottom),
           nextTop: Math.round((notices ?? composer).getBoundingClientRect().top),
           composerBottom: Math.round(composer.getBoundingClientRect().bottom),
           viewportHeight: window.innerHeight,
+          inputHeight: input.clientHeight,
+          placeholderHeight: input.scrollHeight,
         };
       });
       const context = JSON.stringify(measured);
@@ -43,6 +46,7 @@ test.describe('Code home on a short phone screen', () => {
       expect(['auto', 'scroll'], context).toContain(measured.overflowY);
       expect(measured.homeBottom, context).toBeLessThanOrEqual(measured.nextTop + 1);
       expect(measured.composerBottom, context).toBeLessThanOrEqual(measured.viewportHeight);
+      expect(measured.inputHeight, context).toBeGreaterThanOrEqual(measured.placeholderHeight);
     });
   }
 });

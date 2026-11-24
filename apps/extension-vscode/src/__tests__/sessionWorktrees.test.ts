@@ -98,4 +98,30 @@ describe('Session Worktrees workspace binding', () => {
       expect.stringContaining('Open a trusted workspace'),
     );
   });
+
+  it('creates a named worktree in the repository from the picker', async () => {
+    const create = vi.fn(async () => REVIEW);
+    const pool = {
+      forWorkspace: (root: string) => ({
+        ...client(root, [], async () => []),
+        createWorktree: root === '/repo-a' ? create : vi.fn(),
+      }),
+    } as unknown as LocalRuntimePool;
+    vi.mocked(vscode.window.showQuickPick).mockImplementationOnce((async (
+      items: readonly { create?: string }[],
+    ) => items.find((item) => item.create === 'named')) as never);
+    vi.mocked(vscode.window.showInputBox).mockImplementationOnce(async () => {
+      (vscode.window as { activeTextEditor: unknown }).activeTextEditor = editorIn(FOLDER_B);
+      return ' review ';
+    });
+
+    await manageSessionWorktrees(new CliCapabilityAdapter(pool));
+
+    expect(create).toHaveBeenCalledWith('review');
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+      'vscode.openFolder',
+      vscode.Uri.file(REVIEW.path),
+      { forceNewWindow: true },
+    );
+  });
 });

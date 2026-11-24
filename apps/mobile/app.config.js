@@ -6,7 +6,13 @@ const easProjectId = '38f0941c-88a7-468a-9750-fcd8b357ff4c';
 const iosShareAppGroupIdentifier = 'group.com.agiworkforce.app.share';
 const fs = require('fs');
 const path = require('path');
-const { AndroidConfig, withInfoPlist, withStringsXml } = require('expo/config-plugins');
+const {
+  AndroidConfig,
+  withAndroidManifest,
+  withGradleProperties,
+  withInfoPlist,
+  withStringsXml,
+} = require('expo/config-plugins');
 const { nativePurchases } = require('./src/features/billing/storePurchases.json');
 
 function v1Feature(name) {
@@ -91,6 +97,34 @@ function withAndroidDisplayName(config) {
   });
 }
 
+function withAndroidFontScale(config) {
+  return withAndroidManifest(config, (c) => {
+    const { $: attributes } = AndroidConfig.Manifest.getMainActivityOrThrow(c.modResults);
+    const changes = new Set(attributes['android:configChanges']?.split('|').filter(Boolean));
+    changes.add('fontScale');
+    attributes['android:configChanges'] = [...changes].join('|');
+    return c;
+  });
+}
+
+function withAndroidReleaseBuildMemory(config) {
+  return withGradleProperties(config, (c) => {
+    const properties = c.modResults;
+    const jvmArgs =
+      properties.find((prop) => prop.type === 'property' && prop.key === 'org.gradle.jvmargs')
+        ?.value ?? '';
+    const retainedArgs = jvmArgs.replace(/(?:^|\s)(?:-Xmx|-XX:MaxMetaspaceSize=)\S+/gu, '').trim();
+    const { updateAndroidBuildProperty } = AndroidConfig.BuildProperties;
+    updateAndroidBuildProperty(
+      properties,
+      'org.gradle.jvmargs',
+      ['-Xmx5g', '-XX:MaxMetaspaceSize=1024m', retainedArgs].filter(Boolean).join(' '),
+    );
+    updateAndroidBuildProperty(properties, 'org.gradle.workers.max', '3');
+    return c;
+  });
+}
+
 const shouldUseProductionEntitlements =
   envIsTruthy('EXPO_ENABLE_PRODUCTION_IOS_ENTITLEMENTS') ||
   (appEnv !== 'development' && !envIsTruthy('EXPO_DISABLE_PRODUCTION_IOS_ENTITLEMENTS'));
@@ -100,6 +134,7 @@ const associatedDomains = shouldUseProductionEntitlements
   : [];
 
 const conditionalPlugins = [
+  ...(appEnv === 'production' || appEnv === 'preview' ? [withAndroidReleaseBuildMemory] : []),
   ...(shouldUseProductionEntitlements
     ? [
         'expo-apple-authentication',
@@ -338,6 +373,7 @@ const config = {
     ],
     backgroundTasksEnabled ? 'expo-background-task' : withoutBackgroundTaskModes,
     withAndroidDisplayName,
+    withAndroidFontScale,
     'expo-image',
     hostedOrigin ? ['expo-router', { origin: hostedOrigin }] : 'expo-router',
     'expo-secure-store',

@@ -41,6 +41,7 @@ import { useSettingsModal } from '@features/settings/components/SettingsModalPro
 import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { SendButton } from './SendButton';
 import { ComposerInput } from './ComposerInput';
+import { composerFocusEvents } from '@agiworkforce/unified-chat/composer-focus';
 import { ImageMaskDialog, type ImageMaskResult } from './ImageMaskDialog';
 import { ComposerFooter } from './ComposerFooter';
 import { PHONE_TOUCH_HIT_AREA_CLASS, WORK_MODE_SEGMENT_HIT_AREA_CLASS } from './touchHitArea';
@@ -64,7 +65,11 @@ import { useReadonlyIdentityLifetime } from '@/lib/identity/useSessionSnapshot';
 import { getProviderModeForModel } from '@shared/lib/provider-mode-for-model';
 import { getConversationProviderMode } from '@features/chat/lib/localByokHandoff';
 import { conversationHoldsLocalTurns } from '@features/chat/lib/local-origin';
-import { dictationSwitchedOffReason, useDictation } from '@features/chat/hooks/use-dictation';
+import {
+  DICTATION_DISABLED_IN_SETTINGS,
+  dictationSwitchedOffReason,
+  useDictation,
+} from '@features/chat/hooks/use-dictation';
 import {
   DesktopRuntimeError,
   LOCAL_ATTACHMENT_REFUSAL,
@@ -998,7 +1003,6 @@ const ChatComposerNewComponent = ({
   const [mentionQuery, setMentionQuery] = useState('');
   const [mentionStartIndex, setMentionStartIndex] = useState(-1);
   const [mentionIndex, setMentionIndex] = useState(0);
-  const [isFocused, setIsFocused] = useState(false);
   const { skills: availableSkills, loading: skillsLoading, error: skillsError } = useSkillsList();
   const [selectedMcpContext, setSelectedMcpContext] = useState<McpContextSelection | null>(null);
   const [showSlashMenu, setShowSlashMenu] = useState(false);
@@ -5510,19 +5514,16 @@ const ChatComposerNewComponent = ({
         </div>
       )}
 
-      {/* Main Input Container. One card shape and no permanent shadow at every
-          state (rest, empty, focus): a shadow only ever appears on focus. */}
       <div
         id="chat-composer"
         ref={composerCardRef}
         onFocusCapture={() => void preloadTranscriptMarkdown()}
-        onPointerDown={() => void preloadTranscriptMarkdown()}
-        className={cn(
-          '@container relative z-[var(--z-control)] rounded-2xl border bg-[var(--chat-input-bg)] transition-all duration-quick',
-          isFocused
-            ? 'border-[var(--chat-border-strong)] shadow-e2 ring-2 ring-[var(--chat-focus-ring)]'
-            : 'border-[var(--chat-border-strong)] shadow-none',
-        )}
+        onPointerDownCapture={(event) => {
+          composerFocusEvents.onPointerDownCapture(event);
+          void preloadTranscriptMarkdown();
+        }}
+        onBlurCapture={composerFocusEvents.onBlurCapture}
+        className="chat-composer-focus @container relative z-[var(--z-control)] rounded-2xl border border-[var(--chat-border-strong)] bg-[var(--chat-input-bg)]"
       >
         {/* Slash Command Menu */}
         {showSlashMenu && (
@@ -5872,7 +5873,6 @@ const ChatComposerNewComponent = ({
                 onDropFiles={handleEditorDropFiles}
                 onSubmit={handleSubmit}
                 onAlternateSubmit={handleSubmitInverted}
-                onFocusChange={setIsFocused}
                 existingFileNames={attachmentNames}
                 mention={composerMention}
                 isSlashMenuActive={() => showSlashMenu}
@@ -6945,7 +6945,7 @@ const ChatComposerNewComponent = ({
                   disabled={composerDisabled || !dictationEnabled || dictationSwitchedOff !== null}
                   disabledReason={
                     dictationSwitchedOff ??
-                    (!dictationEnabled ? 'Dictation is off in Voice settings' : undefined)
+                    (!dictationEnabled ? DICTATION_DISABLED_IN_SETTINGS : undefined)
                   }
                 />
               </div>

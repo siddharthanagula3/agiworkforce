@@ -3,7 +3,7 @@
 import { useSession } from '@/lib/identity/client';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
-import { Button, ButtonRow, Eyebrow, Prose, Stack } from '@/features/marketing/components/system';
+import { Button, ButtonRow, Eyebrow, Stack } from '@/features/marketing/components/system';
 import {
   CREATE_ACCOUNT_LABEL,
   webEntryHref,
@@ -35,7 +35,7 @@ export default function ChromeExtensionAuthCompletePage() {
                 {!isLoaded
                   ? 'Checking your account.'
                   : isSignedIn
-                    ? 'Chrome is connected.'
+                    ? 'Signed in to AGI Cloud.'
                     : 'Sign in to continue.'}
               </h1>
             </div>
@@ -44,14 +44,9 @@ export default function ChromeExtensionAuthCompletePage() {
                 Checking your Cloud session…
               </p>
             ) : isSignedIn ? (
-              <Stack gap="tight">
-                <p className="agi-ds-prose" role="status">
-                  Your Cloud session is ready for the browser extension.
-                </p>
-                <Prose size="sm">
-                  Return to Chrome. The AGI side panel picks up your account when you go back to it.
-                </Prose>
-              </Stack>
+              <p className="agi-ds-prose" role="status">
+                Return to the AGI side panel in Chrome to continue with your account.
+              </p>
             ) : (
               <Stack gap="tight">
                 <p className="agi-ds-prose" role="alert">

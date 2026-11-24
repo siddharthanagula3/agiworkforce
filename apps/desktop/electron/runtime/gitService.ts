@@ -578,21 +578,45 @@ export async function readWorkingTreeChanges(
   const root = await findRepositoryRoot(directory);
   if (!root) return null;
   await assertHostGitAllowed(root);
-  const status = await git(root, STATUS_ARGS);
-  const diff =
-    (await gitOrNull(root, [
-      'diff',
-      '--no-color',
-      '--no-ext-diff',
-      '--no-textconv',
-      IGNORE_SUBMODULES,
-      'HEAD',
-    ])) ?? '';
+  const folderPrefix = await git(directory, ['rev-parse', '--show-prefix']);
+  const scopeArgs = folderPrefix ? ['--', folderPrefix] : [];
+  const [status, branch, revision] = await Promise.all([
+    git(root, ['--literal-pathspecs', ...STATUS_ARGS, ...scopeArgs]),
+    gitOrNull(root, ['symbolic-ref', '--short', '--quiet', 'HEAD']),
+    gitOrNull(root, ['rev-parse', '--verify', 'HEAD']),
+  ]);
+  let diff = '';
+  let diffTruncated = false;
+  let diffUnavailable = false;
+  if (revision !== null) {
+    try {
+      diff = await git(root, [
+        '--literal-pathspecs',
+        'diff',
+        '--no-color',
+        '--no-ext-diff',
+        '--no-textconv',
+        IGNORE_SUBMODULES,
+        revision,
+        ...scopeArgs,
+      ]);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') {
+        diffTruncated = true;
+        const stdout = (error as { stdout?: unknown }).stdout;
+        if (typeof stdout === 'string') diff = stdout;
+      } else {
+        diffUnavailable = true;
+      }
+    }
+  }
   return {
     files: parseWorkingTreeStatus(status),
     diff: diff.slice(0, WORKING_TREE_DIFF_LIMIT),
-    diffTruncated: diff.length > WORKING_TREE_DIFF_LIMIT,
-    folderPrefix: (await gitOrNull(directory, ['rev-parse', '--show-prefix'])) ?? '',
+    diffTruncated: diffTruncated || diff.length > WORKING_TREE_DIFF_LIMIT,
+    folderPrefix,
+    comparison: { branch, revision },
+    ...(diffUnavailable ? { diffUnavailable: true } : {}),
   };
 }
 
@@ -604,14 +628,21 @@ export async function discardWorkingTreeChanges(
   if (!root)
     throw new Error('This folder is not a git repository, so there is nothing to discard.');
   await assertHostGitAllowed(root);
+  const folderPrefix = await git(directory, ['rev-parse', '--show-prefix']);
+  const folder = path.resolve(root, folderPrefix);
+  const inFolder = (file: string): boolean => isInside(folder, path.resolve(root, file));
   const changed = new Map(
     parseWorkingTreeStatus(await git(root, STATUS_ARGS)).map((change) => [change.path, change]),
   );
   const chosen = paths.map((path) => {
+    if (!inFolder(path)) throw new Error('The selected file is outside the approved folder.');
     const change = changed.get(path);
     if (!change) throw new Error(`${path} has no changes to discard.`);
     if (change.state === 'conflicted') {
       throw new Error(`${path} has a merge conflict. Resolve it before discarding it.`);
+    }
+    if (change.originalPath && !inFolder(change.originalPath)) {
+      throw new Error('This rename also affects a file outside the approved folder.');
     }
     return change;
   });

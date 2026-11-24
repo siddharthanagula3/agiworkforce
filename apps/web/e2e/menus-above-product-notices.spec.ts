@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
-import { signIn } from './qa-capability-harness';
+import { signIn, signInAsDevAccount } from './qa-capability-harness';
 
 const INCIDENT_MESSAGE =
   'AGI is having a problem right now, and some requests may fail. We are working on it.';
@@ -215,6 +215,37 @@ async function openMenu(page: Page, menu: MenuCase): Promise<void> {
   }
   await page.waitForTimeout(SETTLE_MS / 2);
 }
+
+test.describe('the product notice at narrow widths', () => {
+  test.use({ hasTouch: true });
+
+  test('gives the message room and keeps Status and Dismiss usable', async ({ page }) => {
+    await page.route('**/api/status/notices', (route) => route.fulfill({ json: INCIDENT_FEED }));
+    await signInAsDevAccount(page, 'lane-desktop');
+    await page.setViewportSize({ width: 320, height: 750 });
+    await page.goto('/chat');
+
+    const notice = page.getByRole('alert').filter({ hasText: INCIDENT_MESSAGE });
+    const message = notice.getByText(INCIDENT_MESSAGE, { exact: true });
+    const status = notice.getByRole('link', { name: 'Status' });
+    const dismiss = notice.getByRole('button', { name: 'Dismiss this notice' });
+    await expect(notice).toBeVisible();
+    await expect(status).toHaveAttribute('href', '/status');
+    const cardBox = (await notice.boundingBox())!;
+    const messageBox = (await message.boundingBox())!;
+    const statusBox = (await status.boundingBox())!;
+    const dismissBox = (await dismiss.boundingBox())!;
+    expect(messageBox.width).toBeGreaterThan(cardBox.width * 0.7);
+    expect(statusBox.y).toBeGreaterThanOrEqual(messageBox.y + messageBox.height);
+    expect(statusBox.height).toBeGreaterThanOrEqual(44);
+    expect(dismissBox.height).toBeGreaterThanOrEqual(44);
+    expect(dismissBox.width).toBeGreaterThanOrEqual(44);
+    expect(dismissBox.x + dismissBox.width).toBeLessThanOrEqual(cardBox.x + cardBox.width);
+
+    await dismiss.tap();
+    await expect(notice).toHaveCount(0);
+  });
+});
 
 test.describe('in-page menus stay above the product notice band', () => {
   test.setTimeout(20 * 60_000);

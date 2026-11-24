@@ -433,6 +433,9 @@ export interface ContextHandoffResponse {
 }
 
 export interface RunPageAction {
+  targetFingerprint?: string;
+  recordedOrigin?: string;
+  recordedPage?: string;
   id: string;
   type: string;
   selector?: string | null;
@@ -441,6 +444,7 @@ export interface RunPageAction {
 }
 
 export interface RunPageActionsMessage extends BaseMessage {
+  expectedPage?: string;
   type: 'RUN_PAGE_ACTIONS';
   expectedOrigin?: string;
   taskId: string;
@@ -729,6 +733,8 @@ export interface GetAccessibilityTreeResponse {
 }
 
 export interface StartRecordingMessage extends BaseMessage {
+  followPages?: boolean;
+  captureValues?: boolean;
   type: 'START_RECORDING';
   expectedOrigin?: string;
 }
@@ -749,6 +755,7 @@ export interface SetRecordingValueCaptureMessage extends BaseMessage {
 export interface RecordingActionMessage extends BaseMessage {
   type: 'RECORDING_ACTION';
   action: unknown;
+  targetDescription?: string;
 }
 
 export interface RecordingResponse {
@@ -977,16 +984,21 @@ export interface DeleteMemoryMessage extends BaseMessage {
 
 export interface ComputerUseUserInputMessage extends BaseMessage {
   type: 'AGI_CU_USER_INPUT';
+  command?: 'stop' | 'takeover';
+  runId?: string;
 }
 
 export interface ComputerUseShowActionMessage extends BaseMessage {
   type: 'AGI_CU_SHOW_ACTION';
+  runId?: string;
   x: number;
   y: number;
 }
 
 export interface ComputerUseWatchInputMessage extends BaseMessage {
   type: 'AGI_CU_WATCH_INPUT';
+  runId?: string;
+  paused?: boolean;
   watching: boolean;
 }
 
@@ -1072,11 +1084,17 @@ export interface BrowserContextTabReference {
   readonly documentId?: string;
 }
 
+export interface EditableSelectionFrame {
+  id: number;
+  url: string;
+}
+
 export interface CaptureEditableSelectionMessage extends Omit<BaseMessage, 'type'> {
   type: 'CAPTURE_EDITABLE_SELECTION';
   pageUrl: string;
   selectedText: string;
   owner: ManagedCloudOwner;
+  topUrl?: string;
 }
 
 export interface ApplyEditableSelectionMessage extends Omit<BaseMessage, 'type'> {
@@ -1087,6 +1105,8 @@ export interface ApplyEditableSelectionMessage extends Omit<BaseMessage, 'type'>
   selectionId: string;
   text: string;
   owner: ManagedCloudOwner;
+  frame?: EditableSelectionFrame;
+  topUrl?: string;
 }
 
 export interface UndoEditableSelectionMessage extends Omit<BaseMessage, 'type'> {
@@ -1096,6 +1116,8 @@ export interface UndoEditableSelectionMessage extends Omit<BaseMessage, 'type'> 
   documentId: string;
   selectionId: string;
   owner: ManagedCloudOwner;
+  frame?: EditableSelectionFrame;
+  topUrl?: string;
 }
 
 export interface EditableSelectionResponse {

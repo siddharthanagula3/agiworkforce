@@ -114,6 +114,7 @@ describe('ThemeProvider DOM integration', () => {
     );
 
     expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+    expect(document.documentElement.getAttribute('data-theme-preference')).toBe('system');
   });
 
   it('mirrors data-theme from the resolved next-themes theme (light)', () => {
@@ -126,6 +127,7 @@ describe('ThemeProvider DOM integration', () => {
     );
 
     expect(document.documentElement.getAttribute('data-theme')).toBe('light');
+    expect(document.documentElement.getAttribute('data-theme-preference')).toBe('light');
   });
 });
 

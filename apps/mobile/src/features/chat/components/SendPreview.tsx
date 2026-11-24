@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View } from 'react-native';
+import { ScrollView, useWindowDimensions, View } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { ChevronDown, ChevronUp, Cloud, HardDrive, Lock } from 'lucide-react-native';
 import type { ReactElement } from 'react';
@@ -7,6 +7,7 @@ import type { SendPreviewPresentation } from '@agiworkforce/types';
 import { Text } from '@/components/ui/Text';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { useLargeTextRows } from '@/src/shared/hooks/useLargeTextRows';
 import { HEADER_TEXT_SCALE_LIMIT } from './WorkModeSwitch';
 
 export interface SendPreviewProps {
@@ -73,20 +74,25 @@ function DetailRow({
   term,
   definition,
   colors,
+  stacked,
 }: {
   term: string;
   definition: string;
   colors: ColorScheme;
+  stacked: boolean;
 }) {
   return (
-    <View style={{ flexDirection: 'row', gap: 6 }}>
-      <Text style={{ fontSize: typeScale.caption, color: colors.textMuted, minWidth: 90 }}>
+    <View style={{ flexDirection: stacked ? 'column' : 'row', gap: stacked ? 2 : 6 }}>
+      <Text
+        style={{
+          fontSize: typeScale.caption,
+          color: colors.textMuted,
+          ...(stacked ? {} : { minWidth: 90 }),
+        }}
+      >
         {term}
       </Text>
-      <Text
-        style={{ flex: 1, fontSize: typeScale.caption, color: colors.textSecondary }}
-        numberOfLines={1}
-      >
+      <Text style={{ flexShrink: 1, fontSize: typeScale.caption, color: colors.textSecondary }}>
         {definition}
       </Text>
     </View>
@@ -100,35 +106,107 @@ function DetailBlock({
   presentation: SendPreviewPresentation;
   colors: ColorScheme;
 }) {
+  const stacked = useLargeTextRows();
+  const details = [
+    ['Message', presentation.bodyCharLabel],
+    ['Attachments', presentation.attachmentLabel],
+    ['System prompt', presentation.systemPromptLabel],
+    ['Context budget', presentation.contextLabel],
+    ['Tools', presentation.toolsLabel],
+    ['Source session', presentation.sourceSessionLabel],
+  ] as const;
   return (
-    <View testID="send-preview-details" style={{ gap: 3, paddingTop: 2 }}>
-      {presentation.bodyCharLabel ? (
-        <DetailRow term="Message" definition={presentation.bodyCharLabel} colors={colors} />
-      ) : null}
-      {presentation.attachmentLabel ? (
-        <DetailRow term="Attachments" definition={presentation.attachmentLabel} colors={colors} />
-      ) : null}
-      {presentation.systemPromptLabel ? (
-        <DetailRow
-          term="System prompt"
-          definition={presentation.systemPromptLabel}
-          colors={colors}
-        />
-      ) : null}
-      {presentation.contextLabel ? (
-        <DetailRow term="Context budget" definition={presentation.contextLabel} colors={colors} />
-      ) : null}
-      {presentation.toolsLabel ? (
-        <DetailRow term="Tools" definition={presentation.toolsLabel} colors={colors} />
-      ) : null}
-      {presentation.sourceSessionLabel ? (
-        <DetailRow
-          term="Source session"
-          definition={presentation.sourceSessionLabel}
-          colors={colors}
-        />
-      ) : null}
+    <View testID="send-preview-details" style={{ gap: stacked ? 8 : 3, paddingTop: 2 }}>
+      {details.map(([term, definition]) =>
+        definition ? (
+          <DetailRow
+            key={term}
+            term={term}
+            definition={definition}
+            colors={colors}
+            stacked={stacked}
+          />
+        ) : null,
+      )}
     </View>
+  );
+}
+
+function PreviewSummary({
+  presentation,
+  colors,
+  showIcon,
+}: {
+  presentation: SendPreviewPresentation;
+  colors: ColorScheme;
+  showIcon: boolean;
+}) {
+  const stacked = useLargeTextRows();
+  const model = getMobileModelLabel(presentation);
+  return (
+    <>
+      <View
+        style={{
+          flexDirection: stacked ? 'column' : 'row',
+          alignItems: stacked ? 'flex-start' : 'center',
+          gap: 8,
+        }}
+      >
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8,
+            ...(stacked ? {} : { flex: 1, minWidth: 0 }),
+          }}
+        >
+          {showIcon ? <DestinationIcon presentation={presentation} colors={colors} /> : null}
+          <Text
+            style={{
+              flexShrink: 1,
+              fontSize: typeScale.caption,
+              fontWeight: '600',
+              color: colors.textPrimary,
+            }}
+          >
+            {getMobileDestinationLabel(presentation)}
+          </Text>
+        </View>
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 3,
+            paddingHorizontal: 6,
+            paddingVertical: 2,
+            borderRadius: 9999,
+            borderWidth: 1,
+            borderColor: colors.border,
+            backgroundColor: colors.surfaceBase,
+          }}
+        >
+          <Lock size={10} color={colors.textSecondary} />
+          <Text
+            style={{
+              flexShrink: 1,
+              fontSize: typeScale.caption,
+              fontWeight: '700',
+              color: colors.textSecondary,
+              textTransform: 'uppercase',
+              letterSpacing: 0.5,
+            }}
+          >
+            {getMobilePrivacyLabel(presentation)}
+          </Text>
+        </View>
+      </View>
+      {model ? (
+        <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>{model}</Text>
+      ) : null}
+      <Text style={{ fontSize: typeScale.caption, color: colors.textSecondary }}>
+        {getMobileBannerCopy(presentation)}
+      </Text>
+    </>
   );
 }
 
@@ -138,6 +216,7 @@ export function SendPreview({
   variant = 'card',
 }: SendPreviewProps) {
   const colors = useThemeColors();
+  const { height } = useWindowDimensions();
   const [expanded, setExpanded] = useState(defaultExpanded);
   const accent = getAccent(presentation, colors);
   const detailsAvailable = Boolean(
@@ -157,7 +236,7 @@ export function SendPreview({
           onPress={() => setExpanded((prev) => !prev)}
           accessibilityRole="button"
           accessibilityState={{ expanded }}
-          accessibilityLabel={`${presentation.destinationLabel}. ${
+          accessibilityLabel={`${getMobileDestinationLabel(presentation)}. ${
             expanded ? 'Hide' : 'Show'
           } send details`}
           hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
@@ -174,7 +253,12 @@ export function SendPreview({
           <DestinationIcon presentation={presentation} colors={colors} />
           <Text
             maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
-            style={{ fontSize: typeScale.caption, fontWeight: '600', color: colors.textMuted }}
+            style={{
+              flexShrink: 1,
+              fontSize: typeScale.caption,
+              fontWeight: '600',
+              color: colors.textMuted,
+            }}
           >
             {getCompactDestinationLabel(presentation)}
           </Text>
@@ -193,59 +277,20 @@ export function SendPreview({
               backgroundColor: accent.bg,
               borderWidth: 1,
               borderColor: accent.border,
-              gap: 6,
             }}
           >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Text
-                style={{
-                  flex: 1,
-                  fontSize: typeScale.caption,
-                  fontWeight: '600',
-                  color: colors.textPrimary,
-                }}
-                numberOfLines={1}
-              >
-                {getMobileDestinationLabel(presentation)}
-              </Text>
-              <View
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 3,
-                  paddingHorizontal: 6,
-                  paddingVertical: 2,
-                  borderRadius: 9999,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  backgroundColor: colors.surfaceBase,
-                }}
-              >
-                <Lock size={10} color={colors.textSecondary} />
-                <Text
-                  style={{
-                    fontSize: typeScale.caption,
-                    fontWeight: '700',
-                    color: colors.textSecondary,
-                    textTransform: 'uppercase',
-                    letterSpacing: 0.5,
-                  }}
-                >
-                  {getMobilePrivacyLabel(presentation)}
-                </Text>
-              </View>
-            </View>
-            {getMobileModelLabel(presentation) ? (
-              <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>
-                {getMobileModelLabel(presentation)}
-              </Text>
-            ) : null}
-            <Text
-              style={{ fontSize: typeScale.caption, lineHeight: 15, color: colors.textSecondary }}
+            <ScrollView
+              style={{ maxHeight: height * 0.3 }}
+              contentContainerStyle={{ gap: 6 }}
+              nestedScrollEnabled
+              keyboardShouldPersistTaps="handled"
+              testID="send-preview-scroll"
             >
-              {getMobileBannerCopy(presentation)}
-            </Text>
-            {detailsAvailable ? <DetailBlock presentation={presentation} colors={colors} /> : null}
+              <PreviewSummary presentation={presentation} colors={colors} showIcon={false} />
+              {detailsAvailable ? (
+                <DetailBlock presentation={presentation} colors={colors} />
+              ) : null}
+            </ScrollView>
           </View>
         ) : null}
       </View>
@@ -264,59 +309,13 @@ export function SendPreview({
         gap: 6,
       }}
     >
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        <DestinationIcon presentation={presentation} colors={colors} />
-        <Text
-          style={{
-            flex: 1,
-            fontSize: typeScale.caption,
-            fontWeight: '600',
-            color: colors.textPrimary,
-          }}
-          numberOfLines={1}
-        >
-          {getMobileDestinationLabel(presentation)}
-        </Text>
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 3,
-            paddingHorizontal: 6,
-            paddingVertical: 2,
-            borderRadius: 9999,
-            borderWidth: 1,
-            borderColor: colors.border,
-            backgroundColor: colors.surfaceBase,
-          }}
-        >
-          <Lock size={10} color={colors.textSecondary} />
-          <Text
-            style={{
-              fontSize: typeScale.caption,
-              fontWeight: '700',
-              color: colors.textSecondary,
-              textTransform: 'uppercase',
-              letterSpacing: 0.5,
-            }}
-          >
-            {getMobilePrivacyLabel(presentation)}
-          </Text>
-        </View>
-      </View>
-      {getMobileModelLabel(presentation) ? (
-        <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>
-          {getMobileModelLabel(presentation)}
-        </Text>
-      ) : null}
-      <Text style={{ fontSize: typeScale.caption, lineHeight: 15, color: colors.textSecondary }}>
-        {getMobileBannerCopy(presentation)}
-      </Text>
+      <PreviewSummary presentation={presentation} colors={colors} showIcon />
       {detailsAvailable ? (
         <PressableBox
           onPress={() => setExpanded((prev) => !prev)}
           accessibilityRole="button"
           accessibilityLabel={expanded ? 'Hide send details' : 'Show send details'}
+          accessibilityState={{ expanded }}
           style={{ alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 4 }}
         >
           {expanded ? (

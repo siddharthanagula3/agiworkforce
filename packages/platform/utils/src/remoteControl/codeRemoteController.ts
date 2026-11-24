@@ -14,6 +14,7 @@ import {
   type RemoteCodeFileChange,
   type RemoteCodeIndexedMessage,
   type RemoteCodeLiveEvent,
+  type RemoteCodeGuidanceRejection,
   type RemoteCodePendingApproval,
   type RemoteCodePendingQuestion,
   type RemoteCodeRequest,
@@ -144,7 +145,10 @@ interface ThreadState {
   toolDiffs: Map<string, RemoteCodeDiff>;
   testRuns: RemoteCodeTestRun[];
   toolHistory: RemoteCodeToolRecord[];
-  queuedGuidance: string[];
+  queuedGuidance: { text: string; requestId: string }[];
+  startedGuidanceIds: string[];
+  rejectedGuidance: RemoteCodeGuidanceRejection[];
+  deliveringGuidance: boolean;
   eventsDuringReads: Set<DeveloperSessionEvent[]>;
 }
 
@@ -439,6 +443,9 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
         testRuns: [],
         toolHistory: [],
         queuedGuidance: [],
+        startedGuidanceIds: [],
+        rejectedGuidance: [],
+        deliveringGuidance: false,
         eventsDuringReads: new Set(),
       };
       threads.set(key, state);
@@ -479,9 +486,16 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
           updatedAt: session.updatedAt,
           ...(session.origin && session.origin !== 'unknown' ? { origin: session.origin } : {}),
           ...(session.location === 'cloud' ? { location: 'cloud' as const } : {}),
+          ...(session.location !== 'cloud' && session.pinned === true
+            ? { pinned: true as const }
+            : {}),
         })),
       )
-      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+      .sort(
+        (left, right) =>
+          Number(right.pinned === true) - Number(left.pinned === true) ||
+          right.updatedAt.localeCompare(left.updatedAt),
+      )
       .slice(0, REMOTE_CODE_LIMITS.sessions);
     await deps.send('code.sessions', {
       action: 'code.sessions',
@@ -613,7 +627,12 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
         -REMOTE_CODE_LIMITS.pendingQuestions,
       ),
       fileChanges,
-      queuedGuidance: state.queuedGuidance,
+      queuedGuidance: state.queuedGuidance.map(({ text }) => text),
+      confirmedGuidanceIds: [
+        ...state.startedGuidanceIds,
+        ...state.queuedGuidance.map(({ requestId }) => requestId),
+      ].slice(-REMOTE_CODE_LIMITS.confirmedGuidance),
+      rejectedGuidance: state.rejectedGuidance,
       tools: state.toolHistory,
       thinking: state.thinking,
       runningTasks: state.runningTasks,
@@ -741,22 +760,59 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
     phoneThreads.add(threadKey(rootId, threadId));
   }
 
-  async function deliverGuidance(state: ThreadState): Promise<void> {
-    if (!isCurrent(state) || state.activeTurnId || state.queuedGuidance.length === 0) return;
-    const text = state.queuedGuidance.join('\n\n');
-    state.queuedGuidance = [];
-    const { turnId } = await deps.startTurn({
-      rootId: state.rootId,
-      threadId: state.threadId,
-      text,
-    });
-    state.activeTurnId ??= turnId;
+  async function rejectGuidance(
+    state: ThreadState,
+    attempted: ThreadState['queuedGuidance'],
+    reason: RemoteCodeGuidanceRejection['reason'],
+  ): Promise<void> {
+    if (!isCurrent(state)) return;
+    state.rejectedGuidance = [
+      ...state.rejectedGuidance,
+      ...attempted.map(({ requestId, text }) => ({ requestId, text, reason })),
+    ].slice(-REMOTE_CODE_LIMITS.rejectedGuidance);
     await sendEvent(state, {
-      type: 'guidance-delivered',
-      turnId,
-      queuedGuidance: [],
-      text: safeText(text, REMOTE_CODE_LIMITS.historyMessageLength),
+      type: 'guidance-rejected',
+      reason,
+      rejectedGuidance: attempted.map(({ text }) => text),
+      queuedGuidance: state.queuedGuidance.map(({ text }) => text),
+      requestIds: attempted.map(({ requestId }) => requestId),
     });
+  }
+
+  async function deliverGuidance(state: ThreadState): Promise<void> {
+    if (state.deliveringGuidance) return;
+    state.deliveringGuidance = true;
+    try {
+      while (isCurrent(state) && !state.activeTurnId && state.queuedGuidance.length > 0) {
+        const attempted = state.queuedGuidance;
+        state.queuedGuidance = [];
+        const messages = attempted.map(({ text }) => text);
+        const requestIds = attempted.map(({ requestId }) => requestId);
+        const text = messages.join('\n\n');
+        let started: { turnId: string };
+        try {
+          started = await deps.startTurn({ rootId: state.rootId, threadId: state.threadId, text });
+        } catch (error) {
+          logger.warn('[remote-control] guidance could not start a turn', error);
+          await rejectGuidance(state, attempted, 'start-failed');
+          continue;
+        }
+        if (!isCurrent(state)) return;
+        state.activeTurnId ??= started.turnId;
+        state.startedGuidanceIds = [...state.startedGuidanceIds, ...requestIds].slice(
+          -REMOTE_CODE_LIMITS.confirmedGuidance,
+        );
+        await sendEvent(state, {
+          type: 'guidance-delivered',
+          turnId: started.turnId,
+          queuedGuidance: state.queuedGuidance.map(({ text }) => text),
+          requestIds,
+          text: safeText(text, REMOTE_CODE_LIMITS.historyMessageLength),
+        });
+      }
+    } finally {
+      state.deliveringGuidance = false;
+    }
   }
 
   async function steer(
@@ -764,16 +820,26 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
   ): Promise<void> {
     const state = stateFor(request.rootId, request.threadId);
     if (state.queuedGuidance.length >= REMOTE_CODE_LIMITS.queuedGuidance) {
-      state.queuedGuidance.shift();
+      await rejectGuidance(
+        state,
+        [{ text: request.text, requestId: request.requestId }],
+        'queue-full',
+      );
+      return;
     }
-    state.queuedGuidance.push(request.text);
-    if (!state.activeTurnId) {
+    state.queuedGuidance.push({ text: request.text, requestId: request.requestId });
+    if (!state.activeTurnId && !state.deliveringGuidance) {
       await deliverGuidance(state);
       return;
     }
-    await sendEvent(state, { type: 'guidance-queued', queuedGuidance: state.queuedGuidance });
-    if (request.interrupt) {
-      await deps.interruptTurn(state.rootId, state.threadId, state.activeTurnId);
+    const active = state.activeTurnId;
+    await sendEvent(state, {
+      type: 'guidance-queued',
+      queuedGuidance: state.queuedGuidance.map(({ text }) => text),
+      requestIds: [request.requestId],
+    });
+    if (request.interrupt && active && state.activeTurnId === active && isCurrent(state)) {
+      await deps.interruptTurn(state.rootId, state.threadId, active);
     }
   }
 

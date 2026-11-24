@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, type RefObject } from 'react';
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import {
   Dimensions,
   Keyboard,
@@ -16,13 +16,34 @@ import {
 export const FIELD_BORDER_WIDTH = 1;
 
 const FIELD_LINE_HEIGHT = Math.ceil(typeScale.body * 1.25);
-
 const MULTILINE_FIELD_VISIBLE_LINES = 6.5;
+const FIELD_VERTICAL_SPACE = 2 * (spacing.md + FIELD_BORDER_WIDTH);
+const SINGLE_LINE_MIN_HEIGHT = 48;
+const MULTILINE_MIN_HEIGHT = 100;
 
-// Six and a half lines show where the text continues; with the helper line the whole field then fits above the keyboard on a 667 pt iPhone and a 640 dp Android window.
-export const MULTILINE_FIELD_MAX_HEIGHT = Math.round(
-  MULTILINE_FIELD_VISIBLE_LINES * FIELD_LINE_HEIGHT + 2 * (spacing.md + FIELD_BORDER_WIDTH),
-);
+export function personalizationFieldHeight(
+  fontScale: number,
+  multiline: boolean,
+  visibleInputHeight: number | null,
+): { minHeight: number; maxHeight?: number } {
+  const lineHeight = Math.ceil(FIELD_LINE_HEIGHT * fontScale);
+  const singleLineHeight = Math.max(SINGLE_LINE_MIN_HEIGHT, lineHeight + FIELD_VERTICAL_SPACE);
+  if (!multiline) return { minHeight: singleLineHeight };
+
+  const preferredMaximum = Math.round(
+    MULTILINE_FIELD_VISIBLE_LINES * lineHeight + FIELD_VERTICAL_SPACE,
+  );
+  // Keep a complete line editable even when the keyboard takes most of the screen.
+  const maxHeight = Math.max(
+    singleLineHeight,
+    Math.min(preferredMaximum, visibleInputHeight ?? preferredMaximum),
+  );
+  const minHeight = Math.min(
+    maxHeight,
+    Math.max(MULTILINE_MIN_HEIGHT, 2 * lineHeight + FIELD_VERTICAL_SPACE),
+  );
+  return { minHeight, maxHeight };
+}
 
 const REVEAL_MARGIN = spacing.md;
 
@@ -68,6 +89,7 @@ export interface RevealScroller extends Measurable {
 }
 
 export interface FieldReveal {
+  visibleInputHeight: number | null;
   focusField: (block: RefObject<Measurable | null>, input: RefObject<Measurable | null>) => void;
   blurField: (block: RefObject<Measurable | null>) => void;
 }
@@ -78,6 +100,7 @@ interface FocusedField {
 }
 
 export function useFocusedFieldReveal(scrollRef: RefObject<RevealScroller | null>) {
+  const [visibleInputHeight, setVisibleInputHeight] = useState<number | null>(null);
   const focused = useRef<FocusedField | null>(null);
   const scrollOffset = useRef(0);
   const keyboardTop = useRef<number | null | undefined>(undefined);
@@ -107,12 +130,14 @@ export function useFocusedFieldReveal(scrollRef: RefObject<RevealScroller | null
       input.measureInWindow((_ix, inputY, _iwidth, inputHeight) => {
         scroller.measureInWindow((_sx, scrollY, _swidth, scrollHeight) => {
           if (focused.current !== field) return;
+          const visibleBottom = Math.min(scrollY + scrollHeight, top);
+          setVisibleInputHeight(Math.floor(visibleBottom - scrollY - 2 * REVEAL_MARGIN));
           const offset = fieldRevealOffset({
             blockY,
             blockHeight,
             inputBottom: inputY + inputHeight,
             viewportY: scrollY,
-            visibleBottom: Math.min(scrollY + scrollHeight, top),
+            visibleBottom,
             currentOffset: scrollOffset.current,
           });
           if (offset !== null) scroller.scrollTo({ y: offset, animated: true });
@@ -127,7 +152,10 @@ export function useFocusedFieldReveal(scrollRef: RefObject<RevealScroller | null
       const { screenY, height } = event.endCoordinates;
       const onScreen = height > 0 && screenY < Dimensions.get('window').height;
       keyboardTop.current = onScreen ? screenY : null;
-      if (!onScreen) cancelPendingFrame();
+      if (!onScreen) {
+        setVisibleInputHeight(null);
+        cancelPendingFrame();
+      }
       if (!onScreen || !focused.current) return;
       cancelPendingFrame();
       // Android pads the screen in its own keyboardDidShow handler; measuring before that commit sees the unpadded list.
@@ -140,6 +168,7 @@ export function useFocusedFieldReveal(scrollRef: RefObject<RevealScroller | null
     });
     const hideSubscription = Keyboard.addListener('keyboardDidHide', () => {
       keyboardTop.current = null;
+      setVisibleInputHeight(null);
       cancelPendingFrame();
     });
     return () => {
@@ -170,7 +199,7 @@ export function useFocusedFieldReveal(scrollRef: RefObject<RevealScroller | null
   }, [revealFocused]);
 
   return {
-    reveal: { focusField, blurField } satisfies FieldReveal,
+    reveal: { visibleInputHeight, focusField, blurField } satisfies FieldReveal,
     scrollProps: { onScroll, onContentSizeChange, scrollEventThrottle: SCROLL_EVENT_THROTTLE },
   };
 }

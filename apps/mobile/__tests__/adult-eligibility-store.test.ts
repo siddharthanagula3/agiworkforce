@@ -213,15 +213,27 @@ describe('the typed age', () => {
     expect(ageGateStatus()).toBe('refused');
   });
 
-  it('keeps asking when the report fails, without granting Cloud', async () => {
+  it('retries a failed report with the saved verdict without asking for the number again', async () => {
     await askedForAge();
     mockPost.mockRejectedValueOnce(new TypeError('offline'));
 
     await store().submitAge('person-a', 30);
 
-    expect(store().status).toBe('age_required');
+    expect(store().status).toBe('error');
     expect(store().error).toBeTruthy();
     expect(isAdultEligibilityConfirmed(store(), 'person-a')).toBe(false);
+    expect(ageGateStatus()).toBe('confirmed');
+
+    mockGet.mockResolvedValueOnce(unconfirmed);
+    mockPost.mockResolvedValueOnce(confirmed);
+    await store().verify('person-a');
+
+    expect(mockPost).toHaveBeenCalledTimes(2);
+    expect(mockPost).toHaveBeenLastCalledWith(ADULT_ELIGIBILITY_PATH, {
+      surface: 'mobile-auth',
+      evidence: { kind: 'age_checked_on_device', minimumAge: ACCOUNT_MINIMUM_AGE },
+    });
+    expect(isAdultEligibilityConfirmed(store(), 'person-a')).toBe(true);
   });
 
   it('ignores an answer meant for an account that is no longer signed in', async () => {

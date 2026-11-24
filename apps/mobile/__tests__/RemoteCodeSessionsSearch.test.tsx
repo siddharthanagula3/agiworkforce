@@ -147,7 +147,10 @@ import {
   DEVICES_LOAD_FAILED_LINE,
   NO_DEVICE_LINE,
 } from '../src/features/cloud-code/components/CodeDevicesSection';
-import { useRemoteCodeStore } from '@/src/features/companion/remote-code/store';
+import {
+  ingestRemoteCodeSessions,
+  useRemoteCodeStore,
+} from '@/src/features/companion/remote-code/store';
 import { useConnectionStore } from '@/stores/connectionStore';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 
@@ -252,6 +255,25 @@ describe('AGI Code merged sessions list', () => {
     expect(screen.getByLabelText(/^Cloud running\. .*\. In the cloud\./)).toBeTruthy();
     expect(iconColor(screen, 'code-session-location-computer')).toBe(lightColors.agentSuccess);
     expect(iconColor(screen, 'code-session-location-cloud')).toBe(lightColors.textMuted);
+  });
+
+  it('shows an older pinned session first and announces the pin', async () => {
+    connect();
+    expect(
+      ingestRemoteCodeSessions({
+        action: 'code.sessions',
+        version: 1,
+        sessions: COMPUTER_SESSIONS.map((session) =>
+          session.threadId === 't2' ? { ...session, pinned: true } : session,
+        ),
+        unavailable: [],
+        syncedAt: SYNCED,
+      }),
+    ).toBe(true);
+    const screen = await renderScreen();
+
+    expect(shownTitles(screen)[0]).toBe('Laptop idle');
+    expect(screen.getByLabelText(/^Laptop idle\. .* On Work laptop\. Pinned/)).toBeTruthy();
   });
 
   it('greys the laptop while the computer is reconnecting', async () => {
