@@ -86,6 +86,7 @@ export type ManagedCloudSlackLinkWorkspace = z.infer<typeof ManagedCloudSlackLin
 
 export const ManagedCloudSlackLinkPreviewSchema = z.object({
   teamName: z.string().min(1),
+  slackUserName: z.string().min(1).nullable(),
   expiresAt: z.string(),
   workspaces: z.array(ManagedCloudSlackLinkWorkspaceSchema).min(1),
   selectedWorkspaceId: z.string().nullable(),
@@ -94,7 +95,11 @@ export const ManagedCloudSlackLinkPreviewSchema = z.object({
 export type ManagedCloudSlackLinkPreview = z.infer<typeof ManagedCloudSlackLinkPreviewSchema>;
 
 export const ManagedCloudSlackLinkConfirmSchema = z
-  .object({ token: z.string(), organizationId: z.string().uuid().nullable() })
+  .object({
+    token: z.string(),
+    organizationId: z.string().uuid().nullable(),
+    acknowledgedSlackAccount: z.literal(true),
+  })
   .strict();
 export type ManagedCloudSlackLinkConfirm = z.infer<typeof ManagedCloudSlackLinkConfirmSchema>;
 

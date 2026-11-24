@@ -17,6 +17,7 @@ export const IDENTITY_SECURITY_EVENT_KEYS = [
   'api_key_created',
   'api_key_revoked',
   'identity_linked',
+  'slack_account_linked',
   'identity_unlinked',
   'sso_connection_changed',
   'recovery_requested',
@@ -183,6 +184,15 @@ export const IDENTITY_SECURITY_EVENTS: Readonly<
     auditEventType: 'identity_linked',
     resourceType: 'identity',
     settingsSection: 'security',
+  },
+  slack_account_linked: {
+    category: 'security',
+    severity: 'warning',
+    title: 'A Slack account was linked to your account',
+    message: `Messages from that Slack account now run as you, on your plan. ${UNDO}`,
+    auditEventType: 'identity_linked',
+    resourceType: 'slack_account',
+    settingsSection: 'slack',
   },
   identity_unlinked: {
     category: 'security',
