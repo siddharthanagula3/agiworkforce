@@ -9,6 +9,7 @@ vi.mock('@/lib/services/schedule-service', () => ({
 }));
 
 import { PLATFORM_SCHEDULE_RUNS_PER_SWEEP } from '@agiworkforce/types';
+import { SCHEDULED_RUN_BUDGET_MS, SCHEDULED_RUN_MIN_WAVE_MS } from '@/lib/deadline-policy';
 import { processDueScheduleRuns } from '@/lib/services/schedule-service';
 import { GET } from './route';
 
@@ -41,10 +42,12 @@ describe('GET /api/cron/run-schedules', () => {
   });
 
   it('executes a bounded batch for an authorized cron request', async () => {
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(1_000_000);
     const response = await GET(request('cron-secret') as never);
+    clock.mockRestore();
     expect(response.status).toBe(200);
     expect(processDue).toHaveBeenCalledWith(
-      expect.objectContaining({ limit: 10, concurrency: 10, timeoutMs: 40_000 }),
+      expect.objectContaining({ limit: 10, concurrency: 10, timeoutMs: SCHEDULED_RUN_BUDGET_MS }),
     );
   });
 
@@ -66,6 +69,41 @@ describe('GET /api/cron/run-schedules', () => {
 
     expect(processDue).toHaveBeenCalledTimes(Math.ceil(PLATFORM_SCHEDULE_RUNS_PER_SWEEP / 10));
     await expect(response.json()).resolves.toMatchObject({ claimed: 50, drained: false });
+  });
+
+  it('does not start a later wave that could not give its runs a useful time', async () => {
+    const full = { claimed: 10, succeeded: 10, failed: 0, timedOut: 0, cancelled: 0 };
+    const start = 1_000_000;
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(start);
+    processDue.mockImplementation(async () => {
+      clock.mockReturnValue(start + SCHEDULED_RUN_BUDGET_MS - SCHEDULED_RUN_MIN_WAVE_MS + 1);
+      return full;
+    });
+
+    const response = await GET(request('cron-secret') as never);
+    clock.mockRestore();
+
+    expect(processDue).toHaveBeenCalledTimes(1);
+    await expect(response.json()).resolves.toMatchObject({ waves: 1, drained: false });
+  });
+
+  it('starts a later wave while at least the minimum wave time remains', async () => {
+    const full = { claimed: 10, succeeded: 10, failed: 0, timedOut: 0, cancelled: 0 };
+    const start = 1_000_000;
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(start);
+    processDue.mockImplementationOnce(async () => {
+      clock.mockReturnValue(start + SCHEDULED_RUN_BUDGET_MS - SCHEDULED_RUN_MIN_WAVE_MS);
+      return full;
+    });
+    processDue.mockImplementationOnce(async () => ({ ...full, claimed: 1 }));
+
+    await GET(request('cron-secret') as never);
+    clock.mockRestore();
+
+    expect(processDue).toHaveBeenCalledTimes(2);
+    expect(processDue).toHaveBeenLastCalledWith(
+      expect.objectContaining({ timeoutMs: SCHEDULED_RUN_MIN_WAVE_MS }),
+    );
   });
 
   it('returns 500 so Vercel observes an infrastructure failure and retries later', async () => {

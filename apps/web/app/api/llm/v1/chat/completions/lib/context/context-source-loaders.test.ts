@@ -104,7 +104,7 @@ describe('every loader returns typed context sources', () => {
 
     const context = await loadProjectContext(
       { query },
-      { projectId: 'project-1', userId: 'user-1' },
+      { projectId: 'project-1', userId: 'user-1', organizationId: null },
     );
 
     expect(context?.sources.map((source) => source.sourceClass)).toEqual([

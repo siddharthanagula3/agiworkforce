@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
+import { MANAGED_CLOUD_SCHEDULE_RUN_FUNCTION_LIMIT_MS } from '@agiworkforce/cloud-contracts';
 
 import {
   CHAT_COMPLETIONS_FUNCTION_LIMIT_MS,
@@ -17,6 +18,9 @@ import {
   FUNCTION_TEARDOWN_RESERVE_MS,
   IMAGE_GENERATION_FUNCTION_LIMIT_MS,
   MIN_CHILD_DEADLINE_MS,
+  SCHEDULED_RUN_BUDGET_MS,
+  SCHEDULED_RUN_FUNCTION_LIMIT_MS,
+  SCHEDULED_RUN_LEASE_SECONDS,
   TOOL_CALL_DEADLINE_MS,
   nestedDeadlineMs,
   resolveCloudCodeCommandDeadlineMs,
@@ -208,5 +212,56 @@ describe('the durable transport is bounded in both directions', () => {
 
   it('judges silence before it detaches, so a dead run is never handed back as live', () => {
     expect(DURABLE_STREAM_SILENCE_DEADLINE_MS).toBeLessThan(DURABLE_STREAM_DETACH_DEADLINE_MS);
+  });
+});
+
+describe('scheduled runs share one budget with the function that hosts them', () => {
+  const read = (relativePath: string) => readFileSync(join(__dirname, relativePath), 'utf8');
+  const runRoutes = [
+    '../../app/api/schedules/[id]/runs/route.ts',
+    '../../app/api/schedules/[id]/runs/[runId]/approval/route.ts',
+  ];
+
+  it('derives the run budget from the function limit and the teardown reserve', () => {
+    expect(SCHEDULED_RUN_BUDGET_MS).toBe(
+      SCHEDULED_RUN_FUNCTION_LIMIT_MS - FUNCTION_TEARDOWN_RESERVE_MS,
+    );
+    expect(SCHEDULED_RUN_BUDGET_MS).toBeGreaterThanOrEqual(CHAT_TOOL_LOOP_BUDGET_MS);
+  });
+
+  it('takes the function limit from the shared contract the clients wait on', () => {
+    expect(SCHEDULED_RUN_FUNCTION_LIMIT_MS).toBe(MANAGED_CLOUD_SCHEDULE_RUN_FUNCTION_LIMIT_MS);
+  });
+
+  it('declares the function limit on the cron and both run routes', () => {
+    for (const route of ['../../app/api/cron/run-schedules/route.ts', ...runRoutes]) {
+      const declared = /export const maxDuration = (\d+)/.exec(read(route));
+      expect(declared, `${route} must declare maxDuration`).not.toBeNull();
+      expect(Number(declared![1]) * 1000).toBe(SCHEDULED_RUN_FUNCTION_LIMIT_MS);
+    }
+  });
+
+  it('leases a run for longer than its budget and inside the function limit', () => {
+    expect(SCHEDULED_RUN_LEASE_SECONDS * 1000).toBeGreaterThan(SCHEDULED_RUN_BUDGET_MS);
+    expect(SCHEDULED_RUN_LEASE_SECONDS).toBeLessThanOrEqual(300);
+  });
+
+  it('keeps the run routes and the executor on the shared budget and lease', () => {
+    for (const route of runRoutes) {
+      const source = read(route);
+      expect(source).not.toContain('40_000');
+      expect(source).toContain('timeoutMs: SCHEDULED_RUN_BUDGET_MS');
+      expect(source).toContain('leaseSeconds: SCHEDULED_RUN_LEASE_SECONDS');
+    }
+    const executor = read('../services/scheduled-agent-executor.ts');
+    expect(executor).toContain('leaseSeconds: SCHEDULED_RUN_LEASE_SECONDS');
+    expect(executor).not.toContain('leaseSeconds: 120');
+  });
+
+  it('keeps the CLI wait equal to the shared function limit', () => {
+    const cli = readFileSync(join(__dirname, '../../../cli/src/schedules.rs'), 'utf8');
+    const declared = /MANUAL_RUN_TIMEOUT: [\w:]+ = [\w:]+::from_secs\((\d+)\)/.exec(cli);
+    expect(declared, 'schedules.rs must declare MANUAL_RUN_TIMEOUT').not.toBeNull();
+    expect(Number(declared![1]) * 1000).toBe(MANAGED_CLOUD_SCHEDULE_RUN_FUNCTION_LIMIT_MS);
   });
 });

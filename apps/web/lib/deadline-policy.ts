@@ -1,9 +1,20 @@
+import { MANAGED_CLOUD_SCHEDULE_RUN_FUNCTION_LIMIT_MS } from '@agiworkforce/cloud-contracts';
+
 export const CHAT_COMPLETIONS_FUNCTION_LIMIT_MS = 300_000;
 
 export const FUNCTION_TEARDOWN_RESERVE_MS = 60_000;
 
 export const CHAT_TOOL_LOOP_BUDGET_MS =
   CHAT_COMPLETIONS_FUNCTION_LIMIT_MS - FUNCTION_TEARDOWN_RESERVE_MS;
+
+export const SCHEDULED_RUN_FUNCTION_LIMIT_MS = MANAGED_CLOUD_SCHEDULE_RUN_FUNCTION_LIMIT_MS;
+
+export const SCHEDULED_RUN_BUDGET_MS =
+  SCHEDULED_RUN_FUNCTION_LIMIT_MS - FUNCTION_TEARDOWN_RESERVE_MS;
+
+export const SCHEDULED_RUN_LEASE_SECONDS = SCHEDULED_RUN_BUDGET_MS / 1000 + 5;
+
+export const SCHEDULED_RUN_MIN_WAVE_MS = 120_000;
 
 export const TOOL_CALL_DEADLINE_MS = 120_000;
 
@@ -98,6 +109,12 @@ export function nestedDeadlineMs(
 }
 
 export const DEADLINE_HIERARCHY = [
+  {
+    parent: 'scheduled run function limit',
+    parentMs: SCHEDULED_RUN_FUNCTION_LIMIT_MS,
+    child: 'scheduled run budget',
+    childMs: SCHEDULED_RUN_BUDGET_MS,
+  },
   {
     parent: 'chat completions function limit',
     parentMs: CHAT_COMPLETIONS_FUNCTION_LIMIT_MS,

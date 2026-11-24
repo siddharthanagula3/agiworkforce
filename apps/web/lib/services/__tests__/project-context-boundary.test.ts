@@ -218,7 +218,7 @@ function projectDb(): ProjectContextDb {
 }
 
 async function loadOwnerContext(projectId = PROJECT) {
-  return loadProjectContext(projectDb(), { projectId, userId: OWNER });
+  return loadProjectContext(projectDb(), { projectId, userId: OWNER, organizationId: null });
 }
 
 describe('a project is the boundary of what a turn may read', () => {
@@ -301,6 +301,7 @@ describe('sibling chats are the project’s own, and only those', () => {
     const context = await loadProjectContext(projectDb(), {
       projectId: PROJECT,
       userId: OWNER,
+      organizationId: null,
       currentConversationId: 'sibling-live',
     });
 

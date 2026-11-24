@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { createError } from '@/lib/errors';
+import { SCHEDULED_RUN_BUDGET_MS, SCHEDULED_RUN_LEASE_SECONDS } from '@/lib/deadline-policy';
 
 vi.mock('server-only', () => ({}));
 
@@ -195,13 +196,13 @@ describe('POST /api/schedules/[id]/runs/[runId]/approval', () => {
       taskId: 'task-1',
       runId: 'run-1',
       approval,
-      leaseSeconds: 45,
+      leaseSeconds: SCHEDULED_RUN_LEASE_SECONDS,
     });
     expect(mocks.processClaimedScheduleRun).toHaveBeenCalledWith(
       db,
       claim,
       mocks.executeScheduledAgent,
-      { timeoutMs: 40_000, resume },
+      { timeoutMs: SCHEDULED_RUN_BUDGET_MS, resume },
     );
   });
 });

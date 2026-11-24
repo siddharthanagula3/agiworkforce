@@ -14,6 +14,7 @@ import {
   listScheduleRuns,
   processClaimedScheduleRun,
 } from '@/lib/services/schedule-service';
+import { SCHEDULED_RUN_BUDGET_MS, SCHEDULED_RUN_LEASE_SECONDS } from '@/lib/deadline-policy';
 import { executeScheduledAgent } from '@/lib/services/scheduled-agent-executor';
 import {
   MANAGED_CLOUD_SCHEDULE_RUNS_DEFAULT_PAGE_SIZE,
@@ -23,7 +24,7 @@ import {
 } from '@agiworkforce/cloud-contracts';
 
 export const runtime = 'nodejs';
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -82,7 +83,7 @@ async function handleTriggerRun(request: NextRequest, context: RouteContext) {
       userId,
       taskId,
       idempotencyKey,
-      leaseSeconds: 45,
+      leaseSeconds: SCHEDULED_RUN_LEASE_SECONDS,
     });
     if (manual.replay) {
       if (manual.run.status === 'running') {
@@ -92,7 +93,7 @@ async function handleTriggerRun(request: NextRequest, context: RouteContext) {
     }
 
     const run = await processClaimedScheduleRun(db, manual.claim, executeScheduledAgent, {
-      timeoutMs: 40_000,
+      timeoutMs: SCHEDULED_RUN_BUDGET_MS,
       signal: request.signal,
     });
     return NextResponse.json({ run, replay: false }, { status: 201 });

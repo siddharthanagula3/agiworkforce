@@ -232,3 +232,194 @@ describe('conversation active-organization isolation', () => {
     });
   });
 });
+
+describe('shared project chats', () => {
+  const OWNER_ID = 'user-2';
+  const SHARED_PROJECT_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+  let sharedGrantActive: boolean;
+  let sharedProjectArchived: boolean;
+  const projectLookups: Array<{ sql: string; params: unknown[] }> = [];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    projectLookups.length = 0;
+    sharedGrantActive = true;
+    sharedProjectArchived = false;
+    mocks.activeOrganizationId = ORGANIZATION_ID;
+    mocks.execute.mockResolvedValue(1);
+    mocks.query.mockImplementation(async (sqlValue: unknown, paramsValue: unknown) => {
+      const sql = String(sqlValue);
+      const params = paramsValue as unknown[];
+      if (/from user_projects/u.test(sql)) {
+        projectLookups.push({ sql, params });
+        const admitsShare = /organization_shared_projects/u.test(sql);
+        const archivedBlocked = /is_archived = false/u.test(sql);
+        const visible =
+          params[0] === SHARED_PROJECT_ID &&
+          params[1] !== OWNER_ID &&
+          params[2] === ORGANIZATION_ID &&
+          sharedGrantActive &&
+          admitsShare &&
+          !(sharedProjectArchived && archivedBlocked);
+        return visible ? [{ id: SHARED_PROJECT_ID }] : [];
+      }
+      if (/update web_conversations/u.test(sql)) {
+        return [{ ...rows[1], project_id: SHARED_PROJECT_ID, title: String(params[2]) }];
+      }
+      if (/insert into web_conversations/u.test(sql)) {
+        return [
+          {
+            id: CREATED_CONVERSATION_ID,
+            organization_id: params[6],
+            title: params[1],
+            model: params[2],
+            project_id: params[3],
+            pinned: false,
+            starred: false,
+            archived: false,
+            is_temporary: params[5],
+            created_at: '2026-08-11T00:00:00.000Z',
+            updated_at: '2026-08-11T00:00:00.000Z',
+          },
+        ];
+      }
+      throw new Error(`Unexpected query: ${sql}`);
+    });
+  });
+
+  function createInShared(): Promise<Response> {
+    return POST(
+      new NextRequest('https://agiworkforce.com/api/chat/conversations', {
+        method: 'POST',
+        body: JSON.stringify({ projectId: SHARED_PROJECT_ID }),
+      }),
+    );
+  }
+
+  function moveIntoShared(): Promise<Response> {
+    return PUT(
+      new NextRequest(`https://agiworkforce.com/api/chat/conversations/${ORG_CONVERSATION_ID}`, {
+        method: 'PUT',
+        body: JSON.stringify({ projectId: SHARED_PROJECT_ID }),
+      }),
+      { params: Promise.resolve({ id: ORG_CONVERSATION_ID }) },
+    );
+  }
+
+  it('lets a member with a shared grant start a private chat in the project', async () => {
+    const response = await createInShared();
+    expect(response.status).toBe(201);
+    expect((await response.json()).conversation).toMatchObject({
+      project_id: SHARED_PROJECT_ID,
+      organization_id: ORGANIZATION_ID,
+    });
+    const insert = mocks.query.mock.calls.find(([sql]) =>
+      /insert into web_conversations/u.test(String(sql)),
+    ) as [string, unknown[]];
+    expect(insert[1][0]).toBe('user-1');
+    expect(insert[1][3]).toBe(SHARED_PROJECT_ID);
+    expect(insert[1][6]).toBe(ORGANIZATION_ID);
+  });
+
+  it('refuses a project that is not shared with the member', async () => {
+    sharedGrantActive = false;
+    const response = await createInShared();
+    expect(response.status).toBe(404);
+    expect(
+      mocks.query.mock.calls.some(([sql]) => /insert into web_conversations/u.test(String(sql))),
+    ).toBe(false);
+  });
+
+  it('refuses a shared project when another workspace is active', async () => {
+    mocks.activeOrganizationId = '99999999-9999-4999-8999-999999999999';
+    const response = await createInShared();
+    expect(response.status).toBe(404);
+  });
+
+  it('refuses a new chat in an archived shared project', async () => {
+    sharedProjectArchived = true;
+    const response = await createInShared();
+    expect(response.status).toBe(404);
+    expect(projectLookups[0]?.sql).toMatch(/is_archived = false/u);
+  });
+
+  it('moves the member own chat into a shared project and refuses an unshared one', async () => {
+    const moved = await moveIntoShared();
+    expect(moved.status).toBe(200);
+    sharedGrantActive = false;
+    const refused = await moveIntoShared();
+    expect(refused.status).toBe(404);
+  });
+});
+
+describe('owner project chats keep their exact workspace rule', () => {
+  const OWN_PROJECT_ID = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+  let ownProjectOrganizationId: string | null;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    ownProjectOrganizationId = null;
+    mocks.activeOrganizationId = null;
+    mocks.execute.mockResolvedValue(1);
+    mocks.query.mockImplementation(async (sqlValue: unknown, paramsValue: unknown) => {
+      const sql = String(sqlValue).replace(/\s+/gu, ' ');
+      const params = paramsValue as unknown[];
+      if (/from user_projects/u.test(sql)) {
+        const ownerBranch = sql.includes(
+          '(p.user_id = $2 and p.organization_id is not distinct from $3::uuid)',
+        );
+        const visible =
+          ownerBranch &&
+          params[0] === OWN_PROJECT_ID &&
+          params[1] === 'user-1' &&
+          ownProjectOrganizationId === params[2];
+        return visible ? [{ id: OWN_PROJECT_ID }] : [];
+      }
+      if (/update web_conversations/u.test(sql)) {
+        return [{ ...rows[0], project_id: OWN_PROJECT_ID, title: String(params[2]) }];
+      }
+      if (/insert into web_conversations/u.test(sql)) {
+        return [{ ...rows[0], id: CREATED_CONVERSATION_ID, project_id: params[3] }];
+      }
+      throw new Error(`Unexpected query: ${sql}`);
+    });
+  });
+
+  function createInOwn(): Promise<Response> {
+    return POST(
+      new NextRequest('https://agiworkforce.com/api/chat/conversations', {
+        method: 'POST',
+        body: JSON.stringify({ projectId: OWN_PROJECT_ID }),
+      }),
+    );
+  }
+
+  function moveIntoOwn(): Promise<Response> {
+    return PUT(
+      new NextRequest(
+        `https://agiworkforce.com/api/chat/conversations/${PERSONAL_CONVERSATION_ID}`,
+        { method: 'PUT', body: JSON.stringify({ projectId: OWN_PROJECT_ID }) },
+      ),
+      { params: Promise.resolve({ id: PERSONAL_CONVERSATION_ID }) },
+    );
+  }
+
+  it('lets the owner chat in a personal project from the personal context', async () => {
+    expect((await createInOwn()).status).toBe(201);
+    expect((await moveIntoOwn()).status).toBe(200);
+  });
+
+  it('lets the owner chat in their organization project from that workspace', async () => {
+    ownProjectOrganizationId = ORGANIZATION_ID;
+    mocks.activeOrganizationId = ORGANIZATION_ID;
+    expect((await createInOwn()).status).toBe(201);
+  });
+
+  it('still refuses the owner a project that belongs to another workspace', async () => {
+    ownProjectOrganizationId = ORGANIZATION_ID;
+    expect((await createInOwn()).status).toBe(404);
+    ownProjectOrganizationId = null;
+    mocks.activeOrganizationId = ORGANIZATION_ID;
+    expect((await createInOwn()).status).toBe(404);
+  });
+});

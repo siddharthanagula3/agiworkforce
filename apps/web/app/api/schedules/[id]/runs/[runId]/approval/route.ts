@@ -14,10 +14,11 @@ import {
   claimScheduleRunApproval,
   processClaimedScheduleRun,
 } from '@/lib/services/schedule-service';
+import { SCHEDULED_RUN_BUDGET_MS, SCHEDULED_RUN_LEASE_SECONDS } from '@/lib/deadline-policy';
 import { executeScheduledAgent } from '@/lib/services/scheduled-agent-executor';
 
 export const runtime = 'nodejs';
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 type RouteContext = { params: Promise<{ id: string; runId: string }> };
 
@@ -51,10 +52,10 @@ async function handleResolveApproval(request: NextRequest, context: RouteContext
       taskId,
       runId,
       approval: parsed.data,
-      leaseSeconds: 45,
+      leaseSeconds: SCHEDULED_RUN_LEASE_SECONDS,
     });
     const run = await processClaimedScheduleRun(db, claim, executeScheduledAgent, {
-      timeoutMs: 40_000,
+      timeoutMs: SCHEDULED_RUN_BUDGET_MS,
       resume,
     });
     return NextResponse.json({ run });

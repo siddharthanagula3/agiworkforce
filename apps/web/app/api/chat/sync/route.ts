@@ -40,6 +40,7 @@ import { scheduleArtifactIndexing } from '@/app/api/chat/conversations/[id]/mess
 import { EXPLICIT_ARTIFACT_DERIVATION_POLICY } from '@agiworkforce/artifacts';
 import { ASSISTANT_CONTENT_EDIT_METADATA_KEY } from '@agiworkforce/cloud-contracts';
 import { SYNC_ASSISTANT_CONTENT_PRESERVED_METADATA_SQL } from '@/lib/server/assistant-content-edits';
+import { syncableProjectAccessSql } from '@/lib/server/project-read-access';
 import {
   recordStoppedRunAssistantTurn,
   recordedTurnEndingKeptSql,
@@ -89,16 +90,15 @@ async function assertProjectsBelongToActiveWorkspace(
   if (projectIds.length === 0) return;
 
   const owned = await db.query<{ id: string }>(
-    `select id::text as id
-       from public.user_projects
-      where user_id = $1
-        and organization_id is not distinct from $2::uuid
-        and id::text = any($3::text[])`,
-    [userId, organizationId, projectIds],
+    `select p.id::text as id
+       from public.user_projects p
+      where p.id::text = any($1::text[])
+        and ${syncableProjectAccessSql('$2', '$3')}`,
+    [projectIds, userId, organizationId],
   );
   const ownedIds = new Set(owned.map((row) => row.id));
   if (projectIds.some((projectId) => !ownedIds.has(projectId))) {
-    throw createError.validation('projectId is not owned in the active workspace');
+    throw createError.validation('projectId is not available in the active workspace');
   }
 }
 
@@ -636,10 +636,9 @@ async function handlePush(request: NextRequest) {
                  not incoming.has_project_id
                  or incoming.project_id is null
                  or exists (
-                   select 1 from public.user_projects as project
-                    where project.id::text = incoming.project_id
-                      and project.user_id = $1
-                      and project.organization_id is not distinct from $3::uuid
+                   select 1 from public.user_projects as p
+                    where p.id::text = incoming.project_id
+                      and ${syncableProjectAccessSql('$1', '$3')}
                  )
                )
             returning existing.id, existing.server_version
@@ -655,10 +654,9 @@ async function handlePush(request: NextRequest) {
                  not incoming.has_project_id
                  or incoming.project_id is null
                  or exists (
-                   select 1 from public.user_projects as project
-                    where project.id::text = incoming.project_id
-                      and project.user_id = $1
-                      and project.organization_id is not distinct from $3::uuid
+                   select 1 from public.user_projects as p
+                    where p.id::text = incoming.project_id
+                      and ${syncableProjectAccessSql('$1', '$3')}
                  )
                )
             on conflict (id) do nothing

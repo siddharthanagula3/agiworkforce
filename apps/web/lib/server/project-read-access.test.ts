@@ -6,7 +6,14 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 vi.mock('server-only', () => ({}));
 
-import { READABLE_PROJECT_SCOPE_SQL, selectReadableProject } from './project-read-access';
+import {
+  LOADABLE_PROJECT_SCOPE_SQL,
+  READABLE_PROJECT_SCOPE_SQL,
+  readableProjectAccessSql,
+  selectChatProject,
+  selectReadableProject,
+  syncableProjectAccessSql,
+} from './project-read-access';
 
 const ORG = '11111111-1111-4111-8111-111111111111';
 const PROJECT = '33333333-3333-4333-8333-333333333333';
@@ -88,5 +95,55 @@ describe('project read statement contract', () => {
     expect(lookup).toContain('[projectId, scope.userId, scope.organizationId, fileId]');
     expect(lookup).not.toContain('superseded_at');
     expect(lookup).not.toContain('is_archived');
+  });
+});
+
+describe('chat project access', () => {
+  it('binds the caller and workspace placeholders it is given', () => {
+    const custom = readableProjectAccessSql('$1', '$3').replace(/\s+/g, ' ');
+    expect(custom).toContain(
+      '(p.user_id = $1 and p.organization_id is not distinct from $3::uuid)',
+    );
+    expect(custom).toContain("m.user_id = $1 and m.status = 'active'");
+    expect(custom).not.toContain('$2');
+    expect(READABLE_PROJECT_SCOPE_SQL).toBe(
+      `p.id = $1\n        and ${readableProjectAccessSql('$2', '$3')}`,
+    );
+  });
+
+  it('lets the loader owner branch ignore the workspace while the share stays bound to it', () => {
+    const loadable = LOADABLE_PROJECT_SCOPE_SQL.replace(/\s+/g, ' ');
+    expect(loadable).toContain('p.user_id = $2 or');
+    expect(loadable).not.toContain('p.organization_id is not distinct from');
+    expect(loadable).toContain('s.organization_id = $3::uuid');
+  });
+
+  it('keeps an archived project closed to new chats', async () => {
+    query.mockResolvedValue([]);
+    await selectChatProject(db, { userId: 'member', organizationId: ORG }, PROJECT);
+    const [statement, params] = query.mock.calls[0] as [string, unknown[]];
+    expect(statement).toContain(READABLE_PROJECT_SCOPE_SQL);
+    expect(statement).toContain('p.is_archived = false');
+    expect(params).toEqual([PROJECT, 'member', ORG]);
+  });
+});
+
+describe('sync project access', () => {
+  const sync = syncableProjectAccessSql('$1', '$3').replace(/\s+/g, ' ');
+
+  it('keeps the owner branch free of the soft-delete filter so an old chat still syncs', () => {
+    expect(
+      sync.startsWith(
+        '( (p.user_id = $1 and p.organization_id is not distinct from $3::uuid) or (',
+      ),
+    ).toBe(true);
+    expect(sync).not.toMatch(/^\( p\.deleted_at/);
+    expect(sync.match(/p\.deleted_at is null/g)).toHaveLength(1);
+  });
+
+  it('requires a live project for the shared branch only', () => {
+    const shared = sync.slice(sync.indexOf(' or ('));
+    expect(shared).toContain('p.deleted_at is null and (');
+    expect(shared).toContain('organization_shared_projects');
   });
 });

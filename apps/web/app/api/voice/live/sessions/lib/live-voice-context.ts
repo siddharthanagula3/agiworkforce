@@ -256,6 +256,7 @@ export async function loadLiveVoiceContext(
       const projectContext = await loadProjectContext(db, {
         projectId,
         userId: params.userId,
+        organizationId: params.organizationId ?? null,
         currentConversationId: conversation.id,
         ...(latestUserQuery ? { currentUserQuery: latestUserQuery } : {}),
         includeChats: memoryPolicy.searchPastChats,

@@ -21,6 +21,7 @@ import {
   type PassageStrategy,
 } from './project-knowledge-passages';
 import type { SearchHit } from '@agiworkforce/data-layer/search';
+import { LOADABLE_PROJECT_SCOPE_SQL } from '@/lib/server/project-read-access';
 import {
   passagesFromIndexedHits,
   retrieveIndexedKnowledgeHits,
@@ -190,6 +191,7 @@ export async function loadProjectContext(
   params: {
     projectId: string;
     userId: string;
+    organizationId: string | null;
     currentConversationId?: string;
     currentUserQuery?: string;
     semanticRetrieval?: boolean;
@@ -203,11 +205,11 @@ export async function loadProjectContext(
     instructions: string | null;
     organization_id?: string | null;
   }>(
-    `select id, name, description, instructions, organization_id
-       from user_projects
-      where id = $1 and user_id = $2 and is_archived = false and deleted_at is null
+    `select p.id, p.name, p.description, p.instructions, p.organization_id
+       from user_projects p
+      where ${LOADABLE_PROJECT_SCOPE_SQL} and p.is_archived = false
       limit 1`,
-    [params.projectId, params.userId],
+    [params.projectId, params.userId, params.organizationId],
   );
   if (!project) return null;
 
