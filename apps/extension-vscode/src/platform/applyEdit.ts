@@ -1,6 +1,7 @@
 import { PRODUCT_NAMES } from '@agiworkforce/types';
 import * as vscode from 'vscode';
 import { t } from '../l10n';
+import { supportsVersionedEditorEdits } from './versionedEditorEdits';
 
 export function extractCodeBlock(text: string, lang: string): string | undefined {
   const escapedLang = lang.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -38,8 +39,10 @@ export async function applyLlmEdit(
   const lang = document.languageId;
   const codeBlock = extractCodeBlock(llmResponse, lang);
 
-  // Cursor can acknowledge competing edits from the same document version.
-  if (codeBlock === undefined || selection.isEmpty || vscode.env.appName === 'Cursor') {
+  const canApply =
+    codeBlock !== undefined && !selection.isEmpty && (await supportsVersionedEditorEdits());
+  if (cancelled()) return undefined;
+  if (!canApply) {
     await showLlmResultInNewTab(llmResponse, commandLabel);
     return undefined;
   }

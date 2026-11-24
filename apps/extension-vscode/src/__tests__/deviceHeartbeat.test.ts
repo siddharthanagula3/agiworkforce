@@ -4,7 +4,9 @@ vi.mock('../utils/api', () => ({
   getAccountToken: vi.fn(async () => 'developer-token'),
   getCloudWebOrigin: () => 'https://agiworkforce.example',
 }));
-vi.mock('../platform/version', () => ({
+type VersionModule = typeof import('../platform/version');
+vi.mock('../platform/version', async (importOriginal) => ({
+  ...(await importOriginal<VersionModule>()),
   getExtensionVersion: () => '0.9.4',
   getExtensionUserAgent: () => 'agi-workforce-vscode/0.9.4',
 }));

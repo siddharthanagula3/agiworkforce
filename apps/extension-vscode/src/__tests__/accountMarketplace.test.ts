@@ -3,7 +3,9 @@ import * as vscode from 'vscode';
 import { browseAccountMarketplace } from '../features/surfaces/accountMarketplace';
 import { getAccountToken } from '../utils/api';
 
-vi.mock('../utils/api', () => ({
+type ApiModule = typeof import('../utils/api');
+vi.mock('../utils/api', async (importOriginal) => ({
+  ...(await importOriginal<ApiModule>()),
   getAccountToken: vi.fn(),
   getCloudWebOrigin: () => 'https://agiworkforce.com',
 }));

@@ -1,6 +1,7 @@
 import * as assert from 'node:assert';
 import * as vscode from 'vscode';
 import { applyLlmEdit } from '../../platform/applyEdit';
+import { supportsVersionedEditorEdits } from '../../platform/versionedEditorEdits';
 
 declare function suite(name: string, run: () => void): void;
 declare function test(name: string, run: () => void | Promise<void>): void;
@@ -29,6 +30,7 @@ suite('native inline edit safety', () => {
   if (vscode.env.appName === 'Cursor') {
     for (const autoApply of [true, false]) {
       test(`previews an edit without writing to the document with auto-apply ${autoApply}`, async () => {
+        assert.strictEqual(await supportsVersionedEditorEdits(), false);
         const item = await target();
         const apply = applyLlmEdit(
           item.editor,
@@ -54,6 +56,7 @@ suite('native inline edit safety', () => {
   }
 
   test('accepts an unchanged target through the actual editor transaction', async () => {
+    assert.strictEqual(await supportsVersionedEditorEdits(), true);
     const item = await target();
     const outcome = await applyLlmEdit(
       item.editor,
@@ -85,6 +88,10 @@ suite('native inline edit safety', () => {
 
   test('accepts only one of two native writes racing against the same version', async () => {
     const item = await target();
+    let markCompetingStarted!: () => void;
+    const competingStarted = new Promise<void>((resolve) => {
+      markCompetingStarted = resolve;
+    });
     let humanChange: Thenable<boolean> | undefined;
     const editor = {
       document: item.document,
@@ -94,6 +101,7 @@ suite('native inline edit safety', () => {
           const human = new vscode.WorkspaceEdit();
           human.replace(item.document.uri, item.selection, 'const value = 9;');
           humanChange = vscode.workspace.applyEdit(human);
+          markCompetingStarted();
         }),
     } as vscode.TextEditor;
     const proposed = applyLlmEdit(
@@ -106,6 +114,7 @@ suite('native inline edit safety', () => {
         expectedDocument: item.expectedDocument,
       },
     );
+    await Promise.race([competingStarted, proposed]);
     assert.ok(humanChange);
     const [humanApplied, proposalOutcome] = await Promise.all([humanChange, proposed]);
     assert.notStrictEqual(

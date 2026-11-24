@@ -141770,6 +141770,9 @@
     "SupportSurface": [
       "packages/contracts/cloud-contracts/src/support.ts"
     ],
+    "supportsVersionedEditorEdits": [
+      "apps/extension-vscode/src/platform/versionedEditorEdits.ts"
+    ],
     "SupportTicket": [
       "packages/contracts/cloud-contracts/src/support.ts"
     ],

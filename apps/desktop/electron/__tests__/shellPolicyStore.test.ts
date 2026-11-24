@@ -5,9 +5,10 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 let userData: string;
 const beforeRename = vi.hoisted(() => vi.fn<(target: string) => void>());
+type FileSystemModule = typeof import('node:fs');
 
 vi.mock('node:fs', async (importOriginal) => {
-  const fs = await importOriginal<typeof import('node:fs')>();
+  const fs = await importOriginal<FileSystemModule>();
   return {
     ...fs,
     renameSync: (...args: Parameters<typeof fs.renameSync>) => {

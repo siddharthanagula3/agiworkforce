@@ -5,6 +5,10 @@ import { catalogFor, DEFAULT_LOCALE, resolveLocale, SUPPORTED_LOCALES, t } from 
 import { applyLlmEdit } from '../platform/applyEdit';
 import { PRODUCT_NAMES } from '@agiworkforce/types';
 
+vi.mock('../platform/versionedEditorEdits', () => ({
+  supportsVersionedEditorEdits: vi.fn(async () => true),
+}));
+
 const mockEnv = vscode.env as unknown as { language: string };
 
 function withLanguage<T>(language: string, body: () => T): T {

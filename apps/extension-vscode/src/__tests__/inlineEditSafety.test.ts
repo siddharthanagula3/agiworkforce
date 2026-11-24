@@ -12,6 +12,10 @@ import { SYNTHETIC_LOCAL_MODEL_ID } from './catalogModelFixtures';
 
 const realpath = vi.hoisted(() => vi.fn<(path: string) => string>());
 
+vi.mock('../platform/versionedEditorEdits', () => ({
+  supportsVersionedEditorEdits: vi.fn(async () => true),
+}));
+
 vi.mock('node:fs', async (importOriginal) => ({
   ...(await importOriginal<ImportedModule0>()),
   realpathSync: realpath,

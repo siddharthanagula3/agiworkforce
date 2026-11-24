@@ -4667,10 +4667,7 @@ export function getWebviewContent(
     }
 
     function mountEmptyState() {
-      var mounted = document.createElement('div');
-      mounted.className = 'empty-state';
-      mounted.id = 'emptyState';
-      mounted.innerHTML = ${serializeForInlineScript(emptyStateContent)};
+      var mounted = emptyStateTemplate.cloneNode(true);
       messagesEl.appendChild(mounted);
       emptyStateEl = mounted;
       syncStartSuggestions();
@@ -9297,6 +9294,7 @@ export function getWebviewContent(
     }
 
     var emptyStateEl = document.getElementById('emptyState');
+    const emptyStateTemplate = emptyStateEl.cloneNode(true);
     function hideEmptyState() {
       if (emptyStateEl) { emptyStateEl.style.display = 'none'; }
     }
