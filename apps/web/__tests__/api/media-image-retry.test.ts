@@ -183,6 +183,13 @@ describe('POST /api/media/image/retry', () => {
     mocks.assetIds.mockResolvedValue([ASSET_ID]);
   });
 
+  it('stays on the image generation budget because a retry runs a provider attempt', async () => {
+    const { withRateLimit } = await import('@/lib/rate-limit');
+    await POST(retryRequest({ job_id: JOB_ID }));
+
+    expect(withRateLimit).toHaveBeenCalledWith(expect.any(NextRequest), 'image-generation');
+  });
+
   it('runs another attempt on the reservation the job already holds', async () => {
     mocks.getJob.mockResolvedValue(job());
     mocks.requeue.mockResolvedValue(job({ status: 'queued' }));

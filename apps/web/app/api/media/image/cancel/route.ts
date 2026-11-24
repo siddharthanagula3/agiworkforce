@@ -47,7 +47,7 @@ async function handleImageCancel(request: NextRequest): Promise<NextResponse> {
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
-  const rateLimitResponse = await withRateLimit(request, 'image-generation');
+  const rateLimitResponse = await withRateLimit(request, 'image-status');
   if (rateLimitResponse) return rateLimitResponse;
 
   const { userId } = await getClerkAuthUser(request);

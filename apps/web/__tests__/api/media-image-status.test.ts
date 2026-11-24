@@ -202,6 +202,14 @@ describe('GET /api/media/image/status', () => {
     });
   });
 
+  it('polls on the status bucket, not the image generation budget', async () => {
+    const { withRateLimit } = await import('@/lib/rate-limit');
+    await GET(statusRequest(JOB_ID));
+
+    expect(withRateLimit).toHaveBeenCalledWith(expect.any(NextRequest), 'image-status');
+    expect(withRateLimit).not.toHaveBeenCalledWith(expect.anything(), 'image-generation');
+  });
+
   it('finishes a cancellation whose attempt never came back, and reports it canceled', async () => {
     const cancelling = job({
       status: 'processing',
@@ -431,6 +439,30 @@ describe('GET /api/media/image/status', () => {
     expect(body['error']).toBe('the provider was busy');
     // Backoff has not elapsed, so nothing is re-driven yet.
     expect(afterCallbacks).toHaveLength(0);
+  });
+
+  it('schedules no attempt on any of 120 polls while a claim is live or the backoff runs', async () => {
+    const claimed = job({
+      status: 'processing',
+      claimToken: 'claim-token-1234',
+      claimExpiresAt: new Date(Date.now() + 120_000).toISOString(),
+    });
+    const backingOff = job({
+      status: 'failed',
+      retryable: true,
+      nextAttemptAt: new Date(Date.now() + 60_000).toISOString(),
+    });
+
+    for (const held of [claimed, backingOff]) {
+      mocks.getJob.mockResolvedValue(held);
+      for (let poll = 0; poll < 120; poll++) {
+        const response = await GET(statusRequest(JOB_ID));
+        expect(response.status).toBe(200);
+      }
+    }
+
+    expect(afterCallbacks).toHaveLength(0);
+    expect(mocks.runAttempt).not.toHaveBeenCalled();
   });
 
   it('rejects a job id that is not a job id', async () => {

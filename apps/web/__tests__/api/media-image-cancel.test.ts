@@ -178,6 +178,14 @@ describe('POST /api/media/image/cancel', () => {
     });
   });
 
+  it('cancels on the status bucket, not the image generation budget', async () => {
+    const { withRateLimit } = await import('@/lib/rate-limit');
+    await POST(cancelRequest({ job_id: JOB_ID }));
+
+    expect(withRateLimit).toHaveBeenCalledWith(expect.any(NextRequest), 'image-status');
+    expect(withRateLimit).not.toHaveBeenCalledWith(expect.anything(), 'image-generation');
+  });
+
   it('releases the reservation and closes a job nothing is working on', async () => {
     const cancelRequested = job({ cancelRequestedAt: new Date().toISOString() });
     mocks.getJob.mockResolvedValue(job());
