@@ -747,6 +747,21 @@ describe('schedule service persistence', () => {
     ).rejects.toBeInstanceOf(ScheduleNotFoundError);
   });
 
+  it("revokes the schedule's share before deleting it", async () => {
+    const query = vi.fn().mockResolvedValueOnce([taskRow]).mockResolvedValueOnce([]);
+    const execute = vi.fn().mockResolvedValue(1);
+
+    await deleteSchedule(database(query, execute), 'user-1', 'task-1');
+
+    const [revokeSql, revokeParams] = execute.mock.calls[0] as [string, unknown[]];
+    const [deleteSql] = execute.mock.calls[1] as [string];
+    expect(revokeSql).toContain('update scheduled_task_shares');
+    expect(revokeSql).toContain('revoked_at = now()');
+    expect(revokeSql).toContain('revoked_at is null');
+    expect(revokeParams).toEqual(['task-1', 'user-1']);
+    expect(deleteSql).toContain('delete from scheduled_tasks');
+  });
+
   it('does not delete a task while one of its runs is still executing', async () => {
     const query = vi
       .fn()
