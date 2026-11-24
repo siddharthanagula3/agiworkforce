@@ -1805,6 +1805,7 @@ export function CodeComposer({
     dictationSwitchedOff ??
     (!dictationEnabled ? DICTATION_DISABLED_IN_SETTINGS : undefined) ??
     (!dictationDestinationReady ? CODE_COPY.dictationRequiresCloud : undefined);
+  const dictationUnavailableReasonId = useId();
   const dictation = useDictation({
     scope: JSON.stringify([
       dictationDestination,
@@ -2044,17 +2045,26 @@ export function CodeComposer({
               </>
             ) : null}
             {!dictation.isActive && (
-              <button
-                type="button"
-                className={styles['controlIconButton']}
-                aria-label={CODE_COPY.startDictation}
-                aria-description={dictationUnavailableReason}
-                title={dictationUnavailableReason}
-                disabled={disabled || busy || dictationUnavailableReason !== undefined}
-                onClick={startDictation}
-              >
-                <Mic size={CONTROL_GLYPH_SIZE} aria-hidden="true" />
-              </button>
+              <>
+                <button
+                  type="button"
+                  className={styles['controlIconButton']}
+                  aria-label={CODE_COPY.startDictation}
+                  aria-describedby={
+                    dictationUnavailableReason ? dictationUnavailableReasonId : undefined
+                  }
+                  title={dictationUnavailableReason}
+                  disabled={disabled || busy || dictationUnavailableReason !== undefined}
+                  onClick={startDictation}
+                >
+                  <Mic size={CONTROL_GLYPH_SIZE} aria-hidden="true" />
+                </button>
+                {dictationUnavailableReason && (
+                  <span id={dictationUnavailableReasonId} hidden>
+                    {dictationUnavailableReason}
+                  </span>
+                )}
+              </>
             )}
           </div>
         </div>
