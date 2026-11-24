@@ -207,7 +207,7 @@ export async function loadProjectContext(
   }>(
     `select p.id, p.name, p.description, p.instructions, p.organization_id
        from user_projects p
-      where ${LOADABLE_PROJECT_SCOPE_SQL} and p.is_archived = false
+      where ${LOADABLE_PROJECT_SCOPE_SQL} and p.is_archived = false and p.deleted_at is null
       limit 1`,
     [params.projectId, params.userId, params.organizationId],
   );

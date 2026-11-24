@@ -9,10 +9,9 @@ vi.mock('server-only', () => ({}));
 import {
   LOADABLE_PROJECT_SCOPE_SQL,
   READABLE_PROJECT_SCOPE_SQL,
-  readableProjectAccessSql,
+  SYNCABLE_PROJECT_ACCESS_SQL,
   selectChatProject,
   selectReadableProject,
-  syncableProjectAccessSql,
 } from './project-read-access';
 
 const ORG = '11111111-1111-4111-8111-111111111111';
@@ -99,16 +98,17 @@ describe('project read statement contract', () => {
 });
 
 describe('chat project access', () => {
-  it('binds the caller and workspace placeholders it is given', () => {
-    const custom = readableProjectAccessSql('$1', '$3').replace(/\s+/g, ' ');
-    expect(custom).toContain(
-      '(p.user_id = $1 and p.organization_id is not distinct from $3::uuid)',
-    );
-    expect(custom).toContain("m.user_id = $1 and m.status = 'active'");
-    expect(custom).not.toContain('$2');
-    expect(READABLE_PROJECT_SCOPE_SQL).toBe(
-      `p.id = $1\n        and ${readableProjectAccessSql('$2', '$3')}`,
-    );
+  it('keeps one shared grant, bound to the caller and the admitted workspace, in every variant', () => {
+    const grant = (statement: string) => {
+      const flat = statement.replace(/\s+/g, ' ');
+      return flat.slice(flat.indexOf('$3::uuid is not null'), flat.lastIndexOf("'write') )") + 10);
+    };
+    const readable = grant(READABLE_PROJECT_SCOPE_SQL);
+    expect(readable).toContain("m.user_id = $2 and m.status = 'active'");
+    expect(readable).toContain('a.user_id = $2');
+    expect(readable).toContain('s.organization_id = $3::uuid');
+    expect(grant(LOADABLE_PROJECT_SCOPE_SQL)).toBe(readable);
+    expect(grant(SYNCABLE_PROJECT_ACCESS_SQL)).toBe(readable);
   });
 
   it('lets the loader owner branch ignore the workspace while the share stays bound to it', () => {
@@ -129,12 +129,12 @@ describe('chat project access', () => {
 });
 
 describe('sync project access', () => {
-  const sync = syncableProjectAccessSql('$1', '$3').replace(/\s+/g, ' ');
+  const sync = SYNCABLE_PROJECT_ACCESS_SQL.replace(/\s+/g, ' ');
 
   it('keeps the owner branch free of the soft-delete filter so an old chat still syncs', () => {
     expect(
       sync.startsWith(
-        '( (p.user_id = $1 and p.organization_id is not distinct from $3::uuid) or (',
+        '( (p.user_id = $2 and p.organization_id is not distinct from $3::uuid) or (',
       ),
     ).toBe(true);
     expect(sync).not.toMatch(/^\( p\.deleted_at/);

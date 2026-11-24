@@ -505,7 +505,7 @@ describe('POST /api/chat/sync, shared cloud contract', () => {
     expect(String(call?.[0])).toContain(
       'set title = case when incoming.has_title then incoming.title else existing.title end',
     );
-    const pushed = JSON.parse(String((call?.[1] as unknown[])[1])) as Array<
+    const pushed = JSON.parse(String((call?.[1] as unknown[])[0])) as Array<
       Record<string, unknown>
     >;
     expect(pushed[0]).not.toHaveProperty('title');
@@ -601,8 +601,8 @@ describe('POST /api/chat/sync, shared cloud contract', () => {
     expect(validationParams).toEqual([[PROJECT_ID], 'user_contract_1', ORGANIZATION_ID]);
     const [mutationSql, mutationParams] = mockQuery.mock.calls[1] as [string, unknown[]];
     expect(mutationSql).toContain('p.organization_id is not distinct from $3::uuid');
-    expect(mutationSql).toContain('p.user_id = $1');
-    expect(mutationParams).toEqual(['user_contract_1', expect.any(String), ORGANIZATION_ID]);
+    expect(mutationSql).toContain('p.user_id = $2');
+    expect(mutationParams).toEqual([expect.any(String), 'user_contract_1', ORGANIZATION_ID]);
   });
 
   it('keeps an owned chat syncing after its project was deleted, in the check and the writes', async () => {
