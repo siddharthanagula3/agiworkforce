@@ -215,7 +215,7 @@ cap-std = "4.0.2"
 
 
 flate2 = "1.0"
-zip = "=9.5.0"
+zip = "=9.6.0"
 
 
 pdf-extract = "0.12"
