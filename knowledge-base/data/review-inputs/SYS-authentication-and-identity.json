@@ -1,0 +1,598 @@
+{
+ "page": {
+  "summary": "One AGI account, held by an identity provider (Clerk today, behind a swappable port), signs in on every app. Web signs in with email, code, password, passkey or provider buttons. Desktop hands off to the browser with a one-time code. Mobile signs in natively. CLI, VS Code and Chrome link through device codes or the web session. Every sign-in meets terms and 18-and-over checks. Local use needs no account.",
+  "sections": [
+   {
+    "heading": "What it is and why it exists",
+    "markdown": "**What it is.** Authentication proves who a person is. Identity ties that person to one account that all six apps share. The product keeps the identity provider behind a small interface (a \"port\") so the provider can change without touching routes or pages. [code] (packages/platform/identity/src/factory.ts:11) names `clerk` as the default provider; `AGI_IDENTITY_PROVIDER` selects it. Web code asks `getIdentityProvider()` and never builds a client itself [code] (apps/web/lib/server/identity.ts).\n\n**Why it exists.** One account lets chat history, plan and devices follow the person across Web, Desktop, Mobile, CLI, VS Code and Chrome. It also gives the server one place to enforce account status, terms, the 18-and-over rule and revocation.\n\n**What it is not.** Sign-in is not payment and not entitlement. Plans, quotas and usage are a separate subsystem (the AGI Subscription system); sign-in only supplies the account id those rules attach to. [inferred] from the sign-in routes carrying no plan check (apps/web/app/api/auth/device/approve/route.ts, token/route.ts). Local inference on mobile and desktop is not gated by payment; whether it is gated by an account differs by app (see Differences between apps).\n\n**Credential families, in one table.**\n\n| Family | Used by | Issuer | Lifetime found in code |\n|---|---|---|---|\n| Identity-provider session cookie and session token | Web (and Desktop window, which shows hosted web) | Clerk | Provider-side lifetime [unknown]; product cap 30 days from creation by default |\n| Identity-provider native session token plus a signed \"surface proof\" token | Mobile | Clerk (mobile token template) | Provider-side [unknown] |\n| Identity-provider token bound to the extension origin | Chrome | Clerk via `syncHost` | Provider-side [unknown] |\n| Developer token (JWT signed by the web app) plus rotating refresh token | CLI, VS Code (and the retained Tauri desktop build) | Web app, after browser approval | Access 7 days, refresh 30 days |\n| `sk_live_` / `sk_test_` API keys | Programmatic callers | Web app | Out of scope here |"
+   },
+   {
+    "heading": "How it works today",
+    "markdown": "### 1. Sign-in service\nThe provider is Clerk [code] (packages/platform/identity/src/factory.ts:11; apps/web/proxy.ts:17-18 imports the port). Web middleware `proxy` wraps every session route with `identityMiddleware.withSession`, passing an **authorized-party allowlist**. If the allowlist cannot be resolved, the proxy answers 503 instead of running unverified, because a provider skips the origin check when the list is empty [code] (apps/web/proxy.ts:192-224, 340). The proxy also sends a signed-out visitor from a protected product route to `/login?redirectTo=...` when no session cookie exists, but `/chat` itself stays open (guest chat) [code] (apps/web/proxy.ts:324-330).\n\nEnabled sign-in providers come from `AGI_AUTH_PROVIDERS` (`google`, `github`, `microsoft`, `apple`; default Google and GitHub; `passkey` is a flag in the same list) [code] (packages/client/client-runtime/src/authProviders.ts; apps/web/features/auth/authProviderConfig.ts).\n\n### 2. Web sign-in steps\n1. `/login` or `/signup` render the same entry screen (apps/web/app/signup/page.tsx calls `AuthEntryScreen`) [code].\n2. `AuthFlow` runs a step machine: `email` -> `password` | `code` -> `second_factor` -> `new_password` | `notice` [code] (apps/web/features/auth/authContract.ts, AuthFlow.tsx). Methods are `password`, `email_code`, `passkey`; provider buttons and enterprise SSO redirect through `/auth/sso-callback` [code] (authContract.ts; IdentityAuthAdapter.tsx:296-301, 649-655). Code length is 6, resend cooldown 30 s, minimum password 8 [code] (authRoutes.ts constants in authContract.ts).\n3. On sign-up the person types an age first; under 18 is refused before any provider call [code] (apps/web/features/auth/useSignupAgeGate.ts; packages/contracts/types/src/account-eligibility.ts:1).\n4. Both flows end at `/login/complete` or `/signup/complete`, a server page that checks in order: a live session exists (else a stale-session recovery screen, not a redirect, to avoid a loop); account is allowed (locked, recovery, suspended, deleted are refused with a notice); primary email confirmed; adult-eligibility decision (`ineligible` shows a refusal, `unconfirmed` asks for age); Terms acceptance; then redirect to a safe destination [code] (apps/web/app/login/complete/page.tsx:41-120).\n5. `postAuthDestination` sends the person to the requested path, or a new chat; sign-in loop paths and `/` map to new chat [code] (apps/web/features/auth/postAuthDestination.ts).\n\n### 3. Desktop hand-off to the browser (public Electron app)\nThe desktop window never shows a password field. A signed-out window shows a data page with Start and Cancel buttons [code] (apps/desktop/electron/signInScreen.ts). Steps:\n1. Shell makes a random 32-byte **verifier**, keeps it in memory only, and computes its SHA-256 **challenge** [code] (apps/desktop/electron/browserSignIn.ts:39-41).\n2. Shell opens the system browser at `https://<cloud origin>/auth/desktop?challenge=...`. The pending attempt lives 10 minutes [code] (browserSignIn.ts:13, 47-53).\n3. The page `/auth/desktop` needs a web session; if none, it sends the person to `/login` and back. It then POSTs the challenge to `api:POST /api/auth/desktop/grant` (CSRF required, rate limit `device-link`, refused for developer-token callers) and gets a one-time code stored hashed with a 60-second life [code] (apps/web/app/auth/desktop/DesktopSignInHandoff.tsx; apps/web/app/api/auth/desktop/grant/route.ts; apps/web/lib/server/desktop-sign-in.ts:7, 33-47). If a passkey is required for the account, the page detours to the account-security verify page first [code] (DesktopSignInHandoff.tsx).\n4. The browser navigates to the deep link `agiworkforce-cloud://sign-in?code=...&challenge=...` [code] (packages/contracts/local-runtime/src/desktop-sign-in.ts; host-bridge.ts:4).\n5. The shell checks the link's challenge against its pending one. Any mismatch, reuse, relaunch or cancel yields `expired`. On match it loads `/auth/desktop/complete#code=...&verifier=...` in the window [code] (browserSignIn.ts `readBrowserSignInLink`).\n6. That page (only runs if the host bridge reports browser sign-in support) POSTs code and verifier to `api:POST /api/auth/desktop/redeem`. The server marks the grant consumed only if the code hash and `sha256(verifier)` match and it has not expired, then asks the identity provider for a **sign-in ticket** valid 60 s, which the page exchanges for a session in the window [code] (DesktopSignInComplete.tsx:73-84; desktop-sign-in.ts:50-67; redeem/route.ts).\n7. The window's persistent partition is `persist:agi-cloud` [code] (apps/desktop/electron/config.ts:24).\n\nThe retained Tauri desktop code instead uses the CLI-style device-code flow (`apps/desktop/src/services/desktopNativeSignIn.ts` imports `requestDeviceAuthorization`, `pollDeviceAuthorization`) [code]. It is internal, not the public desktop [requirement] (AGENTS.md section 5).\n\n### 4. Mobile native sign-in\nThe app wraps everything in `ClerkProvider` with Clerk's secure token cache [code] (apps/mobile/app/_layout.tsx:58-59, 994). Sign-in screen steps are `email`, `password`, `code`, with email-code, password, passkey-adjacent second factors, Apple and other providers via `useSSO` and `useSignInWithApple` [code] (apps/mobile/src/features/auth/components/MobileSignIn.tsx:5-7, 46). On iOS the app shows either both Apple and other providers or none (App Store rule 4.8) [code] (apps/mobile/src/features/auth/services/loginProviders.ts). A native token has no web origin, so each API call carries the session token as Bearer plus a second \"surface proof\" token from a Clerk template, sent in `SURFACE_TOKEN_HEADER` [code] (apps/mobile/services/authSession.ts; apps/mobile/src/integrations/clerk.ts:79-146). The server admits such a pair only if both tokens lack an origin claim, name the same subject and the proof binds a known surface [code] (apps/web/lib/server/native-session-token.ts).\n\n### 5. CLI and VS Code device linking (RFC 8628 device grant)\n1. Client calls `api:POST /api/auth/device/code` with `surface` of `cli`, `vscode`, `chrome` or `desktop`. Server stores a pending row and returns `device_code` (UUID), a short `user_code` (XXXX-XXXX), verification URL, interval 5 s, lifetime 900 s [code] (apps/web/app/api/auth/device/code/route.ts:24-31, 80-120; grant-policy.ts).\n2. Client opens `/auth/device?user_code=...&surface=...`. The signed-in person sees the client name and scopes (`account:read`, `managed-cloud:use`) and approves or denies with `api:POST /api/auth/device/approve` [code] (apps/web/app/auth/device/page.tsx; approve/route.ts).\n3. Approval is refused when: caller is itself a developer-token session; the account's device sign-in setting is off (403 `DEVICE_SIGNIN_DISABLED`, 503 if unreadable); Terms need re-acceptance; the 18-and-over decision is not confirmed [code] (approve/route.ts:45-190).\n4. Client polls `api:POST /api/auth/device/token`. Answers: `authorization_pending`, `slow_down`, `access_denied`, `expired_token`, `account_unavailable`, `terms_acceptance_required`, age refusal, or tokens. On success the server consumes the code and inserts a hashed refresh token in a new family, in one transaction [code] (token/route.ts:70-250).\n5. Access token is a JWT (issuer `agiworkforce-api-gateway`) valid 604800 s; refresh token is 32 random bytes, stored only as a SHA-256 hash, valid 30 days [code] (developer-token.ts:9-11; device-refresh-token.ts:5-22).\n6. `api:POST /api/auth/device/refresh` rotates the pair; a replayed old refresh token marks the whole family compromised and revokes it [code] (refresh/route.ts, refresh-token-family.ts `finishFamilyAsCompromised`).\n7. CLI stores the grant in the OS keyring (service `com.agiworkforce.cli.auth`), or an owner-only file when `AGIWORKFORCE_NO_KEYRING=1` [code] (apps/cli/src/auth.rs:92, 175, 778). VS Code stores it in `SecretStorage` under `agiWorkforce.accountToken` [code] (apps/extension-vscode/src/utils/api.ts:220-229).\n8. Sign-out calls `api:POST /api/auth/logout` with the access token and/or refresh token; it revokes the token id and the whole session family [code] (apps/web/app/api/auth/logout/route.ts; apps/cli/src/oauth.rs:451-485).\n\n### 6. Chrome extension link to the web session\nThe extension does not run its own sign-in form. `openClerkSignIn` opens `<web origin>/sign-in?redirectTo=/auth/chrome-extension` in a tab; `/sign-in` is a permanent redirect to `/login` [code] (apps/extension/src/features/cloud-bridge/clerkAuth.ts:216-223; apps/web/next.config.ts:155). The page `/auth/chrome-extension` only reports signed-in or signed-out and tells the person to return to the side panel [code] (apps/web/app/auth/chrome-extension/page.tsx). The extension's Clerk client uses `syncHost` (the web origin from `CLERK_SYNC_HOST`) so it mirrors the web session, and requires a token whose `azp` claim equals the extension's own origin [code] (clerkAuth.ts:84-92, 129-135). Cookie changes on the sync host (`__client_uat*`) trigger a re-read, so signing out on the web signs the extension out [code] (clerkAuth.ts `watchSyncHostSession`). Extension sign-out also DELETEs the synced web session by id [code] (clerkAuth.ts:247-280). A dev-only bearer in `chrome.storage.local` exists in development builds [code] (freeTrialClient.ts:371, 409).\n\n### 7. Session length\n- Product cap: any session older than `SESSION_ABSOLUTE_LIFETIME_HOURS` (default 720 h = 30 days, measured from creation) is refused and ended; the provider's own idle expiry also applies [code] (apps/web/lib/auth/session-policy.ts:1-60; api-auth.ts `assertSessionWithinAbsoluteLifetime`).\n- Provider-side idle length is a Clerk dashboard setting, not in the repo [unknown].\n- Device grants: access 7 days, refresh 30 days (above).\n\n### 8. 18-and-over step\n`ACCOUNT_MINIMUM_AGE` is 18 [code] (packages/contracts/types/src/account-eligibility.ts:1). The server stores only an outcome (`eligible` or `ineligible`), the minimum it was judged against and how it was reached; never the age [code] (apps/web/db/neon/0425_adult_eligibility.sql; adult-eligibility.ts). A decision counts only while its minimum is at least the current one. `api:GET /api/eligibility` reads state; `api:POST /api/eligibility` submits evidence (`declared_age`, `age_checked_on_device`, `platform_age_signal`) [code] (apps/web/app/api/eligibility/route.ts). An `ineligible` outcome is final until support reviews it [code] (adult-eligibility.ts comment). Confirmed state is cached 5 minutes per server instance [code] (adult-eligibility.ts:55).\n\n### 9. Linked devices and sign-out everywhere\n- Every non-web surface registers with `api:POST /api/devices/heartbeat` (rate limit `device-heartbeat`, CSRF), which upserts `table:device_registrations` keyed by user, surface and install id and links the credential family and identity session id [code] (apps/web/app/api/devices/heartbeat/route.ts). CLI calls it after login [code] (apps/cli/src/auth.rs:1044-1052; device_registry.rs:6).\n- `api:GET /api/settings/devices` lists them; `api:DELETE /api/settings/devices/{deviceId}` unlinks one (options `lost` and `logoutAll`), `PATCH` renames, `POST` stops remote work [code] (apps/web/app/api/settings/devices/[deviceId]/route.ts:431-433).\n- `api:GET /api/settings/sessions` lists provider sessions and ends any past lifetime; `api:DELETE /api/settings/sessions/{sessionId}` ends one; `api:DELETE /api/settings/sessions` is **sign out everywhere**: CSRF, step-up proof (`session.revoke_all`), revokes every other provider session, then the current one, and revokes every device refresh credential; sends a security notice; on partial failure answers 502 with counts so the caller can retry [code] (apps/web/app/api/settings/sessions/route.ts:189-274)."
+   },
+   {
+    "heading": "Implementation map",
+    "markdown": "| Concern | Where | Basis |\n|---|---|---|\n| Identity port and Clerk adapter | packages/platform/identity/src (factory.ts, adapters/clerk.ts, adapters/clerk-sessions.ts, types.ts) | [code] |\n| Web provider selection | apps/web/lib/server/identity.ts | [code] |\n| Routing, CSP, session gate | apps/web/proxy.ts (exports `proxy`; matcher at end) | [code] |\n| Bearer and cookie verification, account gates | apps/web/lib/api-auth.ts (`verifyBearerToken` line 323, `getClerkAuthUser` line 427) | [code] |\n| Native session admission | apps/web/lib/server/native-session-token.ts | [code] |\n| Sign-in UI | apps/web/features/auth (AuthFlow.tsx, IdentityAuthAdapter.tsx, authContract.ts, authRoutes.ts, postAuthDestination.ts, StepUpDialog.tsx) | [code] |\n| Client identity hooks | apps/web/lib/identity (client.ts, token.ts, request-authority.ts, useSessionSnapshot.ts) | [code] |\n| Post-sign-in gate page | apps/web/app/login/complete/page.tsx, apps/web/app/signup/complete | [code] |\n| Desktop shell sign-in | apps/desktop/electron/browserSignIn.ts, signInScreen.ts, main.ts (deep link handling around line 692-745), config.ts | [code] |\n| Desktop contract | packages/contracts/local-runtime/src/desktop-sign-in.ts | [code] |\n| Desktop web pages and routes | apps/web/app/auth/desktop/*, apps/web/app/api/auth/desktop/{grant,redeem}/route.ts, apps/web/lib/server/desktop-sign-in.ts | [code] |\n| Device grant routes | apps/web/app/api/auth/device/{code,approve,token,refresh}/route.ts, grant-policy.ts; page apps/web/app/auth/device/page.tsx | [code] |\n| Token issuing and revocation | apps/web/lib/server/developer-token.ts, device-refresh-token.ts, refresh-token-family.ts | [code] |\n| Logout | apps/web/app/api/auth/logout/route.ts | [code] |\n| Sessions and devices settings | apps/web/app/api/settings/sessions/*, apps/web/app/api/settings/devices/*, apps/web/lib/server/session-revocation.ts | [code] |\n| Step-up | apps/web/lib/server/step-up-auth.ts, apps/web/app/api/auth/step-up/route.ts | [code] |\n| Age gate | apps/web/lib/server/adult-eligibility.ts, adult-eligibility-gate.ts, require-adult-eligibility.ts, apps/web/app/api/eligibility/route.ts | [code] |\n| Session policy | apps/web/lib/auth/session-policy.ts | [code] |\n| Account status | apps/web/lib/auth/account-status.ts | [code] |\n| Mobile | apps/mobile/src/features/auth (components/MobileSignIn.tsx, store.ts, services/*), apps/mobile/src/integrations/clerk.ts, apps/mobile/services/authSession.ts, surfaceProof.ts | [code] |\n| CLI | apps/cli/src/auth.rs, oauth.rs, app_server/account.rs, device_registry.rs | [code] |\n| CLI `trust/identity.rs` | Workspace identity (git remote key) for trust grants. **Not account identity.** | [code] (apps/cli/src/trust/identity.rs:1-30) |\n| VS Code | apps/extension-vscode/src/features/account-auth/deviceAuth.ts, src/utils/api.ts | [code] |\n| Chrome | apps/extension/src/features/cloud-bridge/clerkAuth.ts, managedCloudAuthority.ts, freeTrialClient.ts | [code] |\n| Shared device client | packages/client/client-runtime/src/deviceAuthorization.ts | [code] |\n| Provider list | packages/client/client-runtime/src/authProviders.ts | [code] |"
+   },
+   {
+    "heading": "Data and state",
+    "markdown": "**Database tables (Neon Postgres, append-only migrations).**\n\n| Table | Holds | Source |\n|---|---|---|\n| table:desktop_sign_in_grants | SHA-256 of one-time code, challenge, expiry, consumed time; never a usable code | [code] (apps/web/db/neon/0334_desktop_sign_in_grants.sql; desktop-sign-in.ts) |\n| table:device_authorization_codes | pending, approved, denied, expired, consumed, revoked device codes, user code, device type, approving user | [code] (device/code, approve, token routes) |\n| table:device_refresh_tokens | token hash, family id, user, device id and name, workspace id, used, revoked, compromised times | [code] (device/token/route.ts; refresh-token-family.ts) |\n| table:device_refresh_token_families | revocation fence per family | [code] (refresh-token-family.ts) |\n| table:revoked_jwts | revoked developer-token ids | [code] (developer-token.ts:137) |\n| table:device_registrations | one row per user, surface, install: OS, version, capabilities, credential family, identity session, remote-enabled flag | [code] (heartbeat/route.ts; migration 0207) |\n| table:profiles | account status, terms version and time, adult eligibility outcome, minimum age and method | [code] (adult-eligibility.ts; 0425 migration) |\n\n**Device stores.**\n\n| Store | App | Holds | Source |\n|---|---|---|---|\n| store:os-keyring (service `com.agiworkforce.cli.auth`) or owner-only auth file | CLI | device grant, API keys | [code] (auth.rs:92-120, 778) |\n| store:vscode-secret-storage | VS Code | account token (`agiWorkforce.accountToken`), refresh token, expiry flags | [code] (utils/api.ts:220-222) |\n| store:clerk-secure-token-cache | Mobile | provider session | [code] (_layout.tsx:59, 994) |\n| store:mmkv `age-gate:v1` | Mobile | on-device age record (confirmed, minor flag, region, threshold) | [code] (ageGate.ts:49, 70-75) |\n| store:mmkv `cloud-cache-owner-id` | Mobile | which account owns cached cloud data | [code] (cloudAccountSession.ts:3) |\n| store:electron-partition `persist:agi-cloud` | Desktop | web session cookies of the hosted app window | [code] (electron/config.ts:24) |\n| in-memory pending sign-in (verifier, challenge) | Desktop | not persisted; lost on relaunch | [code] (browserSignIn.ts:15) |\n| store:chrome-storage-local | Chrome | dev-build bearer only; production uses provider client via `syncHost` | [code] (freeTrialClient.ts:371-409) |\n\n**Lifetimes (all [code]).** Desktop pending attempt 10 min; desktop grant and ticket 60 s; device code 900 s; poll interval 5 s; developer access token 7 days; device refresh token 30 days; product session cap 30 days default (`SESSION_ABSOLUTE_LIFETIME_HOURS`); adult-eligibility cache 5 min.\n\n**Configuration names (no values).** `AGI_IDENTITY_PROVIDER`, `AGI_AUTH_PROVIDERS`, `AGI_AUTH_MFA_EMAIL_FALLBACK`, `SESSION_ABSOLUTE_LIFETIME_HOURS`, `JWT_SECRET` (signs developer tokens), `CLERK_PUBLISHABLE_KEY` and `CLERK_SYNC_HOST` (Chrome build), `AGI_AUTH_BASE` (CLI override of the device-grant base), `AGIWORKFORCE_NO_KEYRING`, `AGIWORKFORCE_JWT` (CLI env credential), `NEXT_PUBLIC_APP_URL`. Per docs/security/security.md:689 `DEVICE_TOKEN_ENCRYPTION_KEY` seals nothing and the real device credential is the hashed pair in `device_refresh_tokens` [requirement] (docs/security/security.md:689-694)."
+   },
+   {
+    "heading": "Rules: access, plans, modes",
+    "markdown": "**Every authenticated API request** passes, in order: token verification (developer token, then identity-provider token with authorized-party check, then native token plus surface proof), absolute session lifetime, account status (`active` only; `locked`, `recovery_pending`, `suspended`, `banned`, `deletion_scheduled`, `deleted` are refused; fail-closed after one retry), account security (passkey or step-up where required), MFA policy for workspaces, and IP allow-list [code] (apps/web/lib/api-auth.ts:452-480; account-status.ts:1-10; docs/security/security.md:345 [requirement]).\n\n**Token-class restrictions.**\n- A surface token used as a Bearer is refused (`surface_token_as_bearer`) [code] (api-auth.ts:365-368).\n- A developer-token session may not approve a device or grant a desktop sign-in; it needs an interactive session [code] (approve/route.ts:45; desktop/grant/route.ts).\n- API keys work only on endpoints that declare an API-key scope [code] (api-auth.ts:437-447).\n\n**Terms.** Device approval, device token and refresh each re-check Terms acceptance; a poller keeps its approved code and waits while the person accepts on the web [code] (token/route.ts:155-170).\n\n**18-and-over enforcement points (server).** Enforced: `/login/complete`, device approve, device token and refresh, product page layouts (chat, tasks, code, workspace, quick-ask, admin, welcome), the LLM chat-completions gate, embeddings, audio transcription, speech, live voice sessions, image and video generation, and mobile intents [code] (grep of `adult-eligibility` and `requireAdultEligibility` across apps/web/app and apps/web/lib). Not enforced on every API route: settings, billing, export and deletion deliberately stay reachable [code] (require-adult-eligibility.ts comment). An unreadable decision refuses, never admits (503) [code] (adult-eligibility-gate.ts).\n\n**Modes and plans.**\n\n| Mode | Account needed to sign in? | Basis |\n|---|---|---|\n| mode:local (mobile) | No account. The device asks for age first (18 threshold, or higher by region rule) before any screen; sign-in appears only when the person chooses Cloud | [code] (apps/mobile/src/features/auth/services/rootRouting.ts:38-60; ageGate.ts:56-70) |\n| mode:local (CLI, VS Code) | No account; local models and BYOK work without `agi login` | [code] (apps/cli/src/auth.rs:1013, \"Run `agi login` for your AGI account, or `agi login <provider>` to use your own API key\") |\n| mode:own-key (CLI, VS Code) | Provider API key saved in keyring or SecretStorage; no AGI sign-in required | [code] (auth.rs API_KEY_PROVIDERS; extension-vscode utils/api.ts:228-237) |\n| mode:cloud (all) | AGI account, adult-eligibility confirmed, Terms accepted; plan rules then apply elsewhere | [code] (device/approve, token routes; llm auth-gate.ts:282) |\n\nEntitlement and quota decisions are not made by the sign-in code. Device scope `managed-cloud:use` says only \"subject to plan and workspace permissions\" [code] (device/code/route.ts:41-46). See SYS-chat-turn-pipeline for how a turn is gated after identity.\n\n**Trust boundary.** Signing in must not silently move a Local chat to Cloud or BYOK [requirement] (AGENTS.md section 6). On mobile, sign-in and session refresh run through the provider SDK and reach the provider hosts in either mode; only the listed account controls pass the egress guard in Local [requirement] (docs/architecture/trust-boundaries.md:47)."
+   },
+   {
+    "heading": "Differences between apps",
+    "markdown": "| Surface | Sign-in method | Where credential lives | Sign out | Account needed for local use |\n|---|---|---|---|---|\n| surface:web | `/login`, `/signup`: email, code, password, passkey, provider buttons, enterprise SSO | Provider session cookie | Provider sign-out; settings page can end other sessions or all | Guest chat on `/chat` without session (proxy leaves `/chat` open); signed-in needed for the rest of product routes [code] (proxy.ts:324-330) |\n| surface:desktop (Electron, public) | System browser, challenge and code hand-off, then ticket in the window | `persist:agi-cloud` partition | Page reports signed-out account; shell switches window to sign-in screen | The window shows the hosted app; signed-out window shows the sign-in screen [code] (main.ts followSignedInState ~766-780). Local-folder features need no AGI account [inferred; not opened] |\n| surface:desktop (Tauri, retained internal) | Device-code flow (`desktopNativeSignIn.ts`) | Native store | [unknown] | [unknown] |\n| surface:mobile | Native screens with Clerk hooks; Apple, Google and others; age check on account | Secure token cache; surface proof per request | `signOut` ends this session or hands over to another saved account; `signOutAllAccounts` ends every session on this device only | None for Local; age gate first [code] |\n| surface:cli | Device code in terminal (`agi login`) | OS keyring or owner-only file | `agi logout`: revokes the device session on the server and forgets caches | None for local models or BYOK |\n| surface:vscode | Device code via `vscode.env.openExternal`; remote windows open the browser on the local machine | `SecretStorage` | `signOutOfAgiCloud` calls logout | None for local or BYOK |\n| surface:chrome | Reuses web session through Clerk `syncHost`; tab to `/login` | Provider client in the extension background; origin-bound token | Clears client and DELETEs synced web session | [unknown] whether a signed-out extension runs any model; `freeTrialClient.ts` suggests a hosted free trial needs a token |\n\n**Notable asymmetries.** Mobile \"sign out of all accounts\" ends sessions on this phone, not on every device; the account-wide action is in Settings, Account security (`DELETE /api/settings/sessions`) [code] (store.ts:277-281; mobile account-security/service.ts:171-186). CLI and VS Code never hold a provider session cookie; they hold a signed developer token the server can revoke by family. Chrome and Mobile tokens are provider tokens, so revocation is by provider session id."
+   },
+   {
+    "heading": "Failure handling",
+    "markdown": "| Situation | Behaviour | Source |\n|---|---|---|\n| Authorized-party allowlist unresolvable | Proxy answers 503 for session routes | [code] proxy.ts:217-224, 340 |\n| Desktop link used twice, after relaunch, after cancel, or from a different attempt | Shell reports `expired`; window shows expired notice; person restarts | [code] browserSignIn.ts `readBrowserSignInLink` |\n| Desktop redeem fails (code expired or used) | 404 \"expired or already used\"; complete page offers \"Continue in your browser\" and \"Sign in here instead\" | [code] redeem/route.ts; DesktopSignInComplete.tsx |\n| Browser cannot open from desktop shell | Screen state `unopened` | [code] signInScreen.ts |\n| Device code unknown, expired, already processed | 404 or 409 with a message to restart | [code] device/code route GET, approve |\n| Device poll too fast | `slow_down` with new interval; CLI adds 5 s | [code] token/route.ts:51-70; oauth.rs |\n| Device approval while Terms outdated | 403 with `acceptanceUrl`; poll returns `terms_acceptance_required` and keeps the code approved | [code] approve, token routes |\n| Account suspended between approval and poll | `account_unavailable` with recovery URL; no token issued | [code] token/route.ts:110-130 |\n| Refresh token replayed | Family marked compromised and revoked; owner notified | [code] refresh/route.ts, refresh-token-family.ts |\n| Revocation lookup fails | Developer-token requests are denied with 503, not allowed | [code] api-auth.ts:330-340 |\n| Sign-out everywhere partly fails | 502 with counts; current session kept; retry finishes | [code] settings/sessions/route.ts:216-236 |\n| Stale client session reaches `/login/complete` | Recovery screen; one automatic retry marker `authRetry=1`; no redirect loop | [code] login/complete/page.tsx:52-62 |\n| Age decision unreadable | 503 `age_eligibility_unavailable`; no admission | [code] adult-eligibility-gate.ts |\n| Secure storage unavailable (mobile) | Dedicated screen | [code] apps/mobile/src/features/auth/components/SecureStorageUnavailable.tsx (file exists) |\n| OS keyring locked (CLI) | Message explains unlock or `AGIWORKFORCE_NO_KEYRING=1` | [code] auth.rs:175 |\n| Region blocked | 451 JSON for API, rewritten page for browsers, before identity runs | [code] proxy.ts:240-262 |"
+   },
+   {
+    "heading": "How it should work",
+    "markdown": "Everything here is [proposed] unless a requirement is cited.\n\n- [requirement] Local, BYOK and Managed Cloud stay separate trust boundaries; sign-in never reroutes Local work (AGENTS.md section 6).\n- [requirement] Local inference on mobile and desktop must not need a paid plan. Whether it needs an account is open; today mobile Local needs none (see Rules).\n- [proposed] State the provider-side session idle length in code or a doc owned by `docs/security/security.md`, so engineers need not open the provider dashboard.\n- [proposed] Give the Chrome extension a stated signed-out behaviour in one place.\n- [proposed] Make Mobile \"sign out all accounts\" wording say it affects this device only, and link to account-wide sign-out.\n- [proposed] Apply the 18-and-over gate through one shared function at the API layer rather than per route, so a new route cannot forget it."
+   },
+   {
+    "heading": "Gaps",
+    "markdown": "Implementation status (is the code connected) and verification status (has anyone run it) are separate. No document in the repository records a real run for any flow on this page, so nothing here is [executed].\n\n| Gap | Status | Basis |\n|---|---|---|\n| All flows above are present in code and wired (routes, pages, shell handlers) | Implemented | [code] |\n| Any of them driven end to end in a live run | Not established | [unknown] |\n| Age gate not on every API route; only listed routes call it | Partial by design; new routes can miss it | [code] (list above) |\n| `docs`: migration 0425 header says \"NOT YET APPLIED\" | Header stale or production not applied | [unknown]; see outdated_documents |\n| Desktop Tauri sign-out and Chrome signed-out behaviour | Not read | [unknown] |\n| `terms/accept` treats a native-surface acceptance with no evidence as `confirmed` age | Possible hole: native clients can skip the evidence step | [code] (apps/web/app/api/terms/accept/route.ts:59-67); intent [unknown] |\n| Provider session length lives outside the repo | Unverifiable here | [unknown] |\n| Electron `safeStorage` claim in docs/architecture/desktop.md:171 | No `safeStorage` use found in apps/desktop/electron/*.ts | [unknown] |"
+   },
+   {
+    "heading": "How to verify",
+    "markdown": "Nothing was run for this page. These are the existing checks to run, [proposed] as a procedure.\n\n**Tests that exist (names seen, not run).**\n- test:apps/desktop/electron/__tests__/browserSignIn.test.ts and signInScreen.test.ts\n- test:apps/web/app/auth/desktop/complete/DesktopSignInComplete.test.tsx\n- test:apps/web/app/api/auth/device/__tests__/session-revocation.test.ts and refresh-carries-device-link.test.ts\n- test:apps/web/app/api/auth/logout/route.test.ts\n- test:apps/web/lib/server/adult-eligibility-gate.test.ts, adult-eligibility.test.ts, require-adult-eligibility.test.ts\n- test:apps/web/features/auth/__tests__/ (AuthFlow, IdentityAuthAdapter, StepUpDialog, postAuthDestination, useSignupAgeGate)\n- test:apps/web/lib/identity/__tests__/useSignOut.push.test.tsx and request-authority.test.ts\n- test:apps/mobile/__tests__/AccountSecurityScreen.test.tsx and SecurityMutationAccountEpoch.test.ts\n- AGENTS.md section 6 names per-surface `trust-boundary.test.ts` and guards `check:trust-boundaries`, `check:rls-boundary`.\n\n**Human checks.**\n1. Web: sign up as under 18, expect refusal before any provider call; sign up as adult, expect `/login/complete` checks then a new chat.\n2. Desktop: start sign-in, cancel, click an old link; expect \"expired\". Complete once; reuse the link; expect \"expired\".\n3. CLI: `agi login`, approve, check keyring entry and a row in `device_registrations`; run `agi logout`; check the refresh token no longer works.\n4. Settings, sign out everywhere: confirm step-up prompt, all sessions and device credentials end.\n5. Mobile Local: confirm no sign-in prompt appears before choosing Cloud.\n\nSee AGENTS.md section 12 for the command inventory (`docs/agent-context/commands.json`); web tests run through the package script, not the root Vitest."
+   }
+  ],
+  "key_facts": [
+   {
+    "fact": "The identity provider is Clerk by default, selected through a port; `AGI_IDENTITY_PROVIDER` can name another provider but only `clerk` is implemented.",
+    "basis": "code",
+    "evidence": [
+     "packages/platform/identity/src/factory.ts:9-45"
+    ]
+   },
+   {
+    "fact": "Web proxy returns 503 for session routes if the authorized-party allowlist cannot be resolved, instead of authenticating without the origin check.",
+    "basis": "code",
+    "evidence": [
+     "apps/web/proxy.ts:192-224",
+     "apps/web/proxy.ts:340"
+    ]
+   },
+   {
+    "fact": "A signed-out visitor to a protected product route is redirected to /login with redirectTo, but /chat is exempt from the cookie check.",
+    "basis": "code",
+    "evidence": [
+     "apps/web/proxy.ts:324-330"
+    ]
+   },
+   {
+    "fact": "Desktop sign-in uses a PKCE-like hand-off: the shell keeps a random verifier in memory, sends its SHA-256 challenge to the browser, and redeems a one-time code with the verifier.",
+    "basis": "code",
+    "evidence": [
+     "apps/desktop/electron/browserSignIn.ts:39-41",
+     "apps/web/lib/server/desktop-sign-in.ts:33-65"
+    ]
+   },
+   {
+    "fact": "The desktop pending attempt lives 10 minutes; the server grant and the sign-in ticket live 60 seconds; the grant is stored only as a hash.",
+    "basis": "code",
+    "evidence": [
+     "apps/desktop/electron/browserSignIn.ts:13",
+     "apps/web/lib/server/desktop-sign-in.ts:7"
+    ]
+   },
+   {
+    "fact": "The desktop deep link scheme is agiworkforce-cloud and the host is sign-in.",
+    "basis": "code",
+    "evidence": [
+     "packages/contracts/local-runtime/src/host-bridge.ts:4",
+     "packages/contracts/local-runtime/src/desktop-sign-in.ts"
+    ]
+   },
+   {
+    "fact": "Redeem is accepted only in a desktop host that reports browser sign-in support, so a grant opened in an ordinary browser fails.",
+    "basis": "code",
+    "evidence": [
+     "apps/web/app/auth/desktop/complete/DesktopSignInComplete.tsx:73"
+    ]
+   },
+   {
+    "fact": "CLI, VS Code and (in the Tauri build) desktop link through an RFC 8628 device grant: code issued with 900 s life and 5 s poll interval, approved on /auth/device, exchanged at /api/auth/device/token.",
+    "basis": "code",
+    "evidence": [
+     "apps/web/app/api/auth/device/grant-policy.ts:6-7",
+     "apps/web/app/api/auth/device/code/route.ts:24-31",
+     "apps/web/app/api/auth/device/token/route.ts"
+    ]
+   },
+   {
+    "fact": "Device access tokens are web-signed JWTs valid 7 days; refresh tokens are 32 random bytes stored as SHA-256 hashes and valid 30 days, rotated on use.",
+    "basis": "code",
+    "evidence": [
+     "apps/web/lib/server/developer-token.ts:11",
+     "apps/web/lib/server/device-refresh-token.ts:5-22",
+     "apps/web/app/api/auth/device/refresh/route.ts"
+    ]
+   },
+   {
+    "fact": "A replayed refresh token marks its whole family compromised and revokes it.",
+    "basis": "code",
+    "evidence": [
+     "apps/web/app/api/auth/device/refresh/route.ts",
+     "apps/web/lib/server/refresh-token-family.ts:191"
+    ]
+   },
+   {
+    "fact": "Device approval is refused for developer-token callers, when the account has device sign-in switched off, when Terms need acceptance, or when no current 18-and-over decision exists.",
+    "basis": "code",
+    "evidence": [
+     "apps/web/app/api/auth/device/approve/route.ts:45",
+     "apps/web/app/api/auth/device/approve/route.ts:134-190"
+    ]
+   },
+   {
+    "fact": "Mobile Cloud calls send the Clerk session token as Bearer plus a Clerk-template surface proof in a separate header; the server admits a native token only with a matching proof.",
+    "basis": "code",
+    "evidence": [
+     "apps/mobile/services/authSession.ts:17-26",
+     "apps/web/lib/server/native-session-token.ts"
+    ]
+   },
+   {
+    "fact": "Mobile root routing requires a device-level age gate before any screen, then lets signed-out users stay in the app; sign-in screens open only on request or when a ended session is owed.",
+    "basis": "code",
+    "evidence": [
+     "apps/mobile/src/features/auth/services/rootRouting.ts:38-60"
+    ]
+   },
+   {
+    "fact": "The Chrome extension reuses the web session through Clerk syncHost, requires a token whose azp equals the extension origin, and opens /sign-in which redirects to /login.",
+    "basis": "code",
+    "evidence": [
+     "apps/extension/src/features/cloud-bridge/clerkAuth.ts:84-92",
+     "apps/extension/src/features/cloud-bridge/clerkAuth.ts:216-223",
+     "apps/web/next.config.ts:155"
+    ]
+   },
+   {
+    "fact": "The minimum account age is 18 on every surface; the server stores only outcome, minimum age, method and time, never the age.",
+    "basis": "code",
+    "evidence": [
+     "packages/contracts/types/src/account-eligibility.ts:1",
+     "apps/web/db/neon/0425_adult_eligibility.sql"
+    ]
+   },
+   {
+    "fact": "An age decision made under a lower minimum no longer counts and the person is asked again; an ineligible outcome stands.",
+    "basis": "code",
+    "evidence": [
+     "apps/web/lib/server/adult-eligibility.ts:25-41"
+    ]
+   },
+   {
+    "fact": "Server-side 18-and-over enforcement covers login-complete, device grant, product page layouts, LLM chat, embeddings, transcription, speech, live voice, image and video generation and mobile intents, not every API route.",
+    "basis": "code",
+    "evidence": [
+     "apps/web/app/api/llm/v1/chat/completions/lib/auth-gate.ts:282",
+     "apps/web/lib/server/require-adult-eligibility.ts",
+     "apps/web/app/api/media/image/generate/route.ts"
+    ]
+   },
+   {
+    "fact": "Sign out everywhere is DELETE /api/settings/sessions: it needs CSRF and a step-up proof, ends all other provider sessions, then the current one, and revokes every device refresh credential.",
+    "basis": "code",
+    "evidence": [
+     "apps/web/app/api/settings/sessions/route.ts:189-274"
+    ]
+   },
+   {
+    "fact": "Product session cap defaults to 30 days from creation (SESSION_ABSOLUTE_LIFETIME_HOURS), on top of the provider's idle expiry.",
+    "basis": "code",
+    "evidence": [
+     "apps/web/lib/auth/session-policy.ts:1-45"
+    ]
+   },
+   {
+    "fact": "The provider-side session length is not in the repository.",
+    "basis": "unknown",
+    "evidence": [
+     "apps/web/lib/auth/session-policy.ts comment says the provider's expiry renews on use"
+    ]
+   },
+   {
+    "fact": "Linked devices are rows in device_registrations created by POST /api/devices/heartbeat and managed through /api/settings/devices.",
+    "basis": "code",
+    "evidence": [
+     "apps/web/app/api/devices/heartbeat/route.ts:20-45",
+     "apps/web/app/api/settings/devices/[deviceId]/route.ts:431-433"
+    ]
+   },
+   {
+    "fact": "CLI credentials sit in the OS keyring (service com.agiworkforce.cli.auth) or an owner-only file when AGIWORKFORCE_NO_KEYRING=1; VS Code uses SecretStorage.",
+    "basis": "code",
+    "evidence": [
+     "apps/cli/src/auth.rs:92",
+     "apps/cli/src/auth.rs:778",
+     "apps/extension-vscode/src/utils/api.ts:220"
+    ]
+   },
+   {
+    "fact": "apps/cli/src/trust/identity.rs is workspace identity for trust grants (git remote key), not account sign-in.",
+    "basis": "code",
+    "evidence": [
+     "apps/cli/src/trust/identity.rs:1-30"
+    ]
+   },
+   {
+    "fact": "CLI logout posts to /api/auth/logout, which revokes the token id and the whole session family, or the family named by a refresh token.",
+    "basis": "code",
+    "evidence": [
+     "apps/cli/src/oauth.rs:451-485",
+     "apps/web/app/api/auth/logout/route.ts:25-80"
+    ]
+   },
+   {
+    "fact": "Enabled web sign-in providers come from AGI_AUTH_PROVIDERS among google, github, microsoft, apple; default google and github.",
+    "basis": "code",
+    "evidence": [
+     "packages/client/client-runtime/src/authProviders.ts:1-30",
+     "apps/web/features/auth/authProviderConfig.ts"
+    ]
+   },
+   {
+    "fact": "Sign-in, device approval and token issue do not check a plan; plan gating happens after identity.",
+    "basis": "inferred",
+    "evidence": [
+     "apps/web/app/api/auth/device/approve/route.ts",
+     "apps/web/app/api/auth/device/token/route.ts"
+    ]
+   },
+   {
+    "fact": "No document in the repository was found recording a real run of these sign-in flows.",
+    "basis": "unknown",
+    "evidence": [
+     "not established"
+    ]
+   }
+  ],
+  "relationships": [
+   {
+    "from": "SYS-authentication-and-identity",
+    "rel": "implemented_by",
+    "to": "file:packages/platform/identity/src/factory.ts",
+    "evidence": [
+     "packages/platform/identity/src/factory.ts:11-45"
+    ]
+   },
+   {
+    "from": "surface:web",
+    "rel": "implemented_by",
+    "to": "file:apps/web/proxy.ts",
+    "evidence": [
+     "apps/web/proxy.ts:316-358"
+    ]
+   },
+   {
+    "from": "surface:web",
+    "rel": "implemented_by",
+    "to": "file:apps/web/features/auth/AuthFlow.tsx",
+    "evidence": [
+     "apps/web/features/auth/AuthFlow.tsx:1-60"
+    ]
+   },
+   {
+    "from": "surface:web",
+    "rel": "implemented_by",
+    "to": "file:apps/web/app/login/complete/page.tsx",
+    "evidence": [
+     "apps/web/app/login/complete/page.tsx:41-120"
+    ]
+   },
+   {
+    "from": "surface:desktop",
+    "rel": "implemented_by",
+    "to": "file:apps/desktop/electron/browserSignIn.ts",
+    "evidence": [
+     "apps/desktop/electron/browserSignIn.ts:13-86"
+    ]
+   },
+   {
+    "from": "surface:desktop",
+    "rel": "stores_data_in",
+    "to": "store:electron-partition persist:agi-cloud",
+    "evidence": [
+     "apps/desktop/electron/config.ts:24"
+    ]
+   },
+   {
+    "from": "surface:desktop",
+    "rel": "exposes_api",
+    "to": "api:POST /api/auth/desktop/grant",
+    "evidence": [
+     "apps/web/app/api/auth/desktop/grant/route.ts:55"
+    ]
+   },
+   {
+    "from": "surface:desktop",
+    "rel": "exposes_api",
+    "to": "api:POST /api/auth/desktop/redeem",
+    "evidence": [
+     "apps/web/app/api/auth/desktop/redeem/route.ts:58"
+    ]
+   },
+   {
+    "from": "api:POST /api/auth/desktop/grant",
+    "rel": "stores_data_in",
+    "to": "table:desktop_sign_in_grants",
+    "evidence": [
+     "apps/web/lib/server/desktop-sign-in.ts:33-47"
+    ]
+   },
+   {
+    "from": "api:POST /api/auth/device/code",
+    "rel": "stores_data_in",
+    "to": "table:device_authorization_codes",
+    "evidence": [
+     "apps/web/app/api/auth/device/code/route.ts:80-92"
+    ]
+   },
+   {
+    "from": "api:POST /api/auth/device/token",
+    "rel": "stores_data_in",
+    "to": "table:device_refresh_tokens",
+    "evidence": [
+     "apps/web/app/api/auth/device/token/route.ts:200-225"
+    ]
+   },
+   {
+    "from": "api:POST /api/auth/device/approve",
+    "rel": "depends_on",
+    "to": "table:profiles",
+    "evidence": [
+     "apps/web/app/api/auth/device/approve/route.ts:134-190",
+     "apps/web/lib/server/adult-eligibility.ts:41-52"
+    ]
+   },
+   {
+    "from": "api:POST /api/auth/logout",
+    "rel": "stores_data_in",
+    "to": "table:revoked_jwts",
+    "evidence": [
+     "apps/web/lib/server/developer-token.ts:137"
+    ]
+   },
+   {
+    "from": "surface:cli",
+    "rel": "uses_provider",
+    "to": "api:POST /api/auth/device/code",
+    "evidence": [
+     "apps/cli/src/oauth.rs:489-495",
+     "apps/cli/src/auth.rs:1016-1020"
+    ]
+   },
+   {
+    "from": "surface:cli",
+    "rel": "stores_data_in",
+    "to": "store:os-keyring com.agiworkforce.cli.auth",
+    "evidence": [
+     "apps/cli/src/auth.rs:92"
+    ]
+   },
+   {
+    "from": "surface:cli",
+    "rel": "exposes_api",
+    "to": "api:POST /api/devices/heartbeat",
+    "evidence": [
+     "apps/cli/src/device_registry.rs:6"
+    ]
+   },
+   {
+    "from": "api:POST /api/devices/heartbeat",
+    "rel": "stores_data_in",
+    "to": "table:device_registrations",
+    "evidence": [
+     "apps/web/app/api/devices/heartbeat/route.ts:20-45"
+    ]
+   },
+   {
+    "from": "surface:vscode",
+    "rel": "implemented_by",
+    "to": "file:apps/extension-vscode/src/features/account-auth/deviceAuth.ts",
+    "evidence": [
+     "apps/extension-vscode/src/features/account-auth/deviceAuth.ts:176"
+    ]
+   },
+   {
+    "from": "surface:vscode",
+    "rel": "stores_data_in",
+    "to": "store:vscode-secret-storage",
+    "evidence": [
+     "apps/extension-vscode/src/utils/api.ts:220-229"
+    ]
+   },
+   {
+    "from": "surface:mobile",
+    "rel": "implemented_by",
+    "to": "file:apps/mobile/src/features/auth/components/MobileSignIn.tsx",
+    "evidence": [
+     "apps/mobile/src/features/auth/components/MobileSignIn.tsx:5-7"
+    ]
+   },
+   {
+    "from": "surface:mobile",
+    "rel": "depends_on",
+    "to": "file:apps/web/lib/server/native-session-token.ts",
+    "evidence": [
+     "apps/mobile/services/authSession.ts:17-26",
+     "apps/web/lib/server/native-session-token.ts"
+    ]
+   },
+   {
+    "from": "surface:mobile",
+    "rel": "stores_data_in",
+    "to": "store:mmkv age-gate:v1",
+    "evidence": [
+     "apps/mobile/src/features/auth/services/ageGate.ts:49"
+    ]
+   },
+   {
+    "from": "surface:mobile",
+    "rel": "available_on",
+    "to": "mode:local",
+    "evidence": [
+     "apps/mobile/src/features/auth/services/rootRouting.ts:38-60"
+    ]
+   },
+   {
+    "from": "surface:chrome",
+    "rel": "implemented_by",
+    "to": "file:apps/extension/src/features/cloud-bridge/clerkAuth.ts",
+    "evidence": [
+     "apps/extension/src/features/cloud-bridge/clerkAuth.ts:216-223"
+    ]
+   },
+   {
+    "from": "surface:chrome",
+    "rel": "depends_on",
+    "to": "surface:web",
+    "evidence": [
+     "apps/extension/src/features/cloud-bridge/clerkAuth.ts:84-92",
+     "apps/web/app/auth/chrome-extension/page.tsx"
+    ]
+   },
+   {
+    "from": "surface:cli",
+    "rel": "available_on",
+    "to": "mode:own-key",
+    "evidence": [
+     "apps/cli/src/auth.rs:1013"
+    ]
+   },
+   {
+    "from": "api:DELETE /api/settings/sessions",
+    "rel": "depends_on",
+    "to": "api:POST /api/auth/step-up",
+    "evidence": [
+     "apps/web/app/api/settings/sessions/route.ts:198-203"
+    ]
+   },
+   {
+    "from": "api:GET /api/eligibility",
+    "rel": "stores_data_in",
+    "to": "table:profiles",
+    "evidence": [
+     "apps/web/lib/server/adult-eligibility.ts:41-52",
+     "apps/web/app/api/eligibility/route.ts:28-31"
+    ]
+   },
+   {
+    "from": "SYS-authentication-and-identity",
+    "rel": "governed_by_subscription",
+    "to": "SYS-chat-turn-pipeline",
+    "evidence": [
+     "apps/web/app/api/llm/v1/chat/completions/lib/auth-gate.ts:282"
+    ]
+   },
+   {
+    "from": "SYS-authentication-and-identity",
+    "rel": "configured_by",
+    "to": "file:apps/web/lib/auth/session-policy.ts",
+    "evidence": [
+     "apps/web/lib/auth/session-policy.ts:1-3"
+    ]
+   },
+   {
+    "from": "SYS-authentication-and-identity",
+    "rel": "tested_by",
+    "to": "test:apps/desktop/electron/__tests__/browserSignIn.test.ts",
+    "evidence": [
+     "apps/desktop/electron/__tests__ listing"
+    ]
+   },
+   {
+    "from": "SYS-authentication-and-identity",
+    "rel": "tested_by",
+    "to": "test:apps/web/app/api/auth/device/__tests__/session-revocation.test.ts",
+    "evidence": [
+     "apps/web/app/api/auth/device/__tests__ listing"
+    ]
+   },
+   {
+    "from": "SYS-authentication-and-identity",
+    "rel": "documented_in",
+    "to": "file:docs/security/security.md",
+    "evidence": [
+     "docs/security/security.md:345",
+     "docs/security/security.md:689-694"
+    ]
+   },
+   {
+    "from": "SYS-authentication-and-identity",
+    "rel": "uses_provider",
+    "to": "provider:clerk",
+    "evidence": [
+     "packages/platform/identity/src/factory.ts:11"
+    ]
+   }
+  ],
+  "open_questions": [
+   "What is the identity provider's idle session length and is it set in code or only in the provider dashboard? Not found in the repo.",
+   "Does a signed-out Chrome extension run any model (hosted free trial, own key or local)? freeTrialClient.ts suggests a token is needed; not fully read.",
+   "Is the Tauri desktop build's device-code sign-in still reachable by any user? It is internal per AGENTS.md section 5 but its code is present.",
+   "Does Electron desktop need an AGI account for any local-folder feature? Only the sign-in screen path was read.",
+   "Product choice: should Local on desktop and CLI require an account? Today CLI Local and BYOK need none, and mobile Local needs none beyond the on-device age gate.",
+   "Is the terms/accept rule that treats a native-surface acceptance without evidence as age-confirmed intended? It could let a native client skip the age step.",
+   "Has migration 0425 been applied in production? The file header says it is not; other state is outside the repository.",
+   "Is the 18-and-over gate meant to cover every cloud route, or only the listed model, media, voice and page routes?",
+   "What does Mobile 'sign out of all accounts' promise users, given it ends sessions on this device only?"
+  ],
+  "outdated_documents": [
+   {
+    "document": "apps/web/db/neon/0425_adult_eligibility.sql (header comment)",
+    "what_is_outdated": "Header says 'NOT YET APPLIED : draft only, pending explicit approval before running.'",
+    "what_the_code_says": "Code in apps/web/lib/server/adult-eligibility.ts and the 18-and-over gates read these profiles columns on live paths, so the code assumes the migration is applied. Whether production has it applied is not shown in the repository.",
+    "evidence": "apps/web/db/neon/0425_adult_eligibility.sql:4; apps/web/lib/server/adult-eligibility.ts:41-52"
+   },
+   {
+    "document": "docs/architecture/desktop.md (Local state and credentials section)",
+    "what_is_outdated": "States account credentials are stored only when Electron safeStorage reports OS encryption is available.",
+    "what_the_code_says": "No safeStorage use was found in apps/desktop/electron/*.ts. The Electron window keeps its session in the persist:agi-cloud partition, and the sign-in itself is the web session. The claim is unverified rather than proven wrong.",
+    "evidence": "docs/architecture/desktop.md:171; apps/desktop/electron/config.ts:24"
+   }
+  ]
+ },
+ "issues": [
+  {
+   "page_a": "40-systems/execution-boundaries.md (lines 54, 124 and 299-304; the Own key row of the Chat table says 'CLI, Tauri desktop; not mobile, Electron or Chrome'; gap row 14)",
+   "says_a": "VS Code Local and own key are 'Unwired' and are shown that way in the per-app tables. The Own key chat row lists only CLI and Tauri.",
+   "page_b": "30-surfaces/vscode.md (summary; Modes table lines 99-101); 40-systems/local-inference.md (VS Code section; 'Account / sign-in, by surface' table); 40-systems/authentication-and-identity.md line 168; 00-start/product-overview.md ('Free users ... VS Code on Local')",
+   "says_b": "VS Code supports Local through the CLI app-server (Ollama, LM Studio) and own key through `agi login <provider>`. Neither needs an AGI account or plan. Only Cloud models need a Premium-or-higher plan.",
+   "which_is_right": "vscode.md and local-inference.md describe what the extension does. The 'Unwired' value is a flag in the harness catalog that lags the implementation, so the execution-boundaries tables are misleading. The page's own gap row 14 says 'policy ahead of code'. That wording has the direction wrong and conflicts with its own table.",
+   "evidence": "apps/extension-vscode/src/integrations/localRuntimeClient.ts:~720-745 builds a local model list with provider enum ['ollama','lmstudio'] and local servers. apps/extension-vscode/src/providers/terminalProvider.ts:~383-404 registers agi-workforce.signInProvider, which runs `<cli> login <id>`. apps/extension-vscode/README.md:~35-38 says local models and provider API keys stay available without an AGI subscription. The only 'unwired' source is packages/ai/model-registry/catalog/harnesses.json:703-725, where vscode/local-chat and vscode/byok-chat have status 'unwired'."
+  },
+  {
+   "page_a": "00-start/product-overview.md (lines 128-130: 'Nothing is sold before 2027-01-01 (owner decision)'; '18 and over on every app (owner decision)')",
+   "says_a": "Both are stated as established owner decisions.",
+   "page_b": "10-requirements/established-requirements.md (lines 177, 224, 230; 174 and 237 on minimum age); 40-systems/authentication-and-identity.md (lines 79-80 and 160)",
+   "says_b": "established-requirements: neither the 2027-01-01 deferral nor the 18-and-over rule is in any repository record, so both are [unknown]. Minimum-age thresholds are also listed as awaiting legal review. authentication-and-identity: 18 is enforced in code, with an `ACCOUNT_MINIMUM_AGE` constant and server enforcement points.",
+   "which_is_right": "On age, the authentication page is right and established-requirements is stale. 18 is code-enforced, and the code outranks prose. On the sales date, no repository source states 2027-01-01, so the overview should not present it as a code or repo fact. The code gate is the waitlist and access-code gate described in the subscriptions page.",
+   "evidence": "packages/contracts/types/src/account-eligibility.ts:1 has `ACCOUNT_MINIMUM_AGE = 18`. apps/mobile/src/features/auth/services/ageGate.ts:25-26, 50 and 69-70 floor every threshold at that constant. A grep of apps/web/lib, apps/web/app, packages/contracts, docs and apps/mobile/src for '2027-01-01' finds only test fixtures and contract dates. The code sales gate is apps/web/lib/server/billing-waitlist-access.ts, per the subscriptions page."
+  },
+  {
+   "page": "40-systems/authentication-and-identity.md (line 166 and the age sections) and 30-surfaces/mobile.md (line 75)",
+   "problem": "The age rule is described as '18 threshold, or higher by region rule' and 'region thresholds, e.g. 18 in India and Brazil'. The region rules do not exceed 18. Brazil, India and the default are all 18, and the code takes max(region, 18). The wording implies some regions are stricter.",
+   "fix": "Say: 'The minimum age is 18 everywhere today. The mobile gate has a per-region table, and every entry is 18.' Cite apps/mobile/src/features/auth/services/ageGate.ts:25-26, 50 and 69-70."
+  },
+  {
+   "page": "40-systems/authentication-and-identity.md (Differences table, web row, 'Account needed for local use' column)",
+   "problem": "The cell talks about guest chat on `/chat`. That is a Cloud route, and web.md says it is off unless a feature flag is on. Web has no Local use, so the column answer should be 'not applicable'. The cell reads as if signed-out web works.",
+   "fix": "Put 'No Local mode on web. A flag-gated guest Cloud chat exists (apps/web/lib/guest-chat/guest-chat-access.ts); everything else needs sign-in.'"
+  },
+  {
+   "page": "40-systems/authentication-and-identity.md (credential table row 1, 'Session length' section) versus 70-qa/start-here/where-things-stand.md (idle sign-out fix)",
+   "problem": "The auth page treats session length as a 30-day product cap plus an unknown provider idle expiry. It never mentions the user-selectable idle sign-out. where-things-stand records that setting as a fix: off by default, and a person stayed signed in for 62 minutes. A reader of the auth page would not know that default idle sign-out is off. The page also does not say that the 30-day cap is an env-configurable default.",
+   "fix": "Add the idle sign-out setting, its default of off, and the 15-minute choice to the Session length section. State that SESSION_ABSOLUTE_LIFETIME_HOURS defaults to 720 (apps/web/lib/auth/session-policy.ts:3 and 12-19). Say the provider-side length is unknown."
+  }
+ ]
+}

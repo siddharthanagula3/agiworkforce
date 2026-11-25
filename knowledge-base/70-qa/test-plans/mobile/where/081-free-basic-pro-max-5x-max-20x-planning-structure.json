@@ -1,0 +1,256 @@
+{
+ "S81.02": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-billing/index.tsx",
+    "text": "What your plan includes"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/screenTitles.ts",
+    "text": "Subscription"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/plans/index.tsx",
+    "text": "A usage allowance, free models only"
+   }
+  ],
+  "needs": "a Free account",
+  "note": "In this build only the signed-in plan is listed (the store purchase switch is off), and server enforcement is not visible in the UI.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with a Free account and make sure chat is set to Cloud.",
+   "Open Settings and tap Subscription.",
+   "Tap What your plan includes.",
+   "Look for the Includes heading and the line A usage allowance, free models only, and compare with Expected."
+  ],
+  "where": "Settings > Subscription > What your plan includes"
+ },
+ "S81.03": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/billing-catalog.ts",
+    "text": "Basic"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-billing/index.tsx",
+    "text": "What your plan includes"
+   }
+  ],
+  "needs": "a Basic account",
+  "note": "No price appears on the plan screen; the price is only shown in the store sheet, which is off in this build.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with a Basic account and make sure chat is set to Cloud.",
+   "Open Settings and tap Subscription.",
+   "Tap What your plan includes.",
+   "Look for the Includes list and the usage line, and compare with Expected."
+  ],
+  "where": "Settings > Subscription > What your plan includes"
+ },
+ "S81.04": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/billing-catalog.ts",
+    "text": "Premium"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-billing/index.tsx",
+    "text": "What your plan includes"
+   }
+  ],
+  "needs": "a Premium account",
+  "note": "No plan is labelled Pro in the code; the tier id pro is shown on screen as Premium.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with a Premium account and make sure chat is set to Cloud.",
+   "Open Settings and tap Subscription.",
+   "Tap What your plan includes.",
+   "Look for the Premium heading and its Includes list, and compare with Expected."
+  ],
+  "where": "Settings > Subscription > What your plan includes"
+ },
+ "S81.05": {
+  "labels": [],
+  "needs": "none",
+  "note": "No Max 5x tier exists in the code; the only Max tier is labelled Max (packages/contracts/types/src/billing-catalog.ts). I searched for 5x in packages/contracts/types/src, apps/mobile/src and apps/web/lib.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S81.06": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/billing-catalog.ts",
+    "text": "Ultra"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-billing/index.tsx",
+    "text": "What your plan includes"
+   }
+  ],
+  "needs": "an Ultra account",
+  "note": "The tier id max_15x is shown on screen as Ultra, not as Max 15x.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with an Ultra account and make sure chat is set to Cloud.",
+   "Open Settings and tap Subscription.",
+   "Tap What your plan includes.",
+   "Look for the Ultra heading and its Includes list, and compare with Expected."
+  ],
+  "where": "Settings > Subscription > What your plan includes"
+ },
+ "S81.09": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-billing/index.tsx",
+    "text": "Compare plans"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx",
+    "text": "Not included in your plan"
+   }
+  ],
+  "needs": "a Free account",
+  "note": "In this build the plan list shows only your own plan and the paywall Compare plans button is hidden, so differences are not shown side by side.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with a Free account and make sure chat is set to Cloud.",
+   "Open Settings and tap Subscription.",
+   "Tap Compare plans and read the Includes list.",
+   "Trigger a gated feature in chat if one is available, then look for the sheet Not included in your plan and compare with Expected."
+  ],
+  "where": "Settings > Subscription > Compare plans"
+ },
+ "S81.14": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/design-system/effort.ts",
+    "text": "Balanced"
+   },
+   {
+    "file": "apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx",
+    "text": "See plans"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ModelSelectorButton.tsx",
+    "text": "Opens the model picker"
+   }
+  ],
+  "needs": "a Free account and a paid account to compare",
+  "note": "Server-side clamping is not visible in the UI, and the picker upgrade path does nothing while purchases are off; the effort control has no visible heading text in the code I read.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat with chat set to Cloud.",
+   "Tap the model button; its label starts with Model: and the hint is Opens the model picker.",
+   "Pick a model that supports effort and look for the effort labels such as Balanced, Deep and Maximum.",
+   "Tap a locked model on a Free account and look for the See plans alert, and compare with Expected."
+  ],
+  "where": "Chat > Model button (shows Model: and the model name) > model picker"
+ },
+ "S81.15": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-usage/index.tsx",
+    "text": "Weekly limits"
+   },
+   {
+    "file": "packages/contracts/types/src/usage-vocabulary.ts",
+    "text": "Most capable models"
+   }
+  ],
+  "needs": "a Cloud account; reaching the cap needs heavy use",
+  "note": "The size of the flagship cap per plan is set on the server and is not shown as a number in the app.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with a Cloud account and open Settings > Subscription.",
+   "Tap Usage.",
+   "Look under Weekly limits for the sub-bucket Most capable models, which appears only when the account has a flagship weekly reset.",
+   "Compare the percentage and reset time with Expected."
+  ],
+  "where": "Settings > Subscription > Usage > Weekly limits"
+ },
+ "S81.23": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-billing/index.tsx",
+    "text": "Upgrade plan"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-billing/index.tsx",
+    "text": "Unavailable in the app"
+   }
+  ],
+  "needs": "a Free account",
+  "note": "Purchases are switched off (FEATURES.billing is false in apps/mobile/lib/v1FeatureFlags.ts and nativePurchases is false in apps/mobile/src/features/billing/storePurchases.json), so the effective-time text cannot be reached in this build.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with a Free account and open Settings > Subscription.",
+   "Look at the Upgrade plan row.",
+   "Note that the row shows Unavailable in the app and cannot be pressed.",
+   "Compare with Expected: no charge or renewal date is shown before confirming, because purchases are off."
+  ],
+  "where": "Settings > Subscription > Upgrade plan"
+ },
+ "S81.25": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-billing/index.tsx",
+    "text": "Paid capabilities are unavailable."
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx",
+    "text": "Update billing"
+   }
+  ],
+  "needs": "a test account with a failed renewal",
+  "note": "The code shows no grace window: the server comment says a lapsed paid plan is served as Free, and the support corpus says there is no grace period, so the Expected grace rule is not visible.",
+  "reachable": "yes",
+  "steps": [
+   "Use a test account whose renewal failed (past due).",
+   "Open Settings > Subscription and read the status card line that says the subscription is past due.",
+   "Trigger a paid feature and look for the Update billing button in the paywall.",
+   "Compare with Expected: check what access remains and how to fix it."
+  ],
+  "where": "Settings > Subscription (status card), and the Update billing paywall"
+ },
+ "S81.27": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-billing/index.tsx",
+    "text": "Your plan, usage, and payment details"
+   }
+  ],
+  "needs": "a second surface signed in to the same account",
+  "note": "The per-surface gate is enforced by the web gateway and was not checked here; the web comparison page was not located in this pass.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Sign in with the same account on the phone app and on the web or desktop app.",
+   "On the phone, open Settings > Subscription and read the card Your plan, usage, and payment details.",
+   "On the other surface, open its billing or subscription page.",
+   "Compare the plan name on both surfaces with Expected."
+  ],
+  "where": "Settings > Subscription on each signed-in surface shows the same plan"
+ },
+ "S81.28": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-billing/index.tsx",
+    "text": "In-app purchases are not available yet"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-billing/index.tsx",
+    "text": "Compare plans"
+   }
+  ],
+  "needs": "a Free account",
+  "note": "In this build only your own plan is listed, so the Adds over lines and the paywall Compare plans button do not appear.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with a Free account and open Settings > Subscription.",
+   "Read the card In-app purchases are not available yet, which says Compare plans shows what each plan adds.",
+   "Tap Compare plans and read the Includes list for the plan.",
+   "Compare with Expected: each plan should explain what it adds over the current plan."
+  ],
+  "where": "Settings > Subscription > Compare plans"
+ }
+}

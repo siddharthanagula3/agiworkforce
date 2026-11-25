@@ -1,0 +1,482 @@
+{
+ "S4.01": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "New chat"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: New Conversation"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "Empty-state and composer exist in code; not run.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, then open AGI Code from the activity bar (or run Code: Open Chat).",
+   "Click the + button whose tooltip is \"New chat\".",
+   "Look for an empty chat with a composer that says \"Describe a task\u2026\" and type a first message to start a new conversation."
+  ],
+  "where": "AGI Code sidebar > New chat (+ button in the header, tooltip \"New chat\"); command palette: Code: New Conversation"
+ },
+ "S4.02": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Sessions"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Open Conversation"
+   }
+  ],
+  "needs": "a signed-in account with at least one past session",
+  "note": "The plan's Code line pointed at commandSetup.ts:1243 (now the sign-out handler). The open-session command is agi-workforce.openConversation at apps/extension-vscode/src/core/commandSetup.ts:1392.",
+  "reachable": "yes",
+  "steps": [
+   "Click the history icon with tooltip \"Sessions\" in the AGI Code header.",
+   "Click one session in the list.",
+   "Check that its transcript opens and that you can send a new message to continue it."
+  ],
+  "where": "AGI Code sidebar > Sessions (history icon in the header) > click a session row; command palette: Code: Open Conversation"
+ },
+ "S4.03": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Search sessions"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Show Sessions History"
+   }
+  ],
+  "needs": "a signed-in account with several past sessions",
+  "note": "The quick-pick version says \"Search sessions by title or message text\" (packages/ui/i18n/locales/en/vscode.json). Whether the sheet box matches message text was not verified in code.",
+  "reachable": "yes",
+  "steps": [
+   "Click the \"Sessions\" icon in the AGI Code header.",
+   "Click the \"Search sessions\" box and type a word from a session title.",
+   "Clear it and type a word that appears only inside a message body.",
+   "Click a matching result and check it opens that session."
+  ],
+  "where": "AGI Code sidebar > Sessions (history icon) > Search sessions box; also command palette: Code: Show Sessions History"
+ },
+ "S4.04": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Archived sessions"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Restore"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Delete permanently"
+   }
+  ],
+  "needs": "a signed-in account with at least one archived session",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Sessions\" in the AGI Code header.",
+   "Click the archive icon labelled \"Archived sessions\".",
+   "Select a session and click the Restore button, or the Delete permanently button.",
+   "Confirm the delete prompt if you chose it; check the session is back in the list or gone from the archive."
+  ],
+  "where": "AGI Code sidebar > Sessions (history icon) > Archived sessions (archive icon); command palette: Code: Archived Sessions"
+ },
+ "S4.06": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "Projects"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/index.ts",
+    "text": "New project"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "More"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click the \"More\" button in the AGI Code header.",
+   "Click \"Projects\".",
+   "Check the list opens with the placeholder \"Open a project\u2026\".",
+   "Click the \"New project\" icon in the list's title bar and check the create flow starts."
+  ],
+  "where": "AGI Code header > More (\u2026) > Projects; command palette: Code: Show Projects"
+ },
+ "S4.07": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "Projects"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/projects/projectActions.ts",
+    "text": "About"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/projects/projectActions.ts",
+    "text": "Recent conversations"
+   }
+  ],
+  "needs": "a signed-in account with at least one project",
+  "note": "The project home is a quick-pick list, not a full page.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"More\" in the AGI Code header, then \"Projects\".",
+   "Click a project in the list.",
+   "Check the project home shows its name, an \"About\" section with description and instructions, \"Knowledge files\" and \"Recent conversations\"."
+  ],
+  "where": "AGI Code header > More > Projects > click a project"
+ },
+ "S4.08": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/projects/projectActions.ts",
+    "text": "Recent conversations"
+   }
+  ],
+  "needs": "a signed-in account with a project that has conversations",
+  "note": "Selecting a conversation calls vscode.env.openExternal, so it opens outside the editor.",
+  "reachable": "yes",
+  "steps": [
+   "Open a project from More > Projects.",
+   "Scroll to the \"Recent conversations\" section.",
+   "Click one conversation.",
+   "Check that it opens; the code opens it in the web app in the browser, not inside the editor."
+  ],
+  "where": "AGI Code header > More > Projects > click a project > \"Recent conversations\" section > click a conversation"
+ },
+ "S4.10": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/projects/projectActions.ts",
+    "text": "Instructions"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/projects/projectActions.ts",
+    "text": "Project instructions"
+   }
+  ],
+  "needs": "a signed-in account with a project",
+  "note": "Settings > Instructions & editor holds workspace custom instructions, not per-project ones. The effect on chats was not verified in code.",
+  "reachable": "yes",
+  "steps": [
+   "Open a project from More > Projects.",
+   "Under \"Edit\", click \"Instructions\".",
+   "Change the text in the \"Project instructions\" box and save.",
+   "Reopen the project and check the saved text shows; check it is used in a chat in that project."
+  ],
+  "where": "AGI Code header > More > Projects > click a project > Edit > Instructions"
+ },
+ "S4.14": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "Work"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/cloud-tasks/cloudTasksTree.ts",
+    "text": "Needs you"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/cloud-tasks/cloudTasksTree.ts",
+    "text": "Done"
+   }
+  ],
+  "needs": "a signed-in account with cloud tasks",
+  "note": "No dedicated filter for finished tasks was found; finished work sits in the Done and Stopped groups.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"More\" in the AGI Code header, then \"Work\".",
+   "Read the groups \"Needs you\", \"Working\", \"Ready for review\", \"Done\" and \"Stopped\".",
+   "To hide finished work, type a word in the list's box to narrow it; no separate filter toggle was found.",
+   "Compare each task's status text with what is shown on the cloud web app."
+  ],
+  "where": "AGI Code header > More > Work"
+ },
+ "S4.15": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/cloud-tasks/cloudTasksTree.ts",
+    "text": "Open Cloud Task"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/cloud-tasks/cloudRunDetail.ts",
+    "text": "Progress"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/cloud-tasks/cloudRunDetail.ts",
+    "text": "Actions"
+   }
+  ],
+  "needs": "a signed-in account with a cloud task",
+  "note": "The detail is a quick-pick list. A step-by-step transcript appears only for coding sessions (cloudCodeSessions.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Click \"More\", then \"Work\".",
+   "Click a task under any group.",
+   "Read the sections \"Progress\", \"Outcome\", \"Result\", \"Error\", \"Outputs\" (only those that apply).",
+   "Check the \"Actions\" section for approve or reject when a decision is pending."
+  ],
+  "where": "AGI Code header > More > Work > click a cloud task row"
+ },
+ "S4.16": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/cloud-tasks/cloudTasksTree.ts",
+    "text": "Needs you"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/index.ts",
+    "text": "Approve this run"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/cloud-tasks/cloudRunDetail.ts",
+    "text": "Approve"
+   }
+  ],
+  "needs": "a signed-in account with a cloud task waiting for approval",
+  "note": "\"Needs you\" acts as the cross-task inbox. \"Code: Show Approval History\" is a record of past approvals, not the pending list.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"More\", then \"Work\".",
+   "Look in the \"Needs you\" group for tasks waiting on you.",
+   "On a row, click the check icon \"Approve this run\" or the x icon \"Reject this run\".",
+   "Open a task and use \"Approve\" or \"Reject\" in its Actions section, then check the row leaves \"Needs you\"."
+  ],
+  "where": "AGI Code header > More > Work > \"Needs you\" group; approve or reject on the row, or open the task > Actions"
+ },
+ "S4.18": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Show Schedules"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/index.ts",
+    "text": "Show recent runs"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Show Schedule Runs"
+   }
+  ],
+  "needs": "a signed-in account with at least one schedule",
+  "note": "Clicking the row itself opens the schedules page on the web (agi-workforce.openSchedule), not an in-app detail page.",
+  "reachable": "yes",
+  "steps": [
+   "Run \"Code: Show Schedules\" from the command palette.",
+   "Hover a schedule row to read its status, cadence, timezone, next run and prompt in the tooltip.",
+   "Click the history icon \"Show recent runs\" on the row.",
+   "Check the run list matches Expected: runs with their status and times."
+  ],
+  "where": "Command palette > Code: Show Schedules; then hover a schedule row, or use its \"Show recent runs\" icon"
+ },
+ "S4.19": {
+  "labels": [],
+  "needs": "a signed-in account",
+  "note": "No dedicated coding-session home found. Closest: the Sessions sheet with its Local and Cloud tabs plus the + New chat button (webviewContent.ts), and Code: Session Worktrees > New session in a worktree (apps/extension-vscode/src/features/surfaces/sessionWorktrees.ts). Searched the app folder for a coding home, coding sessions and repository-start screens.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S4.20": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Review changes"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a signed-in account with a coding session that changed files",
+  "note": "No separate workspace screen found; the sidebar chat panel is the workspace. Diff controls are commands such as Code: Accept Diff.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Sessions\" in the AGI Code header and open a session.",
+   "Read the transcript in the chat panel.",
+   "Where a change exists, click \"Review changes\".",
+   "Type your next instruction in the box that says \"Describe a task\u2026\" and check the reply continues the session."
+  ],
+  "where": "AGI Code header > Sessions > open a session row (the chat panel is the workspace)"
+ },
+ "S4.25": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "Artifacts"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/index.ts",
+    "text": "Open an artifact\u2026"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/artifacts/artifactsTree.ts",
+    "text": "Open Artifact"
+   }
+  ],
+  "needs": "a signed-in account with at least one artifact",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click \"More\" in the AGI Code header, then \"Artifacts\".",
+   "Check the list of your artifacts.",
+   "Click one artifact and check it opens."
+  ],
+  "where": "AGI Code header > More > Artifacts; command palette: Code: Show Artifacts"
+ },
+ "S4.35": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "Skills"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/capabilityManagement.ts",
+    "text": "Install a skill"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/capabilityManagement.ts",
+    "text": "Create a skill"
+   }
+  ],
+  "needs": "none",
+  "note": "The remove control uses a shared constant; its visible word was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"More\", then \"Skills\".",
+   "Check the installed and available lists.",
+   "Click \"Install a skill\" or \"Create a skill\" from the top of the list.",
+   "On a skill row, use the \"Turn on\" or \"Turn off\" button and check the state changes."
+  ],
+  "where": "AGI Code header > More > Skills; also Settings > Integrations > Skills"
+ },
+ "S4.36": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "Plugins"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/capabilityManagement.ts",
+    "text": "Browse AGI Cloud Marketplace"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/capabilityManagement.ts",
+    "text": "Install a plugin"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Update"
+   }
+  ],
+  "needs": "a signed-in account to browse the marketplace",
+  "note": "The remove control is not checked for its visible word.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"More\", then \"Plugins\".",
+   "Check the installed plugins and the \"Browse AGI Cloud Marketplace\" entry.",
+   "Click \"Install a plugin\" to add one.",
+   "On an installed plugin, use \"Configure options\" or \"Update\" and check the result."
+  ],
+  "where": "AGI Code header > More > Plugins; also Settings > Integrations > Plugins"
+ },
+ "S4.39": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Account & usage"
+   },
+   {
+    "file": "apps/extension-vscode/src/core/commandSetup.ts",
+    "text": "Session usage"
+   },
+   {
+    "file": "apps/extension-vscode/src/core/commandSetup.ts",
+    "text": "Usage history"
+   }
+  ],
+  "needs": "a paid account to see plan windows (a Free account sees only the Upgrade item)",
+  "note": "Usage is a quick-pick list. Plan windows are session, weekly and credits as the data provides them.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"More\", then the \"Account & usage\" item (or run the command).",
+   "Read \"Session usage\" and the \"<plan> plan usage\" rows with their reset times.",
+   "Scroll to \"Usage history\" for recent usage."
+  ],
+  "where": "AGI Code header > More > Account & usage; command palette: Code: Account & usage"
+ },
+ "S4.41": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "Personalization"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/personalization/personalization.ts",
+    "text": "About you"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/personalization/personalization.ts",
+    "text": "Responses"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "No profile, appearance or notification sections were found in code; only About you and Responses exist here.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"More\", then \"Personalization\".",
+   "Under \"About you\", pick \"What should AGI call you?\" and change it.",
+   "Under \"Responses\", change \"Style\" or \"Length\".",
+   "Close and reopen Personalization and check the new values are kept."
+  ],
+  "where": "AGI Code header > More > Personalization; command palette: Code: Personalization"
+ },
+ "S4.44": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "Help"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/help/helpMenu.ts",
+    "text": "Help center"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/help/helpMenu.ts",
+    "text": "Send feedback"
+   },
+   {
+    "file": "apps/extension-vscode/src/core/commandSetup.ts",
+    "text": "Report a Bug"
+   }
+  ],
+  "needs": "a signed-in account to send feedback",
+  "note": "Help menu is in helpMenu.ts; the Code line's submitFeedback.ts was not the menu.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"More\", then \"Help\".",
+   "Check the items \"Help center\", \"Service status\", \"Documentation\", \"Contact support\" open web pages.",
+   "Click \"Send feedback\", then choose \"Report a Bug\" and check the feedback form opens."
+  ],
+  "where": "AGI Code header > More > Help"
+ }
+}

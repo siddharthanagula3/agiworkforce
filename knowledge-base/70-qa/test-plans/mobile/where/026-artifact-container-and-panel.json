@@ -1,0 +1,431 @@
+{
+ "S26.01": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/StreamingArtifactCard.tsx",
+    "text": "Generating artifact"
+   }
+  ],
+  "needs": "an account that can chat",
+  "note": "Card and viewer are in MessageBubble.tsx and InlineArtifactCard.tsx; the card has no fixed visible words beyond the artifact title.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a chat.",
+   "Ask the assistant for a small self-contained web page or a code file.",
+   "Wait until the reply finishes and a card appears under it.",
+   "Tap the card.",
+   "Compare: a full-screen viewer opens with the same artifact (Expected: the card opens the artifact)."
+  ],
+  "where": "Chat > open a reply that writes an artifact > tap the card under that reply (it shows the artifact title and type in capitals)"
+ },
+ "S26.02": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/artifacts/artifactTitle.ts",
+    "text": "Web page"
+   },
+   {
+    "file": "apps/mobile/src/features/artifacts/artifactTitle.ts",
+    "text": "Diagram"
+   }
+  ],
+  "needs": "an artifact with a name and one without (for example a diagram or web page without a title)",
+  "note": "The viewer title is built in ArtifactFullScreen.tsx from the artifact title, with the type appended after a middle dot.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat with an artifact and tap its card.",
+   "Read the bold title at the top left of the viewer.",
+   "Read the title on the card in the chat.",
+   "Check the fallback: an artifact with no name shows the kind name, for example 'Web page' or 'Diagram'.",
+   "Compare with Expected: title shown on card and viewer, with a fallback."
+  ],
+  "where": "Chat > tap an artifact card > read the title at the top of the viewer (it reads 'title \u00b7 TYPE')"
+ },
+ "S26.03": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/InlineArtifactCard.tsx",
+    "text": "Chart"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/InlineArtifactCard.tsx",
+    "text": "Document"
+   }
+  ],
+  "needs": "artifacts of two different kinds",
+  "note": "Card shows the language if set, else a type label; viewer shows language or type in capitals. The word 'Spreadsheet' was not found in apps/mobile; the kind labels come from a shared package outside apps/mobile.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat with an artifact of a known kind (for example a chart or a document).",
+   "Look at the small capital-letter word on the card, such as CHART or DOCUMENT.",
+   "Tap the card and read the type after the middle dot in the viewer header.",
+   "Compare with Expected: kind shown on card and in viewer."
+  ],
+  "where": "Chat > tap an artifact card > read the capital-letter type word in the viewer header; the card shows the same word under its title"
+ },
+ "S26.04": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/StreamingArtifactCard.tsx",
+    "text": "Writing\u2026"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/StreamingArtifactCard.tsx",
+    "text": "Stopped"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/StreamingArtifactCard.tsx",
+    "text": "Failed"
+   }
+  ],
+  "needs": "a model reply long enough to watch while it writes",
+  "note": "A finished artifact shows no state word; it shows the normal card. What makes a write 'Failed' (the failed prop) was not traced and the stop control was not located.",
+  "reachable": "yes",
+  "steps": [
+   "Send a request that asks for a long artifact.",
+   "While the reply is still writing, look at the card for 'Writing\u2026' under its title.",
+   "Stop the reply before it finishes, if the app offers a stop control.",
+   "Look at the card for 'Stopped' (title becomes 'Stopped artifact').",
+   "Compare with Expected: being written, finished, stopped or failed each shown."
+  ],
+  "where": "Chat > send a request that makes an artifact > while the reply is still writing, the card shows 'Writing\u2026'; a stopped or failed write shows 'Stopped' or 'Failed' on the card"
+ },
+ "S26.05": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Library"
+   },
+   {
+    "file": "apps/mobile/src/features/library/index.tsx",
+    "text": "Artifacts"
+   }
+  ],
+  "needs": "at least one saved artifact",
+  "note": "Library opens the artifact gallery route (apps/mobile/src/features/artifacts/index.tsx) for the tapped item.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu and tap 'Library'.",
+   "Tap the 'Artifacts' filter chip.",
+   "Tap an artifact to open it.",
+   "Compare: its content shows in a view (Expected: open from chat or a list)."
+  ],
+  "where": "Menu (side drawer) > Library > 'Artifacts' filter chip > tap an artifact; or in chat, tap an artifact card"
+ },
+ "S26.06": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+    "text": "Close"
+   }
+  ],
+  "needs": "none",
+  "note": "The X is an icon; its visible word is only the accessibility label 'Close' with hint 'Returns to the conversation'.",
+  "reachable": "yes",
+  "steps": [
+   "Open an artifact from its card in chat.",
+   "Tap the X icon at the top right of the viewer.",
+   "Check the viewer closes and you are back in the conversation.",
+   "Check the card is still under the reply.",
+   "Compare with Expected: closing hides it and it stays available."
+  ],
+  "where": "Chat > tap an artifact card > tap the X (accessibility name 'Close') at the top right of the viewer"
+ },
+ "S26.07": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/library/index.tsx",
+    "text": "Artifacts"
+   }
+  ],
+  "needs": "an account with a saved artifact; a way to restart the app",
+  "note": "No separate reopen toggle was found; reopening is done through the card or the list. The reload survival relies on the artifact store (apps/mobile/src/features/artifacts/store.ts) and was not run.",
+  "reachable": "yes",
+  "steps": [
+   "Open an artifact, then close it with the X.",
+   "Tap the same card again or open it from Library > Artifacts.",
+   "Force-quit and reopen the app, then open the chat and tap the card.",
+   "Compare: the same artifact opens (Expected: reopen after close and after reload)."
+  ],
+  "where": "Chat > tap the same artifact card again; or Menu > Library > 'Artifacts' > tap the artifact"
+ },
+ "S26.10": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+    "text": "Close"
+   }
+  ],
+  "needs": "none",
+  "note": "No separate expand button was found; the viewer is always a full-screen modal on open.",
+  "reachable": "yes",
+  "steps": [
+   "Tap an artifact card in chat.",
+   "Check the viewer fills the whole screen.",
+   "Tap the X to return to the conversation.",
+   "Compare with Expected: the artifact can be expanded to full screen and returned from."
+  ],
+  "where": "Chat > tap an artifact card; the viewer opens over the whole screen and closes with the X"
+ },
+ "S26.12": {
+  "labels": [],
+  "needs": "a conversation with two or more artifacts",
+  "note": "The switcher appears only when the conversation has more than one artifact; its row shows artifact titles, with no fixed visible words.",
+  "reachable": "yes",
+  "steps": [
+   "Open a conversation with at least two artifacts.",
+   "Tap one artifact card to open the viewer.",
+   "Look for the row of artifact titles under the header.",
+   "Tap another title in the row.",
+   "Compare: the viewer shows that artifact without closing (Expected: switch without leaving the viewer)."
+  ],
+  "where": "Chat > a reply or conversation with two or more artifacts > tap one artifact card > use the row of artifact titles under the viewer header to switch"
+ },
+ "S26.14": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+    "text": "Preview"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+    "text": "Source"
+   }
+  ],
+  "needs": "a previewable artifact (for example an HTML page)",
+  "note": "Which kinds count as previewable (isPreviewable) was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open an HTML or diagram artifact from its card.",
+   "Tap 'Source' and read the code.",
+   "Tap 'Preview' and read the rendered view.",
+   "Compare with Expected: switch between the rendered preview and the source."
+  ],
+  "where": "Chat > tap an artifact card > tap 'Preview' or 'Source' in the tab row under the viewer header (shown only for artifacts that can be previewed)"
+ },
+ "S26.16": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+    "text": "Edit source"
+   }
+  ],
+  "needs": "an artifact with two or more versions (made by editing it first)",
+  "note": "The code has no visible 'Read-only' label. Editing is only offered for the newest version of a non-generated file (canEditSource). Shared-copy read-only was not found.",
+  "reachable": "yes",
+  "steps": [
+   "Open an artifact that has at least two versions.",
+   "Step back to an older version with the left arrow next to 'Version N of M'.",
+   "Tap the More artifact actions button (three dots).",
+   "Check that 'Edit source' is not listed for the older version.",
+   "Compare with Expected: the older version is viewable without changing it."
+  ],
+  "where": "Chat > tap an artifact with two or more versions > tap 'Previous version' to an older version > tap the More artifact actions button and look for 'Edit source'"
+ },
+ "S26.20": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactVersionHistorySheet.tsx",
+    "text": "Version history"
+   }
+  ],
+  "needs": "an artifact with two or more versions",
+  "note": "The 'Version N of M' text is an accessibility label (ArtifactFullScreen.tsx), not a visible word.",
+  "reachable": "yes",
+  "steps": [
+   "Open an artifact with more than one version.",
+   "Read the 'Version N of M' control under the header.",
+   "Tap it to open the 'Version history' sheet.",
+   "Tap a version row to show that version.",
+   "Compare: the viewer shows the chosen version and its number (Expected: see and pick any version)."
+  ],
+  "where": "Chat > tap an artifact with two or more versions > tap the 'Version N of M' button under the viewer header to open 'Version history'"
+ },
+ "S26.21": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+    "text": "Previous version"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+    "text": "Next version"
+   }
+  ],
+  "needs": "an artifact with two or more versions",
+  "note": "The arrows are icon-only; their words are accessibility labels.",
+  "reachable": "yes",
+  "steps": [
+   "Open an artifact with at least three versions.",
+   "Tap the left arrow ('Previous version') and check the version number changes.",
+   "Tap the right arrow ('Next version').",
+   "Check the arrows are dimmed at the first and last version.",
+   "Compare with Expected: step to previous and next and see which version is shown."
+  ],
+  "where": "Chat > tap an artifact with two or more versions > use the left and right arrows beside 'Version N of M' under the viewer header"
+ },
+ "S26.23": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+    "text": "Restore"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+    "text": "Show changes"
+   }
+  ],
+  "needs": "an artifact with two or more versions",
+  "note": "No confirmation dialog was found on the restore path; restoring happens directly.",
+  "reachable": "yes",
+  "steps": [
+   "Open an artifact with at least two versions.",
+   "Step back to an older version with the left arrow.",
+   "Tap 'Restore' (accessibility label 'Restore version N').",
+   "Check the viewer now shows the restored content as the newest version.",
+   "Open 'Version history' and check the versions in between are still listed."
+  ],
+  "where": "Chat > tap an artifact with two or more versions > step to an older version > tap 'Restore' in the version row under the viewer header"
+ },
+ "S26.29": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactExportSheet.tsx",
+    "text": "Download as"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+    "text": "Download artifact"
+   }
+  ],
+  "needs": "none; a way to view the saved file",
+  "note": "Artifacts with one format save directly; generated files use the share sheet instead.",
+  "reachable": "yes",
+  "steps": [
+   "Open an artifact from its card.",
+   "Tap the download icon in the top bar.",
+   "If the 'Download as' sheet opens, tap a format such as Markdown, PDF, Plain text or Word.",
+   "Save or share the file in the system sheet that opens.",
+   "Compare: the file is in the chosen format (Expected: each choice saves that format)."
+  ],
+  "where": "Chat > tap an artifact card > tap 'Download artifact' (download icon) in the top bar; if several formats exist, choose one in the 'Download as' sheet"
+ },
+ "S26.30": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+    "text": "Copy content"
+   },
+   {
+    "file": "apps/mobile/src/shared/hooks/useCopyAction.ts",
+    "text": "Copied"
+   }
+  ],
+  "needs": "none",
+  "note": "The copy icon is icon-only; 'Copied' is the accessibility label after success. Failure label is 'Could not copy'.",
+  "reachable": "yes",
+  "steps": [
+   "Open an artifact from its card.",
+   "Tap the copy icon in the top bar.",
+   "Check the icon changes to a check mark and the label reads 'Copied'.",
+   "Paste into Notes or the chat box.",
+   "Compare: the pasted text matches the artifact's content (Expected: a copy control puts that content on the clipboard and confirms)."
+  ],
+  "where": "Chat > tap an artifact card > tap the copy icon ('Copy content') in the top bar, then paste elsewhere"
+ },
+ "S26.32": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactAudienceChip.tsx",
+    "text": "Published"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactAudienceChip.tsx",
+    "text": "Workspace"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+    "text": "Private. Only you can open it until you publish it."
+   }
+  ],
+  "needs": "an AGI Cloud account; a published or workspace-shared artifact; a private one for the private line",
+  "note": "A private artifact shows no card chip; the private line appears only in cloud mode under the publish condition in ArtifactFullScreen.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to AGI Cloud and open an artifact that has been published or shared.",
+   "Look at the small chip on its card in chat (and in Library > Artifacts).",
+   "Open the artifact and check the publish area of the viewer.",
+   "For a private artifact, check the line 'Private. Only you can open it until you publish it.'",
+   "Compare with Expected: private, published, or workspace state is visible."
+  ],
+  "where": "Chat > an artifact card shows a small chip under its title: 'Published', 'Workspace' or 'Invited'; viewer shows 'Private. Only you can open it until you publish it.' in AGI Cloud mode"
+ },
+ "S26.35": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/SafeArtifactPreview.tsx",
+    "text": "This preview stopped with an error."
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/SafeArtifactPreview.tsx",
+    "text": "Retry"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/SafeArtifactPreview.tsx",
+    "text": "View source"
+   }
+  ],
+  "needs": "an artifact that fails to render (made by asking the assistant for a broken page)",
+  "note": "A load timeout shows 'This preview did not finish loading.' instead; an invalid SVG shows \"This image couldn't be rendered.\"",
+  "reachable": "yes",
+  "steps": [
+   "Open an artifact whose page fails to run (for example an HTML page that throws an error on load).",
+   "Read the error panel: 'This preview stopped with an error.'",
+   "Tap 'View source' and check the source opens.",
+   "Go back to Preview and tap 'Retry'.",
+   "Compare with Expected: an error panel that explains the failure and offers source or retry."
+  ],
+  "where": "Chat > open an HTML or React artifact that fails to render > the viewer shows 'This preview stopped with an error.' with 'Retry' and 'View source'"
+ },
+ "S26.39": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/StreamingArtifactCard.tsx",
+    "text": "Generating artifact"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/StreamingArtifactCard.tsx",
+    "text": "Writing\u2026"
+   }
+  ],
+  "needs": "a reply that writes an artifact slowly enough to watch",
+  "note": "Live update was traced in StreamingArtifactCard.tsx; the speed of growth was not run.",
+  "reachable": "yes",
+  "steps": [
+   "Send a request that asks for a long artifact such as a code file.",
+   "While the card shows 'Writing\u2026', tap the card.",
+   "Watch the viewer as the content grows.",
+   "Compare with Expected: the artifact view updates live while the reply writes."
+  ],
+  "where": "Chat > send a request for an artifact > while the reply is writing, tap the card titled 'Generating artifact' (it shows 'Writing\u2026')"
+ },
+ "S26.40": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+    "text": "Close"
+   }
+  ],
+  "needs": "phone width (the iPhone build or a phone-sized simulator)",
+  "note": "This is a layout rule: the viewer is a full-screen Modal (overFullScreen, slide animation) in ArtifactFullScreen.tsx, so its effect is only seen on screen.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "On a phone-sized screen, tap an artifact card in chat.",
+   "Check the viewer covers the full screen with no side panel.",
+   "Check the buttons in the top bar are large touch targets.",
+   "Tap the X to return.",
+   "Compare with Expected: full-screen reader with touch controls."
+  ],
+  "where": "Phone screen: tap any artifact card in chat; the viewer opens as a full-screen slide-up view with the X at the top right"
+ }
+}

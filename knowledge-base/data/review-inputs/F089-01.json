@@ -1,0 +1,564 @@
+{
+ "feature": {
+  "id": "F089-01",
+  "aliases": [
+   "Account service",
+   "Account status gate",
+   "Account lifecycle check",
+   "Identity-to-account resolution",
+   "Authentication-provider adapter (S89.01, S89.02)",
+   "ACCOUNT_UNAVAILABLE denial"
+  ],
+  "summary": "On every web API request, the server turns the verified sign-in subject into one AGI account id and then refuses the request if the account is locked, in recovery, suspended, banned, or deleted. A scheduled deletion is still allowed so the person can cancel it. Clerk is the only identity provider the code can select.",
+  "purpose": {
+   "what_it_does": "Maps a provider sign-in (a subject string) to one AGI account id, reads the account's standing, and either lets the request through or answers 403 with a reason and a recovery path. The provider sits behind one interface so the rest of the web app never talks to Clerk directly (apps/web/lib/server/identity.ts:1-53).",
+   "why_it_exists": "The account must outlive the sign-in method, and a closed account must stop working everywhere at once. One check at the API layer covers Web, Desktop, Mobile, CLI and both extensions because they all call the same API [inferred from the shared API layer].",
+   "who_uses_it": "Every signed-in person, indirectly. Support and security staff rely on it to make lock, suspend and delete real.",
+   "problems_solved": [
+    "A suspended or erased person cannot keep using a stale session or a stale provider callback (apps/web/lib/server/identity-account.ts:179-212).",
+    "A locked person gets a path to fix it (password reset) and a suspended person gets an appeal path, instead of a bare error (apps/web/lib/auth/account-status.ts:72-100).",
+    "Swapping the identity provider needs one adapter and an environment change, not edits at each call site (apps/web/lib/server/identity.ts comment on getIdentityProvider; packages/platform/identity/src/factory.ts:36-53)."
+   ],
+   "use_cases": [
+    "A suspended person opens the web app and sees a suspension notice with an Appeal link instead of their chats.",
+    "A person whose account was erased tries to sign in again through a leftover provider session and is turned away.",
+    "A person with a scheduled deletion signs in and can still open Settings to cancel the deletion.",
+    "An operator replaces the identity provider by adding an adapter in the factory switch."
+   ]
+  },
+  "user_experience": {
+   "where_to_find_it": [
+    "No control. It runs on every request on the server (apps/web/lib/api-auth.ts:244-282).",
+    "The denial notice titles come from ACCOUNT_DENIAL_NOTICE: 'This account is locked' (action 'Reset your password'), 'Finish recovering this account' ('Continue recovery'), 'This account is suspended' ('Appeal this suspension'), 'This account has been deleted' ('Back to sign-in') (apps/web/lib/auth/account-status.ts:32-37).",
+    "Recovery pages named in code: /auth/reset-password and /appeal (apps/web/lib/auth/account-status.ts:27-28)."
+   ],
+   "prerequisites": [
+    "A verified sign-in through the hosted identity provider (the only selectable provider is 'clerk') (packages/platform/identity/src/types.ts:1).",
+    "An account profile row; an identity row is linked on first sign-in if the account exists (apps/web/lib/server/identity-account.ts:158-168)."
+   ],
+   "screens_and_controls": [
+    "No screen owns this feature. Clients show the 403 body: message, reason, recoveryPath (apps/web/lib/api-auth.ts:111-117).",
+    "On a device sign-in refresh the denial is returned as error 'account_unavailable' with an optional recovery_url (apps/web/app/api/auth/device/refresh/route.ts, account_unavailable branch)."
+   ],
+   "journey": [
+    "The person acts in any app; the app sends a request with a session cookie or bearer token.",
+    "The server verifies the token with the identity provider and resolves the subject to an account id.",
+    "The server reads the account status (cache first, database second).",
+    "If the status is locked, recovery_pending, suspended, banned or deleted the server answers 403 ACCOUNT_UNAVAILABLE with the reason and recovery path.",
+    "Otherwise the request proceeds; a scheduled deletion does not block it."
+   ],
+   "feedback_and_outputs": [
+    "403 with code ACCOUNT_UNAVAILABLE, reason one of locked, recovery, suspended, deleted, and recoveryPath (apps/web/lib/api-auth.ts:111-117).",
+    "503 'Unable to verify account status. Please try again shortly.' when the lookup fails twice (apps/web/lib/api-auth.ts:279-282).",
+    "Locked message names /auth/reset-password; suspended message cites section 11 of the Terms and says a person reviews every appeal (apps/web/lib/auth/account-status.ts:75-95)."
+   ],
+   "settings": [
+    "AGI_IDENTITY_PROVIDER selects the provider; unset means clerk; any other value throws a config error (packages/platform/identity/src/factory.ts:11-34).",
+    "ACCOUNT_STATUS_FAIL_OPEN (1, true or on) allows requests when the status lookup fails; default is fail closed (apps/web/lib/api-auth.ts:269-278)."
+   ]
+  },
+  "current_implementation": {
+   "working": [
+    "Subject-to-account resolution with a 5 minute key-value cache, database fallback, and an 'erased' outcome distinct from 'unknown' (apps/web/lib/server/identity-account.ts:179-212; apps/web/lib/server/request-context-cache.ts:10).",
+    "Seven stored statuses; deletion_scheduled and deleted are derived from a deletion date and an erasure tombstone, and erasure outranks everything (apps/web/lib/auth/account-status.ts:1-9, 61-66; apps/web/lib/auth/account-lifecycle.ts:12-34).",
+    "Denial decisions for locked, recovery_pending, suspended, banned (reported as 'suspended'), deleted (apps/web/lib/auth/account-status.ts:72-100).",
+    "Status lookup is cached, retried twice, each try bounded to 2000 ms, and fails closed with 503 (apps/web/lib/api-auth.ts:109-120, 244-282).",
+    "An erased subject is logged as an auth failure 'erased_account' and refused (apps/web/lib/api-auth.ts:293-303).",
+    "An unattended-run query refuses owners whose status is a denying one, derived from the same vocabulary (apps/web/lib/auth/account-lifecycle.ts:46-52)."
+   ],
+   "incomplete": [
+    "The brief says adapters cover password, social, passkey and SSO (brief S89.02). The code has one adapter only, Clerk (packages/platform/identity/src/factory.ts:47-52; packages/platform/identity/src/types.ts:1). SSO connection code at apps/web/lib/server/sso/clerk-enterprise-connections.ts was not opened [unknown how it ties to the adapter].",
+    "Sign-in-completion check fails open on a lookup error, by design, leaving the route gate as the fail-closed layer (apps/web/lib/auth/account-lifecycle.ts:38-46)."
+   ],
+   "disconnected_or_disabled": [
+    "ACCOUNT_STATUS_FAIL_OPEN turns fail-closed into fail-open when set (apps/web/lib/api-auth.ts:269-278). Its production value is unknown."
+   ],
+   "not_available": [
+    "A second identity provider: not available in the code (packages/platform/identity/src/types.ts:1).",
+    "Per-app behaviour: none recorded; the brief marks every app n/a (brief S89.01)."
+   ]
+  },
+  "required_behaviour": {
+   "established": [
+    {
+     "statement": "A server-side account service maps every authenticated identity to one AGI account record and enforces account state (active, locked, pending deletion) on each request.",
+     "source": "brief S89.01"
+    },
+    {
+     "statement": "Authentication is delegated to identity-provider adapters (password, social, passkey, SSO) behind one server interface that verifies sessions and fetches users.",
+     "source": "brief S89.02"
+    },
+    {
+     "statement": "Security behaviour fails closed.",
+     "source": "doc: AGENTS.md section 6"
+    },
+    {
+     "statement": "A lockout is self-service and a suspension is not; they must not share a message; a scheduled deletion stays allowed.",
+     "source": "apps/web/lib/auth/account-status.ts:68-71"
+    }
+   ],
+   "acceptance_criteria": [
+    "A locked account gets 403 reason 'locked' with recoveryPath '/auth/reset-password' on any authenticated API route.",
+    "A suspended or banned account gets 403 reason 'suspended' with recoveryPath '/appeal'.",
+    "A deleted or erased account gets reason 'deleted' with recoveryPath null.",
+    "An account with a deletion date but status active is allowed.",
+    "When the status lookup fails twice, the request gets 503 unless ACCOUNT_STATUS_FAIL_OPEN is set.",
+    "After erasure, a stale provider session for the old subject is refused and logged as 'erased_account'."
+   ],
+   "inferred": [
+    "Because every client calls the same web API, one check protects all six apps [inferred]; Local-mode work that never calls the API is not covered by it [inferred].",
+    "A cached 'allowed' answer can outlive a new lock for the cache window; the length of the status cache is not in the files read [inferred, unknown TTL]."
+   ],
+   "proposed": [
+    "[proposed] Add a second adapter behind the factory, or reword brief S89.02 to say Clerk is the single provider, so the brief and code agree.",
+    "[proposed] Record which clients render the denial notice titles, per app, so the notice is checked on all six."
+   ]
+  },
+  "implementation_map": [
+   {
+    "kind": "service",
+    "name": "resolveAuthenticatedAccount",
+    "path": "apps/web/lib/server/identity-account.ts",
+    "role": "Maps provider subject to account id; cache, database, link, erased outcome (lines 179-212)."
+   },
+   {
+    "kind": "service",
+    "name": "invalidateIdentityAccountCache",
+    "path": "apps/web/lib/server/identity-account.ts",
+    "role": "Erasure calls it so a stale callback stops authenticating."
+   },
+   {
+    "kind": "service",
+    "name": "assertAccountLifecycleActive and withDeadline",
+    "path": "apps/web/lib/api-auth.ts",
+    "role": "Per-request status gate: cache, two attempts, 2000 ms deadline, fail closed (lines 244-282)."
+   },
+   {
+    "kind": "service",
+    "name": "bindOrganizationScope",
+    "path": "apps/web/lib/api-auth.ts",
+    "role": "Binds workspace id with the same deadline; a failed or slow lookup throws 503 (lines 215-242)."
+   },
+   {
+    "kind": "service",
+    "name": "accountForSubject",
+    "path": "apps/web/lib/api-auth.ts",
+    "role": "Turns an 'erased' resolution into an audit failure and a refusal (lines 293-303)."
+   },
+   {
+    "kind": "service",
+    "name": "accountAccessDecision and effectiveAccountStatus",
+    "path": "apps/web/lib/auth/account-status.ts",
+    "role": "Status vocabulary, denial reasons, messages, recovery paths."
+   },
+   {
+    "kind": "service",
+    "name": "readAccountStatus and accountAccessForSignIn",
+    "path": "apps/web/lib/auth/account-lifecycle.ts",
+    "role": "Reads profiles.account_status, deletion date and tombstone; sign-in-completion variant fails open."
+   },
+   {
+    "kind": "service",
+    "name": "getIdentityProvider",
+    "path": "apps/web/lib/server/identity.ts",
+    "role": "Single place the web app obtains the identity provider port."
+   },
+   {
+    "kind": "service",
+    "name": "resolveIdentityProvider",
+    "path": "packages/platform/identity/src/factory.ts",
+    "role": "Chooses provider from AGI_IDENTITY_PROVIDER; only clerk exists."
+   },
+   {
+    "kind": "service",
+    "name": "ClerkIdentityProvider",
+    "path": "packages/platform/identity/src/adapters/clerk.ts",
+    "role": "The one adapter that implements the identity port."
+   },
+   {
+    "kind": "service",
+    "name": "request-context-cache",
+    "path": "apps/web/lib/server/request-context-cache.ts",
+    "role": "Cache TTL constant (5 minutes) and status cache helpers."
+   },
+   {
+    "kind": "table",
+    "name": "public.identities",
+    "path": "apps/web/lib/server/identity-account.ts",
+    "role": "provider, subject, user_id, last_authenticated_at rows linking a subject to an account."
+   },
+   {
+    "kind": "table",
+    "name": "public.profiles",
+    "path": "apps/web/lib/auth/account-lifecycle.ts",
+    "role": "account_status and deletion_scheduled_for columns."
+   },
+   {
+    "kind": "table",
+    "name": "public.erasure_tombstones",
+    "path": "apps/web/lib/auth/account-lifecycle.ts",
+    "role": "Only record that an erased account existed."
+   },
+   {
+    "kind": "component",
+    "name": "ACCOUNT_DENIAL_NOTICE",
+    "path": "apps/web/lib/auth/account-status.ts",
+    "role": "Heading and button text for each denial."
+   },
+   {
+    "kind": "event",
+    "name": "identity_linked audit event",
+    "path": "apps/web/lib/server/identity-account.ts",
+    "role": "Written when a new identity row is linked at sign-in."
+   },
+   {
+    "kind": "test",
+    "name": "account-status tests",
+    "path": "apps/web/lib/auth/account-status.test.ts",
+    "role": "Covers the decision function."
+   }
+  ],
+  "execution_and_data_flow": {
+   "steps": [
+    {
+     "what_happens": "A client sends a cookie or bearer token; the server verifies it with the identity provider.",
+     "runs_on": "our servers",
+     "evidence": "apps/web/lib/server/identity.ts:35-43"
+    },
+    {
+     "what_happens": "The subject is resolved to an account id: cache read, else a database join of identities and erasure_tombstones; an unmapped subject resolves only where the subject is the stored user id.",
+     "runs_on": "our servers",
+     "evidence": "apps/web/lib/server/identity-account.ts:179-212"
+    },
+    {
+     "what_happens": "If the identity row is missing but the account exists it is linked and an identity_linked audit event is written; otherwise last_authenticated_at is touched.",
+     "runs_on": "our servers",
+     "evidence": "apps/web/lib/server/identity-account.ts:158-168, 203-206"
+    },
+    {
+     "what_happens": "The account status is read from cache or from profiles plus tombstone, bounded to 2000 ms and retried once.",
+     "runs_on": "our servers",
+     "evidence": "apps/web/lib/api-auth.ts:244-266; apps/web/lib/auth/account-lifecycle.ts:12-34"
+    },
+    {
+     "what_happens": "A denying status throws a 403 ACCOUNT_UNAVAILABLE error with reason and recovery path.",
+     "runs_on": "our servers",
+     "evidence": "apps/web/lib/api-auth.ts:111-117"
+    },
+    {
+     "what_happens": "The client shows the notice and the recovery link.",
+     "runs_on": "device",
+     "evidence": "apps/web/lib/auth/account-status.ts:32-37 (copy); which client renders it per app is unknown"
+    }
+   ],
+   "data": [
+    {
+     "what": "Identity link (provider, subject, account id, last authenticated time)",
+     "where_stored": "table public.identities (Neon Postgres)",
+     "synced": "Server only",
+     "retained_or_deleted": "Erasure removes the profile; the tombstone remains (apps/web/lib/auth/account-lifecycle.ts:12-14)."
+    },
+    {
+     "what": "Account status and scheduled deletion date",
+     "where_stored": "table public.profiles",
+     "synced": "Server only; every app sees it through the API refusal",
+     "retained_or_deleted": "Deleted with the profile on erasure; tombstone in public.erasure_tombstones."
+    },
+    {
+     "what": "Cached identity resolution and cached status",
+     "where_stored": "key-value store keyed req-ctx:v1:identity:<provider>:<subject>",
+     "synced": "Shared across server instances",
+     "retained_or_deleted": "5 minute TTL; invalidated on erasure (apps/web/lib/server/identity-account.ts:104-118)."
+    }
+   ],
+   "models_and_providers": "No AI model or inference provider takes part. The identity provider (Clerk) takes part as an outside service for token verification and user lookup (packages/platform/identity/src/adapters/clerk.ts)."
+  },
+  "access_and_usage": {
+   "account": "A signed-in AGI account is required; the feature is what decides whether the account may proceed.",
+   "permissions": "None found in the code; it applies to every account regardless of workspace role.",
+   "subscription": "none found in the code",
+   "limits_and_metering": "None for plans. Operational limits only: 2 attempts, 2000 ms per attempt (apps/web/lib/api-auth.ts:109-120).",
+   "flags": "ACCOUNT_STATUS_FAIL_OPEN and AGI_IDENTITY_PROVIDER (names and purposes only).",
+   "model_compatibility": "Not model-dependent.",
+   "provider_restrictions": "Identity provider fixed to clerk in code. No AI provider involved.",
+   "local_mode": "Local mode (on-device inference) does not call this server code [inferred]. Whether Local mode needs a sign-in on each app is unknown here; this feature only decides standing for requests that reach our servers."
+  },
+  "states_and_edge_cases": [
+   {
+    "state": "Loading",
+    "behaviour": "Not handled in the code for a visible spinner; the check is server side and adds up to 2 s per attempt.",
+    "evidence": "apps/web/lib/api-auth.ts:109-120"
+   },
+   {
+    "state": "Timeout",
+    "behaviour": "A lookup over 2000 ms counts as a failed attempt; after 2 attempts the request gets 503 (fail closed).",
+    "evidence": "apps/web/lib/api-auth.ts:252-282"
+   },
+   {
+    "state": "Workspace binding timeout",
+    "behaviour": "The workspace lookup that binds the request throws 503 'Unable to verify workspace scope'.",
+    "evidence": "apps/web/lib/api-auth.ts:225-241"
+   },
+   {
+    "state": "Erased account",
+    "behaviour": "Refused as erased, with an audit failure 'erased_account'.",
+    "evidence": "apps/web/lib/api-auth.ts:293-303"
+   },
+   {
+    "state": "Scheduled deletion",
+    "behaviour": "Allowed so the person can cancel while signed in.",
+    "evidence": "apps/web/lib/auth/account-status.ts:68-71"
+   },
+   {
+    "state": "Banned",
+    "behaviour": "Shown as 'suspended' (same message and appeal path).",
+    "evidence": "apps/web/lib/auth/account-status.ts:85-95"
+   },
+   {
+    "state": "Cache failure",
+    "behaviour": "A failed cache read or write is logged at debug level and the database is used.",
+    "evidence": "apps/web/lib/server/identity-account.ts:80-100"
+   },
+   {
+    "state": "Second subject for the same account",
+    "behaviour": "The link write conflicts, is logged as an error, and the request continues without an identity id.",
+    "evidence": "apps/web/lib/server/identity-account.ts:150-157"
+   },
+   {
+    "state": "Offline / reconnect / accessibility",
+    "behaviour": "Not handled in the code in these files; client rendering is unverified.",
+    "evidence": "not found in files read"
+   }
+  ],
+  "verification": {
+   "existing_tests": [
+    {
+     "path": "apps/web/lib/auth/account-status.test.ts",
+     "covers": "Account access decisions and the status vocabulary."
+    },
+    {
+     "path": "apps/web/lib/server/identity-account.test.ts",
+     "covers": "Subject-to-account resolution."
+    },
+    {
+     "path": "apps/web/lib/auth/__tests__/account-lifecycle.single-source.test.ts",
+     "covers": "Single source of the lifecycle vocabulary."
+    },
+    {
+     "path": "apps/web/lib/auth/__tests__/account-status.schema.test.ts",
+     "covers": "Status values against the schema."
+    },
+    {
+     "path": "apps/web/lib/auth/__tests__/identity-objects.schema.test.ts",
+     "covers": "Identity table shape."
+    },
+    {
+     "path": "apps/web/lib/server/unreadable-identity.test.ts",
+     "covers": "Behaviour when identity data is unreadable."
+    },
+    {
+     "path": "apps/web/app/admin/__tests__/layout.account-status.test.tsx",
+     "covers": "Admin layout refusing by account status."
+    },
+    {
+     "path": "apps/web/db/neon/identity-account-lifecycle-migration.test.ts",
+     "covers": "Lifecycle migration."
+    }
+   ],
+   "scenarios": [
+    {
+     "name": "Suspended account refused",
+     "steps": [
+      "Set a test account's status to suspended in a test database",
+      "Call GET /api/me with its token"
+     ],
+     "expected": "403 ACCOUNT_UNAVAILABLE, reason suspended, recoveryPath /appeal."
+    },
+    {
+     "name": "Locked account recovery path",
+     "steps": [
+      "Set status locked",
+      "Call any authenticated route"
+     ],
+     "expected": "403 reason locked, recoveryPath /auth/reset-password."
+    },
+    {
+     "name": "Scheduled deletion still allowed",
+     "steps": [
+      "Set deletion_scheduled_for on an active account",
+      "Call an authenticated settings route"
+     ],
+     "expected": "Request succeeds."
+    },
+    {
+     "name": "Slow lookup fails closed",
+     "steps": [
+      "Make the status read exceed 2 s twice (test double)",
+      "Call an authenticated route without ACCOUNT_STATUS_FAIL_OPEN"
+     ],
+     "expected": "503 'Unable to verify account status'."
+    },
+    {
+     "name": "Erased subject",
+     "steps": [
+      "Add a tombstone for the account",
+      "Present the old provider session"
+     ],
+     "expected": "Refused; an 'erased_account' auth failure is logged."
+    }
+   ],
+   "diagnostics": [
+    "Log 'account_status lookup failed after retry; denying request (fail-closed)' (apps/web/lib/api-auth.ts:279).",
+    "Log 'Identity mapping could not be linked' (apps/web/lib/server/identity-account.ts:152).",
+    "Tables profiles, identities, erasure_tombstones; audit event identity_linked and auth failure erased_account."
+   ]
+  },
+  "gaps": [
+   {
+    "gap": "Brief says adapters cover password, social, passkey and SSO; the code has one provider adapter (Clerk).",
+    "affects": "All apps; provider independence",
+    "evidence": "packages/platform/identity/src/types.ts:1; factory.ts:47-52",
+    "work_needed": "Add a second adapter or restate the requirement as 'one adapter behind the port'."
+   },
+   {
+    "gap": "No record of how each app renders the denial notice.",
+    "affects": "Desktop, Mobile, CLI, VS Code, Chrome",
+    "evidence": "brief S89.01 lists status n/a for every app",
+    "work_needed": "Trace each client's handling of ACCOUNT_UNAVAILABLE and add tests."
+   },
+   {
+    "gap": "The status cache TTL and its invalidation on lock/suspend were not read.",
+    "affects": "Time between a lock and its effect",
+    "evidence": "apps/web/lib/api-auth.ts:245 uses getCachedAccountStatus; its implementation not opened",
+    "work_needed": "Read request-context-cache.ts and document or test the delay."
+   }
+  ],
+  "depends_on": [
+   "SYS-authentication-and-identity",
+   "SYS-authorization-and-workspaces",
+   "SYS-data-model-and-migrations",
+   "SYS-security-and-privacy",
+   "surface:web",
+   "surface:desktop",
+   "surface:mobile",
+   "surface:cli",
+   "surface:vscode",
+   "surface:chrome",
+   "mode:cloud",
+   "table:identities",
+   "table:profiles",
+   "table:erasure_tombstones",
+   "file:apps/web/lib/api-auth.ts",
+   "file:apps/web/lib/server/identity-account.ts",
+   "file:apps/web/lib/auth/account-status.ts"
+  ],
+  "relationships": [
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/web/lib/server/identity-account.ts",
+    "evidence": "resolveAuthenticatedAccount at line 179"
+   },
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/web/lib/api-auth.ts",
+    "evidence": "assertAccountLifecycleActive at line 244"
+   },
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/web/lib/auth/account-status.ts",
+    "evidence": "accountAccessDecision at line 72"
+   },
+   {
+    "rel": "depends_on",
+    "to": "SYS-authentication-and-identity",
+    "evidence": "identity port in apps/web/lib/server/identity.ts"
+   },
+   {
+    "rel": "stores_data_in",
+    "to": "table:identities",
+    "evidence": "RESOLVE and LINK queries in identity-account.ts"
+   },
+   {
+    "rel": "stores_data_in",
+    "to": "table:profiles",
+    "evidence": "ACCOUNT_LIFECYCLE query in account-lifecycle.ts"
+   },
+   {
+    "rel": "stores_data_in",
+    "to": "table:erasure_tombstones",
+    "evidence": "ACCOUNT_LIFECYCLE query joins it"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/web/lib/auth/account-status.test.ts",
+    "evidence": "file exists"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/web/lib/server/identity-account.test.ts",
+    "evidence": "file exists"
+   },
+   {
+    "rel": "configured_by",
+    "to": "file:packages/platform/identity/src/factory.ts",
+    "evidence": "AGI_IDENTITY_PROVIDER read at line 11-34"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:web",
+    "evidence": "server code in apps/web"
+   },
+   {
+    "rel": "governed_by_subscription",
+    "to": "SYS-subscriptions-entitlements-and-usage",
+    "evidence": "no plan rule found; standing applies to all plans"
+   }
+  ],
+  "unknowns": [
+   "Whether sso/clerk-enterprise-connections.ts is part of the adapter surface the brief describes (file not opened).",
+   "How each non-web app displays an ACCOUNT_UNAVAILABLE response.",
+   "Length and invalidation of the account-status cache.",
+   "Production value of ACCOUNT_STATUS_FAIL_OPEN.",
+   "Whether Local mode requires sign-in on each app."
+  ]
+ },
+ "corrections": [
+  {
+   "section": "3",
+   "claim": "Status lookup is cached, retried twice, each try bounded to 2000 ms, and fails closed with 503",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "ACCOUNT_STATUS_ATTEMPTS = 2 is two attempts in total, i.e. one retry. Cache, 2000 ms deadline and 503 are right. Section 6 says 'retried once', so the page contradicts itself.",
+   "evidence": "apps/web/lib/api-auth.ts:109,120,250-266,279-282",
+   "correction": "Status lookup is cached, tried at most twice (one retry), each try bounded to 2000 ms, and fails closed with 503 unless ACCOUNT_STATUS_FAIL_OPEN is set."
+  },
+  {
+   "section": "3 / 10 / 4 / Unknown",
+   "claim": "The status cache TTL ... not in the files read [unknown TTL]; Unknown: 'Length and invalidation of the account-status cache'",
+   "verdict": "wrong",
+   "what_the_code_shows": "The TTL is known. setCachedAccountStatus writes with REQUEST_CONTEXT_CACHE_TTL_SECONDS (5 minutes), and invalidateAccountStatusCache exists. Section 6 and section 5 already cite the 5 minute value for identity and status, so the page contradicts itself. A lock can therefore take up to 5 minutes to bite unless something calls invalidateAccountStatusCache.",
+   "evidence": "apps/web/lib/server/request-context-cache.ts:10,64-76,78-86",
+   "correction": "The account-status cache lives 5 minutes (same constant as the identity cache) and is cleared by invalidateAccountStatusCache(userId); a lock or suspension written without that call takes up to 5 minutes to take effect."
+  },
+  {
+   "section": "2 / 7",
+   "claim": "It runs on every request on the server (apps/web/lib/api-auth.ts:244-282); applies to every account on every API request",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "assertAccountLifecycleActive is reached through assertAccountActive. The code comment says it runs on every cookie-authenticated request. The page did not show that every bearer-token, device-token or other authenticated route calls it. The device refresh route does its own check with accountAccessDecision on owner_account_status. In assertAccountActive the workspace lockdown gate fails open (a lookup error is logged as 'not locked'), which the page omits.",
+   "evidence": "apps/web/lib/api-auth.ts:115-120,196-216,244-282; apps/web/app/api/auth/device/refresh/route.ts:181-188",
+   "correction": "The status gate runs for authenticated API requests through assertAccountActive, which is also called on the cookie path. The device refresh route applies the same decision separately. Do not claim every request is covered without tracing each auth path."
+  },
+  {
+   "section": "8",
+   "claim": "Second subject for the same account: the link write conflicts, is logged as an error, and the request continues without an identity id",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "linkIdentity catches the error, logs 'Identity mapping could not be linked' at error level and returns null, so identityId is null and the request continues; the comment attributes it to migration 0174's (provider, user_id) uniqueness. The INSERT uses ON CONFLICT (provider, subject) DO NOTHING, which handles only the same subject. The null identityId is also cached for 5 minutes via writeCache, so the missing link persists. Not stated on the page.",
+   "evidence": "apps/web/lib/server/identity-account.ts:53-58,140-157,203-210",
+   "correction": "A second subject for the same account violates the (provider, user_id) uniqueness; the failure is logged at error level, the request continues with identityId null, and that null identity is cached for 5 minutes."
+  }
+ ],
+ "missing_facts": [
+  "The status cache has a known 5 minute TTL and an invalidateAccountStatusCache(userId) function, so a lock or suspension can take up to 5 minutes to apply unless that function is called (apps/web/lib/server/request-context-cache.ts:10,64-86). The page says the TTL is unknown.",
+  "The workspace lockdown gate fails open: a failed or slow workspace lookup is logged as 'not locked' and the request continues (apps/web/lib/api-auth.ts:196-208). Only the bindOrganizationScope path (mfaGateExemptForOwner) fails closed with 503 (api-auth.ts:215-242). The page lists only the fail-closed case.",
+  "Sign-in completion uses accountAccessForSignIn, which allows the request on any lookup error (apps/web/lib/auth/account-lifecycle.ts:38-46). The device-token refresh route applies its own accountAccessDecision on owner_account_status and returns 403 account_unavailable (apps/web/app/api/auth/device/refresh/route.ts:181-188,281-295). The page's section 3 mentions them but its 'every request' framing hides that account standing is enforced on several separate paths."
+ ]
+}

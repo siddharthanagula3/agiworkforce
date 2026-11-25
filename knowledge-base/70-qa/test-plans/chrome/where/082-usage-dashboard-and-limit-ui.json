@@ -1,0 +1,168 @@
+{
+ "S82.01": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "More"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The plan name is shown only in the More menu account header. The code does not show it on other surfaces, and the header is hidden when the account is signed out.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to the AGI Chrome side panel with an account that has a plan.",
+   "Click the More button.",
+   "Look at the account header at the top of the menu: the plan name should appear beside your name or email, and match the plan on your account page."
+  ],
+  "where": "More > account header at the top of the menu (the plan name sits beside the account name)"
+ },
+ "S82.02": {
+  "labels": [],
+  "needs": "a paid account",
+  "note": "No renewal or end date text was found in apps/extension. The only period wording is the bucket label 'This billing period' (packages/contracts/types/src/usage-vocabulary.ts) and the reset countdown. Searched apps/extension/src and apps/extension/_locales for renew, billing period, period end and ends on.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S82.03": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Usage"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "More"
+   }
+  ],
+  "needs": "a paid account",
+  "note": "The row is hidden on Free and while managed model access has not loaded. It shows one overall percentage, not per-window meters.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with a paid account and wait for the side panel to load.",
+   "Click the More button.",
+   "Look at the row labelled Usage: it has a thin bar and a percentage such as 40%.",
+   "Compare the percentage with the usage shown on the web usage page after you click Usage."
+  ],
+  "where": "More > Usage row (shown only on paid plans, not on Free)"
+ },
+ "S82.04": {
+  "labels": [],
+  "needs": "a paid account",
+  "note": "No per-model usage breakdown was found in apps/extension. The only model-specific wording is the 'most capable models' weekly bucket in the usage banner. Clicking More > Usage opens the web page /settings/usage, which is outside this code folder.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S82.13": {
+  "labels": [],
+  "needs": "a paid account",
+  "note": "Remaining credit figures are computed in apps/extension/src/features/side-panel/usageWindows.ts (UsageWindowView.detail, PurchasedCreditsView.balance), but no element renders them. Searched apps/extension/src for detail, balance and credits rendering.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S82.14": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Plan limit reached. Your purchased credits are covering usage."
+   }
+  ],
+  "needs": "a paid account with purchased credits and overage on, with the plan limit spent",
+  "note": "The banner names the two sources but does not show the purchased balance figure.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with a paid account that has purchased credits with overage enabled, and use up the plan limit.",
+   "Send a message.",
+   "Look at the banner above the composer: it should say that the plan limit is reached and that purchased credits are covering usage."
+  ],
+  "where": "Composer usage banner (appears above the composer when every plan window is spent and purchased credits are on)"
+ },
+ "S82.17": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/usage-vocabulary.ts",
+    "text": "Resets in"
+   }
+  ],
+  "needs": "a paid account near or at a usage limit",
+  "note": "The countdown is shown only for the window that is binding or blocking, not for every window at once.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with a paid account whose usage window is at least 75% used, or use up a window.",
+   "Look at the banner above the composer or the message shown when sending is blocked.",
+   "Find the text ending in a reset time such as 'Resets in 3 hr 20 min' or 'Resets in 2 days'.",
+   "Compare the countdown with the time until the window resets on the web usage page."
+  ],
+  "where": "Composer usage banner or the blocked composer message (shown only for a window that is near or at its limit)"
+ },
+ "S82.24": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Add credits"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Manage usage"
+   }
+  ],
+  "needs": "a paid account near a usage limit",
+  "note": "The banner text is built from a template in packages/contracts/types/src/usage-vocabulary.ts, so the exact sentence varies. The Free plan never shows this banner.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with a paid account whose usage window is at least 75% used.",
+   "Look at the banner above the composer.",
+   "Check that it states how much of the limit is used and offers a button such as Add credits or Manage usage."
+  ],
+  "where": "Composer usage banner (appears on a paid plan when a usage window has 25% or less left)"
+ },
+ "S82.25": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Your Managed Cloud usage limit has been reached."
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Add credits"
+   }
+  ],
+  "needs": "an account at its usage limit (a paid account or a Free account)",
+  "note": "The shown message is built from the blocking window (for example 'You've reached the Free limit for now' from packages/contracts/types/src/usage-vocabulary.ts). The fixed sentence above is the fallback text.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with an account that has used its whole limit and has no purchased credits to spend.",
+   "Click in the composer and try to send a message.",
+   "Look at the blocked message: it should name the limit and when it resets, and show a button such as Add credits, Upgrade or Manage usage."
+  ],
+  "where": "Composer, after you send a message when the usage limit has been reached (Managed Cloud chat gate)"
+ },
+ "S82.26": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Switch model"
+   }
+  ],
+  "needs": "an account whose plan or limit blocks the selected model",
+  "note": "The code does not filter the model menu to eligible models on this path. It only opens the menu. A notice naming the replacement model appears when a saved model is not allowed (spModelFallback).",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with an account whose plan or limit blocks the model currently selected.",
+   "Send a message on that model.",
+   "When the reply fails, look for the Switch model button under the failed reply.",
+   "Click Switch model and check that the model menu offers models this account can use."
+  ],
+  "where": "Failed reply in the chat, when the error is quota_exceeded or plan_required: the Switch model button"
+ },
+ "S82.27": {
+  "labels": [],
+  "needs": "an account at its usage limit",
+  "note": "No wait or wait-until-reset control was found. The blocked message shows the reset time, the recovery button is Add credits, Upgrade or Manage usage, and the side panel refreshes itself at the reset time. Searched apps/extension/src and _locales for wait and reset wording.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ }
+}

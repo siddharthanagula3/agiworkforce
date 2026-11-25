@@ -1,0 +1,619 @@
+{
+ "S3.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/auth/AuthEmailStep.tsx",
+    "text": "Log in or sign up"
+   },
+   {
+    "file": "apps/web/features/auth/AuthEmailStep.tsx",
+    "text": "Email address"
+   },
+   {
+    "file": "apps/web/features/auth/AuthEmailStep.tsx",
+    "text": "Continue"
+   }
+  ],
+  "needs": "an existing account with a password or email code",
+  "note": "The same screen serves /login and /signup. Provider and passkey buttons appear above the email field when configured.",
+  "reachable": "yes",
+  "steps": [
+   "Sign out, or open the app while signed out.",
+   "Type your account email in \"Email address\".",
+   "Click \"Continue\".",
+   "Enter your password (or the emailed code) and click \"Continue\".",
+   "Look for the signed-in chat page, which means the session was issued."
+  ],
+  "where": "Signed out: \"Log in or sign up\" screen > \"Email address\" > \"Continue\""
+ },
+ "S3.02": {
+  "labels": [
+   {
+    "file": "apps/web/features/auth/AuthEmailStep.tsx",
+    "text": "Log in or sign up"
+   },
+   {
+    "file": "apps/web/features/auth/AuthNewPasswordStep.tsx",
+    "text": "Create a password"
+   }
+  ],
+  "needs": "an email address that has no account yet",
+  "note": "There is no separate \"Create account\" button in the code. /signup renders the same screen as sign-in.",
+  "reachable": "yes",
+  "steps": [
+   "Open the sign-up address (/signup) or sign out.",
+   "Type an email address that has no account in \"Email address\".",
+   "Click \"Continue\".",
+   "Follow the next step, which can be \"Create a password\".",
+   "Look for the account being created and the next step (email confirmation)."
+  ],
+  "where": "Signed out: \"Log in or sign up\" screen > \"Email address\" > \"Continue\" (use an address with no account)"
+ },
+ "S3.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/auth/AuthCodeStep.tsx",
+    "text": "Check your inbox"
+   },
+   {
+    "file": "apps/web/features/auth/ConfirmEmailStep.tsx",
+    "text": "Confirm your email address"
+   }
+  ],
+  "needs": "a new email address you can read",
+  "note": "The order of sign-up steps is set by the server response, so the exact screen order is not fixed in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Sign up with an email address that has no account.",
+   "Look for the \"Check your inbox\" screen and the \"We sent a code to\" line with your address.",
+   "Open your email and find the code.",
+   "Enter it in \"Code\" and click \"Continue\".",
+   "Check that the account is usable after the code is accepted."
+  ],
+  "where": "Signed out: \"Log in or sign up\" > new \"Email address\" > \"Continue\" > \"Check your inbox\" screen"
+ },
+ "S3.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/auth/AuthCodeStep.tsx",
+    "text": "Code"
+   },
+   {
+    "file": "apps/web/features/auth/AuthCodeStep.tsx",
+    "text": "Resend code"
+   },
+   {
+    "file": "apps/web/features/auth/AuthMethodPicker.tsx",
+    "text": "Email me a code"
+   }
+  ],
+  "needs": "an email account you can read",
+  "note": "This screen takes emailed codes. Authenticator codes are entered on the \"Confirm it is you\" screen (S3.14).",
+  "reachable": "yes",
+  "steps": [
+   "Reach the \"Check your inbox\" screen.",
+   "Type a wrong code in \"Code\" and click \"Continue\"; look for the error.",
+   "Click \"Resend code\" and look for the \"Resend code in\" countdown.",
+   "Enter the newest emailed code (autofill from the email app is offered by the field) and click \"Continue\".",
+   "Look for the signed-in result."
+  ],
+  "where": "\"Check your inbox\" screen > \"Code\" field (reach it with \"Try another way to sign in\" > \"Email me a code\" when a password is offered)"
+ },
+ "S3.06": {
+  "labels": [
+   {
+    "file": "apps/web/features/auth/AuthPasswordStep.tsx",
+    "text": "Forgot password?"
+   },
+   {
+    "file": "apps/web/features/auth/AuthPasswordStep.tsx",
+    "text": "Enter your password"
+   },
+   {
+    "file": "apps/web/features/auth/AuthCodeStep.tsx",
+    "text": "Check your inbox"
+   }
+  ],
+  "needs": "an account with a password and access to its email",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Type the email of an account that has a password and click \"Continue\".",
+   "On \"Enter your password\" click \"Forgot password?\".",
+   "Look for the \"Check your inbox\" screen with the \"We sent a code to\" line.",
+   "Open the email inbox and look for the reset code."
+  ],
+  "where": "\"Log in or sign up\" > \"Email address\" > \"Continue\" > \"Enter your password\" > \"Forgot password?\""
+ },
+ "S3.07": {
+  "labels": [
+   {
+    "file": "apps/web/features/auth/AuthNewPasswordStep.tsx",
+    "text": "Set a new password"
+   },
+   {
+    "file": "apps/web/features/auth/AuthNewPasswordStep.tsx",
+    "text": "New password"
+   }
+  ],
+  "needs": "the reset code from the email",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Enter the reset code from the email in \"Code\" and click \"Continue\".",
+   "On \"Set a new password\" type a new password in \"New password\".",
+   "Read the rule line about minimum length and breach checks.",
+   "Click \"Continue\".",
+   "Look for being signed in after the new password is set."
+  ],
+  "where": "\"Forgot password?\" > \"Check your inbox\" > \"Code\" > \"Continue\" > \"Set a new password\""
+ },
+ "S3.08": {
+  "labels": [
+   {
+    "file": "apps/web/features/auth/AuthProviderButtons.tsx",
+    "text": "Continue with {{provider}}"
+   },
+   {
+    "file": "packages/client/client-runtime/src/authProviders.ts",
+    "text": "GitHub"
+   }
+  ],
+  "needs": "a Google or GitHub account",
+  "note": "The provider list comes from AGI_AUTH_PROVIDERS and defaults to Google and GitHub. Microsoft and Apple are also defined.",
+  "reachable": "yes",
+  "steps": [
+   "Sign out and open the sign-in screen.",
+   "Look for the provider buttons above \"Email address\".",
+   "Click \"Continue with Google\" (or GitHub).",
+   "Finish the provider sign-in in the provider window.",
+   "Look for the signed-in chat page."
+  ],
+  "where": "Signed out: \"Log in or sign up\" screen > \"Continue with Google\" or \"Continue with GitHub\" (buttons above the email field)"
+ },
+ "S3.09": {
+  "labels": [
+   {
+    "file": "apps/web/features/auth/AuthPhaseStatus.tsx",
+    "text": "This address belongs to an organization. Taking you to its sign-in"
+   }
+  ],
+  "needs": "an account in an SSO-enabled organization",
+  "note": "No separate SSO button exists in the code. The SSO start is triggered by the email step.",
+  "reachable": "yes",
+  "steps": [
+   "Type an email address of an SSO-enabled organization in \"Email address\".",
+   "Click \"Continue\".",
+   "Look for the message \"This address belongs to an organization. Taking you to its sign-in\".",
+   "Finish the organization sign-in in the browser when asked, then look for the signed-in result."
+  ],
+  "where": "Signed out: \"Log in or sign up\" > \"Email address\" (an organization address) > \"Continue\""
+ },
+ "S3.10": {
+  "labels": [
+   {
+    "file": "apps/web/features/auth/AuthPhaseStatus.tsx",
+    "text": "This address belongs to an organization. Taking you to its sign-in"
+   }
+  ],
+  "needs": "a work email on a verified organization domain",
+  "note": "The domain check runs on the server (apps/web/lib/services/organization-verified-domains.ts); the screen only shows its result.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Type a work email whose domain belongs to a verified organization.",
+   "Click \"Continue\".",
+   "Look for the message \"This address belongs to an organization. Taking you to its sign-in\" and the redirect to the organization sign-in."
+  ],
+  "where": "\"Log in or sign up\" > \"Email address\" (a work email) > \"Continue\"; the effect shows as the organization message"
+ },
+ "S3.11": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/components/Settings/PasskeysPanel.tsx",
+    "text": "Add a passkey"
+   },
+   {
+    "file": "apps/web/features/settings/components/Settings/PasskeysPanel.tsx",
+    "text": "Passkeys"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Security"
+   }
+  ],
+  "needs": "a signed-in account and a browser or device that supports passkeys",
+  "note": "The menu entry that opens Settings was not found under this exact wording; the Settings title is in packages/ui/i18n/locales/en/common.json.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, then open Settings.",
+   "Click \"Security\" in the Settings list.",
+   "Find the \"Passkeys\" heading and click \"Add a passkey\".",
+   "Complete the device or browser passkey prompt.",
+   "Look for the new passkey listed; click \"Rename\" or \"Remove\" on it to check those controls."
+  ],
+  "where": "Settings > Security > \"Passkeys\" > \"Add a passkey\""
+ },
+ "S3.12": {
+  "labels": [
+   {
+    "file": "apps/web/features/auth/AuthEmailStep.tsx",
+    "text": "Sign in with a passkey or security key"
+   },
+   {
+    "file": "apps/web/features/auth/AuthMethodPicker.tsx",
+    "text": "Use a passkey or security key"
+   }
+  ],
+  "needs": "a registered passkey on the account and a device that holds it",
+  "note": "The button appears only when the server provider list includes passkey and the browser supports passkeys.",
+  "reachable": "yes",
+  "steps": [
+   "Sign out and open the sign-in screen.",
+   "Click \"Sign in with a passkey or security key\".",
+   "Complete the passkey prompt on the device.",
+   "Look for the signed-in result without a password or code."
+  ],
+  "where": "\"Log in or sign up\" > \"Sign in with a passkey or security key\" (above the email field); or \"Try another way to sign in\" > \"Use a passkey or security key\""
+ },
+ "S3.13": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/components/Settings/TwoFactorEnrollment.tsx",
+    "text": "Set up authenticator app"
+   },
+   {
+    "file": "apps/web/features/settings/components/Settings/TwoFactorEnrollment.tsx",
+    "text": "Verify and enable"
+   },
+   {
+    "file": "apps/web/features/settings/components/Settings/TwoFactorEnrollment.tsx",
+    "text": "Authenticator app"
+   }
+  ],
+  "needs": "an authenticator app on a phone",
+  "note": "The confirm dialog says the change may also sign out sessions and revoke linked access.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, click \"Security\", find \"Authenticator app\".",
+   "Click \"Set up authenticator app\" (or \"Enable two-factor\" in the confirm step).",
+   "Scan the QR code with an authenticator app, or use \"Copy key\".",
+   "Type the 6-digit code in \"Enter the 6-digit code from the app\" and click \"Verify and enable\".",
+   "Look for \"Two-factor authentication is now enabled on your account.\" Then sign out and check that sign-in asks for a code."
+  ],
+  "where": "Settings > Security > \"Authenticator app\" > \"Set up authenticator app\""
+ },
+ "S3.14": {
+  "labels": [
+   {
+    "file": "apps/web/features/auth/AuthSecondFactorStep.tsx",
+    "text": "Confirm it is you"
+   },
+   {
+    "file": "apps/web/features/auth/AuthSecondFactorStep.tsx",
+    "text": "Use a backup code"
+   },
+   {
+    "file": "apps/web/features/auth/AuthSecondFactorStep.tsx",
+    "text": "Lost the device with your codes?"
+   }
+  ],
+  "needs": "an account with authenticator two-factor on, and its device",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with password on an account that has two-factor on.",
+   "Look for the \"Confirm it is you\" screen.",
+   "Enter the code from the authenticator app and click \"Continue\".",
+   "Look for the alternatives such as \"Use a backup code\" or \"Text me a code instead\".",
+   "Look for \"Lost the device with your codes?\" as the recovery path."
+  ],
+  "where": "Signed out: \"Log in or sign up\" > \"Email address\" > \"Continue\" > password > \"Confirm it is you\" screen"
+ },
+ "S3.15": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/components/Settings/TwoFactorEnrollment.tsx",
+    "text": "Save your backup codes"
+   },
+   {
+    "file": "apps/web/features/settings/components/Settings/TwoFactorEnrollment.tsx",
+    "text": "Copy codes"
+   },
+   {
+    "file": "apps/web/features/settings/components/Settings/TwoFactorEnrollment.tsx",
+    "text": "Download codes"
+   }
+  ],
+  "needs": "a signed-in account with two-factor on, or the setup flow",
+  "note": "Print uses the browser print path; the code shows a fallback message if printing fails.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, click \"Security\", find \"Authenticator app\".",
+   "Click \"Generate new backup codes\" and confirm in \"Replace your backup codes?\".",
+   "Look for the \"Save your backup codes\" section with the codes.",
+   "Click \"Copy codes\", \"Download codes\" and \"Print codes\" one at a time and check each result.",
+   "Look that the codes are shown only once in this view."
+  ],
+  "where": "Settings > Security > \"Authenticator app\" > \"Generate new backup codes\" (also shown during \"Set up authenticator app\")"
+ },
+ "S3.16": {
+  "labels": [
+   {
+    "file": "apps/web/app/recover/page.tsx",
+    "text": "Recover your account"
+   },
+   {
+    "file": "apps/web/features/auth/AccountRecoveryForm.tsx",
+    "text": "Request recovery"
+   },
+   {
+    "file": "apps/web/features/auth/AuthPasswordStep.tsx",
+    "text": "Can\u2019t reach this email?"
+   }
+  ],
+  "needs": "an email address you can be reached at",
+  "note": "The page says a person verifies the account, so the restore is handled after the request. Recovery tickets are in apps/web/lib/support/tickets/recovery.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Reach \"Can\u2019t reach this email?\" from the password screen.",
+   "Look for the \"Recover your account\" page and pick the reason shown.",
+   "Fill in every field and an email address we can reach you at.",
+   "Click \"Request recovery\".",
+   "Look for the request-sent confirmation, or the error if a field is missing."
+  ],
+  "where": "\"Log in or sign up\" > \"Email address\" > \"Continue\" > \"Enter your password\" > \"Can\u2019t reach this email?\" (or \"Confirm it is you\" > \"Lost the device with your codes?\") > \"Request recovery\""
+ },
+ "S3.17": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/components/Settings/SignInMethodsPanel.tsx",
+    "text": "Sign-in methods"
+   },
+   {
+    "file": "apps/web/features/settings/components/Settings/SignInMethodsPanel.tsx",
+    "text": "Connect"
+   },
+   {
+    "file": "apps/web/features/settings/components/Settings/SignInMethodsPanel.tsx",
+    "text": "Disconnect"
+   }
+  ],
+  "needs": "a signed-in account and a Google or GitHub account not yet linked",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, open Settings, click \"Security\".",
+   "Find the \"Sign-in methods\" heading.",
+   "Click \"Connect\" next to Google (or GitHub) and finish the provider sign-in.",
+   "Look for the row to say \"Connected as\" with your provider email.",
+   "Click \"Disconnect\" to see the removal step; do not confirm unless the test needs it."
+  ],
+  "where": "Settings > Security > \"Sign-in methods\" > \"Connect\" next to Google or GitHub"
+ },
+ "S3.18": {
+  "labels": [
+   {
+    "file": "apps/web/lib/auth/error-taxonomy.copy.ts",
+    "text": "This email already has an account"
+   },
+   {
+    "file": "apps/web/lib/auth/error-taxonomy.copy.ts",
+    "text": "Log in instead"
+   },
+   {
+    "file": "apps/web/lib/auth/error-taxonomy.copy.ts",
+    "text": "No account uses this email"
+   }
+  ],
+  "needs": "one account email and one unused email",
+  "note": "The copy exists. The combined screen may route an existing address straight to sign-in, so the conflict message may be hard to trigger by hand.",
+  "reachable": "yes",
+  "steps": [
+   "Enter an email address that already has an account and click \"Continue\".",
+   "Look for the message \"This email already has an account\" and the action \"Log in instead\".",
+   "Enter an email address with no account and click \"Continue\".",
+   "Look for \"No account uses this email\" and the action \"Create an account\"."
+  ],
+  "where": "\"Log in or sign up\" > \"Email address\" > \"Continue\" (error message appears on the screen)"
+ },
+ "S3.19": {
+  "labels": [
+   {
+    "file": "apps/web/app/login/complete/page.tsx",
+    "text": "Finish signing in"
+   },
+   {
+    "file": "apps/web/app/signup/TermsGate.tsx",
+    "text": "Terms of Service"
+   }
+  ],
+  "needs": "an account that has not accepted the current Terms",
+  "note": "The re-prompt after a Terms change is applied on the server (apps/web/lib/server/terms.ts); the tester cannot trigger a new version.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with an account that has not accepted the current Terms, or create a new account.",
+   "Look for the \"Finish signing in\" screen and the line \"Review the details below to continue.\"",
+   "Tick the terms checkbox.",
+   "Click \"Continue\".",
+   "Look for the sign-in finishing into the app."
+  ],
+  "where": "Finish signing in screen after sign-in or sign-up: \"Finish signing in\" > checkbox \"I agree to the Terms of Service and acknowledge the Privacy Policy.\" > \"Continue\""
+ },
+ "S3.21": {
+  "labels": [
+   {
+    "file": "apps/web/features/onboarding/components/OnboardingWizard.tsx",
+    "text": "What should we call you?"
+   },
+   {
+    "file": "apps/web/features/onboarding/components/OnboardingWizard.tsx",
+    "text": "Preferred name"
+   },
+   {
+    "file": "apps/web/features/onboarding/components/OnboardingWizard.tsx",
+    "text": "Continue"
+   }
+  ],
+  "needs": "a new account that has not finished onboarding",
+  "note": "The page is /welcome. The name field's label inside Settings > General was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with a new account.",
+   "On \"What should we call you?\" clear \"Preferred name\" and type a name.",
+   "Click \"Continue\", then click \"Finish\" on the next step.",
+   "Look for the name being used by the chat (or check the name in Settings > General)."
+  ],
+  "where": "After sign-in with an account that has not finished setup: \"What should we call you?\" > \"Preferred name\" > \"Continue\""
+ },
+ "S3.23": {
+  "labels": [
+   {
+    "file": "apps/web/features/onboarding/components/OnboardingWizard.tsx",
+    "text": "What best describes your work?"
+   },
+   {
+    "file": "apps/web/features/onboarding/components/OnboardingWizard.tsx",
+    "text": "What do you want to do first?"
+   },
+   {
+    "file": "apps/web/features/onboarding/lib/use-cases.ts",
+    "text": "Write and debug code"
+   }
+  ],
+  "needs": "a new account that has not finished onboarding",
+  "note": "Copy conflict: the disclosure says the choice is not saved and only picks suggestions, while the \"How this works\" list says the work described shapes replies, and Expected says it tailors replies.",
+  "reachable": "yes",
+  "steps": [
+   "On step 1 open \"What best describes your work?\" and pick an option (default says \"Select one\").",
+   "Click \"Continue\".",
+   "On step 2 pick \"Write and debug code\" or another option.",
+   "Read \"This picks the suggestions below and nothing else\".",
+   "Look at the starter prompts that change with the choice."
+  ],
+  "where": "/welcome after sign-in: step 1 \"What best describes your work?\" (pick from the list); step 2 \"What do you want to do first?\" (radio options such as \"Write and debug code\")"
+ },
+ "S3.24": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/components/web-settings-navigation.ts",
+    "text": "Personalization"
+   },
+   {
+    "file": "apps/web/features/settings/components/web-settings-navigation.ts",
+    "text": "Response style"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "Onboarding has no personalization style step, so only the Settings page is reachable for it.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click \"Personalization\".",
+   "Change a value under \"Response style\" or \"Response length\".",
+   "Open a chat and send a short question.",
+   "Compare the reply style with the setting you chose."
+  ],
+  "where": "Settings > Personalization > \"Response style\" (onboarding asks only for name and work, not style)"
+ },
+ "S3.26": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/MemorySection.tsx",
+    "text": "Start import"
+   },
+   {
+    "file": "apps/web/features/settings/components/ImportMemoryDialog.tsx",
+    "text": "Paste memories"
+   },
+   {
+    "file": "apps/web/features/settings/components/ImportMemoryDialog.tsx",
+    "text": "Upload file"
+   }
+  ],
+  "needs": "text or a file exported from another assistant, and a Cloud account with memory available",
+  "note": "The Start import button is disabled when no memory controller is available.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, click \"Personalization\", scroll to \"Memory\".",
+   "Click \"Start import\".",
+   "Pick a source (ChatGPT, Claude, Gemini, Copilot or Other), then \"Paste memories\" or \"Upload file\".",
+   "Click \"Preview\" and select the memories to keep.",
+   "Click \"Import\" with the count and look for \"Imported N memories from\"."
+  ],
+  "where": "Settings > Personalization > \"Memory\" > \"Import memory from other AI providers\" > \"Start import\""
+ },
+ "S3.27": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Suggested for"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Connectors"
+   }
+  ],
+  "needs": "a saved work role and an outside account for the connector",
+  "note": "Suggestions are not shown during onboarding itself; they show in Settings > Connectors and only when a work role is set.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click \"Connectors\".",
+   "Look for the \"Suggested for\" heading with connector buttons.",
+   "Click one suggested connector.",
+   "Click its connect action and follow the guided flow.",
+   "Look for the connector shown as connected."
+  ],
+  "where": "Settings > \"Connectors\" > \"Suggested for\" row (appears only when a work role is saved)"
+ },
+ "S3.32": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/pages/WebChatPage.tsx",
+    "text": "Get notified when the response is ready."
+   },
+   {
+    "file": "apps/web/features/chat/pages/WebChatPage.tsx",
+    "text": "Enable"
+   },
+   {
+    "file": "apps/web/features/settings/components/web-settings-navigation.ts",
+    "text": "Reply ready"
+   }
+  ],
+  "needs": "a browser where notification permission is still undecided, and a reply that runs long",
+  "note": "The banner appears only while browser permission is the default and a reply is still running. Whether the Notifications page has a browser permission control was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message that takes a while to answer.",
+   "Wait for the banner \"Get notified when the response is ready.\".",
+   "Click \"Enable\" and look for the browser permission prompt; or click the close control labelled \"Dismiss notification prompt\".",
+   "Open Settings, click \"Notifications\", and look at \"Reply ready\" to change it later."
+  ],
+  "where": "Chat page during a long reply: banner \"Get notified when the response is ready.\" with \"Enable\" and a close control; later change in Settings > Notifications > \"Reply ready\""
+ },
+ "S3.35": {
+  "labels": [
+   {
+    "file": "apps/web/features/onboarding/components/OnboardingWizard.tsx",
+    "text": "How this works"
+   },
+   {
+    "file": "apps/web/features/onboarding/components/OnboardingWizard.tsx",
+    "text": "What do you want to do first?"
+   },
+   {
+    "file": "apps/web/features/onboarding/components/OnboardingWizard.tsx",
+    "text": "Finish"
+   }
+  ],
+  "needs": "a new account that has not finished onboarding",
+  "note": "The prompt is passed as a starterPrompt query value and filled into the composer by apps/web/features/chat/pages/WebChatPage.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "As a new account on step 2, click \"How this works\" and read the points.",
+   "Click one starter prompt (or pick a use case and click \"Finish\").",
+   "Look for the chat page opening with the chosen prompt in the message box.",
+   "Check that the prompt is not sent until you press send."
+  ],
+  "where": "/welcome step 2: \"What do you want to do first?\" > \"How this works\" > a starter prompt, or \"Finish\""
+ }
+}

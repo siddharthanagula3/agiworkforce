@@ -1,0 +1,230 @@
+{
+ "S49.01": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/voice/index.tsx",
+    "text": "Voice Input"
+   },
+   {
+    "file": "apps/mobile/src/features/voice/components/VoiceInputButton.tsx",
+    "text": "Tap to record, hold for push-to-talk"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Stop recording"
+   }
+  ],
+  "needs": "a microphone, phone width or Mac/iPhone with mic permission; the mic button only appears when Voice Input is on and the on-device recognizer is available",
+  "note": "The mic is hidden when Voice Input is off or the on-device recognizer is missing (onDeviceRecognizerGuaranteed in VoiceInputButton.tsx); the Mac may not show a mic button at all.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Voice, and turn on \"Voice Input\" (it is a toggle row).",
+   "Open any chat so the message field and its controls show.",
+   "Tap the microphone button (idle label \"Tap to record, hold for push-to-talk\").",
+   "Speak a short sentence, then tap \"Stop recording\" (the square).",
+   "Compare: the spoken words should appear as text in the message field."
+  ],
+  "where": "Settings > Voice > turn on \"Voice Input\"; then open any chat and tap the microphone button in the message field"
+ },
+ "S49.02": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Stop recording"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Send recording"
+   }
+  ],
+  "needs": "a microphone; phone width recommended",
+  "note": "The square \"Stop recording\" inserts; the arrow \"Send recording\" sends immediately, which is the opposite of an editable-first flow, so test the square. I did not read the insert handler body (handleTranscription) in full.",
+  "reachable": "yes",
+  "steps": [
+   "Open any chat with Voice Input turned on in Settings > Voice.",
+   "Tap the microphone button and speak a sentence with a mistake in it.",
+   "Tap \"Stop recording\" (the square, not the arrow).",
+   "Tap inside the message field and edit a word, then compare: the transcript should be there and editable, and nothing should be sent yet."
+  ],
+  "where": "Open a chat > microphone button > \"Stop recording\" (square); the text lands in the message field"
+ },
+ "S49.03": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/voice/index.tsx",
+    "text": "Speech language"
+   }
+  ],
+  "needs": "a microphone",
+  "note": "The row opens a language picker in the same screen; a separate screen with the title \"Voice & Language\" also exists (src/features/settings/voice-language/index.tsx). I did not verify which one the row opens in the UI.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Voice.",
+   "Tap the row labelled \"Speech language\" and pick a different language from the list.",
+   "Turn on Voice Input if it is off, open a chat, and dictate a sentence in the new language.",
+   "Compare: the transcript should be in that language. The choice is stored per Local and Cloud mode."
+  ],
+  "where": "Settings > Voice > \"Speech language\""
+ },
+ "S49.05": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Stop recording"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Didn't catch that"
+   }
+  ],
+  "needs": "a microphone",
+  "note": "An empty transcript is dropped silently (VoiceInputButton.tsx only delivers text that is not blank), so an empty result shows nothing in the field.",
+  "reachable": "yes",
+  "steps": [
+   "Turn on Voice Input, open a chat, and tap the microphone button.",
+   "Speak one full sentence, then tap \"Stop recording\".",
+   "Wait for the processing state to finish.",
+   "Compare: the full sentence should appear once as the final text. If nothing was heard, the alert \"Didn't catch that\" appears instead."
+  ],
+  "where": "Open a chat > microphone button > speak > \"Stop recording\"; the final transcript appears in the message field"
+ },
+ "S49.06": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Didn't catch that"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Try again"
+   }
+  ],
+  "needs": "a microphone",
+  "note": "Retry means a new recording, not a re-transcription of the old audio, because audio is not kept. Which failures trigger this alert was not fully traced.",
+  "reachable": "yes",
+  "steps": [
+   "Turn on Voice Input, open a chat, and tap the microphone button.",
+   "Stay silent for a few seconds, or speak so it cannot be heard, then tap \"Stop recording\".",
+   "When the alert \"Didn't catch that\" appears, tap \"Try again\".",
+   "Compare: recording starts again straight away without you retyping anything. The alert says the audio is not saved, so you must speak again."
+  ],
+  "where": "Open a chat > microphone button > stay silent or fail > alert \"Didn't catch that\" > \"Try again\""
+ },
+ "S49.07": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Cancel recording"
+   }
+  ],
+  "needs": "a microphone",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Turn on Voice Input, open a chat, and type a few words so you can see the field's current text.",
+   "Tap the microphone button and speak a sentence.",
+   "Tap \"Cancel recording\" (the X button on the left of the recording bar).",
+   "Compare: the recording stops, nothing is added to the message field, and nothing is sent."
+  ],
+  "where": "Open a chat > microphone button > while recording tap \"Cancel recording\" (the X)"
+ },
+ "S49.09": {
+  "labels": [
+   {
+    "file": "apps/mobile/ios/AGIMobile/AGIAppIntents/TranscribeIntent.swift",
+    "text": "Transcribe with AGI"
+   }
+  ],
+  "needs": "an iPhone with a short audio recording saved in the Files app",
+  "note": "Found the batch path: TranscribeIntent.swift (title \"Transcribe with AGI\") hands an audio file to the app, and app/_layout.tsx (case 'transcribe') opens app/(app)/voice.tsx, which calls transcribeAudioFile in one request (voice.tsx lines 324-358, voiceInput.ts non-streaming path). I could not confirm from the code how a person starts that intent on the phone (the Shortcuts app or the Share sheet), so the path is left empty. Searched: rg for audioUri, transcribe and Transcribe with AGI in apps/mobile.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S49.10": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/voice/components/VoiceInputButton.tsx",
+    "text": "Tap to stop recording"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/voice/index.tsx",
+    "text": "Voice Input"
+   }
+  ],
+  "needs": "a microphone; an iPhone with on-device speech recognition for the live text",
+  "note": "Live partial text comes from interimResults in VoiceInputButton's recording path (VoiceInputButton.tsx onPartialTranscript to setLiveTranscript). The separate voice conversation mode (LiveVoiceBar.tsx, \"Open Voice Companion\" in Settings > Voice) is a different streaming feature, not the composer dictation; I did not confirm the on-screen rendering of the live text.",
+  "reachable": "yes",
+  "steps": [
+   "Turn on Voice Input in Settings > Voice, open a chat.",
+   "Tap the microphone button (the label becomes \"Tap to stop recording\").",
+   "Speak slowly for several seconds without tapping anything.",
+   "Compare: words should appear in the message field while you are still speaking, before \"Stop recording\" is tapped."
+  ],
+  "where": "Settings > Voice > turn on \"Voice Input\"; open a chat > microphone button > speak; words appear in the field before you stop"
+ },
+ "S49.17": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/voice/components/VoiceOnboardingSheet.tsx",
+    "text": "Dictation"
+   },
+   {
+    "file": "apps/mobile/src/features/voice/components/VoiceOnboardingSheet.tsx",
+    "text": "Your voice is transcribed on this device and never recorded."
+   },
+   {
+    "file": "apps/mobile/src/features/voice/components/VoiceOnboardingSheet.tsx",
+    "text": "Continue"
+   }
+  ],
+  "needs": "a microphone; the sheet only appears the first time, so use an account or device that has not seen dictation yet",
+  "note": "There is no separate checkbox: agreement is the \"Continue\" button. The disclosure shown depends on the mode (on-device or live); I did not confirm which mode dictation passes to the sheet.",
+  "reachable": "yes",
+  "steps": [
+   "Turn on Voice Input in Settings > Voice, then open a chat.",
+   "Tap the microphone button for the first time (the sheet only appears once on this account or device).",
+   "Read the sheet: title \"Dictation\", the line \"Speak instead of typing. Your words appear as text in your message.\", and the disclosure line.",
+   "Compare: the disclosure should say where audio goes. Tap \"Continue\" to start recording; the sheet's X closes it without starting."
+  ],
+  "where": "Settings > Voice > turn on \"Voice Input\"; open a chat > tap the microphone button the first time > \"Dictation\" sheet > \"Continue\""
+ },
+ "S49.25": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/chat/[id].tsx",
+    "text": "Export"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ConversationExportSheet.tsx",
+    "text": "Export as Text"
+   }
+  ],
+  "needs": "a chat with at least one message",
+  "note": "There is no export that is only the dictation transcript: the export covers the whole conversation. The exact trigger for the chat action menu was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat that contains a message written with dictation.",
+   "Open the chat's action menu and tap \"Export\".",
+   "Tap \"Export as Markdown\" (or \"Export as Text\").",
+   "Compare: the share sheet opens with a file that contains the dictated words in the conversation."
+  ],
+  "where": "Open a chat that has a dictated message > the chat's action menu > \"Export\" > \"Export as Text\" or \"Export as Markdown\" or \"Export as PDF\""
+ },
+ "S49.27": {
+  "labels": [],
+  "needs": "none",
+  "note": "No recording or dictation retention or delete control was found. Audio is not kept (ChatInput.tsx: \"Audio isn't saved, so say it again.\"). Transcripts are chat messages, so they follow chat deletion. The only \"Data retention\" row is cloud-only (src/features/settings/cloud-privacy/index.tsx:44). Searched rg for retention, recording delete and transcript delete in apps/mobile/app and src.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S49.30": {
+  "labels": [],
+  "needs": "a device",
+  "note": "Searched rg -i undo in apps/mobile/src/features/chat/components/ChatInput.tsx and apps/mobile/src/features/voice: no match. The dictated text is inserted by the app's own state update, so whether the normal undo action reverts it was not verified from code.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ }
+}

@@ -1,0 +1,345 @@
+{
+ "S56.01": {
+  "labels": [],
+  "needs": "none",
+  "note": "No mailbox-search control found in the CLI. Gmail appears only as a schedule trigger source (agi schedules triggers add --source gmail), and the search operation is not in CLI code.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S56.03": {
+  "labels": [],
+  "needs": "none",
+  "note": "No email draft control found in the CLI; only the generic connector approval text in apps/cli/src/claude_parity.rs was found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S56.04": {
+  "labels": [],
+  "needs": "none",
+  "note": "No email send control found in the CLI; only the generic connector approval text in apps/cli/src/claude_parity.rs was found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S56.07": {
+  "labels": [],
+  "needs": "none",
+  "note": "No calendar search control found in the CLI; Google Calendar appears only as a schedule trigger source.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S56.08": {
+  "labels": [],
+  "needs": "none",
+  "note": "No free/busy control found in the CLI; Google Calendar appears only as a schedule trigger source.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S56.09": {
+  "labels": [],
+  "needs": "none",
+  "note": "No calendar event creation control found in the CLI; Google Calendar appears only as a schedule trigger source.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S56.10": {
+  "labels": [],
+  "needs": "none",
+  "note": "No calendar edit or cancel control found in the CLI; Google Calendar appears only as a schedule trigger source.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S56.13": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "/connectors"
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "Your account's connectors"
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "Connectors you connected at https://agiworkforce.com/connectors"
+   }
+  ],
+  "needs": "a Managed Cloud session signed in, with Google Drive connected at https://agiworkforce.com/connectors",
+  "note": "The CLI names only Google Drive as a connector; the search itself runs on the provider side and is not in CLI code.",
+  "reachable": "yes",
+  "steps": [
+   "Connect Google Drive at https://agiworkforce.com/connectors in a browser.",
+   "In a terminal run agi, then type /connectors.",
+   "Read the block that starts Your account's connectors; it should say connected connectors are offered to this session.",
+   "Type a request such as: find a Google Drive file whose name contains a word you know.",
+   "Compare the file names the assistant returns with what Google Drive shows."
+  ],
+  "where": "agi, then /connectors, then a chat request about Google Drive"
+ },
+ "S56.14": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "/connectors"
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "Your account's connectors"
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "Connectors you connected at https://agiworkforce.com/connectors"
+   }
+  ],
+  "needs": "a Managed Cloud session signed in, with Google Drive connected at https://agiworkforce.com/connectors",
+  "note": "The CLI names only Google Drive; the read operation runs on the provider side and is not in CLI code.",
+  "reachable": "yes",
+  "steps": [
+   "Connect Google Drive at https://agiworkforce.com/connectors in a browser.",
+   "In a terminal run agi, then type /connectors.",
+   "Read the block that starts Your account's connectors; it should say connected connectors are offered to this session.",
+   "Type a request such as: read the text of one named Google Drive file.",
+   "Compare the text the assistant shows with the file in Google Drive."
+  ],
+  "where": "agi, then /connectors, then a chat request about Google Drive"
+ },
+ "S56.15": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "/connectors"
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "Connectors you connected at https://agiworkforce.com/connectors"
+   }
+  ],
+  "needs": "a Managed Cloud session signed in, with Google Drive connected at https://agiworkforce.com/connectors",
+  "note": "The CLI text says each call asks first unless the tool was allowed on the connectors page; the creation operation is provider-side.",
+  "reachable": "yes",
+  "steps": [
+   "Connect Google Drive at https://agiworkforce.com/connectors in a browser.",
+   "In a terminal run agi, then type /connectors.",
+   "Type a request such as: create a new Google Drive file with a name you choose and one line of text.",
+   "When the approval prompt appears, read it and approve the call.",
+   "Compare the new file in Google Drive with what the assistant reported."
+  ],
+  "where": "agi, then /connectors, then a chat request about Google Drive"
+ },
+ "S56.16": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "/connectors"
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "Connectors you connected at https://agiworkforce.com/connectors"
+   }
+  ],
+  "needs": "a Managed Cloud session signed in, with Google Drive connected at https://agiworkforce.com/connectors",
+  "note": "The CLI names only Google Drive; the edit operation runs on the provider side and is not in CLI code.",
+  "reachable": "yes",
+  "steps": [
+   "Connect Google Drive at https://agiworkforce.com/connectors in a browser.",
+   "In a terminal run agi, then type /connectors.",
+   "Type a request such as: add one line to a named Google Drive file you own.",
+   "When the approval prompt appears, read it and approve the call.",
+   "Compare the file in Google Drive with what the assistant reported."
+  ],
+  "where": "agi, then /connectors, then a chat request about Google Drive"
+ },
+ "S56.18": {
+  "labels": [],
+  "needs": "none",
+  "note": "No Google Docs or Word editing control found in the CLI; no document connector is named in CLI code.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S56.21": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "/connectors"
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "Your account's connectors"
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "Connectors you connected at https://agiworkforce.com/connectors"
+   }
+  ],
+  "needs": "a Managed Cloud session signed in, with Slack connected at https://agiworkforce.com/connectors",
+  "note": "The CLI names only Slack as an example connector; the search runs on the provider side.",
+  "reachable": "yes",
+  "steps": [
+   "Connect Slack at https://agiworkforce.com/connectors in a browser.",
+   "In a terminal run agi, then type /connectors.",
+   "Read the block that starts Your account's connectors; it should say connected connectors are offered to this session.",
+   "Type a request such as: find Slack messages that mention a word you know.",
+   "Compare the messages the assistant returns with what Slack shows."
+  ],
+  "where": "agi, then /connectors, then a chat request about Slack"
+ },
+ "S56.22": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "/connectors"
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "Connectors you connected at https://agiworkforce.com/connectors"
+   }
+  ],
+  "needs": "a Managed Cloud session signed in, with Slack connected and a test channel",
+  "note": "The CLI names only Slack as an example connector; the post operation runs on the provider side.",
+  "reachable": "yes",
+  "steps": [
+   "Connect Slack at https://agiworkforce.com/connectors in a browser.",
+   "In a terminal run agi, then type /connectors.",
+   "Type a request such as: draft a Slack message to a test channel saying a short phrase.",
+   "When the approval prompt appears, read it and approve the call.",
+   "Compare the posted message in Slack with the draft shown in the chat."
+  ],
+  "where": "agi, then /connectors, then a chat request about Slack"
+ },
+ "S56.24": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "/connectors"
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "Connectors you connected at https://agiworkforce.com/connectors"
+   }
+  ],
+  "needs": "a Managed Cloud session signed in, with Notion connected at https://agiworkforce.com/connectors",
+  "note": "The CLI names only Notion as an example connector; the create and edit operations run on the provider side.",
+  "reachable": "yes",
+  "steps": [
+   "Connect Notion at https://agiworkforce.com/connectors in a browser.",
+   "In a terminal run agi, then type /connectors.",
+   "Type a request such as: create a Notion page with a title you choose and one line of text.",
+   "When the approval prompt appears, read it and approve the call.",
+   "Compare the new page in Notion with what the assistant reported."
+  ],
+  "where": "agi, then /connectors, then a chat request about Notion"
+ },
+ "S56.26": {
+  "labels": [],
+  "needs": "none",
+  "note": "No issue-tracker control found in the CLI; Linear appears only in test fixtures.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S56.28": {
+  "labels": [],
+  "needs": "none",
+  "note": "No CRM lookup control found in the CLI.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S56.29": {
+  "labels": [],
+  "needs": "none",
+  "note": "No CRM opportunity update control found in the CLI.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S56.31": {
+  "labels": [
+   {
+    "file": "apps/cli/src/features/exec/tools/dir_ops/mod.rs",
+    "text": "Search({}, {})"
+   }
+  ],
+  "needs": "a project folder with code on this Mac",
+  "note": "This searches the local checkout with grep only; no search of a hosted repository was found in CLI code, and the model chooses whether to use this tool.",
+  "reachable": "yes",
+  "steps": [
+   "Open a terminal in a project folder that contains code and run agi.",
+   "Type: find every place the word logout appears in this project (use a word your project has).",
+   "Watch for the tool line that reads Search(<word>, <path>).",
+   "Read the matching lines the assistant shows, with file names and line numbers.",
+   "Compare the results with a search you run yourself in that folder."
+  ],
+  "where": "agi, then a chat request to search the code in the project folder"
+ },
+ "S56.32": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Review a hosted pull request by number, URL or branch, read with the GitHub CLI."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Post the review to the pull request as a comment."
+   }
+  ],
+  "needs": "a GitHub pull request you can comment on, and the GitHub CLI (gh) signed in",
+  "note": "Reading and posting use the GitHub CLI (gh pr diff and gh pr review --comment); --post works only with --pr.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to the GitHub CLI (gh) with an account that can see a test pull request.",
+   "In a terminal run agi review --pr <number> and read the review printed.",
+   "Run agi review --pr <number> --post on the same test pull request.",
+   "Open the pull request on GitHub.",
+   "Compare the new review comment on GitHub with the printed review."
+  ],
+  "where": "agi review --pr <number>, then agi review --pr <number> --post"
+ },
+ "S56.33": {
+  "labels": [],
+  "needs": "none",
+  "note": "No CI status or build-log command found in apps/cli/src/lib.rs or the CLI code (searched for CI, pipeline, build log and gh run terms).",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S56.35": {
+  "labels": [],
+  "needs": "none",
+  "note": "No Figma or design-file control found in the CLI.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S56.38": {
+  "labels": [],
+  "needs": "none",
+  "note": "No analytics or BI dashboard control found in the CLI.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S56.39": {
+  "labels": [],
+  "needs": "none",
+  "note": "No deployment list, inspect or deploy command found in apps/cli/src/lib.rs or the CLI code.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S56.47": {
+  "labels": [],
+  "needs": "none",
+  "note": "No bank or financial account control found in the CLI.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ }
+}

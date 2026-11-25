@@ -1,0 +1,407 @@
+{
+ "S4.01": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/new"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "Code shows /new handler only; the exact empty-screen layout was not read.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi in a terminal and sign in.",
+   "Look at the first screen: it should show the input box ready to type in.",
+   "Type /new and press Enter.",
+   "Check the screen is a fresh empty conversation with a ready input box, compared with Expected."
+  ],
+  "where": "agi (opens the app after sign-in), then type /new"
+ },
+ "S4.02": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/resume"
+   }
+  ],
+  "needs": "a signed-in account with at least one past conversation",
+  "note": "Transcript display on open was not confirmed in the code read.",
+  "reachable": "yes",
+  "steps": [
+   "In the app, type /resume and press Enter.",
+   "In the session list that opens, move to a past conversation and press Enter.",
+   "Check that its earlier messages are shown.",
+   "Type a new message and send it to confirm the conversation continues."
+  ],
+  "where": "agi, then type /resume (or /sessions) and press Enter"
+ },
+ "S4.03": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Search saved sessions by keyword"
+   }
+  ],
+  "needs": "a signed-in account with past conversations",
+  "note": "The in-app /search command is a web search, not conversation search.",
+  "reachable": "yes",
+  "steps": [
+   "In a terminal run agi --search \"<a word from an old chat>\".",
+   "Check that past conversations with that word in their title or messages are listed.",
+   "Optionally, in the app type /sessions search <a word> and press Enter.",
+   "Open one result and compare with Expected."
+  ],
+  "where": "agi --search \"<keyword>\" (from a terminal), or in the app type /sessions search <keyword>"
+ },
+ "S4.04": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "List archived sessions instead."
+   }
+  ],
+  "needs": "a signed-in account with an archived conversation",
+  "note": "Archiving itself is done with the session archive subcommand; no in-app archived list was found.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi session list --archived in a terminal.",
+   "Check that archived conversations are listed.",
+   "Run agi session unarchive <id> with an id from the list, then run agi session list to confirm it left the archived list.",
+   "Run agi session delete <id> and read the confirmation prompt before answering."
+  ],
+  "where": "agi session list --archived (terminal); restore with agi session unarchive <id>; delete with agi session delete <id>"
+ },
+ "S4.06": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Browse and create the projects in your AGI account."
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Run agi projects list.",
+   "Check that the account's projects are listed.",
+   "Run agi projects create \"Test project\" and then run agi projects list again.",
+   "Check the new project appears."
+  ],
+  "where": "agi projects list (terminal); create with agi projects create <name>"
+ },
+ "S4.07": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Show one project: description, instructions, knowledge files and conversation count."
+   }
+  ],
+  "needs": "a signed-in account with a project",
+  "note": "The output is text; no links to chats or files were found in the code read.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi projects list and pick a project name.",
+   "Run agi projects show \"<project name>\".",
+   "Check the output shows the name, description, instructions, knowledge files and conversation count.",
+   "Note whether it offers links to the project's chats and files, compared with Expected."
+  ],
+  "where": "agi projects show <project name or id> (terminal)"
+ },
+ "S4.10": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Rename a project or change its description or instructions."
+   }
+  ],
+  "needs": "a signed-in account with a project",
+  "note": "Whether the instructions then apply to chats in that project was not checked in the UI.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi projects show \"<project name>\" and note the current instructions.",
+   "Run agi projects edit \"<project name>\" --instructions \"Answer in short bullet points\".",
+   "Run agi projects show \"<project name>\" again.",
+   "Check the new instructions are shown, compared with Expected."
+  ],
+  "where": "agi projects edit <project name or id> --instructions \"<text>\" (terminal); view with agi projects show <project>"
+ },
+ "S4.12": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Keep it with the account project this directory is linked to"
+   }
+  ],
+  "needs": "a signed-in account with a project",
+  "note": "Only the add scope flag was found; no project-only memory view or scope control was found in the code read.",
+  "reachable": "unsure",
+  "steps": [
+   "Link a folder to a project with agi projects link \"<project name>\" from that folder.",
+   "Run agi memory add --project \"Test memory for this project\".",
+   "Run agi memory list.",
+   "Check whether the project memory is shown separately from account memory, compared with Expected."
+  ],
+  "where": "agi memory add --project \"<text>\" (terminal); list account memories with agi memory list"
+ },
+ "S4.17": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Manage the account's scheduled agent tasks in AGI cloud."
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "Exact flag names were not all read; use each subcommand's --help.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi schedules list and read the status and cadence columns.",
+   "Run agi schedules create with a name, a cron expression such as \"0 9 * * *\", and a prompt (see agi schedules create --help for flags).",
+   "Run agi schedules pause <name>, then agi schedules resume <name>.",
+   "Run agi schedules run <name>, then agi schedules delete <name> and read the prompt before confirming.",
+   "Compare each step with Expected."
+  ],
+  "where": "agi schedules list (terminal); create with agi schedules create, change with agi schedules edit, pause/resume/run/delete with the matching subcommands"
+ },
+ "S4.18": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Show a schedule's run history."
+   }
+  ],
+  "needs": "a signed-in account with a schedule that has run",
+  "note": "No separate show command for a schedule's configuration was found; it may only appear in the list output (not verified).",
+  "reachable": "yes",
+  "steps": [
+   "Run agi schedules list to get a schedule id or name.",
+   "Run agi schedules runs \"<name>\".",
+   "Check the run history is listed.",
+   "Check that the schedule's prompt, cadence and next run are visible, compared with Expected."
+  ],
+  "where": "agi schedules runs <id or name> (terminal)"
+ },
+ "S4.19": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "List cloud Code sessions."
+   }
+  ],
+  "needs": "a signed-in account and a GitHub checkout",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Run agi code list in a terminal.",
+   "Check the cloud coding sessions are listed.",
+   "Inside a GitHub checkout, run agi code start \"Add a README line\" and answer the review prompt.",
+   "Run agi code list again and check the new session appears."
+  ],
+  "where": "agi code list (terminal); start one with agi code start \"<task>\" inside a GitHub checkout"
+ },
+ "S4.20": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Show one cloud Code session: where it works and what each turn did."
+   }
+  ],
+  "needs": "a signed-in account with a cloud Code session",
+  "note": "No diff view or steering composer was found in the CLI code read; agi code show is the only workspace command found.",
+  "reachable": "unsure",
+  "steps": [
+   "Run agi code list and copy a session id.",
+   "Run agi code show <session id>.",
+   "Check the transcript of each turn is shown.",
+   "Look for file changes or diffs and a box to send the next instruction; compare with Expected."
+  ],
+  "where": "agi code show <session id> (terminal); open in browser with agi code open <session id>"
+ },
+ "S4.23": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Browse your Library"
+   }
+  ],
+  "needs": "a signed-in account with library items",
+  "note": "The Library command covers images, videos and files; artifacts are listed under agi artifacts.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi library.",
+   "Check the list shows generated and uploaded images, videos and files.",
+   "Run agi library --kind image and check only images are listed.",
+   "Run agi library show <id> or agi library download <id> for one item and check it opens or saves."
+  ],
+  "where": "agi library (terminal); filter with agi library --kind image and agi library --search <text>"
+ },
+ "S4.25": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Browse, read and publish the artifacts in your AGI account."
+   }
+  ],
+  "needs": "a signed-in account with artifacts",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Run agi artifacts list.",
+   "Check the artifacts are listed newest first.",
+   "Run agi artifacts show <id> to print one, or agi artifacts open <id> to open it in the browser.",
+   "Compare with Expected."
+  ],
+  "where": "agi artifacts list (terminal); also the in-app /artifacts"
+ },
+ "S4.27": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/image <prompt> draws an image on your account and saves it here"
+   }
+  ],
+  "needs": "a signed-in paid or allowed account",
+  "note": "No separate studio screen was found; image generation is a command inside the chat.",
+  "reachable": "yes",
+  "steps": [
+   "In the app, type /image --aspect 16:9 a red bicycle on a beach and press Enter.",
+   "Watch for the generated image to appear, and press Esc to stop if needed.",
+   "Type /image last to see the settings the last image used.",
+   "Run agi library and check the image is in the account library."
+  ],
+  "where": "In the app, type /image <prompt> (flags such as --aspect 16:9 come before the prompt); also agi image \"<prompt>\" in a terminal"
+ },
+ "S4.33": {
+  "labels": [
+   {
+    "file": "apps/cli/src/agents.rs",
+    "text": "Usage: /agents show <name>"
+   }
+  ],
+  "needs": "none",
+  "note": "These are local agent definition files, not account-hosted custom assistants; there is no in-app edit screen, only /agents set and /agents rename.",
+  "reachable": "yes",
+  "steps": [
+   "In the app, type /agents and press Enter to list agents.",
+   "Type /agents new my-helper and check a new agent is created.",
+   "Type /agents show my-helper to view it.",
+   "Type /agents delete my-helper --yes and check it is removed."
+  ],
+  "where": "In the app, type /agents (then /agents show <name>, /agents new <name>, /agents delete <name> --yes)"
+ },
+ "S4.35": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Enable or disable individual skills"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Usage: /skills import <path to SKILL.md or its folder>"
+   }
+  ],
+  "needs": "a folder with a SKILL.md file to import",
+  "note": "Remove behaviour and the available-skills catalogue were not read in full.",
+  "reachable": "yes",
+  "steps": [
+   "In the app, type /skills and press Enter to list installed skills.",
+   "Type /skills-toggle and turn one skill off, then back on.",
+   "Type /skills import <path to a SKILL.md folder> to install one.",
+   "Type /skills remove <name> to remove a skill and compare the list with Expected."
+  ],
+  "where": "In the app, type /skills (list), /skills import <path>, /skills-toggle; author with /create-skill"
+ },
+ "S4.36": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Manage plugins."
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "In the app, type /plugins and press Enter.",
+   "Look at the installed and available tabs.",
+   "In a terminal run agi marketplace browse, then agi plugin list.",
+   "Use agi plugin disable <name> and agi plugin enable <name> and check the list changes."
+  ],
+  "where": "In the app, type /plugins; also agi plugin list and agi marketplace browse in a terminal"
+ },
+ "S4.38": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Set the default model."
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "Context and price columns were not confirmed in the list output.",
+  "reachable": "yes",
+  "steps": [
+   "In the app, type /models and press Enter to see the model list with its flags.",
+   "Type /model and choose a model from the picker.",
+   "In a terminal run agi models list.",
+   "Run agi models set <model name> and check the default changes."
+  ],
+  "where": "In the app, type /models (list) or /model (picker); in a terminal run agi models list and agi models set <model>"
+ },
+ "S4.39": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Show the account's managed allowance from the shared usage ledger."
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "Per-window (session, weekly, credits) limits and reset times and recent history were not confirmed in the code read.",
+  "reachable": "yes",
+  "steps": [
+   "In the app, type /usage and press Enter.",
+   "Check the token totals, cost and per-model breakdown.",
+   "In a terminal run agi usage.",
+   "Check the account allowance against the plan limits and reset times, compared with Expected."
+  ],
+  "where": "In the app, type /usage; in a terminal run agi usage and agi plans"
+ },
+ "S4.41": {
+  "labels": [
+   {
+    "file": "apps/cli/src/cloud/personalization.rs",
+    "text": "What to call you"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "No notifications settings screen was found in the code read.",
+  "reachable": "yes",
+  "steps": [
+   "In the app, type /personalize and answer the prompts such as What to call you.",
+   "Type /config show and check the saved values.",
+   "Type /memories and check the auto-memory setting can be changed.",
+   "Restart the app and check the values are kept."
+  ],
+  "where": "In the app, type /personalize, /config, or /memories"
+ },
+ "S4.44": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/command_popup.rs",
+    "text": "Show help"
+   },
+   {
+    "file": "apps/cli/src/cloud/feedback.rs",
+    "text": "Describe it after the command"
+   }
+  ],
+  "needs": "a signed-in account and network access",
+  "note": "No help, docs or status links were found in the help or feedback code read.",
+  "reachable": "yes",
+  "steps": [
+   "In the app, type /help and press Enter to see the command list.",
+   "Type /feedback I would like a dark theme and press Enter.",
+   "Check the app confirms the feedback was sent.",
+   "Compare the help output with Expected for links to docs and status."
+  ],
+  "where": "In the app, type /help; to send feedback type /feedback <text> or /bug <text>"
+ }
+}

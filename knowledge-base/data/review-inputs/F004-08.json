@@ -1,0 +1,578 @@
+{
+ "feature": {
+  "id": "F004-08",
+  "aliases": [
+   "Linked devices",
+   "Devices",
+   "Account computers",
+   "Remote devices (S4.21)",
+   "Remote-session viewer (S4.22)",
+   "Companion",
+   "Remote",
+   "agi devices",
+   "device registry"
+  ],
+  "summary": "Lists the apps and computers signed in to the account (desktop, CLI, VS Code, Chrome, mobile) with online state, signed-in state, last seen and capabilities, and lets the person rename or unlink each. A phone viewer for a session running on another device exists but is switched off in the current mobile build.",
+  "purpose": {
+   "what_it_does": "Shows every linked device from a server registry, lets the owner rename a device or unlink it (revoking its credentials), and on mobile can follow a coding session on a paired computer. (apps/web/features/settings/components/LinkedDevicesPanel.tsx:100) (apps/mobile/src/features/companion/remote-code/service.ts:33)",
+   "why_it_exists": "So the person can see where the account is signed in and cut off a lost or unused device, as the leaders' account pages do. [inferred]",
+   "who_uses_it": "Any signed-in person with more than one app installed; security-minded users after losing a device.",
+   "problems_solved": [
+    "Cannot tell which devices still hold a live sign-in.",
+    "Cannot remove a lost laptop.",
+    "Cannot tell if a computer is online for remote work."
+   ],
+   "use_cases": [
+    "Web: open Settings > Account and unlink an old laptop.",
+    "Web: rename 'MacBook' to 'Work laptop'.",
+    "Terminal: agi devices --json to list devices.",
+    "Phone (when enabled): open a coding session running on the desktop and send guidance."
+   ]
+  },
+  "user_experience": {
+   "where_to_find_it": [
+    "Web (and Desktop through the hosted web app): Settings > Account, heading 'Linked devices' (apps/web/features/settings/sections/AccountSection.tsx:629) (apps/web/features/settings/components/LinkedDevicesPanel.tsx:370).",
+    "CLI: agi devices (apps/cli/src/lib.rs:1100).",
+    "Mobile: Devices section on the AGI Code list and the Remote screen under /(app)/companion; both are hidden when FEATURES.companion is false (apps/mobile/src/features/cloud-code/components/CodeDevicesSection.tsx:181) (apps/mobile/lib/v1FeatureFlags.ts:17).",
+    "VS Code and Chrome: not available."
+   ],
+   "prerequisites": [
+    "Signed-in account.",
+    "For mobile remote viewing: FEATURES.companion and FEATURES.dispatch true, a paired computer, and a plan with remote control (apps/mobile/app/(app)/companion/index.tsx:108)."
+   ],
+   "screens_and_controls": [
+    "Web rows show name, surface and version, platform, then state: Online, Sleeping or Offline, 'Signed in' or 'Signed out', 'Last seen', 'Linked', and a capability line such as 'Can use Browser, Computer use' (apps/web/features/settings/components/LinkedDevicesPanel.tsx:101).",
+    "Buttons 'Rename' (with 'Save' and 'Cancel') and 'Unlink'; signed-out devices are grouped under 'Signed out (N)'.",
+    "Empty text 'No app is linked to this account.'; load error with 'Try again'.",
+    "Mobile rows: device name plus 'Connected', 'Connecting', 'Reconnecting' or 'Not connected'; pill to add a device (apps/mobile/src/features/cloud-code/components/CodeDevicesSection.tsx:22)."
+   ],
+   "journey": [
+    "Open Settings > Account.",
+    "Read the list under 'Linked devices'.",
+    "To rename, press Rename, edit, press Save (PATCH).",
+    "To unlink, press Unlink; a confirmation dialog titled 'Unlink <device>?' explains the device is signed out and its stored credentials are revoked and must be linked again from the device.",
+    "After confirm the row disappears; an error shows 'Unable to unlink this device.'"
+   ],
+   "feedback_and_outputs": [
+    "Inline alert for load, rename and unlink errors with the server message filtered for users.",
+    "Buttons show 'Saving...' and 'Unlinking...' while working.",
+    "CLI prints a table or JSON (apps/cli/src/cloud/devices.rs:76)."
+   ],
+   "settings": [
+    "Remote Control hidden in the mobile v1 build per the flag file (apps/mobile/lib/v1FeatureFlags.ts:17).",
+    "'Stop remote work' effect appears on unlink (apps/web/app/api/settings/devices/__tests__/route.stop-remote-work.test.ts)."
+   ]
+  },
+  "current_implementation": {
+   "working": [
+    "Web list from GET /api/settings/devices merging the device registry, desktop and mobile legacy tables and device sign-in grants (apps/web/app/api/settings/devices/route.ts:113).",
+    "Rename (PATCH) and unlink (DELETE) with CSRF, UUID check and credential revocation (apps/web/app/api/settings/devices/[deviceId]/route.ts:60).",
+    "Unlink asks first and names what stops working (apps/web/features/settings/components/LinkedDevicesPanel.tsx:332).",
+    "Heartbeat endpoint registers and refreshes devices (apps/web/app/api/devices/heartbeat/route.ts).",
+    "CLI agi devices lists devices with presence and hosting capabilities, with JSON output (apps/cli/src/lib.rs:3452). The brief says CLI missing; the code has it."
+   ],
+   "incomplete": [
+    "CLI cannot rename or unlink; only list (apps/cli/src/lib.rs:1100).",
+    "Presence for sign-in grants without a registration is null, so such rows show no online state (apps/web/app/api/settings/devices/route.ts:213)."
+   ],
+   "disconnected_or_disabled": [
+    "Mobile Devices section returns null when FEATURES.companion is false (apps/mobile/src/features/cloud-code/components/CodeDevicesSection.tsx:181).",
+    "Mobile Remote screens show a FeatureUnavailable view when companion is false (apps/mobile/app/(app)/companion/index.tsx:183) (apps/mobile/app/(app)/companion/code/[threadId].tsx:81).",
+    "The mobile remote viewer (attach, steer, interrupt, history) exists but is not reachable in this build (apps/mobile/src/features/companion/remote-code/service.ts:33)."
+   ],
+   "not_available": [
+    "Remote-session viewer on web, desktop, CLI, VS Code, Chrome: not present (brief S4.22).",
+    "Device management on VS Code and Chrome: none found.",
+    "Pairing a new device from the web list: not present; the person links from the device itself (apps/web/features/settings/components/LinkedDevicesPanel.tsx:336)."
+   ]
+  },
+  "required_behaviour": {
+   "established": [
+    {
+     "statement": "A devices destination lists linked devices with status and last activity and lets the owner manage (rename, unlink, pair) them.",
+     "source": "S4.21 (doc: knowledge-base/data/area-briefs/004-signed-in-application-destinations.md)"
+    },
+    {
+     "statement": "A viewer opens a session on another of the user's devices with live transcript and controls.",
+     "source": "S4.22 (doc: knowledge-base/data/area-briefs/004-signed-in-application-destinations.md)"
+    },
+    {
+     "statement": "An action a user cannot undo asks first and names the consequence.",
+     "source": "(doc: AGENTS.md section 9)"
+    },
+    {
+     "statement": "Remote Control is hidden in mobile v1 and review accounts need password sign-in.",
+     "source": "(doc: owner memory, owner-product-decisions)"
+    }
+   ],
+   "acceptance_criteria": [
+    "Each row shows device type, platform, online state, signed in or out and last seen.",
+    "Unlink shows a dialog naming that the device is signed out, credentials revoked and it must relink; cancel leaves it.",
+    "After unlink the device no longer appears and its refresh credentials are revoked.",
+    "Rename rejects an empty name with 'Give the device a name.'",
+    "A failed load shows 'Unable to load linked devices.' and a retry.",
+    "Devices of another account never appear.",
+    "With companion flag off, mobile shows no Devices section."
+   ],
+   "inferred": [
+    "Only the owner may list or change a device row, since every query filters on user_id (apps/web/app/api/settings/devices/route.ts:74). [inferred]",
+    "Presence windows differ for desktop (apps/../packages/contracts/cloud-contracts/src/device-registry.ts:207). [inferred]"
+   ],
+   "proposed": [
+    "[proposed] Add agi devices rename and unlink so CLI matches web.",
+    "[proposed] Give sign-in-only rows a presence once their client heartbeats."
+   ]
+  },
+  "implementation_map": [
+   {
+    "kind": "component",
+    "name": "LinkedDevicesPanel",
+    "path": "apps/web/features/settings/components/LinkedDevicesPanel.tsx",
+    "role": "List, rename and unlink UI."
+   },
+   {
+    "kind": "screen",
+    "name": "AccountSection",
+    "path": "apps/web/features/settings/sections/AccountSection.tsx",
+    "role": "Hosts the panel under Settings > Account."
+   },
+   {
+    "kind": "endpoint",
+    "name": "GET /api/settings/devices",
+    "path": "apps/web/app/api/settings/devices/route.ts",
+    "role": "Lists devices from registry, legacy tables and sign-in grants."
+   },
+   {
+    "kind": "endpoint",
+    "name": "PATCH/DELETE /api/settings/devices/[deviceId]",
+    "path": "apps/web/app/api/settings/devices/[deviceId]/route.ts",
+    "role": "Rename and unlink with revocation."
+   },
+   {
+    "kind": "endpoint",
+    "name": "POST /api/devices/heartbeat",
+    "path": "apps/web/app/api/devices/heartbeat/route.ts",
+    "role": "Upserts device registration and last seen."
+   },
+   {
+    "kind": "service",
+    "name": "device-registry",
+    "path": "apps/web/lib/device-steps/device-registry.ts",
+    "role": "propagateDeviceRevocation and registry logic."
+   },
+   {
+    "kind": "schema",
+    "name": "device-registry contract",
+    "path": "packages/contracts/cloud-contracts/src/device-registry.ts",
+    "role": "Presence windows, device types, rename schema."
+   },
+   {
+    "kind": "table",
+    "name": "device_registrations",
+    "path": "apps/web/db/neon/0207_device_registrations.sql",
+    "role": "Registry of linked devices."
+   },
+   {
+    "kind": "table",
+    "name": "device_refresh_tokens",
+    "path": "apps/web/app/api/settings/devices/route.ts",
+    "role": "Credential families deciding signed in or out."
+   },
+   {
+    "kind": "table",
+    "name": "desktop_devices / mobile_devices",
+    "path": "apps/web/app/api/settings/devices/route.ts",
+    "role": "Legacy device tables still listed."
+   },
+   {
+    "kind": "command",
+    "name": "agi devices",
+    "path": "apps/cli/src/cloud/devices.rs",
+    "role": "CLI list with JSON option."
+   },
+   {
+    "kind": "service",
+    "name": "device registry (mobile)",
+    "path": "apps/mobile/src/features/device-registry/computers.ts",
+    "role": "Lists account computers; heartbeat sender alongside."
+   },
+   {
+    "kind": "component",
+    "name": "CodeDevicesSection",
+    "path": "apps/mobile/src/features/cloud-code/components/CodeDevicesSection.tsx",
+    "role": "Mobile Devices rows, hidden behind companion flag."
+   },
+   {
+    "kind": "screen",
+    "name": "Companion index",
+    "path": "apps/mobile/app/(app)/companion/index.tsx",
+    "role": "Remote screen and pairing."
+   },
+   {
+    "kind": "screen",
+    "name": "Remote code session",
+    "path": "apps/mobile/app/(app)/companion/code/[threadId].tsx",
+    "role": "Mobile remote session viewer."
+   },
+   {
+    "kind": "service",
+    "name": "remote-code service",
+    "path": "apps/mobile/src/features/companion/remote-code/service.ts",
+    "role": "Sends attach, detach, steer, interrupt, start, history over the paired control channel."
+   },
+   {
+    "kind": "config",
+    "name": "FEATURES",
+    "path": "apps/mobile/lib/v1FeatureFlags.ts",
+    "role": "companion and dispatch set false."
+   }
+  ],
+  "execution_and_data_flow": {
+   "steps": [
+    {
+     "what_happens": "Settings panel fetches GET /api/settings/devices.",
+     "runs_on": "device and our servers",
+     "evidence": "apps/web/features/settings/components/LinkedDevicesPanel.tsx:150"
+    },
+    {
+     "what_happens": "Server runs registry, legacy and sign-in grant queries for the user and computes presence from last seen.",
+     "runs_on": "our servers",
+     "evidence": "apps/web/app/api/settings/devices/route.ts:196"
+    },
+    {
+     "what_happens": "Each client app posts heartbeats that upsert the registration and last seen time.",
+     "runs_on": "device and our servers",
+     "evidence": "apps/web/app/api/devices/heartbeat/route.ts:25"
+    },
+    {
+     "what_happens": "Unlink revokes the device's refresh credential family, deletes registration rows in one transaction and propagates revocation to live sessions.",
+     "runs_on": "our servers",
+     "evidence": "apps/web/app/api/settings/devices/[deviceId]/route.ts:78"
+    },
+    {
+     "what_happens": "Mobile remote viewing sends control messages through the paired connection store to the computer; the computer hosts the session.",
+     "runs_on": "device and our servers",
+     "evidence": "apps/mobile/src/features/companion/remote-code/service.ts:11"
+    }
+   ],
+   "data": [
+    {
+     "what": "Device registration (surface, name, OS, version, capabilities, last seen, credential family)",
+     "where_stored": "table device_registrations",
+     "synced": "Read from the server by every app",
+     "retained_or_deleted": "Deleted on unlink (apps/web/app/api/settings/devices/[deviceId]/route.ts:112)"
+    },
+    {
+     "what": "Refresh credentials",
+     "where_stored": "table device_refresh_tokens",
+     "synced": "server only",
+     "retained_or_deleted": "Revoked on unlink; a lost flag marks them compromised"
+    }
+   ],
+   "models_and_providers": "No model or provider takes part in listing, renaming or unlinking. Remote viewing relays a session whose model is chosen on the host computer; not read."
+  },
+  "access_and_usage": {
+   "account": "Signed in; web needs a session principal (apps/web/app/api/settings/devices/route.ts:195).",
+   "permissions": "Rows are filtered by the user's id; unlink needs CSRF and a rate limit bucket (apps/web/app/api/settings/devices/[deviceId]/route.ts:58).",
+   "subscription": "Listing and unlinking: none found in the code. Mobile remote control checks plan capability remote_control (paid tiers) before pairing (apps/mobile/app/(app)/companion/index.tsx:100) (packages/contracts/types/src/billing-catalog.ts:352).",
+   "limits_and_metering": "List capped at 200 rows per query (apps/web/app/api/settings/devices/route.ts:16); name length DEVICE_NAME_MAX_LENGTH. No usage metering found.",
+   "flags": "Mobile FEATURES.companion=false and FEATURES.dispatch=false (apps/mobile/lib/v1FeatureFlags.ts:17).",
+   "model_compatibility": "none found in the code",
+   "provider_restrictions": "none found in the code",
+   "local_mode": "The list needs our servers and a signed-in account, so it is not available signed out. Local inference does not use it. Whether a Local-only user must sign in to link a device is unknown."
+  },
+  "states_and_edge_cases": [
+   {
+    "state": "Loading",
+    "behaviour": "Two pulsing placeholder rows.",
+    "evidence": "apps/web/features/settings/components/LinkedDevicesPanel.tsx:381"
+   },
+   {
+    "state": "Load error",
+    "behaviour": "Alert text 'Unable to load linked devices.' with 'Try again'.",
+    "evidence": "apps/web/features/settings/components/LinkedDevicesPanel.tsx:156"
+   },
+   {
+    "state": "Empty",
+    "behaviour": "'No app is linked to this account.'",
+    "evidence": "apps/web/features/settings/components/LinkedDevicesPanel.tsx:413"
+   },
+   {
+    "state": "Signed-out devices",
+    "behaviour": "Grouped in a collapsed 'Signed out (N)' section.",
+    "evidence": "apps/web/features/settings/components/LinkedDevicesPanel.tsx:432"
+   },
+   {
+    "state": "Rename empty",
+    "behaviour": "'Give the device a name.'",
+    "evidence": "apps/web/features/settings/components/LinkedDevicesPanel.tsx:196"
+   },
+   {
+    "state": "Rename cancel",
+    "behaviour": "Escape or Cancel closes the editor.",
+    "evidence": "apps/web/features/settings/components/LinkedDevicesPanel.tsx:276"
+   },
+   {
+    "state": "Unlink failure",
+    "behaviour": "Alert 'Unable to unlink this device.' row stays.",
+    "evidence": "apps/web/features/settings/components/LinkedDevicesPanel.tsx:176"
+   },
+   {
+    "state": "Mobile companion off",
+    "behaviour": "FeatureUnavailable view named Remote.",
+    "evidence": "apps/mobile/app/(app)/companion/index.tsx:183"
+   },
+   {
+    "state": "Mobile list load failure",
+    "behaviour": "Line 'Your computers could not be loaded.'",
+    "evidence": "apps/mobile/src/features/cloud-code/components/CodeDevicesSection.tsx:63"
+   },
+   {
+    "state": "Offline / timeout / retry beyond the Try again button",
+    "behaviour": "not handled in the code I read.",
+    "evidence": "not found"
+   }
+  ],
+  "verification": {
+   "existing_tests": [
+    {
+     "path": "apps/web/features/settings/components/__tests__/LinkedDevicesPanel.test.tsx",
+     "covers": "Panel behaviour (name matches; content not read)."
+    },
+    {
+     "path": "apps/web/app/api/settings/devices/__tests__/route.test.ts",
+     "covers": "List route."
+    },
+    {
+     "path": "apps/web/app/api/settings/devices/__tests__/route.stop-remote-work.test.ts",
+     "covers": "Unlink stopping remote work."
+    },
+    {
+     "path": "apps/web/app/api/settings/devices/__tests__/device-registry.schema.test.ts",
+     "covers": "Registry schema."
+    },
+    {
+     "path": "apps/web/app/api/devices/heartbeat/route.test.ts",
+     "covers": "Heartbeat route."
+    },
+    {
+     "path": "apps/web/db/neon/device-registrations-migration.test.ts",
+     "covers": "Registry migration."
+    },
+    {
+     "path": "apps/mobile/src/features/device-registry/__tests__",
+     "covers": "Mobile device registry (files not listed)."
+    },
+    {
+     "path": "apps/mobile/src/features/companion/remote-code/__tests__/service.test.ts",
+     "covers": "Remote code requests."
+    }
+   ],
+   "scenarios": [
+    {
+     "name": "Unlink asks first",
+     "steps": [
+      "Open Settings > Account.",
+      "Press Unlink on a device.",
+      "Cancel."
+     ],
+     "expected": "Dialog names the consequence; device stays."
+    },
+    {
+     "name": "Unlink confirm",
+     "steps": [
+      "Press Unlink, confirm."
+     ],
+     "expected": "Row removed; the device's next request is signed out."
+    },
+    {
+     "name": "Rename",
+     "steps": [
+      "Press Rename, type a new name, Save."
+     ],
+     "expected": "Row shows the new name after reload."
+    },
+    {
+     "name": "Failed load",
+     "steps": [
+      "Make GET /api/settings/devices return 500."
+     ],
+     "expected": "'Unable to load linked devices.' with Try again."
+    },
+    {
+     "name": "CLI list",
+     "steps": [
+      "Run agi devices --json."
+     ],
+     "expected": "JSON of devices with presence and capabilities."
+    },
+    {
+     "name": "Mobile flag off",
+     "steps": [
+      "Open AGI Code on a build with companion false."
+     ],
+     "expected": "No Devices section."
+    }
+   ],
+   "diagnostics": [
+    "Routes: /api/settings/devices, /api/devices/heartbeat.",
+    "Tables device_registrations, device_refresh_tokens (revoked_at, expires_at), desktop_devices, mobile_devices.",
+    "Client error 'Unable to unlink this device.'"
+   ]
+  },
+  "gaps": [
+   {
+    "gap": "Mobile device list and remote session viewer are off in v1.",
+    "affects": "Mobile users",
+    "evidence": "apps/mobile/lib/v1FeatureFlags.ts:17",
+    "work_needed": "Owner decision to enable; then verify pairing."
+   },
+   {
+    "gap": "CLI can list but not rename or unlink; brief says missing.",
+    "affects": "CLI users",
+    "evidence": "apps/cli/src/lib.rs:1100",
+    "work_needed": "Add actions or update the brief."
+   },
+   {
+    "gap": "No remote-session viewer on web or desktop.",
+    "affects": "Web and desktop users",
+    "evidence": "brief S4.22",
+    "work_needed": "Decide scope."
+   },
+   {
+    "gap": "Web Account panel has no way to pair a new device.",
+    "affects": "Web users",
+    "evidence": "apps/web/features/settings/components/LinkedDevicesPanel.tsx",
+    "work_needed": "Add a pair action or document linking from the device."
+   },
+   {
+    "gap": "VS Code and Chrome are not shown as devices management surfaces though they heartbeat as device types.",
+    "affects": "VS Code and Chrome users",
+    "evidence": "apps/web/features/settings/components/LinkedDevicesPanel.tsx:46",
+    "work_needed": "None for listing (they appear in the web list); management stays on web."
+   }
+  ],
+  "depends_on": [
+   "surface:web",
+   "surface:mobile",
+   "surface:cli",
+   "api:GET /api/settings/devices",
+   "api:POST /api/devices/heartbeat",
+   "table:device_registrations",
+   "table:device_refresh_tokens",
+   "SYS-authentication-and-identity",
+   "SYS-sync-and-continuity",
+   "SYS-security-and-privacy",
+   "F004-07"
+  ],
+  "relationships": [
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/web/features/settings/components/LinkedDevicesPanel.tsx",
+    "evidence": "apps/web/features/settings/sections/AccountSection.tsx:629"
+   },
+   {
+    "rel": "exposes_api",
+    "to": "api:GET /api/settings/devices",
+    "evidence": "apps/web/app/api/settings/devices/route.ts:195"
+   },
+   {
+    "rel": "exposes_api",
+    "to": "api:DELETE /api/settings/devices/[deviceId]",
+    "evidence": "apps/web/app/api/settings/devices/[deviceId]/route.ts:50"
+   },
+   {
+    "rel": "stores_data_in",
+    "to": "table:device_registrations",
+    "evidence": "apps/web/app/api/settings/devices/route.ts:74"
+   },
+   {
+    "rel": "stores_data_in",
+    "to": "table:device_refresh_tokens",
+    "evidence": "apps/web/app/api/settings/devices/route.ts:130"
+   },
+   {
+    "rel": "blocked_by",
+    "to": "file:apps/mobile/lib/v1FeatureFlags.ts",
+    "evidence": "companion and dispatch false"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:cli",
+    "evidence": "apps/cli/src/lib.rs:7765"
+   },
+   {
+    "rel": "governed_by_subscription",
+    "to": "plan:basic",
+    "evidence": "remote_control capability is on paid tiers (packages/contracts/types/src/billing-catalog.ts:352)"
+   },
+   {
+    "rel": "depends_on",
+    "to": "SYS-authentication-and-identity",
+    "evidence": "Unlink revokes refresh credential families (apps/web/app/api/settings/devices/[deviceId]/route.ts:102)"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/web/app/api/settings/devices/__tests__/route.test.ts",
+    "evidence": "File exists"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/web/features/settings/components/__tests__/LinkedDevicesPanel.test.tsx",
+    "evidence": "File exists"
+   },
+   {
+    "rel": "depends_on",
+    "to": "F004-07",
+    "evidence": "Mobile remote code viewer opens sessions from the Code list (apps/mobile/src/features/cloud-code/CloudCodeSessionsScreen.tsx:417)"
+   }
+  ],
+  "unknowns": [
+   "How the presence online window values compare in minutes (constants not read).",
+   "Whether the Tauri desktop shows its own device list.",
+   "What the mobile Remote flow needs on the computer side (host not read).",
+   "Whether Local-only users must sign in to appear in the registry.",
+   "Test contents were not read, only file names.",
+   "Whether the relay for mobile remote control is deployed (owner memory says no Fly deploy until told)."
+  ]
+ },
+ "corrections": [
+  {
+   "section": "7",
+   "claim": "Mobile remote control checks plan capability remote_control (paid tiers) before pairing (companion/index.tsx:100; billing-catalog.ts:352)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "remote_control maps to PAID_TIERS (basic, pro, max, max_15x, team, team_premium, enterprise). planLacksRemoteControl is true only when the tier is known, no pairing code is held, and the status is not connected, stale or reconnecting. The check runs on the client only. No server gate was found.",
+   "evidence": "apps/mobile/app/(app)/companion/index.tsx:99-107,185; packages/contracts/types/src/billing-catalog.ts:332-340,352",
+   "correction": "A plan check on the client hides the Remote screen from non-paid tiers, but only once the tier has loaded and only when the session is not already connected or reconnecting. Paid tiers are basic and above."
+  },
+  {
+   "section": "7",
+   "claim": "List capped at 200 rows per query (route.ts:16)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "MAX_DEVICES=200 is used as limit 200 in three SQL queries, and the merged list is sliced to 200.",
+   "evidence": "apps/web/app/api/settings/devices/route.ts:16,85,130,175,234",
+   "correction": "The merged list is capped at 200 devices in total, and each source query is also limited to 200."
+  },
+  {
+   "section": "6",
+   "claim": "Unlink revokes the refresh credential family, deletes registration rows in one transaction and propagates revocation to live sessions ([deviceId]/route.ts:78)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "propagateDeviceRevocation (live sessions and remote work) runs before and outside db.transaction, and only for registry devices. The transaction then revokes refresh credentials and deletes the device_registrations, mobile_devices and desktop_devices rows.",
+   "evidence": "apps/web/app/api/settings/devices/[deviceId]/route.ts:77-135",
+   "correction": "Unlink first propagates revocation to live sessions (registered devices only). Then, in one transaction, it revokes refresh credentials and deletes registration and legacy rows."
+  },
+  {
+   "section": "6",
+   "claim": "Each client app posts heartbeats that upsert the registration and last seen time (heartbeat/route.ts:25)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The route needs a user-scoped DB, CSRF and a schema-valid body. It upserts on (user_id, surface, install_id). A repo search found heartbeat callers only in apps/cli/src/device_registry.rs and the desktop bundle. None was found in the mobile source.",
+   "evidence": "apps/web/app/api/devices/heartbeat/route.ts:21-60; apps/cli/src/device_registry.rs",
+   "correction": "CLI and desktop post heartbeats. Heartbeats from mobile, VS Code and Chrome were not found, so 'each client app' is unverified."
+  }
+ ],
+ "missing_facts": [
+  "Unlink takes a lost flag, which records the credentials as compromised (device_lost), and a logoutAll flag, which revokes all mobile intent tokens. The page mentions only a lost flag, in one table cell. apps/web/app/api/settings/devices/[deviceId]/route.ts:50-54,100-110",
+  "A heartbeat can never re-enable remote_enabled. After 'Stop remote work' it stays off until the device is paired again. The page does not say this. apps/web/app/api/devices/heartbeat/route.ts:23-42",
+  "Remote screen gating is inconsistent. The mobile Remote screen renders when companion is on and dispatch is off. Only companion is checked at the render guard, but the connect and notification effects also need dispatch. apps/mobile/app/(app)/companion/index.tsx:108,118,125,183"
+ ]
+}

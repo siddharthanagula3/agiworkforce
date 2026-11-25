@@ -1,0 +1,830 @@
+{
+  "summary": "Write, from the code, how a tester reaches each Web item and how to start the other five apps, using the cheap model",
+  "agentCount": 5,
+  "logs": [
+    "pipeline[0] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[1] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[2] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[3] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[4] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[5] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[6] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[7] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[8] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[9] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[10] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[11] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[12] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[13] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[14] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[15] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[16] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[17] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[18] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[19] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[20] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[21] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[22] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[23] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[24] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[25] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[26] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[27] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[28] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[29] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[30] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[31] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[32] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[33] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[34] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[35] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[36] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[37] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[38] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[39] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[40] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[41] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[42] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[43] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[44] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[45] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[46] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[47] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[48] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[49] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[50] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[51] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[52] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[53] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[54] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[55] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[56] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[57] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[58] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[59] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[60] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[61] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[62] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[63] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[64] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[65] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[66] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[67] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[68] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[69] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[70] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[71] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[72] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[73] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[74] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[75] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[76] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[77] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[78] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[79] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[80] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[81] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[82] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[83] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[84] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[85] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[86] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[87] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[88] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[89] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[90] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[91] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[92] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[93] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[94] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[95] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[96] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[97] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[98] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[99] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[100] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[101] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[102] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[103] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[104] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[105] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[106] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[107] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[108] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[109] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "pipeline[110] failed: undefined is not an object (evaluating 'job.slug.slice')",
+    "paths: 0 items returned for 0 asked; 111 areas returned nothing"
+  ],
+  "result": {
+    "paths": [],
+    "setup": [
+      {
+        "app": "AGI Desktop (Electron public Desktop) on macOS, pointed at the local web server at http://localhost:3000, with local Clerk test accounts",
+        "what_it_is": "The public AGI Desktop is an Electron shell. Its window loads the hosted web app (production https://agiworkforce.com by default). For local testing, an unpackaged build can be pointed at localhost with the AGI_CLOUD_APP_ORIGIN environment variable. AGI Code (coding sessions on local folders) runs in a bundled CLI process that the Electron shell starts.",
+        "prerequisites": [
+          "macOS with pnpm available and the repository checked out at ~/Desktop/agiworkforce (docs/agent-context/commands.json:5 runs pnpm install). The docs in the files do not state a required Node or pnpm version for this path (apps/desktop/README.md:163 says Node 24 is needed only for the GPUI build).",
+          "Dependencies installed (pnpm install). The Electron dependency is electron ^44.10.2 (apps/desktop/package.json:168).",
+          "apps/web/.env.local present, with Clerk development keys and Stripe test-mode keys. The dev-accounts commands refuse to run without them (docs/development/local-test-accounts.md:70-78). The example file is apps/web/.env.local.example.",
+          "CLERK_AUTHORIZED_PARTIES set (docs/development/troubleshooting.md:62-64; apps/web/lib/validate-env.ts:68).",
+          "A running local web server (step 4 below). The Electron window loads whatever origin it is given, so the web server must be up first.",
+          "A local database for the local stack. The documents refer to it (local-test-accounts.md:41-45, 'the local database') but do not say how to start it."
+        ],
+        "steps": [
+          {
+            "what": "From the repository root, install workspace dependencies. The docs list this as the install command. It is not named as a heavy job in the docs.",
+            "command": "pnpm install",
+            "source": "docs/agent-context/commands.json:5"
+          },
+          {
+            "what": "Check that apps/web/.env.local exists and holds the Clerk development and Stripe test-mode keys. The dev-accounts commands read this file, and the local web server reads the same file.",
+            "source": "docs/development/local-test-accounts.md:20-21 and :70-78; apps/web/.env.local.example:5 (NEXT_PUBLIC_APP_URL=http://localhost:3000), :11, :15 (CLERK_AUTHORIZED_PARTIES)"
+          },
+          {
+            "what": "From the repository root, create the local test accounts. This makes every account that does not exist yet. Existing accounts are left as they are.",
+            "command": "pnpm dev:accounts seed",
+            "source": "docs/development/local-test-accounts.md:15; package.json:415"
+          },
+          {
+            "what": "Start the local web server in its own terminal and leave it running. Wrap it in the heavy-job lock, because dev servers are heavy jobs and only one may run at a time. The web app then serves http://localhost:3000.",
+            "command": "scripts/dev/heavy-job.sh pnpm --filter @agiworkforce/web dev",
+            "source": "docs/agent-context/commands.json:126 (the command is pnpm --filter @agiworkforce/web dev); apps/web/package.json:6 (dev is next dev); scripts/dev/heavy-job.sh:2-4 (usage and heavy-job rule); http://localhost:3000 from apps/web/.env.local.example:5 and docs/development/local-test-accounts.md:61"
+          },
+          {
+            "what": "Build the Electron main process. Run this through the heavy-job lock. The dev:electron script in step 6 also builds, so this step is only needed if you want the build done first.",
+            "command": "scripts/dev/heavy-job.sh pnpm --filter @agiworkforce/desktop build:electron",
+            "source": "apps/desktop/package.json:15 (build:electron = node electron/build-main.mjs); scripts/dev/heavy-job.sh:2-4"
+          },
+          {
+            "what": "Set the Clerk development publishable key in the shell that will launch Electron. Without it, the window sends that Clerk tenant's sign-in host to the browser instead of showing it. The key's value is not in the docs; the owner supplies it.",
+            "command": "export VITE_CLERK_PUBLISHABLE_KEY=<development publishable key from the Clerk dev instance>",
+            "source": "docs/architecture/desktop-local-runtime.md:346-348; apps/desktop/electron/config.ts:20 and :127"
+          },
+          {
+            "what": "Launch the Electron shell pointed at the local web server. The environment variable is honored only in an unpackaged build, which is what this is. Plain http is allowed only for localhost. The example in the docs uses port 3100, which conflicts with port 3000 used everywhere else; this step uses 3000.",
+            "command": "cd ~/Desktop/agiworkforce/apps/desktop && AGI_CLOUD_APP_ORIGIN=http://localhost:3000 pnpm exec electron .",
+            "source": "docs/architecture/desktop-local-runtime.md:343 (the same command with port 3100); apps/desktop/electron/config.ts:58-73 (cloudAppOriginFrom: env honored only when not packaged; otherwise production); apps/desktop/electron/config.ts:46-52 (http only for localhost); docs/architecture/desktop.md:141"
+          },
+          {
+            "what": "The equivalent launch that also builds first, using the package script. The variable is set on the same line.",
+            "command": "AGI_CLOUD_APP_ORIGIN=http://localhost:3000 pnpm --filter @agiworkforce/desktop dev:electron",
+            "source": "apps/desktop/README.md:40 (Electron dev shell = pnpm --filter @agiworkforce/desktop dev:electron); apps/desktop/package.json:16 (build:electron then electron .)"
+          },
+          {
+            "what": "Find the account address to sign in with. The list command prints each account, its seed, its live state, and how to sign in as it.",
+            "command": "pnpm dev:accounts list",
+            "source": "docs/development/local-test-accounts.md:18; package.json:415"
+          },
+          {
+            "what": "Sign in inside the Electron window with the account address and the fixed code.",
+            "source": "docs/development/local-test-accounts.md:61-64 (open http://localhost:3000/login, use agi-dev-<name>+clerk_test@example.com, code 424242)"
+          },
+          {
+            "what": "After a test session, put the account back to its seed. Conversations, projects and files survive a reset; plan, usage, credits and settings go back to the seed.",
+            "command": "pnpm dev:accounts reset <name|all>",
+            "source": "docs/development/local-test-accounts.md:17 and :20-21; docs/agent-context/commands.json:27"
+          }
+        ],
+        "sign_in": "Use a seeded local test account, one per plan and one per lane (docs/development/local-test-accounts.md:30-38). Names include free, basic, premium, max, ultra, team, team-member, and lane-desktop (the top individual plan for the Desktop lane). Get the exact address from pnpm dev:accounts list (local-test-accounts.md:18). Address format: agi-dev-<name>+clerk_test@example.com. Code: 424242. The Clerk development instance accepts that fixed code for +clerk_test addresses and sends no mail (local-test-accounts.md:61-64). The Playwright helper signInAsDevAccount in apps/web/e2e/qa-capability-harness.ts is for specs, not hand testing (local-test-accounts.md:56-58). Use one account per tester or lane and reset it afterwards (local-test-accounts.md:56-58).",
+        "modes": [
+          {
+            "mode": "Cloud, for a subscribed user",
+            "how": "Launch Electron with AGI_CLOUD_APP_ORIGIN=http://localhost:3000 (step 6 or 7) and sign in as a paid seeded account, such as premium, or lane-desktop for the Desktop lane (local-test-accounts.md:30-38). Desktop chat is Managed Cloud only: it does not accept provider API keys or expose Local/BYOK chat (docs/architecture/desktop.md:100-109). Cloud conversations and account state are shared with the web app (desktop.md:100-109). The plan a seeded account has is set by its seed, and pnpm dev:accounts reset <name> puts it back (local-test-accounts.md:17).",
+            "source": "docs/architecture/desktop.md:100-109; docs/development/local-test-accounts.md:17, :30-38; apps/desktop/electron/config.ts:58-73"
+          },
+          {
+            "mode": "AGI Code on a local model",
+            "how": "In the Electron window, add a local folder to AGI Code first. A session cannot open until its folder is added (apps/desktop/electron/main.ts:797-798). A coding session runs the bundled CLI, which can use a local model set up in the CLI (docs/architecture/desktop.md:110-119 under Host Developer). The public Electron dispatcher refuses local-inference commands and reports localModels: false (docs/architecture/desktop.md:100-109; docs/architecture/desktop-local-runtime.md:14-17). The docs do not give the steps to choose or set up a local model inside the app. The Electron package lists @agiworkforce/providers-ollama and @agiworkforce/providers-lmstudio as dependencies (apps/desktop/package.json:73-74); that is the only mention of these providers.",
+            "source": "apps/desktop/electron/main.ts:797-798; docs/architecture/desktop.md:100-119; docs/architecture/desktop-local-runtime.md:14-17; apps/desktop/README.md:226-233; apps/desktop/package.json:73-74"
+          },
+          {
+            "mode": "AGI Code on the user's own key",
+            "how": "Same path as local-model Code: add a folder, then a coding session runs the bundled CLI, which can use a provider key set up in the CLI (docs/architecture/desktop.md:110-119). Desktop Cloud chat accepts no provider keys (desktop.md:100-109). Provider or tool secrets stay in the operating-system credential store (desktop.md:110-119). The baseline test protocol D-9 describes supplying a test provider key in a native secret field, with a visible provider label on turns (docs/development baseline at ~/.cache/agi-audit/leader-docs/2026-11-22/results/baseline/scripts/desktop.md:15). That is a test protocol, not a setup guide, and the docs do not describe that field in the Electron app.",
+            "source": "docs/architecture/desktop.md:100-119; apps/desktop/README.md:135-136 (no provider key or Local session is moved into Cloud); ~/.cache/agi-audit/leader-docs/2026-11-22/results/baseline/scripts/desktop.md:15"
+          }
+        ],
+        "how_to_tell_it_is_running": "The web server is up when http://localhost:3000 opens the AGI web app in a browser. The docs do not give the exact ready message that next dev prints. The Electron window loads the origin it was given. With the variable set, it shows the web app at localhost:3000, not agiworkforce.com (apps/desktop/README.md:28-30; docs/architecture/desktop.md:141). The sign-in page at /login should load and accept the fixed code 424242 for a +clerk_test address (local-test-accounts.md:61-64). If the sign-in page hands off to the browser instead of loading in the window, VITE_CLERK_PUBLISHABLE_KEY is missing from the shell (desktop-local-runtime.md:346-348). If the window shows production, AGI_CLOUD_APP_ORIGIN was not set in the environment of that launch (config.ts:58-73). The docs do not describe any other visible indicator, such as the origin shown in the UI or a tray icon.",
+        "cannot_be_done_on_this_computer": [
+          "A signed, notarized public release (DMG or ZIP) needs the Developer ID Application certificate (AGI AUTOMATION LLC, D2PR62RLT4) in the login keychain and an App Store Connect .p8 key file, plus notarization (docs/runbooks/desktop-electron-macos-release.md:13-17, 21-32). The local release script runs only on an Apple silicon Mac (scripts/release/build-desktop-mac-local.sh:20-25). It refuses a dirty tree, a missing certificate or an unreadable key (runbook:41-42). It never publishes (runbook:43-46), and publishing is a separate owner-approved step (runbook:45-46).",
+          "GitHub Actions release (.github/workflows/release-desktop-cloud.yml) needs the macos-release environment secrets APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD, APPLE_API_KEY, APPLE_API_ISSUER and APPLE_API_PRIVATE_KEY (runbook:50-55). Environment secrets on a private repository need a paid GitHub plan (runbook:54-55). Not on this machine.",
+          "Post-release verification on a Mac that did not build the release: codesign --verify, spctl --assess and xcrun stapler validate, install from the published DMG, and an update check (runbook:57-62). The runbook requires a different Mac for this step.",
+          "Auto-update to a newer signed build needs an already-published newer signed build (docs/development/desktop baseline D-10: ~/.cache/agi-audit/leader-docs/2026-11-22/results/baseline/scripts/desktop.md:15-16). The baseline says to record blocked and defer to the owner if none exists.",
+          "Installing the owner-supplied signed release through the normal OS installer (baseline D-1, desktop.md:7). Requires that release.",
+          "Native screen-reader acceptance and physical IME acceptance are open gates (apps/desktop/README.md:97-98 and :289-292). These are listed for the GPUI and Terminal surfaces, and the docs say they need live checks on a real machine.",
+          "Real phone or mobile testing: the Desktop docs do not cover it, and nothing in the Desktop files runs on a phone.",
+          "Live Stripe billing: the dev-accounts refusal list blocks a live-mode Stripe key (docs/development/local-test-accounts.md:76-77). Only Stripe test mode is allowed locally.",
+          "Production or live Clerk instances: the dev-accounts tooling refuses a Clerk key that belongs to a production instance (local-test-accounts.md:75)."
+        ],
+        "not_found_in_the_docs": [
+          "The port the web server listens on is not set in apps/web/package.json (line 6 is next dev with no port). Port 3000 comes only from apps/web/.env.local.example:5 and the local-test-accounts.md:61 link.",
+          "The example launch in docs/architecture/desktop-local-runtime.md:343 uses AGI_CLOUD_APP_ORIGIN=http://localhost:3100. This conflicts with port 3000 in apps/web/.env.local.example:5 and local-test-accounts.md:61. The docs do not say which is right. This plan uses 3000.",
+          "Environment variable name conflict: apps/web/.env.local.example:11 uses NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY, but the Electron shell reads VITE_CLERK_PUBLISHABLE_KEY from the shell (desktop-local-runtime.md:346-348; config.ts:20). The docs do not say whether both must be set.",
+          "apps/web/.env.local.example:6 sets NEXT_PUBLIC_API_URL to http://localhost:3001/api. The docs do not say what runs on port 3001, or whether it must be started for this path.",
+          "Conflict in the troubleshooting doc: docs/development/troubleshooting.md:58-60 says a Clerk development publishable key (pk_test_) forces a handshake redirect and that a live-format key is needed for automation. The local-test-accounts doc uses the Clerk development instance (local-test-accounts.md:41-42). The docs do not reconcile these.",
+          "How to start the local database (Postgres) that the local stack needs. The docs refer to it but give no command.",
+          "A readiness message from the web server or the Electron window to confirm the app is up.",
+          "How to stop the web server, the Electron process and the dev environment cleanly.",
+          "pnpm dev:desktop is the Tauri app, not Electron: apps/desktop/package.json:8 (dev = tauri dev) and docs/agent-context/commands.json:91. A tester who wants the Electron window must use dev:electron or pnpm exec electron ., not dev:desktop.",
+          "Setting a local model in the Electron app: the docs do not say how to download, select or start a local model (Ollama or LM Studio) for AGI Code.",
+          "Setting a provider key in the Electron app's CLI: the docs do not give the screen, command or field. The baseline D-9 mentions a native secret field, but no doc describes it for Electron.",
+          "How to choose AGI Code's mode (Local or BYOK) in the window, and how a visible provider label is displayed. docs/architecture/desktop.md only states it in general terms.",
+          "Electron's window-level indicators of the active origin, mode or account. The docs describe none.",
+          "A test folder for AGI Code. The baseline D-4 names a disposable code-bench repository, but no doc in the files I read gives its location or how to create it.",
+          "Whether the Electron launch itself (not the build) counts as a heavy job under scripts/dev/heavy-job.sh. The header of that script lists builds, full suites, tsc, cargo, dev servers, browsers, emulators and git push, and does not name the Electron window. The CLAUDE.md delegation section adds the same list.",
+          "A Node version for the Electron path. The only Node version in the desktop docs is Node 24 for the GPUI build (apps/desktop/README.md:163).",
+          "Any document that combines the web server, the Electron launch and the account seed in one checked procedure. The pieces are in local-test-accounts.md, desktop-local-runtime.md:340-343 and the desktop README, and the steps above join them."
+        ]
+      },
+      {
+        "app": "AGI Mobile (apps/mobile, Expo and React Native package @agiworkforce/mobile), run against the local web server at http://localhost:3000 with local test accounts",
+        "what_it_is": "AGI Mobile is the Expo and React Native phone app. Its Local mode runs a model on the device with no account. Its Cloud mode signs in through Clerk and calls the web backend; with the local env file it points at http://localhost:3000. The repo documents local test accounts (one per plan, made by pnpm dev:accounts) for trying Cloud on the Free plan or a subscribed plan without touching production.",
+        "prerequisites": [
+          "Repository at ~/Desktop/agiworkforce with dependencies installed by `pnpm install` (docs/agent-context/commands.json, repoWide.install).",
+          "pnpm available (all documented commands are pnpm scripts: package.json, docs/agent-context/commands.json).",
+          "apps/mobile/.env.local present with APP_ENV=development, EXPO_PUBLIC_APP_ENV=development, EXPO_PUBLIC_API_URL=http://localhost:3000 (apps/mobile/.env.local:1-3; template at apps/mobile/.env.local.example:1-9).",
+          "apps/web/.env.local present: the dev-accounts commands read it, and the local web server reads it (docs/development/local-test-accounts.md:20-22).",
+          "The local web server running on localhost:3000 (docs/development/local-test-accounts.md:61; apps/mobile/.env.local.example:9). The docs do not state a port setting for next dev.",
+          "For the iOS Simulator: Xcode. The store runbook says the local simulator builds were made with Xcode 27.1 (docs/runbooks/mobile-store-first-release.md:85). The docs do not give an install or minimum version.",
+          "For the Android emulator: the Android SDK and an emulator image. No document says how to install them; the baseline only says adb is on PATH (scripts/mobile.md Fixtures section).",
+          "Every heavy job (dev server, Metro, simulator, emulator, build) goes through scripts/dev/heavy-job.sh, one at a time, because the machine has 16 GB (CLAUDE.md, Delegation section; scripts/dev/heavy-job.sh lines 2-4)."
+        ],
+        "steps": [
+          {
+            "what": "Start the local web server. Each command is wrapped in the heavy-job lock as the repo requires. The web dev script runs next dev.",
+            "command": "scripts/dev/heavy-job.sh pnpm --filter @agiworkforce/web dev",
+            "source": "docs/agent-context/commands.json:126 (surfaces.web.dev); apps/web/package.json:6 (\"dev\": \"next dev\"); scripts/dev/heavy-job.sh:2-4"
+          },
+          {
+            "what": "Make the local test accounts on the local stack. Run from the repo root. This is idempotent: existing accounts are left as they are. It is not in the heavy-job list, so it runs unwrapped.",
+            "command": "pnpm dev:accounts seed",
+            "source": "docs/development/local-test-accounts.md:11-15; package.json:415 (dev:accounts)"
+          },
+          {
+            "what": "List the accounts, their plans and how to sign in as each one. The list output is the source of truth for names.",
+            "command": "pnpm dev:accounts list",
+            "source": "docs/development/local-test-accounts.md:18 and :26"
+          },
+          {
+            "what": "Check the local mobile env file. It must set the API URL to localhost:3000 and the APP_ENV values. The template says to copy .env.local.example to .env.local; the working copy already exists in the tree. The file is not a command.",
+            "source": "apps/mobile/.env.local:1-4; apps/mobile/.env.local.example:1-9"
+          },
+          {
+            "what": "Start the Expo dev server (Metro) for the mobile app, wrapped in the heavy-job lock.",
+            "command": "scripts/dev/heavy-job.sh pnpm --filter @agiworkforce/mobile dev",
+            "source": "apps/mobile/package.json:8 (\"dev\": \"expo start\"); apps/mobile/README.md:40; scripts/dev/heavy-job.sh:2-4"
+          },
+          {
+            "what": "Build and launch the app on the iOS Simulator. This is a local native build through expo run:ios; it is heavy and must be wrapped.",
+            "command": "scripts/dev/heavy-job.sh pnpm --filter @agiworkforce/mobile ios",
+            "source": "apps/mobile/package.json:10 (\"ios\": \"expo run:ios\"); apps/mobile/README.md:41"
+          },
+          {
+            "what": "Build and launch the app on the Android emulator. The docs name only the command; the emulator setup is not documented.",
+            "command": "scripts/dev/heavy-job.sh pnpm --filter @agiworkforce/mobile android",
+            "source": "apps/mobile/package.json:9 (\"android\": \"expo run:android\"); apps/mobile/README.md:42"
+          },
+          {
+            "what": "Optional, for a physical iPhone only. The script refuses to run without an Apple Development signing identity for the AGI team. It also runs an expo prebuild with --clean, which regenerates the native ios folder.",
+            "command": "scripts/dev/heavy-job.sh pnpm --filter @agiworkforce/mobile ios:device:dev",
+            "source": "apps/mobile/package.json:11; apps/mobile/README.md:43; apps/mobile/scripts/ios-device-dev.sh:22-24 (signing check), and the prebuild line in the same script"
+          },
+          {
+            "what": "Sign in as a local test account (see sign_in below). Then check the mode and plan in the app. The docs do not give the exact control labels.",
+            "source": "docs/development/local-test-accounts.md:54-64; scripts/mobile.md M-1 (baseline)"
+          },
+          {
+            "what": "Reset one account to its seed between runs, so plan, usage, credits and settings go back. Conversations, projects and files survive a reset.",
+            "command": "pnpm dev:accounts reset <name>",
+            "source": "docs/development/local-test-accounts.md:17 and :22"
+          },
+          {
+            "what": "For the age step, clear the five adult_eligibility_* columns on the account's profiles row in the local database and sign in again. Re-run the reset command to restore the decision.",
+            "source": "docs/development/local-test-accounts.md:48-52"
+          }
+        ],
+        "sign_in": "Local test accounts are Clerk development-instance users with the address agi-dev-<name>+clerk_test@example.com. Open http://localhost:3000/login in a browser, enter that address and the code 424242. The Clerk development instance accepts that fixed code for +clerk_test addresses and sends no mail (docs/development/local-test-accounts.md:61-64). The name comes from pnpm dev:accounts list (md:18). Accounts: free, basic, premium, max, ultra, team, team-member, extra-usage, window-nearly-full, stripe-premium, lane-chrome, lane-vscode, lane-desktop, lane-cli, lane-mobile, lane-credits (md:30-39). The mobile app's own sign-in is described only as an \"actual browser handoff\" in the baseline (scripts/mobile.md, M-1). The 424242 code is documented for the web /login page only.",
+        "modes": [
+          {
+            "mode": "Local on the device",
+            "how": "The app needs no account. Start the mobile app with the steps above and choose the Local mode in the app. Local mode is also documented as needing no account and running the model on the device (docs/runbooks/mobile-store-first-release.md:59). The baseline's M-7 needs a compatible local model downloaded while online, then the device set offline; the files do not say how the model is downloaded or where the Local control is. A simulator can check the UI only, not the real on-device model result (scripts/mobile.md M-7, line 13).",
+            "source": "docs/runbooks/mobile-store-first-release.md:59; scripts/mobile.md M-1 (line 7) and M-7 (line 13)"
+          },
+          {
+            "mode": "Cloud on the Free plan",
+            "how": "Start the app as above. Sign in with the free account (agi-dev-free+clerk_test@example.com, code 424242 at localhost:3000/login). Choose Cloud where the app offers it, and check that the route label and plan read Free. The baseline says choose Cloud where applicable. The local env points the API at http://localhost:3000 (apps/mobile/.env.local:3). The docs describe Cloud as talking to https://agiworkforce.com (store runbook:60); the files do not say what happens to Cloud when the API URL is localhost.",
+            "source": "docs/development/local-test-accounts.md:30 (free account); apps/mobile/.env.local:3; scripts/mobile.md M-1 (line 7)"
+          },
+          {
+            "mode": "Cloud for a subscribed user",
+            "how": "Start the app as above. Sign in with an entitled account: premium (the subscribed plan with extra usage), or lane-mobile, which the docs name as the top individual plan for the mobile lane (md:30-37). Check that the plan and the Cloud route show entitled usage. The baseline fixture needs an already-entitled account with available Cloud credit. For a Stripe-billed test account use stripe-premium or lane-credits (md:36-39).",
+            "source": "docs/development/local-test-accounts.md:30-39; scripts/mobile.md Fixtures section"
+          }
+        ],
+        "how_to_tell_it_is_running": "The dev server (expo start) runs as a Metro bundler, and the simulator or emulator launches the app after expo run:ios or expo run:android. The docs do not describe the Metro terminal output or the first screen. The baseline's success test for M-1 is a usable chat composer in under 60 seconds, on the correct route. Local: the chat works with no sign-in. Cloud: after sign-in the app shows the correct route label. On the web side, dev:accounts list prints each account's live state as the meters read it (local-test-accounts.md:18). The on-screen route and plan label text is not documented.",
+        "cannot_be_done_on_this_computer": [
+          "A physical iPhone build with the company signing identity. ios:device:dev refuses without an Apple Development certificate for team D2PR62RLT4 (apps/mobile/scripts/ios-device-dev.sh:22-24; docs/runbooks/mobile-eas-signing.md). The team ID is listed at mobile-eas-signing.md:14.",
+          "EAS cloud builds (build:dev, build:preview, build:prod). They need the EAS CLI authenticated with the release-owner account (docs/runbooks/mobile-eas-signing.md:25-27; apps/mobile/package.json build scripts).",
+          "Store signing, TestFlight and Google Play submissions. Those need the App Store Connect key in apps/mobile/secrets and the Play service account (docs/runbooks/mobile-eas-signing.md:37-40; docs/runbooks/mobile-store-first-release.md).",
+          "Local-mode proof of the on-device model with the network off. M-7 must be run on each real iPhone and Android phone; a simulator run checks the UI only (scripts/mobile.md:13).",
+          "The built-in Apple model generating a reply on the simulator. The store runbook says it shows ready on the simulator but cannot generate there (docs/runbooks/mobile-store-first-release.md:87 and :1853).",
+          "Real camera, real microphone and real file picks. The baseline fixture notes a virtual camera proves UI flow only (scripts/mobile.md Fixtures section, M-4 and M-5).",
+          "Any iPad coverage. The store runbook records that no iPad screen was exercised (docs/runbooks/mobile-store-first-release.md:88).",
+          "Clerk production sign-in. Local accounts are on the development instance only (docs/development/local-test-accounts.md:41)."
+        ],
+        "not_found_in_the_docs": [
+          "The exact in-app control, label or screen where a tester chooses Local or Cloud, and the label text of the route and plan indicators. The baseline says only select Local, choose Cloud, switch to Cloud (scripts/mobile.md M-1, M-7, M-8).",
+          "The mobile sign-in steps: the browser handoff URL, whether the 424242 code works through the mobile handoff, and where it returns. The code is documented only for http://localhost:3000/login in a browser (local-test-accounts.md:61-64).",
+          "Whether the Clerk key in apps/mobile/.env.local (a pk_test_ key) belongs to the same development instance that dev:accounts seeds. The template says a blank key uses the built-in development instance and to set the key when the local API validates another instance (apps/mobile/.env.local.example:13-15). The files do not confirm the match.",
+          "Whether Expo or Metro must be restarted after editing apps/mobile/.env.local. The troubleshooting doc covers only clearing the Metro cache for className issues (docs/development/troubleshooting.md:111-113).",
+          "What the local ports 3001 (EXPO_PUBLIC_GATEWAY_URL) and 4000 (EXPO_PUBLIC_WS_URL) serve, and whether any of them is needed for chat. Nothing starts them (apps/mobile/.env.local.example:10-11). Nothing in the docs names a command for them.",
+          "Android emulator setup: installing the SDK, creating an AVD, starting the emulator, or PATH setup. The repo has no emulator command, only expo run:android (apps/mobile/package.json:9).",
+          "How the Android emulator reaches the host's localhost:3000. The files say to use a LAN IP for a physical device (apps/mobile/.env.local.example:7-8) and say nothing about the emulator.",
+          "A simulator boot command (xcrun simctl or similar) or a choice of simulator device. expo run:ios is the only documented path (apps/mobile/package.json:10). The baseline says only that xcrun is on PATH (scripts/mobile.md Fixtures section).",
+          "How a local Free or subscribed account reaches the age step on mobile. The docs describe the web database columns to clear (local-test-accounts.md:48-52), not a mobile screen.",
+          "How the Local on-device model is downloaded, which models are compatible, and where to see the offline indicator. The baseline says to download one while online (scripts/mobile.md M-7), and no file names the steps.",
+          "A documented expected Metro or Expo terminal output, and the first screen on a fresh launch.",
+          "The docs describe Cloud as talking to https://agiworkforce.com (mobile-store-first-release.md:60). The files do not say how the local API URL in apps/mobile/.env.local changes that, or whether Cloud calls go to localhost when it is set.",
+          "The request in the task was to update all documentation with the Haiku 5.5 model. This read-only step did not change any document. That work is not covered by this result."
+        ]
+      },
+      {
+        "app": "AGI CLI (agi), run against the local web server at http://localhost:3000 with local test accounts",
+        "what_it_is": "The AGI CLI is a Rust terminal AI coding agent (binary `agi`, with `agiworkforce` as an alias) with three trust modes: Local (nothing leaves the device), Your key (BYOK, sent straight to a provider key the user owns), and Managed (AGI cloud, which needs a plan that includes Cloud in the CLI). The local test setup points the Managed mode and sign-in at the local Next.js web server on localhost:3000, using accounts seeded by `pnpm dev:accounts`.",
+        "prerequisites": [
+          "macOS on this computer; the sandbox backend on macOS is `sandbox-exec`, which ships with macOS (apps/cli/README.md:79-82).",
+          "Node >=24.15.0 <25 and pnpm >=10.16.0, the engines in package.json:14-16; packageManager pins pnpm@10.34.7 (package.json:12).",
+          "Rust/cargo is needed to build the CLI from source (apps/cli/README.md:58-62; docs/agent-context/commands.json:148). The docs read do not say how to install Rust.",
+          "The repository's local web stack must be running on localhost:3000 (see the web server steps). The docs say the local web server reads apps/web/.env.local (docs/development/local-test-accounts.md:20-21).",
+          "apps/web/.env.local must exist and be filled in. CLERK_AUTHORIZED_PARTIES is required, or sign-in fails with no useful error (docs/development/troubleshooting.md:62-64). The docs do not give the local value.",
+          "The local database must be reachable on loopback. The accounts tooling refuses any Postgres host other than 127.0.0.1, localhost, ::1, *.localhost or *.test (docs/development/local-test-accounts.md:71-74).",
+          "Heavy jobs (builds, dev servers, cargo, tsc) run one at a time through scripts/dev/heavy-job.sh on this 16 GB machine (CLAUDE.md:25-31; scripts/dev/heavy-job.sh:1-5)."
+        ],
+        "steps": [
+          {
+            "what": "Install JavaScript dependencies from the repository root, using the frozen lockfile.",
+            "command": "pnpm install --frozen-lockfile",
+            "source": "docs/development/troubleshooting.md:18-19 (names the command; it is the only install command in the files read)"
+          },
+          {
+            "what": "Seed the local test accounts (one per plan and lane). Run from the repository root. This reads apps/web/.env.local and refuses any non-local database, Clerk production instance or Stripe live key.",
+            "command": "pnpm dev:accounts seed",
+            "source": "docs/development/local-test-accounts.md:13-21, 66-79; package.json:415"
+          },
+          {
+            "what": "Print the seeded accounts, their live state, and how to sign in as each one. Use this to get the exact address for each account.",
+            "command": "pnpm dev:accounts list",
+            "source": "docs/development/local-test-accounts.md:18"
+          },
+          {
+            "what": "Start the local web server, the Next.js dev server that serves http://localhost:3000. Wrap it in the heavy-job gate because it is a dev server. Note that the gate holds its lock until the wrapped command exits, so stop the server when done.",
+            "command": "scripts/dev/heavy-job.sh pnpm --filter @agiworkforce/web dev",
+            "source": "docs/agent-context/commands.json:126 (web dev command); apps/web/package.json:6 (\"dev\": \"next dev\"); CLAUDE.md:25-31 (dev servers go through heavy-job.sh); scripts/dev/heavy-job.sh:40-41 (the lock is held while the child runs)"
+          },
+          {
+            "what": "Confirm the web server is answering. The docs name this page as the local sign-in page. Do not use the root `pnpm dev`, which starts the desktop app, not the web server.",
+            "source": "docs/development/local-test-accounts.md:61 (open http://localhost:3000/login); docs/agent-context/commands.json:126 vs package.json:414 (root dev is dev:desktop)"
+          },
+          {
+            "what": "Build the CLI binary from source in release mode, wrapped in the heavy-job gate. Use the command the README gives for a source build of the primary binary.",
+            "command": "scripts/dev/heavy-job.sh cargo build --release -p agiworkforce-cli --bin agi",
+            "source": "apps/cli/README.md:406 (build command); docs/agent-context/commands.json:148 (cli build); CLAUDE.md:25-31 (cargo is a heavy job)"
+          },
+          {
+            "what": "Alternative to the previous step: install the binary from source with cargo. The README gives this as the source-build route; the doc does not say where cargo puts the binary.",
+            "command": "scripts/dev/heavy-job.sh cargo install --path apps/cli --bin agi",
+            "source": "apps/cli/README.md:58-62"
+          },
+          {
+            "what": "Check the built binary. The smoke script looks for the release binary at the repository's target folder, so this is the path the repository itself expects.",
+            "command": "target/release/agi --version",
+            "source": "apps/cli/scripts/cli-smoke.mjs:17 (candidate path ../../target/release/agi); apps/cli/README.md:16 (the README shows `agi` as the start command); docs/runbooks/cli-release.md:280-283 (expect `agi 0.0.1`)"
+          },
+          {
+            "what": "Run the health check. It reports local diagnostics, including the sandbox backend; `--json` gives machine-readable output.",
+            "command": "target/release/agi doctor",
+            "source": "apps/cli/README.md:342-344 (agi doctor, agi doctor --json); apps/cli/README.md:85-86 (agi doctor reports sandbox.os)"
+          },
+          {
+            "what": "Start the interactive terminal UI from a project folder. This is the default start, with no arguments.",
+            "command": "target/release/agi",
+            "source": "apps/cli/README.md:15-20 and 188-190 (`agi` opens the interactive TUI)"
+          }
+        ],
+        "sign_in": "The docs describe two sign-in paths. (1) The local web account: open http://localhost:3000/login, enter the account's address, which is agi-dev-<name>+clerk_test@example.com (run `pnpm dev:accounts list` to get it), and enter the code 424242. Clerk's development instance accepts that fixed code for +clerk_test addresses and sends no mail (docs/development/local-test-accounts.md:61-64). (2) The CLI sign-in: `agi login` runs a device-code sign-in in the browser for an AGI account, and `agi login <provider>` stores a provider key (apps/cli/README.md:64-70; apps/cli/src/lib.rs:987-992). The docs do not say that the device-code page accepts a +clerk_test account. A Playwright helper, signInAsDevAccount in apps/web/e2e/qa-capability-harness.ts, signs in with a Clerk ticket, but that is for Playwright specs, not a hands-on tester (docs/development/local-test-accounts.md:56-59). Use one account per lane and reset it afterwards: `pnpm dev:accounts reset <name>` (docs/development/local-test-accounts.md:17, 56-59). The CLI lane account is lane-cli, the top individual plan (docs/development/local-test-accounts.md:37-39). Check sign-in with `agi auth-status` (apps/cli/README.md:69).\"",
+        "modes": [
+          {
+            "mode": "Local model (no sign-in, no plan, nothing leaves the device)",
+            "how": "1) Start a local model server outside this repository. The source defaults are Ollama at http://localhost:11434 and LM Studio at http://localhost:1234/v1. 2) Discover models: `target/release/agi models scan`, `agi models status` or `agi models list` (subcommands in apps/cli/src/lib.rs:1862-1890). 3) Start a session on a local model: `target/release/agi --provider ollama -m <model>` (the --provider help names ollama, apps/cli/src/lib.rs:194-196; the -m model must come from the local list). 4) Or set the default: `target/release/agi models set <model> --provider ollama` (apps/cli/src/lib.rs:1876-1886). 5) Inside the TUI, `/privacy-mode local` switches the boundary (apps/cli/src/claude_parity.rs:225 and the tests at 3792-3820). Local means no prompt, chat or file context should leave the device (apps/cli/src/platform/runtime/session.rs:283-290).",
+            "source": "apps/cli/src/local_models.rs:7-8 (default URLs); apps/cli/src/lib.rs:194-196, 772-776, 1862-1890; apps/cli/src/claude_parity.rs:225, 3792; apps/cli/README.md:335-336 (Local needs no plan); apps/cli/src/platform/runtime/session.rs:283-290"
+          },
+          {
+            "mode": "Your own key (BYOK)",
+            "how": "1) Store the key: `target/release/agi login anthropic` (or another provider name). The prompt enters the key under 'Your Key' (apps/cli/src/lib.rs:987-990; apps/cli/README.md:68). 2) Confirm: `target/release/agi auth-status` (apps/cli/README.md:69). 3) Inside the TUI, `/login <provider>` does the same (apps/cli/src/repl/slash_commands.rs:599-601). 4) Switch the boundary: `/privacy-mode byok` (apps/cli/src/claude_parity.rs:225; test at 3809). BYOK sends selected context straight to the user's own provider key (apps/cli/src/platform/runtime/session.rs:280-285). It does not go through localhost:3000, and needs no plan (apps/cli/README.md:335-336).",
+            "source": "apps/cli/README.md:64-70, 335-336; apps/cli/src/lib.rs:987-992; apps/cli/src/repl/slash_commands.rs:599-601; apps/cli/src/claude_parity.rs:225, 3809; apps/cli/src/platform/runtime/session.rs:280-285"
+          },
+          {
+            "mode": "Managed Cloud for a subscribed user (pointed at localhost:3000)",
+            "how": "1) The plan must include 'Cloud in the CLI and VS Code'. Check with `target/release/agi plans` (apps/cli/README.md:333-335). Use the lane-cli account, or another paid one from `pnpm dev:accounts list` (docs/development/local-test-accounts.md:30-39). 2) Export the local API base before the CLI starts: `AGIWORKFORCE_API_BASE=http://localhost:3000`. The source accepts a loopback http base (apps/cli/src/tier_cache.rs:641-663, 651). The CLI then sends its token to that loopback address (apps/cli/src/cloud/client.rs:380-383). 3) For sign-in, the device-grant base is AGI_AUTH_BASE. The source says it must include /api, so set `AGI_AUTH_BASE=http://localhost:3000/api` (apps/cli/src/auth.rs:1016-1020; apps/cli/src/app_server/account.rs:287-293). Then run `target/release/agi login`. 4) Switch into Cloud mode with `/model` or `/privacy-mode managed` inside the TUI (apps/cli/src/cloud/client.rs:51 says 'Switch to Cloud mode with /model'; apps/cli/src/claude_parity.rs:3820). 5) Verify with `target/release/agi usage` (docs/runbooks/cli-release.md:300-301; apps/cli/README.md:336-338). Account commands refuse in Local and BYOK modes.",
+            "source": "apps/cli/README.md:64-70, 333-340; apps/cli/src/cloud/client.rs:51, 57, 380-383; apps/cli/src/tier_cache.rs:19, 641-663; apps/cli/src/auth.rs:1016-1020; apps/cli/src/app_server/account.rs:287-293; apps/cli/src/claude_parity.rs:3820; docs/runbooks/cli-release.md:300-301; docs/development/local-test-accounts.md:30-39"
+          }
+        ],
+        "how_to_tell_it_is_running": "Web server: opening http://localhost:3000/login in a browser shows the sign-in page (docs/development/local-test-accounts.md:61). The dev server prints its output in the terminal where it was started (the docs do not describe the message). The CLI: `agi --version` prints `agi <version>`, which is `agi 0.0.1` for the current Cargo.toml version (docs/runbooks/cli-release.md:280-283; apps/cli/Cargo.toml:4). The interactive TUI shows a header line with `AGI CLI v<version> │ model │ provider │ branch │ ctx` and a top-right cost HUD with tokens in/out, $ cost and context percent; the README shows this layout as an example (apps/cli/README.md:15-20, 182-190). `agi doctor` gives local diagnostics (apps/cli/README.md:342-344). `agi auth-status` shows the sign-in state for each provider (apps/cli/README.md:69; apps/cli/src/lib.rs:1004-1005). In Managed mode `agi usage` answers, and the same command is refused after switching to Local or BYOK (docs/runbooks/cli-release.md:300-302).\"",
+        "cannot_be_done_on_this_computer": [
+          "The one-command installer (curl ... install.sh) cannot be used yet: until the first signed release is published, the installer stops with 'No signed AGI CLI release is published yet' (apps/cli/README.md:28-34). The release workflow has never completed successfully (docs/runbooks/cli-release.md:108-111). Use the source build instead.",
+          "Publishing a CLI release needs the owner's GitHub admin rights, the release signing key (kept offline), the protected cli-release environment, and two owner approvals in the workflow run (docs/runbooks/cli-release.md:46-51, 98-100, 196-207, 258-263).",
+          "Platform code signing: the binaries carry no Apple Developer ID and no notarization, and no Windows Authenticode signature. The signed checksum manifest is the integrity check (docs/runbooks/cli-release.md:33-40). A browser-downloaded archive gets Gatekeeper warnings (docs/runbooks/cli-release.md:38-40).",
+          "Homebrew: the tap is private and not advertised; npm, WinGet and apt/dnf channels produce nothing (docs/runbooks/cli-release.md:71-76; apps/cli/README.md:32-33).",
+          "Release verification needs a Mac, a Linux machine and Windows Git Bash (docs/runbooks/cli-release.md:265-266). Windows has no sandbox, and its installer needs Git Bash, MSYS2, Cygwin or WSL (apps/cli/README.md:45, 52-54, 136-137). Linux sandboxing needs bubblewrap (apps/cli/README.md:81).",
+          "Editor integrations (Zed, JetBrains) need those editors (apps/cli/README.md:364-378). The VS Code install route is documented separately (docs/runbooks/cli-release.md:68).",
+          "The voice feature (/voice, /dictate) is off in the default build and needs an audio stack (apps/cli/Cargo.toml:126-132; apps/cli/src/lib.rs:73-106).",
+          "No store account, real phone or Apple certificate is needed for the source build and local testing; the docs name none for the CLI."
+        ],
+        "not_found_in_the_docs": [
+          "Rust or cargo installation steps. The docs call for cargo but do not say how to install it.",
+          "How to create apps/web/.env.local from its examples, and the values for a local run. apps/web/.env.local.example and .env.example exist in the repository, but no document in the files read describes filling them in for localhost.",
+          "The local value of CLERK_AUTHORIZED_PARTIES for localhost:3000. The docs say it is required (docs/development/troubleshooting.md:62-64). .env.example:45 lists only the production and extension origins.",
+          "How to start or reset the local Postgres database, and the local DATABASE_URL value. apps/web/.env.example:72-76 shows a remote host with sslmode=require. docs/development/local-test-accounts.md:71-74 requires loopback, but no setup steps.",
+          "A port flag for next dev. apps/web/package.json:6 runs `next dev` with no port, and the docs say localhost:3000 without saying how it is set.",
+          "A documented way to point the CLI at localhost. AGIWORKFORCE_API_BASE and AGI_AUTH_BASE appear only in source comments and error messages (apps/cli/src/cloud/client.rs:57, 380-383; apps/cli/src/auth.rs:1016-1020; apps/cli/src/app_server/account.rs:287-293). They are not in apps/cli/README.md or any development doc.",
+          "Whether `agi login` (device code) works with a +clerk_test local account. The docs describe the web /login sign-in for local accounts, not the CLI device-code flow.",
+          "Installing Ollama or LM Studio, pulling a model, or starting their servers. Only their default URLs appear in source (apps/cli/src/local_models.rs:7-8).",
+          "Built-in provider key variable names, for example which environment variable holds an Anthropic key. apps/cli/README.md:161-178 documents api_key_env only for custom OpenAI-compatible providers.",
+          "Where `cargo install --path apps/cli --bin agi` puts the binary. The docs give no install folder.",
+          "A first-run walkthrough: the trust prompt for a new folder, onboarding and first-time setup (`agi onboarding` is listed in apps/cli/README.md:321-329, but its flow is not described).",
+          "The fixture and step-by-step tasks in the baseline (code-bench fixture, keep.txt marker, C-1 to C-12) are in ~/.cache/agi-audit/leader-docs/2026-11-22/results/baseline/scripts/cli.md, not in the project. The project files do not define the fixture.",
+          "A keyboard-shortcut list for the TUI. The files read do not include one.",
+          "How to stop the local web server and release the heavy-job lock. The gate's lock is held until the wrapped command exits (scripts/dev/heavy-job.sh:40-41), but the docs do not describe stopping a dev server."
+        ]
+      },
+      {
+        "app": "AGI Code VS Code extension (apps/extension-vscode, package name agi-workforce, display name \"AGI Code\"), tested against the local web server at http://localhost:3000 with local test accounts",
+        "what_it_is": "AGI Code is a VS Code extension (publisher agiworkforce, version 0.0.2, public preview) that puts an AGI chat in the Activity Bar and an @agi participant in VS Code Chat. Chat, agent runs and session history run through the local `agi` CLI (`agi app-server`), not through the web app; the web app at localhost:3000 is used for sign-in, the Cloud account, usage and the Cloud API the extension can be pointed at. (apps/extension-vscode/README.md:17-19, 23-38; docs/development/local-test-accounts.md:7-9)",
+        "prerequisites": [
+          "macOS with VS Code 1.100 or newer (apps/extension-vscode/README.md:25; apps/extension-vscode/package.json:16-18 engines.vscode ^1.100.0).",
+          "Repository dependencies installed from the root with pnpm install (docs/agent-context/commands.json:5 repoWide.install).",
+          "AGI CLI 0.0.1 or newer available as `agi` on PATH, or installed with the extension command Code: Install AGI CLI, or agiWorkforce.cliPath pointing at a binary (apps/extension-vscode/README.md:26-29; package.json:1232-1236 cliPath default agi). To build the CLI from source the repo gives: cargo install --path apps/cli --bin agi (apps/cli/README.md:61). Cargo is a heavy job.",
+          "apps/web/.env.local, created from apps/web/.env.local.example (its header says: Copy to .env.local and replace blank credential values; apps/web/.env.local.example:2). The local stack needs a Clerk development-instance key, a Stripe test-mode key and a loopback DATABASE_URL (docs/development/local-test-accounts.md:20, 66-79). The file already exists in this checkout; its contents were not read because they are secrets.",
+          "A Postgres database on loopback. The docs name one route: node scripts/dev-db-ws-proxy.mjs against a loopback Postgres, with AGI_DATABASE_WS_PROXY=127.0.0.1:5433 (apps/web/.env.example:75-76). How to install or start Postgres is not documented.",
+          "A trusted VS Code workspace folder. In a restricted workspace the local app-server is not started, so chat waits (apps/extension-vscode/README.md:30-34).",
+          "Heavy local work goes through scripts/dev/heavy-job.sh, one job at a time on this 16 GB machine (scripts/dev/heavy-job.sh:1-5; CLAUDE.md Delegation section). The docs do not say whether pnpm install or pnpm dev:accounts count as heavy."
+        ],
+        "steps": [
+          {
+            "what": "Install the repository dependencies from the repository root.",
+            "command": "pnpm install",
+            "source": "docs/agent-context/commands.json:5 (repoWide.install)"
+          },
+          {
+            "what": "Create apps/web/.env.local from the example and fill the blank credential values (Clerk development key, Stripe test key, DATABASE_URL, secrets). The copy command itself is not written in the docs.",
+            "source": "apps/web/.env.local.example:2; docs/development/local-test-accounts.md:20"
+          },
+          {
+            "what": "Start the local Postgres route the docs name: the websocket proxy to a loopback Postgres, with AGI_DATABASE_WS_PROXY set to 127.0.0.1:5433 in the env file. Starting Postgres itself is not documented.",
+            "command": "node scripts/dev-db-ws-proxy.mjs",
+            "source": "apps/web/.env.example:75-76"
+          },
+          {
+            "what": "Start the local web server, through the heavy-job gate. The docs name the command but do not state the port; localhost:3000 is taken from docs/development/local-test-accounts.md:61.",
+            "command": "scripts/dev/heavy-job.sh pnpm --filter @agiworkforce/web dev",
+            "source": "docs/agent-context/commands.json:126 (surfaces.web.dev); apps/web/package.json:6 (dev: next dev); scripts/dev/heavy-job.sh:1-7 (usage)"
+          },
+          {
+            "what": "Seed the local test accounts (one per plan and per lane). Run from the repository root.",
+            "command": "pnpm dev:accounts seed",
+            "source": "docs/development/local-test-accounts.md:13-15; docs/agent-context/commands.json:26"
+          },
+          {
+            "what": "List the accounts, their live state and how to sign in as each.",
+            "command": "pnpm dev:accounts list",
+            "source": "docs/development/local-test-accounts.md:18; docs/agent-context/commands.json:28"
+          },
+          {
+            "what": "Check the local stack is reachable: open the sign-in page in a browser.",
+            "source": "docs/development/local-test-accounts.md:61"
+          },
+          {
+            "what": "Build the VS Code extension package (VSIX). The package script cleans out/, bundles for production and runs vsce packaging, writing agi-workforce-<version>.vsix into the extension folder. Run through the heavy-job gate. A 0.0.2 file already exists in apps/extension-vscode.",
+            "command": "scripts/dev/heavy-job.sh pnpm --filter agi-workforce package",
+            "source": "apps/extension-vscode/package.json:1571 (package script); apps/extension-vscode/src/test/runTests.ts:142 (VSIX file name pattern)"
+          },
+          {
+            "what": "Verify the VSIX before installing it: safe paths, no source or maps, the four runtime files, manifest identity, icon, README and license.",
+            "command": "pnpm --filter agi-workforce verify:package",
+            "source": "apps/extension-vscode/package.json:1572; docs/runbooks/vscode-marketplace-publish.md:47-50"
+          },
+          {
+            "what": "Install the built .vsix into VS Code. The docs give only a Marketplace-ID install into a named clean profile; installing a local .vsix by file path is not documented. The clean-profile form is the one the docs use for release smoke checks.",
+            "command": "code --profile agi-release-smoke --install-extension agiworkforce.agi-workforce",
+            "source": "docs/runbooks/vscode-marketplace-publish.md:251-254 (documented for the Marketplace ID only; the path form is not in the docs)"
+          },
+          {
+            "what": "Make sure the AGI CLI is available: run Code: Check the CLI in This Environment, or Code: Install AGI CLI if it is missing. Install needs a signed release (see cannot_be_done).",
+            "source": "apps/extension-vscode/package.json:122-128 (commands checkCli, installCli); apps/extension-vscode/README.md:43; docs/runbooks/vscode-marketplace-publish.md:68-71"
+          },
+          {
+            "what": "Open the AGI Code panel in a trusted folder. The keyboard shortcut on macOS is Cmd+Shift+A.",
+            "source": "apps/extension-vscode/README.md:42-45; apps/extension-vscode/package.json:1487-1490 (keybinding chat cmd+shift+a)"
+          },
+          {
+            "what": "Sign in or set credentials for the mode being tested (see modes). For the local web stack, the local test accounts sign in at the web login page.",
+            "source": "docs/development/local-test-accounts.md:54-64"
+          },
+          {
+            "what": "Point the extension's Cloud API at the local server, for Cloud testing. The validator accepts http://localhost, 127.0.0.1 and [::1]. The docs do not say to do this for local testing; the value http://localhost:3000/api/llm/v1 is composed from the default path and is unverified.",
+            "source": "apps/extension-vscode/src/utils/api.ts:727-750 (ENDPOINT_ALLOWED_HOSTS, validateEndpointUrl); apps/extension-vscode/package.json:1214-1217 (agiWorkforce.apiEndpoint default https://agiworkforce.com/api/llm/v1)"
+          },
+          {
+            "what": "Reset a test account to its seed after a session, so it is not shared.",
+            "command": "pnpm dev:accounts reset <name|all>",
+            "source": "docs/development/local-test-accounts.md:17; docs/agent-context/commands.json:27"
+          }
+        ],
+        "sign_in": "The documented route is the local Clerk development instance. Open http://localhost:3000/login, enter the account's address agi-dev-<name>+clerk_test@example.com (the name is shown by `pnpm dev:accounts list`), and enter the code 424242. Clerk's development instance accepts that fixed code for +clerk_test addresses and sends no mail (docs/development/local-test-accounts.md:61-64). Accounts are: free, basic, premium, max, ultra, team, team-member, extra-usage, window-nearly-full, stripe-premium, lane-chrome, lane-vscode, lane-desktop, lane-cli, lane-mobile, lane-credits (docs/development/local-test-accounts.md:30-39). Use one account per tester run and reset it afterwards. The extension's own sign-in is Code: Sign In to AGI Cloud, which uses a browser-approved device flow and stores the credential in VS Code SecretStorage (apps/extension-vscode/package.json:157-160; apps/extension-vscode/docs/CONTRIBUTING-NOTES.md:74-76). Which web host that device flow calls on a local setup is not documented.",
+        "modes": [
+          {
+            "mode": "Local model",
+            "how": "Chat runs through the local agi CLI on this machine, and local models stay on the device. The CLI docs name Ollama as a pre-registered provider and say custom providers go in ~/.agiworkforce/config.toml. They do not give steps for installing or starting a local model. Choose the model with Code: Select Model (setting agiWorkforce.model, default auto). A Local default model is never swapped for a cloud model. The chat header shows the Local boundary label.",
+            "source": "apps/extension-vscode/README.md:166-170, 185-188; apps/cli/README.md:159-176; apps/extension-vscode/package.json:187-190, 1219-1222; apps/extension-vscode/docs/CONTRIBUTING-NOTES.md:96"
+          },
+          {
+            "mode": "Own key (BYOK)",
+            "how": "Set a provider key from inside the editor with Code: Set API Key (package.json:177-180), Code: Manage Provider Keys (package.json:257-260), or Code: Sign In with Provider (package.json:330-333). On the CLI side, `agi login anthropic` stores a provider key (apps/cli/README.md:64-68). Provider keys send directly to the named provider, and the chat header names BYOK. The docs do not say which keys the extension stores in SecretStorage for this mode.",
+            "source": "apps/extension-vscode/package.json:177-180, 257-260, 330-333; apps/cli/README.md:64-68; apps/extension-vscode/README.md:166-170"
+          },
+          {
+            "mode": "Managed Cloud for a subscribed user",
+            "how": "Sign in with a subscribed local test account. Use Code: Sign In to AGI Cloud (package.json:157-160), which runs the browser device flow, then Code: Account & Usage, which reads /api/usage (apps/extension-vscode/docs/CONTRIBUTING-NOTES.md:74-78; apps/extension-vscode/README.md:126). Pick a paid account from the list, for example lane-vscode, which the docs describe as the top individual plan (docs/development/local-test-accounts.md:37-38). To send requests to the local server, set agiWorkforce.apiEndpoint to the local URL (package.json:1214-1217; src/utils/api.ts:727-750). That last step is not in the docs and is unverified. Managed Cloud sends to AGI infrastructure, and the chat header names it before a request is sent.",
+            "source": "apps/extension-vscode/package.json:157-160, 1214-1217; apps/extension-vscode/docs/CONTRIBUTING-NOTES.md:74-78; docs/development/local-test-accounts.md:37-38; apps/extension-vscode/src/utils/api.ts:727-750; apps/extension-vscode/README.md:166-170"
+          }
+        ],
+        "how_to_tell_it_is_running": "Web: the local stack answers at http://localhost:3000, and http://localhost:3000/login shows the sign-in page for the +clerk_test address (docs/development/local-test-accounts.md:61). The text the dev server prints is not in the docs. Account state: `pnpm dev:accounts list` prints each account, its live state and how to sign in (docs/development/local-test-accounts.md:18). Extension: the AGI Code icon shows in the Activity Bar, and the panel opens from it or from Cmd+Shift+A (apps/extension-vscode/README.md:44-45). The status bar shows the active model and any non-default agent mode (README.md:81-82). The chat header names the boundary in use before each request: Local, BYOK or Managed Cloud (README.md:166-170). Code: Check the CLI in This Environment reports whether the CLI is found (package.json:122-124). The baseline pass for chat (task V-2 in the leader-docs baseline vscode.md) is a correct streamed answer with a visible stop control.",
+        "cannot_be_done_on_this_computer": [
+          "Installing the CLI through Code: Install AGI CLI needs a signed release: it downloads from https://agiworkforce.com/install.sh, which accepts only a signed release. Until the first signed CLI release exists, a Marketplace install has no working chat (docs/runbooks/vscode-marketplace-publish.md:66-73). The blocker is recorded in audit/blockers/14-desktop-and-vscode-need-unpublished-cli.md (named in that runbook).",
+          "Publishing or updating the Marketplace listing needs the owner's Microsoft, Azure and Eclipse accounts, the publisher agiworkforce and an Azure federated credential. The owner approves the publish job (docs/runbooks/vscode-marketplace-publish.md:90-107, 157-163). A tester cannot do this step.",
+          "Verifying the published listing needs the Marketplace listing and a clean profile after publication (docs/runbooks/vscode-marketplace-publish.md:244-258). This is for the owner after release.",
+          "Native test runs with a VS Code executable: the test runner downloads a pinned VS Code version unless --vscode-executable is passed (apps/extension-vscode/docs/CONTRIBUTING-NOTES.md:60-64). This is a test path, not the hands-on path.",
+          "Real AGI accounts and live Clerk or Stripe keys: local-test-accounts refuses production Clerk keys and live-mode Stripe keys, and refuses non-loopback databases (docs/development/local-test-accounts.md:66-79).",
+          "No signing certificate, real phone or second machine is named for the hands-on VS Code path in the files read. The CLI docs name macOS's sandbox-exec (Seatbelt) as shipped with macOS for sandboxed commands (apps/cli/README.md:82). No VSIX code-signing requirement is documented."
+        ],
+        "not_found_in_the_docs": [
+          "The dev-server port. The docs name `pnpm --filter @agiworkforce/web dev` (docs/agent-context/commands.json:126) and `next dev` (apps/web/package.json:6), but no file says the server binds to localhost:3000 or gives the output text to expect.",
+          "How to install or start Postgres. Only the websocket proxy route to a loopback Postgres is named (apps/web/.env.example:75-76).",
+          "Node and pnpm version requirements for the repo or the extension. The extension engine is only VS Code ^1.100.0 (apps/extension-vscode/package.json:16-18).",
+          "A command to install a local .vsix by file path. The docs show only `code --profile agi-release-smoke --install-extension agiworkforce.agi-workforce` for the Marketplace ID (docs/runbooks/vscode-marketplace-publish.md:254).",
+          "Where the `code` VS Code CLI is on PATH, and the VS Code UI steps for Install from VSIX.",
+          "A documented way to point the extension at http://localhost:3000 for local testing. The validator allows localhost (src/utils/api.ts:727-750), but no doc says to set agiWorkforce.apiEndpoint that way.",
+          "Which host the Code: Sign In to AGI Cloud device flow and the agi login device flow use on a local stack. Not documented.",
+          "Steps for a Local model: installing Ollama or another local model, starting it, and selecting it in the extension. Only the provider name is listed (apps/cli/README.md:176).",
+          "A fixed sample project, the sum.py fixture and a 'fresh fixture' for baseline tasks V-3 and V-6 (leader-docs baseline vscode.md). Not found in the docs read.",
+          "The shared run protocol and scorecard that the baseline script refers to ('Run protocol', ../README.md in the baseline folder). Not read by this task.",
+          "A troubleshooting section for the VS Code extension. docs/development/troubleshooting.md has no VS Code entry; its local-run entries (docs/development/troubleshooting.md:56-80) cover the web stack only.",
+          "Whether `pnpm dev:accounts` or `pnpm install` count as heavy jobs under the heavy-job rule. The docs do not classify them. The rule covers builds, full suites, tsc, cargo, dev servers, browsers, emulators and git push (scripts/dev/heavy-job.sh:3-4).",
+          "Inconsistency in docs/agent-context/commands.json: the surfaces.extension block (lines 159-160) uses the filter @agiworkforce/extension, but the extension's package name is agi-workforce (apps/extension-vscode/package.json:2). Use the vscodeExtension block (lines 162-169), which uses agi-workforce.",
+          "The heavy-job gate's minimum free memory and wait. Defaults are AGI_HEAVY_MIN_FREE_GB=3 and a 900-second wait (scripts/dev/heavy-job.sh:30, 34). These come from the script; the docs do not mention them."
+        ]
+      },
+      {
+        "app": "AGI Chrome extension (manifest name \"AGI Extension\", package @agiworkforce/extension), tested against the local web server at http://localhost:3000",
+        "what_it_is": "The AGI Chrome extension is a Manifest V3 side panel that chats with AGI Managed Cloud and, on sites the user approves, reads and acts on the page. For local testing, Vite builds it into apps/extension/dist, Google Chrome loads that folder unpacked, and the extension and the web app both point at http://localhost:3000.",
+        "prerequisites": [
+          "Node 24 and the pnpm pinned by packageManager (CONTRIBUTING.md:10-13; apps/extension/package.json:74-77 requires node >=24.0.0 and pnpm >=9.15.3).",
+          "Google Chrome 132 or later (docs/runbooks/chrome-web-store-publish.md:296; apps/extension/manifest.json:87). Incognito is not allowed (manifest.json:9).",
+          "Dependencies installed with pnpm install (CONTRIBUTING.md:16).",
+          "apps/web/.env.local from apps/web/.env.local.example, with Clerk development keys (NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY, CLERK_SECRET_KEY), a local DATABASE_URL and the secrets (apps/web/.env.local.example:10-24).",
+          "A local database: a Postgres URL must name 127.0.0.1, localhost, ::1, a *.localhost or a *.test host (docs/development/local-test-accounts.md:71-74).",
+          "A Stripe test-mode key; the account commands stop when it is missing or live-mode (local-test-accounts.md:76-77).",
+          "apps/extension/.env.local from apps/extension/.env.local.example (apps/extension/.env.example:4).",
+          "python3 on the PATH for scripts/dev/heavy-job.sh (scripts/dev/heavy-job.sh:4-5)."
+        ],
+        "steps": [
+          {
+            "what": "Install the repository dependencies from the repository root.",
+            "command": "pnpm install",
+            "source": "CONTRIBUTING.md:16"
+          },
+          {
+            "what": "Create apps/web/.env.local from the example. Set NEXT_PUBLIC_APP_URL to http://localhost:3000, fill the Clerk development keys and the local database URL. Leave CLERK_AUTHORIZED_PARTIES for step 8.",
+            "command": "",
+            "source": "apps/web/.env.local.example:2, :5, :10-18"
+          },
+          {
+            "what": "Create apps/extension/.env.local from the example. It already points the extension at localhost:3000 and needs the Clerk values for the development instance paired with the local web app. Leave CHROME_EXTENSION_PUBLIC_KEY unset.",
+            "command": "",
+            "source": "apps/extension/.env.example:4; apps/extension/.env.local.example:2-4, :10-13, :19-20"
+          },
+          {
+            "what": "Seed the local test accounts from the repository root. Accounts that exist are left unchanged.",
+            "command": "pnpm dev:accounts seed",
+            "source": "docs/development/local-test-accounts.md:15, :20-21; package.json:415"
+          },
+          {
+            "what": "List the accounts and their sign-in addresses.",
+            "command": "pnpm dev:accounts list",
+            "source": "docs/development/local-test-accounts.md:18"
+          },
+          {
+            "what": "Start the local web server on localhost:3000 in its own terminal. It is a dev server, so run it through the heavy-job wrapper.",
+            "command": "scripts/dev/heavy-job.sh pnpm --filter @agiworkforce/web dev",
+            "source": "docs/agent-context/commands.json:126 (web.dev); apps/web/package.json:6 (dev = next dev); scripts/dev/heavy-job.sh:2-3; CLAUDE.md:28"
+          },
+          {
+            "what": "Build the extension. The build runs a main pass and a content-script pass and writes the unpacked folder to apps/extension/dist. Wait for it to finish.",
+            "command": "scripts/dev/heavy-job.sh pnpm --filter @agiworkforce/extension build",
+            "source": "docs/runbooks/chrome-web-store-publish.md:64; docs/agent-context/commands.json:157; apps/extension/package.json:25; apps/extension/vite.config.ts:11, :63"
+          },
+          {
+            "what": "In Chrome, open chrome://extensions, turn on Developer mode (top right), choose Load unpacked, and select apps/extension/dist. The runbook says to pick the candidate folder; dist as the local folder is inferred from vite.config.ts:63.",
+            "command": "",
+            "source": "docs/runbooks/chrome-web-store-publish.md:300-301; apps/extension/vite.config.ts:63"
+          },
+          {
+            "what": "Copy the extension ID from its card in chrome://extensions. Add chrome-extension://<extension-id> to CLERK_AUTHORIZED_PARTIES in apps/web/.env.local, next to http://localhost:3000. Then restart the web server (the restart is not stated in the docs).",
+            "command": "",
+            "source": "apps/web/.env.local.example:13-15; apps/extension/README.md:55-56; docs/development/troubleshooting.md:62-64"
+          },
+          {
+            "what": "Pin the extension from the puzzle-piece menu. Open the side panel from the toolbar icon or with Command+Shift+K.",
+            "command": "",
+            "source": "docs/runbooks/chrome-web-store-publish.md:301; apps/extension/manifest.json:67-72"
+          },
+          {
+            "what": "After any change to the extension source or apps/extension/.env.local, run the build again and reload the unpacked extension.",
+            "command": "scripts/dev/heavy-job.sh pnpm --filter @agiworkforce/extension build",
+            "source": "apps/extension/README.md:49-51"
+          },
+          {
+            "what": "Optional, for artifact previews only: run the isolated artifact renderer on port 3002 with the unpacked extension ID. It is a second local server, so run it through heavy-job too.",
+            "command": "node infrastructure/sandbox/dev.mjs --extension-id <extension-id> --port 3002",
+            "source": "apps/extension/README.md:55-59; apps/extension/.env.local.example:7"
+          }
+        ],
+        "sign_in": "The web app's local sign-in is documented: open http://localhost:3000/login, enter the account address agi-dev-<name>+clerk_test@example.com (name from pnpm dev:accounts list) and the code 424242. Clerk's development instance accepts that code for +clerk_test addresses and sends no mail (docs/development/local-test-accounts.md:61-64). Accounts are: free, basic, premium, max, ultra, team, team-member, extra-usage, window-nearly-full, stripe-premium, lane-chrome, lane-vscode, lane-desktop, lane-cli, lane-mobile, lane-credits (local-test-accounts.md:30-39). Reset an account with pnpm dev:accounts reset <name> rather than sharing one (local-test-accounts.md:17, :58-59). The side panel is signed in through the web session, because the extension reads the sync host's session cookie (apps/extension/docs/threat-model.md:57; apps/extension/.env.local.example:13 sets CLERK_SYNC_HOST=http://localhost:3000). The order \"web login first, then open the side panel\" is inferred from those two, not stated in the docs. The docs give no side-panel sign-in steps for local dev; the only in-panel steps are the production candidate checks (chrome-web-store-publish.md:303-304).",
+        "modes": [
+          {
+            "mode": "Cloud (Managed Cloud chat, following the signed-in web account)",
+            "how": "No Cloud switch or label is documented. Chrome chat is Managed-Cloud-only with no Local, BYOK or native fallback, so there is nothing to choose. To send extension chat to the local web server, set VITE_AGI_WEB_API_BASE_URL=http://localhost:3000 in apps/extension/.env.local (the example already does), rebuild, and reload. The chat gateway is FREE_TRIAL_GATEWAY = configuredAgiWebOrigin() ?? DEFAULT_AGI_WEB_ORIGIN, and a localhost http origin is accepted.",
+            "source": "apps/extension/docs/threat-model.md:22, :57, :206-208; apps/extension/src/features/cloud-bridge/freeTrialClient.ts:111; apps/extension/src/lib/webOrigin.ts:14-26, :36-41; apps/extension/.env.local.example:4"
+          },
+          {
+            "mode": "Permission modes (Auto default, Ask first, YOLO) for actions, not the Cloud chat runtime",
+            "how": "Auto is the default and stops for crucial actions. Ask first confirms every action; choose it in the permission menu to test approval cards. Start a task with -yolo or --always-approve for unattended YOLO on approved sites.",
+            "source": "apps/extension/docs/threat-model.md:26-27; apps/extension/README.md:10-14; docs/runbooks/chrome-web-store-publish.md:320"
+          }
+        ],
+        "how_to_tell_it_is_running": "Web server: http://localhost:3000/login opens (docs/development/local-test-accounts.md:61). The docs do not describe the next dev terminal output. Extension: after Load unpacked, an AGI Extension card appears in chrome://extensions with an ID (apps/extension/manifest.json:3; apps/extension/README.md:55-56). The toolbar icon has the title AGI Extension (manifest.json:59). The side panel shows the sign-in prompt, then the account and plan after sign-in. If sign-in appears to succeed but API calls return 401 and the panel falls back to sign-in, the CLERK_AUTHORIZED_PARTIES origin is missing (chrome-web-store-publish.md:175-177). Check accounts with pnpm dev:accounts list (local-test-accounts.md:18).",
+        "cannot_be_done_on_this_computer": [
+          "Chrome Web Store item creation, publisher registration and the developer account fee: owner steps (docs/runbooks/chrome-web-store-publish.md:42-52, :73-75).",
+          "The production package key and item ID (CHROME_EXTENSION_PUBLIC_KEY, CWS_EXTENSION_ID), which exist only after the store item exists (chrome-web-store-publish.md:33-35, :89-96).",
+          "A production Clerk instance, pk_live key and the production secret key, including the allowed_origins change (chrome-web-store-publish.md:60, :154-166).",
+          "The production web deploy, production migrations, the GitHub chrome-web-store environment and Google Cloud workload identity: owner or repository-admin tasks (chrome-web-store-publish.md:107-136, :205-231).",
+          "Microsoft Edge Add-ons publishing through Partner Center (chrome-web-store-publish.md:496-504).",
+          "The Desktop pairing checks need the AGI Desktop app open on this Mac, plus a second Chrome profile, and a Desktop build with the pairing changes (chrome-web-store-publish.md:306-310). This runs on this Mac but depends on the Desktop build.",
+          "Signing certificate, real phone or another machine: none of the documents I read names these for the unpacked local path."
+        ],
+        "not_found_in_the_docs": [
+          "The port next dev uses. Only http://localhost:3000 is named for the web app (local-test-accounts.md:61; apps/web/.env.local.example:5). apps/web/.env.local.example:6 sets NEXT_PUBLIC_API_URL=http://localhost:3001/api, and no doc explains 3001.",
+          "Whether the web server or the extension must restart after .env.local edits. The docs say to rebuild and reload the extension (apps/extension/README.md:49-51), and say nothing about restarting the web server after CLERK_AUTHORIZED_PARTIES changes.",
+          "How to start a local Postgres or Neon branch for development. apps/web/.env.local.example:17-18 says only 'Local or development Neon branch'. The migration commands name production or a target with no local target name (chrome-web-store-publish.md:221-224; docs/development/troubleshooting.md:84-87).",
+          "Where to get the Clerk development keys and the development frontend API domain. apps/extension/.env.local.example:12 has the placeholder replace-with-instance.clerk.accounts.dev, and no doc says where the values come from.",
+          "Where to get the Stripe test-mode key (local-test-accounts.md:76-77 names none).",
+          "A conflict to watch: docs/development/troubleshooting.md:58-60 says a Clerk pk_test_ key forces a handshake redirect so authenticated pages never resolve, while docs/development/local-test-accounts.md:41 uses a Clerk development instance for these accounts. The docs do not say which applies on localhost.",
+          "Whether the unpacked ID of a local build stays the same across rebuilds or folder moves. chrome-web-store-publish.md:284-285 covers only the keyless store draft.",
+          "A local load step: no doc names apps/extension/dist for Load unpacked. The Load unpacked steps are written for a release candidate folder (chrome-web-store-publish.md:300-301).",
+          "Any doc for loading the watch build. The script exists (apps/extension/package.json:24, dev = BUILD_TARGET=content vite build && vite build --watch), but no doc says to load it or how to use it with Chrome.",
+          "A side-panel sign-in procedure for local dev. The only in-panel sign-in steps are the production candidate checks (chrome-web-store-publish.md:303-304). The web-login-first order is inferred from threat-model.md:57 and .env.local.example:13.",
+          "A Cloud mode switch or label. The docs say chat is Managed Cloud only (threat-model.md:22, :206-208) and name no Cloud setting.",
+          "A doc/code mismatch: apps/extension/docs/threat-model.md:206-207 says the chat request goes to https://agiworkforce.com/api/llm/v1/chat/completions. The code uses the configured origin, which can be localhost (src/features/cloud-bridge/freeTrialClient.ts:111; src/lib/webOrigin.ts:36-41). Under AGENTS.md section 2 the code wins.",
+          "The fixture pages in the baseline (fixture-a.html and fixture-b.html on a fixture-only loopback origin; chrome.md:9-11). No document I read says where they are or how to serve them.",
+          "How to create a disposable Chrome profile on a Mac. The baseline asks for one (chrome.md:7), and no doc says how.",
+          "Mac-specific Chrome steps beyond Cmd+Q (chrome-web-store-publish.md:314) and the Command+Shift+K shortcut (manifest.json:67-72).",
+          "A commands.json entry for running the extension locally. It lists build, test, testE2E and package for the extension (docs/agent-context/commands.json:150-160) and has no dev or local-run entry.",
+          "Whether pnpm install falls under the heavy-job rule. CLAUDE.md:28 names builds, full suites, tsc, cargo, dev servers, browsers, emulators and git push, and install is not among them.",
+          "The extension watch build under heavy-job. CLAUDE.md:28 covers builds and dev servers, so wrapping it is the conservative reading. No doc says so directly."
+        ]
+      }
+    ]
+  },
+  "workflowProgress": [
+    {
+      "type": "workflow_phase",
+      "index": 1,
+      "title": "Paths"
+    },
+    {
+      "type": "workflow_phase",
+      "index": 2,
+      "title": "Setup"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 1,
+      "label": "setup:desktop",
+      "phaseIndex": 2,
+      "phaseTitle": "Setup",
+      "agentId": "a1c04a6b68d787cc7",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795560273416,
+      "queuedAt": 1795560273144,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "AGI Desktop (Electron public Desktop) on macOS, pointed at …",
+      "promptPreview": "Write, from this project's own documents and scripts, how a tester starts the AGI Desktop app on this Mac for hands-on testing against the LOCAL web server at http://localhost:3000 with local test accounts.\n\nProject folder (READ ONLY: never edit, create or delete anything, and never run builds, tests, installs, servers, simulators or the app itself): ~/Desktop/agiworkforce\nRead: ap…",
+      "promptFramed": true,
+      "lastProgressAt": 1795560393052,
+      "tokens": 94366,
+      "toolCalls": 20,
+      "durationMs": 119635,
+      "resultPreview": "{\"app\":\"AGI Desktop (Electron public Desktop) on macOS, pointed at the local web server at http://localhost:3000, with local Clerk test accounts\",\"what_it_is\":\"The public AGI Desktop is an Electron shell. Its window loads the hosted web app (production https://agiworkforce.com by default). For local testing, an unpackaged build can be pointed at localhost with the AGI_CLOUD_APP_ORIGIN environment …"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 2,
+      "label": "setup:mobile",
+      "phaseIndex": 2,
+      "phaseTitle": "Setup",
+      "agentId": "a73af45d1f40e3543",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795560273416,
+      "queuedAt": 1795560273144,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "AGI Mobile (apps/mobile, Expo and React Native package @agi…",
+      "promptPreview": "Write, from this project's own documents and scripts, how a tester starts the AGI Mobile app on this Mac for hands-on testing against the LOCAL web server at http://localhost:3000 with local test accounts.\n\nProject folder (READ ONLY: never edit, create or delete anything, and never run builds, tests, installs, servers, simulators or the app itself): ~/Desktop/agiworkforce\nRead: app…",
+      "promptFramed": true,
+      "lastProgressAt": 1795560364433,
+      "tokens": 84276,
+      "toolCalls": 16,
+      "durationMs": 89758,
+      "resultPreview": "{\"app\":\"AGI Mobile (apps/mobile, Expo and React Native package @agiworkforce/mobile), run against the local web server at http://localhost:3000 with local test accounts\",\"what_it_is\":\"AGI Mobile is the Expo and React Native phone app. Its Local mode runs a model on the device with no account. Its Cloud mode signs in through Clerk and calls the web backend; with the local env file it points at http…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 3,
+      "label": "setup:cli",
+      "phaseIndex": 2,
+      "phaseTitle": "Setup",
+      "agentId": "a100e9e7559c8c10d",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795560273416,
+      "queuedAt": 1795560273144,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "AGI CLI (agi), run against the local web server at http://l…",
+      "promptPreview": "Write, from this project's own documents and scripts, how a tester starts the AGI CLI app on this Mac for hands-on testing against the LOCAL web server at http://localhost:3000 with local test accounts.\n\nProject folder (READ ONLY: never edit, create or delete anything, and never run builds, tests, installs, servers, simulators or the app itself): ~/Desktop/agiworkforce\nRead: apps/c…",
+      "promptFramed": true,
+      "lastProgressAt": 1795560402765,
+      "tokens": 123683,
+      "toolCalls": 22,
+      "durationMs": 128087,
+      "resultPreview": "{\"app\":\"AGI CLI (agi), run against the local web server at http://localhost:3000 with local test accounts\",\"what_it_is\":\"The AGI CLI is a Rust terminal AI coding agent (binary `agi`, with `agiworkforce` as an alias) with three trust modes: Local (nothing leaves the device), Your key (BYOK, sent straight to a provider key the user owns), and Managed (AGI cloud, which needs a plan that includes Clou…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 4,
+      "label": "setup:vscode",
+      "phaseIndex": 2,
+      "phaseTitle": "Setup",
+      "agentId": "af134ba126528427e",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795560273416,
+      "queuedAt": 1795560273145,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "AGI Code VS Code extension (apps/extension-vscode, package …",
+      "promptPreview": "Write, from this project's own documents and scripts, how a tester starts the AGI VS Code app on this Mac for hands-on testing against the LOCAL web server at http://localhost:3000 with local test accounts.\n\nProject folder (READ ONLY: never edit, create or delete anything, and never run builds, tests, installs, servers, simulators or the app itself): ~/Desktop/agiworkforce\nRead: ap…",
+      "promptFramed": true,
+      "lastProgressAt": 1795560413581,
+      "tokens": 110714,
+      "toolCalls": 21,
+      "durationMs": 138902,
+      "resultPreview": "{\"app\":\"AGI Code VS Code extension (apps/extension-vscode, package name agi-workforce, display name \\\"AGI Code\\\"), tested against the local web server at http://localhost:3000 with local test accounts\",\"what_it_is\":\"AGI Code is a VS Code extension (publisher agiworkforce, version 0.0.2, public preview) that puts an AGI chat in the Activity Bar and an @agi participant in VS Code Chat. Chat, agent r…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 5,
+      "label": "setup:chrome",
+      "phaseIndex": 2,
+      "phaseTitle": "Setup",
+      "agentId": "a9c5853799fcf8aa6",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795560273416,
+      "queuedAt": 1795560273145,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "AGI Chrome extension (manifest name \"AGI Extension\", packag…",
+      "promptPreview": "Write, from this project's own documents and scripts, how a tester starts the AGI Chrome app on this Mac for hands-on testing against the LOCAL web server at http://localhost:3000 with local test accounts.\n\nProject folder (READ ONLY: never edit, create or delete anything, and never run builds, tests, installs, servers, simulators or the app itself): ~/Desktop/agiworkforce\nRead: app…",
+      "promptFramed": true,
+      "lastProgressAt": 1795560446433,
+      "tokens": 126819,
+      "toolCalls": 25,
+      "durationMs": 171752,
+      "resultPreview": "{\"app\":\"AGI Chrome extension (manifest name \\\"AGI Extension\\\", package @agiworkforce/extension), tested against the local web server at http://localhost:3000\",\"what_it_is\":\"The AGI Chrome extension is a Manifest V3 side panel that chats with AGI Managed Cloud and, on sites the user approves, reads and acts on the page. For local testing, Vite builds it into apps/extension/dist, Google Chrome loads…"
+    }
+  ],
+  "totalTokens": 539858,
+  "totalToolCalls": 104
+}

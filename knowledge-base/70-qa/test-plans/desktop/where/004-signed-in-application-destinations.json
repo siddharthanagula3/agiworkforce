@@ -1,0 +1,942 @@
+{
+ "S4.01": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/sidebar/Sidebar.tsx",
+    "text": "New chat"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and stay on the Chat screen with the left sidebar.",
+   "Click \"New chat\" in the sidebar (the same control is in the collapsed rail).",
+   "Look for an empty conversation with the message box ready to type in, then type a message and send it.",
+   "Compare with Expected: a new empty chat with a ready composer."
+  ],
+  "where": "Sidebar > New chat"
+ },
+ "S4.02": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/sidebar/Sidebar.tsx",
+    "text": "Recents"
+   }
+  ],
+  "needs": "a past conversation in the sidebar",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and look at the sidebar list under the \"Recents\" heading.",
+   "Click a past conversation title.",
+   "Look for its earlier messages (transcript) and a message box to continue the chat.",
+   "Compare with Expected: transcript shown and the chat can be continued."
+  ],
+  "where": "Sidebar > Recents > a conversation title"
+ },
+ "S4.03": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/sidebar/Sidebar.tsx",
+    "text": "Search"
+   },
+   {
+    "file": "apps/web/features/chat/components/dialogs/GlobalSearchDialog.tsx",
+    "text": "Search your workspace"
+   },
+   {
+    "file": "apps/web/shared/components/CommandPalette/CommandPalette.tsx",
+    "text": "Search Conversations"
+   }
+  ],
+  "needs": "a past conversation with a known word in it",
+  "note": "The code does not show whether results update while typing or only after Enter; the tester should try both. Command key plus K opens \"Search Conversations\" in the command palette as a second route.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Search\" in the sidebar.",
+   "In the box \"Search your workspace\", type a word from a past chat title or message.",
+   "Wait for matching past conversations to appear.",
+   "Click one result and check that its conversation opens."
+  ],
+  "where": "Sidebar > Search"
+ },
+ "S4.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/PrivacySection.tsx",
+    "text": "Archived chats"
+   },
+   {
+    "file": "apps/web/features/settings/sections/PrivacySection.tsx",
+    "text": "Manage"
+   },
+   {
+    "file": "packages/ui/ui/src/sidebar/Sidebar.tsx",
+    "text": "Archived ({{count}})"
+   }
+  ],
+  "needs": "at least one archived chat (archive one from its row menu first)",
+  "note": "The sidebar button appears only when at least one chat is archived. Delete moves a chat to \"Recently deleted\" and does not remove it at once.",
+  "reachable": "yes",
+  "steps": [
+   "Open the account menu and choose \"Settings\", then \"Privacy\".",
+   "Find \"Archived chats\" and click \"Manage\".",
+   "Check the list of archived chats; try \"Restore\" on one and check it returns to the sidebar.",
+   "Try the sidebar \"Archived (N)\" button as a second route and compare with Expected: open, restore or delete."
+  ],
+  "where": "Settings > Privacy > Archived chats > Manage"
+ },
+ "S4.05": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/sidebar/Sidebar.tsx",
+    "text": "Pinned"
+   },
+   {
+    "file": "packages/ui/ui/src/sidebar/SessionItem.tsx",
+    "text": "Pin"
+   }
+  ],
+  "needs": "at least two chats",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open the menu of a chat row in the sidebar and click \"Pin\".",
+   "Look for the \"Pinned\" section at the top of the chat list.",
+   "Click the pinned chat and check that it opens.",
+   "Open its menu again and click \"Unpin\"; check that it leaves the Pinned section."
+  ],
+  "where": "Sidebar > Pinned section, set from a chat row's menu > Pin"
+ },
+ "S4.06": {
+  "labels": [
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Projects"
+   },
+   {
+    "file": "apps/web/app/chat/projects/page.tsx",
+    "text": "New project"
+   }
+  ],
+  "needs": "none (one project helps)",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Projects\" in the left rail.",
+   "Look for the list of your projects.",
+   "Click \"New project\" and check that a create dialog opens.",
+   "Click an existing project card and check that it opens."
+  ],
+  "where": "Sidebar > Projects (left rail item \"Projects\")"
+ },
+ "S4.07": {
+  "labels": [
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Projects"
+   },
+   {
+    "file": "apps/web/app/chat/projects/[id]/page.tsx",
+    "text": "Chats"
+   },
+   {
+    "file": "apps/web/app/chat/projects/[id]/page.tsx",
+    "text": "Sources"
+   }
+  ],
+  "needs": "a project",
+  "note": "The project home is a page with tabs; a description summary was not confirmed in the files read.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Projects\" in the left rail and open a project card.",
+   "Check the project name heading at the top.",
+   "Check the tabs \"Chats\", \"Artifacts\", \"Work\", \"Sources\", \"Scheduled\".",
+   "Compare with Expected: name, description or instructions, and entries to its chats and files."
+  ],
+  "where": "Projects > a project card"
+ },
+ "S4.08": {
+  "labels": [
+   {
+    "file": "apps/web/app/chat/projects/[id]/page.tsx",
+    "text": "Chats"
+   }
+  ],
+  "needs": "a project with at least one chat in it",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a project.",
+   "Click the \"Chats\" tab.",
+   "Check the list of this project's conversations.",
+   "Click one and check that it opens."
+  ],
+  "where": "Projects > a project > Chats tab"
+ },
+ "S4.09": {
+  "labels": [
+   {
+    "file": "apps/web/app/chat/projects/[id]/page.tsx",
+    "text": "Sources"
+   },
+   {
+    "file": "packages/ui/ui/src/sidebar/Sidebar.tsx",
+    "text": "Add sources"
+   }
+  ],
+  "needs": "a file to upload",
+  "note": "Project settings also has a \"Files\" section with a knowledge files panel. The remove control was not confirmed in the files read. Google Drive needs its connector.",
+  "reachable": "yes",
+  "steps": [
+   "Open a project and click the \"Sources\" tab.",
+   "Click \"Add sources\" and choose a file, Google Drive, or \"Add text\".",
+   "Check that the new item appears in the Sources list.",
+   "Look for a remove control on that item and check that it removes it."
+  ],
+  "where": "Projects > a project > Sources tab > Add sources"
+ },
+ "S4.10": {
+  "labels": [
+   {
+    "file": "apps/web/app/chat/projects/[id]/page.tsx",
+    "text": "Project options"
+   },
+   {
+    "file": "apps/web/app/chat/projects/[id]/page.tsx",
+    "text": "Project settings"
+   },
+   {
+    "file": "apps/web/features/projects/components/ProjectSettingsDialog.tsx",
+    "text": "Instructions"
+   }
+  ],
+  "needs": "a project",
+  "note": "Whether the instructions change the reply is not checked by this code read.",
+  "reachable": "yes",
+  "steps": [
+   "Open a project and click \"Project options\".",
+   "Click \"Project settings\".",
+   "Type text in the \"Instructions\" box and click \"Save\".",
+   "Open a new chat in that project and check that the reply follows the instructions."
+  ],
+  "where": "Projects > a project > Project options > Project settings > Instructions"
+ },
+ "S4.11": {
+  "labels": [
+   {
+    "file": "apps/web/app/chat/projects/[id]/page.tsx",
+    "text": "Share"
+   },
+   {
+    "file": "apps/web/features/projects/components/ProjectSharingControls.tsx",
+    "text": "Add people"
+   },
+   {
+    "file": "apps/web/features/projects/components/ProjectSharingControls.tsx",
+    "text": "Can view"
+   }
+  ],
+  "needs": "a second account in the same workspace",
+  "note": "The owner is listed with the label \"Owner\". Only the owner can add or remove people, per Expected; not tested here.",
+  "reachable": "yes",
+  "steps": [
+   "Open a project, click \"Project options\", then \"Share\".",
+   "Click \"Add people\" and pick a person from the workspace.",
+   "Choose \"Can view\" or \"Can edit\" for that person.",
+   "Check that the person appears in the member list; then check it from the second account."
+  ],
+  "where": "Projects > a project > Project options > Share"
+ },
+ "S4.12": {
+  "labels": [
+   {
+    "file": "apps/web/features/projects/components/ProjectSettingsDialog.tsx",
+    "text": "Memory"
+   },
+   {
+    "file": "apps/web/features/projects/components/ProjectMemoryPanel.tsx",
+    "text": "Project memories"
+   },
+   {
+    "file": "apps/web/features/projects/components/ProjectSettingsDialog.tsx",
+    "text": "Use memories from outside this project"
+   }
+  ],
+  "needs": "a project",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a project's \"Project settings\".",
+   "Scroll to the \"Memory\" section and read the \"Project memories\" list.",
+   "Add a memory in the box \"Add a memory only this project uses\".",
+   "Check it appears only in this project and that the \"Use memories from outside this project\" checkbox is shown separately from account memory."
+  ],
+  "where": "Projects > a project > Project options > Project settings > Memory"
+ },
+ "S4.13": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Work"
+   },
+   {
+    "file": "apps/web/features/chat/lib/agi-work.ts",
+    "text": "Work history"
+   }
+  ],
+  "needs": "a paid account (the code hides Work on a free trial)",
+  "note": "The mode button is shown only when the plan allows AGI Work.",
+  "reachable": "yes",
+  "steps": [
+   "On the new chat screen, open the mode control in the message box and choose \"Work\".",
+   "Type a goal for an autonomous task and send it.",
+   "Check that the screen shows the work run and that \"Work history\" is reachable from the command palette or the home screen.",
+   "Compare with Expected: a place to state a goal and reach recent work."
+  ],
+  "where": "Chat screen > message box > mode \"Work\""
+ },
+ "S4.14": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/lib/agi-work.ts",
+    "text": "Work history"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/tasks/TasksPage.tsx",
+    "text": "Active"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/tasks/TasksPage.tsx",
+    "text": "All"
+   }
+  ],
+  "needs": "none (a work task helps)",
+  "note": "The home link appears only above a set number of runs.",
+  "reachable": "yes",
+  "steps": [
+   "Press Command plus K and choose \"Work history\", or go to the home screen and click \"Work history\" if it appears.",
+   "Click the filter \"Active\".",
+   "Check that running work tasks show their live status.",
+   "Click \"All\" and check that finished tasks also appear."
+  ],
+  "where": "Work history (command palette \"Work history\", or the \"Work history\" link on the home screen when there are many runs)"
+ },
+ "S4.15": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx",
+    "text": "Task details"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx",
+    "text": "Task plan"
+   }
+  ],
+  "needs": "a work task",
+  "note": "The outputs section was not confirmed in the detail panel file read.",
+  "reachable": "yes",
+  "steps": [
+   "Open \"Work history\" and click a task.",
+   "Check the \"Task details\" panel for the status, the \"Task goal\" and the \"Task plan\".",
+   "Look for any pending decision or approval on the panel.",
+   "Compare with Expected: status, step-by-step activity, outputs and pending decision."
+  ],
+  "where": "Work history > a task row"
+ },
+ "S4.16": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/tasks/TasksPage.tsx",
+    "text": "Needs you"
+   }
+  ],
+  "needs": "a work task that is waiting for approval",
+  "note": "There is no separate approvals inbox; pending approvals are gathered under the \"Needs you\" filter.",
+  "reachable": "yes",
+  "steps": [
+   "Open \"Work history\" and click the filter \"Needs you\".",
+   "Check the tasks waiting for a decision and their approval cards.",
+   "Click the approve or deny button on one card.",
+   "Check that the card updates to show the decision."
+  ],
+  "where": "Work history > filter \"Needs you\""
+ },
+ "S4.17": {
+  "labels": [
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Scheduled"
+   },
+   {
+    "file": "apps/web/features/schedules/components/SchedulesPage.tsx",
+    "text": "Create a task"
+   },
+   {
+    "file": "apps/web/features/schedules/components/ScheduleCard.tsx",
+    "text": "Run now"
+   }
+  ],
+  "needs": "none",
+  "note": "Status filters include Active, Paused, Completed, Failed and Expired.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Scheduled\" in the sidebar.",
+   "Click \"Create a task\" (or \"New task\") and fill in and save a schedule.",
+   "On a schedule card, use the menu item \"Run now\", then \"Pause\" or \"Resume\".",
+   "Click the edit control (\"Edit Schedule\") and the \"Delete\" menu item, and compare with Expected."
+  ],
+  "where": "Sidebar > Scheduled"
+ },
+ "S4.18": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/ScheduleCard.tsx",
+    "text": "Run History"
+   },
+   {
+    "file": "apps/web/features/schedules/components/ScheduleCard.tsx",
+    "text": "Edit Schedule"
+   }
+  ],
+  "needs": "a schedule that has run at least once",
+  "note": "There is no separate routine page; the configuration is seen on the card and in the edit dialog. Next run display was not confirmed in the files read.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Scheduled\" in the sidebar.",
+   "On a schedule card click the \"Run History\" button to expand its run history.",
+   "Click \"Edit Schedule\" to see the prompt and cadence.",
+   "Compare with Expected: prompt, cadence, next run and run history."
+  ],
+  "where": "Sidebar > Scheduled > a schedule card > Run History"
+ },
+ "S4.19": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/sidebar/Sidebar.tsx",
+    "text": "Code"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Select repository"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Start the task"
+   }
+  ],
+  "needs": "a paid account",
+  "note": "The page says Code is on paid plans.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Code\" in the sidebar switch.",
+   "Look for the \"Cloud sessions\" list.",
+   "Click \"New\" and choose a repository with \"Select repository\".",
+   "Click \"Start the task\" and check that a new session starts."
+  ],
+  "where": "Sidebar > Code (surface switch: \"Home\" / \"Code\") > New"
+ },
+ "S4.20": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Changes"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Cloud sessions"
+   }
+  ],
+  "needs": "a Code session that has run",
+  "note": "The message box label used for steering a running session was not confirmed in the files read.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Code\" in the sidebar switch and open a session in the \"Cloud sessions\" list.",
+   "Check the session transcript.",
+   "Click \"Changes\" to see the file changes and the diff.",
+   "Look for a message box to send the next instruction and compare with Expected."
+  ],
+  "where": "Sidebar > Code > Cloud sessions > a session"
+ },
+ "S4.21": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/components/LinkedDevicesPanel.tsx",
+    "text": "Linked devices"
+   },
+   {
+    "file": "apps/web/features/settings/components/LinkedDevicesPanel.tsx",
+    "text": "Rename"
+   },
+   {
+    "file": "apps/web/features/settings/components/LinkedDevicesPanel.tsx",
+    "text": "Unlink device"
+   }
+  ],
+  "needs": "at least one linked device",
+  "note": "No pairing control was found in this web panel, although Expected lists pair.",
+  "reachable": "yes",
+  "steps": [
+   "Open the account menu, choose \"Settings\", then \"Account\".",
+   "Scroll to \"Linked devices\" and read each device's status.",
+   "Click \"Rename\", type a new name, click \"Save\", and check the new name.",
+   "Click \"Unlink\" and confirm \"Unlink device\"; check that the device leaves the list."
+  ],
+  "where": "Settings > Account > Linked devices"
+ },
+ "S4.23": {
+  "labels": [
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Library"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Uploads"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Download"
+   }
+  ],
+  "needs": "some uploaded or generated files",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Library\" in the sidebar.",
+   "Look at the filter tabs \"All\", \"Images\", \"Videos\", \"Documents\", \"Artifacts\", \"Uploads\", \"Generated files\".",
+   "Choose a file and open its menu or \"Download\" action.",
+   "Compare with Expected: files, images, videos, documents and artifacts, with filters and open or download."
+  ],
+  "where": "Sidebar > Library"
+ },
+ "S4.24": {
+  "labels": [],
+  "needs": "a second account in the same workspace",
+  "note": "Found only the workspace console page \"Sharing\" (apps/web/features/workspace-console/components/WorkspaceConsoleNav.tsx), which lists what the workspace shares, not what others share with the user. Shared projects show the label \"Shared with you\" on the project page (apps/web/app/chat/projects/[id]/page.tsx). No list of items shared with the user was found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S4.25": {
+  "labels": [
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Library"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Artifacts"
+   }
+  ],
+  "needs": "at least one artifact",
+  "note": "The old address /chat/artifacts redirects to the Library Artifacts filter.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Library\" in the sidebar.",
+   "Click the filter \"Artifacts\".",
+   "Click one artifact to open it.",
+   "Compare with Expected: a gallery of generated artifacts that opens any one of them."
+  ],
+  "where": "Sidebar > Library > Artifacts"
+ },
+ "S4.26": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Edit source"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Save as a new version"
+   }
+  ],
+  "needs": "a chat with a text document artifact",
+  "note": "\"Edit source\" appears only for some artifacts and not while a preview is shown.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat that produced a text document artifact and open it in the side panel.",
+   "Open the more menu and click \"Edit source\".",
+   "Change the text, then click \"Save\" (tooltip \"Save as a new version\").",
+   "Open the version history and check that a new version exists with the change."
+  ],
+  "where": "A chat > artifact side panel > more menu (...) > Edit source"
+ },
+ "S4.27": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/AttachmentMenu.tsx",
+    "text": "Generate image"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Select aspect ratio"
+   }
+  ],
+  "needs": "a signed-in account; image generation may depend on plan (not verified)",
+  "note": "No dedicated image studio found: searched apps/web and packages/ui for 'image studio' and the image routes; apps/web/app/chat/images/page.tsx redirects to /chat/library?tab=images. The + button's own label was not found.",
+  "reachable": "yes",
+  "steps": [
+   "Click Chat in the left rail to open a new chat.",
+   "Click the + button in the composer and choose Generate image.",
+   "Look for the Image chip in the composer, then open the aspect ratio control (Select aspect ratio) and the Add a style to the prompt control.",
+   "Type a description and send. Compare with Expected: the picture should appear in the chat. There is no studio page with prompt, style, size and history in one place; /chat/images only redirects to Library > Images."
+  ],
+  "where": "Chat > the + button in the composer > Generate image (no separate studio page)"
+ },
+ "S4.28": {
+  "labels": [
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Library"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Images"
+   }
+  ],
+  "needs": "a few generated or uploaded images in the account",
+  "note": "Remix appears only when the host provides remixItem (LibraryView.tsx:701 and :294); the row-menu text was not located as a literal.",
+  "reachable": "yes",
+  "steps": [
+   "Click Library in the left rail.",
+   "Click the Images tab.",
+   "Hover an image and look for its download control and any Remix action in its row menu (Remix shows only where the host supports it).",
+   "Check that generated and uploaded images both appear here, and compare with Expected: open, download and remix actions."
+  ],
+  "where": "Library > Images"
+ },
+ "S4.30": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/library/MediaJobsSection.tsx",
+    "text": "Generations"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/library/MediaJobsSection.tsx",
+    "text": "Generating"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/library/MediaJobsSection.tsx",
+    "text": "Queued"
+   }
+  ],
+  "needs": "at least one image or video generation job in the account",
+  "note": "Whether a job links to its result was not confirmed in the code read.",
+  "reachable": "yes",
+  "steps": [
+   "Click Library in the left rail.",
+   "Look for the Generations heading above the tabs.",
+   "Check the status words on each job: Queued, Generating, Failed, Done, Cancelled.",
+   "Open a finished job and see whether it links to its result, then compare with Expected."
+  ],
+  "where": "Library > Generations (section above the tabs)"
+ },
+ "S4.31": {
+  "labels": [
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Projects"
+   },
+   {
+    "file": "apps/web/app/chat/projects/[id]/page.tsx",
+    "text": "Sources"
+   },
+   {
+    "file": "apps/web/features/projects/components/ProjectStudio.tsx",
+    "text": "Briefing doc"
+   }
+  ],
+  "needs": "a project; a file to upload (optional)",
+  "note": "Studio tiles start a chat that makes the output; no separate reader or annotation view was found for sources.",
+  "reachable": "yes",
+  "steps": [
+   "Click Projects in the left rail and open a project.",
+   "Click the Sources tab.",
+   "Click Add sources, add a text note or a file, and check it is listed.",
+   "Look at the Studio tiles (Briefing doc, Study guide and others) and compare with Expected: the sources are the notebook, and the outputs appear from them."
+  ],
+  "where": "Projects > (open a project) > Sources"
+ },
+ "S4.32": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "text": "Research sources"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "text": "Library"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "text": "Report"
+   }
+  ],
+  "needs": "a conversation that has run Deep Research",
+  "note": "The Library tab renders ResearchReportsGallery with a Load older reports control; the panel opens from the chat toolbar, not the rail.",
+  "reachable": "yes",
+  "steps": [
+   "Open a conversation that ran Deep Research.",
+   "Hover the sources button; its title is Research sources, and click it to open the panel.",
+   "Click the Library tab, then open a report.",
+   "Check the report's sections (Report tab) and cited sources, and compare with Expected."
+  ],
+  "where": "Chat > a conversation with research sources > Open sources panel (title Research sources) > Library tab"
+ },
+ "S4.35": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Settings"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Customize"
+   },
+   {
+    "file": "apps/web/features/skills/hooks/useSkillsSettingsAdapter.tsx",
+    "text": "New skill"
+   }
+  ],
+  "needs": "a signed-in account; skills may be limited by plan",
+  "note": "Install, enable, disable and remove controls for skills were not found as literal labels; the account menu trigger was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open the account menu and click Settings.",
+   "Under Customize, click Skills.",
+   "Click New skill, fill in the editor, and click Create skill.",
+   "Check the list for installed and available skills and their controls, then compare with Expected."
+  ],
+  "where": "Account menu > Settings > Customize > Skills"
+ },
+ "S4.36": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Plugins"
+   },
+   {
+    "file": "apps/web/features/directory/constants.ts",
+    "text": "Install"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Add marketplace"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "Configure and Update controls were not found as literal labels.",
+  "reachable": "yes",
+  "steps": [
+   "Open the account menu, click Settings, then Customize > Plugins.",
+   "Compare the installed and available plugin lists.",
+   "Click Install on an available plugin.",
+   "Open a plugin's remove action and look for the Remove plugin? confirmation, then compare with Expected."
+  ],
+  "where": "Account menu > Settings > Customize > Plugins"
+ },
+ "S4.37": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Connectors"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connected"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Reconnect"
+   }
+  ],
+  "needs": "an outside account for the service to connect",
+  "note": "Labels come from the shared SettingsModal; the web adapter path was not run.",
+  "reachable": "yes",
+  "steps": [
+   "Open the account menu, click Settings, then Connectors under Customize.",
+   "Look at the Connected tab and the list of services.",
+   "Click Connect on one service, then Reconnect or Disconnect on a connected one (Disconnect asks to confirm).",
+   "Compare with Expected: the list should update to the new state."
+  ],
+  "where": "Account menu > Settings > Customize > Connectors"
+ },
+ "S4.38": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ModelCatalogue.tsx",
+    "text": "Models"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ModelCatalogue.tsx",
+    "text": "Search models"
+   },
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "Default model"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The composer model control's own label was not located; find it by the current model name.",
+  "reachable": "yes",
+  "steps": [
+   "Open a new chat and open the model control in the composer.",
+   "Look for the Models panel with Search models, Context ceiling and Capabilities for each model.",
+   "Pick a model, then open Settings > General.",
+   "Under Preferences, check the Default model row, choose a model, and compare with Expected."
+  ],
+  "where": "Composer model picker (Models panel) and Settings > General > Preferences > Default model"
+ },
+ "S4.39": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Usage"
+   },
+   {
+    "file": "apps/web/features/settings/sections/UsageSection.tsx",
+    "text": "Plan usage limits"
+   },
+   {
+    "file": "apps/web/features/settings/sections/UsageSection.tsx",
+    "text": "Where your usage went"
+   },
+   {
+    "file": "apps/web/features/settings/sections/UsageSection.tsx",
+    "text": "Monthly spend limit"
+   }
+  ],
+  "needs": "a signed-in account with some usage",
+  "note": "Plan usage limits heading shows an upgrade title on Free plans instead.",
+  "reachable": "yes",
+  "steps": [
+   "Open the account menu, click Settings, then Usage.",
+   "Read Plan usage limits and Credit balances, and check the Resets section.",
+   "Scroll to Monthly spend limit and check its figure.",
+   "Scroll to Where your usage went, switch between By day, By week and By month, and compare with Expected."
+  ],
+  "where": "Account menu > Settings > Usage"
+ },
+ "S4.40": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Billing"
+   },
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Manage billing"
+   },
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Invoices"
+   },
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Adjust plan"
+   }
+  ],
+  "needs": "a paid account for the plan and invoice views (test checkout per the product note)",
+  "note": "No separate cancel control was found; cancelling appears to go through Manage billing. The plan says this path is unfinished.",
+  "reachable": "yes",
+  "steps": [
+   "Open the account menu, click Settings, then Billing.",
+   "Check the plan name, Renews on date and the Payment section.",
+   "Check the Invoices table, then click Adjust plan (or Upgrade plan on Free) and look at the options.",
+   "Click Manage billing and compare with Expected (in Electron it opens outside the app)."
+  ],
+  "where": "Account menu > Settings > Billing"
+ },
+ "S4.41": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "General"
+   },
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "Profile"
+   },
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "Full name"
+   },
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "Preferences"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "No Save control label was checked; appearance, personalization and notifications are separate panes.",
+  "reachable": "yes",
+  "steps": [
+   "Open the account menu, click Settings, then General.",
+   "Under Profile, change Full name.",
+   "Scroll to Preferences and change Default model or Display Language.",
+   "Leave the screen, come back, and check the change was kept, then compare with Expected."
+  ],
+  "where": "Account menu > Settings > General"
+ },
+ "S4.42": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Workspace"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceConsoleNav.tsx",
+    "text": "Members"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceConsoleNav.tsx",
+    "text": "Policy"
+   }
+  ],
+  "needs": "an admin or owner account; a second account to invite",
+  "note": "Non-admin users may see a different view; not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Open the account menu, click Settings, then Workspace.",
+   "Follow the link to the workspace console and look at Overview, Members, Roles, Identity and Policy.",
+   "On Members or Roles, check invitations and seats, and invite a second account.",
+   "Compare with Expected: an admin can manage members, roles, invitations and policy."
+  ],
+  "where": "Account menu > Settings > Workspace (then the workspace console: Members, Roles, Policy)"
+ },
+ "S4.43": {
+  "labels": [],
+  "needs": "a signed-in account",
+  "note": "The page exists at /developers (apps/web/app/developers/page.tsx, heading Developer console in apps/web/features/developers/components/DeveloperConsolePage.tsx) with API keys (apps/web/features/settings/components/Settings/ApiKeys.tsx). Searched for links to /developers and the navDeveloperConsole string in the signed-in nav, Settings and Account menu: none found, so no UI path was confirmed.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S4.44": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Get help"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Send feedback"
+   },
+   {
+    "file": "apps/web/features/settings/sections/HelpSection.tsx",
+    "text": "Help center"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The account menu trigger was not traced; the Send feedback dialog's own opener was not traced beyond the menu item.",
+  "reachable": "yes",
+  "steps": [
+   "Open the account menu and hover Get help.",
+   "Click Send feedback and choose a feedback type in the dialog, then send.",
+   "Open Settings > Help and check the links: Documentation, Help center, Contact support, Report a bug, Release notes, System status, Legal.",
+   "Compare with Expected: help links and a feedback path should both be there."
+  ],
+  "where": "Account menu > Get help > Send feedback; Settings > Help"
+ }
+}

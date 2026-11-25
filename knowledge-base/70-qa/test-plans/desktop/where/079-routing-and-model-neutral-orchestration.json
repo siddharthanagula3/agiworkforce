@@ -1,0 +1,341 @@
+{
+ "S79.01": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/routing-profile-choice.ts",
+    "text": "Auto"
+   }
+  ],
+  "needs": "a paid account",
+  "note": "The picker trigger label was not found in the files checked; Auto row selection code is in apps/web/features/chat/components/Composer/ComposerFooter.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in on a paid plan and open the model picker from the chat composer.",
+   "Choose the row labelled Auto.",
+   "Send a short question, then a harder coding question in a new chat.",
+   "Compare the answers: Auto should pick a model for each message and a \"Moved to\" line appears when it changes model."
+  ],
+  "where": "Composer model picker > Auto"
+ },
+ "S79.02": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+    "text": "Recommended"
+   }
+  ],
+  "needs": "a paid account (free plans see fewer models)",
+  "note": "Individual model row labels were not read from the file; the picker trigger label was not found.",
+  "reachable": "yes",
+  "steps": [
+   "Open the model picker from the chat composer.",
+   "Choose a specific model from the list (for example under Recommended).",
+   "Send a message.",
+   "Check the answer is from the chosen model: no \"Moved to\" line should appear."
+  ],
+  "where": "Composer model picker > choose a named model row"
+ },
+ "S79.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/projects/components/ProjectSettingsDialog.tsx",
+    "text": "Project settings"
+   },
+   {
+    "file": "apps/web/features/projects/components/ProjectDefaultModelField.tsx",
+    "text": "Default model"
+   }
+  ],
+  "needs": "a paid account, a project",
+  "note": "Sidebar path \"Projects\" and the save button text were not verified in the files read.",
+  "reachable": "yes",
+  "steps": [
+   "Open a project from the sidebar.",
+   "Open Project settings.",
+   "Under Default model, pick a model from the dropdown and save.",
+   "Start a new chat inside that project and check the model shown in the composer is the default."
+  ],
+  "where": "Projects > open a project > Project settings > Default model"
+ },
+ "S79.04": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/routing-profile-choice.ts",
+    "text": "Best"
+   }
+  ],
+  "needs": "a paid account",
+  "note": "Task-specific behaviour is in the profile rows; the description says the most capable model, not specifically premium for coding.",
+  "reachable": "yes",
+  "steps": [
+   "Open the model picker from the chat composer.",
+   "Choose the row labelled Best under the Auto section.",
+   "Send a harder coding or reasoning question.",
+   "Check the answer and the model note; it should come from the most capable model your plan includes."
+  ],
+  "where": "Composer model picker > Auto > Best"
+ },
+ "S79.05": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/routing-profile-choice.ts",
+    "text": "Instant"
+   }
+  ],
+  "needs": "a paid account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open the model picker from the chat composer.",
+   "Choose the row labelled Instant.",
+   "Send a simple question.",
+   "Check the answer comes back quickly and the model is one of your plan's fastest models."
+  ],
+  "where": "Composer model picker > Instant"
+ },
+ "S79.06": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/routing-profile-choice.ts",
+    "text": "Best"
+   }
+  ],
+  "needs": "a paid account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open the model picker from the chat composer.",
+   "Choose the row labelled Best.",
+   "Send a hard question.",
+   "Check the answer model is the most capable one your plan includes."
+  ],
+  "where": "Composer model picker > Best"
+ },
+ "S79.07": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/routing-profile-choice.ts",
+    "text": "Economy"
+   }
+  ],
+  "needs": "a paid account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open the model picker from the chat composer.",
+   "Choose the row labelled Economy.",
+   "Send a simple task.",
+   "Check the answer model is a low-cost one that can handle the task."
+  ],
+  "where": "Composer model picker > Economy"
+ },
+ "S79.08": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/WorkspacePolicySection.tsx",
+    "text": "Default privacy mode"
+   },
+   {
+    "file": "apps/web/app/workspace/policy/page.tsx",
+    "text": "Workspace policy"
+   }
+  ],
+  "needs": "a workspace admin account",
+  "note": "There is no single privacy-first profile; privacy is set as a workspace policy. Sidebar path to Workspace policy was not verified.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Workspace policy page (admin only).",
+   "Under Allowed privacy modes and Default privacy mode, read the Local option.",
+   "Set Default privacy mode to Local and save.",
+   "Check that Local shows the hint \"On-device models. Nothing leaves the machine.\""
+  ],
+  "where": "Workspace policy > Default privacy mode"
+ },
+ "S79.09": {
+  "labels": [],
+  "needs": "none",
+  "note": "Intent classification is server-side inner behaviour; its effect shows only through model changes.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Send a coding question and then a plain chat question in the same chat.",
+   "Compare which model label appears under each answer (\"Moved to\" line if the model changed)."
+  ],
+  "where": ""
+ },
+ "S79.10": {
+  "labels": [],
+  "needs": "none",
+  "note": "Tool classification is server-side (request-processor); no direct control found.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Ask for something that needs a web search, then a question that does not.",
+   "Compare which model answers, using the \"Moved to\" line if shown."
+  ],
+  "where": ""
+ },
+ "S79.11": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Choose a compatible model"
+   }
+  ],
+  "needs": "a file to upload (an image)",
+  "note": "The routing to a multimodal model happens automatically in some cases; the button shows only when a conflict exists.",
+  "reachable": "yes",
+  "steps": [
+   "Attach an image in the chat composer while the current model cannot read images.",
+   "Look for the message \"No model on your plan can read this attachment.\" or click Choose a compatible model.",
+   "Pick a model from the list.",
+   "Check the attachment is sent and the answer reads the image."
+  ],
+  "where": "Chat composer > attach an image > Choose a compatible model"
+ },
+ "S79.12": {
+  "labels": [],
+  "needs": "none",
+  "note": "Complexity classification is internal; no visible setting found.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Send a short simple question and then a long multi-step question.",
+   "Compare the model and depth of the answers."
+  ],
+  "where": ""
+ },
+ "S79.13": {
+  "labels": [],
+  "needs": "none",
+  "note": "Freshness detection is server-side (request-processor); I did not verify the exact visible result.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Ask about a current event such as today's news.",
+   "Check whether the answer uses fresh sources."
+  ],
+  "where": ""
+ },
+ "S79.14": {
+  "labels": [],
+  "needs": "a Free account and a paid account",
+  "note": "Filtering is applied before ranking; the effect is seen as a different model list per plan.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open the model picker on a Free account and on a paid account.",
+   "Compare which models are listed."
+  ],
+  "where": ""
+ },
+ "S79.15": {
+  "labels": [],
+  "needs": "none",
+  "note": "Provider-route choice has no visible control; it is server-side ranking.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Send a message on a chosen model and check the answer comes back without an error."
+  ],
+  "where": ""
+ },
+ "S79.16": {
+  "labels": [],
+  "needs": "a paid account",
+  "note": "The lock is behaviour; visible proof is the absence of the \"Moved to\" line.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Pick a specific model in the model picker.",
+   "Send several messages.",
+   "Check no answer shows a \"Moved to\" line, so the model is never swapped."
+  ],
+  "where": ""
+ },
+ "S79.19": {
+  "labels": [],
+  "needs": "a Free account",
+  "note": "Quota-aware selection is in request-processor; the exact limit message was not verified.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Use a Free account until its usage limit is near.",
+   "Send messages and check the model still answers or a limit message shows."
+  ],
+  "where": ""
+ },
+ "S79.20": {
+  "labels": [],
+  "needs": "none",
+  "note": "Fallback notice text was not read; the failure cannot be forced from the UI.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "If a model call fails, look under the answer for a fallback notice (role status, data-testid fallback-reason-notice).",
+   "Check an answer still arrives."
+  ],
+  "where": ""
+ },
+ "S79.21": {
+  "labels": [],
+  "needs": "a file to upload (an image)",
+  "note": "Only the attachment conflict switch (Choose a compatible model, ChatComposerNew.tsx) was found; no general better-model one-click offer was found in the code read.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S79.24": {
+  "labels": [
+   {
+    "file": "apps/web/features/models/components/ModelCatalogueBrowser.tsx",
+    "text": "Compare"
+   }
+  ],
+  "needs": "none",
+  "note": "The catalogue route is apps/web/app/models/compare/page.tsx; the sidebar path and the second answer-comparison button label were not verified.",
+  "reachable": "yes",
+  "steps": [
+   "Open the models catalogue page.",
+   "Tick at least two models using their compare checkboxes.",
+   "Click the Compare button.",
+   "Check the comparison table lists the chosen models side by side."
+  ],
+  "where": "Models catalogue > select models > Compare"
+ },
+ "S79.26": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/lib/modelEscalation.ts",
+    "text": "Moved to"
+   }
+  ],
+  "needs": "a paid account",
+  "note": "The line appears only when a move happened.",
+  "reachable": "yes",
+  "steps": [
+   "Use Auto in a chat and send a message that makes Auto change model.",
+   "Look under the answer for the line starting \"Moved to\" with the model name and reason.",
+   "Check the reason explains why Auto chose or moved to that model."
+  ],
+  "where": "Chat answer > line under the answer that starts \"Moved to\""
+ },
+ "S79.27": {
+  "labels": [],
+  "needs": "none",
+  "note": "The receipt line under an answer (MessageBubble.tsx) appears only when a model escalation happened; a general model label on every answer was not found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S79.28": {
+  "labels": [],
+  "needs": "none",
+  "note": "Policy versioning is server-side (routing-trace.ts, routing-decision-trace-service.ts); no visible control found.",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": ""
+ },
+ "S79.30": {
+  "labels": [],
+  "needs": "a paid account",
+  "note": "Fallback to a safe default is server-side (task-family.ts); visible effect is a normal answer.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Send a short ambiguous message such as \"hi\" with Auto selected.",
+   "Check an answer still arrives from a default model."
+  ],
+  "where": ""
+ }
+}

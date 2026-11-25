@@ -1,0 +1,72 @@
+{
+ "S50.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "More message actions"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Read message aloud"
+   }
+  ],
+  "needs": "a browser that supports speech synthesis, with at least one system voice",
+  "note": "The Read message aloud item appears only when the browser supports speech and the reply has readable text; I did not trace whether the More message actions button is hover-only on desktop.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to the AGI Web app and open a conversation that has an assistant reply.",
+   "Move the pointer over the assistant reply, then click the button labelled More message actions.",
+   "Click Read message aloud in the menu.",
+   "Look for the reply being spoken aloud, and for the same menu item now reading Stop reading message while it plays."
+  ],
+  "where": "Chat, under an assistant reply > More message actions > Read message aloud"
+ },
+ "S50.02": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "Backup read-aloud voice"
+   },
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "Preferences"
+   },
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "Preview"
+   }
+  ],
+  "needs": "a browser with at least one system voice; the row shows a message instead if the browser has no voices",
+  "note": "There is no separate language picker for read-aloud; the language comes with the chosen voice. The menu entry that opens Settings was not traced to its exact label, so the first step names the General tab only.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, open Settings, and choose the General tab.",
+   "Scroll to the Preferences heading and find the row Backup read-aloud voice.",
+   "Open the drop-down labelled Backup read-aloud voice and choose a voice; each option shows its name and language code in brackets, and Browser default is the first option.",
+   "Click Preview next to the drop-down and listen; compare the voice and language with what you chose."
+  ],
+  "where": "Settings > General > Preferences > Backup read-aloud voice"
+ },
+ "S50.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "Read-aloud speed"
+   },
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "Fast"
+   }
+  ],
+  "needs": "a browser with speech synthesis support; the row is hidden when speech is not supported",
+  "note": "The speed applies to browser read-aloud only (rates in apps/web/shared/stores/web-settings-store.ts); the separate Live voice pace row in the same section is for live voice conversations. The menu entry that opens Settings was not traced to its exact label.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, open Settings, and choose the General tab.",
+   "Scroll to the Preferences heading and find the row Read-aloud speed.",
+   "Click Slow, Normal or Fast; the chosen button is shown as pressed.",
+   "Open an assistant reply, use Read message aloud, and compare the pace with the Normal setting."
+  ],
+  "where": "Settings > General > Preferences > Read-aloud speed"
+ }
+}

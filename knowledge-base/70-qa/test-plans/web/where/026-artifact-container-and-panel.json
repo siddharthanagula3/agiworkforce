@@ -1,0 +1,679 @@
+{
+ "S26.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactCard.tsx",
+    "text": "Open"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx",
+    "text": "Artifacts"
+   }
+  ],
+  "needs": "a chat that produces an artifact",
+  "note": "The Code line pointed at InlineArtifactCards.tsx; the card itself is rendered by ArtifactCard.tsx, which I read directly.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and start a new chat.",
+   "Ask for a short HTML page or a document so the reply produces an artifact.",
+   "Find the card in the reply that shows the artifact title and the type.",
+   "Click the card's \"Open\" button.",
+   "Look: the artifact opens in the panel and shows the content, as Expected."
+  ],
+  "where": "Chat > ask for a document or an HTML page > in the assistant's reply click the card's \"Open\" button"
+ },
+ "S26.02": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactLabels.tsx",
+    "text": "Untitled"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Artifact"
+   }
+  ],
+  "needs": "a chat that produces an artifact",
+  "note": "The fallback the viewer shows is \"Artifact\" and the card and list use \"Untitled\"; I did not find a control to force an untitled artifact.",
+  "reachable": "yes",
+  "steps": [
+   "Ask for an artifact and click its card's \"Open\" button.",
+   "Read the title shown at the top of the viewer.",
+   "Find the same title on the card in the reply.",
+   "Make a second artifact with no title if the model gives one; check that the fallback shows \"Untitled\" in the list."
+  ],
+  "where": "Chat > open an artifact > read the title at the top of the viewer header"
+ },
+ "S26.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactLabels.tsx",
+    "text": "HTML"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactLabels.tsx",
+    "text": "Artifact"
+   }
+  ],
+  "needs": "a chat that produces an artifact",
+  "note": "Card subtitle shows \"Artifact\" for runs-as-artifact cards and the type label otherwise, as read in ArtifactCard.tsx; the exact subtitle depends on the artifact.",
+  "reachable": "yes",
+  "steps": [
+   "Ask for an HTML page, then a document, in separate replies.",
+   "Click \"Open\" on each card.",
+   "Read the grey line under each title: it shows the kind, for example \"HTML\" or \"MD\".",
+   "Compare the kind shown with the artifact that was made."
+  ],
+  "where": "Chat > open an artifact > read the grey line under the title in the viewer, and the line under the title on the card"
+ },
+ "S26.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/StreamingArtifactView.tsx",
+    "text": "Writing\u2026"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactCreatingRow.tsx",
+    "text": "Creating"
+   }
+  ],
+  "needs": "a chat that produces a long artifact, and a way to stop the reply",
+  "note": "No visible word for finished or failed was found in the artifact files; the stopped notice text is 'This artifact was saved from a partial response. It may not include later output.' in ArtifactPreview.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Ask for a long document or page and watch the Artifacts panel while the reply is still running.",
+   "Read the status text: it shows \"Writing\u2026\" while content arrives.",
+   "Stop the reply (the stop control in the composer) while it is still writing.",
+   "Open that artifact and read the notice that says it was saved from a partial response.",
+   "Note: I did not find visible words for a finished or a failed state, so compare with Expected and report what you see."
+  ],
+  "where": "Chat > ask for a long artifact > watch the status text in the panel while it is written; the stopped state appears as a notice in the viewer"
+ },
+ "S26.05": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactCard.tsx",
+    "text": "Open"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactsPanel.tsx",
+    "text": "Open artifacts panel"
+   }
+  ],
+  "needs": "a chat that produces an artifact",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "In a chat with an artifact, click the card's \"Open\" button.",
+   "Check that the viewer shows the artifact content.",
+   "Close the panel, click the Artifacts icon button (aria label \"Open artifacts panel\"), then click the artifact's tab.",
+   "Look: the same content is shown."
+  ],
+  "where": "Chat > click the card's \"Open\" button, or click the Artifacts icon button (aria label \"Open artifacts panel\") then pick the artifact tab"
+ },
+ "S26.06": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Close artifact viewer"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactsPanel.tsx",
+    "text": "Close artifacts panel"
+   }
+  ],
+  "needs": "a chat that produces an artifact",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open an artifact so the Artifacts panel shows it.",
+   "Click the X button labelled \"Close artifact viewer\" in the viewer header.",
+   "Look: the viewer hides.",
+   "Click the Artifacts icon button (aria label \"Open artifacts panel\") and check that the artifact is still listed as a tab or card."
+  ],
+  "where": "Artifacts panel > click the X button (aria label \"Close artifacts panel\") or the X in the viewer header (aria label \"Close artifact viewer\")"
+ },
+ "S26.07": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactsPanel.tsx",
+    "text": "Open artifacts panel"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactCard.tsx",
+    "text": "Open"
+   }
+  ],
+  "needs": "a chat that produces an artifact",
+  "note": "I read the code for reopening but did not check persistence after a reload.",
+  "reachable": "yes",
+  "steps": [
+   "Open an artifact, then close the panel as in S26.06.",
+   "Click the Artifacts icon button (aria label \"Open artifacts panel\"), or go back to the chat and click the card's \"Open\" button.",
+   "Look: the same artifact opens.",
+   "Reload the page, then open the Artifacts panel again and check the artifact is still there."
+  ],
+  "where": "Chat > click the Artifacts icon button (aria label \"Open artifacts panel\") or the card's \"Open\" button"
+ },
+ "S26.08": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactsPanel.tsx",
+    "text": "Artifacts"
+   }
+  ],
+  "needs": "a desktop-width window",
+  "note": "Below 640 px the code shows the panel as an overlay instead of a docked side panel.",
+  "reachable": "yes",
+  "steps": [
+   "Use a window wider than 639 px (the mobile overlay starts at 639 px or less).",
+   "Open an artifact from its card.",
+   "Look: the conversation and the Artifacts panel are both visible side by side.",
+   "Scroll the conversation and check the panel stays open."
+  ],
+  "where": "Chat in a wide window > open an artifact > the \"Artifacts\" panel docks on the right of the conversation"
+ },
+ "S26.09": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactsPanel.tsx",
+    "text": "Resize artifacts panel"
+   }
+  ],
+  "needs": "a desktop-width window and a mouse or keyboard",
+  "note": "The code for keeping the width after reopening was not read in this pass; the store is packages/ui/unified-chat/src/stores/uiStore.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Open an artifact so the docked panel is visible.",
+   "Drag the edge of the panel by its resize handle, or click the handle and press the Left or Right arrow key.",
+   "Look: the panel gets wider or narrower and the conversation resizes to match.",
+   "Close the panel, open it again, and check the width is kept."
+  ],
+  "where": "Artifacts panel (docked) > drag the thin handle labelled \"Resize artifacts panel\" or focus it and press the Left or Right arrow key"
+ },
+ "S26.10": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Enter fullscreen"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Expand"
+   }
+  ],
+  "needs": "a chat that produces an artifact",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open an artifact in the viewer.",
+   "Hover the header button titled \"Expand\" to see its tooltip.",
+   "Click it: the artifact fills the screen.",
+   "Click the \"Exit fullscreen\" button to return."
+  ],
+  "where": "Artifact viewer header > click the button labelled \"Enter fullscreen\" (title \"Expand\") > click it again labelled \"Exit fullscreen\""
+ },
+ "S26.11": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactMoreMenu.tsx",
+    "text": "More artifact actions"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Open in new tab"
+   }
+  ],
+  "needs": "a chat that produces an HTML or other renderable artifact",
+  "note": "The page is opened as a sandboxed blob in a new tab; a separate native window was not found in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Open a renderable artifact such as an HTML page.",
+   "Click the \"More artifact actions\" button (three dots).",
+   "Click \"Open in new tab\".",
+   "Look: a new browser tab opens and shows the rendered artifact."
+  ],
+  "where": "Artifact viewer > click \"More artifact actions\" > click \"Open in new tab\""
+ },
+ "S26.12": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactsPanel.tsx",
+    "text": "Artifacts"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx",
+    "text": "View {overflow} more artifacts"
+   }
+  ],
+  "needs": "a chat with two artifacts",
+  "note": "The label on the second cards list is built from a template; the tab itself shows the artifact's own title.",
+  "reachable": "yes",
+  "steps": [
+   "Make a conversation that produces at least two artifacts.",
+   "Open the Artifacts panel from the Artifacts icon button.",
+   "Click the tab for the second artifact by its title.",
+   "Look: the viewer changes to the second artifact without closing the panel.",
+   "Click the first tab and check it switches back."
+  ],
+  "where": "Chat with two or more artifacts > open the Artifacts panel > click a different artifact tab by its title"
+ },
+ "S26.13": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/StreamingArtifactView.tsx",
+    "text": "Writing\u2026"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactsPanel.tsx",
+    "text": "Artifacts"
+   }
+  ],
+  "needs": "a chat where an artifact is being written",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Start a reply that writes an artifact.",
+   "Look at the tab row at the top of the Artifacts panel while it is written.",
+   "Look: the artifact being written has its own tab with a pulsing dot.",
+   "When it finishes, check it is still one tab, not two."
+  ],
+  "where": "Artifacts panel > tab row at the top (one tab per artifact); the artifact being written shows a pulsing dot in its tab"
+ },
+ "S26.14": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Preview"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Source"
+   }
+  ],
+  "needs": "a chat that produces a renderable artifact",
+  "note": "The two icons appear only for renderable types.",
+  "reachable": "yes",
+  "steps": [
+   "Open an HTML or other renderable artifact.",
+   "Click the eye icon labelled \"Preview\": the rendered page shows.",
+   "Click the code icon labelled \"Source\": the source code shows.",
+   "Look: the same artifact is shown in both modes."
+  ],
+  "where": "Artifact viewer header > the eye icon labelled \"Preview\" and the code icon labelled \"Source\""
+ },
+ "S26.15": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Edit"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Save as a new version"
+   }
+  ],
+  "needs": "a chat that produces an editable artifact",
+  "note": "The header Edit button is shown only for document-type artifacts in the code read; code artifacts use the \"Edit source\" menu item.",
+  "reachable": "yes",
+  "steps": [
+   "Open an editable artifact such as a document.",
+   "Click the \"Edit\" button in the header.",
+   "Change some text in the editor.",
+   "Click the button titled \"Save as a new version\".",
+   "Look: a new version appears in the version chip (v2/\u2026) and the new text shows."
+  ],
+  "where": "Artifact viewer > click the \"Edit\" button (for a document) or \"More artifact actions\" > \"Edit source\" (for code) > change the text > click \"Save\" (title \"Save as a new version\")"
+ },
+ "S26.16": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Previous version"
+   }
+  ],
+  "needs": "an artifact with at least two versions",
+  "note": "I read the read-only logic but did not confirm the exact hiding condition; check it against the older version behaviour before trusting this step.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open an artifact that has at least two versions.",
+   "Click the \"Previous version\" arrow to go to an older version.",
+   "Look: the Edit button and the Save controls are not shown for the older version."
+  ],
+  "where": "Shown as a missing Edit button when you step to an older version with \"Previous version\""
+ },
+ "S26.20": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactVersionHistory.tsx",
+    "text": "Version history"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Version history"
+   }
+  ],
+  "needs": "an artifact with several versions",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open an artifact with several versions.",
+   "Look at the chip under the title: it shows the current version as \"v N/M\".",
+   "Click the \"Version history\" chip.",
+   "Click another version in the list.",
+   "Look: the viewer shows that version and the chip number changes."
+  ],
+  "where": "Artifact viewer > click the version chip \"v2/3\" under the title (its tooltip is \"Version history\") > choose another version in the list"
+ },
+ "S26.21": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Previous version"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Next version"
+   }
+  ],
+  "needs": "an artifact with several versions",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open an artifact with several versions.",
+   "Click the \"Previous version\" arrow: an older version shows.",
+   "Read the \"v N/M\" number to see which version is shown.",
+   "Click the \"Next version\" arrow to step forward again."
+  ],
+  "where": "Artifact viewer > the left arrow \"Previous version\" and right arrow \"Next version\" on either side of the \"v N/M\" chip under the title"
+ },
+ "S26.23": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactVersionHistory.tsx",
+    "text": "Restore"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Restore"
+   }
+  ],
+  "needs": "an artifact with at least three versions",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open an artifact with at least three versions.",
+   "Click the \"Version history\" chip and pick an earlier version.",
+   "Click \"Restore\" for that version, then confirm in the dialog that asks \"Restore version N?\".",
+   "Look: the restored version is now the current one.",
+   "Open the version history again and check the newer versions are still listed."
+  ],
+  "where": "Artifact viewer > click the \"Version history\" chip under the title > click \"Restore\" beside an earlier version > confirm \"Restore\""
+ },
+ "S26.24": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Duplicate"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactMoreMenu.tsx",
+    "text": "More artifact actions"
+   }
+  ],
+  "needs": "a saved artifact in the Artifacts panel",
+  "note": "The Duplicate item appears only in the panel variant for stored artifacts.",
+  "reachable": "yes",
+  "steps": [
+   "Open a saved artifact in the Artifacts panel (panel view, not the inline card).",
+   "Click \"More artifact actions\" and click \"Duplicate\".",
+   "Look: the toast says \"Duplicated. Edits here no longer touch the original.\"",
+   "Edit the copy, then open the original and check it did not change."
+  ],
+  "where": "Artifacts panel > open a saved artifact > click \"More artifact actions\" > click \"Duplicate\""
+ },
+ "S26.26": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Save to Library"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactMoreMenu.tsx",
+    "text": "More artifact actions"
+   }
+  ],
+  "needs": "a signed-in account with a Library",
+  "note": "I did not find the sidebar word for the Library; check the Library location in the app before the test.",
+  "reachable": "yes",
+  "steps": [
+   "Open a saved artifact that is not a generated file, image, PDF or Word document.",
+   "Click \"More artifact actions\" and click \"Save to Library\".",
+   "Look: the toast says \"Saved to your Library\".",
+   "Open your Library and find the artifact there."
+  ],
+  "where": "Artifact viewer > click \"More artifact actions\" > click \"Save to Library\""
+ },
+ "S26.27": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Save to project"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "In project"
+   }
+  ],
+  "needs": "a project in the account",
+  "note": "The project list is only shown when the account has projects.",
+  "reachable": "yes",
+  "steps": [
+   "Make sure the account has at least one project.",
+   "Open an artifact and click \"More artifact actions\".",
+   "Under \"Save to project\", click a project name.",
+   "Look: a bar with \"In project\" and the project link appears under the header.",
+   "Open that project and check the artifact is listed."
+  ],
+  "where": "Artifact viewer > click \"More artifact actions\" > under the group \"Save to project\" click a project name > look for \"In project\" under the header"
+ },
+ "S26.28": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Add to chat"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Start Work"
+   }
+  ],
+  "needs": "a saved artifact in the Library",
+  "note": "The Library's Add to chat uses the file, not a live artifact link. The Start Work item in the viewer's More menu is a different action; the Library's label for the item menu was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Library and find a saved artifact item.",
+   "Click \"Add to chat\".",
+   "Look: a new chat opens with the item attached.",
+   "Ask for a change to it and check the reply continues from that content."
+  ],
+  "where": "Library > open an artifact item > click \"Add to chat\""
+ },
+ "S26.29": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Download as Markdown"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Download"
+   }
+  ],
+  "needs": "an artifact with several export formats",
+  "note": "When only one format exists, the download icon saves directly with no menu; the format list depends on artifact type.",
+  "reachable": "yes",
+  "steps": [
+   "Open an artifact that has more than one download format (for example a document).",
+   "Click the download icon in the header.",
+   "Look: a menu lists formats such as \"Download as Markdown\" or \"Download as PDF\".",
+   "Pick one and check the file is saved in that format."
+  ],
+  "where": "Artifact viewer > click the download icon (title \"Download\") > choose a format such as \"Download as Markdown\""
+ },
+ "S26.30": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Copy artifact"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Copied"
+   }
+  ],
+  "needs": "a text, code or document artifact",
+  "note": "The copy button is hidden for PDF, Word and image artifacts.",
+  "reachable": "yes",
+  "steps": [
+   "Open a text, code or document artifact.",
+   "Click the \"Copy\" button in the header.",
+   "Look: the button changes to a check mark and the word \"Copied\".",
+   "Paste into a text field and compare with the artifact content."
+  ],
+  "where": "Artifact viewer > click the copy icon labelled \"Copy\" (aria label \"Copy artifact\") in the header"
+ },
+ "S26.31": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Publish"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Copy link"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Who can open this"
+   }
+  ],
+  "needs": "a signed-in account; a Free or paid account; a workspace is needed only for the 'Everyone in this workspace' option",
+  "note": "No 'take down' or 'unpublish' control found for an artifact. The only revoke wording is 'Revoke share' in apps/web/features/chat/components/share/ShareConversationDialog.tsx, which is for whole chats. Searched for unpublish, take down, stop sharing, remove link in the artifacts folders.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a chat that has an artifact, then click its card to open the viewer.",
+   "Click the 'Publish' button in the viewer header (or 'Share' icon, title 'Share').",
+   "Check the link bar appears with 'Copy link' and the 'Who can open this' dropdown; click 'Copy link' and look for 'Link copied'.",
+   "Open the 'Who can open this' dropdown and pick another option; compare with Expected: choose who can open the link."
+  ],
+  "where": "Chat > open an artifact card > artifact viewer header: Publish, Copy link, Who can open this"
+ },
+ "S26.32": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Anyone with the link"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Everyone in this workspace"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Only people you invite"
+   }
+  ],
+  "needs": "a signed-in account; a workspace member count is needed to show 'Everyone in this workspace'",
+  "note": "No separate private/public badge was found on the artifact card or list; the state shows only as the dropdown after publishing. The unpublished (private) state has no label found.",
+  "reachable": "yes",
+  "steps": [
+   "Open a published artifact in the viewer (click 'Publish' first if it is not yet published).",
+   "Look at the link bar under the header for the 'Who can open this' dropdown and its current choice.",
+   "Open the dropdown and compare the three choices with Expected: private, anyone with the link, or workspace."
+  ],
+  "where": "Chat > open an artifact card > Publish > 'Who can open this' dropdown"
+ },
+ "S26.35": {
+  "labels": [
+   {
+    "file": "infrastructure/sandbox/index.html",
+    "text": "Render error:"
+   }
+  ],
+  "needs": "a Free or paid account; an artifact that fails at run time",
+  "note": "The sandbox only shows the error message in a plain pre block. No source or retry control was found in infrastructure/sandbox/index.html or ArtifactPreview.tsx, so Expected's buttons are unconfirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open an artifact whose code throws an error when it runs.",
+   "Look in the preview for the red-text block starting with 'Render error:'.",
+   "Compare with Expected: the viewer shows an error panel that explains the failure and offers source or retry."
+  ],
+  "where": "Chat > open an HTML or React artifact that fails when it runs > preview area shows the error text"
+ },
+ "S26.36": {
+  "labels": [
+   {
+    "file": "infrastructure/sandbox/index.html",
+    "text": "Loading React\u2026"
+   }
+  ],
+  "needs": "a Free or paid account; a slow or offline connection helps to see the state",
+  "note": "Only the React loading text was found. The failed-load report is in the sandbox as an error message, and it was not verified as visible to the user.",
+  "reachable": "yes",
+  "steps": [
+   "Open a React artifact in the viewer.",
+   "Look at the preview area while it starts; the text 'Loading React\u2026' shows until the runtime loads.",
+   "Compare with Expected: loading state shown, and a failed load reported."
+  ],
+  "where": "Chat > open a React artifact > preview area while the libraries load"
+ },
+ "S26.38": {
+  "labels": [
+   {
+    "file": "apps/web/app/gallery/GalleryClient.tsx",
+    "text": "Open chat"
+   }
+  ],
+  "needs": "a signed-in account with at least one artifact in the gallery",
+  "note": "No 'Gallery' item was found in the sidebar menu. The same 'Open chat' label also exists in packages/ui/unified-chat/src/components/library/LibraryView.tsx for the Library path.",
+  "reachable": "yes",
+  "steps": [
+   "Open the gallery page at /gallery.",
+   "Click an artifact to open its drawer.",
+   "Click the 'Open chat' link in the drawer.",
+   "Compare with Expected: the chat that made the artifact opens."
+  ],
+  "where": "Gallery page (web address /gallery) > open an artifact card > Open chat"
+ },
+ "S26.39": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/StreamingArtifactView.tsx",
+    "text": "Writing\u2026"
+   }
+  ],
+  "needs": "a Free or paid account; a model reply that produces an artifact",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Send a request that asks for an artifact, and click its card while the reply is still running.",
+   "Watch the viewer header for the 'Writing\u2026' label with a pulsing dot.",
+   "Watch the content area for it to grow while the reply streams.",
+   "Compare with Expected: content appears live until the reply ends."
+  ],
+  "where": "Chat > send a request that makes an artifact > click the artifact card while it is being written"
+ },
+ "S26.40": {
+  "labels": [],
+  "needs": "phone width",
+  "note": "The rule is a media query, (max-width: 639px), in apps/web/features/chat/stores/artifacts-store.ts; the effect is seen as an overlay. Touch controls were not verified in the code.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open a chat with an artifact on a phone-sized browser window (640 px wide or less) or on a phone.",
+   "Click the artifact card and check that the viewer covers the screen as an overlay, not a docked side panel.",
+   "Compare with Expected: full-screen reader with touch controls."
+  ],
+  "where": "Phone-width screen: the artifact opens as an overlay sheet instead of a side panel"
+ }
+}

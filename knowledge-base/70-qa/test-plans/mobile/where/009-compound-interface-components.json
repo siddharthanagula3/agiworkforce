@@ -1,0 +1,554 @@
+{
+ "S9.01": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx",
+    "text": "Search models\u2026"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ModelSelectorButton.tsx",
+    "text": "Model:"
+   }
+  ],
+  "needs": "none",
+  "note": "The code searches models only; the Expected line also names files, projects and skills, which this picker does not list.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a new chat.",
+   "Tap the model button at the bottom of the message box (its accessibility label starts with \"Model:\").",
+   "In the sheet, tap the search field that says \"Search models\u2026\" and type part of a model name.",
+   "Check that the list narrows to matching models only. Note: this picker lists models; files, projects and skills are not in it (files are searched in Library > \"Search library\")."
+  ],
+  "where": "Chat > Model button at the bottom of the message box > Search models\u2026"
+ },
+ "S9.02": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ModelSelectorButton.tsx",
+    "text": "Model:"
+   },
+   {
+    "file": "apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx",
+    "text": "Search models\u2026"
+   }
+  ],
+  "needs": "none",
+  "note": "Models that are locked for the account show a lock reason in the row, such as upgrade or sign-in needed.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a new chat.",
+   "Tap the model button at the bottom of the message box.",
+   "In the sheet, tap a different model row (rows show \"selected\" for the current one).",
+   "Send a message and check the model shown on the button or the reply matches the model you picked."
+  ],
+  "where": "Chat > Model button at the bottom of the message box > model list"
+ },
+ "S9.04": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorAccountSummary.tsx",
+    "text": "Account"
+   }
+  ],
+  "needs": "a connector with two or more linked accounts",
+  "note": "Searched apps/mobile for account selection in connector code. Settings > Connectors > a connector shows an \"Account\" row that lists linked accounts (ConnectorAccountSummary.tsx), but I found no control to choose which account a task or chat uses.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S9.05": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Workspace"
+   },
+   {
+    "file": "apps/mobile/app/(app)/settings/workspace.tsx",
+    "text": "Personal"
+   }
+  ],
+  "needs": "a cloud account in a team workspace",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with a cloud account that belongs to a team workspace.",
+   "Tap Settings, then the \"Workspace\" row.",
+   "Read the list: \"Personal\" and each team workspace name are shown, with a check mark on the active one.",
+   "Tap a row that is not checked; the screen switches workspace and the check mark moves to it."
+  ],
+  "where": "Settings > Workspace"
+ },
+ "S9.06": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ProjectSelectorBar.tsx",
+    "text": "No project"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ProjectSelectorBar.tsx",
+    "text": "Choose the project context for this chat."
+   }
+  ],
+  "needs": "a Cloud account with at least one project",
+  "note": "The code also reaches the project picker from Add to chat; that menu label was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a new chat.",
+   "Tap the project bar that says \"No project\" (its accessibility label is \"Select a project for this chat\").",
+   "In the picker, read the line \"Choose the project context for this chat.\" and tap one of your projects.",
+   "Check the bar now shows the project name (accessibility label \"Active project: ...\")."
+  ],
+  "where": "Chat > project bar above the message box > No project > pick a project"
+ },
+ "S9.10": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/capabilities/index.tsx",
+    "text": "Action approvals"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Allow once"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Always allow"
+   }
+  ],
+  "needs": "a Cloud account; an action that asks for approval",
+  "note": "No picker for API keys or site automation scope was found in the files read; this covers tool approvals only.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and tap \"Capabilities\", then the \"Action approvals\" row.",
+   "Read the three choices: \"Ask before every action\", \"Run read-only actions without asking\", \"Skip approvals\".",
+   "In a Cloud chat, ask the assistant to do an action that needs approval.",
+   "In the approval card, compare the choices \"Allow once\", \"Allow for this chat\", \"Always allow\" and \"Deny\" with Expected (once versus always)."
+  ],
+  "where": "Settings > Capabilities > Action approvals (scope of tool approvals); the approval card in chat shows \"Allow once\", \"Allow for this chat\" and \"Always allow\""
+ },
+ "S9.12": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/schedules/index.tsx",
+    "text": "Create schedule"
+   },
+   {
+    "file": "apps/mobile/src/features/schedules/components/RecurrencePicker.tsx",
+    "text": "Weekly"
+   }
+  ],
+  "needs": "a plan that includes Scheduled tasks",
+  "note": "The code offers only Once, Daily, Weekly and Monthly; no custom rule option was found, unlike the Expected line.",
+  "reachable": "yes",
+  "steps": [
+   "Open the menu and tap \"AGI Work\", then \"Scheduled tasks\".",
+   "Tap \"Create schedule\".",
+   "Open the repeat choice and pick \"Once\", \"Daily\", \"Weekly\" or \"Monthly\".",
+   "Save, then check the task's list entry shows the chosen cadence."
+  ],
+  "where": "AGI Work > Scheduled tasks > Create schedule"
+ },
+ "S9.13": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Library"
+   },
+   {
+    "file": "apps/mobile/src/features/library/index.tsx",
+    "text": "Search library"
+   }
+  ],
+  "needs": "none (a few saved files help)",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open the menu (drawer) and tap \"Library\".",
+   "Read the chips \"All\", \"Images\", \"Videos\", \"Documents\", \"Uploads\", \"Generated files\", \"Artifacts\" and tap one to filter.",
+   "Tap the search bar that says \"Search library\" and type a name.",
+   "Tap a file to open it, then compare with Expected."
+  ],
+  "where": "Menu > Library"
+ },
+ "S9.15": {
+  "labels": [],
+  "needs": "a Cloud or Local chat that returns a table",
+  "note": "The sort logic is in apps/mobile/src/features/chat/components/MessageContentRenderer.tsx (headers are buttons with a sorted state); the header text itself is model output, so no fixed visible label was found.",
+  "reachable": "yes",
+  "steps": [
+   "Ask the assistant for a table, for example a comparison of three items.",
+   "Look for the table in the answer and scroll it sideways if it is wide.",
+   "Tap a column header once; rows should reorder by that column.",
+   "Tap it again to reverse the order and compare with Expected."
+  ],
+  "where": "Chat > an answer that contains a table > tap a column header"
+ },
+ "S9.16": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Library"
+   },
+   {
+    "file": "apps/mobile/src/features/library/index.tsx",
+    "text": "Search library"
+   }
+  ],
+  "needs": "none (a few saved files, artifacts or projects help)",
+  "note": "The grid uses a fixed test id \"library-grid\" in the code; the visible grid columns depend on screen width.",
+  "reachable": "yes",
+  "steps": [
+   "Open the menu and tap \"Library\".",
+   "Check the items appear as cards in a grid.",
+   "Tap a card to open it.",
+   "Compare the card layout and opening with Expected."
+  ],
+  "where": "Menu > Library (cards shown in the grid)"
+ },
+ "S9.17": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/drawer/components/DrawerContent.tsx",
+    "text": "Images"
+   },
+   {
+    "file": "apps/mobile/src/features/library/index.tsx",
+    "text": "Videos"
+   }
+  ],
+  "needs": "a few images (generated or uploaded)",
+  "note": "The code opens the library with an image id; the larger viewer itself was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open the menu and tap \"Images\".",
+   "Check the images show as a gallery of thumbnails.",
+   "Tap one image to open it in a larger view.",
+   "Compare the larger view with Expected."
+  ],
+  "where": "Menu > Images (or Menu > Library > Images chip)"
+ },
+ "S9.19": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx",
+    "text": "Worked for"
+   }
+  ],
+  "needs": "a Cloud account; a request that runs tools",
+  "note": "Step order and per-step duration display were not traced in full.",
+  "reachable": "yes",
+  "steps": [
+   "Send a Cloud request that uses tools (for example one that searches or runs an action).",
+   "When the reply is done, find the line that starts with \"Worked for\" and its elapsed time.",
+   "Expand the activity to list the steps in order and check each step's state (for example Paused, Failed, Stopped wording)."
+  ],
+  "where": "Chat > a request that runs tools > the \"Worked for\" line under the reply"
+ },
+ "S9.20": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/screenTitles.ts",
+    "text": "Security and login"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/account-security/index.tsx",
+    "text": "Recent security activity"
+   }
+  ],
+  "needs": "a Cloud account (the row shows \"Cloud mode required\" in Local mode)",
+  "note": "The newest-first ordering was not confirmed in the code read.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with a cloud account and open Settings.",
+   "Tap \"Security and login\".",
+   "Find the section titled \"Recent security activity\".",
+   "Read the rows and check they are newest first, or that the row says \"No activity recorded yet\" when empty."
+  ],
+  "where": "Settings > Security and login > Recent security activity"
+ },
+ "S9.22": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/companion/index.tsx",
+    "text": "Show companion walkthrough"
+   },
+   {
+    "file": "apps/mobile/src/features/companion/components/CompanionDemoWalkthrough.tsx",
+    "text": "Next step"
+   }
+  ],
+  "needs": "none (Remote Control may be hidden in some builds)",
+  "note": "The walkthrough shows dots (StepDots); a text counter such as \"Step 2 of 4\" was not found.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and tap \"Connections\".",
+   "Open the companion screen from the remote control screen.",
+   "Tap \"Show companion walkthrough\".",
+   "Tap \"Next step\" to move forward and check the dots and the current step against Expected; \"Finish walkthrough\" appears on the last step."
+  ],
+  "where": "Settings > Connections > remote control screen > Show companion walkthrough"
+ },
+ "S9.23": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(public)/onboarding.tsx",
+    "text": "Your name"
+   },
+   {
+    "file": "apps/mobile/app/(public)/onboarding.tsx",
+    "text": "Continue"
+   }
+  ],
+  "needs": "a fresh install (no account yet)",
+  "note": "No step counter text was found; saving of choices at the end was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Install or reset to a fresh state and open the app.",
+   "Enter your name in the field labelled \"Your name\" and tap \"Continue\".",
+   "Choose a model and tap \"Continue\" or \"Download model\".",
+   "Look for \"Sign in to use Cloud\", then check that your choices were kept when the setup finishes."
+  ],
+  "where": "First launch > onboarding (name, model, Cloud sign-in)"
+ },
+ "S9.26": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+    "text": "Restore version"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+    "text": "Previous version"
+   }
+  ],
+  "needs": "an artifact with at least two versions",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open an artifact from a chat that has several saved versions.",
+   "Tap the version control that reads \"Version N of M\".",
+   "In the history sheet, read each version and tap \"Restore version\" for the one you want.",
+   "Use \"Previous version\" and \"Next version\" to step through; compare with Expected."
+  ],
+  "where": "Chat > open an artifact full screen > the \"Version\" control (shows Version N of M)"
+ },
+ "S9.27": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/companion/components/CodeSessionView.tsx",
+    "text": "changed."
+   }
+  ],
+  "needs": "a Cloud Code session with changed files",
+  "note": "The diff counts (file and line counts ending in \"changed.\") are in apps/mobile/src/features/companion/components/CodeSessionView.tsx, but I did not confirm the menu path that opens a session or the on-screen diff view.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S9.28": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/CollapsibleSources.tsx",
+    "text": "View {{count}} sources"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/CollapsibleSources.tsx",
+    "text": "Sources"
+   }
+  ],
+  "needs": "a Cloud account with web search enabled",
+  "note": "The excerpt shown per source was not confirmed in the code read.",
+  "reachable": "yes",
+  "steps": [
+   "Ask a question that uses web search so the answer has sources.",
+   "Tap the line that says \"View 3 sources\" (count varies) or \"Sources so far\" while streaming.",
+   "Read each source's title and origin, then tap one to open it.",
+   "Compare with Expected; the excerpt display was not traced."
+  ],
+  "where": "Chat > an answer with sources > \"View N sources\""
+ },
+ "S9.29": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Usage"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-usage/index.tsx",
+    "text": "Plan usage"
+   }
+  ],
+  "needs": "a Cloud account",
+  "note": "The meter's assistive-tech values were not confirmed; the info control has an accessibility label.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with a Cloud account and open Settings.",
+   "Tap \"Usage\".",
+   "Read the \"Plan usage\" section: each meter shows its label and a reset line below the bar.",
+   "Tap the info control labelled \"About usage limits\" and compare the reset time with Expected."
+  ],
+  "where": "Settings > Usage > Plan usage"
+ },
+ "S9.31": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Capabilities"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/capabilities/index.tsx",
+    "text": "What AGI can use"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/capabilities/index.tsx",
+    "text": "Action approvals"
+   }
+  ],
+  "needs": "none (some rows need a Cloud account)",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and tap \"Capabilities\".",
+   "Read the header \"What AGI can use\" and the rows (for example \"Action approvals\", \"Web search\", \"Image generation\").",
+   "Each row shows its state as a value on the right.",
+   "Tap \"Action approvals\" to see the approval choices, then compare with Expected."
+  ],
+  "where": "Settings > Capabilities"
+ },
+ "S9.32": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Allow once"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Deny"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Ask before every action"
+   }
+  ],
+  "needs": "a Cloud account; a tool action that needs approval",
+  "note": "Which actions ask depends on the policy and the tool, so the card may not appear for every action.",
+  "reachable": "yes",
+  "steps": [
+   "Set Settings > Capabilities > Action approvals to \"Ask before every action\".",
+   "In a Cloud chat, ask the assistant to do an action that needs approval (for example a write or send action).",
+   "Read the approval card: it names the action and shows the choices.",
+   "Tap \"Allow once\" or \"Deny\" and check the run continues or stops, as Expected says."
+  ],
+  "where": "Chat (Cloud) > an action that needs approval > approval card with \"Allow once\", \"Allow for this chat\", \"Always allow\", \"Deny\""
+ },
+ "S9.33": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/index.tsx",
+    "text": "Connected"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx",
+    "text": "Disconnect"
+   }
+  ],
+  "needs": "a Cloud account; at least one connector",
+  "note": "The code maps states to connected, needs reauthorization and not responding; a visible \"Expired\" word was not found.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with a Cloud account and open Settings.",
+   "Tap \"Connectors\".",
+   "Read each connector card: the \"Connected\" filter and the connected state shown on the card.",
+   "Open a connector and tap \"Disconnect\" (a confirmation asks first), then compare with Expected."
+  ],
+  "where": "Settings > Connectors"
+ },
+ "S9.34": {
+  "labels": [],
+  "needs": "a Cloud or Local chat with a model that lacks a feature",
+  "note": "Searched apps/mobile/src/features/chat and apps/mobile/src/features/model-picker for \"not support\", \"doesn't support\", \"can't send\" and similar; ChatInput.tsx near line 880 is attachment handling, and no visible capability-warning notice was found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S9.35": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/companion/agent/[id].tsx",
+    "text": "Expand tool call log"
+   },
+   {
+    "file": "apps/mobile/app/(app)/companion/agent/[id].tsx",
+    "text": "Artifacts"
+   }
+  ],
+  "needs": "a Cloud account; a running task; Remote Control may be hidden in some builds",
+  "note": "The progress bar is in apps/mobile/src/features/companion/components/AgentDashboard.tsx; the path from the task list to the agent screen goes through the companion screen, and the exact entry label was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Start a long task in Cloud mode so it runs in the background.",
+   "Open the task from the task list and check the card shows its progress bar and current state.",
+   "Watch the card update while the task runs, then tap \"Expand tool call log\" to see the latest actions.",
+   "Compare with Expected (steps done, latest action)."
+  ],
+  "where": "Remote control (AGI Work > Tasks > open a running task) > agent detail"
+ },
+ "S9.36": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/InteractiveCardBlock.tsx",
+    "text": "Map of"
+   }
+  ],
+  "needs": "a Cloud or Local chat that returns an interactive card",
+  "note": "Feedback from the choice into the conversation was not traced in full.",
+  "reachable": "yes",
+  "steps": [
+   "Ask the assistant for a place, for example \"show me a map of a city\" or a day plan.",
+   "Find the map card in the answer and tap its action buttons.",
+   "Check the map shows the place with its overlay labels (route pill, attribution).",
+   "Tap a choice or action and see whether the answer or conversation updates, as Expected says."
+  ],
+  "where": "Chat > ask for a place or an itinerary > the map card in the answer"
+ },
+ "S9.37": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/notifications/index.tsx",
+    "text": "Notifications"
+   },
+   {
+    "file": "apps/mobile/app/(app)/notifications/index.tsx",
+    "text": "Mark read"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/ChatsListScreen.tsx",
+    "text": "Search"
+   }
+  ],
+  "needs": "a signed-in account; at least one notification (an unread one shows the unread style); the cloud chat feature must be on, otherwise the screen shows nothing",
+  "note": "The unread-count button in the header (DrawerButton.tsx) opens the same inbox only on wide layouts; on phone the search route is the path found in code, and the Mark all as read button is icon only.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the Chats screen.",
+   "Tap the search icon in the header (it has no visible text; the code labels it 'search').",
+   "Type Notifications (or inbox) in the Search box and tap Notifications under Go to.",
+   "Look at the title Notifications and the line under it: 'N unread notifications' or 'All caught up'. Unread rows show a bold title and a small dot, and their screen-reader label starts with 'Unread,'.",
+   "Tap an unread row to open it, or tap Mark read on it, then check that the row turns to the read style and the count goes down.",
+   "Check that the newest item is at the top."
+  ],
+  "where": "Chats > search icon in the header > type Notifications > under Go to, tap Notifications"
+ },
+ "S9.38": {
+  "labels": [],
+  "needs": "none",
+  "note": "Not built on mobile, as the plan's ledger says (D-2026-09-28-27). I searched apps/mobile for keyboard handlers (keyCommand, useKeyCommands, onKeyPress, hardwareKey, keydown, shortcut) and found only Android launcher shortcuts in native/android/withAGIShortcuts.cjs, which are not an in-app palette. The Search screen (app/(app)/search.tsx) has no keyboard shortcut and no Enter-to-run.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ }
+}

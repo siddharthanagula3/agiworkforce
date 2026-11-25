@@ -1,0 +1,572 @@
+{
+ "S8.01": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "text": "Yes"
+   },
+   {
+    "file": "apps/cli/src/tui/mod.rs",
+    "text": "Default"
+   }
+  ],
+  "needs": "a working agi session (signed in)",
+  "note": "Which request brings up the approval box was not confirmed in the code; the tester may need to try a few requests. No style is named primary; the highlighted Yes uses the warning colour fill.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi and check the status bar chip reads Default (press Shift+Tab until it does).",
+   "Ask the assistant to run a shell command, for example run pwd.",
+   "When the approval box appears, look at the Yes button, which starts highlighted.",
+   "Compare: Yes is the main choice with a warning-coloured fill. The code has no button named primary, so the tester should note how the main button looks."
+  ],
+  "where": "agi (chat screen, mode chip reads Default) > ask for a command that needs approval > Tool approval box > Yes"
+ },
+ "S8.02": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "text": "Allow Session"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "text": "No"
+   }
+  ],
+  "needs": "a working agi session (signed in)",
+  "note": "The code draws unhighlighted approve buttons in muted colour and the rest in the default colour; there is no separate outline or ghost style.",
+  "reachable": "yes",
+  "steps": [
+   "Trigger the approval box as in S8.01 (Default mode, a command that needs approval).",
+   "Look at the buttons beside Yes: No, Allow Session, Always allow, Deny All and Allow All.",
+   "Press the Right arrow to move the highlight to No, then to Allow Session.",
+   "Compare: the other buttons look less bold or muted than the highlighted one. The code has no outline or ghost style, so note what is seen."
+  ],
+  "where": "agi (chat screen, mode chip reads Default) > ask for a command that needs approval > Tool approval box > No and Allow Session"
+ },
+ "S8.03": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "text": "Deny All"
+   }
+  ],
+  "needs": "a working agi session (signed in)",
+  "note": "The code uses the danger colour for the highlighted and unhighlighted Deny All button. Contrast was not checked here.",
+  "reachable": "yes",
+  "steps": [
+   "Trigger the approval box as in S8.01.",
+   "Press the Right arrow until the Deny All button is highlighted.",
+   "Look at the highlighted Deny All: it should have a red fill.",
+   "Look at Deny All when not highlighted: its text should be red. Do not press Enter, because Deny All cancels the turn."
+  ],
+  "where": "agi (chat screen, mode chip reads Default) > ask for a command that needs approval > Tool approval box > Deny All"
+ },
+ "S8.06": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/skills_toggle.rs",
+    "text": "Space toggle"
+   }
+  ],
+  "needs": "at least one skill installed (otherwise the list says no skills discovered)",
+  "note": "The rows use [x] and [ ] checkbox text. The code has no pressed-state or accessibility role for a toggle button; Expected is not met in the code as written.",
+  "reachable": "yes",
+  "steps": [
+   "Type /skills-toggle and press Enter.",
+   "Move with the arrow keys to a skill and press Space.",
+   "Look at the row: its box flips between [x] and [ ].",
+   "Compare: the row shows a checkbox style, not a pressed-state button. Note this for the tester."
+  ],
+  "where": "/skills-toggle > Space toggle on a skill"
+ },
+ "S8.07": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "text": "Enter confirm"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "text": "Always allow"
+   }
+  ],
+  "needs": "a working agi session (signed in)",
+  "note": "No labelled group or group role was found in the code; the buttons are one row of text.",
+  "reachable": "yes",
+  "steps": [
+   "Trigger the approval box as in S8.01.",
+   "Look at the row of six buttons under the prompt.",
+   "Read the hint line at the bottom of the box.",
+   "Compare: the buttons sit in one row, and the hint line reads Enter confirm. The code does not draw a separate group label; the prompt above the buttons is the only text that names them."
+  ],
+  "where": "agi (chat screen, mode chip reads Default) > ask for a command that needs approval > Tool approval box > row of buttons (Yes, No, Allow Session, Always allow, Deny All, Allow All) > Enter confirm"
+ },
+ "S8.08": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "Open one in your browser with /links <number>."
+   }
+  ],
+  "needs": "a working agi session (signed in); the reply must contain a web link",
+  "note": "The TUI renders Markdown links as link text plus the URL in muted colour (apps/cli/src/tui/markdown_renderer.rs); the link text itself does not open when clicked in the chat. Opening goes through /links. The tester should confirm the browser opens.",
+  "reachable": "yes",
+  "steps": [
+   "Ask the assistant a question whose answer includes a web link.",
+   "Type /links and press Enter. The list shows each link with a number.",
+   "Type /links 1 and press Enter.",
+   "Compare: the link opens in your browser. The code runs the browser open for that number."
+  ],
+  "where": "agi (chat screen) > ask for a reply that contains a web link > type /links > type /links 1"
+ },
+ "S8.09": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Message AGI...  / for commands"
+   }
+  ],
+  "needs": "a working agi session (signed in)",
+  "note": "The placeholder text is the input's visible label; no separate accessible name was found in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi and look at the bottom input line.",
+   "Read the grey text in the empty input line.",
+   "Type a few words and watch them appear after the prompt character.",
+   "Compare: the grey hint is the label for the input, and the typed words replace it."
+  ],
+  "where": "agi (chat screen) > bottom input line"
+ },
+ "S8.10": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Insert newline (multiline)"
+   }
+  ],
+  "needs": "a working agi session (signed in)",
+  "note": "Ctrl-J always inserts a newline; Shift+Enter only works where the terminal sends it.",
+  "reachable": "yes",
+  "steps": [
+   "Type a first line in the bottom input line.",
+   "Press Ctrl-J (or Shift+Enter if the terminal sends it).",
+   "Type a second line.",
+   "Compare: the input shows two lines and the text is kept. Type /keybindings to see the list, which includes Insert newline (multiline)."
+  ],
+  "where": "agi (chat screen) > bottom input line > Ctrl-J (or Shift+Enter) > /keybindings"
+ },
+ "S8.11": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/model_picker.rs",
+    "text": "type to filter by name or provider..."
+   }
+  ],
+  "needs": "a working agi session (signed in)",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Type /model and press Enter to open the model list.",
+   "Look at the search line, which shows the grey placeholder.",
+   "Type part of a model name.",
+   "Compare: the list narrows to matching models as you type."
+  ],
+  "where": "/model > type to filter by name or provider..."
+ },
+ "S8.12": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/elicitation_overlay.rs",
+    "text": "hidden"
+   }
+  ],
+  "needs": "a connected MCP server that asks for input",
+  "note": "No command opens this form; a server must ask for it. The code masks the value with asterisks in the field and shows hidden as the suffix.",
+  "reachable": "yes",
+  "steps": [
+   "Connect an MCP server that asks for a credential through a form.",
+   "When the form opens, find the field whose name looks like a secret.",
+   "Type a value in it.",
+   "Compare: the field shows hidden and the typed text is not shown."
+  ],
+  "where": "A connected MCP server's form (it opens when the server asks for input) > a field whose name contains key, token, secret or password"
+ },
+ "S8.14": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/skills_toggle.rs",
+    "text": "[x]"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/skills_toggle.rs",
+    "text": "Space toggle"
+   }
+  ],
+  "needs": "at least one skill installed",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Type /skills-toggle and press Enter.",
+   "Move down the list with the arrow keys.",
+   "Press Space on a skill to tick or untick it.",
+   "Compare: the box changes between [x] and [ ] and the list keeps all skills independent."
+  ],
+  "where": "/skills-toggle > Space toggle"
+ },
+ "S8.15": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/effort_picker.rs",
+    "text": "no thinking"
+   }
+  ],
+  "needs": "a working agi session (signed in)",
+  "note": "The code marks the current level with a bullet only; no accessible checked state was found.",
+  "reachable": "yes",
+  "steps": [
+   "Type /effort and press Enter.",
+   "Move with the arrow keys between the levels.",
+   "Look at the bullet mark, which marks the current level.",
+   "Compare: only one level is marked at a time, and each row shows its token budget or no thinking."
+  ],
+  "where": "/effort (typed with no value)"
+ },
+ "S8.16": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/elicitation_overlay.rs",
+    "text": "Space to toggle"
+   }
+  ],
+  "needs": "a connected MCP server that asks for input",
+  "note": "The code shows true or false as bracketed text, not as a switch. A second on or off row is in /memories as Auto-memory, which is saved when the view closes; the tester should compare it with Expected.",
+  "reachable": "yes",
+  "steps": [
+   "Connect an MCP server whose form has a true or false field.",
+   "Move to that field and press Space.",
+   "Look at the value in the brackets, which flips.",
+   "Compare: the switch changes on press. The form is submitted only when confirmed."
+  ],
+  "where": "A connected MCP server's form (it opens when the server asks for input) > a true or false field > Space to toggle"
+ },
+ "S8.18": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/model_picker.rs",
+    "text": "type to filter by name or provider..."
+   }
+  ],
+  "needs": "a working agi session (signed in)",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Type /model and press Enter.",
+   "Move the highlight with the up and down arrow keys.",
+   "Press Enter on one model.",
+   "Compare: only one model is chosen and the picker closes with that model in use."
+  ],
+  "where": "/model > arrow keys > Enter"
+ },
+ "S8.19": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/model_picker.rs",
+    "text": "type to filter by name or provider..."
+   }
+  ],
+  "needs": "a working agi session (signed in)",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Type /model and press Enter.",
+   "Type part of a model name in the search line.",
+   "Use the up and down arrow keys to pick a match, then press Enter.",
+   "Compare: the list filters as you type and the chosen model is used."
+  ],
+  "where": "/model > type to filter by name or provider... > arrow keys > Enter"
+ },
+ "S8.20": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/elicitation_overlay.rs",
+    "text": "\u2190 / \u2192 move, Space toggle"
+   }
+  ],
+  "needs": "a connected MCP server that asks for input",
+  "note": "No command opens this form; a server must ask for it. The code shows the hint text for the list field.",
+  "reachable": "yes",
+  "steps": [
+   "Connect an MCP server whose form has a list of choices.",
+   "Move to the list field and use the arrow keys to move between choices.",
+   "Press Space to pick a choice, then pick another.",
+   "Compare: each pick stays marked and can be unpicked with Space."
+  ],
+  "where": "A connected MCP server's form (it opens when the server asks for input) > a list field > Space toggle"
+ },
+ "S8.29": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Inline a file, or list a folder with @dir/"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Attach an image, PDF or Office file"
+   }
+  ],
+  "needs": "a file in the project folder, and an image or PDF for the /attach step",
+  "note": "The @ picker lists workspace files; the code has no native file-open dialog, so files are picked by name or typed path.",
+  "reachable": "yes",
+  "steps": [
+   "Type @ in the bottom input line.",
+   "Type part of a file name and use the arrow keys to pick a file, then press Enter.",
+   "Type /attach and press Enter to see the menu.",
+   "Compare: the file or image is added to the next message. Note that /attach takes a typed path; no system file dialog was found in the code."
+  ],
+  "where": "agi chat > type @ in the bottom input line (file picker) > /attach (typed with no value) lists the ways to add context"
+ },
+ "S8.31": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/screen_renderers.rs",
+    "text": "Discover"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/screen_renderers.rs",
+    "text": "\u2190/\u2192 switch tabs"
+   }
+  ],
+  "needs": "a working agi session (signed in)",
+  "note": "/agents also has tabs (Agents, Running, Library) that use the same arrow keys.",
+  "reachable": "yes",
+  "steps": [
+   "Type /plugin and press Enter.",
+   "Read the tab names on the top row: Discover, Installed, Marketplaces, Errors.",
+   "Press the Right and Left arrow keys to move between tabs.",
+   "Compare: the list below changes with each tab and the footer reads \u2190/\u2192 switch tabs."
+  ],
+  "where": "/plugin > \u2190/\u2192 switch tabs"
+ },
+ "S8.33": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "showing full tool output, Ctrl-O to collapse"
+   }
+  ],
+  "needs": "a working agi session (signed in)",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Ask agi to run a command that prints many lines, for example ls -la.",
+   "Press Ctrl-O to expand the tool output.",
+   "Read the status line.",
+   "Compare: it reads showing full tool output, Ctrl-O to collapse, and more lines show. Press Ctrl-O again to collapse."
+  ],
+  "where": "agi chat > after a tool runs with output > Ctrl-O"
+ },
+ "S8.34": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/command_popup.rs",
+    "text": "Commands"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Close palette"
+   }
+  ],
+  "needs": "a working agi session (signed in)",
+  "note": "The only dropdown-style menu found is the slash command list; no button that opens a menu of actions was found.",
+  "reachable": "yes",
+  "steps": [
+   "Make sure the bottom input line is empty.",
+   "Type / to open the Commands list.",
+   "Use the up and down arrow keys to move through the commands, and type letters to filter.",
+   "Compare: the list opens as a menu of actions. Press Esc to close it (the key help shows Esc as Close palette)."
+  ],
+  "where": "agi chat > empty bottom input line > type /"
+ },
+ "S8.38": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/effort_picker.rs",
+    "text": "no thinking"
+   }
+  ],
+  "needs": "a working agi session (signed in)",
+  "note": "The code handles Esc to close; an outside click in a terminal was not found in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Type /effort and press Enter to open the picker over the chat.",
+   "Look at the floating list with the current level marked.",
+   "Press Esc.",
+   "Compare: the picker closes and the chat is back. The code has no outside-click dismissal that was confirmed."
+  ],
+  "where": "/effort (typed with no value) > Esc"
+ },
+ "S8.40": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/mod.rs",
+    "text": "Default"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Mode:"
+   }
+  ],
+  "needs": "a working agi session (signed in)",
+  "note": "The chip is shown only when the status line setting includes the mode; in a narrow window the label is cut to three letters.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi and look at the bottom status bar: a coloured chip shows the mode, Default.",
+   "Press Shift+Tab.",
+   "Look at the chip and the top banner that starts with Mode:.",
+   "Compare: the chip now shows the next mode, Plan, and the banner shows it for about two seconds."
+  ],
+  "where": "agi chat > bottom status bar > mode chip, then Shift+Tab to change it"
+ },
+ "S8.42": {
+  "labels": [],
+  "needs": "a working agi session (signed in)",
+  "note": "Role markers are text symbols (>, a star sign, a diamond, an info sign, a cross); no screen-reader label was found in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Type hi and press Enter.",
+   "Look at the marker before your line, which is a > sign.",
+   "Wait for the reply and look at its marker, which is a star sign.",
+   "Compare: each author has a marker symbol. The code shows no image avatar and no accessible name for each marker."
+  ],
+  "where": "agi chat > send any message > look at the marker before each line"
+ },
+ "S8.43": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "still working"
+   }
+  ],
+  "needs": "a working agi session (signed in)",
+  "note": "The code uses a still spinner when reduced motion is on; no accessible name for the spinner was found.",
+  "reachable": "yes",
+  "steps": [
+   "Send a request that takes a few seconds.",
+   "Look at the spinner line above the input: it shows a spinning symbol, a verb, and the elapsed time.",
+   "Wait for a slow request.",
+   "Compare: the line adds still working after the time. The spinner stops when the reply ends."
+  ],
+  "where": "agi chat > send a request > spinner line above the bottom input line"
+ },
+ "S8.45": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Mode:"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "showing full tool output, Ctrl-O to collapse"
+   }
+  ],
+  "needs": "a working agi session (signed in)",
+  "note": "Both are two-second notices in the code. The Mode: banner is drawn at the top of the chat, and the Ctrl-O notice sits in the status line; neither has a close control.",
+  "reachable": "yes",
+  "steps": [
+   "Press Shift+Tab and look at the banner at the top of the chat that starts with Mode:.",
+   "Wait about two seconds and check the banner has gone.",
+   "Run a command with output, then press Ctrl-O and read the status line notice.",
+   "Compare: the notice disappears by itself after about two seconds, and nothing needs closing."
+  ],
+  "where": "agi chat > Shift+Tab (top banner that starts with Mode:) > Ctrl-O (status line notice showing full tool output, Ctrl-O to collapse)"
+ },
+ "S8.46": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "No session matches"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/resume"
+   }
+  ],
+  "needs": "none",
+  "note": "The message is an info-role line (prefix \u2139) in the transcript; the error-role line (prefix \u2717) is used only for a few save failures such as \"The skill choices were not saved:\", which are harder to trigger by hand.",
+  "reachable": "yes",
+  "steps": [
+   "Start the app with agi in the terminal and wait for the composer.",
+   "Type /resume no-such-session and press Enter.",
+   "Look for a line in the chat that starts with the info mark and says No session matches, followed by the reference and the reason.",
+   "Compare with Expected: a message block inside the chat that reports the failure. Note that it uses the plain info style, not an alert or status style."
+  ],
+  "where": "agi, then type /resume followed by a session reference that does not exist (for example /resume no-such-session) in the composer"
+ },
+ "S8.47": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Mode:"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Falling back:"
+   }
+  ],
+  "needs": "none",
+  "note": "A second banner, \"Falling back:\" (model fallback), is also a one-line centred strip at the top of the chat, not full width, and is shown only when the model fallback chain rotates, which is hard to trigger by hand; no full-width account or system banner was found in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Start the app with agi and wait for the composer.",
+   "Press Shift+Tab once.",
+   "Look at the top line of the chat area for a short strip that says Mode: with the current mode name and the cycle key hint, shown for about 2 seconds.",
+   "Compare with Expected: a banner across the top of the view. Note that the strip is centred and only as wide as its text, not full width, and it is not an account or system message."
+  ],
+  "where": "agi, then press Shift+Tab in the composer"
+ },
+ "S8.49": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/session_picker.rs",
+    "text": "(no sessions to resume)"
+   }
+  ],
+  "needs": "a clean state with no saved sessions",
+  "note": "Other empty lists exist: /rewind with no checkpoints shows \"(no checkpoints yet: each prompt you send makes one)\" (apps/cli/src/tui/widgets/checkpoint_picker.rs), and /skills-toggle with no skills shows \"(no skills discovered)\" (apps/cli/src/tui/widgets/skills_toggle.rs).",
+  "reachable": "yes",
+  "steps": [
+   "Start the app with agi in a folder with no saved sessions, or use a fresh profile.",
+   "Type /resume and press Enter.",
+   "Look at the session list box for the line (no sessions to resume).",
+   "Compare with Expected: a short message in the list area that says the list is empty. Note that the Expected text asks for a next step, and this message does not give one."
+  ],
+  "where": "agi, then type /resume in the composer when no saved sessions exist"
+ },
+ "S8.50": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/screen_renderers.rs",
+    "text": "Retry connection"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/screen_renderers.rs",
+    "text": "\u2718 failed"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/mcp"
+   }
+  ],
+  "needs": "an MCP server configured in the project that fails to connect",
+  "note": "The recovery action is shown on the server screen; the code does not show a dedicated error sentence on that screen, and a failed session load appears as a chat line instead (for example \"Could not load session:\" in apps/cli/src/tui/tui_app.rs).",
+  "reachable": "yes",
+  "steps": [
+   "Start the app with agi and wait for the composer.",
+   "Type /mcp and press Enter to see the MCP server list.",
+   "Choose a configured server whose status reads \u2718 failed and open it.",
+   "Look for the recovery item \u276f 1. Retry connection on the server screen.",
+   "Compare with Expected: a view-level message with a recovery action. Note that the failed server screen shows the status and the Retry connection action, but no separate sentence explaining the load or request failure."
+  ],
+  "where": "agi, then type /mcp in the composer, then open a server whose status shows \"\u2718 failed\""
+ }
+}

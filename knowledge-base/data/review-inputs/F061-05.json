@@ -1,0 +1,509 @@
+{
+ "feature": {
+  "id": "F061-05",
+  "aliases": [
+   "Agent memory",
+   "Agent routines",
+   "Agent deployments",
+   "Agent knowledge files",
+   "Agent workspace",
+   "Agent responsibilities",
+   "Activity",
+   "S61.06",
+   "S61.07",
+   "S61.10",
+   "S61.12"
+  ],
+  "summary": "Per-agent memory, routines, a private workspace and a responsibility list. The brief calls all four missing. The code has two partial pieces on web and mobile Cloud: routines that run as an agent (Deployments), and up to 20 reference files per agent. No per-agent memory, no private computer and no responsibility list were found.",
+  "purpose": {
+   "what_it_does": "Would give each agent its own memory, scheduled routines, a workspace for its files and a list of what it owns. Today Cloud agents can own scheduled routines and carry reference files; nothing else of the four is built.",
+   "why_it_exists": "S61.06, S61.07, S61.10 and S61.12 describe agents that persist over time like a team member (doc: knowledge-base/data/area-briefs/061-persistent-agents-and-agent-rosters.md).",
+   "who_uses_it": "Web and mobile Cloud users who want an agent that runs on a schedule or reads fixed files; future users of persistent agents.",
+   "problems_solved": [
+    "Running the same agent on a schedule without opening a chat.",
+    "Giving an agent reference material once instead of attaching it each chat."
+   ],
+   "use_cases": [
+    "Add a weekly routine that runs a research agent every Monday.",
+    "Upload a style guide as Knowledge so a writing agent always has it.",
+    "See the agent's recent chats and routines under Activity."
+   ]
+  },
+  "user_experience": {
+   "where_to_find_it": [
+    "Web editor: Knowledge panel, Deployments panel (button 'New deployment'), Activity data (apps/web/features/agents/components/AgentKnowledgePanel.tsx:99-182; AgentDeploymentsPanel.tsx:221-371).",
+    "Mobile editor: Knowledge section with 'Add file', Activity section with 'Add a routine' (apps/mobile/src/features/agents/components/AgentManageSections.tsx:136-171, 411-480).",
+    "CLI: none. Chrome, VS Code, Tauri desktop: none found."
+   ],
+   "prerequisites": [
+    "Signed in; Cloud mode on mobile.",
+    "Only the owner uploads or removes files and only an active agent accepts new files (custom-agent-service.ts:767-775)."
+   ],
+   "screens_and_controls": [
+    "Knowledge: description 'Files the agent can read in every chat.', button 'Add file', Remove per file (AgentManageSections.tsx:136-170; AgentKnowledgePanel.tsx:170).",
+    "Deployments: list of routines with Pause or Resume, a run activity bar and 'New deployment' linking to /chat/schedules?agent=<id> (AgentDeploymentsPanel.tsx:30-33, 146, 315-320).",
+    "Mobile Activity: 'Add a routine' (AgentManageSections.tsx:471)."
+   ],
+   "journey": [
+    "Add a file: pick a text file, it is stored with its content and hash.",
+    "Create a routine for the agent from the schedules page; on each run the server loads the agent and runs the task as that agent.",
+    "Open Activity to see up to 50 recent conversations and 50 routines linked to the agent."
+   ],
+   "feedback_and_outputs": [
+    "File limit message: 'An agent holds up to 20 files.' (custom-agent-service.ts:775-777).",
+    "Duplicate file name: 'The agent already has a file named <name>.' (custom-agent-service.ts:793-796).",
+    "Deployments error: 'Deployments could not be loaded.' (AgentDeploymentsPanel.tsx:249-262)."
+   ],
+   "settings": [
+    "File limits: 20 files, 512,000 bytes each (packages/contracts/cloud-contracts/src/agents.ts:22-23).",
+    "Context cap: reference files are cut to 120,000 characters in total per turn (apps/web/lib/agents/agent-turn-config.ts:15, 38-52)."
+   ]
+  },
+  "current_implementation": {
+   "working": [
+    "Cloud agent knowledge files: add, list, remove; stored with content and hash; injected into every turn as agent_file blocks treated as material, not instructions (custom-agent-service.ts:755-826; agent-turn-config.ts:111-137).",
+    "Cloud routines as an agent: scheduled_tasks has an agent_id column; the schedule service validates the agent; the scheduled executor loads the agent turn config and applies its model, web, code and connector settings (apps/web/db/neon/0370_user_agents.sql:143-148; apps/web/lib/services/schedule-service.ts:922-924, 1006; apps/web/lib/services/scheduled-agent-executor.ts:918-958).",
+    "Cloud activity: conversations and routines of an agent for the viewer (custom-agent-service.ts:640-688).",
+    "Pausing or retiring an agent stops its routines (AgentManagePanel.tsx:208-216 dialog text; scheduled-agent-executor.ts:921 throws ScheduledAgentUnavailableError) [inferred for pause]."
+   ],
+   "incomplete": [
+    "Knowledge files are text only (content stored as text, hash of content) and are not a workspace or computer (custom-agent-service.ts:767-800).",
+    "Activity lists chats and routines; it is not a list of responsibilities the agent owns (custom-agent-service.ts:640-688).",
+    "Scheduled routines skip the daily message count (schedule-service.ts:922-924) [inferred]."
+   ],
+   "disconnected_or_disabled": [],
+   "not_available": [
+    "Per-agent memory: none found. A grep of db/neon SQL for agent_id near memory returned no row; the chat memory path was not read, so unknown.",
+    "Persistent private workspace or computer per agent (S61.10): none found.",
+    "Responsibility list per agent (S61.12): none found.",
+    "CLI agents have no memory, routines, workspace or responsibilities; the CLI has cron tools but they are not tied to an agent (apps/cli/src/features/exec/tools/mod.rs:1204-1218)."
+   ]
+  },
+  "required_behaviour": {
+   "established": [
+    {
+     "statement": "Each agent keeps its own memory separate from other agents.",
+     "source": "S61.06"
+    },
+    {
+     "statement": "An agent can own routines that run as that agent.",
+     "source": "S61.07"
+    },
+    {
+     "statement": "Each agent has its own persistent workspace or computer where its files live.",
+     "source": "S61.10"
+    },
+    {
+     "statement": "Each agent shows the list of responsibilities it currently owns.",
+     "source": "S61.12"
+    },
+    {
+     "statement": "Memory, projects and context are governed by their own system page.",
+     "source": "SYS-memory-projects-and-context"
+    }
+   ],
+   "acceptance_criteria": [
+    "A routine created with agent=<id> runs with that agent's instructions, model and tool toggles.",
+    "A paused or retired agent's routine run fails with the unavailable message instead of running.",
+    "Adding a 21st file is refused.",
+    "Adding a file with an existing name is refused.",
+    "Reference file text appears in the model context but is labelled as material, not instructions.",
+    "Total reference text per turn never exceeds 120,000 characters."
+   ],
+   "inferred": [
+    "Per-agent memory must respect Local, own-key and Cloud boundaries (AGENTS.md section 6) [inferred].",
+    "The activity panel is the closest thing to a responsibility list and could be extended [inferred]."
+   ],
+   "proposed": [
+    "[proposed] Add a memory scope keyed by agent id.",
+    "[proposed] Show owned routines, open runs and open tasks as responsibilities.",
+    "[proposed] Let an agent have a sandbox folder in Cloud with file read and write."
+   ]
+  },
+  "implementation_map": [
+   {
+    "kind": "service",
+    "name": "agent files",
+    "path": "apps/web/lib/services/custom-agent-service.ts",
+    "role": "listAgentFiles, addAgentFile, deleteAgentFile, readAgentFileTexts (755-826)."
+   },
+   {
+    "kind": "table",
+    "name": "user_agent_files",
+    "path": "apps/web/db/neon/0370_user_agents.sql",
+    "role": "File name, type, content, hash, size (line 117)."
+   },
+   {
+    "kind": "endpoint",
+    "name": "/api/custom-agents/{id}/files",
+    "path": "apps/web/app/api/custom-agents/[id]/files/route.ts",
+    "role": "List and upload files; delete at files/[fileId]."
+   },
+   {
+    "kind": "endpoint",
+    "name": "GET /api/custom-agents/{id}/activity",
+    "path": "apps/web/app/api/custom-agents/[id]/activity/route.ts",
+    "role": "Conversations and routines for an agent."
+   },
+   {
+    "kind": "table",
+    "name": "scheduled_tasks.agent_id",
+    "path": "apps/web/db/neon/0370_user_agents.sql",
+    "role": "Routine to agent link (lines 143-148)."
+   },
+   {
+    "kind": "service",
+    "name": "schedule-service",
+    "path": "apps/web/lib/services/schedule-service.ts",
+    "role": "Validates agent for a schedule (922-924, 1006)."
+   },
+   {
+    "kind": "service",
+    "name": "scheduled-agent-executor",
+    "path": "apps/web/lib/services/scheduled-agent-executor.ts",
+    "role": "Runs a routine as the agent (918-958)."
+   },
+   {
+    "kind": "component",
+    "name": "AgentKnowledgePanel",
+    "path": "apps/web/features/agents/components/AgentKnowledgePanel.tsx",
+    "role": "Web file list and upload."
+   },
+   {
+    "kind": "component",
+    "name": "AgentDeploymentsPanel",
+    "path": "apps/web/features/agents/components/AgentDeploymentsPanel.tsx",
+    "role": "Web routines list with pause and resume."
+   },
+   {
+    "kind": "component",
+    "name": "AgentManageSections (mobile)",
+    "path": "apps/mobile/src/features/agents/components/AgentManageSections.tsx",
+    "role": "Mobile Knowledge and Activity."
+   },
+   {
+    "kind": "service",
+    "name": "mobile files and activity calls",
+    "path": "apps/mobile/src/features/agents/service.ts",
+    "role": "uploadAgentFile (138), getAgentActivity (126)."
+   },
+   {
+    "kind": "service",
+    "name": "agentSystemPrompt",
+    "path": "apps/web/lib/agents/agent-turn-config.ts",
+    "role": "Injects files as agent_file blocks."
+   }
+  ],
+  "execution_and_data_flow": {
+   "steps": [
+    {
+     "what_happens": "Upload: the owner's file text is stored with a SHA-256 hash and size after the 20-file check.",
+     "runs_on": "our servers",
+     "evidence": "apps/web/lib/services/custom-agent-service.ts:767-798"
+    },
+    {
+     "what_happens": "Each chat turn as the agent loads the files in name order and cuts them at 120,000 characters.",
+     "runs_on": "our servers",
+     "evidence": "apps/web/lib/agents/agent-turn-config.ts:38-52, 104-108"
+    },
+    {
+     "what_happens": "A routine fires; the executor loads the agent, refuses when paused or retired, uses the agent's model and tool settings.",
+     "runs_on": "our servers",
+     "evidence": "apps/web/lib/services/scheduled-agent-executor.ts:918-958"
+    },
+    {
+     "what_happens": "Activity reads conversations and scheduled tasks linked to the agent for this viewer.",
+     "runs_on": "our servers",
+     "evidence": "apps/web/lib/services/custom-agent-service.ts:640-688"
+    }
+   ],
+   "data": [
+    {
+     "what": "Agent reference files",
+     "where_stored": "user_agent_files (content stored as text in the database)",
+     "synced": "Yes via API",
+     "retained_or_deleted": "Removed by the owner or when the agent is deleted"
+    },
+    {
+     "what": "Routine definitions",
+     "where_stored": "scheduled_tasks with agent_id",
+     "synced": "Yes",
+     "retained_or_deleted": "agent_id set to null if the agent row is deleted (0370_user_agents.sql:143-144)"
+    }
+   ],
+   "models_and_providers": "A routine uses the agent's model when set, else the task's model (scheduled-agent-executor.ts:923). Provider is chosen by the shared routing, not by this feature."
+  },
+  "access_and_usage": {
+   "account": "Signed-in Cloud account.",
+   "permissions": "Owner only for file changes; viewers see activity filtered to their own conversations (custom-agent-service.ts:650-660).",
+   "subscription": "No plan check found in the files or activity routes. Scheduled routines may have their own limits in the schedule service (not opened).",
+   "limits_and_metering": "20 files, 512,000 bytes each, 120,000 characters per turn, activity limit 50 each (agents.ts:22-23; agent-turn-config.ts:15; custom-agent-service.ts:29).",
+   "flags": "none found in the code.",
+   "model_compatibility": "Same as F061-03.",
+   "provider_restrictions": "none found in the code.",
+   "local_mode": "Not available in Local mode: files, routines and activity are Cloud server features. CLI has none of them."
+  },
+  "states_and_edge_cases": [
+   {
+    "state": "Routine for an unavailable agent",
+    "behaviour": "ScheduledAgentUnavailableError with the agent's reason.",
+    "evidence": "apps/web/lib/services/scheduled-agent-executor.ts:918-921"
+   },
+   {
+    "state": "Some deployments fail to load",
+    "behaviour": "Panel throws 'Deployments could not be loaded.' when routines exist but none load.",
+    "evidence": "apps/web/features/agents/components/AgentDeploymentsPanel.tsx:249-262"
+   },
+   {
+    "state": "File too many or duplicate",
+    "behaviour": "Validation or conflict error with plain message.",
+    "evidence": "apps/web/lib/services/custom-agent-service.ts:775-797"
+   },
+   {
+    "state": "Files over the context cap",
+    "behaviour": "Later files are cut or dropped silently.",
+    "evidence": "apps/web/lib/agents/agent-turn-config.ts:38-52"
+   },
+   {
+    "state": "Retired agent",
+    "behaviour": "Files cannot be added; routines stop.",
+    "evidence": "custom-agent-service.ts:333-337, 767-770; AgentManagePanel.tsx:208-216"
+   },
+   {
+    "state": "Offline",
+    "behaviour": "not handled in the code beyond error messages.",
+    "evidence": "AgentKnowledgePanel.tsx:40-50"
+   }
+  ],
+  "verification": {
+   "existing_tests": [
+    {
+     "path": "apps/web/app/api/custom-agents/[id]/files/route.test.ts",
+     "covers": "Files route (contents not opened)."
+    },
+    {
+     "path": "apps/web/app/api/custom-agents/[id]/activity/route.test.ts",
+     "covers": "Activity route (contents not opened)."
+    },
+    {
+     "path": "apps/web/lib/services/__tests__/scheduled-agent-routine.test.ts",
+     "covers": "Routine as an agent (contents not opened)."
+    },
+    {
+     "path": "apps/web/features/agents/__tests__/AgentKnowledgePanel.test.tsx",
+     "covers": "Knowledge panel (contents not opened)."
+    },
+    {
+     "path": "apps/web/features/agents/__tests__/AgentDeploymentsPanel.test.tsx",
+     "covers": "Deployments panel (contents not opened)."
+    }
+   ],
+   "scenarios": [
+    {
+     "name": "File reaches the model",
+     "steps": [
+      "Upload a small text file named style.md to an agent.",
+      "Publish and Chat.",
+      "Ask what the file says."
+     ],
+     "expected": "The agent answers from the file and does not follow commands inside it."
+    },
+    {
+     "name": "File limit",
+     "steps": [
+      "Upload 20 files.",
+      "Try a 21st."
+     ],
+     "expected": "Refused with 'An agent holds up to 20 files.'"
+    },
+    {
+     "name": "Routine as agent",
+     "steps": [
+      "From the agent's Deployments panel press New deployment.",
+      "Create a routine that runs now.",
+      "Open the result."
+     ],
+     "expected": "The run follows the agent's instructions and tool toggles."
+    },
+    {
+     "name": "Pause stops routines",
+     "steps": [
+      "Pause the agent.",
+      "Trigger the routine."
+     ],
+     "expected": "The run reports that the agent is paused and does not execute."
+    }
+   ],
+   "diagnostics": [
+    "Error ScheduledAgentUnavailableError in scheduled executor logs.",
+    "Tables user_agent_files and scheduled_tasks (agent_id).",
+    "Activity endpoint output."
+   ]
+  },
+  "gaps": [
+   {
+    "gap": "No per-agent memory.",
+    "affects": "All apps.",
+    "evidence": "S61.06; no agent-scoped memory table or code found",
+    "work_needed": "Design memory keyed by agent and boundary."
+   },
+   {
+    "gap": "No private workspace or computer per agent; only text reference files.",
+    "affects": "All apps.",
+    "evidence": "custom-agent-service.ts:767-800 (text content column)",
+    "work_needed": "Define sandbox storage and file tools."
+   },
+   {
+    "gap": "No responsibility list.",
+    "affects": "Web and mobile.",
+    "evidence": "S61.12; activity only lists chats and routines",
+    "work_needed": "Define what an agent owns and show it."
+   },
+   {
+    "gap": "No CLI routines tied to an agent.",
+    "affects": "CLI users.",
+    "evidence": "apps/cli/src/features/exec/tools/mod.rs cron tools carry no agent field",
+    "work_needed": "Bind cron entries to an agent name."
+   },
+   {
+    "gap": "Brief says routines and files are missing; web and mobile have them.",
+    "affects": "Documentation.",
+    "evidence": "apps/web/lib/services/scheduled-agent-executor.ts:918",
+    "work_needed": "Update brief."
+   }
+  ],
+  "depends_on": [
+   "surface:web",
+   "surface:mobile",
+   "surface:cli",
+   "mode:cloud",
+   "table:user_agent_files",
+   "table:scheduled_tasks",
+   "file:apps/web/lib/services/scheduled-agent-executor.ts",
+   "file:apps/web/lib/services/custom-agent-service.ts",
+   "api:GET /api/custom-agents/{id}/activity",
+   "api:POST /api/custom-agents/{id}/files",
+   "SYS-memory-projects-and-context",
+   "SYS-files-artifacts-and-storage",
+   "SYS-agents-tools-and-automation",
+   "SYS-sync-and-continuity",
+   "F061-02",
+   "F061-03"
+  ],
+  "relationships": [
+   {
+    "rel": "stores_data_in",
+    "to": "table:user_agent_files",
+    "evidence": "apps/web/db/neon/0370_user_agents.sql:117"
+   },
+   {
+    "rel": "stores_data_in",
+    "to": "table:scheduled_tasks",
+    "evidence": "agent_id column 0370_user_agents.sql:143-144"
+   },
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/web/lib/services/scheduled-agent-executor.ts",
+    "evidence": "Lines 918-958"
+   },
+   {
+    "rel": "exposes_api",
+    "to": "api:POST /api/custom-agents/{id}/files",
+    "evidence": "apps/web/app/api/custom-agents/[id]/files/route.ts"
+   },
+   {
+    "rel": "exposes_api",
+    "to": "api:GET /api/custom-agents/{id}/activity",
+    "evidence": "apps/web/app/api/custom-agents/[id]/activity/route.ts"
+   },
+   {
+    "rel": "depends_on",
+    "to": "SYS-memory-projects-and-context",
+    "evidence": "Per-agent memory is not built; memory belongs to that system"
+   },
+   {
+    "rel": "depends_on",
+    "to": "SYS-files-artifacts-and-storage",
+    "evidence": "Files stored in user_agent_files content column"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:web",
+    "evidence": "AgentKnowledgePanel.tsx; AgentDeploymentsPanel.tsx"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:mobile",
+    "evidence": "AgentManageSections.tsx:136-171, 411-480"
+   },
+   {
+    "rel": "blocked_by",
+    "to": "mode:cloud",
+    "evidence": "All pieces are server features"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/web/lib/services/__tests__/scheduled-agent-routine.test.ts",
+    "evidence": "File exists"
+   },
+   {
+    "rel": "governed_by_subscription",
+    "to": "SYS-subscriptions-entitlements-and-usage",
+    "evidence": "Routine runs are metered by the schedule system (not opened)"
+   }
+  ],
+  "unknowns": [
+   "Whether the chat memory system reads or writes anything keyed by agent; the memory pipeline was not read.",
+   "Whether scheduled routines have plan limits in schedule-service.ts beyond what was opened.",
+   "How the file upload route validates file type; only the service was read.",
+   "Whether pausing an agent explicitly cancels routines or only fails their next run."
+  ]
+ },
+ "corrections": [
+  {
+   "section": "3 Incomplete",
+   "claim": "Scheduled routines skip the daily message count (schedule-service.ts:922-924) [inferred].",
+   "verdict": "wrong",
+   "what_the_code_shows": "schedule-service.ts:922-924 is assertScheduleAgent, which passes countTurns:false only when a routine is created or edited. At run time scheduled-agent-executor.ts:~899-901 calls loadAgentTurnConfig(scope.db, scope.userId, task.agentId) with the default countTurns:true. That default enforces dailyTurnLimit (agent-turn-config.ts:78-86) and monthlyCreditLimit (agent-turn-config.ts:87-95), and the executor throws ScheduledAgentUnavailableError when either is hit.",
+   "evidence": "apps/web/lib/agents/agent-turn-config.ts:58-95; apps/web/lib/services/scheduled-agent-executor.ts:899-901; apps/web/lib/services/schedule-service.ts:922-924",
+   "correction": "Routine runs count against the agent's daily message limit and monthly credit limit, and are refused when either is reached. Only the check made when a routine is created or edited skips the count."
+  },
+  {
+   "section": "7 Access and usage rules",
+   "claim": "Subscription: No plan check found in the files or activity routes. Scheduled routines may have their own limits in the schedule service (not opened).",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The files and activity routes show no plan check, so that part holds. The routine run path does check the plan. The executor resolves the entitlement bundle and calls evaluateManagedComputeAccess(... 'schedules'). When access is denied the run is skipped and returns 'Scheduled execution skipped: <reason>'.",
+   "evidence": "apps/web/lib/services/scheduled-agent-executor.ts:~889-912",
+   "correction": "Files and activity have no plan gate. Routine runs as an agent are gated by the managed-compute access policy for 'schedules', and the plan tier is passed into schedule validation and routing."
+  },
+  {
+   "section": "6 Models and providers",
+   "claim": "A routine uses the agent's model when set, else the task's model (scheduled-agent-executor.ts:923).",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "agentModelFor returns the agent's model only when the task model is empty or an Auto id. If the task names a specific model, that model wins. If the agent has no model, the task's model is used.",
+   "evidence": "apps/web/lib/agents/agent-turn-config.ts:175-182; apps/web/lib/services/scheduled-agent-executor.ts:~903",
+   "correction": "A routine uses the agent's model only when the task's own model is unset or Auto. An explicit task model overrides it."
+  },
+  {
+   "section": "2 Before you start / 8 States",
+   "claim": "Only the owner uploads or removes files and only an active agent accepts new files; Retired agent: files cannot be added.",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "addAgentFile calls requireOwnedAgent, then assertEditable. assertEditable rejects only status 'retired'. A paused agent still accepts files. Owner-only is correct for add and delete.",
+   "evidence": "apps/web/lib/services/custom-agent-service.ts:333-337, 767-769",
+   "correction": "Only the owner can add or remove files. Adding is refused only for a retired agent, and a paused agent still accepts files."
+  },
+  {
+   "section": "2 Settings / 7 Limits",
+   "claim": "File limits: 20 files, 512,000 bytes each (packages/contracts/cloud-contracts/src/agents.ts:22-23).",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The values are right: AGENT_FILES_MAX = 20 and AGENT_FILE_MAX_BYTES = 512_000. They sit at lines 25-26, and lines 22-23 hold other constants (AGENT_DAILY_TURN_LIMIT_MAX, AGENT_MONTHLY_CREDIT_LIMIT_MAX). Enforcement of the 20-file limit is at custom-agent-service.ts:773-777. I did not find where the byte cap is enforced.",
+   "evidence": "packages/contracts/cloud-contracts/src/agents.ts:25-26",
+   "correction": "Cite agents.ts:25-26. The byte cap enforcement site was not located (the files route was not checked)."
+  }
+ ],
+ "missing_facts": [
+  "Per-agent dailyTurnLimit and monthlyCreditLimit (owner-set) are enforced on routine runs and on chat turns, with the messages 'reached its limit of N messages a day' and 'used the N credits its owner allows each month' (apps/web/lib/agents/agent-turn-config.ts:78-95). The page lists neither in Limits and metering.",
+  "Routine runs are gated by evaluateManagedComputeAccess for 'schedules' with the user's entitlement plan, and are skipped with 'Scheduled execution skipped: ...' when denied (apps/web/lib/services/scheduled-agent-executor.ts:~889-912).",
+  "A routine as an agent also applies the agent's web search, code execution, connector selection and allowed or blocked web domains, not only its model (apps/web/lib/services/scheduled-agent-executor.ts:~938-960)."
+ ]
+}

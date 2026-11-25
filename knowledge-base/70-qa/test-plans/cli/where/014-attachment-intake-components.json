@@ -1,0 +1,280 @@
+{
+ "S14.01": {
+  "labels": [],
+  "needs": "none",
+  "note": "No device file chooser found. /attach and /files take a typed path, and @ opens a picker for workspace files only. Searched apps/cli/src for file-dialog code (rfd, FileDialog, NSOpenPanel, osascript, file chooser) and found none.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S14.03": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Attach the image on the clipboard"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/attach clipboard"
+   }
+  ],
+  "needs": "an image on the clipboard and a vision model selected",
+  "note": "Ctrl+V only attaches a clipboard image. Plain text paste arrives as text, and an image is refused if the model has no vision support.",
+  "reachable": "yes",
+  "steps": [
+   "Copy an image to the clipboard, for example with a screenshot.",
+   "Start agi and click into the message box.",
+   "Press Ctrl+V.",
+   "Look for the notice 'attached <name>' in the chat, then type /attach list and compare with Expected."
+  ],
+  "where": "agi, then Ctrl+V in the message box (or type /attach clipboard)"
+ },
+ "S14.08": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Fetch a web page and add its text to the conversation"
+   }
+  ],
+  "needs": "a public web page URL and network access",
+  "note": "The notice wording after the fetch was not checked line by line; only the /attach url branch was read.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi.",
+   "Type /attach https://example.com and press Enter.",
+   "Wait for the fetch to finish, then look for the notice in the chat that the page was added.",
+   "Ask a question about the page's content and compare the answer with Expected."
+  ],
+  "where": "agi, then type /attach <url> in the message box (for example /attach https://example.com)"
+ },
+ "S14.11": {
+  "labels": [],
+  "needs": "none",
+  "note": "No command attaches a code repository as task context. The only match is the --repo / -C flag in apps/cli/src/lib.rs, which points the whole program at a repository rather than attaching it. Searched apps/cli/src for github, /repo and repository attach terms.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S14.12": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "/add-dir"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Inline a file, or list a folder with @dir/"
+   }
+  ],
+  "needs": "a folder inside the project folder",
+  "note": "/add-dir grants read and change access to the folder, which is broader than the attachment wording in Expected. /files takes files only.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi in the project folder.",
+   "Type /add-dir <a folder name> and press Enter.",
+   "Type /add-dir with no folder to see the list of added folders.",
+   "Compare the list with Expected and check that the folder is named."
+  ],
+  "where": "agi, then type /add-dir <folder> in the message box, or type @dir/ to list a folder"
+ },
+ "S14.15": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "/files"
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "No files attached."
+   }
+  ],
+  "needs": "two or three small text files in the project folder",
+  "note": "/attach takes one path only. Multiple selection is typed names, not a picker.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi in a folder that holds two or three small text files.",
+   "Type /files notes1.txt notes2.txt and press Enter (separate names with spaces).",
+   "Look for one 'attached:' line per file in the reply.",
+   "Type /files with no names to see the Context files list."
+  ],
+  "where": "agi, then type /files <file1> <file2> in the message box"
+ },
+ "S14.18": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Staged for the next turn:"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/attach remove to drop"
+   }
+  ],
+  "needs": "an image file in the project folder and a vision model",
+  "note": "The chip above the box shows names only, without size. /files replies show paths without sizes.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi in a folder that holds a PNG or JPG image.",
+   "Type /attach <image file name> and press Enter.",
+   "Read the reply 'Attached <name> (<size>)...' and the chip line above the message box.",
+   "Type /attach list and compare the name and size with Expected."
+  ],
+  "where": "agi, then type /attach <image file> in the message box, then /attach list"
+ },
+ "S14.22": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "It goes with your next message"
+   }
+  ],
+  "needs": "an image file and a vision model",
+  "note": "Whether the chip clears after sending was not confirmed in the code read.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi with a vision model selected.",
+   "Type /attach <image file name> and press Enter.",
+   "Look for the reply 'Attached <name>. It goes with your next message; /attach remove drops it.'",
+   "Look at the chip line above the message box, type a question, press Enter, and compare with Expected."
+  ],
+  "where": "agi, then type /attach <image file> in the message box"
+ },
+ "S14.23": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "truncated to budget:"
+   }
+  ],
+  "needs": "a text file over 40,000 characters in the project folder",
+  "note": "The per-file limit is 40,000 characters and the total is 120,000. For PDF and Office files the cut note appears in the document text (apps/cli/src/documents.rs), and no app-visible notice for it was found.",
+  "reachable": "yes",
+  "steps": [
+   "Create a plain text file in the project folder longer than 40,000 characters.",
+   "Start agi and type /files <that file name> and press Enter.",
+   "Look for the line 'truncated to budget:' followed by the file path.",
+   "Compare with Expected."
+  ],
+  "where": "agi, then type /files <large text file> in the message box"
+ },
+ "S14.24": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "is not an image, PDF or Office document"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Could not attach"
+   }
+  ],
+  "needs": "a file of an unsupported type such as .txt",
+  "note": "/files accepts plain text files, so this notice applies to /attach only.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi in a folder that holds a .txt or .zip file.",
+   "Type /attach <that file name> and press Enter.",
+   "Look for the reply 'Could not attach <name>: <name> is not an image, PDF or Office document'.",
+   "Compare with Expected."
+  ],
+  "where": "agi, then type /attach <file> in the message box with a file that is not an image, PDF or Office document"
+ },
+ "S14.28": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/attach remove to drop"
+   }
+  ],
+  "needs": "two image files and a vision model",
+  "note": "Removal covers /attach staging only. No command to remove files added with /files was found, so the 'removed file is not sent' part could not be confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Attach two images with /attach <image>.",
+   "Type /attach list and note the numbers.",
+   "Type /attach remove 1 and press Enter.",
+   "Type /attach list and check that only the other image remains, then compare with Expected."
+  ],
+  "where": "agi, then type /attach remove in the message box (or /attach remove <n> or /attach remove all)"
+ },
+ "S14.31": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "is already attached"
+   }
+  ],
+  "needs": "an image file and a vision model",
+  "note": "For /files the duplicate reply is 'already attached:' with the path (apps/cli/src/claude_parity.rs).",
+  "reachable": "yes",
+  "steps": [
+   "Start agi with a vision model selected.",
+   "Type /attach <image file name> and press Enter.",
+   "Type the same command again and press Enter.",
+   "Look for the reply '<name> (<size>) is already attached' and compare with Expected."
+  ],
+  "where": "agi, then type /attach <image file> twice in the message box"
+ },
+ "S14.32": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "failed:"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Could not attach"
+   }
+  ],
+  "needs": "one existing text file and one missing file name",
+  "note": "The error reason text comes from path checks and was not traced line by line.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi in the project folder.",
+   "Type /files notes1.txt missing-file.txt and press Enter.",
+   "Look for an 'attached:' line for the first file and a 'failed:' line that names the second file and gives a reason.",
+   "Compare with Expected."
+  ],
+  "where": "agi, then type /files <existing file> <missing file> in the message box"
+ },
+ "S14.33": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "No files attached."
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "failed:"
+   }
+  ],
+  "needs": "three small text files, one of them missing or repeated for a fuller check",
+  "note": "The reply is one block of per-file lines with no total count, so it is not a true summary line.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi in a folder with three small text files.",
+   "Type /files with the three file names and press Enter.",
+   "Read the reply: one line per file for 'attached:', 'already attached:', 'truncated to budget:' or 'failed:'.",
+   "Compare with Expected."
+  ],
+  "where": "agi, then type /files <name1> <name2> <name3> in the message box"
+ },
+ "S14.36": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "switch to a vision model with /model first"
+   }
+  ],
+  "needs": "a model without vision support in this build",
+  "note": "The code names no convert option. For @path mentions in an untrusted workspace, the reply is 'only the path was sent' (apps/cli/src/mentions.rs), which is another fallback.",
+  "reachable": "yes",
+  "steps": [
+   "Type /model and choose a model that does not accept images (the code does not list which one in this build).",
+   "Type /attach <image file name> and press Enter.",
+   "Look for the reply '<model name> does not accept images; switch to a vision model with /model first'.",
+   "Compare with Expected."
+  ],
+  "where": "agi, then pick a model without vision with /model, then type /attach <image file> in the message box"
+ }
+}

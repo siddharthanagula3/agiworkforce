@@ -1,0 +1,464 @@
+{
+ "S57.01": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/capabilities/index.tsx",
+    "text": "Web search"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-display.ts",
+    "text": "Search the web"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/WebSearchToolCard.tsx",
+    "text": "1 source"
+   }
+  ],
+  "needs": "a signed-in account in Cloud mode; the Web search row appears only when the mobile release enables it",
+  "note": "Search row label comes from the display map; the toggle is hidden when FEATURES.webSearch is off.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu, tap Settings, then tap Assistant > Capabilities.",
+   "Under AGI Cloud, check the Web search row is on (its value reads Cloud).",
+   "Go back to a Cloud chat and ask about a recent event or today's news.",
+   "Look for a Search the web row in the reply and tap it to expand.",
+   "Compare with Expected: the search and its sources (1 source or N sources, with links) should be shown."
+  ],
+  "where": "Settings > Assistant > Capabilities > Web search (then a Cloud chat)"
+ },
+ "S57.02": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ToolCallTimeline.tsx",
+    "text": "Failed to fetch:"
+   }
+  ],
+  "needs": "a Cloud account; a public web page address",
+  "note": "The success label Web Fetch is not a literal in the code; it comes from the readable-name rule in packages/contracts/types/src/tool-display.ts. No separate on/off control for fetch was found.",
+  "reachable": "yes",
+  "steps": [
+   "Open a Cloud chat (Settings > Assistant > Capabilities shows Cloud mode).",
+   "Paste a full web page address and ask what the page says.",
+   "Look for a tool row in the reply; a row named Web Fetch (generated from the tool name web_fetch) should appear.",
+   "If the fetch fails, the row reads Failed to fetch: followed by the address; compare with Expected."
+  ],
+  "where": "Cloud chat: paste a web page address and ask what it says"
+ },
+ "S57.03": {
+  "labels": [],
+  "needs": "a Cloud chat",
+  "note": "Rollout flag in packages/ai/model-registry/catalog/routing-policies.json:161 is server-only, and no source-reader tool control was found in apps/mobile. The only source control found is the Open source link on search results (apps/mobile/src/features/chat/components/WebSearchResultCard.tsx), which is not a document reader.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S57.04": {
+  "labels": [],
+  "needs": "a Cloud chat with files available to the account",
+  "note": "Searched for search_files and open_file: found in apps/web/lib/server/tools/file-tool-names.ts and the web tool loop, but no mobile control or visible label was found in apps/mobile.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S57.05": {
+  "labels": [],
+  "needs": "a Cloud account with code execution enabled on the server",
+  "note": "Only the sandbox gate (apps/web/lib/e2b/gate.ts:20) and the Code execution and file creation row (apps/mobile/src/features/settings/capabilities/index.tsx) were found; no file-read tool name or phone control was located. Plan says the server switch AGI_E2B_EXECUTION=1 is needed.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S57.06": {
+  "labels": [],
+  "needs": "a Cloud account with code execution enabled on the server",
+  "note": "Same as S57.05: only the sandbox gate (apps/web/lib/e2b/gate.ts:20) was found; no file-write tool name or phone control was located.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S57.07": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/capabilities/index.tsx",
+    "text": "Code execution and file creation"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+    "text": "Download artifact"
+   }
+  ],
+  "needs": "a Cloud account; the Code execution and file creation row must not show Off",
+  "note": "Row shows Off when FEATURES.codeExecution is false in this release. Download artifact is an accessibility label, not confirmed as printed text.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Assistant > Capabilities and check Code execution and file creation is not Off.",
+   "In a Cloud chat, ask for a spreadsheet (for example a three-month budget in Excel format).",
+   "When the file card appears in the reply, tap it to open the file.",
+   "Tap the download control (Download artifact) and confirm an .xlsx file can be opened or shared, as Expected says."
+  ],
+  "where": "Settings > Assistant > Capabilities > Code execution and file creation, then a Cloud chat that asks for a spreadsheet"
+ },
+ "S57.08": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/capabilities/index.tsx",
+    "text": "Code execution and file creation"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+    "text": "Download artifact"
+   }
+  ],
+  "needs": "a Cloud account; the Code execution and file creation row must not show Off",
+  "note": "Same gate as S57.07. The file type is chosen by the model, not by a phone control.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Assistant > Capabilities and check Code execution and file creation is not Off.",
+   "In a Cloud chat, ask for a Word document (docx) on a topic.",
+   "When the file card appears, tap it to open the document.",
+   "Tap the download control (Download artifact) and confirm a .docx file opens or can be shared."
+  ],
+  "where": "Settings > Assistant > Capabilities > Code execution and file creation, then a Cloud chat that asks for a Word document"
+ },
+ "S57.09": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/capabilities/index.tsx",
+    "text": "Code execution and file creation"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+    "text": "Download artifact"
+   }
+  ],
+  "needs": "a Cloud account; the Code execution and file creation row must not show Off",
+  "note": "Same gate as S57.07. The file type is chosen by the model, not by a phone control.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Assistant > Capabilities and check Code execution and file creation is not Off.",
+   "In a Cloud chat, ask for a short presentation (pptx) on a topic.",
+   "When the file card appears, tap it to open the deck.",
+   "Tap the download control (Download artifact) and confirm a .pptx file opens or can be shared."
+  ],
+  "where": "Settings > Assistant > Capabilities > Code execution and file creation, then a Cloud chat that asks for a slide deck"
+ },
+ "S57.10": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/tool-display.ts",
+    "text": "Run code"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/CodeRunAgain.tsx",
+    "text": "Run again"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/capabilities/index.tsx",
+    "text": "Code execution and file creation"
+   }
+  ],
+  "needs": "a Cloud account; the Code execution and file creation row must not show Off",
+  "note": "Run again only appears when the tool is terminal and the conversation allows it.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Assistant > Capabilities and check Code execution and file creation is not Off.",
+   "In a Cloud chat, ask for a short Python program that prints a result (for example the first ten square numbers).",
+   "Look for a Run code row in the reply and tap it to expand.",
+   "Check the Code heading shows the code and the Output heading shows the printed result.",
+   "Optionally tap Run again under the code and compare the new output with Expected."
+  ],
+  "where": "Settings > Assistant > Capabilities > Code execution and file creation, then a Cloud chat with a Run code row"
+ },
+ "S57.12": {
+  "labels": [],
+  "needs": "a Cloud account with code execution enabled on the server",
+  "note": "Only the sandbox gate (apps/web/lib/e2b/gate.ts:20) was found; no patch or edit tool name or phone control was located in apps/mobile.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S57.16": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/capabilities/index.tsx",
+    "text": "Image generation"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/capabilities/index.tsx",
+    "text": "Allow eligible Cloud chats to create generated images."
+   }
+  ],
+  "needs": "a Cloud account; the Image generation row must be on (eligible chats only)",
+  "note": "The image card is rendered for image.v1 cards in apps/mobile/src/features/chat/components/InteractiveCardBlock.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Assistant > Capabilities and check the Image generation row is on (its value reads Cloud).",
+   "Go back to a Cloud chat and ask for a picture (for example a lighthouse at dusk).",
+   "Look in the reply for the generated image card.",
+   "Compare with Expected: the image should appear in the transcript."
+  ],
+  "where": "Settings > Assistant > Capabilities > Image generation, then a Cloud chat"
+ },
+ "S57.17": {
+  "labels": [],
+  "needs": "a Cloud chat with an image to change",
+  "note": "Image-card rendering is in apps/mobile/src/features/chat/components/InteractiveCardBlock.tsx, but no phone control to supply or attach an image for editing was found, and the edit tool name was not located.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S57.21": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Memory"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Assistant"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/capabilities/index.tsx",
+    "text": "Account memories used in Cloud chats."
+   }
+  ],
+  "needs": "a Cloud account (memory is used in Cloud chats)",
+  "note": "Memory tool row names (Save Memory, Search Memory, Forget Memory) are generated from save_memory, search_memory and forget_memory (apps/web/lib/server/tools/memory-tools.ts), not literal strings.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Assistant > Memory and note what is listed.",
+   "In a Cloud chat, type: Remember that my favourite colour is green.",
+   "Look for a memory tool row in the reply and tap it to expand if it has details.",
+   "Go back to Settings > Assistant > Memory and check the new fact is listed; then ask the chat to forget it and check it is removed."
+  ],
+  "where": "Settings > Assistant > Memory, then a Cloud chat"
+ },
+ "S57.22": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/tool-display.ts",
+    "text": "Read your calendar"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Permissions"
+   }
+  ],
+  "needs": "a phone with calendar access granted and some events on the day",
+  "note": "Expected names a Google Calendar connector, which is not set up (plan says the owner must create the OAuth client); only the phone's own calendar tools (Read your calendar, Check your availability, Add to your calendar) were found.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Device > Permissions and confirm calendar access is allowed for the phone.",
+   "In a chat, ask: What is on my calendar today?",
+   "Look for a Read your calendar row in the reply and tap it to expand.",
+   "Compare the events shown with your phone Calendar app, as Expected says."
+  ],
+  "where": "Settings > Device > Permissions (calendar access), then a chat that asks about your calendar"
+ },
+ "S57.23": {
+  "labels": [],
+  "needs": "a connected messaging service",
+  "note": "Searched apps/mobile for Slack and messaging tool names: no match. The Connectors page (Settings > Cloud > Connectors, apps/mobile/src/features/settings/cloud-connectors/index.tsx) exists, but no messaging tool or Slack entry was located in the phone code.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S57.24": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Schedules"
+   },
+   {
+    "file": "apps/mobile/app/(app)/schedules/index.tsx",
+    "text": "Create Schedule"
+   },
+   {
+    "file": "apps/mobile/app/(app)/schedules/index.tsx",
+    "text": "Scheduled tasks require Basic"
+   }
+  ],
+  "needs": "a plan that includes scheduled tasks (the screen says Scheduled tasks require Basic on lower plans)",
+  "note": "Only create_schedule exists as a chat tool (apps/web/lib/server/tools/schedule-tool.ts); listing and deleting schedules happen on the Schedules screen, not through a chat tool.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu and tap Schedules.",
+   "Tap Create Schedule, enter a name, the prompt and how often it runs, then save.",
+   "Check the new schedule appears in the Schedules list and is active.",
+   "Optionally, in a Cloud chat ask for a reminder schedule and look for the create tool row."
+  ],
+  "where": "Schedules > Create Schedule (from the side menu), and the create_schedule tool in a Cloud chat"
+ },
+ "S57.26": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ClarifyCard.tsx",
+    "text": "Send answers"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ClarifyCard.tsx",
+    "text": "Something else\u2026"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ClarifyCard.tsx",
+    "text": "Skipped"
+   }
+  ],
+  "needs": "a Cloud chat (the assistant decides when to ask)",
+  "note": "The card is rendered for clarify.v1 cards in apps/mobile/src/features/chat/components/InteractiveCardBlock.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "In a Cloud chat, send a vague request that needs choices, for example: Help me plan a trip.",
+   "Look for a card with questions and options in the reply.",
+   "Pick an option, or type in the Something else box, then tap Send answers.",
+   "Check the assistant continues using your answer, as Expected says."
+  ],
+  "where": "Cloud chat: a question card with choices and a Send answers button"
+ },
+ "S57.28": {
+  "labels": [],
+  "needs": "several connected tools",
+  "note": "Tool discovery is server-side: apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts and tool-schema-loader.ts. No phone control or visible label was found.",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": "no screen; the effect is only in what the model answers"
+ },
+ "S57.29": {
+  "labels": [],
+  "needs": "none",
+  "note": "Server-side tool search exists (apps/web/lib/connectors/tool-search.ts, tool-schema-loader.ts). No user-facing tool search control in apps/mobile was found, so the user-side part of Expected could not be located.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S57.31": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ToolCallTimeline.tsx",
+    "text": "Request"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-display.ts",
+    "text": "Search the web"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ToolCallTimeline.tsx",
+    "text": "Response"
+   }
+  ],
+  "needs": "a Cloud account with Web search on",
+  "note": "A row can be tapped only when it has arguments or output.",
+  "reachable": "yes",
+  "steps": [
+   "In a Cloud chat with Web search on, ask a question that needs a web search.",
+   "Tap the Search the web row to expand it.",
+   "Look under the Request heading for the query or the arguments the tool was called with.",
+   "Compare with Expected: the arguments (query, command, file or JSON) are shown."
+  ],
+  "where": "Any tool row in a chat (for example Search the web): tap the row"
+ },
+ "S57.32": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/tool-display.ts",
+    "text": "Searched the web"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-status.ts",
+    "text": "Running"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-status.ts",
+    "text": "Failed"
+   }
+  ],
+  "needs": "a Cloud account with Web search on",
+  "note": "No running elapsed-time display was found in ToolCallTimeline.tsx; the duration chip appears only after completion.",
+  "reachable": "yes",
+  "steps": [
+   "In a Cloud chat with Web search on, ask a question about current events.",
+   "While the search runs, watch the row: it reads the running form (for example Searching the web\u2026) with a shimmer.",
+   "When it finishes, the row changes to Searched the web and a duration chip appears.",
+   "Compare with Expected: an elapsed-time counter while running is not in the code; only the duration after it finishes."
+  ],
+  "where": "Any running tool row in a Cloud chat (for example Search the web)"
+ },
+ "S57.33": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ToolCallTimeline.tsx",
+    "text": "Response"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-status.ts",
+    "text": "Done"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-status.ts",
+    "text": "Partial result"
+   }
+  ],
+  "needs": "a Cloud account with a finished tool call",
+  "note": "The preview is the expanded Response text; no separate short-preview truncation was found for small results.",
+  "reachable": "yes",
+  "steps": [
+   "In a Cloud chat with Web search on, ask a question that needs a web search.",
+   "Look at the finished row's right side for a short chip (a duration or a results count).",
+   "Tap the row and read the text under the Response heading.",
+   "Compare with Expected: a short preview of the result is shown."
+  ],
+  "where": "Any finished tool row in a Cloud chat: tap it, then read the Response heading"
+ },
+ "S57.34": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ToolCallTimeline.tsx",
+    "text": "View full output"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ToolCallTimeline.tsx",
+    "text": "Request"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ToolCallTimeline.tsx",
+    "text": "Response"
+   }
+  ],
+  "needs": "a Cloud account with a finished tool call",
+  "note": "View full output appears only for large results (more than 12 lines or a large size).",
+  "reachable": "yes",
+  "steps": [
+   "In a Cloud chat, run a tool (for example a web search) and wait until the row is finished.",
+   "Tap the row; the chevron turns down and the Request and Response sections appear.",
+   "Tap the row again to collapse it.",
+   "For a long result, tap View full output to open the full-screen sheet, then close it and compare with Expected."
+  ],
+  "where": "Any tool row in a Cloud chat: tap to expand, tap again to collapse"
+ },
+ "S57.36": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ToolCallTimeline.tsx",
+    "text": "View full output"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-display.ts",
+    "text": "Run code"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ToolCallTimeline.tsx",
+    "text": "Response"
+   }
+  ],
+  "needs": "a Cloud account with code execution enabled",
+  "note": "The large-result reference and store are server-side (apps/web/app/api/llm/v1/chat/completions/lib/tool-result-store.ts, tool-loop.ts); only the phone full-output sheet is visible to the user.",
+  "reachable": "yes",
+  "steps": [
+   "In a Cloud chat with code execution on, ask for a program that prints many lines (for example 100 numbers).",
+   "Tap the Run code row to expand it.",
+   "Tap View full output to open the complete result in a full-screen sheet.",
+   "Compare with Expected: the full text is kept and can be opened later; the context reference itself is server-side and not visible."
+  ],
+  "where": "A long tool result in a Cloud chat: expand the row, then tap View full output"
+ }
+}

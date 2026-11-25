@@ -1,0 +1,222 @@
+{
+ "S16.01": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/MessageBubble.tsx",
+    "text": "You"
+   }
+  ],
+  "needs": "a Free or paid account",
+  "note": "Expected mentions an avatar, but the code draws no avatar; the author is told apart by alignment and bubble style, and the name appears only to screen readers.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, open a chat (or start a new one), type \"Hello\" in the message box and send it.",
+   "Look at your message: it sits on the right in a rounded bubble.",
+   "Look at the reply: it is plain text across the full width with no bubble.",
+   "Turn on a screen reader and move to your message: it is announced as \"Your message: Hello\" (the name \"You\" is only in that spoken label).",
+   "Compare with Expected: alignment and bubble style tell the two authors apart; no avatar or visible name was found in the code."
+  ],
+  "where": "Chat > send any message > look at your message and the reply"
+ },
+ "S16.02": {
+  "labels": [],
+  "needs": "a Free or paid account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "In a chat, type a short sentence in the message box.",
+   "Tap send.",
+   "Look at the transcript: the sentence you sent appears in your message bubble, unchanged."
+  ],
+  "where": "Chat > send any message > your message in the transcript"
+ },
+ "S16.03": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/MessageBubble.tsx",
+    "text": "Could not open file"
+   }
+  ],
+  "needs": "a file or image to upload",
+  "note": "The attach button's visible words were not found; if the file is missing from the phone, the app shows the alert \"Could not open file\" instead.",
+  "reachable": "yes",
+  "steps": [
+   "In a chat, use the attach control in the message box to choose a photo or a file. The control's exact label was not checked in the code.",
+   "Send the message.",
+   "Look at the sent message: an image appears as a tile, and a file appears as a chip with its name and a detail line.",
+   "Tap the image tile (hint \"Opens full screen\") or the file chip (hint \"Opens the file\") and check it opens."
+  ],
+  "where": "Chat > attach a file or image in the message box > send > the sent message"
+ },
+ "S16.04": {
+  "labels": [],
+  "needs": "none",
+  "note": "Searched MessageBubble.tsx: the only chips on a sent user message are a quoted-text chip (text starting with \"> \" then a blank line) and a \"Skill: \" chip. No code adds connector, page, editor-selection or @mention chips to a sent message.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S16.07": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/MessageBubble.tsx",
+    "text": "Copy Message"
+   }
+  ],
+  "needs": "a sent message",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Press and hold your sent message (about 0.4 seconds) to open the message actions.",
+   "Tap \"Copy Message\".",
+   "Paste into the message box.",
+   "Compare the pasted text with the sent message: it must match. (While a reply is still streaming the label reads \"Copy Partial Response\".)"
+  ],
+  "where": "Chat > long-press your sent message > Copy Message"
+ },
+ "S16.08": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/MessageBubble.tsx",
+    "text": "Edit Message"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/MessageEditModal.tsx",
+    "text": "Send"
+   }
+  ],
+  "needs": "a sent message in a chat",
+  "note": "If an answer has unsaved edits, the app first asks before the edit replaces that answer.",
+  "reachable": "yes",
+  "steps": [
+   "Press and hold your sent message and tap \"Edit Message\".",
+   "In the \"Edit Message\" dialog, change the text in the box labelled \"Edit message text\".",
+   "Tap \"Send\".",
+   "Look for a new reply to the edited text and the version pager (\"1 / 2\" style) under your message."
+  ],
+  "where": "Chat > long-press your sent message > Edit Message"
+ },
+ "S16.09": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/MessageBubble.tsx",
+    "text": "Resend"
+   }
+  ],
+  "needs": "a sent message in a chat",
+  "note": "The action is hidden when the app reports that rerun is unavailable.",
+  "reachable": "yes",
+  "steps": [
+   "Press and hold your sent message to open the message actions.",
+   "Tap \"Resend\" without changing the text.",
+   "Look at the transcript: a fresh reply appears for the same message."
+  ],
+  "where": "Chat > long-press your sent message > Resend"
+ },
+ "S16.11": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/MessageBubble.tsx",
+    "text": "Previous ${noun}"
+   }
+  ],
+  "needs": "a sent message that has been edited",
+  "note": "The label is built from the word \"version\" in code, so the spoken label reads \"Previous version\"; the pager appears only when the message has more than one version.",
+  "reachable": "yes",
+  "steps": [
+   "Edit a sent message and send the edit, so the message has two versions.",
+   "Under the edited message, look for the pager with a left and right arrow and a count such as \"2 / 2\".",
+   "Tap the left arrow (screen-reader label \"Previous version\").",
+   "Check the count changes to \"1 / 2\" and the thread shows the earlier version and its reply. Tap the right arrow to go back."
+  ],
+  "where": "Chat > Edit Message on a sent message (S16.08) > version pager under your message"
+ },
+ "S16.15": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/MessageBubble.tsx",
+    "text": "failed to send"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/MessageBubble.tsx",
+    "text": "queued"
+   }
+  ],
+  "needs": "a way to turn the network off on the test device",
+  "note": "The failed badge appears only when an offline-queued message fails to go out; other send errors show as a banner on the chat screen, not on the bubble.",
+  "reachable": "yes",
+  "steps": [
+   "Turn off the network on the test device.",
+   "In a chat, type a message and send it: the bubble shows a \"queued\" badge.",
+   "Turn the network back on and wait for the send to finish.",
+   "If the send fails, look at the bubble: it shows \"failed to send\" with a \"Retry\" button."
+  ],
+  "where": "Chat > send a message with the network off > the failed message bubble"
+ },
+ "S16.16": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/MessageBubble.tsx",
+    "text": "Retry"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/MessageBubble.tsx",
+    "text": "Retry sending this message"
+   }
+  ],
+  "needs": "a way to turn the network off on the test device",
+  "note": "Attachments are restored from the stored message before the retry is sent (chatExecutionStore.ts), and the retry count is limited with the alert \"Retry Limit Reached\".",
+  "reachable": "yes",
+  "steps": [
+   "Make a send fail as in S16.15 so the bubble shows \"failed to send\".",
+   "Tap \"Retry\" next to it (or long-press the message and tap \"Resend\").",
+   "Check the same text and attached files are sent again.",
+   "Check the failed badge goes away and a reply appears, or a new failure replaces it."
+  ],
+  "where": "Chat > failed message bubble > Retry"
+ },
+ "S16.17": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Edit queued message"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Cancel queued message"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/MessageBubble.tsx",
+    "text": "queued"
+   }
+  ],
+  "needs": "a chat where a reply is still running (or the network off for the offline badge)",
+  "note": "The row above the box shows only the message text with a clock icon and no visible \"queued\" word was checked; the \"queued\" badge belongs to offline sends.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message and, while its reply is still streaming, type a second message and tap send.",
+   "Look above the message box: the second message appears as a row with a clock icon, with an \"Edit queued message\" and a \"Cancel queued message\" button.",
+   "Wait for the first reply to finish: the queued message goes out and appears in the transcript.",
+   "Optionally, with the network off, send a message: its bubble shows the \"queued\" badge until it goes out."
+  ],
+  "where": "Chat > send a second message while a reply is still running > the row above the message box"
+ },
+ "S16.18": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Pasted text not sent"
+   }
+  ],
+  "needs": "a way to turn the network off on the test device",
+  "note": "Drafts are stored per chat (draftKey is the chat id in app/(app)/chat/[id].tsx); no visible word \"draft\" was found in the code.",
+  "reachable": "yes",
+  "steps": [
+   "In a chat, type a sentence but do not send it. Open another chat, then come back: the sentence is still in the message box for this chat.",
+   "In the first chat, send the sentence with the network off (see S16.15) so the send fails.",
+   "Check the sentence returns to the message box as unsent text, and that it does not appear as a sent message in the transcript.",
+   "Compare: sent messages appear in the transcript, while the unsent text stays in the box."
+  ],
+  "where": "Chat > type in the message box without sending > switch chats and come back; and a failed send"
+ }
+}

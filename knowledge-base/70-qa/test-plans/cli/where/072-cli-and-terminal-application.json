@@ -1,0 +1,724 @@
+{
+ "S72.01": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "for commands"
+   }
+  ],
+  "needs": "a signed-in AGI account (agi login) or a saved provider key",
+  "note": "The launch path with no arguments was not traced step by step; the start hint text is built from the keybinding for the command palette.",
+  "reachable": "yes",
+  "steps": [
+   "Open Terminal, go to any project folder and type agi, then press Enter.",
+   "Look for a full-screen screen with a composer at the bottom and the start hint line that says \"for commands\".",
+   "Type a short question such as \"say hello\" and press Enter.",
+   "Look for your message and an answer in the transcript above the composer, and compare with Expected."
+  ],
+  "where": "Type agi in a terminal with no arguments, then the start screen line \"Type / for commands\""
+ },
+ "S72.02": {
+  "labels": [
+   {
+    "file": "apps/cli/src/output.rs",
+    "text": "Whether this run renders in plain mode"
+   }
+  ],
+  "needs": "a signed-in AGI account or a provider key",
+  "note": "The code also has a screen-reader mode switched on by the AGI_SCREEN_READER environment variable that adds a label; it is not a visible control, and the exact plain-mode behaviour was not run.",
+  "reachable": "yes",
+  "steps": [
+   "In Terminal, type agi --plain exec \"say hello in one line\" and press Enter.",
+   "Look for plain text only: no colour, no spinner, no horizontal rules and no full-screen redraw.",
+   "Compare the lines printed with the ones that appear one after another in order."
+  ],
+  "where": "agi --plain exec \"<your question>\" in a terminal (--plain is the flag; AGI_SCREEN_READER is an environment variable with no screen control)"
+ },
+ "S72.03": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Run non-interactively (alias: e)."
+   }
+  ],
+  "needs": "a signed-in AGI account or a provider key",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "In Terminal, type agi exec \"say hello in one word\" and press Enter.",
+   "Look for the answer printed and the shell prompt returning on its own, with no full-screen UI.",
+   "Type echo $? and press Enter; expect 0 after a successful run."
+  ],
+  "where": "agi exec \"<your prompt>\" in a terminal (alias agi e)"
+ },
+ "S72.04": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Read prompt from stdin (auto-detected when stdin is piped)"
+   }
+  ],
+  "needs": "a signed-in AGI account or a provider key",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "In Terminal, type echo \"say hello in one word\" | agi --stdin and press Enter.",
+   "Look for the answer printed and the shell prompt returning.",
+   "Compare with Expected: the prompt text came from stdin, not from the command line."
+  ],
+  "where": "echo \"<your prompt>\" | agi --stdin in a terminal, or echo \"<your prompt>\" | agi -"
+ },
+ "S72.05": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Read prompt from stdin (auto-detected when stdin is piped)"
+   }
+  ],
+  "needs": "a git project with an uncommitted change, and a signed-in AGI account",
+  "note": "The auto-detection of piped stdin is in the top-level code path; the --file flag was not run.",
+  "reachable": "yes",
+  "steps": [
+   "Make a small change to a tracked file in a git project.",
+   "In Terminal, type git diff | agi \"explain this diff\" and press Enter.",
+   "Look for an answer that talks about the change you made, and that the prompt text and the diff were both used.",
+   "Optionally run agi -f <a file> \"summarize\" and check the answer uses that file."
+  ],
+  "where": "git diff | agi \"explain this diff\" in a git folder with an uncommitted change"
+ },
+ "S72.06": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Print output without any formatting (raw text only)"
+   }
+  ],
+  "needs": "a signed-in AGI account or a provider key",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "In Terminal, type agi --raw \"say hello in one word\" and press Enter.",
+   "Look for only the answer text: no spinner, no cost line and no formatting.",
+   "Compare with Expected."
+  ],
+  "where": "agi --raw \"<your prompt>\" in a terminal (also agi --print or agi --output-format text)"
+ },
+ "S72.07": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Output format for the one-shot response and for"
+   }
+  ],
+  "needs": "a signed-in AGI account or a provider key",
+  "note": "The exact JSON field names were not read in this pass.",
+  "reachable": "yes",
+  "steps": [
+   "In Terminal, type agi exec --json \"say hello in one word\" and press Enter.",
+   "Look for one JSON object printed on its own.",
+   "Check the object has the answer and fields for tokens, cost, duration and error state, and compare with Expected."
+  ],
+  "where": "agi exec --json \"<your prompt>\" in a terminal (or agi --output-format json \"<your prompt>\")"
+ },
+ "S72.08": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Newline-delimited JSON for streaming consumption (CI/CD compatible)"
+   }
+  ],
+  "needs": "a signed-in AGI account or a provider key",
+  "note": "The value name stream-json is inferred from the enum variant StreamJson; the exact event names were not read.",
+  "reachable": "yes",
+  "steps": [
+   "In Terminal, type agi --output-format stream-json \"say hello in one word\" and press Enter.",
+   "Look for one JSON event per line appearing while the answer is being produced.",
+   "Compare the events with Expected: session start, user message, text, tool events, final message and end or error."
+  ],
+  "where": "agi --output-format stream-json \"<your prompt>\" in a terminal"
+ },
+ "S72.09": {
+  "labels": [],
+  "needs": "a signed-out state (agi logout) and a terminal",
+  "note": "The mapping is in the code (exit code per error class); the exact code for each situation was not run.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Run agi exec \"hello\" while signed out and with no provider key.",
+   "Type echo $? and press Enter.",
+   "Compare the number with Expected: 77 for not permitted, or 78 for a configuration problem."
+  ],
+  "where": "Exit status of agi in a terminal, shown with echo $?"
+ },
+ "S72.10": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Sign in to your AGI account, or store a provider API key."
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "not signed in (agi login)"
+   }
+  ],
+  "needs": "an AGI account; the browser sign-in step needs a web browser",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "In Terminal, type agi auth-status and press Enter; note the account line.",
+   "Type agi login and follow the browser sign-in prompt, then run agi auth-status again.",
+   "Type agi logout and press Enter, then agi auth-status; expect a signed-out line.",
+   "Compare with Expected."
+  ],
+  "where": "agi login, agi logout, agi auth-status in a terminal; /login, /logout and /status in the TUI"
+ },
+ "S72.11": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/session_picker.rs",
+    "text": "Sessions"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/session_picker.rs",
+    "text": "(no sessions to resume)"
+   }
+  ],
+  "needs": "at least one earlier session on this device",
+  "note": "The agi session list subcommand was not separately checked.",
+  "reachable": "yes",
+  "steps": [
+   "Run one prompt in agi so a session exists, then exit with Ctrl+D twice.",
+   "Start agi again and type /history, then press Enter.",
+   "Look for the picker titled Sessions listing saved sessions; use the arrow keys to move and press Esc to close.",
+   "In a second Terminal window, type agi history and press Enter; compare the list with the picker."
+  ],
+  "where": "/history in the TUI (picker titled Sessions); agi history in a terminal"
+ },
+ "S72.12": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Resumed session {session_id} ({count} messages)."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Continue the newest session started in this project"
+   }
+  ],
+  "needs": "at least one earlier session",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Start agi and type /resume, then press Enter.",
+   "In the Sessions picker, use the arrow keys to choose a session and press Enter.",
+   "Look for a notice that says Resumed session with the message count, and the earlier messages in the transcript.",
+   "Compare with Expected."
+  ],
+  "where": "/resume in the TUI; agi resume in a terminal; agi -c for the newest session in this folder"
+ },
+ "S72.13": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/fork"
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Fork a previous session."
+   }
+  ],
+  "needs": "an existing conversation with at least one message",
+  "note": "The exact notice text after a fork was not read.",
+  "reachable": "yes",
+  "steps": [
+   "In a session with at least one exchange, type /fork and press Enter.",
+   "Look for a new session created from this one, with the earlier messages copied in.",
+   "Type /history and press Enter to see both sessions listed."
+  ],
+  "where": "/fork or /branch in the TUI; agi fork <session id> in a terminal"
+ },
+ "S72.14": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/model_picker.rs",
+    "text": "Model changed to"
+   }
+  ],
+  "needs": "a signed-in AGI account with more than one model available",
+  "note": "The picker title was not found in this pass.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi and type /model, then press Enter.",
+   "Use the arrow keys to choose another model and press Enter.",
+   "Look for the banner Model changed to followed by the model name.",
+   "Send a short prompt and compare with Expected."
+  ],
+  "where": "/model in the TUI (opens the model picker); /model <id> to set it directly"
+ },
+ "S72.15": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/effort_picker.rs",
+    "text": "Effort"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Effort set to"
+   }
+  ],
+  "needs": "a signed-in AGI account",
+  "note": "That the next request actually uses the new level cannot be seen on screen from the code path alone.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi and type /effort, then press Enter.",
+   "Look for the picker titled Effort; use the arrow keys or Tab to choose low, medium, high or max, then press Enter.",
+   "Look for the notice Effort set to followed by the chosen level.",
+   "Send a short prompt and compare with Expected."
+  ],
+  "where": "/effort in the TUI (opens the picker titled Effort); /effort low, /effort med, /effort high from the composer"
+ },
+ "S72.16": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/screen_renderers.rs",
+    "text": "Permissions:"
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "cycle permission mode"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Start agi and type /permissions, then press Enter.",
+   "Look for the line Permissions: followed by Recently denied, Allow, Ask, Deny and Workspace.",
+   "Press Shift+Tab and watch the mode change.",
+   "Compare with Expected."
+  ],
+  "where": "/permissions in the TUI (aliases /perms, /approvals); Shift+Tab to cycle the permission mode"
+ },
+ "S72.17": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/context"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Context is"
+   }
+  ],
+  "needs": "a conversation with several messages",
+  "note": "The report wording was not read.",
+  "reachable": "yes",
+  "steps": [
+   "In a conversation with several messages, type /context and press Enter.",
+   "Look for a report of how full the context window is.",
+   "If the conversation is near full, look for the notice Context is N% full.",
+   "Compare with Expected."
+  ],
+  "where": "/context (or /ctx) in the TUI"
+ },
+ "S72.18": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/screen_renderers.rs",
+    "text": "Usage"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/screen_renderers.rs",
+    "text": "Esc to close"
+   }
+  ],
+  "needs": "a signed-in AGI account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Start agi and type /usage, then press Enter.",
+   "Look for the panel titled Usage showing session tokens and cost and the account allowance.",
+   "Press Esc to close the panel (it says Esc to close).",
+   "Compare with Expected."
+  ],
+  "where": "/usage in the TUI (opens the Usage panel)"
+ },
+ "S72.19": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/compact summarizes earlier turns to make room"
+   }
+  ],
+  "needs": "a long conversation",
+  "note": "The before and after size report wording was not read.",
+  "reachable": "yes",
+  "steps": [
+   "In a long conversation, type /compact and press Enter; or type /compact keep the database decisions and press Enter.",
+   "Look for the summary step finish and a report of the size before and after.",
+   "Compare with Expected."
+  ],
+  "where": "/compact [focus words] in the TUI"
+ },
+ "S72.20": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Manage the global MCP server registry"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/mcp"
+   }
+  ],
+  "needs": "an MCP server to add, or none to list",
+  "note": "The authenticate and remove subcommand names were not confirmed in this pass.",
+  "reachable": "yes",
+  "steps": [
+   "In a terminal, type agi mcp list and press Enter; note the servers shown.",
+   "Type /mcp in the TUI and press Enter; look for the connected servers and tools.",
+   "Compare with Expected. Add, inspect, authenticate and remove were not run."
+  ],
+  "where": "agi mcp list and agi mcp add <name> in a terminal; /mcp in the TUI"
+ },
+ "S72.21": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Manage plugins."
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/skills"
+   }
+  ],
+  "needs": "none to list; a plugin to install or update",
+  "note": "Install and update were not traced; the skills toggle screen was not read in full.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi and type /skills, then press Enter; look for the skills list with on and off toggles.",
+   "Type /plugins and press Enter; look for the plugins list.",
+   "In a terminal type agi plugin and press Enter; compare the list with the TUI."
+  ],
+  "where": "/skills and /plugins in the TUI; agi plugin in a terminal"
+ },
+ "S72.22": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "--add-dir"
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "/add-dir"
+   }
+  ],
+  "needs": "two folders on this Mac",
+  "note": "The /add-dir command is dispatched only in the parity REPL file, not in the TUI command list, so it was not confirmed in the TUI.",
+  "reachable": "yes",
+  "steps": [
+   "In a terminal, type agi -C ~/some/other/folder and press Enter, then ask what folder it is in.",
+   "Type agi --add-dir <another folder> \"list the files in it\" and press Enter.",
+   "Compare the answer with the folder named."
+  ],
+  "where": "agi -C <folder> \"<prompt>\" in a terminal; agi --add-dir <folder> \"<prompt>\"; /add-dir <folder> in the REPL"
+ },
+ "S72.23": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/mention_popup.rs",
+    "text": "Files"
+   }
+  ],
+  "needs": "a project folder with files",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Start agi in a project folder.",
+   "Type @ at the start of a word and look for the popup headed Files.",
+   "Type part of a file name to filter it, press Enter to pick it, then send a question about the file.",
+   "Check the answer uses the content of the chosen file."
+  ],
+  "where": "Type @ in the composer of the TUI (opens the Files popup)"
+ },
+ "S72.24": {
+  "labels": [
+   {
+    "file": "apps/cli/src/command_registry.rs",
+    "text": "Previous / next prompt"
+   },
+   {
+    "file": "apps/cli/src/command_registry.rs",
+    "text": "Search previous prompts (reverse history search)"
+   }
+  ],
+  "needs": "none",
+  "note": "The key for reverse history search was not confirmed in this pass.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi, type a prompt such as hello one and press Enter, then exit with Ctrl+D twice.",
+   "Start agi again and press the Up arrow in the empty composer.",
+   "Look for hello one appearing in the composer.",
+   "Compare with Expected."
+  ],
+  "where": "Up and Down arrows in the TUI composer; history persists across runs"
+ },
+ "S72.25": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/keys for all keys"
+   },
+   {
+    "file": "apps/cli/src/keybindings.rs",
+    "text": "Keybindings"
+   }
+  ],
+  "needs": "none; a config file to rebind",
+  "note": "The rebinding itself was not run; the config path is from the config code.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi and type /keys, then press Enter.",
+   "Look for the heading Keybindings and the list of actions with their keys.",
+   "Compare with the bindings in ~/.agiworkforce/config.toml under [ui.keybindings] (rebinding is done there).",
+   "Compare with Expected."
+  ],
+  "where": "/keys or /keybindings in the TUI; config in the file ~/.agiworkforce/config.toml under [ui.keybindings]"
+ },
+ "S72.26": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Generate shell completion scripts."
+   }
+  ],
+  "needs": "none",
+  "note": "The older flag `--completions <SHELL>` still works as a deprecated alias (apps/cli/src/lib.rs:288) and `completions` is also accepted as the command name.",
+  "reachable": "yes",
+  "steps": [
+   "Open a terminal and type `agi completion bash`, then press Enter.",
+   "Look for a printed bash completion script for the agi command (a function and a complete line for agi).",
+   "Repeat with `agi completion zsh` and `agi completion fish`.",
+   "Compare: each shell prints its own script with no error, as Expected says."
+  ],
+  "where": "Terminal: agi completion bash (also zsh or fish)"
+ },
+ "S72.27": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Theme set to"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/theme_picker.rs",
+    "text": "High Contrast Dark"
+   }
+  ],
+  "needs": "none",
+  "note": "The choice is saved to the project settings file (save_project_ui_settings in apps/cli/src/config.rs), not a global file, and `/theme <slug>` sets it directly. Esc closes the picker without a change.",
+  "reachable": "yes",
+  "steps": [
+   "Type `agi` and press Enter to open the full-screen app.",
+   "Type `/theme` and press Enter to open the theme picker.",
+   "Press Down or j to move to another row (for example High Contrast Dark), then press Enter.",
+   "Look for the message `Theme set to <name>, saved in <path>.` and for the screen colours changing. Quit and run `agi` again to check the theme is kept. Compare with Expected."
+  ],
+  "where": "Terminal: agi, then type /theme and press Enter"
+ },
+ "S72.28": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Plain output for a screen reader"
+   }
+  ],
+  "needs": "none",
+  "note": "--plain switches to the line-based screen reader mode instead of the full-screen app. NO_COLOR is checked in apps/cli/src/output.rs (detect_color_level) and in apps/cli/src/tui/icons.rs, but I did not find a check of NO_COLOR for the full-screen app's colours, so that part is unsure.",
+  "reachable": "yes",
+  "steps": [
+   "Type `agi --plain` and press Enter.",
+   "Type a short question and look for plain text with no coloured words, no spinner and no box rules.",
+   "Optionally type `NO_COLOR=1 agi` and press Enter, then check the colours in the full-screen app."
+  ],
+  "where": "Terminal: agi --plain (or NO_COLOR=1 agi)"
+ },
+ "S72.29": {
+  "labels": [],
+  "needs": "none",
+  "note": "Resizing is handled by the terminal redraw; no control exists. The matching regression test name is in apps/cli/src/tui/tui_app.rs but is not a visible word, so it is not used as a label.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Type `agi` and press Enter, then send one short question so the transcript has text.",
+   "Drag a corner of the terminal window to make it narrower, then wider.",
+   "Look for the transcript still showing the same messages, with the text re-wrapped to the new width. Compare with Expected."
+  ],
+  "where": "Terminal window resize while agi's full-screen app is open"
+ },
+ "S72.30": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Bring a cloud Code session here"
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Continue previous session, from this device or from your account."
+   }
+  ],
+  "needs": "a cloud Code session on your AGI account whose repository is on GitHub; for --teleport, a local checkout of that repository",
+  "note": "Teleport fails with a message for sessions with no GitHub repository or no working branch yet.",
+  "reachable": "yes",
+  "steps": [
+   "In a checkout of the GitHub repository a cloud session used, type `agi resume --teleport` and press Enter, then pick a session.",
+   "Or type `agi resume <id> --cloud` with an id from your account.",
+   "Look for the message `Checked out` or `Updated` with the branch name and remote, then the session history shown in the app.",
+   "Compare with Expected: the session continues from its cloud history."
+  ],
+  "where": "Terminal: agi resume --teleport (picker), agi resume --teleport <id>, or agi resume <id> --cloud"
+ },
+ "S72.31": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "List background runs, newest first."
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/tasks"
+   }
+  ],
+  "needs": "none for background runs; for /tasks stop, a task that is running in the session (for example a sub-agent)",
+  "note": "Expected mentions long-running commands; the code only shows prompt runs and sub-agent tasks. The /tasks stop subcommand is in apps/cli/src/repl/registry.rs.",
+  "reachable": "yes",
+  "steps": [
+   "Type `agi background start \"<a short prompt>\"` and press Enter to start a background run.",
+   "Type `agi background list` and press Enter; find the run id.",
+   "Type `agi background logs <id>` to see its output, then `agi background stop <id>` to stop it.",
+   "In the app, type `/tasks` and press Enter to list this session's tasks; compare the list and stop state with Expected."
+  ],
+  "where": "Terminal: agi background list (also logs <id>, stop <id>); in the app: type /tasks and press Enter"
+ },
+ "S72.32": {
+  "labels": [
+   {
+    "file": "apps/cli/src/repl/registry.rs",
+    "text": "already exists, so nothing was written"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/export"
+   }
+  ],
+  "needs": "a conversation with at least one message",
+  "note": "Export writes to a file or the screen only; I did not find a clipboard export in the export code, so the clipboard part of Expected is unsure. The JSON form is `/export json <file>`.",
+  "reachable": "yes",
+  "steps": [
+   "Have a conversation with at least one message.",
+   "Type `/export` and press Enter; look for the Markdown transcript shown on screen.",
+   "Type `/export transcript.md` and press Enter; look for `Exported the conversation to <path>.`",
+   "Type the same command again; look for the refusal that the file already exists. Compare with Expected."
+  ],
+  "where": "In the app: type /export and press Enter, or /export <file name> and press Enter"
+ },
+ "S72.33": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Show current configuration"
+   },
+   {
+    "file": "apps/cli/src/config.rs",
+    "text": "Sources:"
+   }
+  ],
+  "needs": "a project config file in .agiworkforce/ (optional, for the override check)",
+  "note": "The global file is resolved by the config root (apps/cli/src/config.rs:15 and :491).",
+  "reachable": "yes",
+  "steps": [
+   "In a project folder that has a .agiworkforce/config.toml file, type `agi --config` and press Enter.",
+   "Look for the `Sources:` section with the global path and the project path.",
+   "Compare the values shown with the config.toml files on disk.",
+   "Type `/config` in the app and compare the same values."
+  ],
+  "where": "Terminal: agi --config, or in the app: /config"
+ },
+ "S72.34": {
+  "labels": [
+   {
+    "file": "apps/cli/src/config.rs",
+    "text": "Env:"
+   }
+  ],
+  "needs": "none; a model id you can use for the model check",
+  "note": "The env override list is built in apps/cli/src/config.rs around line 1665; the env var names are listed in apps/cli/src/config.rs around line 1634.",
+  "reachable": "yes",
+  "steps": [
+   "Type `agi --config` with no extra variables and press Enter; note the `Env:` line says none.",
+   "Type `AGI_PLAIN=1 agi --config` and press Enter; look for AGI_PLAIN listed on the `Env:` line.",
+   "Type `AGIWORKFORCE_MODEL=<a model id from /model> agi --config` and press Enter; look for the model value and AGIWORKFORCE_MODEL on the `Env:` line.",
+   "Compare with Expected: the override is shown."
+  ],
+  "where": "Terminal: AGIWORKFORCE_MODEL=<model id> agi --config (or AGI_PLAIN=1 agi --config)"
+ },
+ "S72.35": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Compare this build against the newest published CLI release."
+   },
+   {
+    "file": "apps/web/public/install.sh",
+    "text": "No signed AGI CLI release is published yet."
+   }
+  ],
+  "needs": "none; the install step does not finish until the owner publishes a signed release",
+  "note": "Expected cannot be met yet: the code notes the release signing key is not set (the owner task in the plan). The install command is from apps/cli/README.md line 29.",
+  "reachable": "yes",
+  "steps": [
+   "Run `curl -fsSL https://agiworkforce.com/install.sh | bash` in a terminal and press Enter.",
+   "Read the installer output: it currently stops with a message that no signed release is published.",
+   "Run `agi update --check` and press Enter.",
+   "Look for the comparison of the running version with the newest published release, as Expected says."
+  ],
+  "where": "Terminal: curl -fsSL https://agiworkforce.com/install.sh | bash, then agi update --check"
+ },
+ "S72.36": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Run local preflight diagnostics."
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Type `agi doctor` and press Enter.",
+   "Read the list of checks and their status words.",
+   "Type `agi doctor --json` and press Enter; look for one JSON report.",
+   "Type `agi doctor --export` and press Enter; note the file it says it wrote and check it is marked as redacted. Compare with Expected."
+  ],
+  "where": "Terminal: agi doctor (also agi doctor --json, agi doctor --export)"
+ },
+ "S72.37": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Stop the session when total spend exceeds this many USD."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Auto-approve safe tool calls (reads, searches, listings)."
+   }
+  ],
+  "needs": "a signed-in account that can run a prompt",
+  "note": "I did not confirm that --max-budget-usd and --mode are accepted after the exec subcommand; check `agi exec --help`. Exit code values are covered by S72.09.",
+  "reachable": "yes",
+  "steps": [
+   "Type `agi exec --output-format json \"say hello\"` and press Enter; look for one JSON result on the screen with no spinner.",
+   "Type `agi exec --json-events --max-budget-usd 0.01 \"<a longer task>\"` and press Enter; look for NDJSON events and a status_update with reason budget_exhausted.",
+   "Type `echo $?` and press Enter; look for a non-zero exit code when the run stops.",
+   "Use `--mode` to set the permission policy and check the run does not ask for input. Compare with Expected."
+  ],
+  "where": "Terminal: agi exec with --output-format json, --json-events, --max-budget-usd and --mode"
+ }
+}

@@ -1,0 +1,145 @@
+{
+ "S3.01": {
+  "labels": [
+   {
+    "file": "apps/cli/src/onboarding.rs",
+    "text": "Choose how to connect"
+   },
+   {
+    "file": "apps/cli/src/onboarding.rs",
+    "text": "Sign in to get started, open to everyone"
+   },
+   {
+    "file": "apps/cli/src/oauth.rs",
+    "text": "Connecting to AGI..."
+   }
+  ],
+  "needs": "an AGI account and a web browser",
+  "note": "The approval page opened in the browser is on the web app and was not reviewed.",
+  "reachable": "yes",
+  "steps": [
+   "Open a terminal and type agi login, then press Enter.",
+   "Read the lines \"Connecting to AGI...\" and \"Open this link in your browser:\" and note the one-time code shown.",
+   "Open the link in a browser, check the page shows the same code, and approve it.",
+   "Back in the terminal, wait for \"Waiting for authorization...\" to finish.",
+   "Compare with Expected: the terminal should finish without an error and the session should be signed in."
+  ],
+  "where": "Run \"agi login\" in a terminal, or on first run: \"Choose how to connect\" > \"AGI cloud\""
+ },
+ "S3.02": {
+  "labels": [],
+  "needs": "a web browser and an email address",
+  "note": "The CLI has no sign-up screen; it only opens a browser link during agi login (apps/cli/src/oauth.rs). apps/web/features/auth/AuthEmailStep.tsx has a heading \"Log in or sign up\", but the browser approval page was not confirmed to reach it. Searched apps/cli/src/onboarding.rs and apps/cli/src/oauth.rs for sign-up wording.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S3.25": {
+  "labels": [
+   {
+    "file": "apps/cli/src/onboarding.rs",
+    "text": "Memory"
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Memory is off for your account. Turn it on with `agi memory on`."
+   }
+  ],
+  "needs": "an AGI account",
+  "note": "Setup only describes memory and does not ask whether it is on; the on/off choice is the agi memory command after setup.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi for the first time on a machine where setup has not run, and read the \"Memory\" paragraph shown after the permission mode choice.",
+   "In a terminal, type agi memory status and read the answer.",
+   "Type agi memory off, then agi memory status, and check it says memory is off.",
+   "Type agi memory on, then agi memory status, and check it is back on.",
+   "Compare with Expected: the user is told about memory and can change the choice later."
+  ],
+  "where": "First-run setup shows a \"Memory\" paragraph; change later with \"agi memory on\" or \"agi memory off\" (check with \"agi memory status\")"
+ },
+ "S3.29": {
+  "labels": [
+   {
+    "file": "apps/cli/src/onboarding.rs",
+    "text": "Trust This Directory"
+   },
+   {
+    "file": "apps/cli/src/onboarding.rs",
+    "text": "Yes, trust this directory"
+   },
+   {
+    "file": "apps/cli/src/onboarding.rs",
+    "text": "Default permission mode"
+   }
+  ],
+  "needs": "a first run where setup has not finished, and a folder not yet trusted",
+  "note": "No command or screen-control permission step was found in setup (searched onboarding.rs for screen, folder and permission wording). Only folder trust and permission mode are set there.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi for the first time on a folder you have not trusted, where setup has not finished.",
+   "At \"Trust This Directory\", read the warning and choose \"Yes, trust this directory\" (or the restricted option).",
+   "Read the \"Before you start:\" notes about approval for file edits and shell commands.",
+   "At \"Default permission mode\", pick one of the three modes and read its line.",
+   "Compare with Expected: the setup covers folder trust and approval mode only; check whether it walks through commands or screen control."
+  ],
+  "where": "First-run setup: \"Trust This Directory\" > \"Yes, trust this directory\", then \"Default permission mode\""
+ },
+ "S3.32": {
+  "labels": [
+   {
+    "file": "apps/cli/src/onboarding.rs",
+    "text": "Ring the terminal bell when a long turn finishes?"
+   },
+   {
+    "file": "apps/cli/src/onboarding.rs",
+    "text": "Turn it off with /config set bell false."
+   }
+  ],
+  "needs": "a way to run a turn, such as a local model or a signed-in account, to hear the bell",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Start agi for the first time on a machine where setup has not run, and go to the question \"Ring the terminal bell when a long turn finishes?\".",
+   "Answer no (the default) or yes, then continue to \"Press Enter to start...\".",
+   "Start the app and type /config set bell true to turn the bell on later, or /config set bell false to turn it off.",
+   "Run a long task and check whether the terminal bell rings only when the setting is on.",
+   "Compare with Expected: the choice is optional, can be declined, and can be changed later."
+  ],
+  "where": "First-run setup, last question \"Ring the terminal bell when a long turn finishes?\"; change later with \"/config set bell true\" or \"/config set bell false\""
+ },
+ "S3.35": {
+  "labels": [],
+  "needs": "a first run",
+  "note": "No introduction to a first conversation was found. The closest screen is the start view in apps/cli/src/tui/tui_app.rs, which shows \"Welcome to AGI\" and \"Choose Local, Your key, or Managed with /model.\" but not what to try. Searched apps/cli/src/onboarding.rs and apps/cli/src/tui for first conversation, what to try and try wording.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S3.37": {
+  "labels": [
+   {
+    "file": "apps/cli/src/onboarding.rs",
+    "text": "Choose how to connect"
+   },
+   {
+    "file": "apps/cli/src/onboarding.rs",
+    "text": "Local model"
+   },
+   {
+    "file": "apps/cli/src/onboarding.rs",
+    "text": "Local model, no account needed."
+   }
+  ],
+  "needs": "Ollama or LM Studio running with a local model, and no AGI account",
+  "note": "No code was found that carries guest work into an account (searched apps/cli/src for guest, anonymous and no account wording); only the local path works without an account.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi for the first time on a machine that is not signed in and where setup has not run.",
+   "At \"Choose how to connect\", pick \"Local model\" (Run AI locally, no account required).",
+   "Follow the local model choice, with Ollama or LM Studio running, until the terminal says \"Local model, no account needed.\"",
+   "Send a message in the first chat and check it answers without signing in.",
+   "Compare with Expected: the product works without an account, but no step was found that signs up later and carries guest work over."
+  ],
+  "where": "First run: \"Choose how to connect\" > \"Local model\" (no account)"
+ }
+}

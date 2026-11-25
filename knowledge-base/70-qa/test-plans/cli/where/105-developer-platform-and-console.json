@@ -1,0 +1,118 @@
+{
+ "S105.04": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "List catalog models and discovered local models."
+   },
+   {
+    "file": "apps/cli/src/provider.rs",
+    "text": "No models available to this CLI account tier."
+   }
+  ],
+  "needs": "an account or API key that can call models",
+  "note": "The text output shows context and output sizes; the capability flags appear only in the --json output.",
+  "reachable": "yes",
+  "steps": [
+   "Open a terminal and sign in to the CLI with an account or key that can call models (agi login).",
+   "Type agi models list and press Return.",
+   "Read each model line: it shows the context window and the max output size.",
+   "Type agi models list --json and look for supports_tools, supports_vision and supports_reasoning on each model.",
+   "Compare with Expected: the models your key can call, with capabilities and context size."
+  ],
+  "where": "Terminal > agi models list (add --json for the JSON form)"
+ },
+ "S105.12": {
+  "labels": [],
+  "needs": "none",
+  "note": "No in-app command to save a prompt template was found; saved prompts are markdown files under ~/.agiworkforce/prompts/claude (apps/cli/src/custom_commands.rs:6) offered as /prompts:<name> (apps/cli/src/command_registry.rs:33), and the loader that feeds them to the registry and any argument substitution for them were not found, so searched apps/cli for save, prompt template, and prompts.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S105.18": {
+  "labels": [
+   {
+    "file": "apps/cli/src/usage_summary.rs",
+    "text": "By model:"
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Show the account's managed allowance from the shared usage ledger."
+   },
+   {
+    "file": "apps/cli/README.md",
+    "text": "Show session credit usage by model"
+   }
+  ],
+  "needs": "a managed account, signed in",
+  "note": "Usage shows credits rather than dollars, and the history is unavailable outside a managed account.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with a managed account (not a local-only or BYOK setup).",
+   "Type agi usage and press Return.",
+   "Read the line that starts Usage history, and the By model: list under it.",
+   "Look at the Week of or month lines under the history to see usage over time.",
+   "Compare with Expected: usage and cost over time, broken down by model."
+  ],
+  "where": "Terminal > agi usage (in the chat, /cost shows session credit usage by model)"
+ },
+ "S105.20": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "No spend cap for this session. /budget <credits> sets one per turn."
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "Spend cap removed."
+   }
+  ],
+  "needs": "none",
+  "note": "The code shows no owner-set cap enforced by the API; --max-budget-usd only emits a budget_exhausted status event (apps/cli/src/lib.rs:491 and 9283).",
+  "reachable": "yes",
+  "steps": [
+   "Start the CLI with agi and open a chat.",
+   "Type /budget 500 and press Return, then read the reply about stopping each turn after 500 credits.",
+   "Type /budget alone and check that it shows the cap.",
+   "Type /budget off and check that the reply says the spend cap was removed.",
+   "Compare with Expected: an owner sets a spend cap that the API enforces. The /budget cap is set by the user per turn in the CLI."
+  ],
+  "where": "Chat > type /budget <credits> (for example /budget 500), or agi --max-budget-usd <USD> on the top-level command"
+ },
+ "S105.28": {
+  "labels": [],
+  "needs": "none",
+  "note": "No support ticket or contact channel found; searched apps/cli for support, contact, help and feedback. The closest is agi doctor --export, whose help text says 'Write a redacted diagnostics file to review and attach to a support request.' (apps/cli/src/lib.rs:1044), which is a file, not a channel.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S105.29": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Install a plugin."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "List installed plugins."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Manage plugins."
+   }
+  ],
+  "needs": "a plugin folder on disk",
+  "note": "Whether a plain local folder is accepted as the install source is not confirmed (apps/cli/src/installs.rs:93 handles git sources; the local-path branch was not read), and the agi plugin digest command comes from a doc comment, not a read of its subcommand entry.",
+  "reachable": "yes",
+  "steps": [
+   "Pick an unpublished plugin folder on disk.",
+   "Type agi plugin digest <folder> and copy the sha256:<hex> value it prints.",
+   "Type agi plugin install <folder> --integrity sha256:<hex> and press Return.",
+   "Type agi plugin list and look for the plugin name in the installed list.",
+   "Compare with Expected: the unpublished plugin loads into your own account so you can try it."
+  ],
+  "where": "Terminal > agi plugin install <folder> --integrity sha256:<hex> (get the hash from agi plugin digest <folder>)"
+ }
+}

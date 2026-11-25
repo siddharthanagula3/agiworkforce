@@ -1,0 +1,596 @@
+{
+ "feature": {
+  "id": "F031-04",
+  "aliases": [
+   "Create PDF",
+   "Text to PDF",
+   "Download as PDF",
+   "Export to PDF",
+   "S31.01",
+   "S31.02",
+   "S31.03",
+   "managed office file tool",
+   "exportToPDF",
+   "document_create_pdf"
+  ],
+  "summary": "Makes a PDF from text. On Web the assistant has a file tool that builds a PDF from a title and markdown-like text, and artifacts have a 'Download as PDF' action for documents and slide decks. Mobile exports documents and decks to PDF on the device. Word, spreadsheet or slide file conversion to PDF was not found.",
+  "purpose": {
+   "what_it_does": "Produces a downloadable PDF from text content. The Web tool takes a filename, a title and up to 100,000 characters (apps/web/lib/services/managed-office-file-service.ts:190-197) and lays them out on A4 pages with 20 mm margins using a PDF library (managed-office-file-service.ts:796-822). Artifact and deck PDFs are made in the browser (apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1642-1666).",
+   "why_it_exists": "Brief S31.01 to S31.03 want text documents, spreadsheets and slide decks turned into PDF (doc: knowledge-base/data/area-briefs/031-pdf-and-document-transformation-products.md). People expect to receive a real file.",
+   "who_uses_it": "Web, Mobile and Tauri desktop users who ask for a PDF or press a download button.",
+   "problems_solved": [
+    "Sharing a chat answer or report as a file",
+    "Printing or sending a slide deck as PDF"
+   ],
+   "use_cases": [
+    "Ask 'make a PDF of this report'",
+    "Open a document artifact and choose 'Download as PDF'",
+    "Open a slide-deck artifact and download it as a PDF",
+    "On a phone, export an artifact as PDF from the export sheet"
+   ]
+  },
+  "user_experience": {
+   "where_to_find_it": [
+    "Web chat: the model calls the file tool when asked for a PDF; creation intent is detected from words such as create, make, export together with pdf (apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:914-916, 993-997)",
+    "Web artifacts: menu items 'Download as PDF' for presentations and text documents (ArtifactPreview.tsx:2397-2411)",
+    "Mobile: artifact export sheet with 'PDF' and details 'A styled document' or 'A document you can print' (apps/mobile/src/features/chat/utils/artifactExport.ts:62, 95)",
+    "Desktop Electron: hosted web app; Tauri build has a document_create_pdf agent tool (apps/desktop/src-tauri/src/core/llm/tool_executor/document_tools.rs:321-347)",
+    "CLI, VS Code, Chrome: missing"
+   ],
+   "prerequisites": [
+    "Web file tool: signed-in chat turn in which office creation is on",
+    "Render check: sandbox execution set up (see current_implementation)"
+   ],
+   "screens_and_controls": [
+    "Web: download chip or card for the generated file; artifact menu entries; toasts 'Preparing the PDF\u2026', 'PDF downloaded', 'The PDF could not be made' (ArtifactPreview.tsx:1643-1655)",
+    "Mobile: export list in apps/mobile/src/features/chat/components/ArtifactExportSheet.tsx"
+   ],
+   "journey": [
+    "Ask for a PDF, or open an artifact",
+    "Web tool: the model sends filename, title, content",
+    "Server builds the PDF and attaches it to the reply",
+    "Person downloads it"
+   ],
+   "feedback_and_outputs": [
+    "A PDF file",
+    "On a failed tool call: 'The file could not be created.' (managed-office-file-service.ts:1066-1078) or the render-check error 'Rendering verification requires an available Office execution environment.' (managed-office-file-service.ts:1038-1041)",
+    "Mobile error 'Cannot export empty content' (apps/mobile/services/fileCreation.ts:186-188)"
+   ],
+   "settings": [
+    "verify_render option on the tool: asks for a real rendered check of the file (managed-office-file-service.ts:193, 278-282)",
+    "Office render template name set by AGI_E2B_CHAT_TEMPLATE and execution switch AGI_E2B_EXECUTION (apps/web/lib/e2b/chat-template.ts:1; apps/web/lib/e2b/gate.ts:6)"
+   ]
+  },
+  "current_implementation": {
+   "working": [
+    "Web tool: PDF with title, headings (#), bullets and numbered lines, wrapped on A4 pages (managed-office-file-service.ts:796-822)",
+    "Web tool: PDF is part of the schema with strict fields (managed-office-file-service.ts:190-197) and the tool description lists PDF (line 253)",
+    "Web tool is added to the turn when creation intent is detected (request-processor.ts:1258-1266, 5494) and runs in the tool loop (tool-loop.ts:2562-2575)",
+    "Web artifacts: documents and decks export to PDF in the browser (ArtifactPreview.tsx:1642-1666; apps/web/features/chat/components/artifacts/presentation/deck-pdf.ts:491-494; apps/web/features/chat/services/export-pdf.ts:1179)",
+    "Mobile: markdown to PDF and deck HTML to PDF on the device through the system print service (apps/mobile/services/fileCreation.ts:181-215; apps/mobile/src/features/chat/utils/artifactExport.ts:122-125, 138)",
+    "Tauri desktop: document_create_pdf tool via printpdf (document_tools.rs:321-347; apps/desktop/src-tauri/src/features/document/create_pdf.rs:64)"
+   ],
+   "incomplete": [
+    "verify_render: needs a sandbox with LibreOffice and poppler; the build script installs those but an owner step is pending per the brief (apps/web/scripts/build-e2b-office-template.mjs:9-17; brief S31.03 'Unfinished')",
+    "Render check converts and rasterises the file for a receipt (apps/web/lib/services/managed-office-preservation.ts:970-1060); whether a converted PDF of a docx, xlsx or pptx is ever returned to the person: unknown",
+    "Pipe tables: the tool description promises them for PDF (managed-office-file-service.ts:276) but the PDF layout lines read handle headings and bullets only; table output not confirmed"
+   ],
+   "disconnected_or_disabled": [
+    "Tauri direct IPC commands for document creation were cut or deregistered (doc: docs/decisions/wire-or-cut.md:843-844); the agent tool path exists"
+   ],
+   "not_available": [
+    "Converting an existing Word, spreadsheet or slide file to PDF as a person-facing action: not found in any app (S31.01 conversion, S31.02, S31.03 as written). The brief's code cites (apps/web/lib/server/container-files.ts:196; chat-attachment-hydration.ts:466) do not do this: container-files.ts fetches provider-hosted files",
+    "Mobile server-tool PDF creation: docs say Mobile should not be the first heavy local generation surface (doc: docs/product/definition.md:475)",
+    "CLI, VS Code, Chrome"
+   ]
+  },
+  "required_behaviour": {
+   "established": [
+    {
+     "statement": "The user can turn a text document (Word, text, markdown) into a PDF file.",
+     "source": "S31.01 (doc: knowledge-base/data/area-briefs/031-pdf-and-document-transformation-products.md)"
+    },
+    {
+     "statement": "The user can turn a spreadsheet into a PDF file.",
+     "source": "S31.02 (same brief)"
+    },
+    {
+     "statement": "The user can turn a slide deck into a PDF with one page per slide.",
+     "source": "S31.03 (same brief); status partial with an owner-run sandbox template step"
+    },
+    {
+     "statement": "Mobile should not be the first heavy local PDF/PPTX/DOCX generation surface.",
+     "source": "doc: docs/product/definition.md:475"
+    }
+   ],
+   "acceptance_criteria": [
+    "Ask on Web for a one-page PDF with a heading and two bullets: a PDF downloads and opens with them",
+    "Content over 100,000 characters is refused by the tool schema",
+    "Ask with verify_render and no sandbox: a clear error is returned",
+    "Download a document artifact as PDF on Web: the file opens",
+    "Download a slide-deck artifact as PDF: one page per slide",
+    "Mobile export of an artifact to PDF saves a file and shows it",
+    "A spreadsheet or Word file attached and 'convert to PDF' asked: record the actual result (feature not found)"
+   ],
+   "inferred": [
+    "Page breaks for long text are added when the cursor passes the bottom margin [inferred from generatePdf]"
+   ],
+   "proposed": [
+    "[proposed] A conversion tool for existing docx, xlsx, pptx using the office sandbox",
+    "[proposed] Confirm the PDF tool lays out pipe tables or drop the promise"
+   ]
+  },
+  "implementation_map": [
+   {
+    "kind": "service",
+    "name": "generatePdf",
+    "path": "apps/web/lib/services/managed-office-file-service.ts",
+    "role": "A4 layout with jsPDF (796-822)"
+   },
+   {
+    "kind": "schema",
+    "name": "ManagedOfficeFileInputSchema (pdf)",
+    "path": "apps/web/lib/services/managed-office-file-service.ts",
+    "role": "filename, title up to 200, content up to 100000 characters, verify_render (190-197)"
+   },
+   {
+    "kind": "service",
+    "name": "createManagedOfficeFileToolDefinition",
+    "path": "apps/web/lib/services/managed-office-file-service.ts",
+    "role": "Tool definition shown to the model (233-290)"
+   },
+   {
+    "kind": "service",
+    "name": "generateManagedOfficeFile",
+    "path": "apps/web/lib/services/managed-office-file-service.ts",
+    "role": "Builds the file and optional render verification (930-1078)"
+   },
+   {
+    "kind": "service",
+    "name": "renderManagedOfficeFile",
+    "path": "apps/web/lib/services/managed-office-preservation.ts",
+    "role": "LibreOffice convert and page raster in the sandbox (970-1060)"
+   },
+   {
+    "kind": "service",
+    "name": "applyManagedOfficeFileCreation",
+    "path": "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts",
+    "role": "Adds the tool to the turn (1258-1266, 5494)"
+   },
+   {
+    "kind": "service",
+    "name": "tool loop office file branch",
+    "path": "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts",
+    "role": "Runs the tool and obtains the sandbox executor (2562-2575)"
+   },
+   {
+    "kind": "config",
+    "name": "E2B gate",
+    "path": "apps/web/lib/e2b/gate.ts",
+    "role": "AGI_E2B_EXECUTION and E2B_API_KEY names (6-13)"
+   },
+   {
+    "kind": "config",
+    "name": "E2B chat template name",
+    "path": "apps/web/lib/e2b/chat-template.ts",
+    "role": "AGI_E2B_CHAT_TEMPLATE name (line 1)"
+   },
+   {
+    "kind": "job",
+    "name": "build-e2b-office-template",
+    "path": "apps/web/scripts/build-e2b-office-template.mjs",
+    "role": "Builds the office sandbox template (LibreOffice, poppler)"
+   },
+   {
+    "kind": "component",
+    "name": "ArtifactPreview export handlers",
+    "path": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "role": "Download as PDF for documents and decks (1642-1666, 2392-2411)"
+   },
+   {
+    "kind": "service",
+    "name": "downloadDeckPdf",
+    "path": "apps/web/features/chat/components/artifacts/presentation/deck-pdf.ts",
+    "role": "Deck to PDF in the browser (491-494)"
+   },
+   {
+    "kind": "service",
+    "name": "renderPdfDocument",
+    "path": "apps/web/features/chat/services/export-pdf.ts",
+    "role": "Document blocks to PDF (1179)"
+   },
+   {
+    "kind": "service",
+    "name": "exportToPDF / exportHtmlToPDF",
+    "path": "apps/mobile/services/fileCreation.ts",
+    "role": "Mobile PDF through the system print service (181-215)"
+   },
+   {
+    "kind": "service",
+    "name": "artifact export options",
+    "path": "apps/mobile/src/features/chat/utils/artifactExport.ts",
+    "role": "PDF entries and deck export (62, 95, 122-138)"
+   },
+   {
+    "kind": "component",
+    "name": "ArtifactExportSheet",
+    "path": "apps/mobile/src/features/chat/components/ArtifactExportSheet.tsx",
+    "role": "Mobile export list"
+   },
+   {
+    "kind": "command",
+    "name": "execute_document_create_pdf_tool",
+    "path": "apps/desktop/src-tauri/src/core/llm/tool_executor/document_tools.rs",
+    "role": "Tauri agent tool (321-347)"
+   },
+   {
+    "kind": "service",
+    "name": "PDF creator",
+    "path": "apps/desktop/src-tauri/src/features/document/create_pdf.rs",
+    "role": "printpdf creation (64, 326)"
+   },
+   {
+    "kind": "test",
+    "name": "managed-office-file-service test",
+    "path": "apps/web/lib/services/managed-office-file-service.test.ts",
+    "role": "Includes 'creates a real PDF and a real CSV' (line 200)"
+   }
+  ],
+  "execution_and_data_flow": {
+   "steps": [
+    {
+     "what_happens": "Person asks for a PDF; the server detects creation intent and adds the file tool to the turn",
+     "runs_on": "our servers",
+     "evidence": "request-processor.ts:914-916, 993-997, 5494"
+    },
+    {
+     "what_happens": "The chat model calls the tool with filename, title and content",
+     "runs_on": "outside service",
+     "evidence": "managed-office-file-service.ts:233-290; model route per SYS-inference-providers"
+    },
+    {
+     "what_happens": "The server validates and builds the PDF in process with jsPDF",
+     "runs_on": "our servers",
+     "evidence": "managed-office-file-service.ts:796-822, 1034-1035"
+    },
+    {
+     "what_happens": "If verify_render is set, a sandbox converts and rasterises it for a receipt; with no sandbox the call fails",
+     "runs_on": "outside service",
+     "evidence": "managed-office-file-service.ts:1036-1042; managed-office-preservation.ts:970-1060"
+    },
+    {
+     "what_happens": "The file is attached to the reply for download",
+     "runs_on": "our servers",
+     "evidence": "managed-office-file-service.ts:1052-1058 result; storage path not traced"
+    },
+    {
+     "what_happens": "Artifact PDF on Web: built in the browser and saved by the browser",
+     "runs_on": "device",
+     "evidence": "deck-pdf.ts:491-494"
+    },
+    {
+     "what_happens": "Mobile: the system print service writes a PDF file, moved to an export path",
+     "runs_on": "device",
+     "evidence": "fileCreation.ts:190-200"
+    }
+   ],
+   "data": [
+    {
+     "what": "Generated PDF (tool path)",
+     "where_stored": "unknown; storage of tool-created files was not traced",
+     "synced": "unknown",
+     "retained_or_deleted": "unknown"
+    },
+    {
+     "what": "Artifact PDF (Web) and Mobile export file",
+     "where_stored": "Downloaded to the device; Mobile export path via allocateExportPath (fileCreation.ts:196-198)",
+     "synced": "No",
+     "retained_or_deleted": "Kept by the user"
+    }
+   ],
+   "models_and_providers": "The chat model only writes the text and calls the tool. PDF layout is done by code, not by a model. Any model that supports tool calls can use the tool [inferred]."
+  },
+  "access_and_usage": {
+   "account": "Web tool: signed-in chat. Artifact download and Mobile export: not checked for sign-in.",
+   "permissions": "none found in the code for the tool beyond the chat turn rules",
+   "subscription": "Sandbox render check depends on managed compute and provisioning gates (apps/web/lib/e2b/gate.ts:15-30); plan rules for the tool itself: none found in the code read",
+   "limits_and_metering": "Content up to 100,000 characters, title up to 200 (managed-office-file-service.ts:195-196); a generated file size cap constant MAX_GENERATED_FILE_BYTES exists (value not read); sandbox compute metered by compute-metering (imported in gate.ts)",
+   "flags": "AGI_E2B_EXECUTION, E2B_API_KEY, AGI_E2B_CHAT_TEMPLATE (names only)",
+   "model_compatibility": "Needs a model that can call tools [inferred]",
+   "provider_restrictions": "none found in the code read",
+   "local_mode": "Mobile exports on the device in any mode. The Tauri tool creates on the device. The Web tool needs our servers."
+  },
+  "states_and_edge_cases": [
+   {
+    "state": "Invalid tool input",
+    "behaviour": "Returns an invalid-request failure describing the bad field",
+    "evidence": "managed-office-file-service.ts:937-940"
+   },
+   {
+    "state": "Render check without sandbox",
+    "behaviour": "Error 'Rendering verification requires an available Office execution environment.'",
+    "evidence": "managed-office-file-service.ts:1038-1041"
+   },
+   {
+    "state": "Any build error",
+    "behaviour": "code office_file_generation_failed with message 'The file could not be created.' unless a ManagedOfficeProcessingError",
+    "evidence": "managed-office-file-service.ts:1066-1078"
+   },
+   {
+    "state": "Web artifact PDF failure",
+    "behaviour": "Toast 'The PDF could not be made' or 'This document could not be exported as PDF'",
+    "evidence": "ArtifactPreview.tsx:1649-1665"
+   },
+   {
+    "state": "Mobile empty content",
+    "behaviour": "Throws 'Cannot export empty content'",
+    "evidence": "fileCreation.ts:186-188"
+   },
+   {
+    "state": "Cancel (tool)",
+    "behaviour": "The abort signal is passed to the render call on the PDF path; plain generation is not interruptible",
+    "evidence": "managed-office-file-service.ts:1047"
+   },
+   {
+    "state": "Offline",
+    "behaviour": "not handled in the code read",
+    "evidence": "none: no offline handling found in the files cited on this page"
+   }
+  ],
+  "verification": {
+   "existing_tests": [
+    {
+     "path": "apps/web/lib/services/managed-office-file-service.test.ts",
+     "covers": "Tool output including a real PDF and CSV"
+    },
+    {
+     "path": "apps/web/lib/services/managed-office-render.integration.test.ts",
+     "covers": "Render of office files (needs the sandbox; run state unknown)"
+    },
+    {
+     "path": "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.office-file.test.ts",
+     "covers": "Tool loop with the office file tool"
+    },
+    {
+     "path": "apps/web/lib/services/chat-tool-provider-schemas.test.ts",
+     "covers": "Tool schema shape per provider"
+    },
+    {
+     "path": "apps/mobile/__tests__/file-creation-managed-file.test.ts",
+     "covers": "Mobile exports including PDF with a mocked print service"
+    },
+    {
+     "path": "apps/mobile/__tests__/file-creation-native-names.test.ts",
+     "covers": "Mobile export file names"
+    },
+    {
+     "path": "apps/web/features/chat/components/artifacts/InlineArtifactCards.test.tsx",
+     "covers": "Artifact cards listing the PDF format"
+    }
+   ],
+   "scenarios": [
+    {
+     "name": "Chat PDF",
+     "steps": [
+      "On Web ask 'create a PDF titled Plan with 3 bullets'",
+      "Download and open"
+     ],
+     "expected": "A4 PDF with title and bullets"
+    },
+    {
+     "name": "Long text",
+     "steps": [
+      "Ask for a PDF of 5 pages of text"
+     ],
+     "expected": "Several pages, 20 mm margins"
+    },
+    {
+     "name": "Render check",
+     "steps": [
+      "With no sandbox configured request a verified PDF"
+     ],
+     "expected": "Clear error about the environment"
+    },
+    {
+     "name": "Deck PDF",
+     "steps": [
+      "Open a slide-deck artifact",
+      "Download as PDF"
+     ],
+     "expected": "One page per slide"
+    },
+    {
+     "name": "Mobile export",
+     "steps": [
+      "Open an artifact on Mobile",
+      "Choose PDF"
+     ],
+     "expected": "A PDF file is saved"
+    },
+    {
+     "name": "Convert existing file",
+     "steps": [
+      "Attach a .docx and ask for a PDF copy"
+     ],
+     "expected": "Record what happens; a direct conversion path was not found"
+    }
+   ],
+   "diagnostics": [
+    "Failure code office_file_generation_failed",
+    "Tool loop message 'Unknown tool' when the tool is not offered (tool-loop.ts:2564)",
+    "Mobile export errors from fileCreation.ts"
+   ]
+  },
+  "gaps": [
+   {
+    "gap": "No conversion of existing Word, spreadsheet or slide files to PDF",
+    "affects": "All apps; S31.01, S31.02, S31.03",
+    "evidence": "Searches found only text-to-PDF, artifact exports and a render check",
+    "work_needed": "Use the office sandbox to convert and return the PDF; finish the owner template step"
+   },
+   {
+    "gap": "Brief says mobile done for S31.01 and S31.02 but cited code is attachment validation and parsing, not PDF creation",
+    "affects": "Brief accuracy",
+    "evidence": "apps/mobile/src/features/chat/utils/attachmentValidation.ts:121; apps/mobile/services/docParser.ts",
+    "work_needed": "Correct the brief; Mobile exports artifacts to PDF instead"
+   },
+   {
+    "gap": "Sandbox render depends on an owner-run template step and flags",
+    "affects": "Web verified-render requests",
+    "evidence": "Brief S31.03 'Unfinished'; build-e2b-office-template.mjs",
+    "work_needed": "Owner builds the template and sets the flags, then live-check"
+   },
+   {
+    "gap": "Table layout in the PDF tool unconfirmed",
+    "affects": "Web tool users",
+    "evidence": "managed-office-file-service.ts:276 vs 796-822",
+    "work_needed": "Test pipe tables"
+   },
+   {
+    "gap": "Tool output storage and retention not documented",
+    "affects": "All Web users",
+    "evidence": "not traced",
+    "work_needed": "Trace"
+   }
+  ],
+  "depends_on": [
+   "surface:web",
+   "surface:mobile",
+   "surface:desktop",
+   "mode:cloud",
+   "mode:local",
+   "api:POST /api/llm/v1/chat/completions",
+   "file:apps/web/lib/services/managed-office-file-service.ts",
+   "file:apps/web/lib/e2b/gate.ts",
+   "SYS-agents-tools-and-automation",
+   "SYS-files-artifacts-and-storage",
+   "SYS-subscriptions-entitlements-and-usage",
+   "SYS-execution-boundaries"
+  ],
+  "relationships": [
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/web/lib/services/managed-office-file-service.ts",
+    "evidence": "managed-office-file-service.ts:796-822, 930-1078"
+   },
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/mobile/services/fileCreation.ts",
+    "evidence": "fileCreation.ts:181-215"
+   },
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/desktop/src-tauri/src/core/llm/tool_executor/document_tools.rs",
+    "evidence": "document_tools.rs:321-347"
+   },
+   {
+    "rel": "exposes_api",
+    "to": "api:POST /api/llm/v1/chat/completions",
+    "evidence": "The tool is offered inside the chat turn; request-processor.ts:5494"
+   },
+   {
+    "rel": "configured_by",
+    "to": "file:apps/web/lib/e2b/gate.ts",
+    "evidence": "gate.ts:6-13"
+   },
+   {
+    "rel": "depends_on",
+    "to": "SYS-execution-boundaries",
+    "evidence": "Render check runs in an outside sandbox; managed-office-preservation.ts:970-1060"
+   },
+   {
+    "rel": "depends_on",
+    "to": "SYS-agents-tools-and-automation",
+    "evidence": "tool-loop.ts:2562-2575"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:web",
+    "evidence": "ArtifactPreview.tsx:2397-2411"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:mobile",
+    "evidence": "artifactExport.ts:62, 95"
+   },
+   {
+    "rel": "governed_by_subscription",
+    "to": "SYS-subscriptions-entitlements-and-usage",
+    "evidence": "gate.ts:15-30 managed compute gate and pricing readiness"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/web/lib/services/managed-office-file-service.test.ts",
+    "evidence": "line 200"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/mobile/__tests__/file-creation-managed-file.test.ts",
+    "evidence": "mocks printToFileAsync, line 20"
+   }
+  ],
+  "unknowns": [
+   "Where the tool-created PDF is stored and for how long",
+   "Value of MAX_GENERATED_FILE_BYTES",
+   "Whether pipe tables render in the PDF tool",
+   "Whether the sandbox-rendered PDF of office files is ever returned",
+   "Whether Electron Desktop was driven for this",
+   "Whether the owner template step is done"
+  ]
+ },
+ "corrections": [
+  {
+   "section": "3",
+   "claim": "Pipe tables: PDF layout lines read handle headings and bullets only; table output not confirmed",
+   "verdict": "wrong",
+   "what_the_code_shows": "generatePdf has an explicit table branch: isTableRow, skips dividers and writes cells joined with '   |   '.",
+   "evidence": "apps/web/lib/services/managed-office-file-service.ts:837-841",
+   "correction": "The PDF tool renders pipe tables as plain text lines with ' | ' separators (no grid), and skips the divider row. Headings, bullets, numbered lines and tables are all handled."
+  },
+  {
+   "section": "3/10",
+   "claim": "Web tool: PDF with title, headings (#), bullets and numbered lines, wrapped on A4 pages (796-822)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "A4 wrap, headings (#{1,3}) and bullets/numbered lines are correct, but the function runs to about line 842, and the table branch sits after line 822. Margin constant PDF_MARGIN_MM is used (page's '20 mm' not checked here).",
+   "evidence": "managed-office-file-service.ts:796-842",
+   "correction": "Cite 796-842; add table rows."
+  },
+  {
+   "section": "6/7/8",
+   "claim": "Generated PDF (tool path) stored in: unknown; file size cap MAX_GENERATED_FILE_BYTES value not read; file attached to reply, 'storage path not traced'",
+   "verdict": "wrong",
+   "what_the_code_shows": "The tool loop persists the bytes with persistGeneratedFileBytes (provider 'agi-managed-office', origin 'managed-office-tool', tied to conversationId) and returns file name/uri/mime/byte_count plus generatedFiles. The cap is 20 * 1024 * 1024 bytes (20 MiB); larger output is rejected, and the reply is 'The Office file could not be attached.' when persistence fails.",
+   "evidence": "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:2575-2606; apps/web/lib/server/generated-file-persist.ts:17, 217, 242",
+   "correction": "The tool-created PDF is saved through persistGeneratedFileBytes and attached to the conversation; the cap is 20 MiB. Remove these from Unknown."
+  },
+  {
+   "section": "7",
+   "claim": "Model compatibility: Needs a model that can call tools [inferred]; Permissions/limits: none found",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "Not inferred. The server rejects office creation with 422 office_creation_stream_required when the request is not streaming, and 422 office_creation_model_unsupported when the resolved model has tools === false.",
+   "evidence": "request-processor.ts:5460-5490",
+   "correction": "Web PDF creation requires a streaming chat request and a tool-capable model; otherwise HTTP 422 with those codes."
+  },
+  {
+   "section": "3",
+   "claim": "Tauri desktop: document_create_pdf tool via printpdf; text from the user",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The executor needs app_handle and takes output_path (required), optional title and author, and a required non-empty string array 'paragraphs' (not text/markdown), then calls document_create_pdf_simple. Page implies same text/markdown input as Web.",
+   "evidence": "apps/desktop/src-tauri/src/core/llm/tool_executor/document_tools.rs:321-347",
+   "correction": "The Tauri tool takes output_path, title, author and a paragraphs list and writes to a local path on the device; no markdown headings or bullets."
+  },
+  {
+   "section": "7",
+   "claim": "Subscription: Sandbox render check depends on managed compute and provisioning gates (gate.ts:15-30)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "e2bExecutionEnabled is true with an E2B_API_KEY OR the flag =1 (lines 9-13); provisioning needs flag=1 AND key AND sandboxComputeIsPriceable (23-30). The managed-compute beta gate is a separate gate, not required for e2bExecutionEnabled. No plan check appears in these lines.",
+   "evidence": "apps/web/lib/e2b/gate.ts:9-37",
+   "correction": "Render check availability is an environment gate (key or AGI_E2B_EXECUTION=1; provisioning also needs priceable compute). The beta gate is separate."
+  }
+ ],
+ "missing_facts": [
+  "Tool-created files are persisted and attached to the conversation through persistGeneratedFileBytes, capped at 20 MiB (apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:2575-2606; apps/web/lib/server/generated-file-persist.ts:17,242). The page lists this as unknown.",
+  "Web PDF creation requires stream:true and a tool-capable model, else HTTP 422 office_creation_stream_required / office_creation_model_unsupported (apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:5460-5490).",
+  "The PDF generator renders pipe tables as ' | ' text rows (apps/web/lib/services/managed-office-file-service.ts:837-841); the Tauri tool takes a paragraphs array and output_path rather than markdown (apps/desktop/src-tauri/src/core/llm/tool_executor/document_tools.rs:321-347)."
+ ]
+}

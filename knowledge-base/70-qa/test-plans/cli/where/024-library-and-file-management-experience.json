@@ -1,0 +1,30 @@
+{
+ "S24.04": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "List the account's artifacts, newest first."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Open an artifact in the browser: its published page, or the conversation"
+   },
+   {
+    "file": "apps/cli/src/repl/slash_commands.rs",
+    "text": "/artifacts"
+   }
+  ],
+  "needs": "A signed-in AGI account (not Local mode) that has at least one artifact, and a Mac with a default web browser",
+  "note": "No picker or selectable view was found: the code prints a text list and each artifact is opened by typing its id one at a time (apps/cli/src/lib.rs:3866 and apps/cli/src/cloud/artifacts.rs:330 match this); the plan's Where to find it says not written yet, so this path comes from the code, not the plan.",
+  "reachable": "yes",
+  "steps": [
+   "In a terminal, type agi artifacts list and press Return.",
+   "Look for one block per artifact: an id, the title, and [type] on the first line, then a line starting with conversation and a date.",
+   "Copy one id from the list.",
+   "Type agi artifacts open <id> with that id, replacing <id>, and press Return.",
+   "Look for your default web browser opening the artifact's published page, or the conversation it came from if it is not published.",
+   "Compare with Expected: the list shows your artifacts and the open step opens the chosen one. Repeat with another id to check each one opens."
+  ],
+  "where": "Type agi artifacts list in the terminal (the list), then agi artifacts open <id> for each artifact; in the chat REPL, type /artifacts to list and /artifacts open <id> to open"
+ }
+}

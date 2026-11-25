@@ -1,0 +1,120 @@
+{
+ "S18.01": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Recent chats"
+   }
+  ],
+  "needs": "none",
+  "note": "Code derives the title from the first user message (truncated to 60 characters). It does not generate a summary title, so Expected may not match what a tester sees; the Code line's evidence lines were moved and found in conversation-history.ts, not side_panel.ts.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Sign in, open a new chat and send a first message such as 'Plan a three-day trip to Lisbon'.",
+   "Look at the title row at the top of the chat.",
+   "Click the Recent chats button and find the chat in the list.",
+   "Compare the title with Expected: a meaningful title without you naming it. The code takes the first message text, collapses spaces and cuts it at 60 characters, so a long first message shows as a truncated copy of it, not a generated summary."
+  ],
+  "where": "No control. The chat title is set from the first message you send, shown in the title row at the top of the chat and in the Recent chats list."
+ },
+ "S18.05": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Delete chat"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Recent chats"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Chat deleted."
+   }
+  ],
+  "needs": "none for a chat saved only on this device; a signed-in account with a synced chat for the account wording and the 'disappears everywhere' check; a second signed-in device to see the chat is gone there",
+  "note": "The confirmation is in place (confirmHistoryAction); the Code line's quoted lines moved, but the delete path is at side_panel.ts around line 12661 and the menu items around 12771 and 12801.",
+  "reachable": "yes",
+  "steps": [
+   "Click the Recent chats button and find the chat row.",
+   "Click the row's More actions button (its name is 'More actions for' the chat title), then click Delete chat.",
+   "Read the confirmation: 'Delete this chat from this device? It cannot be recovered.' (or, for a chat synced to your account, '...from this device and from your AGI account?'). Click Delete chat to confirm, or Cancel to stop.",
+   "Look for the status 'Chat deleted.' and check the chat is gone from Recent chats and from the title row."
+  ],
+  "where": "Recent chats > More actions for the chat > Delete chat > Delete chat (confirm)"
+ },
+ "S18.09": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "AGI Work"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Later messages in this chat use it until you turn it off."
+   }
+  ],
+  "needs": "a plan that includes AGI Work (otherwise the row is shown locked with 'available on' text)",
+  "note": "The only mode in this code is AGI Work on or off; there is no separate agent or plan mode switch. Starting a new chat resets the mode to chat (side_panel.ts around lines 1827 and 1965).",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat and send one message.",
+   "Click the model button in the message box, the one that shows the model name.",
+   "Turn on the switch labelled AGI Work. Its description reads 'Plans and runs multi-step tasks with tools and files...'.",
+   "Send a multi-step request, then check that the model button shows an 'AGI Work' badge and that later messages in this chat use it. Turn the switch off and check the badge goes away."
+  ],
+  "where": "Model button in the message box (the button showing the model name) > AGI Work switch"
+ },
+ "S18.10": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Temporary chat"
+   },
+   {
+    "file": "apps/extension/src/side_panel.ts",
+    "text": "Add attachment"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Stays out of your history, search, memory and Library."
+   }
+  ],
+  "needs": "none",
+  "note": "The Temporary chat item is hidden once a chat has messages, so it can only be turned on in an empty chat (startTemporaryChat returns early when messages exist). The Expected example names 'incognito' and 'local-only'; the code has only Temporary chat, with no local-only mode.",
+  "reachable": "yes",
+  "steps": [
+   "Start a new, empty chat. Click the Add attachment button in the message box.",
+   "Click Temporary chat. Hover over it first to read its tooltip, which explains what is not saved.",
+   "Look for the banner: 'Temporary chat. Stays out of your history, search, memory and Library.'",
+   "Send a message, then click Add attachment again and click Temporary chat. Check the prompt offers End temporary chat, End and discard, Keep chatting or Turn off, and that after ending the chat is absent from Recent chats."
+  ],
+  "where": "Add attachment button > Temporary chat"
+ },
+ "S18.28": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Continue on phone"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Continue on your phone"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Copy link"
+   }
+  ],
+  "needs": "a signed-in account, a chat synced to the account (the item only appears for chats with a cloud conversation), and a second device signed in with the same account",
+  "note": "The item is not shown for chats saved only on this device, and Account mirroring off in AGI settings keeps chats local; the Code evidence lines (background.ts ~6167, side_panel.ts ~599) are the sync and status code, not the menu item itself.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat that is saved to your account (signed in, account mirroring on).",
+   "Click the More actions button on the chat title row, then click Continue on phone.",
+   "A sheet titled 'Continue on your phone' shows a code and the text 'Scan this code with your phone's camera to open this chat in AGI.' Use Copy link to copy the link.",
+   "On the other device, sign in with the same account, open the link or scan the code, and check the same chat opens."
+  ],
+  "where": "Chat title row > More actions for the chat > Continue on phone"
+ }
+}

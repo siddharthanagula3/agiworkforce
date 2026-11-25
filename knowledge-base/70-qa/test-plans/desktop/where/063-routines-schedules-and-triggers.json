@@ -1,0 +1,582 @@
+{
+ "S63.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/SchedulesPage.tsx",
+    "text": "Start from a template"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Scheduled"
+   }
+  ],
+  "needs": "a plan that can create schedules (otherwise the button reads Upgrade plan); at least one saved routine, because the gallery only shows when the list is not empty",
+  "note": "The Desktop app has the same gallery in apps/desktop/src/features/schedules/DesktopCloudSchedules.tsx, but its toggle button text was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, click Scheduled in the sidebar.",
+   "Click the arrow button next to New task (aria-label \"More ways to create a task\").",
+   "Click Start from a template.",
+   "Look for the template gallery section titled Start from a template with ready-made routines to pick."
+  ],
+  "where": "Scheduled > More ways to create a task (arrow next to New task) > Start from a template"
+ },
+ "S63.02": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/SchedulesPage.tsx",
+    "text": "New task"
+   },
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "Task Instructions"
+   },
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "Create Schedule"
+   }
+  ],
+  "needs": "a plan that can create schedules",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click Scheduled in the sidebar, then click New task.",
+   "Type a name in Schedule Name and the instructions in Task Instructions.",
+   "Pick a Frequency such as Daily, then click Create Schedule.",
+   "Look for the new routine card in the list with the name and prompt you typed."
+  ],
+  "where": "Scheduled > New task"
+ },
+ "S63.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Run this on a schedule"
+   }
+  ],
+  "needs": "a finished assistant reply in a chat",
+  "note": "The exact button that opens the reply's menu and whether the form is pre-filled from the reply were not confirmed in code.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message in chat and wait until the reply finishes streaming.",
+   "Open the menu on that reply.",
+   "Click Run this on a schedule.",
+   "Look for the schedule form opening, and check whether it carries that reply's content."
+  ],
+  "where": "Chat > a finished reply's menu > Run this on a schedule"
+ },
+ "S63.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "Schedule Name"
+   },
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "Description"
+   },
+   {
+    "file": "apps/web/features/schedules/components/ScheduleCard.tsx",
+    "text": "Edit Schedule"
+   }
+  ],
+  "needs": "a plan that can create schedules",
+  "note": "Edit Schedule is a tooltip title on an icon button, not visible text.",
+  "reachable": "yes",
+  "steps": [
+   "Click Scheduled, then New task.",
+   "Type a name in Schedule Name and text in Description.",
+   "Click Create Schedule, then click the Edit Schedule icon on the routine card.",
+   "Change the name or description, click Save Changes, and check the card shows the new values."
+  ],
+  "where": "Scheduled > New task > Schedule Name and Description (edit later with Scheduled > routine card > Edit Schedule)"
+ },
+ "S63.05": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "Task Instructions"
+   }
+  ],
+  "needs": "a plan that can create schedules",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click Scheduled, then New task.",
+   "Type several lines into Task Instructions, pressing Enter for new lines.",
+   "Click Create Schedule, then Edit Schedule on the card.",
+   "Look for the Task Instructions box showing all lines, edit one line, click Save Changes and check the change stays."
+  ],
+  "where": "Scheduled > New task > Task Instructions (later: routine card > Edit Schedule > Task Instructions)"
+ },
+ "S63.06": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/ScheduleAccessFields.tsx",
+    "text": "Sources"
+   },
+   {
+    "file": "apps/web/features/schedules/components/ScheduleAccessFields.tsx",
+    "text": "Recent chats"
+   }
+  ],
+  "needs": "a plan that can create schedules; a project with files if you want to test project files",
+  "note": "The Code line pointed to moved lines. The Sources group was found in ScheduleAccessFields.tsx; I did not confirm that the form renders it.",
+  "reachable": "yes",
+  "steps": [
+   "Click Scheduled, then New task.",
+   "Find the Sources group of checkboxes.",
+   "Tick or untick Project instructions and files, Saved memories, The web or Recent chats.",
+   "Click Create Schedule, reopen Edit Schedule, and check the same boxes are still set."
+  ],
+  "where": "Scheduled > New task > Sources"
+ },
+ "S63.08": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/ScheduleAccessFields.tsx",
+    "text": "Connectors"
+   }
+  ],
+  "needs": "a plan that can create schedules; connectors set up in the account to see choices",
+  "note": "Whether the list is empty without connectors was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Click Scheduled, then New task.",
+   "Find the Connectors group; wait for Reading your connectors to go away.",
+   "Tick the connectors the routine may use.",
+   "Click Create Schedule, reopen Edit Schedule and check the choice is kept."
+  ],
+  "where": "Scheduled > New task > Connectors"
+ },
+ "S63.09": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "Run as agent"
+   },
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "No agent"
+   }
+  ],
+  "needs": "a plan that can create schedules; at least one custom agent created to see choices beyond No agent",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click Scheduled, then New task.",
+   "Open the Run as agent drop-down; the default is No agent.",
+   "Pick an agent from the list.",
+   "Click Create Schedule and check the card or Edit Schedule shows that agent."
+  ],
+  "where": "Scheduled > New task > Run as agent"
+ },
+ "S63.11": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "Frequency"
+   },
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "One Time"
+   },
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "Run At"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click Scheduled, then New task.",
+   "Set Frequency to One Time.",
+   "Pick a date and time in Run At that is in the future.",
+   "Click Create Schedule and check the card shows that one time as its next run."
+  ],
+  "where": "Scheduled > New task > Frequency > One Time > Run At"
+ },
+ "S63.12": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "Frequency"
+   },
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "Daily"
+   },
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "Local Time"
+   }
+  ],
+  "needs": "none",
+  "note": "Whether the card shows the repeat wording was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Click Scheduled, then New task.",
+   "Set Frequency to Daily, then set Local Time.",
+   "Click Create Schedule.",
+   "Look at the card's next-run information and check it repeats at the chosen time."
+  ],
+  "where": "Scheduled > New task > Frequency > Daily, Weekly or Monthly"
+ },
+ "S63.13": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "Time Zone"
+   }
+  ],
+  "needs": "none",
+  "note": "The Code line pointed to moved lines; the field was found at ScheduleForm.tsx line 510.",
+  "reachable": "yes",
+  "steps": [
+   "Click Scheduled, then New task.",
+   "Click the Time Zone field and type a city or region in Search by city or region\u2026",
+   "Pick a zone, then set a Local Time.",
+   "Click Create Schedule, reopen Edit Schedule and check the Time Zone is kept."
+  ],
+  "where": "Scheduled > New task > Time Zone"
+ },
+ "S63.14": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "Custom Cron"
+   },
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "Recurrence Rule"
+   },
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "Only Run During"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click Scheduled, then New task.",
+   "Set Frequency to Interval and fill Repeat Every, or Custom Cron and fill Cron Expression, or Recurrence Rule and fill Recurrence Rule.",
+   "Optionally set Only Run During to a window.",
+   "Click Create Schedule and check the card shows the advanced recurrence."
+  ],
+  "where": "Scheduled > New task > Frequency > Interval, Custom Cron or Recurrence Rule"
+ },
+ "S63.15": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "When An Event Happens"
+   },
+   {
+    "file": "apps/web/features/schedules/components/ScheduleTriggersPanel.tsx",
+    "text": "Google Calendar"
+   }
+  ],
+  "needs": "a connected account for the chosen service (for example GitHub or Gmail) to test a real event",
+  "note": "Not confirmed whether the trigger panel is inside the form or appears after saving; firing an event was not verified in code.",
+  "reachable": "yes",
+  "steps": [
+   "Click Scheduled, then New task.",
+   "Set Frequency to When An Event Happens.",
+   "Look for the trigger choices: GitHub, Slack, Gmail, Google Calendar, Anything else (signed webhook).",
+   "Pick one, save, then send or cause that event and check a run starts."
+  ],
+  "where": "Scheduled > New task > Frequency > When An Event Happens"
+ },
+ "S63.16": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/TriggerConditionsEditor.tsx",
+    "text": "Only when"
+   },
+   {
+    "file": "apps/web/features/schedules/components/TriggerConditionsEditor.tsx",
+    "text": "Other field\u2026"
+   }
+  ],
+  "needs": "a connected event source to send real events",
+  "note": "Only the field conditions were confirmed; event type, account and repeat-suppression wording was not found as visible labels.",
+  "reachable": "yes",
+  "steps": [
+   "Set Frequency to When An Event Happens and pick a trigger.",
+   "Find the Only when group.",
+   "Pick a field from the drop-down, or Other field\u2026, and enter a Value.",
+   "Save, send a matching and a non-matching event, and check only the matching one starts a run."
+  ],
+  "where": "Scheduled > New task > Frequency > When An Event Happens > Only when"
+ },
+ "S63.17": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/ScheduleTriggersPanel.tsx",
+    "text": "Anything else (signed webhook)"
+   }
+  ],
+  "needs": "a terminal to send the POST; the signing secret from the panel",
+  "note": "The panel builds a signed curl example; the exact labels for the URL and secret were not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Set Frequency to When An Event Happens and pick Anything else (signed webhook).",
+   "Save, then copy the endpoint and signing secret shown in the trigger panel.",
+   "Send a signed POST to the endpoint, using the example command shown in the panel.",
+   "Look in the routine's run history for a new run."
+  ],
+  "where": "Scheduled > New task > Frequency > When An Event Happens > Anything else (signed webhook)"
+ },
+ "S63.19": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/ScheduleCard.tsx",
+    "text": "Run now"
+   }
+  ],
+  "needs": "a saved routine; a routine that is finished or legacy shows Run now disabled",
+  "note": "The button that opens the card menu was not confirmed in code.",
+  "reachable": "yes",
+  "steps": [
+   "Click Scheduled and open the menu on a saved routine.",
+   "Click Run now.",
+   "Look for a new run in Latest result or the run history with a status and output."
+  ],
+  "where": "Scheduled > routine card menu > Run now"
+ },
+ "S63.20": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/SchedulesPage.tsx",
+    "text": "Next run"
+   }
+  ],
+  "needs": "a routine that is active",
+  "note": "The label used on the card itself was not confirmed; Next run found here is the sort option text.",
+  "reachable": "yes",
+  "steps": [
+   "Click Scheduled and look at each routine card.",
+   "Find the next-run time (shown as a tooltip titled Next run on the card).",
+   "Compare the time with the Time Zone and Local Time set in Edit Schedule."
+  ],
+  "where": "Scheduled > routine card (next-run line)"
+ },
+ "S63.21": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/ScheduleCard.tsx",
+    "text": "Last run:"
+   }
+  ],
+  "needs": "a routine that has run at least once; a failing run to see the error",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click Scheduled and open a routine that has run.",
+   "Look for the Last run line on its card.",
+   "If the last run failed, check the error text after Last run."
+  ],
+  "where": "Scheduled > routine card (Last run line)"
+ },
+ "S63.22": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/SchedulesPage.tsx",
+    "text": "Latest result"
+   },
+   {
+    "file": "apps/web/features/schedules/components/SchedulesPage.tsx",
+    "text": "This schedule has not run yet."
+   }
+  ],
+  "needs": "a routine with past runs",
+  "note": "The control that opens Latest result from the card was not confirmed in code.",
+  "reachable": "yes",
+  "steps": [
+   "Click Scheduled and open a routine that has run.",
+   "Open the Latest result panel from the card.",
+   "Look for the list of past runs with status and time.",
+   "If there are no runs, check the text This schedule has not run yet."
+  ],
+  "where": "Scheduled > routine card > Latest result (run history)"
+ },
+ "S63.23": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/SchedulesPage.tsx",
+    "text": "Latest result"
+   }
+  ],
+  "needs": "a routine with a finished run that produced output",
+  "note": "Opening a single run and its output view was not confirmed in code; ScheduleRunHistory.tsx shows the run list.",
+  "reachable": "yes",
+  "steps": [
+   "Open Latest result for a routine that has run.",
+   "Click or open a past run in the list.",
+   "Look for the run's output text, not only its status."
+  ],
+  "where": "Scheduled > routine card > Latest result > a run"
+ },
+ "S63.24": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/ScheduleCard.tsx",
+    "text": "Pause"
+   },
+   {
+    "file": "apps/web/features/schedules/components/ScheduleCard.tsx",
+    "text": "Resume"
+   },
+   {
+    "file": "apps/web/features/schedules/components/ScheduleCard.tsx",
+    "text": "Paused"
+   }
+  ],
+  "needs": "a saved routine",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click Scheduled and find a routine that is active.",
+   "Click Pause on its card, or Pause in the card menu.",
+   "Look for the Paused label on the card and that it does not run at its next time.",
+   "Click Resume and check the label goes away."
+  ],
+  "where": "Scheduled > routine card > Pause (or Resume)"
+ },
+ "S63.26": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/ScheduleCard.tsx",
+    "text": "Edit Schedule"
+   },
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "Save Changes"
+   }
+  ],
+  "needs": "a saved routine",
+  "note": "Edit Schedule is a tooltip title on an icon button.",
+  "reachable": "yes",
+  "steps": [
+   "Click Scheduled and click the Edit Schedule icon on a routine card.",
+   "Change a field such as Frequency, Local Time or Task Instructions.",
+   "Click Save Changes.",
+   "Look at the card and reopen Edit Schedule to check the change saved."
+  ],
+  "where": "Scheduled > routine card > Edit Schedule"
+ },
+ "S63.27": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/SchedulesPage.tsx",
+    "text": "Delete Schedule?"
+   }
+  ],
+  "needs": "a saved routine; the deletion is permanent",
+  "note": "The card menu that holds Delete was not confirmed in code; the dialog wording was read but its consequence text was not.",
+  "reachable": "yes",
+  "steps": [
+   "Click Scheduled and open the menu on a routine.",
+   "Click Delete.",
+   "Read the confirmation Delete Schedule? and confirm.",
+   "Look for the routine gone from the list and that it no longer runs."
+  ],
+  "where": "Scheduled > routine card menu > Delete"
+ },
+ "S63.29": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/SchedulesPage.tsx",
+    "text": "Share link"
+   }
+  ],
+  "needs": "a second account to open the link",
+  "note": "The Share menu item wording was taken from a test file, not the component; the recipient copy flow was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Click Scheduled and open the share action for a routine.",
+   "In the dialog, copy the Share link.",
+   "Open the link in a second account in the same workspace or another browser, and check it offers to create a copy.",
+   "Check the original routine is unchanged."
+  ],
+  "where": "Scheduled > routine card > Share (link dialog Share \u201c<routine name>\u201d)"
+ },
+ "S63.31": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "Maximum Runs"
+   },
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "Credit Cap"
+   }
+  ],
+  "needs": "a plan that can create schedules",
+  "note": "Empty fields show the placeholder No limit\u2026; whether all plans can set these was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Click Scheduled, then New task.",
+   "Fill Maximum Runs with a number, and optionally Credit Cap.",
+   "Click Create Schedule.",
+   "Let the routine reach the limit, or check Edit Schedule shows the cap is kept."
+  ],
+  "where": "Scheduled > New task > Maximum Runs and Credit Cap"
+ },
+ "S63.32": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/ScheduleRunHistory.tsx",
+    "text": "Waiting for your approval"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Scheduled"
+   },
+   {
+    "file": "apps/web/features/schedules/components/ScheduleCard.tsx",
+    "text": "Run History"
+   }
+  ],
+  "needs": "a routine whose unattended run needs a tool approval (the tool's approval has to be triggered by the run)",
+  "note": "The approve and deny button words come from TOOL_APPROVAL_ACTION_LABELS in packages/types, not a literal in these files. The desktop screen (apps/desktop/src/features/schedules/DesktopCloudSchedules.tsx) shows the same approval box under \"Recent results\" and asks the user to approve in run history. The code paths for pausing and resuming are in apps/web/lib/services/scheduled-agent-executor.ts and the tool-call gate; the resume after approval was not confirmed on screen, and the labels for the \"resume the schedule\" action were not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open \"Scheduled\" in the left sidebar.",
+   "Open a routine that uses a tool which asks for approval, and run it unattended (or wait for its schedule to fire).",
+   "When the run needs approval, the routine card shows a paused note: \"Paused: a run needed your approval. Approve or deny it in Run History\". Click the Run History (clock) icon on the card.",
+   "In the run row, look for the \"Waiting for your approval\" box listing the tool calls with an approve and a deny button, and an \"Expires\" time.",
+   "Click approve. Compare with Expected: the run should resume and finish, and the approval box should go away."
+  ],
+  "where": "Scheduled > (routine card) > Run History (clock icon) > run row shows \"Waiting for your approval\" with the approve and deny buttons"
+ },
+ "S63.33": {
+  "labels": [
+   {
+    "file": "packages/contracts/cloud-contracts/src/schedules.ts",
+    "text": "Skipped the run scheduled for"
+   },
+   {
+    "file": "packages/contracts/cloud-contracts/src/schedules.ts",
+    "text": "Ran late: scheduled for"
+   },
+   {
+    "file": "apps/web/features/schedules/components/ScheduleCard.tsx",
+    "text": "Run History"
+   }
+  ],
+  "needs": "a routine with a recurring schedule and a run that was actually missed (the tester cannot force this easily)",
+  "note": "The note text is built in code (a template string), so the full sentence is not one literal; the setting label \"If A Run Is Missed\" is in apps/web/features/schedules/components/ScheduleForm.tsx. The desktop Recent results section (apps/desktop/src/features/schedules/DesktopCloudSchedules.tsx) also shows the same timing note. Whether a missed run is shown in a live test was not verified.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open \"Scheduled\" in the left sidebar.",
+   "Make sure a routine has a recurring schedule and its run was missed (for example the computer was asleep or the app was closed when it was due). The \"If A Run Is Missed\" setting in the routine form decides whether it runs late or is skipped.",
+   "Click the Run History (clock) icon on the routine card.",
+   "Read the run row: a skipped run shows the word \"skipped\" in place of the status, plus a note explaining why. A late run shows the note \"Ran late: scheduled for ...\".",
+   "Compare with Expected: the history should say that the occurrence was missed or skipped and why."
+  ],
+  "where": "Scheduled > (routine card) > Run History (clock icon) > run row shows \"skipped\" and a note such as \"Skipped the run scheduled for ...\" or \"Ran late: scheduled for ...\""
+ }
+}

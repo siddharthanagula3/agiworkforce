@@ -1,0 +1,611 @@
+{
+ "feature": {
+  "id": "F104-06",
+  "aliases": [
+   "encrypted local database",
+   "SQLCipher",
+   "agi_mobile.db",
+   "on-device model",
+   "Local mode model",
+   "device tier",
+   "Performance settings",
+   "local-llm package"
+  ],
+  "summary": "AGI Mobile stores chats in an encrypted SQLite database whose 256-bit key sits in device secure storage, and can run a small model on the phone for free without an account. Onboarding checks the device and recommends a model. The Electron desktop does not run on-device models; only the retained Tauri code checks a local model server.",
+  "purpose": {
+   "what_it_does": "Keeps mobile data encrypted on the device and runs inference there when the phone supports it. (apps/mobile/storage/db.ts:19-30,130-160; packages/platform/local-llm/src/selector.ts)",
+   "why_it_exists": "Local mode must work without an account, keep work on the device and make no hidden cloud calls. (doc: docs/product/requirements.md section 7.1)",
+   "who_uses_it": "Mobile users who want private, free, offline chat.",
+   "problems_solved": [
+    "Readable chats if the phone is lost (encryption).",
+    "Needing an account or payment for basic chat.",
+    "Not knowing whether a device can run a model."
+   ],
+   "use_cases": [
+    "Chat on a plane with no network.",
+    "Finish onboarding and download a recommended model.",
+    "Check tokens per second in Performance settings."
+   ]
+  },
+  "user_experience": {
+   "where_to_find_it": [
+    "Mobile onboarding screen 'Set up local chat on <device name>.' (onboarding.tsx:~700).",
+    "Mobile Settings, Performance: 'Device Tier', 'Benchmark This Device', 'Show performance chip in chat' (performance.tsx:594,940,1077).",
+    "Desktop Tauri build (retained internal): local model server health monitor (App.tsx:746-752)."
+   ],
+   "prerequisites": [
+    "A supported phone; downloading a model needs storage and network; Local use needs no sign-in (doc: docs/product/requirements.md M-US-001)."
+   ],
+   "screens_and_controls": [
+    "'Recommended' badge, 'Pick a different model', 'Continue without downloading', 'Sign in to use Cloud', 'Continue' and 'Skip for now' (onboarding.tsx:648-810).",
+    "When unsupported: '<model> is unavailable on this device.', 'Browse local models', 'Continue without a local model' (onboarding.tsx:684-686,777-794).",
+    "Download screen: 'The download continues if you leave this screen.', 'Try again', 'Continue to chat' (onboarding.tsx:880-916)."
+   ],
+   "journey": [
+    "Open the app for the first time.",
+    "Onboarding reads device capability.",
+    "Screen shows a recommended model with download size.",
+    "Download over wifi or confirm cellular.",
+    "Start chatting; chats are saved to the encrypted database.",
+    "Optionally view tokens per second."
+   ],
+   "feedback_and_outputs": [
+    "Download progress, speed and error with retry (onboarding.tsx:880-905).",
+    "Local data reset notice if the database could not be read (localDataReset.ts; LocalDataResetNotice test)."
+   ],
+   "settings": [
+    "Performance chip toggle; model picker; installed models store (installedModels.ts)."
+   ]
+  },
+  "current_implementation": {
+   "working": [
+    "Encrypted SQLite through expo-sqlite with SQLCipher enabled (app.config.js:454); key is 32 random bytes in hex kept in secure storage, this-device-only, id agi_sqlcipher_db_key_v1 (db.ts:23-60).",
+    "Schema migrations on open using PRAGMA user_version (db.ts:105-122).",
+    "An unreadable database (for example restored on another phone without its key) is renamed aside, not deleted, and the person is told (db.ts:76-95); removal of set-aside copies happens only inside the data export and delete flow (services/dsarExport.ts:432-452).",
+    "Three-tier local runtime selection: system model, ExecuTorch-based, and GGUF-based; capability detection by platform and RAM (packages/platform/local-llm/src/selector.ts; capabilities.ts:1-60; tier3.ts:1-60).",
+    "Multimodal local models need enough RAM and verified artifacts (multimodal.ts exports in index.ts).",
+    "Onboarding decides the tier and recommended model (onboarding.tsx:158-215)."
+   ],
+   "incomplete": [
+    "Chrome, VS Code and CLI use of this on-device package: not read."
+   ],
+   "disconnected_or_disabled": [
+    "Electron desktop refuses local inference commands (dispatcher.ts:3234-3244).",
+    "Tauri desktop health monitor runs only when isTauri (App.tsx:746-752) and checks a local model server (ollamaHealthService.ts:1-50), a different mechanism from the on-device package."
+   ],
+   "not_available": [
+    "Web: no local database or on-device model found.",
+    "Live voice in Local mode (F104-04)."
+   ]
+  },
+  "required_behaviour": {
+   "established": [
+    {
+     "statement": "S104.11: a client keeps data in an encrypted local database on the device.",
+     "source": "area brief S104.11; apps/mobile/storage/db.ts:89; app.config.js:454"
+    },
+    {
+     "statement": "S104.26: the area item about on-device models; mobile loads the on-device runtime at runtime.",
+     "source": "area brief S104.26; packages/platform/local-llm/src/tier3.ts:30"
+    },
+    {
+     "statement": "Local mode: no AGI account required, local storage by default, no hidden provider call, fails closed.",
+     "source": "(doc: docs/product/requirements.md section 7.1)"
+    },
+    {
+     "statement": "The user is not forced to sign in for Local; first chat does not call BYOK or Cloud routes; no-model state has setup guidance.",
+     "source": "(doc: docs/product/requirements.md M-US-001 acceptance)"
+    },
+    {
+     "statement": "Mobile v1 is small on-device Local models plus signed-in Managed Free; no mobile BYOK in v1.",
+     "source": "(doc: docs/product/commercial.md Launch Posture)"
+    }
+   ],
+   "acceptance_criteria": [
+    "First launch without an account reaches a chat with a local model or clear guidance.",
+    "Chats persist after restart and the database file is not readable as plain SQLite.",
+    "Restoring a backup on a new phone shows the reset notice and keeps the old file aside.",
+    "An unsupported device shows '<model> is unavailable on this device.' with browse and continue options.",
+    "Local chat makes no network call to Cloud or BYOK routes.",
+    "Performance screen shows device tier and benchmark."
+   ],
+   "inferred": [
+    "Local inference is free of any subscription because the code path has no entitlement check (not found in local-llm files read) [inferred]."
+   ],
+   "proposed": [
+    "[proposed] Resolve the desktop conflict: the product says on-device inference on desktop is free, while the public desktop refuses it; record an owner decision.",
+    "[proposed] Add a visible label of what happens to the set-aside database."
+   ]
+  },
+  "implementation_map": [
+   {
+    "kind": "store",
+    "name": "encrypted db",
+    "path": "apps/mobile/storage/db.ts",
+    "role": "Open, key, migrate, set aside unreadable."
+   },
+   {
+    "kind": "store",
+    "name": "migrations",
+    "path": "apps/mobile/storage/migrations.ts",
+    "role": "Schema versions."
+   },
+   {
+    "kind": "store",
+    "name": "conversations",
+    "path": "apps/mobile/storage/conversations.ts",
+    "role": "Conversation rows."
+   },
+   {
+    "kind": "store",
+    "name": "messages",
+    "path": "apps/mobile/storage/messages.ts",
+    "role": "Message rows."
+   },
+   {
+    "kind": "store",
+    "name": "installedModels",
+    "path": "apps/mobile/storage/installedModels.ts",
+    "role": "Installed on-device models."
+   },
+   {
+    "kind": "service",
+    "name": "unreadableFiles",
+    "path": "apps/mobile/storage/unreadableFiles.ts",
+    "role": "Set-aside logic."
+   },
+   {
+    "kind": "service",
+    "name": "localDataReset",
+    "path": "apps/mobile/storage/localDataReset.ts",
+    "role": "Reset report for the notice."
+   },
+   {
+    "kind": "config",
+    "name": "app.config",
+    "path": "apps/mobile/app.config.js",
+    "role": "expo-sqlite useSQLCipher true (line 454)."
+   },
+   {
+    "kind": "service",
+    "name": "dsarExport",
+    "path": "apps/mobile/services/dsarExport.ts",
+    "role": "Export and delete incl. set-aside databases (432-452)."
+   },
+   {
+    "kind": "service",
+    "name": "local-llm selector",
+    "path": "packages/platform/local-llm/src/selector.ts",
+    "role": "Chooses tier and runtime."
+   },
+   {
+    "kind": "service",
+    "name": "capabilities",
+    "path": "packages/platform/local-llm/src/capabilities.ts",
+    "role": "Detects device capability."
+   },
+   {
+    "kind": "service",
+    "name": "tier1",
+    "path": "packages/platform/local-llm/src/tier1.ts",
+    "role": "System-provided model runtime."
+   },
+   {
+    "kind": "service",
+    "name": "tier2",
+    "path": "packages/platform/local-llm/src/tier2.ts",
+    "role": "Second on-device runtime."
+   },
+   {
+    "kind": "service",
+    "name": "tier3",
+    "path": "packages/platform/local-llm/src/tier3.ts",
+    "role": "Third runtime, loaded at run time (lines 25-36)."
+   },
+   {
+    "kind": "config",
+    "name": "local model catalog",
+    "path": "packages/platform/local-llm/src/catalog.ts",
+    "role": "Catalog of local models."
+   },
+   {
+    "kind": "screen",
+    "name": "onboarding",
+    "path": "apps/mobile/app/(public)/onboarding.tsx",
+    "role": "Device check and model recommendation."
+   },
+   {
+    "kind": "screen",
+    "name": "performance settings",
+    "path": "apps/mobile/app/(app)/settings/performance.tsx",
+    "role": "Device tier and benchmark."
+   },
+   {
+    "kind": "service",
+    "name": "modelDownload",
+    "path": "apps/mobile/services/modelDownload.ts",
+    "role": "Downloads models."
+   },
+   {
+    "kind": "service",
+    "name": "localModelRuntime",
+    "path": "apps/mobile/src/features/model-picker/localModelRuntime.ts",
+    "role": "Runtime glue for the picker."
+   },
+   {
+    "kind": "service",
+    "name": "chatExecutionStore",
+    "path": "apps/mobile/stores/chat/chatExecutionStore.ts",
+    "role": "Execution mode per chat (local or cloud)."
+   },
+   {
+    "kind": "service",
+    "name": "ollamaHealthService",
+    "path": "apps/desktop/src/services/ollamaHealthService.ts",
+    "role": "Retained Tauri local-server check."
+   },
+   {
+    "kind": "service",
+    "name": "desktop dispatcher refusal",
+    "path": "apps/desktop/electron/runtime/dispatcher.ts",
+    "role": "Refuses local inference in Electron."
+   }
+  ],
+  "execution_and_data_flow": {
+   "steps": [
+    {
+     "what_happens": "App opens the database: reads or creates the key from secure storage, opens, applies PRAGMA key, WAL, migrations.",
+     "runs_on": "device",
+     "evidence": "db.ts:130-170"
+    },
+    {
+     "what_happens": "Onboarding reads device capabilities and picks a model.",
+     "runs_on": "device",
+     "evidence": "onboarding.tsx:200-215; capabilities.ts"
+    },
+    {
+     "what_happens": "Model files download from the model host.",
+     "runs_on": "outside service",
+     "evidence": "modelDownload.ts (not read in detail)"
+    },
+    {
+     "what_happens": "Local chat sends messages to the on-device runtime and streams tokens back.",
+     "runs_on": "device",
+     "evidence": "selector.ts; tier3.ts:20-27"
+    },
+    {
+     "what_happens": "Messages are written to the encrypted database.",
+     "runs_on": "device",
+     "evidence": "storage/messages.ts"
+    }
+   ],
+   "data": [
+    {
+     "what": "Chats, messages, memory, settings",
+     "where_stored": "apps/mobile agi_mobile.db (encrypted)",
+     "synced": "Not by default; only after sign-in and explicit move (doc: requirements.md 7.1)",
+     "retained_or_deleted": "Set-aside copies deleted only in export and delete flow (dsarExport.ts:432-452)"
+    },
+    {
+     "what": "Database key",
+     "where_stored": "Device secure storage, this-device-only",
+     "synced": "no",
+     "retained_or_deleted": "Lost on device change; database then set aside (db.ts:76-95)"
+    },
+    {
+     "what": "Model files",
+     "where_stored": "Device file system",
+     "synced": "no",
+     "retained_or_deleted": "Managed by installedModels and picker; delete path unknown"
+    }
+   ],
+   "models_and_providers": "Local models come from the local catalog in the local-llm package and are chosen by role and device tier; no provider key or Cloud call is used for them. Which exact models are offered is catalog data, not named here."
+  },
+  "access_and_usage": {
+   "account": "Not required for Local (doc: requirements.md M-US-001). Cloud route in onboarding needs sign-in.",
+   "permissions": "Storage for models; secure storage for the key.",
+   "subscription": "No entitlement check found in the local-llm files read; Local is free where technically available (doc: docs/product/commercial.md Launch Posture).",
+   "limits_and_metering": "Context window bounded to 4096 minimum and 8192 maximum for mobile (tier3.ts:60-70); RAM minimum for multimodal (MULTIMODAL_MIN_RAM_MB); device tier minimum RAM 3500 MB for the second tier (capabilities.ts:5). Local use is not metered by the code read.",
+   "flags": "none found in files read.",
+   "model_compatibility": "Only models in the local catalog and fitting RAM and runtime; tools in Local mode are not used (doc: requirements.md:133).",
+   "provider_restrictions": "No provider for Local; mobile has no BYOK in v1 (doc: commercial.md).",
+   "local_mode": "This is the Local mode implementation on mobile: data and inference on the device with no account. Desktop Electron refuses local inference; CLI local routes exist but were not read."
+  },
+  "states_and_edge_cases": [
+   {
+    "state": "No capable device",
+    "behaviour": "Message 'is unavailable on this device', options to browse or continue without a model, Cloud sign-in entry.",
+    "evidence": "onboarding.tsx:157-160,684-686,777-808"
+   },
+   {
+    "state": "Download error",
+    "behaviour": "Alert text and 'Try again'.",
+    "evidence": "onboarding.tsx:893-905"
+   },
+   {
+    "state": "Download continues in background",
+    "behaviour": "Hint text shown.",
+    "evidence": "onboarding.tsx:880"
+   },
+   {
+    "state": "Key missing",
+    "behaviour": "Any old database set aside, new key made.",
+    "evidence": "db.ts:132-135"
+   },
+   {
+    "state": "Database unreadable with key",
+    "behaviour": "Set aside once and reopened fresh.",
+    "evidence": "db.ts:137-142"
+   },
+   {
+    "state": "Thermal throttling",
+    "behaviour": "Tracked in capabilities and shown in Performance.",
+    "evidence": "capabilities.ts:4,46; performance.tsx:669"
+   },
+   {
+    "state": "Offline",
+    "behaviour": "Local chat works; download needs network.",
+    "evidence": "MathBlockOffline and onboarding download"
+   },
+   {
+    "state": "What a person sees when the device cannot run a model during an ongoing chat",
+    "behaviour": "not verified.",
+    "evidence": "brief"
+   },
+   {
+    "state": "Accessibility",
+    "behaviour": "Onboarding controls have accessibility labels and roles.",
+    "evidence": "onboarding.tsx:777,905"
+   }
+  ],
+  "verification": {
+   "existing_tests": [
+    {
+     "path": "apps/mobile/__tests__/local-db-restore-recovery.test.ts",
+     "covers": "Restore recovery."
+    },
+    {
+     "path": "apps/mobile/__tests__/LocalDataResetNotice.test.tsx",
+     "covers": "Reset notice."
+    },
+    {
+     "path": "apps/mobile/__tests__/Onboarding.test.tsx",
+     "covers": "Onboarding."
+    },
+    {
+     "path": "apps/mobile/__tests__/FirstRunLocalModelReadiness.test.tsx",
+     "covers": "First-run readiness."
+    },
+    {
+     "path": "apps/mobile/__tests__/local-llm-selector.test.ts",
+     "covers": "Selector."
+    },
+    {
+     "path": "apps/mobile/__tests__/model-tier-matrix.test.ts",
+     "covers": "Tier matrix."
+    },
+    {
+     "path": "apps/mobile/__tests__/installed-models-storage.test.ts",
+     "covers": "Installed models."
+    },
+    {
+     "path": "packages/platform/local-llm/src/__tests__/tier3.test.ts",
+     "covers": "Third runtime."
+    },
+    {
+     "path": "packages/platform/local-llm/src/__tests__/selector-tier2.test.ts",
+     "covers": "Second tier selection."
+    },
+    {
+     "path": "packages/platform/local-llm/src/__tests__/catalog.test.ts",
+     "covers": "Catalog."
+    },
+    {
+     "path": "apps/mobile/__tests__/OnboardingBackgroundDownload.test.tsx",
+     "covers": "Background download."
+    }
+   ],
+   "scenarios": [
+    {
+     "name": "Fresh offline start",
+     "steps": [
+      "Install on a supported phone, no account.",
+      "Finish onboarding and download the recommended model.",
+      "Turn on airplane mode and chat."
+     ],
+     "expected": "Replies stream locally; no sign-in asked."
+    },
+    {
+     "name": "Restore on another phone",
+     "steps": [
+      "Back up and restore onto a new device."
+     ],
+     "expected": "Reset notice; old file renamed aside; new chat works."
+    },
+    {
+     "name": "Unsupported device",
+     "steps": [
+      "Run onboarding on a phone below the RAM floor."
+     ],
+     "expected": "Unavailable text and options."
+    },
+    {
+     "name": "Encrypted at rest",
+     "steps": [
+      "Pull the database file from a test device.",
+      "Open it with a plain SQLite tool."
+     ],
+     "expected": "'file is not a database'."
+    },
+    {
+     "name": "No cloud call in Local",
+     "steps": [
+      "Chat in Local with a network monitor."
+     ],
+     "expected": "No Cloud or provider traffic."
+    },
+    {
+     "name": "Desktop",
+     "steps": [
+      "On Electron try a local model chat."
+     ],
+     "expected": "Cloud-only message."
+    }
+   ],
+   "diagnostics": [
+    "Log '[local-llm] iOS capability detection failed'.",
+    "reportLocalDataReset event.",
+    "Database file agi_mobile.db and set-aside copies.",
+    "SecureStore id agi_sqlcipher_db_key_v1 (name only)."
+   ]
+  },
+  "gaps": [
+   {
+    "gap": "Desktop (Electron) refuses on-device inference although the product requirement says local inference on desktop is free of any subscription.",
+    "affects": "Desktop",
+    "evidence": "dispatcher.ts:3234-3244; D-2026-09-15-04",
+    "work_needed": "Owner decision; update requirement or build path."
+   },
+   {
+    "gap": "No evidence on what a person sees when a device cannot run a model mid-chat.",
+    "affects": "Mobile",
+    "evidence": "brief 'Not verified'",
+    "work_needed": "Test and document."
+   },
+   {
+    "gap": "Web, Chrome, VS Code and CLI storage of chats not read.",
+    "affects": "Those apps",
+    "evidence": "not opened",
+    "work_needed": "Read."
+   },
+   {
+    "gap": "Brief cites tier3.ts:30 for loading at runtime; at that range the code is the dynamic module loader at lines 25-36, which matches.",
+    "affects": "none",
+    "evidence": "tier3.ts:25-36",
+    "work_needed": "none"
+   }
+  ],
+  "depends_on": [
+   "SYS-local-inference",
+   "SYS-sync-and-continuity",
+   "SYS-security-and-privacy",
+   "SYS-execution-boundaries",
+   "SYS-model-catalog-and-routing",
+   "SYS-data-model-and-migrations",
+   "surface:mobile",
+   "surface:desktop",
+   "mode:local",
+   "store:agi_mobile.db",
+   "file:packages/platform/local-llm/src/selector.ts",
+   "file:apps/mobile/storage/db.ts"
+  ],
+  "relationships": [
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/mobile/storage/db.ts",
+    "evidence": "lines 19-170"
+   },
+   {
+    "rel": "implemented_by",
+    "to": "file:packages/platform/local-llm/src/selector.ts",
+    "evidence": "lines 1-40"
+   },
+   {
+    "rel": "stores_data_in",
+    "to": "store:agi_mobile.db",
+    "evidence": "db.ts:19-20"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:mobile",
+    "evidence": "onboarding.tsx; performance.tsx"
+   },
+   {
+    "rel": "blocked_by",
+    "to": "surface:desktop",
+    "evidence": "dispatcher.ts:3234-3244 refuses local inference"
+   },
+   {
+    "rel": "depends_on",
+    "to": "SYS-local-inference",
+    "evidence": "packages/platform/local-llm"
+   },
+   {
+    "rel": "depends_on",
+    "to": "SYS-execution-boundaries",
+    "evidence": "requirements.md 7.1 (doc)"
+   },
+   {
+    "rel": "configured_by",
+    "to": "file:apps/mobile/app.config.js",
+    "evidence": "line 454 useSQLCipher true"
+   },
+   {
+    "rel": "governed_by_subscription",
+    "to": "SYS-subscriptions-entitlements-and-usage",
+    "evidence": "(doc: docs/product/commercial.md) Local is free; no entitlement check found in code read"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/mobile/__tests__/local-db-restore-recovery.test.ts",
+    "evidence": "file exists"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/mobile/__tests__/Onboarding.test.tsx",
+    "evidence": "file exists"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:packages/platform/local-llm/src/__tests__/tier3.test.ts",
+    "evidence": "file exists"
+   }
+  ],
+  "unknowns": [
+   "Which exact models the catalog offers on a given phone.",
+   "How model files are deleted.",
+   "Whether any code path sends Local content to a server when signed in.",
+   "Local storage on Chrome, VS Code, CLI and Tauri desktop beyond the health check.",
+   "Whether local inference needs any sign-in on any app (requirements say not for Local)."
+  ]
+ },
+ "corrections": [
+  {
+   "section": "3",
+   "claim": "Schema migrations on open using PRAGMA user_version (db.ts:105-122)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The behaviour is right, but runMigrations is at db.ts:114-128, so the cited range misses part of it.",
+   "evidence": "apps/mobile/storage/db.ts:114-128",
+   "correction": "Cite db.ts:114-128."
+  },
+  {
+   "section": "7",
+   "claim": "Limits: context window bounded to 4096 minimum and 8192 maximum for mobile (tier3.ts:60-70); device tier minimum RAM 3500 MB for the second tier (capabilities.ts:5)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The values are right. tier3.ts:45-46 defines DEFAULT_CONTEXT_TOKENS = 4096 and MAX_MOBILE_CONTEXT_TOKENS = 8192. The clamp is at tier3.ts:70-75, and it falls back to 4096 when the catalog gives no context. capabilities.ts:4 defines the 3500 constant, used at line 76 (tier 2 is available when RAM is at least 3500, or RAM is unknown and the ExecuTorch runtime exists). The page cites the wrong lines.",
+   "evidence": "packages/platform/local-llm/src/tier3.ts:45-46,70-75; capabilities.ts:4,75-77",
+   "correction": "Context is clamped to 4096-8192, defaulting to 4096 (tier3.ts:45-46,70-75). Tier 2 needs 3500 MB of RAM, or unknown RAM with the ExecuTorch runtime present (capabilities.ts:4,75-77)."
+  },
+  {
+   "section": "7",
+   "claim": "Account: Not required for Local. Cloud route in onboarding needs sign-in.",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "No Clerk sign-in is needed for Local (rootRouting.ts:44-57, onboarding.tsx:804-808 'Sign in to use Cloud'). But a first-launch age gate comes first. rootRouting.ts:38-43 sends anyone with ageGateConfirmed false to /age-gate before onboarding, and ageGate.ts applies region thresholds. So the person confirms their age before reaching Local chat. This matches the owner decision that every surface is 18 and over.",
+   "evidence": "apps/mobile/src/features/auth/services/rootRouting.ts:38-43; apps/mobile/src/features/auth/services/ageGate.ts:1-58; apps/mobile/app/(public)/age-gate.tsx",
+   "correction": "No account is needed for Local, but the first-run age gate must be passed first. Cloud use needs sign-in."
+  },
+  {
+   "section": "7",
+   "claim": "Subscription: no entitlement check found in the local-llm files read; Local is free where technically available",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "docs/product/commercial.md:22 says Local is 'Free to use where technically available'. The grep for entitlement, plan and subscription in packages/platform/local-llm/src matched only catalog.ts, so the page's 'not found' is consistent with the code. I did not open that hit to see what it is. The page also flags this as unverified.",
+   "evidence": "docs/product/commercial.md:22; packages/platform/local-llm/src/catalog.ts",
+   "correction": "Acceptable as worded. It is an absence-of-evidence statement, not a verified rule."
+  }
+ ],
+ "missing_facts": [
+  "First-run age gate: rootRouting.ts:38-43 redirects any user without a confirmed age to /age-gate before onboarding. ageGate.ts:1-58 applies region thresholds (18 in India and Brazil timezones, otherwise ACCOUNT_MINIMUM_AGE). The page's Journey, acceptance criteria and 'no account needed' text omit this. It is a mandatory step before Local chat.",
+  "Onboarding shows a first-run disclosure with consent acceptance before the 'about-you' screen (onboarding.tsx:280-305, using mmkvDisclosureLedger). The page does not mention it.",
+  "Electron's refusal is deliberate and cross-referenced: dispatcher.ts:3234-3244 says local coding sessions reach local models through the bundled CLI. The page says 'CLI local routes exist but were not read', so it misses a stated path for on-device inference on desktop."
+ ]
+}

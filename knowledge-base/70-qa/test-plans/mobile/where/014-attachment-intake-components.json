@@ -1,0 +1,482 @@
+{
+ "S14.01": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "File"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ModeSwitchModal.tsx",
+    "text": "AGI Cloud"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account and a file on the phone",
+  "note": "The File card is shown only when the mode is AGI Cloud (AddToChatSheet.tsx:720); the sheet has no File card in on-device mode.",
+  "reachable": "yes",
+  "steps": [
+   "On the Chat screen, switch the mode toggle to AGI Cloud.",
+   "Tap the + button labelled Add to chat at the left of the message box.",
+   "Tap the File card in the sheet titled Add to Chat.",
+   "In the phone's file chooser, pick a PDF or text file.",
+   "Look at the composer: the file should appear as a chip, and after sending the message the file should be attached to it."
+  ],
+  "where": "Chat screen > Add to chat (+) > File (AGI Cloud mode only)"
+ },
+ "S14.04": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Camera"
+   }
+  ],
+  "needs": "a phone with a camera; an account that has the camera capability (the Camera card is hidden otherwise)",
+  "note": "The Camera card depends on the canUseCamera capability (AddToChatSheet.tsx:697), so a tester on an account without it will not see it.",
+  "reachable": "yes",
+  "steps": [
+   "On the Chat screen, tap the + button labelled Add to chat.",
+   "Tap the Camera card in the sheet titled Add to Chat.",
+   "If asked, allow camera access; take a photo with the camera screen.",
+   "Look at the composer: the photo should appear as a thumbnail chip, ready to send."
+  ],
+  "where": "Chat screen > Add to chat (+) > Camera"
+ },
+ "S14.05": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Photos"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   }
+  ],
+  "needs": "a phone with at least one photo in the library",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "On the Chat screen, tap the + button labelled Add to chat.",
+   "Tap the Photos card in the sheet titled Add to Chat.",
+   "In the photo library, tap one photo, then confirm the picker.",
+   "Look at the composer: the chosen photo should appear as a thumbnail chip."
+  ],
+  "where": "Chat screen > Add to chat (+) > Photos"
+ },
+ "S14.10": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Attach from Library"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account with at least one image or file already in its Library",
+  "note": "The section appears only when Library items exist; it is hidden in an empty Library.",
+  "reachable": "yes",
+  "steps": [
+   "On the Chat screen, switch the mode to AGI Cloud.",
+   "Tap the + button labelled Add to chat.",
+   "Look for the Attach from Library section in the sheet and tap a file row (its label reads Attach <file name> from Library).",
+   "Look at the composer: the Library file should appear as an attachment chip."
+  ],
+  "where": "Chat screen > Add to chat (+) > Attach from Library (tap a file row)"
+ },
+ "S14.15": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Photos"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "File"
+   }
+  ],
+  "needs": "several photos on the phone, and for the File part an AGI Cloud account and several files",
+  "note": "The photo picker is multi-select (allowsMultipleSelection true) and the file chooser sets multiple: true.",
+  "reachable": "yes",
+  "steps": [
+   "Tap the + button labelled Add to chat, then tap Photos.",
+   "In the photo picker, tap two or more photos, then confirm.",
+   "Look at the composer: every chosen photo should appear as its own chip.",
+   "Repeat with AGI Cloud mode and File, choosing several files, and check that each one is attached."
+  ],
+  "where": "Chat screen > Add to chat (+) > Photos (select several); AGI Cloud mode > Add to chat (+) > File (select several)"
+ },
+ "S14.16": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Photos"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   }
+  ],
+  "needs": "a phone with a photo in the library",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Tap the + button labelled Add to chat, then tap Photos.",
+   "Pick one photo and confirm.",
+   "Look at the message box area: the photo should show as a square picture (about 72 by 72) before sending."
+  ],
+  "where": "Chat screen > Add to chat (+) > Photos"
+ },
+ "S14.17": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AttachmentPreview.tsx",
+    "text": "PDF"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AttachmentPreview.tsx",
+    "text": "Spreadsheet"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AttachmentPreview.tsx",
+    "text": "Code"
+   }
+  ],
+  "needs": "an AGI Cloud account and one PDF, one spreadsheet and one code file",
+  "note": "Other kinds show the words Presentation, Document, Text or File (AttachmentPreview.tsx:105-111).",
+  "reachable": "yes",
+  "steps": [
+   "Switch to AGI Cloud, tap Add to chat (+), then tap the File card.",
+   "Pick a PDF, then a spreadsheet (for example .csv or .xlsx), then a code file (for example .py).",
+   "Look at each chip: under the file name it should show the kind word: PDF, Spreadsheet or Code."
+  ],
+  "where": "Chat screen > Add to chat (+) > File (AGI Cloud mode)"
+ },
+ "S14.18": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "File"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   }
+  ],
+  "needs": "an AGI Cloud account and a non-image file",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Switch to AGI Cloud, tap Add to chat (+), then tap File.",
+   "Pick a non-image file such as a PDF.",
+   "Look at the chip: it should show the file name and, under it, the kind and size (for example PDF and a size in KB or MB)."
+  ],
+  "where": "Chat screen > Add to chat (+) > File (AGI Cloud mode)"
+ },
+ "S14.19": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ModeSwitchModal.tsx",
+    "text": "AGI Cloud"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "File"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   }
+  ],
+  "needs": "an AGI Cloud account and a large file",
+  "note": "The progress label text is in apps/mobile/src/features/chat/upload/uploadLifecycle.ts:46 and is not drawn on screen; only the bar is visible.",
+  "reachable": "yes",
+  "steps": [
+   "Switch to AGI Cloud, tap Add to chat (+), then tap File.",
+   "Pick a large file (several megabytes) so the upload lasts a few seconds.",
+   "While it uploads, look at the bottom edge of the chip: a thin progress bar fills up.",
+   "Compare with Expected: the chip shows progress while the upload runs. The percentage (Uploading NN%) is only in the screen-reader label, not printed on the chip."
+  ],
+  "where": "Chat screen > AGI Cloud mode > Add to chat (+) > File"
+ },
+ "S14.22": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ModeSwitchModal.tsx",
+    "text": "AGI Cloud"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Photos"
+   }
+  ],
+  "needs": "an AGI Cloud account",
+  "note": "No visible 'ready' wording was found in AttachmentPreview.tsx; the word Uploaded only appears in a screen-reader label.",
+  "reachable": "yes",
+  "steps": [
+   "Switch to AGI Cloud, tap Add to chat (+), then pick a photo under Photos.",
+   "Watch the chip while it uploads (progress bar).",
+   "When the bar disappears, check the chip has no Retry or Cancel overlay and the Send button is not held.",
+   "Compare with Expected: the code shows no visible Ready or Uploaded word, so judge whether the chip alone makes ready clear."
+  ],
+  "where": "Chat screen > AGI Cloud mode > Add to chat (+) > Photos or File, then wait for the upload"
+ },
+ "S14.23": {
+  "labels": [
+   {
+    "file": "packages/contracts/cloud-contracts/src/chat-attachment-truncation.ts",
+    "text": "Only part of"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "File"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ModeSwitchModal.tsx",
+    "text": "AGI Cloud"
+   }
+  ],
+  "needs": "an AGI Cloud account and a long document",
+  "note": "The notice is shown only for the AGI Cloud path (streaming header); on-device reading adds the text to the model input instead.",
+  "reachable": "yes",
+  "steps": [
+   "Switch to AGI Cloud, tap Add to chat (+), then tap File.",
+   "Pick a long text or document file that is larger than the readable limit.",
+   "Type a short question and send.",
+   "Look under your sent message: a grey line should say Only part of <file name> was read because it is too long to read in full."
+  ],
+  "where": "Chat screen > AGI Cloud mode > Add to chat (+) > File, then send; read the line under your sent message"
+ },
+ "S14.24": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Attachment not added"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "File"
+   }
+  ],
+  "needs": "an AGI Cloud account and a file the chat refuses",
+  "note": "The chooser only offers types listed in services/docParser.ts, so a refused type may not be selectable; the alert text is in apps/mobile/src/features/chat/utils/attachmentValidation.ts:123.",
+  "reachable": "yes",
+  "steps": [
+   "Switch to AGI Cloud, tap Add to chat (+), then tap File.",
+   "Pick a file type the chat cannot read (for example an executable or an unsupported archive, if the chooser lets you pick it).",
+   "Look for the alert titled Attachment not added: it should name the file and say it is not a supported file type."
+  ],
+  "where": "Chat screen > AGI Cloud mode > Add to chat (+) > File"
+ },
+ "S14.25": {
+  "labels": [],
+  "needs": "a password-protected PDF",
+  "note": "The notice text is written only into the input sent to the model (apps/mobile/services/attachmentContext.ts:45), so no app-drawn notice was found; the File card that could attach a PDF is shown only in AGI Cloud mode (AddToChatSheet.tsx:720), where the password check runs on the server, which is not in this app's code. Searched apps/mobile for ENCRYPTED_PDF and password protected.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S14.26": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AttachmentPreview.tsx",
+    "text": "Retry"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Photos"
+   }
+  ],
+  "needs": "an AGI Cloud account and a way to switch the network off and on",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Switch to AGI Cloud, turn Wi-Fi and mobile data off, then tap Add to chat (+) and pick a photo.",
+   "Wait until the chip shows a failed state with a Retry overlay.",
+   "Turn the network back on and tap Retry on the chip.",
+   "Look at the chip: the upload should start again and the Retry overlay should go away when it finishes."
+  ],
+  "where": "Chat screen > AGI Cloud mode > Add to chat (+) > Photos (upload fails), then tap Retry on the chip"
+ },
+ "S14.27": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "File"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ModeSwitchModal.tsx",
+    "text": "AGI Cloud"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   }
+  ],
+  "needs": "an AGI Cloud account and a large file",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Switch to AGI Cloud, tap Add to chat (+), then tap File and pick a large file.",
+   "While the progress bar is moving, tap the small X on the chip's corner (screen reader label: Cancel upload of <file name>).",
+   "Look at the chip: it should disappear and the upload should stop."
+  ],
+  "where": "Chat screen > AGI Cloud mode > Add to chat (+) > File, then tap the small X on the uploading chip"
+ },
+ "S14.28": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Photos"
+   }
+  ],
+  "needs": "a phone with at least two photos",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Tap Add to chat (+), then tap Photos and pick two photos.",
+   "Tap the small X at the top corner of one chip (screen reader label: Remove <file name>).",
+   "Look at the composer: that chip should disappear.",
+   "Send the message and check the sent message shows only the other photo."
+  ],
+  "where": "Chat screen > Add to chat (+) > Photos, then tap the small X on the chip"
+ },
+ "S14.31": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Already attached"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Each file is attached once."
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Photos"
+   }
+  ],
+  "needs": "a phone with a photo in the library",
+  "note": "Duplicates are matched by attachment identity; a newly taken camera photo has a new identity, so it is not treated as a duplicate.",
+  "reachable": "yes",
+  "steps": [
+   "Tap Add to chat (+), then tap Photos and pick one photo.",
+   "Open Add to chat (+) again, tap Photos, and pick the same photo again.",
+   "Look for an alert titled Already attached that names the file and says Each file is attached once.",
+   "Check the composer shows the photo only once."
+  ],
+  "where": "Chat screen > Add to chat (+) > Photos (pick the same photo twice)"
+ },
+ "S14.32": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Attachment not added"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "File"
+   }
+  ],
+  "needs": "an AGI Cloud account and one file the chat refuses",
+  "note": "Per-file reasons are built in apps/mobile/src/features/chat/utils/attachmentValidation.ts; a failed upload shows Retry on that chip (AttachmentPreview.tsx:392) rather than a named error.",
+  "reachable": "yes",
+  "steps": [
+   "Switch to AGI Cloud, tap Add to chat (+), then tap File.",
+   "Pick one acceptable file and one refused file together.",
+   "Look for the alert Attachment not added: it should name the refused file in quotes and give the reason.",
+   "Check that the accepted file still appears as a chip."
+  ],
+  "where": "Chat screen > AGI Cloud mode > Add to chat (+) > File (pick several files, one refused)"
+ },
+ "S14.33": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Some attachments not added"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "File"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   }
+  ],
+  "needs": "an AGI Cloud account and three files, one refused",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Switch to AGI Cloud, tap Add to chat (+), then tap File.",
+   "Pick three files, with at least one the chat refuses.",
+   "Look for one alert titled Some attachments not added that lists each refused file with its reason.",
+   "Check that the accepted files appear as chips in the composer."
+  ],
+  "where": "Chat screen > AGI Cloud mode > Add to chat (+) > File (pick three or more files, one refused)"
+ },
+ "S14.34": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Add to Chat"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Uploaded to AGI Cloud and kept in your Library until you delete them."
+   }
+  ],
+  "needs": "an AGI Cloud account; a temporary chat for the second check",
+  "note": "The on-device-mode caption (AddToChatSheet.tsx:131) says nothing about keeping files, so in on-device mode the explanation is missing.",
+  "reachable": "yes",
+  "steps": [
+   "Tap Add to chat (+) with AGI Cloud mode on.",
+   "Read the grey line under the Add to Chat title: it should say Uploaded to AGI Cloud and kept in your Library until you delete them.",
+   "Open a temporary chat and tap Add to chat (+) again; the line should say Kept out of your Library and deleted with this temporary chat.",
+   "Compare with Expected: whether and how long files are kept."
+  ],
+  "where": "Chat screen > Add to chat (+) (read the caption under the Add to Chat title)"
+ },
+ "S14.36": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/utils/attachmentValidation.ts",
+    "text": "retake it with the in-app camera"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Attachment not added"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Photos"
+   }
+  ],
+  "needs": "an AGI Cloud account and a HEIC photo on the phone",
+  "note": "HEIC photos may be converted before this check (apps/mobile/src/features/media/image-normalization), so the alert may not appear; the on-device Office-file alert (switch to AGI Cloud for Office files) is not reachable from the sheet because the File card is hidden in on-device mode.",
+  "reachable": "yes",
+  "steps": [
+   "Switch to AGI Cloud, tap Add to chat (+), then tap Photos.",
+   "Pick a HEIC photo from the library.",
+   "Look for the alert Attachment not added: it should say AGI Cloud cannot read the HEIC photo and to retake it with the in-app camera.",
+   "Compare with Expected: the alert names the alternative (retake with the camera)."
+  ],
+  "where": "Chat screen > AGI Cloud mode > Add to chat (+) > Photos (pick a HEIC photo)"
+ }
+}

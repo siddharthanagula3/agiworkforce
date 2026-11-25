@@ -1,0 +1,25 @@
+{
+ "S30.28": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Download $FILE$"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Files from this answer"
+   }
+  ],
+  "needs": "a request that makes a .pptx file; the app must produce one, which the extension code does not do itself",
+  "note": "The extension has no PPTX-specific code: any produced file gets this card and Download button (apps/extension/src/features/side-panel/generatedFiles.ts:274 and bubbles.ts:730). The saved name keeps the file's own name, so the .pptx extension depends on the backend naming it; the button is icon-only, so its visible words are only a tooltip and aria label. The plan's 'Where to find it: not written yet' line is stale. Searched for pptx and presentation in apps/extension and packages/ui/unified-chat.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to the AGI Chrome side panel and open a new chat.",
+   "Ask the assistant to make a presentation (a deck) and wait for the answer to finish.",
+   "Look under the answer for the \"Files from this answer\" list and find the card for the .pptx file.",
+   "Click the Download icon button on that card (its tooltip reads \"Download <file name>\").",
+   "Check that the browser saves a .pptx file with the deck's name and that the status line under the card does not show a failure message."
+  ],
+  "where": "Side panel chat > ask for a presentation to be made > under the answer, the \"Files from this answer\" list > the Download icon button on the .pptx file card (tooltip \"Download $FILE$\")"
+ }
+}

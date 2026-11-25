@@ -1,0 +1,320 @@
+{
+ "S41.01": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/TemporaryChatToggle.tsx",
+    "text": "Turn on temporary chat?"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/TemporaryChatToggle.tsx",
+    "text": "Temporary"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-privacy/ChatPrivacyScreen.tsx",
+    "text": "Temporary Chat"
+   }
+  ],
+  "needs": "none",
+  "note": "No setting makes new chats temporary by default; temporary is one on/off value, switched from the header control or Settings > Privacy > Chat privacy > Temporary Chat.",
+  "reachable": "yes",
+  "steps": [
+   "Open the chat screen with no conversation selected.",
+   "Tap the eye-off icon at the top right of the header.",
+   "Read the alert \"Turn on temporary chat?\" and tap Turn on.",
+   "Look for the \"Temporary\" label with a purple background in the header; compare with Expected."
+  ],
+  "where": "Chat screen (new chat) > top-right \"Temporary\" control (eye-off icon) > \"Turn on temporary chat?\" > Turn on"
+ },
+ "S41.02": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/TemporaryChatToggle.tsx",
+    "text": "Temporary"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/TemporaryChatBanner.tsx",
+    "text": "Temporary chat explainer"
+   }
+  ],
+  "needs": "none",
+  "note": "The banner is shown only once per app session (hasShownThisSession), not for as long as the chat is open; the persistent indicator is the header \"Temporary\" label, and the banner is rendered only on the chat thread screen, not the new chat screen.",
+  "reachable": "yes",
+  "steps": [
+   "Turn on temporary chat from the header control on the new chat screen.",
+   "Send a message, then open that chat so the chat thread screen shows.",
+   "Look at the purple strip under the header with the explainer text.",
+   "Leave the chat and return to it; check whether the header \"Temporary\" label stays while the chat is open."
+  ],
+  "where": "Chat screen > top-right \"Temporary\" control > Turn on, then open a chat thread: the explainer banner appears under the header"
+ },
+ "S41.03": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/TemporaryChatBanner.tsx",
+    "text": "Learn more"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/TemporaryChatToggle.tsx",
+    "text": "Turn on temporary chat?"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/TemporaryChatBanner.tsx",
+    "text": "Won't appear in history or use memory, and is normally deleted after 30 days."
+   }
+  ],
+  "needs": "a Free or paid account; the cloud text appears in Cloud mode, the local text in Local mode",
+  "note": "Explanation text is fixed copy: cloud says it is normally deleted after 30 days, local says attachments never leave this device; the banner text is the same as the alert text.",
+  "reachable": "yes",
+  "steps": [
+   "Tap the eye-off control on the new chat screen to open the \"Turn on temporary chat?\" alert.",
+   "Read the explanation text in the alert.",
+   "Turn on temporary chat, open a chat thread, and read the banner text.",
+   "Tap \"Learn more\" and check the Privacy screen that opens against the banner text."
+  ],
+  "where": "Chat screen > top-right \"Temporary\" control > read the alert text \"Turn on temporary chat?\"; in a chat thread, tap \"Learn more\" in the banner"
+ },
+ "S41.04": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/TemporaryChatBanner.tsx",
+    "text": "Personalized"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/TemporaryChatBanner.tsx",
+    "text": "Unpersonalized"
+   }
+  ],
+  "needs": "a signed-in account in Cloud mode; a Free account may not show the switch",
+  "note": "The only temporary-chat choice found is the Personalized switch, which covers profile, instructions and style; memory is excluded in temporary chats by code (chatExecutionStore.ts:2798) with no separate choice, and the banner shows only once per app session.",
+  "reachable": "yes",
+  "steps": [
+   "In Cloud mode, turn on temporary chat and open a chat thread so the banner shows.",
+   "Look at the line under the explainer: \"Personalized\" or \"Unpersonalized\" with a switch.",
+   "Switch it, then send a message in the temporary chat.",
+   "Compare the reply with Expected: the switch controls profile, instructions and response style, not memory."
+  ],
+  "where": "Chat thread with temporary chat on > banner under header > \"Personalized\" switch (Cloud mode only)"
+ },
+ "S41.05": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/settings/memory.tsx",
+    "text": "Memory summary"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Memory"
+   }
+  ],
+  "needs": "a Free or paid account",
+  "note": "",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open Settings > Memory and note the count shown under the list.",
+   "Turn on temporary chat, send a message that states a personal fact, and wait for the reply.",
+   "Go back to Settings > Memory and compare the count with the one you noted.",
+   "Open \"Memory summary\" and check that the new fact is not listed."
+  ],
+  "where": "Effect seen in Settings > Memory > \"Memory summary\" (memory count does not grow after a temporary chat)"
+ },
+ "S41.06": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/TemporaryChatBanner.tsx",
+    "text": "Personalized"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/TemporaryChatBanner.tsx",
+    "text": "Personalized uses your profile, instructions and response style. Unpersonalized leaves them out."
+   }
+  ],
+  "needs": "a signed-in account in Cloud mode and saved custom instructions",
+  "note": "The switch is hidden in Local mode, and the banner shows only once per app session, so reopen the app to see it again.",
+  "reachable": "yes",
+  "steps": [
+   "In Cloud mode, turn on temporary chat and open a chat thread.",
+   "Set the banner switch to \"Unpersonalized\".",
+   "Ask a question that depends on your saved instructions or profile.",
+   "Compare the answer with Expected: it should ignore custom instructions while the switch is off."
+  ],
+  "where": "Chat thread with temporary chat on > banner under header > \"Personalized\" switch (Cloud mode only)"
+ },
+ "S41.08": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-privacy/ChatPrivacyScreen.tsx",
+    "text": "Delete all chats"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-privacy/ChatPrivacyScreen.tsx",
+    "text": "Deleted and temporary chats are normally deleted for good after 30 days. A workspace legal hold can keep them longer."
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/TemporaryChatBanner.tsx",
+    "text": "attachments never leave this device"
+   }
+  ],
+  "needs": "a file to upload; a Free or paid account",
+  "note": "The Local-mode banner says attachments never leave the device, but no file-specific retention text was found for Cloud mode; only the chat 30-day note exists.",
+  "reachable": "yes",
+  "steps": [
+   "Turn on temporary chat, open a chat thread and read the banner text.",
+   "Go to Settings > Privacy > Chat privacy.",
+   "Read the footnote under the group with \"Shared links\" and \"Archived chats\" (Cloud mode) and \"Delete all chats\".",
+   "Attach a file in a temporary chat and compare what the app says about how long it is kept with Expected."
+  ],
+  "where": "Settings > Privacy > Chat privacy (footnote under the retention group); temporary-chat banner in a chat thread"
+ },
+ "S41.14": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ModeToggle.tsx",
+    "text": "Local"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-privacy/index.tsx",
+    "text": "Local chats stay on this device unless you sync them."
+   }
+  ],
+  "needs": "none for Local mode; a signed-in account to compare with Cloud",
+  "note": "Whether a Local chat is uploaded to the account can only be confirmed indirectly; no on-screen proof was found.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu from the top left of the chat screen, or open Settings.",
+   "Tap the \"Local\" segment of the Local / Cloud control.",
+   "Start a new chat, send a message, and check that it is kept on this device.",
+   "Open Settings > Privacy and read \"Local chats stay on this device unless you sync them.\" and compare with Expected."
+  ],
+  "where": "Side menu (drawer) or Settings > top segmented control \"Local\" / \"Cloud\" > choose Local"
+ },
+ "S41.16": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Memory"
+   },
+   {
+    "file": "apps/mobile/app/(app)/settings/memory.tsx",
+    "text": "Memory summary"
+   },
+   {
+    "file": "apps/mobile/app/(app)/settings/memory-summary.tsx",
+    "text": "On-device memory"
+   }
+  ],
+  "needs": "none",
+  "note": "No separate local-only memory switch was found; the device-only scope follows the Local mode toggle.",
+  "reachable": "yes",
+  "steps": [
+   "Switch to Local mode with the Local / Cloud control.",
+   "Open Settings > Memory.",
+   "Read the scope line under the list; expect \"Stored on this device only.\"",
+   "Open \"Memory summary\" and read the info card: \"On-device memory\"."
+  ],
+  "where": "Settings > Memory > Local segment (Local / Cloud) > Memory summary, which says \"Stored on this device only.\""
+ },
+ "S41.17": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/settings/storage.tsx",
+    "text": "Danger Zone"
+   },
+   {
+    "file": "apps/mobile/app/(app)/settings/storage.tsx",
+    "text": "Delete everything"
+   },
+   {
+    "file": "apps/mobile/app/(app)/settings/storage.tsx",
+    "text": "Clear cache"
+   }
+  ],
+  "needs": "a throwaway install or test account; this is destructive",
+  "note": "\"Clear cache\" only removes temporary files; the full wipe is under Danger Zone.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Storage and scroll to the bottom.",
+   "Tap \"Delete everything\" under \"Danger Zone\".",
+   "Read the alert \"Delete all local data?\", then tap \"Delete Everything\" and read the second alert.",
+   "Compare the result with Expected: the app should wipe local data, sign out and return to onboarding."
+  ],
+  "where": "Settings > Storage > scroll to \"Danger Zone\" > \"Delete everything\""
+ },
+ "S41.18": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-privacy/index.tsx",
+    "text": "Model training"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-privacy/index.tsx",
+    "text": "Telemetry off by default"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-privacy/TrainingPreferenceGroups.tsx",
+    "text": "Use my chats"
+   }
+  ],
+  "needs": "a signed-in account in Cloud mode for the training controls; \"Data retention\" card only in Cloud mode",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Privacy and read the three cards under \"Our approach to privacy\".",
+   "Open Settings > Privacy > Chat privacy and see \"Temporary Chat\" as its own switch.",
+   "Back on Settings > Privacy, scroll to \"AGI Cloud privacy controls\" in Cloud mode.",
+   "Check that training choices (\"Use my chats\", \"Use my voice\") are listed apart from history and retention, and compare with Expected."
+  ],
+  "where": "Settings > Privacy: \"Model training\", \"Telemetry off by default\", \"Data retention\" card; \"Chat privacy\" > \"Temporary Chat\" and \"Delete all chats\""
+ },
+ "S41.19": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-privacy/index.tsx",
+    "text": "Telemetry off by default"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-privacy/index.tsx",
+    "text": "Model training"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/TemporaryChatBanner.tsx",
+    "text": "Personalized uses your profile, instructions and response style. Unpersonalized leaves them out."
+   }
+  ],
+  "needs": "none for the Privacy cards; a signed-in Cloud account for the personalization switch",
+  "note": "Explanations are fixed text per row; the explainer for a switch shows as a hint, not as a visible line, in the banner.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Privacy and read the body text under \"Model training\", \"Telemetry off by default\" and \"Data retention\".",
+   "Open Settings > Privacy > Chat privacy and read the footnote under \"Temporary Chat\".",
+   "Turn on temporary chat, open a chat thread and read the \"Personalized\" hint.",
+   "Compare each explanation with what the switch or setting does, against Expected."
+  ],
+  "where": "Settings > Privacy: each card under \"Our approach to privacy\" has its own explanation line; \"Chat privacy\" > \"Temporary Chat\" footnote"
+ },
+ "S41.20": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-privacy/index.tsx",
+    "text": "Data use & access"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-privacy/DataUseScreen.tsx",
+    "text": "Where each feature processes your data"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-privacy/DataUseScreen.tsx",
+    "text": "Chat in Local Mode"
+   }
+  ],
+  "needs": "none",
+  "note": "Rows marked iOS-only appear only on iPhone, so a Mac-simulated test may show fewer rows.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Privacy and tap \"Data use & access\".",
+   "Scroll to \"Where each feature processes your data\".",
+   "Read each feature row, starting with \"Chat in Local Mode\" and \"Chat in AGI Cloud\".",
+   "Compare the listed place (on this device, AGI Cloud, or the named provider) with Expected."
+  ],
+  "where": "Settings > Privacy > \"Data use & access\" > scroll to \"Where each feature processes your data\""
+ }
+}

@@ -1,0 +1,112 @@
+{
+ "S49.01": {
+  "labels": [
+   {
+    "file": "src/side_panel.ts",
+    "text": "Voice input"
+   },
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Listening\u2026 click to stop"
+   }
+  ],
+  "needs": "a microphone and Chrome microphone permission for the extension. The button is hidden unless the account's voice capability allows it; that capability source was not in apps/extension, so a Free or other plan may not show it.",
+  "note": "Code pointers moved: the quoted lines are gone, but setupVoiceInput in src/features/side-panel/voice.ts and the wiring at src/side_panel.ts (setupVoiceInput call near line 15826) hold the feature.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the side panel on a chat.",
+   "Find the small microphone icon button in the composer bar, next to the message field. Its accessible name is \"Voice input\".",
+   "Click it. If a \"Before you dictate\" notice appears, click \"Continue\", then allow the microphone in Chrome's prompt.",
+   "Look for the button to pulse and its tooltip to change to \"Listening\u2026 click to stop\". Speak a short sentence.",
+   "Click the microphone again to stop. Compare: the spoken words should appear as text in the message field."
+  ],
+  "where": "Side panel > composer at the bottom of the chat > microphone button labelled \"Voice input\""
+ },
+ "S49.02": {
+  "labels": [
+   {
+    "file": "src/side_panel.ts",
+    "text": "Voice input"
+   }
+  ],
+  "needs": "a microphone and Chrome microphone permission",
+  "note": "Code reads the transcript into the textarea through appendComposerText (src/features/side-panel/composerText.ts); nothing in voice.ts sends it. Whether it is sent is not checked here.",
+  "reachable": "yes",
+  "steps": [
+   "Start dictation with the \"Voice input\" microphone button in the composer bar.",
+   "Speak a sentence, then click the microphone again to stop.",
+   "Compare: the transcript is added to the message field and is not sent to the chat.",
+   "Click inside the message field and type or delete a word to edit the transcript.",
+   "Compare: the edit stays in the field until you press send yourself."
+  ],
+  "where": "Side panel > composer at the bottom of the chat > microphone button labelled \"Voice input\""
+ },
+ "S49.03": {
+  "labels": [
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Extension settings"
+   },
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Dictation language saved."
+   },
+   {
+    "file": "_locales/en/messages.json",
+    "text": "The microphone transcribes in this language. The list is the languages this browser is set up for; add more in Chrome's language settings."
+   }
+  ],
+  "needs": "none (a microphone only to test that recognition uses the chosen language)",
+  "note": "The choices come from the Chrome profile's languages, so the list only grows by adding languages in Chrome settings. The select sits in the \"Options\" section (src/features/options/preference-rows.ts), not in the composer; the More button's placement was not verified visually.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side panel and click the \"More\" button.",
+   "Click \"Extension settings\". A settings tab opens.",
+   "In the left navigation, click \"Options\". Scroll down to the \"Dictation\" row.",
+   "Open the select box in that row and pick a different language.",
+   "Compare: the status line \"Dictation language saved.\" appears. Then open the side panel, click \"Voice input\" and check its tooltip shows the new language name."
+  ],
+  "where": "Side panel > More button > \"Extension settings\" (opens the options page) > left navigation \"Options\" > \"Dictation\" row, select box below it"
+ },
+ "S49.05": {
+  "labels": [
+   {
+    "file": "src/side_panel.ts",
+    "text": "Voice input"
+   },
+   {
+    "file": "_locales/en/messages.json",
+    "text": "No speech was heard. Try again and speak after the button starts pulsing."
+   }
+  ],
+  "needs": "a microphone and Chrome microphone permission",
+  "note": "Only one final result is used (interimResults is false), and the text is added when the recognizer returns it, so the field may update only after you stop speaking. Code pointers moved: see voice.ts onresult and onend handlers.",
+  "reachable": "yes",
+  "steps": [
+   "Click the \"Voice input\" microphone button and wait for it to pulse.",
+   "Speak a full sentence, then click the microphone again to stop.",
+   "Compare: the final transcript appears in the message field once dictation ends.",
+   "Click the microphone, stay silent until it stops by itself.",
+   "Compare: the notice \"No speech was heard. Try again and speak after the button starts pulsing.\" appears above the composer."
+  ],
+  "where": "Side panel > composer at the bottom of the chat > microphone button labelled \"Voice input\""
+ },
+ "S49.30": {
+  "labels": [
+   {
+    "file": "src/side_panel.ts",
+    "text": "Voice input"
+   }
+  ],
+  "needs": "a microphone and Chrome microphone permission",
+  "note": "Insertion uses document.execCommand('insertText') in src/features/side-panel/composerText.ts, which normally keeps the browser undo stack; the fallback path sets the field value directly and may not be undoable. Not verified in a running browser.",
+  "reachable": "yes",
+  "steps": [
+   "Dictate a sentence with the \"Voice input\" microphone button and stop it.",
+   "Click into the message field so it has focus.",
+   "Press Command+Z (the browser's normal undo).",
+   "Compare: the dictated text is removed. Press Command+Z again to check that earlier typing is handled normally."
+  ],
+  "where": "Side panel > composer at the bottom of the chat > microphone button \"Voice input\" > then click into the message field and press Command+Z"
+ }
+}

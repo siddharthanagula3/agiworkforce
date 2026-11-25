@@ -1,0 +1,258 @@
+{
+ "S109.03": {
+  "labels": [
+   {
+    "file": "apps/mobile/native/ios/AGIWidgets/AGIWidgets.swift",
+    "text": "New chat"
+   },
+   {
+    "file": "apps/mobile/native/ios/AGIWidgets/AGIWidgets.swift",
+    "text": "Camera"
+   },
+   {
+    "file": "apps/mobile/native/ios/AGIWidgets/AGIWidgets.swift",
+    "text": "Voice"
+   }
+  ],
+  "needs": "a phone with the AGI Mobile app installed (iPhone or Android); no Mac menu bar exists in this app",
+  "note": "The Expected line mentions a menu bar, which is not in this mobile app; the nearest match is the home-screen widget. The add-widget gesture is an OS step, not from code. Screenshot and quick ask were not found as widget actions.",
+  "reachable": "yes",
+  "steps": [
+   "Long-press an empty spot on the home screen and add the AGI Mobile widget (medium size shows New chat, Camera and Voice; small size shows New chat).",
+   "Tap New chat on the widget and check that the chat screen opens.",
+   "Go back to the home screen, tap Camera on the widget and check that the camera screen opens.",
+   "Tap Voice on the widget and check that voice mode opens (or the chat screen if on-device speech recognition is not available)."
+  ],
+  "where": "Home screen > add widget > AGI Mobile (iPhone widget or Android widget), then tap New chat, Camera or Voice on the widget. Quick-action widget and long-press app shortcuts also list New chat, Voice and Camera. There is no Mac menu-bar item in apps/mobile."
+ },
+ "S109.04": {
+  "labels": [],
+  "needs": "a paired desktop (not available in v1)",
+  "note": "Feature is off in this build: apps/mobile/lib/v1FeatureFlags.ts sets companion: false and dispatch: false. The companion screen (apps/mobile/app/(app)/companion/index.tsx) returns early when these flags are off, and the Settings Remote control section with Connections is shown only when FEATURES.companion is on. The drawer 'Code' entry only matches the companion path. Nothing reachable found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S109.07": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/siri/AskFromSiriSetting.tsx",
+    "text": "Ask from Siri"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/screenTitles.ts",
+    "text": "Security and login"
+   },
+   {
+    "file": "apps/mobile/native/ios/AGIAppIntents/AppShortcuts.swift",
+    "text": "Ask AGI"
+   }
+  ],
+  "needs": "an iPhone with Siri, a signed-in AGI Cloud account, and Ask from Siri turned on",
+  "note": "Found only as Siri ask (AskAGIIntent, no app opening). No keyboard shortcut or Android voice command for global dictation was found. TranscribeIntent ('Transcribe with AGI') transcribes audio recordings, not live dictation. The Siri activation step is an OS step, not from code; the Settings entry label was not confirmed in code.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Security and login, and turn on Ask from Siri (this needs AGI Cloud mode; the switch says to switch to Cloud mode otherwise).",
+   "Close the app to the home screen so it is not open.",
+   "Activate Siri (hold the side button or say 'Hey Siri') and say 'Talk to AGI Mobile', then say a question.",
+   "Check that Siri answers out loud and the answer is saved as a chat, without the app opening."
+  ],
+  "where": "Siri: say 'Talk to AGI Mobile' or 'Ask AGI Mobile' (Siri shortcut 'Ask AGI'). Turn on first: Settings > Security and login > Ask from Siri."
+ },
+ "S109.11": {
+  "labels": [
+   {
+    "file": "apps/mobile/native/ios/AGIAppIntents/OpenAGIWorkforceIntent.swift",
+    "text": "Open AGI Mobile"
+   }
+  ],
+  "needs": "an iPhone running iOS 18 or later (the control is declared only for iOS 18+); a Stream Deck or macropad is not supported",
+  "note": "Only the iPhone control and Action Button path was found; the Action Button assignment and Control Center add steps are OS steps, not from code. Action Button trigger opens the app only, not a chosen AGI action.",
+  "reachable": "yes",
+  "steps": [
+   "On an iPhone with iOS 18 or later, add the AGI Mobile control to Control Center or the Lock Screen (the OS shows it as Open AGI Mobile).",
+   "Assign it to the Action Button if you want a hardware press (OS setting).",
+   "Press the control or Action Button with the phone locked or unlocked.",
+   "Check that AGI Mobile opens to the app."
+  ],
+  "where": "iPhone Control Center or Action Button: add the control 'AGI Mobile' (control named Open AGI Mobile); then press the control or Action Button to open AGI Mobile. No Stream Deck or macropad integration was found."
+ },
+ "S109.13": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/siri/AskFromSiriSetting.tsx",
+    "text": "Ask from Siri"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/screenTitles.ts",
+    "text": "Security and login"
+   },
+   {
+    "file": "apps/mobile/native/ios/AGIAppIntents/AppShortcuts.swift",
+    "text": "Ask AGI"
+   }
+  ],
+  "needs": "an iPhone with Siri, AGI Cloud signed in, Ask from Siri turned on, and earbuds or a headset",
+  "note": "No AGI-specific headset control was found; the headset trigger is the OS Siri behavior. The Settings entry label was not confirmed in code.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Security and login, and turn on Ask from Siri (needs AGI Cloud mode).",
+   "Connect the headset or earbuds to the iPhone.",
+   "Trigger Siri with the headset button or voice (OS behavior), then say 'Talk to AGI Mobile' and ask a question.",
+   "Check that the answer is spoken back and saved as a chat, with the phone not opened."
+  ],
+  "where": "Siri via headset: say 'Talk to AGI Mobile' (or 'Ask AGI Mobile') with earbuds or a headset connected; turn on first in Settings > Security and login > Ask from Siri."
+ },
+ "S109.18": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/model-picker/components/ModelRow.tsx",
+    "text": "Cancel download"
+   },
+   {
+    "file": "apps/mobile/src/features/model-picker/components/ModelRow.tsx",
+    "text": "Download"
+   },
+   {
+    "file": "apps/mobile/app/(app)/settings/general/index.tsx",
+    "text": "Models"
+   }
+  ],
+  "needs": "a phone with enough storage for a local model; a Free or paid account (no subscription needed for the local model download)",
+  "note": "No pause control was found. Visible download percentage was not confirmed in code (only in the accessibility label). The Settings entry label was not confirmed in code; the Models row is in apps/mobile/src/features/settings/general/index.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then General, then tap Models.",
+   "Find an on-device model row showing the Download badge and tap it (tap to download; long press to favourite).",
+   "Watch the row while it downloads; the row shows the downloading state (progress appears only in the accessibility label).",
+   "Tap Cancel download on the row and check that the download stops and the badge returns."
+  ],
+  "where": "Settings > General > Models (opens the models screen), then tap a local model row with the Download badge."
+ },
+ "S109.19": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/settings/storage.tsx",
+    "text": "Downloaded Models"
+   },
+   {
+    "file": "apps/mobile/app/(app)/settings/storage.tsx",
+    "text": "Downloaded models (estimated)"
+   },
+   {
+    "file": "apps/mobile/app/(app)/settings/storage.tsx",
+    "text": "Delete"
+   }
+  ],
+  "needs": "at least one downloaded local model",
+  "note": "The trash button has no visible text; it is named Delete <model> for assistive technology. The Settings entry label was not confirmed in code.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Storage (or General, then Storage).",
+   "Read the Downloaded models (estimated) row and the Estimated size under each model in Downloaded Models.",
+   "Tap the trash button on a model row and read the Delete dialog that names the model.",
+   "Tap Delete and check that the model is removed and the Downloaded models (estimated) total goes down."
+  ],
+  "where": "Settings > Storage (or Settings > General > Storage), then find Downloaded Models and tap the trash button on a model row."
+ },
+ "S109.20": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/settings/performance.tsx",
+    "text": "Performance"
+   },
+   {
+    "file": "apps/mobile/app/(app)/settings/performance.tsx",
+    "text": "Capabilities"
+   },
+   {
+    "file": "apps/mobile/app/(app)/settings/performance.tsx",
+    "text": "RAM"
+   }
+  ],
+  "needs": "none (reads the device; a local model is not needed to see the panel)",
+  "note": "The Settings entry label was not confirmed in code; the Performance row is in apps/mobile/src/features/settings/general/index.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then General, then tap Performance.",
+   "Read the tier badge and description at the top of the screen (device tier and ExecuTorch needs 3.5 GB RAM note).",
+   "Find the RAM row and compare it with the device's memory.",
+   "Find the Capabilities row and check the listed runtimes (AICore, ExecuTorch, llama.rn or Apple FM)."
+  ],
+  "where": "Settings > General > Performance, then read the Capabilities row (tier label, RAM and runtimes)."
+ },
+ "S109.21": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/settings/performance.tsx",
+    "text": "Load"
+   },
+   {
+    "file": "apps/mobile/app/(app)/settings/performance.tsx",
+    "text": "Loaded in memory"
+   },
+   {
+    "file": "apps/mobile/app/(app)/settings/performance.tsx",
+    "text": "Unload local models"
+   }
+  ],
+  "needs": "a downloaded local model selected on the Performance screen",
+  "note": "The button shows Load when no model is in memory and Unload local models when one is loaded; the Settings entry label was not confirmed in code.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then General, then tap Performance.",
+   "Read the status line under the selected model (Not loaded; an installed model loads on use).",
+   "Tap Load and wait; the status changes to Loaded in memory.",
+   "Tap Unload local models and check the status returns to not loaded."
+  ],
+  "where": "Settings > General > Performance, then tap Load (or Unload local models) under the selected local model."
+ },
+ "S109.22": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/settings/performance.tsx",
+    "text": "Loaded in memory"
+   },
+   {
+    "file": "apps/mobile/app/(app)/settings/performance.tsx",
+    "text": "Working\u2026"
+   }
+  ],
+  "needs": "a downloaded local model; a failure needs a model that cannot load (for example one that is not on the device)",
+  "note": "No separate health indicator was found; health is shown only through this status line and the Failed to message. The Settings entry label was not confirmed in code.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then General, then tap Performance.",
+   "Read the status line under the selected local model.",
+   "Tap Load; while it works the status shows Working\u2026.",
+   "Check the result: Loaded in memory when healthy, or a Failed to ... message with the error text when the runtime fails."
+  ],
+  "where": "Settings > General > Performance, then read the status line under the local model (Loaded in memory, Working\u2026, or Failed to load/unload with the message)."
+ },
+ "S109.25": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/settings/performance.tsx",
+    "text": "avg tok/s"
+   },
+   {
+    "file": "apps/mobile/app/(app)/settings/performance.tsx",
+    "text": "Run Benchmark"
+   },
+   {
+    "file": "apps/mobile/app/(app)/settings/performance.tsx",
+    "text": "Show performance chip in chat"
+   }
+  ],
+  "needs": "a downloaded local model, and at least one local reply or a benchmark run",
+  "note": "Partial: peak memory stays 0 because no runtime reports it and no memory sampler is installed; it is shown as a value only when above 0. The exact conditions for showing each stats row were not fully traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then General, then tap Performance.",
+   "Use a local model for a reply, or tap Run Benchmark, to create data.",
+   "Scroll to the stats rows: avg tok/s, avg TTFT, mem peak and thermal.",
+   "Compare the tok/s and TTFT values with the reply; mem peak may show no value because no runtime reports peak memory."
+  ],
+  "where": "Settings > General > Performance, then scroll to the stats rows (avg tok/s, avg TTFT, mem peak, thermal) and the Run Benchmark button."
+ }
+}

@@ -1,0 +1,504 @@
+{
+ "S57.01": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Browse the web"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Attach or use tools"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "{count} sources"
+   }
+  ],
+  "needs": "a web search key for Local or BYOK (the menu shows Set up web search when one is needed)",
+  "note": "The menu description says the search runs through the CLI and that Local privacy mode refuses the network.",
+  "reachable": "yes",
+  "steps": [
+   "Click the + button in the chat box and choose Browse the web (it turns on).",
+   "Type a question that needs current web information and send it.",
+   "Watch the transcript for a web search tool row with its own label and summary.",
+   "Click the row to expand it, then look for an \"N sources\" line under the answer and check the sources are listed."
+  ],
+  "where": "AGI Code sidebar > + button (title \"Attach or use tools\") > Browse the web"
+ },
+ "S57.02": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/capabilityManagement.ts",
+    "text": "Web pages"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/capabilityManagement.ts",
+    "text": "Read a page by its URL"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Choose Tools for This Session"
+   }
+  ],
+  "needs": "a web connection and the Web pages tool ticked",
+  "note": "The chooser requires a CLI capability (turnToolFilters) and shows an error if it is missing.",
+  "reachable": "yes",
+  "steps": [
+   "Run Code: Choose Tools for This Session from the Command Palette.",
+   "Make sure Web pages (Read a page by its URL) is ticked and press Enter.",
+   "In the chat box, paste a web page address and ask the assistant to read it and summarise it.",
+   "Expand the new tool row in the transcript and check its request shows the address and its response shows the page text."
+  ],
+  "where": "Command Palette > Code: Choose Tools for This Session > Web pages"
+ },
+ "S57.03": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Snippet"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "File"
+   }
+  ],
+  "needs": "a PDF or Office file in the open folder",
+  "note": "No separate source-reader control was found; the document reading sits in the CLI documents module and is reached through the file read tool. Whether a cited source is opened by reference was not confirmed in the extension UI.",
+  "reachable": "yes",
+  "steps": [
+   "Open a folder that contains a PDF or Word file.",
+   "In the chat box, ask the assistant to read that file and quote a sentence from it.",
+   "Expand the file tool row in the transcript.",
+   "Check the Snippet section shows text from the document."
+  ],
+  "where": "AGI Code sidebar > chat box: ask the assistant to read a PDF or Office file in the workspace"
+ },
+ "S57.04": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Request"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Response"
+   }
+  ],
+  "needs": "a project folder with files containing a known phrase",
+  "note": "Tool row names are built from the tool's internal name at run time, so the exact row title is not a fixed string in the code. The Request or Response label depends on how the tool is classed.",
+  "reachable": "yes",
+  "steps": [
+   "Open a project folder.",
+   "In the chat box, ask the assistant to find where a given phrase or file name appears in the project.",
+   "Expand the search tool row in the transcript.",
+   "Check the request shows the search text and the response lists matching paths or lines."
+  ],
+  "where": "AGI Code sidebar > chat box: ask the assistant to find a phrase in the project"
+ },
+ "S57.05": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "File"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Snippet"
+   }
+  ],
+  "needs": "a text file in the open folder",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a folder that contains a text file.",
+   "In the chat box, ask the assistant to read that file by name and tell you one line from it.",
+   "Expand the file tool row in the transcript.",
+   "Check the File section shows the path and the Snippet section shows the file text."
+  ],
+  "where": "AGI Code sidebar > chat box: ask the assistant to read a named file"
+ },
+ "S57.06": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Wrote"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/capabilityManagement.ts",
+    "text": "New files"
+   }
+  ],
+  "needs": "a folder open in VS Code and an approval if asked",
+  "note": "Whether the write happens in a sandbox or on the machine depends on the session trust mode; not verified.",
+  "reachable": "yes",
+  "steps": [
+   "Open a folder in VS Code.",
+   "In the chat box, ask the assistant to create a new file with a given name and one line of text.",
+   "Approve the request if the assistant asks for permission.",
+   "Expand the file tool row and check the Wrote section shows the file path, and that the file exists in the folder."
+  ],
+  "where": "AGI Code sidebar > chat box: ask the assistant to create a new file"
+ },
+ "S57.10": {
+  "labels": [],
+  "needs": "none",
+  "note": "No dedicated code-execution tool was found in the tool catalog (apps/cli/src/platform/runtime/tool_catalog.rs). The nearest is the shell tool (Shell commands), which can run a script the assistant wrote. Searched the extension and CLI for a code-run tool name.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S57.11": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/capabilityManagement.ts",
+    "text": "Shell commands"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Command"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Output"
+   }
+  ],
+  "needs": "a shell available on the machine and the Shell commands tool ticked",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Run Code: Choose Tools for This Session and make sure Shell commands is ticked.",
+   "In the chat box, ask the assistant to run a harmless command such as node --version.",
+   "Expand the command tool row.",
+   "Check the Command section shows the command with a $ prefix, and the Output section shows the result with an exit code."
+  ],
+  "where": "Command Palette > Code: Choose Tools for This Session > Shell commands, then AGI Code sidebar > chat box"
+ },
+ "S57.12": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/capabilityManagement.ts",
+    "text": "File edits"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Open diff"
+   }
+  ],
+  "needs": "an existing file in the open folder",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Make sure File edits is ticked in Code: Choose Tools for This Session.",
+   "In the chat box, ask the assistant to change one line in an existing file and leave the rest alone.",
+   "Expand the edit tool row and click Open diff.",
+   "Check the diff changes only the requested line and the row shows a diff summary."
+  ],
+  "where": "Command Palette > Code: Choose Tools for This Session > File edits, then AGI Code sidebar > chat box"
+ },
+ "S57.13": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/capabilityManagement.ts",
+    "text": "Browser"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/capabilityManagement.ts",
+    "text": "Open, read and act on pages in the paired browser"
+   }
+  ],
+  "needs": "a paired browser; the pairing steps were not found in the extension code",
+  "note": "How a browser gets paired was not found in the extension code.",
+  "reachable": "yes",
+  "steps": [
+   "Make sure Browser is ticked in Code: Choose Tools for This Session.",
+   "In the chat box, ask the assistant to open a web address in the browser.",
+   "Expand the browser tool row to see the address it used.",
+   "Check that a real browser tab opened at that address."
+  ],
+  "where": "Command Palette > Code: Choose Tools for This Session > Browser, then AGI Code sidebar > chat box"
+ },
+ "S57.14": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/capabilityManagement.ts",
+    "text": "Browser"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/capabilityManagement.ts",
+    "text": "Open, read and act on pages in the paired browser"
+   }
+  ],
+  "needs": "a paired browser with a page open; the pairing steps were not found in the extension code",
+  "note": "The browser action tools are listed in the same Browser group as the navigation tool.",
+  "reachable": "yes",
+  "steps": [
+   "Make sure Browser is ticked in Code: Choose Tools for This Session.",
+   "With a page open in the paired browser, ask the assistant to read the page and then click or type in it.",
+   "Expand each browser tool row in the transcript.",
+   "Check the page in the browser changed as the row describes."
+  ],
+  "where": "Command Palette > Code: Choose Tools for This Session > Browser, then AGI Code sidebar > chat box"
+ },
+ "S57.21": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Memory"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Add Memory Fact"
+   }
+  ],
+  "needs": "none",
+  "note": "The in-turn memory tool has no control of its own; the Code: Memory commands are the user-side view of the same facts.",
+  "reachable": "yes",
+  "steps": [
+   "In the chat box, ask the assistant to remember a fact, such as a preferred test framework.",
+   "Approve the save if the assistant asks first.",
+   "Run Code: Memory from the Command Palette and check the fact is listed.",
+   "In a new chat, ask the assistant what it remembers and check the memory tool row appears with the fact."
+  ],
+  "where": "AGI Code sidebar > chat box: ask the assistant to remember a fact; Command Palette > Code: Memory to check it"
+ },
+ "S57.22": {
+  "labels": [],
+  "needs": "none",
+  "note": "No calendar tool was found in the extension or the CLI tool catalog. Calendar appears only as a connector event source for scheduled triggers (apps/cli/src/schedules/triggers.rs) and in the generic connector approval text (apps/cli/src/models/managed_approvals.rs).",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S57.23": {
+  "labels": [],
+  "needs": "none",
+  "note": "No Slack messaging tool was found. send_message in the CLI catalog is for agent-team teammates, not a connected service. Slack appears only as a schedule trigger source (apps/cli/src/schedules/triggers.rs) and the generic connector approval text.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S57.24": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Show Schedules"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Pause Schedule"
+   }
+  ],
+  "needs": "a signed-in AGI account (scheduled work runs in the AGI cloud and cannot be local-only)",
+  "note": "The tool that creates a schedule is cron_create in the CLI catalog. Whether a chat session can call it from this extension was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Run Code: Show Schedules from the Command Palette and note the list.",
+   "In the chat box, ask the assistant to schedule a short task every day at nine.",
+   "Run Code: Show Schedules again and check the new schedule is listed.",
+   "Use Code: Pause Schedule or Code: Run Schedule Now on it and check its state changes."
+  ],
+  "where": "Command Palette > Code: Show Schedules; or AGI Code sidebar > chat box: ask the assistant to schedule a task"
+ },
+ "S57.25": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Subagents"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "In the chat box, ask the assistant to hand one sub-task, such as summarising a file, to a subagent and use its answer.",
+   "Watch the Subagents panel appear above the transcript and its count change.",
+   "Open the subagent transcript if the panel offers it.",
+   "Check the main answer uses the subagent result."
+  ],
+  "where": "AGI Code sidebar > chat box: ask for a sub-task to be handed to a subagent"
+ },
+ "S57.26": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "AGI asks"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "In the chat box, ask the assistant to pick a setting for you, and to ask you before it starts.",
+   "Check an AGI asks card appears with the question and choice buttons.",
+   "Click one choice button.",
+   "Check the card closes and the assistant continues with your choice."
+  ],
+  "where": "AGI Code sidebar > chat box: ask a request that needs a choice first"
+ },
+ "S57.28": {
+  "labels": [],
+  "needs": "several tools available to the session",
+  "note": "The effect shows only as a tool search row in the transcript, whose label is built from the tool name. Tool discovery is in apps/cli/src/features/exec/tools/mod.rs.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Connect more tools than fit in one turn, for example by ticking many groups in Code: Choose Tools for This Session.",
+   "Ask a task that needs a tool outside the first set.",
+   "Check a tool search row appears in the transcript when the assistant loads that tool."
+  ],
+  "where": "Inner behaviour: the model is told which other tools exist; no control in the app"
+ },
+ "S57.29": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Choose Tools for This Session"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/capabilityManagement.ts",
+    "text": "Tools for this session"
+   }
+  ],
+  "needs": "none",
+  "note": "The typed filter searches only the six tool groups. The model's own tool search (tool_search in apps/cli/src/features/exec/tools/mod.rs) has no control in the app.",
+  "reachable": "yes",
+  "steps": [
+   "Run Code: Choose Tools for This Session from the Command Palette.",
+   "Type a word such as browser or web into the list.",
+   "Check only the matching tool groups stay in the list and each shows its description.",
+   "Press Escape to close without changing anything."
+  ],
+  "where": "Command Palette > Code: Choose Tools for This Session, then type a word in the list"
+ },
+ "S57.31": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Command"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Request"
+   }
+  ],
+  "needs": "a folder open in VS Code",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "In the chat box, ask the assistant to run a shell command such as ls.",
+   "Wait for the tool row to appear in the transcript.",
+   "Click the tool row to open it.",
+   "Check the Command section shows the command with a $ prefix, or the Request section shows the arguments for other tools."
+  ],
+  "where": "AGI Code sidebar > chat box: ask for a shell command, then click its tool row"
+ },
+ "S57.32": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "{count} actions"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Completed with errors"
+   }
+  ],
+  "needs": "a folder open in VS Code",
+  "note": "The code shows a spinner while running, but no live elapsed time; the elapsed time is added only when the tool finishes. Expected says running with elapsed time.",
+  "reachable": "yes",
+  "steps": [
+   "In the chat box, ask the assistant to run a command that waits about 10 seconds, such as sleep 10.",
+   "While it runs, check the tool row shows a spinning icon and the activity line counts the action.",
+   "When it ends, check the row changes to done, or to an error state.",
+   "Check the row summary ends with an elapsed time."
+  ],
+  "where": "AGI Code sidebar > chat box: ask for a shell command that takes a few seconds; watch the activity line above the tool rows"
+ },
+ "S57.33": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Output"
+   }
+  ],
+  "needs": "a folder open in VS Code",
+  "note": "The closed row shows only the label, summary and elapsed time; the result text appears only after the row is opened, so Expected's preview is not visible on the closed row.",
+  "reachable": "yes",
+  "steps": [
+   "In the chat box, ask the assistant to run a short command such as echo hello.",
+   "When the row finishes, look at the row without clicking it.",
+   "Click the row and check the Output section shows the result text.",
+   "Compare the shown text with the command output."
+  ],
+  "where": "AGI Code sidebar > chat box: ask for a shell command, then look at the finished tool row"
+ },
+ "S57.34": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Command"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Output"
+   }
+  ],
+  "needs": "a folder open in VS Code",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Ask the assistant to run a shell command and wait for its row to finish.",
+   "Click the row once and check the Command and Output sections appear.",
+   "Click the row again and check it collapses.",
+   "Compare what is shown with the request and result."
+  ],
+  "where": "AGI Code sidebar > chat box: click any finished tool row"
+ },
+ "S57.36": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Output"
+   },
+   {
+    "file": "apps/cli/src/features/exec/tools/common/mod.rs",
+    "text": "full output saved for the user to"
+   }
+  ],
+  "needs": "a folder open in VS Code and an approval if asked",
+  "note": "The reference is plain text with a path; no open button was found in the extension. The path is in the CLI config folder under tool-output.",
+  "reachable": "yes",
+  "steps": [
+   "In the chat box, ask the assistant to run a command with a very long output, such as seq 1 200000.",
+   "Approve the command if asked.",
+   "Expand the finished tool row and scroll to the end of the Output section.",
+   "Check the text says the full output was saved and gives a file path to open."
+  ],
+  "where": "AGI Code sidebar > chat box: ask for a command with a very long output, then expand its row"
+ },
+ "S57.37": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Show Session Activity"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/sessionReceipt.ts",
+    "text": "Files changed"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/sessionReceipt.ts",
+    "text": "Approvals"
+   }
+  ],
+  "needs": "a chat session that has run tools",
+  "note": "The receipt lists file changes and approvals, not every tool call with its input and outcome, so Expected is only partly met.",
+  "reachable": "yes",
+  "steps": [
+   "Use an AGI Code chat that ran at least one tool.",
+   "Run Code: Show Session Activity from the Command Palette.",
+   "Read the list: Details, then Files changed, then Approvals.",
+   "Check each file change and approval matches what the tools did in the chat."
+  ],
+  "where": "Command Palette > Code: Show Session Activity"
+ }
+}

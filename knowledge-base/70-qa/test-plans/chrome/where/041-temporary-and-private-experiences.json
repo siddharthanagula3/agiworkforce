@@ -1,0 +1,108 @@
+{
+ "S41.14": {
+  "labels": [
+   {
+    "file": "apps/extension/src/side_panel.ts",
+    "text": "Add attachment"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Temporary chat"
+   },
+   {
+    "file": "apps/extension/src/features/privacy/dataHandling.ts",
+    "text": "Save Managed Cloud chats to my account"
+   }
+  ],
+  "needs": "A signed-in AGI account; a Managed Cloud chat to see the mirror switch take effect; a web or mobile check for account history.",
+  "note": "The mirror switch covers only Managed Cloud chats and defaults to on; a temporary chat is never saved at all, so it is not the same as a chat kept only on the device.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to the AGI side panel and open the composer's \"Add attachment\" button.",
+   "Click \"Temporary chat\" and send a message in the new chat.",
+   "Open More > Extension settings, then click \"Account\" in the left list of the options page.",
+   "Find \"Save Managed Cloud chats to my account\" under \"Privacy and data handling\", switch it off, and start a Managed Cloud chat.",
+   "Check that the chat appears only in this browser and not in the account's history on the web or mobile, and compare with Expected."
+  ],
+  "where": "Add attachment (composer button) > Temporary chat, or More > Extension settings > Account > Save Managed Cloud chats to my account (switch)"
+ },
+ "S41.18": {
+  "labels": [
+   {
+    "file": "apps/extension/src/features/options/data-handling-section.ts",
+    "text": "Privacy and data handling"
+   },
+   {
+    "file": "apps/extension/src/features/privacy/dataHandling.ts",
+    "text": "Model training"
+   },
+   {
+    "file": "apps/extension/src/features/privacy/dataHandling.ts",
+    "text": "How long chats are kept"
+   }
+  ],
+  "needs": "none",
+  "note": "Model training and retention are statements with no switch; history is the only switch in this section.",
+  "reachable": "yes",
+  "steps": [
+   "Open More, then click \"Extension settings\".",
+   "In the options page, click \"Account\" in the left list.",
+   "Scroll to the \"Privacy and data handling\" section.",
+   "Read the separate rows \"Save Managed Cloud chats to my account\" (a switch), \"Model training\" (text only) and \"How long chats are kept\" (text only).",
+   "Check that history, training and retention each have their own row, and compare with Expected."
+  ],
+  "where": "More > Extension settings > Account > Privacy and data handling"
+ },
+ "S41.19": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Stays out of your history, search, memory and Library."
+   },
+   {
+    "file": "apps/extension/src/features/options/data-handling-section.ts",
+    "text": "Privacy and data handling"
+   },
+   {
+    "file": "apps/extension/src/features/privacy/dataHandling.ts",
+    "text": "Save Managed Cloud chats to my account"
+   }
+  ],
+  "needs": "none",
+  "note": "The explanation for the mirror switch changes with its state through describeCloudMirroring in the same file; the in-context explanation for Temporary chat is the longer text in the same messages file under spTemporaryChatRetention. The code audit quoted side_panel.ts:5598, which I did not confirm.",
+  "reachable": "yes",
+  "steps": [
+   "Open the composer's \"Add attachment\" button and look at the \"Temporary chat\" item and its hint line.",
+   "Click \"Temporary chat\" to close the menu, then open More > Extension settings.",
+   "Click \"Account\" and scroll to \"Privacy and data handling\".",
+   "Read the text under \"Model training\", \"How long chats are kept\" and the switch \"Save Managed Cloud chats to my account\", and check each one says what the setting does, and compare with Expected."
+  ],
+  "where": "Add attachment > Temporary chat (hint line under the item), and More > Extension settings > Account > Privacy and data handling (text under each row)"
+ },
+ "S41.20": {
+  "labels": [
+   {
+    "file": "apps/extension/src/features/options/data-handling-section.ts",
+    "text": "Privacy and data handling"
+   },
+   {
+    "file": "apps/extension/src/features/privacy/dataHandling.ts",
+    "text": "Managed Cloud chats are mirrored to your account"
+   },
+   {
+    "file": "apps/extension/src/features/privacy/dataHandling.ts",
+    "text": "Model training"
+   }
+  ],
+  "needs": "none for reading; a Free account to see the Free-plan provider wording.",
+  "note": "No row gives a single processing location per feature; locations are stated inside the body text of several rows (page text is sent only when asked, requests go to the model's hosted provider), so Expected is only partly matched. The code audit quoted side_panel.ts:5598, which I did not confirm.",
+  "reachable": "yes",
+  "steps": [
+   "Open More, then click \"Extension settings\".",
+   "Click \"Account\" in the left list and scroll to \"Privacy and data handling\".",
+   "Read the rows \"The debugger permission drives computer use\", \"Managed Cloud chats are mirrored to your account\" and \"Model training\".",
+   "Check each row says where the data goes (this browser, your AGI account, or the hosted provider of the model), and compare with Expected."
+  ],
+  "where": "More > Extension settings > Account > Privacy and data handling"
+ }
+}

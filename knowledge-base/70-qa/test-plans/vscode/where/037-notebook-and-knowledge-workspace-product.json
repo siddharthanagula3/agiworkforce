@@ -1,0 +1,133 @@
+{
+ "S37.01": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "Projects"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Show Projects"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/index.ts",
+    "text": "Open a project\u2026"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account with at least one project",
+  "note": "The code calls these projects, not notebooks; the Expected item's notebook is the same object as a project.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI Code sidebar and click the More button (tooltip More).",
+   "Click Projects in the menu.",
+   "Look for a list of your projects with the placeholder Open a project. If you are signed out, the list shows Sign in to see your projects instead.",
+   "Click one project in the list and check that its detail menu opens with the project name as its title."
+  ],
+  "where": "AGI Code sidebar > More > Projects (or Command Palette > Code: Show Projects)"
+ },
+ "S37.02": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/index.ts",
+    "text": "New project"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: New Project"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "Projects"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click More in the AGI Code sidebar, then click Projects.",
+   "Click the New project icon at the top of the list (tooltip New project).",
+   "Type a name such as QA test notebook and press Enter. An empty name is refused with the message A project needs a name.",
+   "Leave Instructions empty and press Enter, or type some and press Enter.",
+   "Look for the message saying the project is on your account, on every client, and check that the project now appears in the list."
+  ],
+  "where": "AGI Code sidebar > More > Projects > New project (or Command Palette > Code: New Project)"
+ },
+ "S37.03": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/projects/projectActions.ts",
+    "text": "Rename project"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/projects/projectActions.ts",
+    "text": "Description"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/projects/projectActions.ts",
+    "text": "Rename"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account with at least one project",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Projects from the More menu and click a project.",
+   "Click Rename, type a new name, and press Enter.",
+   "Open the same project again, click Description, type a description, and press Enter.",
+   "Look for the message saying the project was saved to your account, and check that the new name is the menu title and the description shows under it."
+  ],
+  "where": "AGI Code sidebar > More > Projects > [project name] > Rename or Description"
+ },
+ "S37.15": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/projects/projectActions.ts",
+    "text": "Instructions"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/projects/projectActions.ts",
+    "text": "Project instructions"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/projects/projectActions.ts",
+    "text": "Use in this chat"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account with at least one project",
+  "note": "In the code, the instructions only reach chat turns in a workspace where the project is used in this chat; the prompt text says every chat in the project, on every client, which is set on the server.",
+  "reachable": "yes",
+  "steps": [
+   "Open Projects from the More menu and click a project.",
+   "Click Instructions under the Edit heading, type text such as Always answer in bullet points, and press Enter.",
+   "Open the project again and check that Instructions now shows Set.",
+   "Click Use in this chat on the project, then send a message in this workspace's chat and compare the reply with the instructions."
+  ],
+  "where": "AGI Code sidebar > More > Projects > [project name] > Instructions"
+ },
+ "S37.37": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Use in this chat"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Projects"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Active project"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account with at least one project",
+  "note": "The Projects group appears only when the start screen has project suggestions; I did not confirm when it shows. The same Use in this chat item is also in the project menu from More > Projects.",
+  "reachable": "yes",
+  "steps": [
+   "Open a new chat in the AGI Code sidebar.",
+   "In the Projects group of the start suggestions, click the Use in this chat button on a project row. The project menu opens.",
+   "Click Use in this chat in that menu.",
+   "Look at the chip above the message box with a folder icon and the project name (labelled Active project), then send a message in the chat."
+  ],
+  "where": "AGI Code chat start screen > Projects group > Use in this chat (then Use in this chat in the project menu)"
+ }
+}

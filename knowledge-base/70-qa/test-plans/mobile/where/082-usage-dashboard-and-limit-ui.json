@@ -1,0 +1,540 @@
+{
+ "S82.01": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/screenTitles.ts",
+    "text": "Subscription"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-billing/index.tsx",
+    "text": "Current plan"
+   }
+  ],
+  "needs": "a signed-in cloud account",
+  "note": "The plan is read by the mobile billing screen; the cited apps/web/app/api/me/route.ts is not checked here.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu and tap Settings.",
+   "Tap Account, then the Subscription row (switch to AGI Cloud mode first if the Cloud rows are hidden).",
+   "Read the \"Current plan\" row on the Subscription screen.",
+   "Compare the plan name with the account's plan. It shows \"Not confirmed\" or \"Checking\u2026\" while the server check is pending."
+  ],
+  "where": "Side menu > Settings > Account > Subscription (row shows the plan name); on the Subscription screen, the \"Current plan\" row"
+ },
+ "S82.02": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-billing/index.tsx",
+    "text": "Renews"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-billing/index.tsx",
+    "text": "Access ends"
+   }
+  ],
+  "needs": "a paid account (the row is hidden on Free)",
+  "note": "Row only appears for a paid, entitled, non-Free plan; the Usage screen also shows \"This billing period\" with \"Resets \u2026\" text.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu, tap Settings, then Account, then Subscription.",
+   "Find the row labelled Renews (or Access ends, or Trial ends) under Current plan.",
+   "Compare the date on that row with the renewal or end date expected for the account."
+  ],
+  "where": "Side menu > Settings > Account > Subscription > \"Renews\" row (or \"Access ends\" / \"Trial ends\")"
+ },
+ "S82.03": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-usage/index.tsx",
+    "text": "Usage"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-usage/index.tsx",
+    "text": "Plan usage"
+   },
+   {
+    "file": "packages/contracts/types/src/usage-vocabulary.ts",
+    "text": "This billing period"
+   }
+  ],
+  "needs": "a paid account (a Free account sees only the \"Free plan\" screen with an Upgrade button)",
+  "note": "Screen title \"Usage\" comes from the Settings Cloud group row in apps/mobile/src/features/settings/index.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Switch to AGI Cloud mode, then open Settings.",
+   "Tap the Usage row in the Cloud group.",
+   "Under Plan usage, look at the bar labelled \"This billing period\" (the overall meter) and the \"Current session\" bar.",
+   "Compare each bar's fill and percent with the plan allowance."
+  ],
+  "where": "Settings > Cloud > Usage > \"Plan usage\" section: bars \"Current session\", \"Weekly limits\" and \"This billing period\""
+ },
+ "S82.04": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-usage/index.tsx",
+    "text": "Where your usage went"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-usage/index.tsx",
+    "text": "By model"
+   }
+  ],
+  "needs": "a paid account with usage in the period",
+  "note": "The card only lists rows once there are requests; the \"flagship-model cap\" bar is \"Most capable models\" under Weekly limits (packages/contracts/types/src/usage-vocabulary.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Switch to AGI Cloud mode, then open Settings and tap Usage in the Cloud group.",
+   "Scroll to the \"Where your usage went\" card.",
+   "Read the \"By model\" list: each row shows a model name and its request and credit totals.",
+   "Compare the rows with the models used in the account."
+  ],
+  "where": "Settings > Cloud > Usage > \"Where your usage went\" > \"By model\" list"
+ },
+ "S82.05": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-usage/index.tsx",
+    "text": "By product area"
+   },
+   {
+    "file": "packages/contracts/types/src/billing-catalog.ts",
+    "text": "Chat"
+   },
+   {
+    "file": "packages/contracts/types/src/billing-catalog.ts",
+    "text": "AGI Code"
+   }
+  ],
+  "needs": "a paid account with usage",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Switch to AGI Cloud mode, then open Settings and tap Usage in the Cloud group.",
+   "Scroll to \"Where your usage went\".",
+   "Read the \"By product area\" list under the period rows.",
+   "Compare the rows with the Chat, AGI Work, Deep Research, AGI Code and Browser areas."
+  ],
+  "where": "Settings > Cloud > Usage > \"Where your usage went\" > \"By product area\" list"
+ },
+ "S82.06": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-usage/index.tsx",
+    "text": "This month"
+   },
+   {
+    "file": "packages/contracts/types/src/account-usage-client.ts",
+    "text": "Voice"
+   }
+  ],
+  "needs": "a paid account with a voice allowance",
+  "note": "The card is hidden when the account has no allowance data; the Voice row is built from the server's unit list, not checked against a live response.",
+  "reachable": "yes",
+  "steps": [
+   "Switch to AGI Cloud mode, then open Settings and tap Usage in the Cloud group.",
+   "Find the \"This month\" card.",
+   "Read the \"Voice\" row: it shows minutes used of the monthly amount, or \"no monthly cap\".",
+   "Compare with the voice minutes used in the period."
+  ],
+  "where": "Settings > Cloud > Usage > \"This month\" card > \"Voice\" row"
+ },
+ "S82.07": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-usage/index.tsx",
+    "text": "This month"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-usage/index.tsx",
+    "text": "Images"
+   }
+  ],
+  "needs": "a paid account that has generated images this period",
+  "note": "The Images row only appears when the account has image requests in the period.",
+  "reachable": "yes",
+  "steps": [
+   "Switch to AGI Cloud mode, then open Settings and tap Usage in the Cloud group.",
+   "Find the \"This month\" card.",
+   "Read the \"Images\" row: image count and credits for the period.",
+   "Compare with the images generated this period."
+  ],
+  "where": "Settings > Cloud > Usage > \"This month\" card > \"Images\" row"
+ },
+ "S82.08": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-usage/index.tsx",
+    "text": "This month"
+   },
+   {
+    "file": "packages/contracts/types/src/account-usage-client.ts",
+    "text": "Video"
+   }
+  ],
+  "needs": "a paid account with a video allowance",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Switch to AGI Cloud mode, then open Settings and tap Usage in the Cloud group.",
+   "Find the \"This month\" card.",
+   "Read the \"Video\" row: seconds used of the monthly amount.",
+   "Compare with the video seconds generated in the period."
+  ],
+  "where": "Settings > Cloud > Usage > \"This month\" card > \"Video\" row"
+ },
+ "S82.09": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/billing-catalog.ts",
+    "text": "Deep Research"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-usage/index.tsx",
+    "text": "By product area"
+   }
+  ],
+  "needs": "a paid account that has run Deep Research",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Switch to AGI Cloud mode, then open Settings and tap Usage in the Cloud group.",
+   "Scroll to \"Where your usage went\" and read \"By product area\".",
+   "Find the row labelled Deep Research and read its request and credit totals."
+  ],
+  "where": "Settings > Cloud > Usage > \"Where your usage went\" > \"By product area\" > \"Deep Research\" row"
+ },
+ "S82.10": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/billing-catalog.ts",
+    "text": "AGI Work"
+   },
+   {
+    "file": "packages/contracts/types/src/billing-catalog.ts",
+    "text": "AGI Code"
+   }
+  ],
+  "needs": "a paid account that has used AGI Work or AGI Code",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Switch to AGI Cloud mode, then open Settings and tap Usage in the Cloud group.",
+   "Scroll to \"Where your usage went\" and read \"By product area\".",
+   "Find the rows labelled AGI Work (agentic work) and AGI Code (coding).",
+   "Compare their totals with the coding and agent runs made."
+  ],
+  "where": "Settings > Cloud > Usage > \"Where your usage went\" > \"By product area\" > \"AGI Work\" and \"AGI Code\" rows"
+ },
+ "S82.11": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-usage/index.tsx",
+    "text": "File storage"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-usage/index.tsx",
+    "text": "Used"
+   }
+  ],
+  "needs": "a paid account with a storage limit",
+  "note": "The card is hidden when storage data is missing.",
+  "reachable": "yes",
+  "steps": [
+   "Switch to AGI Cloud mode, then open Settings and tap Usage in the Cloud group.",
+   "Scroll to the \"File storage\" card.",
+   "Read the \"Used\" row: used bytes of the plan limit, with a bar below it.",
+   "Compare with the files uploaded or generated."
+  ],
+  "where": "Settings > Cloud > Usage > \"File storage\" card"
+ },
+ "S82.12": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-usage/index.tsx",
+    "text": "Responses running now"
+   }
+  ],
+  "needs": "a paid account, and a response that is still running",
+  "note": "The row only appears when the response allowance is returned by the server.",
+  "reachable": "yes",
+  "steps": [
+   "Switch to AGI Cloud mode, then open Settings and tap Usage in the Cloud group.",
+   "Find the \"This month\" card.",
+   "Read the \"Responses running now\" row: active responses of the concurrent limit, \"at a time\".",
+   "Start a long response and compare the count."
+  ],
+  "where": "Settings > Cloud > Usage > \"This month\" card > \"Responses running now\" row"
+ },
+ "S82.13": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-usage/index.tsx",
+    "text": "Credit balances"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-usage/index.tsx",
+    "text": "Included in your plan"
+   }
+  ],
+  "needs": "a paid account",
+  "note": "Bonus and purchased rows only appear in builds where native purchases are on (NATIVE_PURCHASES_AVAILABLE in apps/mobile/src/features/billing/nativePurchaseAvailability.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Switch to AGI Cloud mode, then open Settings and tap Usage in the Cloud group.",
+   "Find the \"Credit balances\" card.",
+   "Read \"Included in your plan\": credits left and the monthly total.",
+   "Compare with the credits expected to remain."
+  ],
+  "where": "Settings > Cloud > Usage > \"Credit balances\" card (\"Included in your plan\" row, with \"left\" amount)"
+ },
+ "S82.14": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-usage/index.tsx",
+    "text": "Included in your plan"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-usage/index.tsx",
+    "text": "Purchased credits"
+   }
+  ],
+  "needs": "a paid account in a build with native purchases; a purchased-credit account to see amounts",
+  "note": "Without native purchases only \"Included in your plan\" shows.",
+  "reachable": "yes",
+  "steps": [
+   "Switch to AGI Cloud mode, then open Settings and tap Usage in the Cloud group.",
+   "Find the \"Credit balances\" card.",
+   "Read \"Included in your plan\" and \"Purchased credits\" side by side.",
+   "Compare that the two rows are separate balances."
+  ],
+  "where": "Settings > Cloud > Usage > \"Credit balances\" card > \"Included in your plan\" and \"Purchased credits\" rows"
+ },
+ "S82.15": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-usage/index.tsx",
+    "text": "Bonus credits"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-usage/index.tsx",
+    "text": "Credit balances"
+   }
+  ],
+  "needs": "an account that has bonus credits (referral or promotion); native-purchase build",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Switch to AGI Cloud mode, then open Settings and tap Usage in the Cloud group.",
+   "Find the \"Credit balances\" card.",
+   "Read the \"Bonus credits\" row: remaining amount and its \"Next expiry\" line, or \"None\".",
+   "Compare with a promotion or referral credit the account received."
+  ],
+  "where": "Settings > Cloud > Usage > \"Credit balances\" card > \"Bonus credits\" row"
+ },
+ "S82.16": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-usage/index.tsx",
+    "text": "Next expiry"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-usage/index.tsx",
+    "text": "Purchased credits"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-usage/index.tsx",
+    "text": "Resets"
+   }
+  ],
+  "needs": "an account with bonus or purchased credits",
+  "note": "Purchased-credit expiry text is built in the same file (purchasedRow) and is shown only where native purchases are on.",
+  "reachable": "yes",
+  "steps": [
+   "Switch to AGI Cloud mode, then open Settings and tap Usage in the Cloud group.",
+   "Find the \"Credit balances\" card and read the detail under \"Bonus credits\" (\"Next expiry \u2026\") and \"Purchased credits\".",
+   "Read the \"Resets\" note on the \"This month\" card and the \"Resets\" card if present.",
+   "Compare the dates with each credit's lapse date."
+  ],
+  "where": "Settings > Cloud > Usage > \"Credit balances\" card (\"Next expiry\" and purchase expiry lines) and \"This month\" card (\"Resets \u2026\" note)"
+ },
+ "S82.17": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/usage-vocabulary.ts",
+    "text": "Resets in ${minutes} min"
+   },
+   {
+    "file": "packages/contracts/types/src/usage-vocabulary.ts",
+    "text": "Current session"
+   }
+  ],
+  "needs": "a paid account with active windows",
+  "note": "The visible text is built from hours, minutes and days; the exact wording is the template in the vocabulary file.",
+  "reachable": "yes",
+  "steps": [
+   "Switch to AGI Cloud mode, then open Settings and tap Usage in the Cloud group.",
+   "Under Plan usage, read the small line under each bar that starts \"Resets in\".",
+   "Wait a few minutes or compare with the clock and check the countdown moves."
+  ],
+  "where": "Settings > Cloud > Usage > \"Plan usage\" section: a \"Resets in \u2026\" line under each bar (\"Current session\", \"Weekly limits\", \"This billing period\")"
+ },
+ "S82.18": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-usage/index.tsx",
+    "text": "Where your usage went"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-usage/index.tsx",
+    "text": "Days"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-usage/index.tsx",
+    "text": "Weeks"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-usage/index.tsx",
+    "text": "Months"
+   }
+  ],
+  "needs": "a paid account with usage history",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Switch to AGI Cloud mode, then open Settings and tap Usage in the Cloud group.",
+   "Scroll to \"Where your usage went\".",
+   "Tap Days, then Weeks, then Months.",
+   "Compare that the period rows change to daily, weekly and monthly totals."
+  ],
+  "where": "Settings > Cloud > Usage > \"Where your usage went\" > segmented buttons \"Days\", \"Weeks\", \"Months\""
+ },
+ "S82.20": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/drawer/components/DrawerContent.tsx",
+    "text": "AGI Work"
+   },
+   {
+    "file": "apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx",
+    "text": "Cost"
+   },
+   {
+    "file": "apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx",
+    "text": "Usage"
+   }
+  ],
+  "needs": "a cloud account with at least one agent run that reported usage",
+  "note": "The side-menu opener and the task list title were not confirmed; the Cost and Usage rows show only when run usage exists.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu and tap AGI Work.",
+   "Tap a task run in the list to open its details sheet.",
+   "Read the \"Cost\" row and the \"Usage\" row (calls and tokens) in the metadata area.",
+   "Compare with the task's work done."
+  ],
+  "where": "Side menu > AGI Work > open a finished task > details sheet with \"Cost\" and \"Usage\" rows"
+ },
+ "S82.23": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx",
+    "text": "Cost"
+   },
+   {
+    "file": "apps/mobile/src/features/drawer/components/DrawerContent.tsx",
+    "text": "AGI Work"
+   }
+  ],
+  "needs": "a cloud account with a finished agent run",
+  "note": "The Cost row is shown when run usage exists and reads \"Metered against your free trial allowance\" when there is no cost figure; the code does not check that the run has finished.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu, tap AGI Work, then tap a task run that has finished.",
+   "Read the \"Cost\" row in the details sheet.",
+   "Compare with the credits shown on the Usage screen for that period."
+  ],
+  "where": "Side menu > AGI Work > open a task run > \"Cost\" row in the details sheet"
+ },
+ "S82.24": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/usage-vocabulary.ts",
+    "text": "You're close to the Free limit for now"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/UsageLimitBanner.tsx",
+    "text": "Notify me when it resets"
+   }
+  ],
+  "needs": "a cloud account near a usage limit",
+  "note": "Banner shows at 25% remaining (warning) and 10% (critical) per packages/contracts/types/src/usage-vocabulary.ts; reaching this state needs a near-limit account.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to AGI Cloud on an account near a usage limit, then open any chat.",
+   "Look above the message box for the usage banner with a gauge icon.",
+   "Read the headline and the reset line under it.",
+   "Compare with the usage on the Usage screen: the banner appears when a window has 25% or less left."
+  ],
+  "where": "Chat screen > warning banner above the message box (e.g. \"You're close to the Free limit for now\" or \"You have used \u2026 of \u2026\")"
+ },
+ "S82.25": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx",
+    "text": "Choose a plan"
+   },
+   {
+    "file": "packages/contracts/types/src/usage-vocabulary.ts",
+    "text": "You've reached the Free limit for now"
+   }
+  ],
+  "needs": "an account at a usage limit (or a Free account after its allowance is used)",
+  "note": "Which title appears depends on the recovery action and whether native purchases are on; the sheet is opened from apps/mobile/app/(app)/chat/[id].tsx.",
+  "reachable": "yes",
+  "steps": [
+   "On an account at its limit, open a chat and send a message.",
+   "A bottom sheet opens: read its title and the body explaining which feature is blocked.",
+   "Read the reset line (\"Resets in \u2026\") under the body, if shown.",
+   "Compare with the limit that was reached."
+  ],
+  "where": "Chat screen > send a message at the limit > bottom sheet titled \"Choose a plan\", \"Upgrade to \u2026\" or \"Update billing\", with the reset line"
+ },
+ "S82.26": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx",
+    "text": "Choose a standard model"
+   }
+  ],
+  "needs": "an account at a limit where the server suggests a standard model",
+  "note": "The button appears only when the paywall presentation sets suggestStandardModel; how the eligible model is chosen was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "On an account at its limit, open a chat and send a message.",
+   "In the sheet that opens, look for the \"Choose a standard model\" button.",
+   "Tap it and check that the model picker offers another model the plan can use."
+  ],
+  "where": "Chat screen > send at the limit > bottom sheet > \"Choose a standard model\" button"
+ },
+ "S82.27": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/UsageLimitBanner.tsx",
+    "text": "Notify me when it resets"
+   },
+   {
+    "file": "packages/contracts/types/src/work-usage.ts",
+    "text": "Add credits to keep going now, or wait for your usage to reset."
+   }
+  ],
+  "needs": "an account at or near a limit; a phone that allows notifications for the reminder",
+  "note": "There is no separate \"wait\" button; waiting is offered as copy and a reminder. The wait-only copy shows when the account cannot upgrade.",
+  "reachable": "yes",
+  "steps": [
+   "On an account at its limit, open a chat and send a message, or look at the banner above the message box.",
+   "Read the recovery copy and the reset line: the banner or sheet shows when usage comes back.",
+   "Tap \"Notify me when it resets\" if it appears and check the confirmation \"We\u2019ll notify you\"."
+  ],
+  "where": "Chat screen > usage banner (\"Notify me when it resets\") and the send-time bottom sheet (reset line \"Resets in \u2026\")"
+ }
+}

@@ -1,0 +1,55 @@
+{
+ "S65.27": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/components/CodeRail.tsx",
+    "text": "Your computer"
+   },
+   {
+    "file": "apps/web/features/remote-dispatch/components/RemoteComputerPage.tsx",
+    "text": "Your computer went offline. This page reconnects when it is back."
+   },
+   {
+    "file": "apps/web/features/remote-dispatch/components/RemoteComputerPage.tsx",
+    "text": "Computers on your account"
+   }
+  ],
+  "needs": "a Free or paid account with Desktop paired on a Mac, and the ability to quit Desktop on that Mac",
+  "note": "The wait-then-continue copy (\"Waiting for <device> to come online\" and \"Continuing without <device>\") is in apps/web/lib/device-steps/device-clearance-step.ts, a server step for Cloud runs. I did not find which screen shows that text, so it is not part of the steps above. The wait budget is one hour, from apps/web/lib/workflows/cloud-agent-workflow.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in on the web app and open the sidebar item \"Your computer\".",
+   "Look at the \"Computers on your account\" list. Each computer shows its state after a dot: \"online\", \"asleep\" or \"offline\".",
+   "Connect a paired computer, then quit Desktop on that computer or turn it off.",
+   "Wait for the page to update. Look for the message \"Your computer went offline. This page reconnects when it is back.\" and compare with Expected (the product says it is offline and waits)."
+  ],
+  "where": "Sidebar > Your computer (Code page). Offline shows as \"offline\" next to the computer name, and once connected a lost link shows \"Your computer went offline. This page reconnects when it is back.\""
+ },
+ "S65.29": {
+  "labels": [
+   {
+    "file": "apps/web/features/remote-dispatch/components/RemoteComputerLink.tsx",
+    "text": "Your computer"
+   },
+   {
+    "file": "apps/web/features/remote-dispatch/components/RemoteComputerPage.tsx",
+    "text": "Send to computer"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/RemoteControlSection.tsx",
+    "text": "Remote Control comes with paid plans."
+   }
+  ],
+  "needs": "a paid account (Remote Control comes with paid plans), Desktop on a Mac with Remote Control on, and a second device or browser signed in to the same account",
+  "note": "Several quoted lines in the Code audit are no longer in the files (RemoteComputerPage.tsx lines 219 and 367, remote-dispatch-client.ts line 155, CodeRail.tsx line 277), so I used the current text. The desktop menu words \"Copy link for a browser\" and \"Pair a phone\" come from the instruction text in RemoteComputerPage.tsx and the Desktop capabilities copy in packages/ui/i18n/locales/en/vscode.json, and I did not verify them on the Desktop screen. Owner notes say Remote Control may be hidden in v1, which I did not check in code.",
+  "reachable": "yes",
+  "steps": [
+   "On the Mac, open Desktop and go to Settings, Capabilities, Remote Control, Pair a phone, and copy the link for a browser.",
+   "In a different browser or device, sign in and open the sidebar item \"Your computer\".",
+   "Paste the link into the field \"Paste the link copied on your computer\" and click \"Connect\". Wait until the page shows \"Connected to\" the computer name.",
+   "Type a task in the box \"Describe what AGI should do on your computer\" and click \"Send to computer\".",
+   "Look at the Tasks list: the new task should appear with a status label (for example queued or running) and the computer should begin work, as Expected says."
+  ],
+  "where": "On the Mac, Desktop > Settings > Capabilities > Remote Control > Pair a phone > Copy link for a browser. Then in the browser, sidebar > Your computer > Pairing link > Connect > Task box > Send to computer."
+ }
+}

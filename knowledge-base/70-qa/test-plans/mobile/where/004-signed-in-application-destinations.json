@@ -1,0 +1,677 @@
+{
+ "S4.01": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "New chat"
+   }
+  ],
+  "needs": "none",
+  "note": "The composer's accessibility labels are New local chat or New AGI Cloud chat (apps/mobile/app/(app)/(tabs)/chat.tsx).",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu.",
+   "Tap New chat.",
+   "Look for an empty chat screen with a message box ready to type in, not an old conversation."
+  ],
+  "where": "Side menu > New chat"
+ },
+ "S4.02": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Recents"
+   }
+  ],
+  "needs": "an existing conversation",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu.",
+   "Under Recents, tap a past conversation.",
+   "Look for its earlier messages and a message box that lets you continue it."
+  ],
+  "where": "Side menu > Recents > tap a conversation title"
+ },
+ "S4.03": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Search"
+   }
+  ],
+  "needs": "at least one past conversation containing the word",
+  "note": "Search opens the route apps/mobile/app/(app)/search.tsx; I read the button and handler but not the result list.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu.",
+   "Tap the Search icon in the header.",
+   "Type a word that appears in a conversation title or message.",
+   "Look for matching past conversations and tap one to open it."
+  ],
+  "where": "Side menu > Search icon (Search)"
+ },
+ "S4.04": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Archived Chats"
+   }
+  ],
+  "needs": "a signed-in Cloud account with at least one archived chat",
+  "note": "The route is apps/mobile/app/(app)/settings/archived-chats.tsx. I did not confirm the restore and delete controls, or how Settings is opened.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings.",
+   "Find the Cloud group and tap Archived Chats.",
+   "Look for a list of archived conversations.",
+   "Try opening, restoring and deleting one, and compare with Expected."
+  ],
+  "where": "Settings > Cloud > Archived Chats"
+ },
+ "S4.05": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Recents"
+   }
+  ],
+  "needs": "a pinned conversation",
+  "note": "I found the pin icon in apps/mobile/src/features/drawer/components/DrawerContent.tsx but no separate Pinned section or filter label. Expected says a pinned section or filter, so check whether one exists.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu.",
+   "Find a conversation that has been pinned, shown with a small pin icon.",
+   "Tap it and confirm it opens the conversation."
+  ],
+  "where": "Side menu > Recents (pinned rows show a pin icon)"
+ },
+ "S4.06": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Projects"
+   },
+   {
+    "file": "apps/mobile/app/(app)/(tabs)/projects.tsx",
+    "text": "New project"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu.",
+   "Tap Projects.",
+   "Look for the list of projects.",
+   "Tap New project and check that a create form opens."
+  ],
+  "where": "Side menu > Projects"
+ },
+ "S4.07": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/projects/[id].tsx",
+    "text": "Chats"
+   },
+   {
+    "file": "apps/mobile/app/(app)/projects/[id].tsx",
+    "text": "Sources"
+   }
+  ],
+  "needs": "a project",
+  "note": "I did not confirm the exact visible text for the description summary.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu and tap Projects.",
+   "Tap a project name.",
+   "Look for the project name, its instructions entry, and tabs named Chats and Sources (Work, Artifacts and Routines appear only in some cases)."
+  ],
+  "where": "Side menu > Projects > tap a project"
+ },
+ "S4.08": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/projects/[id].tsx",
+    "text": "Chats"
+   },
+   {
+    "file": "apps/mobile/src/features/projects/components/ProjectChatsTab.tsx",
+    "text": "New chat"
+   }
+  ],
+  "needs": "a project with at least one conversation",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open the project as in S4.07.",
+   "Tap the Chats tab.",
+   "Look for the project's conversations and tap one to open it.",
+   "Compare with Expected."
+  ],
+  "where": "Side menu > Projects > tap a project > Chats"
+ },
+ "S4.09": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/projects/[id].tsx",
+    "text": "Sources"
+   }
+  ],
+  "needs": "a project and a file to upload",
+  "note": "I found the tab but not the add or remove controls inside it.",
+  "reachable": "yes",
+  "steps": [
+   "Open the project as in S4.07.",
+   "Tap the Sources tab.",
+   "Look for the project's files and the controls to add or remove them.",
+   "Compare with Expected."
+  ],
+  "where": "Side menu > Projects > tap a project > Sources"
+ },
+ "S4.10": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Projects"
+   }
+  ],
+  "needs": "a project the account can edit (not archived or shared with it)",
+  "note": "The instructions entry only shows when the project can be edited or already has instructions. I did not find its visible words.",
+  "reachable": "yes",
+  "steps": [
+   "Open the project as in S4.07.",
+   "Tap the instructions entry on the project home (ProjectInstructionsEntry).",
+   "Edit the instructions and save.",
+   "Open a chat in that project and check the instructions apply."
+  ],
+  "where": "Side menu > Projects > tap a project > instructions entry"
+ },
+ "S4.13": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/drawer/components/DrawerContent.tsx",
+    "text": "AGI Work"
+   },
+   {
+    "file": "apps/mobile/src/features/tasks/CloudTasksScreen.tsx",
+    "text": "New task"
+   }
+  ],
+  "needs": "a plan that includes AGI Work",
+  "note": "The item is hidden unless the plan and grant allow it. I did not find a visible word for the More item.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu.",
+   "Tap AGI Work (it may sit under the More item).",
+   "Look for the New task button and a field to state a goal.",
+   "Check that you can reach your recent work from this screen."
+  ],
+  "where": "Side menu > AGI Work"
+ },
+ "S4.14": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/tasks/runPresentation.ts",
+    "text": "Running"
+   },
+   {
+    "file": "apps/mobile/src/features/tasks/runPresentation.ts",
+    "text": "Finished"
+   }
+  ],
+  "needs": "a running AGI Work task",
+  "note": "The filter chips are All, Needs you, Running and Finished.",
+  "reachable": "yes",
+  "steps": [
+   "Open AGI Work as in S4.13.",
+   "Tap the Running filter.",
+   "Look for tasks that are in progress and their live status.",
+   "Tap Finished and check that only finished tasks remain."
+  ],
+  "where": "Side menu > AGI Work > filter Running"
+ },
+ "S4.15": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx",
+    "text": "Latest output"
+   },
+   {
+    "file": "apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx",
+    "text": "Activity"
+   }
+  ],
+  "needs": "a task",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open AGI Work and tap a task.",
+   "Look for the status, Started on, Mode, Model, and the sections Latest output and Activity.",
+   "Look for the action buttons (Pause this task, Resume this task, Stop this task) and any pending approval."
+  ],
+  "where": "Side menu > AGI Work > tap a task"
+ },
+ "S4.16": {
+  "labels": [],
+  "needs": "a task waiting for approval",
+  "note": "No separate approvals inbox found. The nearest candidate is the Needs you filter in AGI Work (apps/mobile/src/features/tasks/runPresentation.ts), and approvals are resolved from the task sheet. I did not confirm that the filter gathers every pending approval.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S4.17": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Schedules"
+   },
+   {
+    "file": "apps/mobile/app/(app)/schedules/index.tsx",
+    "text": "Create schedule"
+   },
+   {
+    "file": "apps/mobile/src/features/schedules/components/ScheduleCard.tsx",
+    "text": "Run now"
+   }
+  ],
+  "needs": "a schedule (create one first if none exists)",
+  "note": "The schedules screen is titled Scheduled runs. I did not confirm how the card actions menu is opened.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu and tap Schedules.",
+   "Look for the list of schedules and the Create schedule button.",
+   "Open a schedule's actions and check for Run now, Pause or Resume, and Delete.",
+   "Compare the cadence and status shown on each card with Expected."
+  ],
+  "where": "Side menu > Schedules"
+ },
+ "S4.18": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/schedules/components/ScheduleCard.tsx",
+    "text": "Run now"
+   }
+  ],
+  "needs": "a schedule that has run at least once",
+  "note": "The history toggle's visible label was not found. Check that the card's detail shows the prompt.",
+  "reachable": "yes",
+  "steps": [
+   "Open Schedules and tap a schedule card.",
+   "Look for the prompt, the cadence and the next run.",
+   "Expand the run history on the card and check it lists past runs."
+  ],
+  "where": "Side menu > Schedules > tap a schedule"
+ },
+ "S4.19": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/pairing.ts",
+    "text": "AGI Code"
+   },
+   {
+    "file": "apps/mobile/src/features/cloud-code/components/NewCloudCodeSessionSheet.tsx",
+    "text": "Repository"
+   }
+  ],
+  "needs": "a Cloud account allowed to use AGI Code",
+  "note": "The new-session button's visible words and the runtime choice were not found.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu and tap AGI Code.",
+   "Look for the list of coding sessions.",
+   "Start a new session and check that a sheet offers Task, Repository and Network access."
+  ],
+  "where": "Side menu > AGI Code"
+ },
+ "S4.20": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/pairing.ts",
+    "text": "AGI Code"
+   }
+  ],
+  "needs": "an existing coding session",
+  "note": "The route is apps/mobile/app/(app)/companion/code/[threadId].tsx. I did not find the visible words for the diff view.",
+  "reachable": "yes",
+  "steps": [
+   "Open AGI Code and tap a session.",
+   "Look for the transcript and any file changes or diffs.",
+   "Type a message in the composer at the bottom and check that it steers the next turn."
+  ],
+  "where": "Side menu > AGI Code > tap a session"
+ },
+ "S4.21": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/pairing.ts",
+    "text": "Add device"
+   },
+   {
+    "file": "apps/mobile/app/(app)/companion/index.tsx",
+    "text": "Remote"
+   },
+   {
+    "file": "apps/mobile/src/features/companion/components/DesktopInfoCard.tsx",
+    "text": "Disconnect"
+   }
+  ],
+  "needs": "a second device or the desktop app to pair",
+  "note": "The Remote screen has no drawer item of its own. I did not confirm the link from AGI Code to it, and I did not find a rename control.",
+  "reachable": "yes",
+  "steps": [
+   "Open AGI Code and find the devices section.",
+   "Tap Add device to pair a new device, or open the Remote screen.",
+   "Look for linked devices with status, and the Disconnect control."
+  ],
+  "where": "AGI Code > Add device (devices section)"
+ },
+ "S4.22": {
+  "labels": [],
+  "needs": "a session running on a second linked device",
+  "note": "The viewer route is apps/mobile/app/(app)/companion/code/[threadId].tsx, the same as S4.20. I did not find how a remote session is opened from a device.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S4.23": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Library"
+   },
+   {
+    "file": "apps/mobile/src/features/library/index.tsx",
+    "text": "Videos"
+   }
+  ],
+  "needs": "some generated or uploaded files",
+  "note": "The download action was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu and tap Library.",
+   "Look for files, images, videos and documents, and the filter chips.",
+   "Tap a filter such as Images and check that the list narrows.",
+   "Open an item and look for open or download actions."
+  ],
+  "where": "Side menu > Library"
+ },
+ "S4.25": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/library/index.tsx",
+    "text": "Artifacts"
+   }
+  ],
+  "needs": "at least one generated artifact",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Library.",
+   "Tap the Artifacts filter chip.",
+   "Look for the list of artifacts.",
+   "Tap one and check it opens (its label starts with Open artifact)."
+  ],
+  "where": "Side menu > Library > Artifacts"
+ },
+ "S4.27": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Images"
+   },
+   {
+    "file": "apps/mobile/src/features/image/ImagesScreen.tsx",
+    "text": "Create an image"
+   },
+   {
+    "file": "apps/mobile/src/features/image/ImagesScreen.tsx",
+    "text": "Describe an image"
+   }
+  ],
+  "needs": "a Cloud account allowed to create images",
+  "note": "I did not confirm the style or size options on this screen.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu and tap Images.",
+   "Look for the Create an image section with the Describe an image box.",
+   "Type a prompt, check the style and size options, and tap Create image.",
+   "Look for the new image and the list of your images."
+  ],
+  "where": "Side menu > Images"
+ },
+ "S4.28": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/image/ImagesScreen.tsx",
+    "text": "Your images"
+   },
+   {
+    "file": "apps/mobile/src/features/library/index.tsx",
+    "text": "Images"
+   }
+  ],
+  "needs": "some images",
+  "note": "The remix action was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu and tap Images, and look for Your images.",
+   "Or open Library and tap the Images filter chip.",
+   "Check that generated and uploaded images both appear.",
+   "Open one and look for download and remix actions."
+  ],
+  "where": "Side menu > Images (Your images), or Library > Images"
+ },
+ "S4.30": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/library/MediaJobsSection.tsx",
+    "text": "Queued"
+   },
+   {
+    "file": "apps/mobile/src/features/library/MediaJobsSection.tsx",
+    "text": "Generating"
+   },
+   {
+    "file": "apps/mobile/src/features/library/MediaJobsSection.tsx",
+    "text": "Failed"
+   },
+   {
+    "file": "apps/mobile/src/features/library/MediaJobsSection.tsx",
+    "text": "Done"
+   }
+  ],
+  "needs": "at least one image or video generation job",
+  "note": "The media jobs section is rendered in apps/mobile/src/features/library/index.tsx when the filter is a generation filter. I did not confirm which chips count as generation filters, and I did not find the list heading.",
+  "reachable": "yes",
+  "steps": [
+   "Open Library and choose a generation filter such as Images.",
+   "Look for the media jobs list.",
+   "Check each job's status: Queued, Generating, Failed or Done.",
+   "Tap a finished job and check it links to its result."
+  ],
+  "where": "Side menu > Library > Images (media jobs list)"
+ },
+ "S4.32": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "More"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Reports"
+   },
+   {
+    "file": "apps/mobile/src/features/research/ReportsScreen.tsx",
+    "text": "No reports yet"
+   }
+  ],
+  "needs": "a signed-in account in Managed Cloud mode, with at least one research report (run Research from the composer first)",
+  "note": "The Reports item is folded under More and only shows in Cloud mode when signed in; signed out it shows \"Sign in to read your reports\". The \"Open menu\" button is at apps/mobile/app/(app)/chat/[id].tsx; I did not trace its onPress line by line to confirm it opens the drawer.",
+  "reachable": "yes",
+  "steps": [
+   "Tap the \"Open menu\" button to open the side drawer.",
+   "Tap \"More\" to expand the folded items, then tap \"Reports\".",
+   "Look for the \"Reports\" title and a list of report rows, each showing its title, date, source count and model.",
+   "Tap one report row to open it, then check for its sections, the \"Sources retrieved\" line and the sources appendix, as in Expected."
+  ],
+  "where": "Open menu > More > Reports"
+ },
+ "S4.37": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx",
+    "text": "Connect"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx",
+    "text": "Disconnect"
+   }
+  ],
+  "needs": "a signed-in Managed Cloud account; a third-party account (for example Google) to complete a real connection",
+  "note": "Connectors are also reachable at the route /(app)/connectors. The Cloud rows only appear when Cloud mode is available, and the Reconnect label is in apps/mobile/src/features/settings/cloud-connectors/index.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Tap \"Open menu\", then tap \"Settings\" at the bottom of the drawer.",
+   "Scroll to the \"Cloud\" section and tap \"Connectors\".",
+   "Look for the heading \"Connect your tools to AGI Cloud\", the \"Connected\" filter and one card per connector showing its status.",
+   "Tap a connector, then check for the \"Connect\" or \"Disconnect\" button and the \"Reconnect\" button when a connection needs it."
+  ],
+  "where": "Settings > Cloud > Connectors"
+ },
+ "S4.38": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/general/index.tsx",
+    "text": "Models"
+   },
+   {
+    "file": "apps/mobile/app/(app)/models.tsx",
+    "text": "Change model"
+   },
+   {
+    "file": "apps/mobile/app/(app)/models.tsx",
+    "text": "Browse Models"
+   }
+  ],
+  "needs": "none for the picker; the Cloud models need a plan that includes them",
+  "note": "Capabilities, context size and price were not found as visible text in ModelPickerSheet.tsx or models.tsx (searched for context, price and pricing), so the picker may not show them. The screen is also reached from the composer's model control (apps/mobile/app/(app)/(tabs)/chat.tsx).",
+  "reachable": "yes",
+  "steps": [
+   "Tap \"Open menu\", then \"Settings\", then \"General\".",
+   "Tap the \"Models\" row. The screen titled \"Models\" opens.",
+   "Tap \"Change model\" at the top card, or \"Browse Models\" at the bottom, to open the model picker.",
+   "Look for the picker groups \"Recent\", \"Favorites\" and \"On device\", then pick a model and check that it becomes the selected model, as in Expected."
+  ],
+  "where": "Settings > General > Models, then \"Change model\" or \"Browse Models\""
+ },
+ "S4.39": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Usage"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-usage/index.tsx",
+    "text": "Plan usage"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-usage/index.tsx",
+    "text": "Where your usage went"
+   }
+  ],
+  "needs": "a signed-in Managed Cloud account; a paid account to see plan limits",
+  "note": "The session and weekly bucket names come from managedUsageBucketLabel, which I did not open. The Usage screen also shows \"Buy credits\" and \"Use reset\" buttons that change balances, so do not press them in a test.",
+  "reachable": "yes",
+  "steps": [
+   "Tap \"Open menu\", then \"Settings\", then scroll to the \"Cloud\" section and tap \"Usage\".",
+   "Look for the \"Plan usage\" section with its limit buckets and reset times.",
+   "Check the \"Credit balances\" card for the included, bonus and purchased credit amounts.",
+   "Scroll to \"Where your usage went\" and try the day, week and month options, then compare with Expected."
+  ],
+  "where": "Settings > Cloud > Usage"
+ },
+ "S4.40": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/screenTitles.ts",
+    "text": "Subscription"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-billing/index.tsx",
+    "text": "Current plan"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-billing/index.tsx",
+    "text": "Manage billing"
+   }
+  ],
+  "needs": "a signed-in account; a paid store-billed account to see renewal and manage rows",
+  "note": "Partial by design: FEATURES.billing is false in apps/mobile/lib/v1FeatureFlags.ts, which disables the billing portal link (portalEnabled in cloud-billing/index.tsx). Invoices, payment method and card text were searched for and not found, so expect those to be missing. Plan changes go through the App Store or Google Play; web-billed plans show \"Managed on the web\".",
+  "reachable": "yes",
+  "steps": [
+   "Tap \"Open menu\", then \"Settings\", then the \"Account\" section, and tap \"Subscription\".",
+   "Check the \"Your plan\" card for the \"Current plan\" value, the \"Renews\" or \"Access ends\" line, and the \"Billing\" row.",
+   "For a paid plan, look for the \"Manage billing\" row. Its presence depends on the portal flag.",
+   "Check the plan buttons (\"Upgrade plan\", \"Adjust plan\" or \"Choose plan\") and compare with Expected. Invoices and card details were not found in the code."
+  ],
+  "where": "Settings > Account > Subscription"
+ },
+ "S4.41": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Appearance"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/screenTitles.ts",
+    "text": "Notifications"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Personalization"
+   }
+  ],
+  "needs": "a signed-in account to see cloud rows such as Personalization",
+  "note": "The \"Profile\" screen is at apps/mobile/app/(app)/profile/index.tsx, and the profile card in apps/mobile/src/features/settings/index.tsx opens it. Settings is the drawer item labelled \"Settings\" (translation key in packages/ui/i18n/locales/en/common.json). Whether each change saves was not checked, since that is behaviour.",
+  "reachable": "yes",
+  "steps": [
+   "Tap \"Open menu\", then \"Settings\".",
+   "Tap the profile card at the top of the page to open the \"Profile\" screen, then look at the name and details shown there.",
+   "Back in \"Settings\", tap \"Appearance\" under \"Device\", change a theme option, and go back to check that the choice stays.",
+   "Tap \"Notifications\" under \"Device\" or \"Personalization\" under \"Assistant\", change one setting, then reopen it and compare with Expected."
+  ],
+  "where": "Settings > Profile card, or Settings > Device > Appearance / Notifications, or Settings > Assistant > Personalization"
+ },
+ "S4.44": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/feedback/presentation.ts",
+    "text": "Report App Issue"
+   },
+   {
+    "file": "apps/mobile/src/features/feedback/index.tsx",
+    "text": "Bug Report"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Help Center"
+   }
+  ],
+  "needs": "none for the form; a network connection to submit",
+  "note": "The form submits to the app's feedback endpoint or opens the email app, depending on configuration. Do not press Submit unless the tester is allowed to send a real report. The section label \"Support\" is in apps/mobile/src/features/settings/index.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Tap \"Open menu\", then \"Settings\", then scroll to the \"Support\" section.",
+   "Tap \"Report App Issue\", then choose a type among \"Bug Report\", \"Feature Request\" or \"General Feedback\".",
+   "Type a message into the text box and check that the button reads \"Submit Feedback\" or \"Email Feedback\" as Expected describes.",
+   "Go back, tap \"Help Center\" and check that it opens the help page in the browser."
+  ],
+  "where": "Settings > Support > Report App Issue, and Settings > Support > Help Center"
+ }
+}

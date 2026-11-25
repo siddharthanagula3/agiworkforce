@@ -1,0 +1,467 @@
+{
+ "S60.01": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/cloud-tasks/continueInCloud.ts",
+    "text": "Continue in the cloud"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Continue in the Cloud"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Commands"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account and a checked-out branch that is pushed to GitHub",
+  "note": "This is a cloud session on a branch, not a separate work-task screen. The entry is the only one found that describes and starts a cloud agent run.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to AGI Cloud, and open a folder whose git branch is pushed to GitHub.",
+   "Click the \"/\" button (title \"Commands\") under the message box and choose /cloud. Or open the Command Palette and run \"Code: Continue in the Cloud\".",
+   "In the input box titled \"Continue in the cloud\", type what the task should do and press Enter.",
+   "In the review dialog, check the repository, branch and model, then click \"Continue in the cloud\".",
+   "Watch for the progress notification \"starting a cloud session\", then the result message. Compare with Expected: a cloud agent run has started and can be found under Work > Cloud tasks."
+  ],
+  "where": "Message box > \"/\" (Commands) > /cloud, or Command Palette > Code: Continue in the Cloud"
+ },
+ "S60.02": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "Work"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/cloud-tasks/cloudRunDetail.ts",
+    "text": "Rename task"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/index.ts",
+    "text": "Cloud tasks"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account and a cloud task that has a conversation",
+  "note": "Rename is offered only when the task has a conversation.",
+  "reachable": "yes",
+  "steps": [
+   "Click the \"More\" button in the sidebar header (aria label \"More actions\") and choose Work.",
+   "Under Cloud tasks, pick a task row that has a conversation.",
+   "Choose \"Rename task\", type a new name and press Enter.",
+   "Compare with Expected: the list row and the detail title show the new name. The row title is otherwise the first line of the task's conversation title, or a default such as \"AGI work task\"."
+  ],
+  "where": "More actions > Work > Cloud tasks > pick a task > Rename task"
+ },
+ "S60.03": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/cloud-tasks/continueInCloud.ts",
+    "text": "Continue in the cloud"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Continue in the Cloud"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account and a pushed branch",
+  "note": "Code shows the objective is sent as the agent turn and its first line becomes the task title. Whether the full objective is shown back in the task view was not confirmed in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Start the flow as in S60.01: choose /cloud or run \"Code: Continue in the Cloud\".",
+   "In the input box titled \"Continue in the cloud\", type the objective. The prompt names the branch.",
+   "Click \"Continue in the cloud\" in the review dialog.",
+   "Open More actions > Work > Cloud tasks and find the new task. Compare with Expected: the objective is stored with the run and shown back."
+  ],
+  "where": "Message box > \"/\" (Commands) > /cloud, then type the objective in the \"Continue in the cloud\" box"
+ },
+ "S60.05": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Attach or use tools"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Attach workspace files"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Git changes"
+   }
+  ],
+  "needs": "none for the menu; an open project folder for workspace files",
+  "note": "A cloud continuation has no source picker: the repository and branch are fixed in the review dialog. Connectors are a separate surface (More actions > Connectors), not in this menu.",
+  "reachable": "yes",
+  "steps": [
+   "Click the \"+\" button (title \"Attach or use tools\") under the message box.",
+   "Read the \"Add context\" menu: \"Attach workspace files\", \"Selection\", \"Open editors\", \"Problems\", \"Git changes\", \"Terminal output\", \"Web page\".",
+   "Choose one, for example \"Git changes\".",
+   "Compare with Expected: the chosen source appears as an item above the message box before you send."
+  ],
+  "where": "Message box > \"+\" (Attach or use tools) > Add context"
+ },
+ "S60.06": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Choose Tools for This Session"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/capabilityManagement.ts",
+    "text": "Shell commands"
+   }
+  ],
+  "needs": "a local runtime that supports tool filters; otherwise an error message appears",
+  "note": "This picker is for the local session, not for cloud tasks.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Command Palette and run \"Code: Choose Tools for This Session\".",
+   "Tick or untick the tools: \"Shell commands\", \"File edits\", \"New files\", \"Web search\", \"Web pages\", \"Browser\".",
+   "Press Enter to confirm.",
+   "Send a message and compare with Expected: the unticked tools are not used. The picker says the choice applies from your next message."
+  ],
+  "where": "Command Palette > Code: Choose Tools for This Session"
+ },
+ "S60.08": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Model"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Select model"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Select Model"
+   }
+  ],
+  "needs": "none",
+  "note": "The code shows the model is sent with the turn, but whether the run records it was not confirmed. A cloud continuation takes its model from the configured setting and shows it in the review dialog.",
+  "reachable": "yes",
+  "steps": [
+   "Find the pill under the message box, showing \"Auto\" by default (title \"Model\").",
+   "Click it. The popover \"Select model\" opens.",
+   "Choose a model from the list.",
+   "Compare with Expected: the pill shows the chosen model before you send. Command Palette \"Code: Select Model\" offers the same choice."
+  ],
+  "where": "Message box > model pill (shows \"Auto\") > pick a model in \"Select model\""
+ },
+ "S60.09": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Mode and reasoning effort"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Set Reasoning Effort"
+   },
+   {
+    "file": "packages/contracts/local-runtime/src/developer-session.ts",
+    "text": "High"
+   }
+  ],
+  "needs": "none",
+  "note": "A cloud continuation sends only the goal and model in the code read, so the effort setting is not sent with a cloud task.",
+  "reachable": "yes",
+  "steps": [
+   "Click the \"Mode and reasoning effort\" button under the message box, or run \"Code: Set Reasoning Effort\" from the Command Palette.",
+   "Pick an effort level: None, Minimal, Low, Medium, High, xHigh or Max.",
+   "Compare with Expected: a message \"AGI Code effort set to: <level>\" appears (palette route), and the controls show the new level.",
+   "Send a message. The effort is sent with the turn in the local chat code path."
+  ],
+  "where": "Message box > \"Mode and reasoning effort\" button > Effort, or Command Palette > Code: Set Reasoning Effort"
+ },
+ "S60.13": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Plan mode"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Approve and auto-accept edits"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Revise"
+   }
+  ],
+  "needs": "none",
+  "note": "The approve button's words say it also auto-accepts edits. Editing is done through Revise; there is no direct step editor in the code read.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"+\" (title \"Attach or use tools\") and choose \"Plan mode\".",
+   "Send a task such as a small refactor.",
+   "Wait until the card titled \"Plan\" stops streaming.",
+   "Compare with Expected: the buttons \"Approve and auto-accept edits\" and \"Revise\" appear. Click \"Revise\" to see the box \"What should change in the plan?\" with \"Send\" and \"Cancel\". Nothing runs until you approve."
+  ],
+  "where": "Message box > \"+\" (Attach or use tools) > Plan mode, then send a task"
+ },
+ "S60.14": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Plan"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/cloud-tasks/cloudRunDetail.ts",
+    "text": "Progress"
+   }
+  ],
+  "needs": "a Plan-mode turn for the chat card, or a cloud task for the Progress list",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "In Plan mode, send a task and open the card titled \"Plan\" in the chat.",
+   "Read the count (for example \"2/5 complete\") and the list of steps.",
+   "For a cloud run, click \"More\" (More actions) > Work > Cloud tasks > pick a task.",
+   "Compare with Expected: the \"Progress\" section lists each step with its own status icon, matching the run."
+  ],
+  "where": "Message box > card titled \"Plan\" (after Plan mode); for cloud runs: More actions > Work > Cloud tasks > pick a task > Progress"
+ },
+ "S60.16": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/cloud-tasks/cloudTasksTree.ts",
+    "text": "Working"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/cloud-tasks/cloudRunDetail.ts",
+    "text": "Progress"
+   }
+  ],
+  "needs": "a cloud task that is running",
+  "note": "The running marker is an icon (spinner) with no text, so the tester must look at it.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"More\" (More actions) > Work, then open the group \"Working\" under Cloud tasks.",
+   "Pick a running task.",
+   "In the \"Progress\" section, find the step with a spinning icon. That is the step executing now.",
+   "Compare with Expected: the spinner moves to the next step as the run continues."
+  ],
+  "where": "More actions > Work > Cloud tasks > Working > pick a running task > Progress"
+ },
+ "S60.19": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/cloud-tasks/cloudTasksTree.ts",
+    "text": "Needs you"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/cloud-tasks/cloudRunDetail.ts",
+    "text": "Approve"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/cloud-tasks/cloudRunApproval.ts",
+    "text": "Approve and continue"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account and a cloud task waiting for a tool approval",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click \"More\" (More actions) > Work and open the group \"Needs you\" under Cloud tasks.",
+   "Pick a task. In its detail, under \"Actions\", read the tool names shown next to \"Approve\" and \"Reject\".",
+   "Click \"Approve\". A modal dialog asks to approve. Confirm with \"Approve and continue\".",
+   "Compare with Expected: the task leaves \"Needs you\" and continues. Choosing \"Reject\" asks for an optional reason."
+  ],
+  "where": "More actions > Work > Cloud tasks > Needs you > pick a task > Actions > Approve"
+ },
+ "S60.20": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Message the agent"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Add instructions or change course"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Your messages"
+   }
+  ],
+  "needs": "a cloud task in the state queued, planning, running or resuming",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click \"More\" (More actions) > Work and pick a task in the group \"Working\".",
+   "In its detail, click \"Message the agent\" (description \"Add instructions or change course\").",
+   "Type the guidance in the box and press Enter. The prompt says it reads the message at its next step.",
+   "Compare with Expected: a notification \"Queued. The agent reads it at its next step.\" appears. Reopen the task and see \"Your messages\" with the message marked as queued."
+  ],
+  "where": "More actions > Work > Cloud tasks > pick a working task > Message the agent"
+ },
+ "S60.22": {
+  "labels": [],
+  "needs": "a paused or stopped cloud task",
+  "note": "Searched features/cloud-tasks (cloudRunDetail.ts, cloudRunApproval.ts, cloudTasksTree.ts) for resume. The only resumeRun call is inside approve or reject. No Resume control was found, and paused tasks are not steerable.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S60.23": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/cloud-tasks/cloudRunDetail.ts",
+    "text": "Stop this task"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/cloud-tasks/cloudTasksTree.ts",
+    "text": "Stopped"
+   }
+  ],
+  "needs": "a cloud task that is still running",
+  "note": "The item is not shown for a task that has already settled.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"More\" (More actions) > Work and pick a task that is still running.",
+   "Click \"Stop this task\" (description \"Asks the cloud executor to cancel the run\").",
+   "In the modal dialog that asks Stop \"<task title>\"?, click \"Stop this task\" to confirm.",
+   "Compare with Expected: the notification \"This task was asked to stop.\" appears, and the task moves to \"Stopped\"."
+  ],
+  "where": "More actions > Work > Cloud tasks > pick a running task > Stop this task"
+ },
+ "S60.25": {
+  "labels": [],
+  "needs": "a finished cloud task",
+  "note": "Searched features/cloud-tasks, features/surfaces, core/commandSetup.ts and features/chat/retry.ts for restart. The only match is \"Code: Retry Last Message\", which resends the last chat message. No restart control for a finished cloud task was found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S60.26": {
+  "labels": [],
+  "needs": "none",
+  "note": "Searched features/cloud-tasks, features/surfaces and core/commandSetup.ts for duplicate. None for cloud tasks. The closest is \"Code: Fork Conversation\", which forks a local session, not a cloud task.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S60.29": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/cloud-tasks/cloudTasksTree.ts",
+    "text": "Done"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/cloud-tasks/cloudRunDetail.ts",
+    "text": "Result"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/cloud-tasks/cloudRunDetail.ts",
+    "text": "Select to copy the full result"
+   }
+  ],
+  "needs": "a finished cloud task (completed, ready for review or archived)",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click \"More\" (More actions) > Work and open the group \"Done\" under Cloud tasks.",
+   "Pick a finished task.",
+   "Read the \"Result\" section, which shows the first line of the result, with the detail \"Select to copy the full result\".",
+   "Compare with Expected: the result summary matches what the run produced. Selecting the line copies the full result with the notice \"copied the task result\"."
+  ],
+  "where": "More actions > Work > Cloud tasks > Done > pick a task > Result"
+ },
+ "S60.30": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/cloud-tasks/cloudRunDetail.ts",
+    "text": "Outputs"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/cloud-tasks/cloudRunDetail.ts",
+    "text": "Untitled"
+   }
+  ],
+  "needs": "a cloud task linked to a conversation that produced an artifact",
+  "note": "Outputs appear only for tasks that have a conversation. Code opens the file; it has no download action.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"More\" (More actions) > Work and pick a task that produced files.",
+   "Read the \"Outputs\" section, which lists each file by its title (or \"Untitled\" plus its type).",
+   "Select a file.",
+   "Compare with Expected: the file opens in the editor. The code opens the file; it has no download step."
+  ],
+  "where": "More actions > Work > Cloud tasks > pick a task > Outputs"
+ },
+ "S60.31": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/cloud-tasks/cloudRunDetail.ts",
+    "text": "Outcome"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/cloud-tasks/cloudTasksTree.ts",
+    "text": "Stopped"
+   }
+  ],
+  "needs": "a cloud task that ended as partial, failed, cancelled or timed out, with steps",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click \"More\" (More actions) > Work and open the group \"Stopped\" under Cloud tasks.",
+   "Pick a task that stopped short.",
+   "Read the \"Outcome\" section, for example \"2 of 5 steps done, 3 not finished\".",
+   "Compare with Expected: the done and remaining steps match the Progress list."
+  ],
+  "where": "More actions > Work > Cloud tasks > Stopped > pick a task > Outcome"
+ },
+ "S60.32": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Show Cloud Tasks"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/cloud-tasks/cloudTasksTree.ts",
+    "text": "Ready for review"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/cloud-tasks/cloudTasksTree.ts",
+    "text": "No cloud tasks yet"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account that has cloud tasks",
+  "note": "The list shows at most one page of 25 runs per load (CLOUD_TASKS_PAGE_LIMIT).",
+  "reachable": "yes",
+  "steps": [
+   "Click \"More\" (More actions) > Work, or run \"Code: Show Cloud Tasks\" from the Command Palette.",
+   "Look at the groups \"Needs you\", \"Working\", \"Ready for review\", \"Done\" and \"Stopped\", each with its tasks.",
+   "Read each row's title and state.",
+   "Pick any row to open its detail. Compare with Expected: the list refreshes about every 15 seconds and can be refreshed with the refresh button."
+  ],
+  "where": "More actions > Work, or Command Palette > Code: Show Cloud Tasks"
+ },
+ "S60.34": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/index.ts",
+    "text": "Cloud tasks"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/cloud-tasks/cloudRunDetail.ts",
+    "text": "Open on web"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Message the agent"
+   }
+  ],
+  "needs": "a second device or the web, signed into the same AGI Cloud account",
+  "note": "Cross-device following relies on the account and the list refresh, which the code read could not confirm end to end.",
+  "reachable": "yes",
+  "steps": [
+   "On a second device (web, desktop or another VS Code), start a task with the same AGI Cloud account.",
+   "In VS Code, open More actions > Work and find the task under Cloud tasks. Use the refresh button if it has not appeared.",
+   "Open the task, then use \"Message the agent\", \"Approve\" or \"Stop this task\".",
+   "Compare with Expected: the change is applied and the state shown on the other device follows it. Use \"Open on web\" to open the conversation in a browser."
+  ],
+  "where": "More actions > Work > Cloud tasks (tasks from other devices appear here), then pick a task"
+ }
+}

@@ -1,0 +1,268 @@
+{
+ "S110.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Edit document"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Save as a new version"
+   }
+  ],
+  "needs": "none",
+  "note": "The Edit and save controls were found; the version list label was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Ask the assistant in chat to write a document, for example a short memo, and wait for it to finish.",
+   "Open the document artifact from the chat.",
+   "Click the Edit button (aria-label \"Edit document\").",
+   "Change some text in the document.",
+   "Click the save control (title \"Save as a new version\").",
+   "Look for the new version in the artifact's version controls and compare with Expected: the edit is saved back as a new version."
+  ],
+  "where": "Open a chat answer that holds a document > open the document as an artifact > Edit document"
+ },
+ "S110.02": {
+  "labels": [],
+  "needs": "a document",
+  "note": "Searched apps/web/features and apps/web/lib for presentation, slide, deck and convert labels. Only a prompt-based 'Slide deck' starter in apps/web/features/projects/components/ProjectStudio.tsx was found, with no control that converts an existing document into a presentation.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S110.03": {
+  "labels": [],
+  "needs": "a spreadsheet file to upload",
+  "note": "Found apps/web/lib/e2b/gate.ts, which gates on AGI_E2B_EXECUTION and E2B_API_KEY. No visible chart or report control was found for this flow, so the path is unknown.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S110.05": {
+  "labels": [],
+  "needs": "a finished research report",
+  "note": "Checked apps/web/features/chat/lib/visual-intent.ts and apps/web/features/chat/utils/research-plan.ts. No visible control for converting a report to an interactive page was found. The Publish button exists in apps/web/features/chat/components/artifacts/ArtifactPreview.tsx, but it is not confirmed as this feature.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S110.07": {
+  "labels": [],
+  "needs": "a microphone and a Free or paid account",
+  "note": "Found the voice tool files under apps/web/lib/voice/ (live-voice-tools.ts). No visible voice control that creates a tracked work task was found, so the path is unknown.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S110.08": {
+  "labels": [],
+  "needs": "a microphone",
+  "note": "Found apps/web/lib/voice/live-voice-tools.ts and apps/web/features/chat/components/Voice/VoiceModeSurface.tsx. No visible label tying a voice request to a generated document was found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S110.10": {
+  "labels": [],
+  "needs": "an outside account (Google) with Gmail connected",
+  "note": "Found a Gmail trigger labelled 'Gmail' in apps/web/features/schedules/components/ScheduleTriggersPanel.tsx (line 75), which runs for each new email. The path from the app to that panel and the thread-to-task step were not confirmed.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S110.11": {
+  "labels": [],
+  "needs": "a team with a repository and the coding feature enabled",
+  "note": "Searched apps/web/features/code and apps/web/lib/e2b/gate.ts. The feature depends on AGI_E2B_EXECUTION and E2B_API_KEY. No visible label for a team mention flow was found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S110.12": {
+  "labels": [],
+  "needs": "a design file and a repository",
+  "note": "Searched apps/web/features/code and apps/web/lib/e2b/gate.ts. The feature depends on AGI_E2B_EXECUTION and E2B_API_KEY. No visible label for a design-to-implementation flow was found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S110.14": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Save as skill"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "More message actions"
+   }
+  ],
+  "needs": "a finished task",
+  "note": "The draft card label 'Save as a skill' is in apps/web/features/chat/components/PluginDraftCard.tsx. The settings path to the skills list was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Finish a task in chat so the answer is complete.",
+   "Click the More message actions button on that answer.",
+   "Click Save as skill.",
+   "Look at the plugin draft card and confirm the skill is saved.",
+   "Open the skills list in settings and check that the skill appears, compared with Expected."
+  ],
+  "where": "Chat > the answer's More message actions menu > Save as skill"
+ },
+ "S110.18": {
+  "labels": [],
+  "needs": "a signed-in account on web and the phone app",
+  "note": "The effect is in the sync and persistence routes (apps/web/app/api/chat/sync/route.ts and persist-message.ts), not a control of its own.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Start a chat in the web app and send a message.",
+   "Open the same conversation on the phone app and check that the full history is there.",
+   "Send a follow-up from the phone.",
+   "Reload the web app and check that the reply appears in the same conversation."
+  ],
+  "where": "Web chat sidebar and the phone app's conversation list"
+ },
+ "S110.23": {
+  "labels": [],
+  "needs": "a finished cloud coding session",
+  "note": "Found apps/web/lib/e2b/gate.ts. The feature depends on AGI_E2B_EXECUTION and E2B_API_KEY. No visible label for bringing a cloud result into a local checkout was found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S110.24": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Project or folder"
+   }
+  ],
+  "needs": "a project with sources",
+  "note": "A chat is scoped to a project or a local folder, never both, per the comment in WebChatPage.",
+  "reachable": "yes",
+  "steps": [
+   "Open the main chat.",
+   "Click the Project or folder control in the composer.",
+   "Search for or pick an existing project.",
+   "Ask a question that the project's sources should answer.",
+   "Check that the answer uses the project's sources, compared with Expected."
+  ],
+  "where": "Chat > composer > Project or folder > pick the project"
+ },
+ "S110.25": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "More message actions"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Save to project"
+   }
+  ],
+  "needs": "a project",
+  "note": "Artifacts also have a 'Save to project' group in apps/web/features/chat/components/artifacts/ArtifactPreview.tsx. The project list in the project was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat with a finished answer.",
+   "Click the More message actions button on the answer.",
+   "Click Save to project.",
+   "Pick the project name from the list.",
+   "Open that project and check that the answer is listed as a source, compared with Expected."
+  ],
+  "where": "Chat > an answer's More message actions > Save to project > pick the project"
+ },
+ "S110.26": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/InlinePaywallCard.tsx",
+    "text": "Buy credits"
+   },
+   {
+    "file": "apps/web/features/chat/components/InlinePaywallCard.tsx",
+    "text": "Use your own key"
+   }
+  ],
+  "needs": "an account that has run out of usage",
+  "note": "The 'Switch to' label is a template string in the same file, and the exact trigger was not reproduced.",
+  "reachable": "yes",
+  "steps": [
+   "Use up the account's usage, or use an account that is already out of usage.",
+   "Send a new message in chat.",
+   "Look at the inline card that appears under the message.",
+   "Click Switch to (the named model) to continue, or Buy credits.",
+   "Check that the reply continues, compared with Expected."
+  ],
+  "where": "Chat > send a message after the usage limit is reached > inline card"
+ },
+ "S110.28": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/PublishedArtifactsSection.tsx",
+    "text": "Published artifacts"
+   },
+   {
+    "file": "apps/web/features/settings/sections/PublishedArtifactsSection.tsx",
+    "text": "History"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Publish"
+   }
+  ],
+  "needs": "a published artifact",
+  "note": "The settings navigation label was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Publish an artifact with the Publish button in the artifact panel.",
+   "Edit the artifact and publish again to the same link.",
+   "Open Settings and find the Published artifacts section.",
+   "Click History on the artifact row.",
+   "Check that the new version is listed and can be restored, compared with Expected."
+  ],
+  "where": "Settings > Published artifacts > History"
+ },
+ "S110.29": {
+  "labels": [
+   {
+    "file": "apps/web/app/shared-artifact/[token]/PublishedArtifactView.tsx",
+    "text": "Save a copy to my chats"
+   }
+  ],
+  "needs": "a second account and a shared artifact link",
+  "note": "The label comes from a translation key with this fallback text. The continue-chat page is apps/web/app/chat/from-share/[token]/page.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with a second account.",
+   "Open a shared artifact link from the first account.",
+   "Click Save a copy to my chats.",
+   "Open the copy in your own chats.",
+   "Continue the copy and check that it is private to your account, compared with Expected."
+  ],
+  "where": "Shared artifact link > Save a copy to my chats"
+ },
+ "S110.30": {
+  "labels": [
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceConsoleNav.tsx",
+    "text": "Sharing"
+   },
+   {
+    "file": "apps/web/features/chat/components/share/ShareConversationDialog.tsx",
+    "text": "Share with workspace"
+   }
+  ],
+  "needs": "a second member in the same workspace",
+  "note": "The route from the sidebar to the workspace console was not confirmed. Access labels Can view and Can edit are in apps/web/features/projects/components/ProjectSharingControls.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Open the workspace console and click Sharing.",
+   "Or open a project, artifact or chat and click Share, then Share with workspace.",
+   "Pick an access level, such as Can view or Can edit.",
+   "Sign in as another member and open the shared resource.",
+   "Check the member can find and open it, compared with Expected."
+  ],
+  "where": "Workspace console > Sharing"
+ }
+}

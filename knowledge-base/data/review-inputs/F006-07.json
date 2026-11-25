@@ -1,0 +1,493 @@
+{
+ "feature": {
+  "id": "F006-07",
+  "aliases": [
+   "Corners, shadows and stacking",
+   "Radius ladder",
+   "Corner scale",
+   "Elevation scale",
+   "Shadow scale",
+   "Z-index ladder",
+   "Stacking order",
+   "S6.27",
+   "S6.28",
+   "S6.29",
+   "corner-* tokens",
+   "elevation-* tokens",
+   "--z-* tokens"
+  ],
+  "summary": "One shared set of named corner sizes, four named shadow levels (different values for light and dark) and one named stacking ladder, so dialogs, menus, toasts and tooltips sit in a fixed order and look consistent. Web and Desktop share the ladder. Mobile, VS Code and Chrome keep their own smaller copies.",
+  "purpose": {
+   "what_it_does": "It gives every surface named values for how round a corner is, how deep a shadow is, and which layer sits on top. Components pick a name such as corner-field, shadow-e3 or z-modal instead of a number. (packages/ui/design-tokens/src/foundation.css:270-279, 318-340, 358-361)",
+   "why_it_exists": "Without a shared ladder, each component invents its own number and layers collide (a menu hidden behind a dialog) or corners look uneven. The foundation file says the ladder exists so consumers never invent a numeric rung. (packages/ui/design-tokens/src/foundation.css:315-317)",
+   "who_uses_it": "Designers and engineers building UI on all apps that draw their own visuals (Web, Desktop, Mobile, VS Code, Chrome). End users never set it; they only see it. The CLI has no corners, shadows or layers.",
+   "problems_solved": [
+    "Menus and popovers appearing behind dialogs.",
+    "Corners and shadows that differ from screen to screen.",
+    "Dark mode shadows that are too faint to see (dark theme has its own stronger shadow values). (foundation.css:524-527)",
+    "Raw numeric z-index values creeping into components (a repo guard rejects them). (scripts/check-css-tokens.mjs:155-170)"
+   ],
+   "use_cases": [
+    "A Dialog opens over the page at z-modal with the e4 shadow and large rounded corners. (packages/ui/ui/src/primitives/Dialog.tsx:28,115)",
+    "A dropdown menu opens from inside a dialog and stays on top because the popover rung (350) is above the modal rung (300). (foundation.css:335-336; DropdownMenu.tsx:104)",
+    "A mobile toast shows above screens at the notification layer. (apps/mobile/src/shared/components/Toast.tsx:181)",
+    "A VS Code sidebar model menu opens on its own popover layer. (apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:222,1347)"
+   ]
+  },
+  "user_experience": {
+   "where_to_find_it": [
+    "Web: seen on every dialog, menu, sheet and card. No setting.",
+    "Desktop (Electron): same hosted web UI, so the same ladder. [inferred from AGENTS.md section 5: the public Desktop shows the hosted web app] (doc: AGENTS.md)",
+    "Mobile: seen on cards, sheets, toasts, the app lock screen. No setting.",
+    "VS Code: seen in the sidebar chat webview menus and popovers. No setting.",
+    "Chrome: seen in the side panel menus, drawers and modals. No setting.",
+    "CLI: not applicable; the brief lists no CLI entry for these items. (doc: knowledge-base/data/area-briefs/006-visual-foundations-and-spacing-conventions.md S6.27-S6.29)"
+   ],
+   "prerequisites": [
+    "None. Always on."
+   ],
+   "screens_and_controls": [
+    "No control. Visible as rounded corners, soft shadows on dialogs and menus, and menus appearing above content."
+   ],
+   "journey": [
+    "Open a screen with a menu or dialog.",
+    "The overlay appears with rounded corners and a shadow.",
+    "A menu opened from a dialog shows above the dialog.",
+    "A toast or notification shows above everything except full-screen layers."
+   ],
+   "feedback_and_outputs": [
+    "Visual only: corners, shadows and layer order."
+   ],
+   "settings": [
+    "None. High contrast and theme settings change colours and borders, not the ladders. [inferred]"
+   ]
+  },
+  "current_implementation": {
+   "working": [
+    "Web/Desktop: ten radius rungs (corner-detail 2px, compact 4, control 6, field 8, menu 10, surface 12, panel 16, overlay 24, hero 32, pill 9999px). (foundation.css:270-279)",
+    "Web: Tailwind radius names map onto the rungs (radius-xs to radius-pill). (packages/ui/design-tokens/src/tailwind.css:46-57)",
+    "Web: four elevation levels, with separate light and dark values. (foundation.css:358-361, 524-527; tailwind.css:65-68)",
+    "Web: one z-index ladder of 23 named rungs from behind-far (-2) to skip-link (10000); dropdown 50, modal 300, popover 350, tooltip 380, notification 400, fullscreen 9999. (foundation.css:318-340)",
+    "Web: Dialog, AlertDialog and Sheet use z-modal; DropdownMenu content uses z-popover and shadow-e3/e2. (Dialog.tsx:28,115; AlertDialog.tsx:23,104; Sheet.tsx:26,36; DropdownMenu.tsx:104,137)",
+    "Mobile: radii from the shared token package (sm to full), a 7-rung zIndex table (base 0, content 1, control 10, overlay 200, modal 300, notification 400, fullscreen 9999) and four elevation presets. (apps/mobile/src/ui/theme/tokens.ts:63-71, 117-125, 144-171)",
+    "Mobile: the eight raw 'zIndex:' sites found in app code all use the zIndex table (no numeric literal). (grep over apps/mobile/src, app, components)",
+    "VS Code: sidebar webview uses shared corner variables and defines its own z rungs content 1, dropdown 20, popover 30, overlay 50, sheet 60, and elevations 2 and 3 from the editor widget shadow. (webviewContent.ts:215-224)",
+    "Chrome: side panel defines its own z rungs dropdown 10, popover 20, sheet 30, drawer-backdrop 40, drawer 41, notice 50, modal 60, modal-raised 61 and uses shared corner and elevation variables. (apps/extension/src/side_panel.css:29-36; side_panel.ts:4321)",
+    "Repo guard rejects raw z-index in portal overlay primitives and in mobile and web code. (scripts/check-css-tokens.mjs:155-170; scripts/check-web-ui-invariants.mjs:161-176)"
+   ],
+   "incomplete": [
+    "VS Code and Chrome do not use the web z ladder; each has a smaller private ladder with different numbers (VS Code popover 30, Chrome popover 20, web popover 350). (webviewContent.ts:220-224; side_panel.css:29-36; foundation.css:336)",
+    "Chrome options page has a raw z-index: 20. (apps/extension/src/options.ts:1060)",
+    "Mobile elevation presets are one fixed set (black shadow colour) and are not different per theme. (tokens.ts:144-171)"
+   ],
+   "disconnected_or_disabled": [
+    "Web DropdownMenu does not use the dropdown rung (50); it uses popover (350). The z-dropdown rung exists but this primitive does not use it. (foundation.css:329; DropdownMenu.tsx:104)"
+   ],
+   "not_available": [
+    "CLI: no corners, shadows or layers (terminal UI). Brief lists no CLI entry."
+   ]
+  },
+  "required_behaviour": {
+   "established": [
+    {
+     "statement": "Corner radii come from one named radius ladder.",
+     "source": "S6.27 (doc: knowledge-base/data/area-briefs/006-visual-foundations-and-spacing-conventions.md)"
+    },
+    {
+     "statement": "Shadows come from a small named elevation scale per theme.",
+     "source": "S6.28 (doc: knowledge-base/data/area-briefs/006-visual-foundations-and-spacing-conventions.md)"
+    },
+    {
+     "statement": "Stacking order uses one named z-index ladder; components never invent numeric layers.",
+     "source": "S6.29 (doc: knowledge-base/data/area-briefs/006-visual-foundations-and-spacing-conventions.md)"
+    },
+    {
+     "statement": "Do not hardcode design values the repository already models; one design system across apps.",
+     "source": "(doc: AGENTS.md sections 4 and 10)"
+    }
+   ],
+   "acceptance_criteria": [
+    "Every Web dialog, alert dialog and sheet sits on the modal layer and a menu opened inside it appears above it.",
+    "A tooltip appears above a popover, which appears above a dialog.",
+    "Changing a --corner-* value in foundation.css changes every component that uses the matching Tailwind radius name.",
+    "Light and dark themes show different shadow values for the same elevation name.",
+    "No component source file contains a raw numeric z-index in the guarded overlay primitives (check:css-tokens passes).",
+    "Mobile toasts show above screen content and below nothing except full-screen layers."
+   ],
+   "inferred": [
+    "Desktop (Electron) matches Web because it loads the hosted web app. [inferred]",
+    "VS Code and Chrome may keep private ladders only because their stacking contexts are isolated webviews; no document states this. [inferred]"
+   ],
+   "proposed": [
+    "[proposed] Build the VS Code and Chrome z ladders from the shared token names so numbers cannot drift.",
+    "[proposed] Make mobile elevation theme-aware (darker shadow in dark mode) like the web scale.",
+    "[proposed] Replace the raw z-index: 20 on the Chrome options page with a named rung."
+   ]
+  },
+  "implementation_map": [
+   {
+    "kind": "config",
+    "name": "foundation.css radius, z and elevation tokens",
+    "path": "packages/ui/design-tokens/src/foundation.css",
+    "role": "Defines corner rungs (270-279), z ladder (318-340), light elevation (358-361) and dark elevation (524-527)."
+   },
+   {
+    "kind": "config",
+    "name": "tailwind.css theme map",
+    "path": "packages/ui/design-tokens/src/tailwind.css",
+    "role": "Maps radius-*, shadow-e1..e4 and ease/duration names onto the tokens."
+   },
+   {
+    "kind": "other",
+    "name": "agiRadii / agiCornerCssVars / agiElevation",
+    "path": "packages/ui/design-tokens/src/index.ts",
+    "role": "TypeScript copies of radii and elevation used by mobile, VS Code and Chrome (lines 326-360, 543)."
+   },
+   {
+    "kind": "component",
+    "name": "Dialog",
+    "path": "packages/ui/ui/src/primitives/Dialog.tsx",
+    "role": "z-modal layer, rounded-2xl, shadow-e4."
+   },
+   {
+    "kind": "component",
+    "name": "AlertDialog",
+    "path": "packages/ui/ui/src/primitives/AlertDialog.tsx",
+    "role": "z-modal layer, rounded-2xl, shadow-e4."
+   },
+   {
+    "kind": "component",
+    "name": "Sheet",
+    "path": "packages/ui/ui/src/primitives/Sheet.tsx",
+    "role": "z-modal layer, shadow-e3."
+   },
+   {
+    "kind": "component",
+    "name": "DropdownMenu",
+    "path": "packages/ui/ui/src/primitives/DropdownMenu.tsx",
+    "role": "z-popover layer, shadow-e3 and e2 for content and sub-content."
+   },
+   {
+    "kind": "config",
+    "name": "mobile tokens",
+    "path": "apps/mobile/src/ui/theme/tokens.ts",
+    "role": "radii (63), zIndex (117), elevation (144), cardRadius and sheetRadius (175-176)."
+   },
+   {
+    "kind": "component",
+    "name": "Toast",
+    "path": "apps/mobile/src/shared/components/Toast.tsx",
+    "role": "Uses zIndex.notification."
+   },
+   {
+    "kind": "component",
+    "name": "AppLockOverlay",
+    "path": "apps/mobile/src/features/auth/components/AppLockOverlay.tsx",
+    "role": "Uses the fullscreen layer."
+   },
+   {
+    "kind": "component",
+    "name": "VS Code sidebar webview styles",
+    "path": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "role": "Private z ladder and elevation (215-224), uses shared corner variables."
+   },
+   {
+    "kind": "component",
+    "name": "Chrome side panel styles",
+    "path": "apps/extension/src/side_panel.css",
+    "role": "Private z ladder (29-36)."
+   },
+   {
+    "kind": "component",
+    "name": "Chrome side panel script styles",
+    "path": "apps/extension/src/side_panel.ts",
+    "role": "Uses z and elevation variables inside injected CSS (2083, 2556, 4321)."
+   },
+   {
+    "kind": "component",
+    "name": "Chrome options page",
+    "path": "apps/extension/src/options.ts",
+    "role": "Contains a raw z-index: 20 at line 1060."
+   },
+   {
+    "kind": "command",
+    "name": "check:css-tokens guard",
+    "path": "scripts/check-css-tokens.mjs",
+    "role": "Rejects raw z-index in portal overlay primitives and inline styles."
+   },
+   {
+    "kind": "command",
+    "name": "check:web-ui-invariants guard",
+    "path": "scripts/check-web-ui-invariants.mjs",
+    "role": "Flags arbitrary z-index utilities and CSS (161-176)."
+   },
+   {
+    "kind": "config",
+    "name": "Desktop Tauri stylesheet",
+    "path": "apps/desktop/src/styles/globals.css",
+    "role": "Tauri build (internal) styles; separate from the hosted web app."
+   }
+  ],
+  "execution_and_data_flow": {
+   "steps": [
+    {
+     "what_happens": "At build time the design token CSS and TypeScript are compiled into each app's styles.",
+     "runs_on": "device",
+     "evidence": "packages/ui/design-tokens/src/foundation.css; tailwind.css:1-80 (build-time activity; no server involved) [inferred]"
+    },
+    {
+     "what_happens": "A component renders with class names like z-[var(--z-modal)] and shadow-e4 that resolve to the token values.",
+     "runs_on": "device",
+     "evidence": "packages/ui/ui/src/primitives/Dialog.tsx:28,115"
+    },
+    {
+     "what_happens": "When the dark class is on the page, the dark elevation values replace the light ones.",
+     "runs_on": "device",
+     "evidence": "foundation.css:433,524-527"
+    },
+    {
+     "what_happens": "Mobile code reads the token objects directly and passes them to style props.",
+     "runs_on": "device",
+     "evidence": "apps/mobile/src/ui/theme/tokens.ts:117-171"
+    }
+   ],
+   "data": [
+    {
+     "what": "Design tokens (static values)",
+     "where_stored": "Source files in the repository; shipped inside each app bundle",
+     "synced": "No sync; compiled into each app",
+     "retained_or_deleted": "Changed only by editing source and releasing"
+    }
+   ],
+   "models_and_providers": "No model or provider takes part. Nothing in this feature calls an AI model."
+  },
+  "access_and_usage": {
+   "account": "None found in the code. Visuals do not need sign-in.",
+   "permissions": "None found in the code.",
+   "subscription": "None found in the code. No plan changes corners, shadows or layers.",
+   "limits_and_metering": "None found in the code.",
+   "flags": "None found in the code.",
+   "model_compatibility": "Not applicable; no model is involved.",
+   "provider_restrictions": "Not applicable.",
+   "local_mode": "Works the same in Local mode; everything is drawn on the device and needs no server."
+  },
+  "states_and_edge_cases": [
+   {
+    "state": "Dark theme",
+    "behaviour": "Web uses stronger shadow values in the dark block. Mobile uses one preset set for both themes.",
+    "evidence": "foundation.css:524-527; apps/mobile/src/ui/theme/tokens.ts:144-171"
+   },
+   {
+    "state": "Menu opened inside a dialog",
+    "behaviour": "Menu stays above because popover (350) is above modal (300).",
+    "evidence": "foundation.css:335-336; DropdownMenu.tsx:104"
+   },
+   {
+    "state": "Windows forced colours",
+    "behaviour": "Chrome sets its panel shadow to transparent in forced colours. Web uses system colour keywords; web shadow detail not opened.",
+    "evidence": "apps/extension/src/tokens.ts:36-60; apps/web/app/globals.css:1322"
+   },
+   {
+    "state": "Loading, empty, error, retry, offline",
+    "behaviour": "not handled in the code (static visual tokens; nothing to load).",
+    "evidence": "packages/ui/design-tokens/src/foundation.css (no such states)"
+   },
+   {
+    "state": "App differences",
+    "behaviour": "Web and Desktop share one ladder; Mobile, VS Code and Chrome each have their own numbers.",
+    "evidence": "tokens.ts:117; webviewContent.ts:220-224; side_panel.css:29-36"
+   }
+  ],
+  "verification": {
+   "existing_tests": [
+    {
+     "path": "scripts/check-css-tokens.mjs",
+     "covers": "Guard script (not a test file) that rejects raw z-index in overlay primitives and mobile/web code."
+    },
+    {
+     "path": "apps/web/shared/components/__tests__/theme-contrast.test.ts",
+     "covers": "Listed by the brief for the radius item (line 1002 per brief); contents not opened, so what it asserts about radii is unknown."
+    },
+    {
+     "path": "apps/mobile/__tests__/theme-contrast.test.ts",
+     "covers": "Text-on-surface readability for mobile colours; does not cover radii, shadows or layers."
+    }
+   ],
+   "scenarios": [
+    {
+     "name": "Menu above dialog",
+     "steps": [
+      "Open Web, open a dialog that has a dropdown (for example a settings dialog with a select menu).",
+      "Open the dropdown."
+     ],
+     "expected": "The menu appears fully above the dialog and is not clipped."
+    },
+    {
+     "name": "Dark shadow",
+     "steps": [
+      "Open Web in light theme and open a dialog.",
+      "Switch to dark theme and open the same dialog."
+     ],
+     "expected": "The dialog shadow is visible in both themes and uses a stronger value in dark."
+    },
+    {
+     "name": "Raw z-index guard",
+     "steps": [
+      "Add z-[999] to Dialog.tsx on a scratch branch.",
+      "Run pnpm check:css-tokens."
+     ],
+     "expected": "The guard fails and names the file and line."
+    },
+    {
+     "name": "Mobile toast layer",
+     "steps": [
+      "On Mobile open a screen with a floating button.",
+      "Trigger a toast."
+     ],
+     "expected": "The toast shows above the button."
+    },
+    {
+     "name": "Chrome modal over drawer",
+     "steps": [
+      "Open the Chrome side panel, open the drawer, then trigger a modal."
+     ],
+     "expected": "Modal (60) appears above drawer (41)."
+    }
+   ],
+   "diagnostics": [
+    "Run pnpm check:css-tokens and read the 'sets a raw z-index' message.",
+    "Inspect the computed z-index of the overlay in browser devtools and compare with foundation.css:318-340."
+   ]
+  },
+  "gaps": [
+   {
+    "gap": "VS Code and Chrome use private z ladders with different numbers from the web ladder.",
+    "affects": "VS Code and Chrome extension users (low risk; separate webviews).",
+    "evidence": "webviewContent.ts:220-224; side_panel.css:29-36",
+    "work_needed": "Decide whether to generate these from shared tokens, or document why they are separate."
+   },
+   {
+    "gap": "Chrome options page has a raw z-index: 20.",
+    "affects": "Chrome extension options page.",
+    "evidence": "apps/extension/src/options.ts:1060",
+    "work_needed": "Replace with a named rung and extend the guard to this file."
+   },
+   {
+    "gap": "Mobile elevation is not different per theme.",
+    "affects": "Mobile users in dark theme.",
+    "evidence": "apps/mobile/src/ui/theme/tokens.ts:144-171",
+    "work_needed": "Add a dark elevation set and choose by isDark."
+   },
+   {
+    "gap": "DropdownMenu does not use the dropdown rung, so that rung may be unused on web.",
+    "affects": "Web engineers.",
+    "evidence": "DropdownMenu.tsx:104 vs foundation.css:329",
+    "work_needed": "Confirm which components use z-dropdown; remove or use it."
+   },
+   {
+    "gap": "CLI has no entry, and the brief marks no status.",
+    "affects": "CLI.",
+    "evidence": "(doc: area brief S6.27-S6.29)",
+    "work_needed": "Mark as not applicable in the brief."
+   }
+  ],
+  "depends_on": [
+   "SYS-shared-ui-and-design",
+   "file:packages/ui/design-tokens/src/foundation.css",
+   "file:packages/ui/design-tokens/src/tailwind.css",
+   "file:apps/mobile/src/ui/theme/tokens.ts",
+   "surface:web",
+   "surface:desktop",
+   "surface:mobile",
+   "surface:vscode",
+   "surface:chrome"
+  ],
+  "relationships": [
+   {
+    "rel": "implemented_by",
+    "to": "file:packages/ui/design-tokens/src/foundation.css",
+    "evidence": "foundation.css:270-279, 318-340, 358-361, 524-527"
+   },
+   {
+    "rel": "implemented_by",
+    "to": "file:packages/ui/ui/src/primitives/Dialog.tsx",
+    "evidence": "Dialog.tsx:28,115 uses z-modal and shadow-e4"
+   },
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/mobile/src/ui/theme/tokens.ts",
+    "evidence": "tokens.ts:63,117,144"
+   },
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/extension/src/side_panel.css",
+    "evidence": "side_panel.css:29-36"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:web",
+    "evidence": "packages/ui/ui/src/primitives/Dialog.tsx; apps/web uses packages/ui"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:mobile",
+    "evidence": "apps/mobile/src/ui/theme/tokens.ts:117"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:vscode",
+    "evidence": "webviewContent.ts:215-224"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:chrome",
+    "evidence": "side_panel.css:29-36"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:scripts/check-css-tokens.mjs",
+    "evidence": "Guard, not a test file: scripts/check-css-tokens.mjs:155-170"
+   },
+   {
+    "rel": "depends_on",
+    "to": "SYS-shared-ui-and-design",
+    "evidence": "Tokens live in packages/ui/design-tokens"
+   },
+   {
+    "rel": "configured_by",
+    "to": "file:packages/ui/design-tokens/src/tailwind.css",
+    "evidence": "tailwind.css:46-68"
+   }
+  ],
+  "unknowns": [
+   "What apps/web/shared/components/__tests__/theme-contrast.test.ts asserts about radii (not opened).",
+   "Whether Desktop Electron adds any layer rules of its own beyond the hosted web app.",
+   "Why VS Code and Chrome keep separate z numbers (no document found).",
+   "Whether web z-dropdown (50) is used by any component.",
+   "Chrome and VS Code radius usage beyond the shared corner variables (not fully checked)."
+  ]
+ },
+ "corrections": [
+  {
+   "section": "3/10",
+   "claim": "Web DropdownMenu does not use z-dropdown; the rung exists but 'this primitive does not use it'; Unknown: whether any component uses z-dropdown",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "DropdownMenu uses z-popover (correct), but z-dropdown is used by other web components, so the rung is not unused.",
+   "evidence": "packages/ui/unified-chat/src/components/SendPreview.tsx:98; AgentControl.tsx:48,114,227; ArtifactPanel.tsx:293",
+   "correction": "z-dropdown (50) is used by unified-chat components (SendPreview, AgentControl, ArtifactPanel); only the DropdownMenu primitive uses popover. Gap 'rung may be unused' and the Unknown entry should be dropped."
+  },
+  {
+   "section": "3",
+   "claim": "Repo guard rejects raw z-index in portal overlay primitives and in mobile and web code (check-css-tokens.mjs:155-170)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "check-css-tokens.mjs:155-170 lists six PORTAL_OVERLAYS files plus patterns for z-N and zIndex:N; the cited lines show no mobile scope. Web-wide coverage is in check-web-ui-invariants.mjs:161-176.",
+   "evidence": "scripts/check-css-tokens.mjs:155-170; scripts/check-web-ui-invariants.mjs:161-176",
+   "correction": "check-css-tokens guards six portal overlay primitives (AlertDialog, Dialog, DropdownMenu, Popover, Select, Tooltip); web-ui-invariants flags arbitrary z-index in web files. Mobile coverage is not shown at the cited lines."
+  }
+ ],
+ "missing_facts": [
+  "Web tooltip is z-tooltip (380) and Popover is z-popover (350), which backs acceptance criterion 2 but is not cited: packages/ui/ui/src/primitives/Tooltip.tsx:25; Popover.tsx:33.",
+  "Chrome side panel's model dropdown in VS Code uses z-popover 30 with shadow from --agi-ext elevation in Chrome; VS Code sidebar model menu uses var(--z-popover) with --corner-field radius (webviewContent.ts:1347 region), showing private rungs are consumed as named variables, not literals.",
+  "The web .dark block (foundation.css:433) is the only theme switch for elevation; the radius and z ladders have no dark variants, so only shadows are theme-dependent on web."
+ ]
+}

@@ -1,0 +1,560 @@
+{
+ "S39.02": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/MemorySection.tsx",
+    "text": "Persistent memory"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Personalization"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The entry point to Settings was not located; the command palette lists \"Settings\" (packages/ui/unified-chat/src/components/CommandPalette.tsx), and the Personalization page is mapped in apps/web/features/settings/components/WebSettingsModal.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, open Settings, then click Personalization.",
+   "Find the row \"Persistent memory\" and note the switch next to it.",
+   "Turn the switch off, then start a new chat and say a fact you know is saved.",
+   "Check the reply does not use the saved fact, and turn the switch back on."
+  ],
+  "where": "Settings > Personalization > Persistent memory"
+ },
+ "S39.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/MemorySection.tsx",
+    "text": "Search past chats"
+   }
+  ],
+  "needs": "a signed-in account with older chats",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Personalization.",
+   "Find the row \"Search past chats\" and its switch.",
+   "Turn it off, then ask a question that refers to an older chat.",
+   "Check the reply does not quote excerpts from your other chats; turn it back on."
+  ],
+  "where": "Settings > Personalization > Search past chats"
+ },
+ "S39.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/MemorySection.tsx",
+    "text": "Manage memories"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/MemoryEditor.tsx",
+    "text": "Memory facts"
+   }
+  ],
+  "needs": "a signed-in account with saved memories (the button is disabled when there are none)",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Personalization.",
+   "Click the \"Manage memories\" button under the memory counts line.",
+   "The page scrolls to the memory list headed by the \"Memory facts\" list.",
+   "Compare the list with the saved count shown as \"saved memories\" above it."
+  ],
+  "where": "Settings > Personalization > Manage memories"
+ },
+ "S39.05": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/MemoryEditor.tsx",
+    "text": "Search memory"
+   }
+  ],
+  "needs": "a signed-in account with several saved memories",
+  "note": "The code shows the search box with this placeholder; whether it is hidden for short lists was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Personalization, then click \"Manage memories\".",
+   "Click the box with the placeholder \"Search memory\".",
+   "Type a word from one saved memory.",
+   "Check only memories containing that word remain in the list."
+  ],
+  "where": "Settings > Personalization > Manage memories > Search memory"
+ },
+ "S39.06": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/MemoryEditor.tsx",
+    "text": "Preferences"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/MemoryEditor.tsx",
+    "text": "About you"
+   }
+  ],
+  "needs": "a signed-in account with saved memories of different kinds",
+  "note": "The grouping is built in code; whether each group heading is drawn visibly was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Personalization, then click \"Manage memories\".",
+   "Look at the group headings in the memory list.",
+   "Compare the headings with the topics in Expected: Preferences, About you, Decisions, Context, Summaries, Skills, Other."
+  ],
+  "where": "Settings > Personalization > Manage memories"
+ },
+ "S39.09": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/ReflectSection.tsx",
+    "text": "Work in progress"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Reflect"
+   }
+  ],
+  "needs": "a signed-in account with chats about ongoing work",
+  "note": "The section appears only when there are ongoing-work items, so it may be absent for a new account.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then click Reflect.",
+   "Look for the section headed \"Work in progress\".",
+   "Compare the listed items with the projects or work you are pursuing in your chats."
+  ],
+  "where": "Settings > Reflect > Work in progress"
+ },
+ "S39.10": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/MemoryEditor.tsx",
+    "text": "Add a new fact"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/MemoryEditor.tsx",
+    "text": "Add"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Personalization, then click \"Manage memories\".",
+   "Click the box with the placeholder \"Example: I prefer Python over JavaScript for data work.\"",
+   "Type a fact, then click the \"Add\" button.",
+   "Check the new fact appears in the memory list with \"Added by you\", then start a chat and check it is used."
+  ],
+  "where": "Settings > Personalization > Manage memories > Add a new fact"
+ },
+ "S39.11": {
+  "labels": [
+   {
+    "file": "apps/web/content/support/memory.md",
+    "text": "Remember that"
+   }
+  ],
+  "needs": "a signed-in account with Persistent memory on",
+  "note": "The phrase comes from the help text; a confirmation message in the reply was not found in the code, so the tester should compare with the reply shown.",
+  "reachable": "yes",
+  "steps": [
+   "In a chat, type \"Remember that\" followed by a fact, such as a preference, and send.",
+   "Read the assistant reply for a confirmation that it was saved.",
+   "Open Settings > Personalization > Manage memories and look for the fact."
+  ],
+  "where": "Chat composer > type \"Remember that\" followed by the fact"
+ },
+ "S39.12": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/MemorySection.tsx",
+    "text": "Save memories from chats"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Personalization.",
+   "Confirm \"Persistent memory\" and \"Save memories from chats\" are on.",
+   "Have an ordinary chat that states a lasting fact about you, such as your job.",
+   "Open Manage memories and check the fact was added without you asking."
+  ],
+  "where": "Settings > Personalization > Save memories from chats"
+ },
+ "S39.13": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/MemoryEditor.tsx",
+    "text": "Edit memory"
+   }
+  ],
+  "needs": "a signed-in account with saved memories",
+  "note": "The edit control is the memory text itself with the accessible name \"Edit memory\"; the saving button text in the editing view was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Personalization, then click \"Manage memories\".",
+   "Click the text of a saved memory; it opens for editing.",
+   "Change the wording and save it.",
+   "Start a new chat and check the reply uses the corrected wording."
+  ],
+  "where": "Settings > Personalization > Manage memories > click a memory's text"
+ },
+ "S39.14": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/MemoryEditor.tsx",
+    "text": "Delete this memory?"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/MemoryEditor.tsx",
+    "text": "Delete memory"
+   }
+  ],
+  "needs": "a signed-in account with saved memories",
+  "note": "The trash icon has no visible text; the tester should find it by its position at the right end of each memory row.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Personalization, then click \"Manage memories\".",
+   "Hover a memory and click its trash icon (accessible name \"Delete memory fact\").",
+   "In the dialog \"Delete this memory?\", click \"Delete memory\".",
+   "Check the memory is gone from the list."
+  ],
+  "where": "Settings > Personalization > Manage memories > Delete memory fact (trash icon)"
+ },
+ "S39.15": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/MemorySection.tsx",
+    "text": "Clear all memories"
+   },
+   {
+    "file": "apps/web/features/settings/sections/MemorySection.tsx",
+    "text": "Delete all memory facts?"
+   },
+   {
+    "file": "apps/web/features/settings/sections/MemorySection.tsx",
+    "text": "Forget everything"
+   }
+  ],
+  "needs": "a signed-in account with saved memories",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Personalization.",
+   "Click \"Clear all memories\".",
+   "In the dialog \"Delete all memory facts?\", read the text, then click \"Forget everything\".",
+   "Check the saved count now shows no saved memories and the Manage memories list is empty."
+  ],
+  "where": "Settings > Personalization > Clear all memories"
+ },
+ "S39.16": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/MemoryEditor.tsx",
+    "text": "Pin memory"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/MemoryEditor.tsx",
+    "text": "Unpin memory"
+   }
+  ],
+  "needs": "a signed-in account with saved memories",
+  "note": "The pin icon has no visible text.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Personalization, then click \"Manage memories\".",
+   "Click the pin icon (accessible name \"Pin memory\") on a memory.",
+   "Check the icon changes to the unpin icon (\"Unpin memory\") and the memory is marked as pinned.",
+   "Compare with Expected: a pinned memory is kept and preferred."
+  ],
+  "where": "Settings > Personalization > Manage memories > Pin memory (pin icon)"
+ },
+ "S39.17": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/MemoryEditor.tsx",
+    "text": "Added by you"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/MemoryEditor.tsx",
+    "text": "Learned from a chat"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/MemoryEditor.tsx",
+    "text": "Imported"
+   }
+  ],
+  "needs": "a signed-in account with saved memories from more than one source",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Personalization, then click \"Manage memories\".",
+   "Read the small line under each memory.",
+   "Compare the lines with Expected: \"Added by you\", \"Learned from a chat\" (with a link to the chat), or \"Imported\"."
+  ],
+  "where": "Settings > Personalization > Manage memories > source line under each memory"
+ },
+ "S39.18": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/MemoryEditor.tsx",
+    "text": "Updated"
+   }
+  ],
+  "needs": "a signed-in account with saved memories",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Personalization, then click \"Manage memories\".",
+   "Read the small line under a memory that ends with \"Updated\" and a date.",
+   "Edit that memory, then check the date changes to today."
+  ],
+  "where": "Settings > Personalization > Manage memories > date text under each memory"
+ },
+ "S39.19": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/components/MemoryConflicts.tsx",
+    "text": "Replaced memories"
+   }
+  ],
+  "needs": "a signed-in account with a saved memory to contradict",
+  "note": "Effect visibility is inferred from the Replaced memories list; the code does not show a direct notice in the chat, so compare with the list.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "In a chat, state a newer fact that contradicts a saved memory, such as a new employer.",
+   "Open Settings > Personalization and look for the older fact under \"Replaced memories\"."
+  ],
+  "where": "Applied by the server when you state a newer fact in a chat"
+ },
+ "S39.20": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/components/MemoryConflicts.tsx",
+    "text": "Replaced memories"
+   },
+   {
+    "file": "apps/web/features/settings/components/MemoryConflicts.tsx",
+    "text": "Use the replaced one instead"
+   }
+  ],
+  "needs": "a signed-in account with two conflicting memories",
+  "note": "The list appears only when a conflict exists, so a tester may need to create one first.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Personalization.",
+   "Find the list labelled \"Replaced memories\" (it appears only when memories conflict).",
+   "Read the rule line: \"Pinned wins, then ones you added, then the newest.\"",
+   "Click \"Use the replaced one instead\" on an entry and check it returns to the active memories."
+  ],
+  "where": "Settings > Personalization > Replaced memories > Use the replaced one instead"
+ },
+ "S39.21": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/MemorySection.tsx",
+    "text": "Start import"
+   },
+   {
+    "file": "apps/web/features/settings/components/ImportMemoryDialog.tsx",
+    "text": "Import memory from other AI providers"
+   }
+  ],
+  "needs": "a file to upload, or a memory export from another assistant",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Personalization.",
+   "Click \"Start import\" on the row \"Import memory from other AI providers\".",
+   "In the dialog, upload a memory export file or pick items, then preview them.",
+   "Confirm the import and check the imported memories appear in Manage memories with \"Imported\"."
+  ],
+  "where": "Settings > Personalization > Import memory from other AI providers > Start import"
+ },
+ "S39.22": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/MemorySection.tsx",
+    "text": "Export memories"
+   }
+  ],
+  "needs": "a signed-in account with saved memories",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Personalization.",
+   "Click \"Export memories\" (it is disabled when there are no memories).",
+   "Open the file that downloads and read it.",
+   "Compare its contents with the list in Manage memories."
+  ],
+  "where": "Settings > Personalization > Export memories"
+ },
+ "S39.24": {
+  "labels": [
+   {
+    "file": "apps/web/features/projects/components/ProjectSettingsDialog.tsx",
+    "text": "Project settings"
+   },
+   {
+    "file": "apps/web/features/projects/components/ProjectMemoryPanel.tsx",
+    "text": "Add a memory only this project uses"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/MemoryEditor.tsx",
+    "text": "Only in"
+   }
+  ],
+  "needs": "a signed-in account with at least two projects",
+  "note": "The sidebar menu item text was not found; the dialog is said to open from the sidebar row context menu in apps/web/features/chat/pages/WebChatPage.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "In the sidebar, open the menu of a project and choose Project settings (the dialog title is \"Project settings\").",
+   "Find the memory list in the dialog and the box labelled \"Add a memory only this project uses\".",
+   "Add a memory there, then open a chat in a different project and check it is not used.",
+   "Check the global memory list in Settings > Personalization shows the project memory with \"Only in\" and the project name."
+  ],
+  "where": "Sidebar > project row menu > Project settings > Add a memory only this project uses"
+ },
+ "S39.26": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/MemorySection.tsx",
+    "text": "Where a memory applies"
+   },
+   {
+    "file": "apps/web/app/workspace/sharing/page.tsx",
+    "text": "Sharing"
+   }
+  ],
+  "needs": "a workspace (organization) account",
+  "note": "The path to the workspace console from the sidebar was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Personalization, and read \"Where a memory applies\".",
+   "Open the workspace page titled \"Sharing\" (apps/web/app/workspace/sharing/page.tsx).",
+   "Check work and workspace memories are listed apart from personal memories and that a personal chat does not show workspace memories."
+  ],
+  "where": "Settings > Personalization > Where a memory applies; and the workspace page titled Sharing"
+ },
+ "S39.27": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Show sources"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "This answer came from your saved memories, not the web."
+   }
+  ],
+  "needs": "a signed-in account with saved memories and a chat that uses them",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Send a question that a saved memory should shape, then wait for the reply.",
+   "Click the \"Show sources\" button under the reply.",
+   "In the panel, look for the section headed \"Memory\" with a count and the memory excerpts used.",
+   "Compare with the reply: a reply that came only from saved memories shows the note \"This answer came from your saved memories, not the web.\""
+  ],
+  "where": "Chat reply > Show sources (sources button) > Memory section"
+ },
+ "S39.28": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/ConversationHeader.tsx",
+    "text": "Temporary chat"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The composer control text was not found; the header label is from the code. The 'Temporary chat' row in the composer is referenced in apps/web/features/desktop-host/hooks/use-temporary-chat.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Turn on \"Temporary chat\" in the chat composer and send a message containing a new fact about you.",
+   "Check the header shows \"Temporary chat\".",
+   "Open Settings > Personalization > Manage memories and confirm the fact is not in the list.",
+   "Start a later normal chat and check it does not refer to the temporary chat."
+  ],
+  "where": "Chat composer > Temporary chat (header shows \"Temporary chat\")"
+ },
+ "S39.29": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/components/MemoryExclusions.tsx",
+    "text": "Never remember"
+   },
+   {
+    "file": "apps/web/features/settings/components/MemoryExclusions.tsx",
+    "text": "Term to never remember"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The automatic refusal of credentials is server behaviour; the tester can only check it by the saved list.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Personalization.",
+   "Find the section headed \"Never remember\".",
+   "Type a term in the box labelled \"Term to never remember\" and click \"Add\".",
+   "Ask the assistant to remember a fact with that term and check it is not saved; a credential should also be refused."
+  ],
+  "where": "Settings > Personalization > Never remember"
+ },
+ "S39.30": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/MemorySection.tsx",
+    "text": "Your chats are not deleted."
+   }
+  ],
+  "needs": "a signed-in account with saved memories and chats",
+  "note": "Whether deleting chats also clears memory was not verified in the files named; only the reset path was found.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Personalization, then click \"Clear all memories\".",
+   "Read the dialog text, which says \"Your chats are not deleted.\"",
+   "Confirm with \"Forget everything\".",
+   "Check the memory count is zero and your chats are still listed in the sidebar."
+  ],
+  "where": "Settings > Personalization > Clear all memories"
+ },
+ "S39.31": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/components/web-settings-navigation.ts",
+    "text": "Personalization"
+   },
+   {
+    "file": "apps/web/features/settings/sections/MemorySection.tsx",
+    "text": "Memory"
+   }
+  ],
+  "needs": "a Free account or a paid account with Memory turned on, and at least two models available to pick",
+  "note": "The model picker's visible label was not found in the web code, so the tester must find it on the composer. The Settings entry point is only confirmed as the word 'Settings' in packages/ui/unified-chat/src/components/CommandPalette.tsx:96, not as a web sidebar button.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open Settings, then Personalization, and scroll to the Memory section. Note one saved fact, for example a preferred name or a work detail.",
+   "Start a new chat with the first model in the model picker and ask a question that needs that fact, such as \"what do you know about my work?\".",
+   "Start another new chat, switch to a different model in the model picker, and ask the same question.",
+   "Compare the two answers: both should use the same saved fact, and Memory should be unchanged between the two chats."
+  ],
+  "where": "Saved memory has no control for model choice; its effect shows in chat. Check Settings > Personalization > Memory, then chat with two different models."
+ },
+ "S39.32": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/components/web-settings-navigation.ts",
+    "text": "Personalization"
+   },
+   {
+    "file": "apps/web/features/settings/sections/MemorySection.tsx",
+    "text": "Memory"
+   }
+  ],
+  "needs": "two clients (web plus desktop, mobile or the extension) signed in to the same account; a Free account or a paid account with Memory on",
+  "note": "The store in packages/ui/unified-chat/src/stores/memoryStore.ts persists facts locally as well as syncing them to the server, so a memory saved on one client only shows on another after the sync completes; device-local memories do not sync. The code audit did not confirm which Memory list on client B holds a server-synced fact.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "On client A (the web app), open Settings, then Personalization, and add a memory with a unique phrase such as \"test fact 39-32\".",
+   "Sign in to the same account on client B (desktop, mobile or the extension) and open its Memory list in Settings.",
+   "Check whether the phrase from step 1 appears on client B. Then ask a chat question on client B that depends on that fact.",
+   "Compare with Expected: the memory should appear and be used on every signed-in client."
+  ],
+  "where": "No control for sync. Its effect is seen on a second signed-in client: Settings > Personalization > Memory."
+ }
+}

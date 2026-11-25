@@ -1,0 +1,107 @@
+{
+ "S106.13": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Slack app"
+   },
+   {
+    "file": "apps/web/features/settings/sections/SlackSection.tsx",
+    "text": "Add to Slack"
+   }
+  ],
+  "needs": "A Slack workspace where you can add apps, and a Slack account you can message; the owner must first complete the Slack app setup from the plan's 'Known to be unfinished' note",
+  "note": "The Settings screen exists, but the reply depends on the owner's Slack app setup and migration 0333, which the plan says are not done; the 'Settings' menu item text was found only in a test file (apps/web/shared/components/layout/AccountFooter.test.tsx), so the component that renders it was not located.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open Settings from the account menu.",
+   "Click 'Slack app' in the Customize group and click 'Add to Slack' under 'Slack workspaces you added' to add the app to a Slack workspace.",
+   "In Slack, open a direct message with the AGI app (first link your account by messaging the app, as 'Your Slack accounts' says) and send a question.",
+   "Look for the assistant's reply in that same direct message and compare with Expected."
+  ],
+  "where": "Settings > Slack app > Add to Slack, then in Slack open a direct message with the AGI app"
+ },
+ "S106.14": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/SlackSection.tsx",
+    "text": "Slack workspaces you added"
+   },
+   {
+    "file": "apps/web/features/settings/sections/SlackSection.tsx",
+    "text": "Add to Slack"
+   }
+  ],
+  "needs": "A Slack workspace where you can add apps and invite them to a channel, and a second member who can post in the channel if needed",
+  "note": "The channel policy control is rendered by apps/web/features/slack/components/SlackChannelPolicies.tsx with aria-label 'What AGI may do in'; the visible label text was not confirmed, and the owner's Slack app setup is listed as unfinished in the plan.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, click 'Slack app', and make sure the workspace is listed under 'Slack workspaces you added' (click 'Add to Slack' if not).",
+   "In Slack, type /invite with the AGI app's name in a channel.",
+   "Under the workspace, check the per-channel control labelled 'What AGI may do in' that channel and leave it on a mode that answers.",
+   "In that channel, post a message for the agent and watch for the agent's reply or report in the channel. Compare with Expected."
+  ],
+  "where": "Settings > Slack app > Slack workspaces you added, then /invite the app to a Slack channel"
+ },
+ "S106.16": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/SlackSection.tsx",
+    "text": "Waiting for your approval"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Slack app"
+   }
+  ],
+  "needs": "A Slack workspace with the app invited to a channel, a linked Slack account, and the Tasks feature available on the account's plan",
+  "note": "Task creation depends on the channel policy and on whether tasks are available for the account (slackTaskAvailable in apps/web/lib/slack/slack-assistant.ts); the task link appears in the Slack reply footer, not in the desktop app.",
+  "reachable": "yes",
+  "steps": [
+   "In a channel where the AGI app has been invited, type a message that mentions the app and asks for a task.",
+   "Wait for the reply in the channel thread and check whether it includes a task link in its footer.",
+   "If the task needs a tool, open Settings > Slack app and look under 'Waiting for your approval' for the pending item.",
+   "Compare the task created with Expected: the mention should become a task the agent runs."
+  ],
+  "where": "In Slack, a channel where the AGI app is invited: @mention the app with a request; then Settings > Slack app > Waiting for your approval if a step needs approval"
+ },
+ "S106.21": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/SlackSection.tsx",
+    "text": "Your Slack accounts"
+   }
+  ],
+  "needs": "A Slack workspace with the app invited to a channel, and a second person's account in that channel if you want to compare",
+  "note": "Identity is set by the bot token (xoxb- prefix, bot_user_id) in apps/web/lib/slack/slack-api.ts and posting in apps/web/lib/slack/slack-messages.ts; the tester sees it only as the sender name in Slack, and the 'Your Slack accounts' copy says AGI answers 'as you' for linked accounts, which may read as confusing next to the bot identity.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "After the app has replied in a channel, look at the sender name and avatar on that reply in Slack.",
+   "Confirm the sender is the AGI app's bot user and not your own Slack name.",
+   "Open Settings > Slack app and compare with the list under 'Your Slack accounts' to see which human accounts AGI answers as."
+  ],
+  "where": "In Slack, the sender name on the app's replies in a channel or direct message; the linked accounts are listed under 'Your Slack accounts' in Settings > Slack app"
+ },
+ "S106.24": {
+  "labels": [
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Scheduled"
+   },
+   {
+    "file": "apps/web/features/schedules/components/ScheduleCard.tsx",
+    "text": "Run History"
+   }
+  ],
+  "needs": "A schedule that has run at least once; for the Slack-originated part, a Slack setup as in S106.13",
+  "note": "The code audit says this is done, but it is not confirmed that runs started from Slack appear in this panel; Slack approvals appear under Settings > Slack app instead.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and click 'Scheduled' in the sidebar.",
+   "On a schedule that has run, click the history icon (tooltip 'Run History', aria-label 'View History for' the schedule name).",
+   "Look at the 'Run History' panel for the runs and their results.",
+   "Compare with Expected: work the agent did from a channel or host should show up here for review."
+  ],
+  "where": "Sidebar > Scheduled > View History (the history icon on a schedule card, tooltip 'Run History')"
+ }
+}

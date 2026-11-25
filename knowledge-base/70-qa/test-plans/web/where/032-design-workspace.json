@@ -1,0 +1,83 @@
+{
+ "S32.31": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Download artifact"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Download as HTML"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactsPanel.tsx",
+    "text": "Artifacts"
+   }
+  ],
+  "needs": "a Free account or a paid account, and a chat with an HTML artifact",
+  "note": "The quoted line 745 and WebChatPage line 5834 no longer contain the feature; the \"Download as HTML\" item is at ArtifactPreview.tsx line 2388 and only appears when the artifact has more than one download option, which HTML artifacts do.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a chat that has an HTML artifact (ask AGI to make a web page if none exists).",
+   "Open the artifacts panel from the \"Artifacts\" button and select the artifact so its preview opens.",
+   "Click the download button (tooltip \"Download\", aria-label \"Download artifact\") in the preview header.",
+   "Click \"Download as HTML\" in the menu.",
+   "Open the downloaded file in a browser and compare it with Expected: a standalone HTML file of the design."
+  ],
+  "where": "Open an artifact in the artifacts panel (title \"Artifacts\") > Download artifact (title \"Download\") > Download as HTML"
+ },
+ "S32.33": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactsPanel.tsx",
+    "text": "Download all"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactsPanel.tsx",
+    "text": "Download all artifacts as zip"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactsPanel.tsx",
+    "text": "Artifact download ready"
+   }
+  ],
+  "needs": "a Free account or a paid account, and a chat with two or more artifacts",
+  "note": "Image export is a separate control in the preview header (ArtifactPreview.tsx line 3466, aria-label \"Download image\") and the ArtifactsPanel.tsx line 745 and downloadArtifacts.ts line 108 cover the zip; the quoted WebChatPage line 5834 no longer contains the feature.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a chat that has two or more artifacts.",
+   "Open the artifacts panel from the \"Artifacts\" button.",
+   "Click \"Download all\" in the panel header (the button only shows when the panel holds more than one artifact).",
+   "Wait for the toast \"Artifact download ready\" and open the zip file from Downloads.",
+   "Compare with Expected: the zip holds the artifacts as files. For an image artifact, open its preview and click the header button with aria-label \"Download image\" to export the image instead."
+  ],
+  "where": "Artifacts panel (title \"Artifacts\") > Download all (aria-label \"Download all artifacts as zip\")"
+ },
+ "S32.34": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Previous version"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Show changes"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactMoreMenu.tsx",
+    "text": "More artifact actions"
+   }
+  ],
+  "needs": "a Free account or a paid account, and an artifact with at least two versions",
+  "note": "\"Show changes\" is hidden for PDF, DOCX and image artifacts and needs a previous version; \"Restore version\" appears only when the shown version is not the latest; the version history list also has a \"Restore\" button per version (aria-label \"Restore version N\", ArtifactVersionHistory.tsx line 171).",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open an artifact that has been edited at least once (two or more versions).",
+   "Click \"Previous version\" in the preview header to show an earlier version.",
+   "Click \"More artifact actions\" and choose \"Show changes\" to compare it with the version before it; check the summary line and the highlighted text.",
+   "To restore, click \"More artifact actions\" and choose \"Restore version N\", then click \"Restore\" in the dialog \"Restore version N?\".",
+   "Compare with Expected: the earlier version is shown again as the newest version, and the version counter increases."
+  ],
+  "where": "Open an artifact with more than one version > Previous version (aria-label \"Previous version\") or the version counter \"Version N of M\" (Version history) > More artifact actions > Show changes or Restore version"
+ }
+}

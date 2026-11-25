@@ -1,0 +1,320 @@
+{
+ "S79.01": {
+  "labels": [
+   {
+    "file": "packages/ai/model-registry/catalog/routing-policies.json",
+    "text": "Auto"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "General"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/general/index.tsx",
+    "text": "Models"
+   }
+  ],
+  "needs": "none",
+  "note": "The same Auto row opens from the model name button above the message box (testID chat.composer.model); that button shows no fixed visible word.",
+  "reachable": "yes",
+  "steps": [
+   "Tap the menu icon at the top left of the chat screen (Open navigation drawer).",
+   "Tap Settings, then General, then Models.",
+   "Tap the row Auto at the top of the list.",
+   "Go back to the chat, send a message, and read the answer's footer (provider \u00b7 model) to see which model answered.",
+   "Compare with Expected: Auto should pick a model for the request from the registry."
+  ],
+  "where": "Open navigation drawer > Settings > General > Models > Auto"
+ },
+ "S79.02": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/models.tsx",
+    "text": "Models"
+   },
+   {
+    "file": "apps/mobile/app/(app)/models.tsx",
+    "text": "Selected model"
+   }
+  ],
+  "needs": "a Cloud account for cloud models (a Free account can choose Free models)",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Tap the menu icon at the top left (Open navigation drawer).",
+   "Tap Settings, then General, then Models.",
+   "Under Selected model, tap a named model row that is not Auto.",
+   "Go back to the chat, send a message, and read the footer under the answer.",
+   "Compare with Expected: the footer should show the chosen model, not a different one."
+  ],
+  "where": "Open navigation drawer > Settings > General > Models > pick a specific model row"
+ },
+ "S79.03": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Projects"
+   },
+   {
+    "file": "apps/mobile/src/features/projects/components/CloudProjectOverview.tsx",
+    "text": "Default model:"
+   }
+  ],
+  "needs": "a Cloud account and a project whose default model was set on the web app",
+  "note": "Mobile shows and applies the project default model but has no control to set it; the mobile update call only changes icon and accent colour.",
+  "reachable": "yes",
+  "steps": [
+   "Tap the menu icon at the top left (Open navigation drawer).",
+   "Under Projects, tap a Cloud project.",
+   "Read the line Default model: on the project's details.",
+   "Tap New chat inside that project and check the model it opens with.",
+   "Compare with Expected: a new chat in the project should use the project's default model."
+  ],
+  "where": "Open navigation drawer > Projects > tap a project > Default model:"
+ },
+ "S79.04": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/MessageBubble.tsx",
+    "text": "Auto chose"
+   }
+  ],
+  "needs": "a Cloud account",
+  "note": "The task-specific profile is set in the routing registry (autoProfileByTask, coding maps to premium); no mobile control sets it. The line appears only when the answering model differs from the requested one.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Select Auto as the model (see S79.01).",
+   "Send a coding or reasoning request, for example a small function to write.",
+   "Read the line under the answer that starts with Auto chose, if it appears."
+  ],
+  "where": "Inside Auto; visible as the line Auto chose under an answer when Auto moves to another model"
+ },
+ "S79.08": {
+  "labels": [],
+  "needs": "none",
+  "note": "No privacy-first profile control found in apps/mobile. Searched for zero retention, retention and privacy profile. Nearest controls: the Local / Cloud switch in the drawer (ModeToggle, accessibility label Local Mode, apps/mobile/src/features/chat/components/ModeToggle.tsx) and Settings > Privacy > Data retention (apps/mobile/src/features/settings/cloud-privacy/index.tsx).",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S79.09": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/MessageBubble.tsx",
+    "text": "Auto chose"
+   }
+  ],
+  "needs": "a Cloud account",
+  "note": "Intent classification has no control; the code is in packages/ai/routing/src/classify.ts.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Select Auto and send two different requests, one simple and one that needs a specialised task.",
+   "Compare the footer model under each answer, and any Auto chose line."
+  ],
+  "where": "Inner routing step; effect only visible as the Auto chose line when Auto switches model"
+ },
+ "S79.10": {
+  "labels": [],
+  "needs": "a Cloud account",
+  "note": "The tool control is shown as Active chat tools in apps/mobile/src/features/chat/components/ChatInput.tsx (accessibility label only), so the label is not a visible word.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Turn on a chat tool such as search or a code tool from the chat tools control.",
+   "Send a request that needs that tool, then read the footer under the answer for the model used."
+  ],
+  "where": "Inner routing step; no visible control; effect appears only in the chosen model"
+ },
+ "S79.11": {
+  "labels": [],
+  "needs": "a photo to attach and a Cloud account",
+  "note": "Modality classification is in packages/ai/routing/src/classify.ts and has no control of its own.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Select Auto, attach a photo to the message, and ask about it.",
+   "Read the footer under the answer for the model that answered, and check that it can read images."
+  ],
+  "where": "Inner routing step; effect visible as the model in the footer under the answer"
+ },
+ "S79.12": {
+  "labels": [],
+  "needs": "a Cloud account",
+  "note": "The effort controls in the picker are chosen by the user and are not the routing classification.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Send a very short question and then a long multi-step question with Auto selected.",
+   "Compare the footer model under each answer."
+  ],
+  "where": "Inner routing step; no visible control"
+ },
+ "S79.13": {
+  "labels": [],
+  "needs": "a Cloud account and an internet connection",
+  "note": "Freshness detection has no visible control; the routing code is in apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Select Auto and ask about a current event, for example today's news.",
+   "Check that the answer shows current information and read the footer for the model used."
+  ],
+  "where": "Inner routing step; effect visible as an answer that uses current information"
+ },
+ "S79.14": {
+  "labels": [],
+  "needs": "a Free account, to see locked rows",
+  "note": "The locked-row message is an accessibility hint in apps/mobile/src/features/model-picker/components/ModelRow.tsx, not visible text, so no exact visible label was found.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open the model picker from Settings > General > Models.",
+   "Look for rows that are locked or unavailable and compare them with the models your plan includes."
+  ],
+  "where": "Inner filter applied before ranking; effect visible in the model picker list"
+ },
+ "S79.15": {
+  "labels": [],
+  "needs": "none",
+  "note": "Only the model is shown in the footer under each answer, not the provider route.",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": "Server-side route choice; no mobile screen shows which provider route served the answer"
+ },
+ "S79.16": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/models.tsx",
+    "text": "Selected model"
+   }
+  ],
+  "needs": "a Cloud account",
+  "note": "The server-side lock is in apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open Settings > General > Models and pick a specific model that is not Auto.",
+   "Send a message, then read the footer under the answer.",
+   "Check the footer shows the same model and that no Auto chose line appears."
+  ],
+  "where": "Picking a specific model keeps that model; effect visible in the answer footer"
+ },
+ "S79.19": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/model-picker/service.ts",
+    "text": "Available while the provider-funded quota lasts."
+   }
+  ],
+  "needs": "a Free account or a Cloud account with a limited plan",
+  "note": "The quota text is the description of a Free quota model; the budget check itself is not shown to the user.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Note the remaining usage shown in the app, then send several requests with Auto selected.",
+   "Check the footer model under each answer as the usage is used up."
+  ],
+  "where": "Server-side route choice that considers remaining budget; no mobile control"
+ },
+ "S79.20": {
+  "labels": [],
+  "needs": "a Cloud account",
+  "note": "The fallback runs in apps/web/app/api/llm/v1/chat/completions/route.ts; it cannot be forced from the app, so reproduction is not dependable.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Send a message with Auto selected and read the footer model.",
+   "Repeat during a provider outage if one is known, and check the footer shows a working model."
+  ],
+  "where": "Server-side fallback when a route fails; effect visible only as a different footer model"
+ },
+ "S79.21": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   }
+  ],
+  "needs": "a Cloud account, a photo to attach, and an image model that cannot edit",
+  "note": "The offer exists only for blocked image-edit requests (alertBlockedImageRequest.ts); other plan blocks show a Choose model banner instead, which is not a switch offer.",
+  "reachable": "yes",
+  "steps": [
+   "Tap Add to chat and attach a photo.",
+   "Choose an image model that cannot edit images, then send an edit request.",
+   "Read the alert and check whether it offers Use <model name> beside Cancel.",
+   "Tap Use <model name> and check that the image model changes.",
+   "Compare with Expected: the switch is offered as a one-tap choice."
+  ],
+  "where": "Chat composer > Add to chat (attach an image) > send an image edit request with an image model that cannot edit it > Use <model name> in the alert"
+ },
+ "S79.24": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/CommandPalette.tsx",
+    "text": "Compare model responses"
+   },
+   {
+    "file": "apps/mobile/src/features/compare/index.tsx",
+    "text": "Compare Models"
+   }
+  ],
+  "needs": "a signed-in Cloud account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat in Cloud mode.",
+   "Tap the message box and type /.",
+   "Tap compare, which reads Compare model responses.",
+   "On the Compare Models screen, choose a model for each slot and send one prompt.",
+   "Compare the two answers side by side with Expected."
+  ],
+  "where": "Chat (Cloud mode) > message box > type / > compare (Compare model responses) > Compare Models"
+ },
+ "S79.26": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/MessageBubble.tsx",
+    "text": "Auto chose"
+   }
+  ],
+  "needs": "a Cloud account",
+  "note": "The line appears only when the answering model differs from the requested one, so it may not show on every answer.",
+  "reachable": "yes",
+  "steps": [
+   "Select Auto and send a question.",
+   "Wait for the answer to finish.",
+   "Read the line under the answer that starts with Auto chose, with the reason after it.",
+   "Compare with Expected: the line should say why Auto picked or moved to a model."
+  ],
+  "where": "Chat > ask a question > read the line under the answer that starts Auto chose"
+ },
+ "S79.27": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ProvenanceFooter.tsx",
+    "text": "\u00b7"
+   }
+  ],
+  "needs": "none",
+  "note": "The footer is hidden while the answer is still streaming.",
+  "reachable": "yes",
+  "steps": [
+   "Send any message in a chat.",
+   "Wait for the answer to finish streaming.",
+   "Read the small grey footer under the answer, which shows provider and model.",
+   "Compare with Expected: the model named in the footer should be the one that answered."
+  ],
+  "where": "Chat > send a message > read the footer under the answer (provider \u00b7 model)"
+ },
+ "S79.28": {
+  "labels": [],
+  "needs": "none",
+  "note": "Searched apps/mobile for routing policy version and trace; only the server-side trace in packages/ai/routing/src/routing-trace.ts and apps/web/lib/services/model-rollout/routing-decision-trace-service.ts exist.",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": "Not visible in the mobile app; the routing trace is recorded on the server"
+ },
+ "S79.30": {
+  "labels": [],
+  "needs": "a Cloud account",
+  "note": "A failed classification cannot be forced from the app, so the effect is hard to reproduce on demand.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Send an unusual or ambiguous message with Auto selected.",
+   "Check the answer still arrives and read the footer for the model used."
+  ],
+  "where": "Server-side fallback to a safe default when classification fails; no visible control"
+ }
+}

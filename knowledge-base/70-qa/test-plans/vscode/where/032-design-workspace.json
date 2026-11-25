@@ -1,0 +1,10 @@
+{
+ "S32.31": {
+  "labels": [],
+  "needs": "none",
+  "note": "No Export to HTML control found. Searched apps/extension-vscode (src and package.json) for 'export', 'html export', 'standalone', 'Export to HTML'; only Code: Export Conversation (package.json:234) and Code: Export Diagnostics (package.json:459) exist. Nearest candidate is the artifact command 'Code: Save Artifact into Workspace' (package.json:714, handler saveArtifactToWorkspace in src/features/artifacts/artifactActions.ts:163, file extension from artifactFileExtension in artifactPresentation.ts:94), which writes the artifact text to a workspace file via a save dialog; it is not confirmed to produce a standalone HTML file, and the menu placement for it was not confirmed. The Code line's package.json:593 reference no longer matches a file entry.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ }
+}

@@ -1,0 +1,286 @@
+{
+ "S41.01": {
+  "labels": [
+   {
+    "file": "apps/web/lib/temporary-chat-policy.ts",
+    "text": "Temporary chat"
+   },
+   {
+    "file": "apps/web/features/settings/sections/PrivacySection.tsx",
+    "text": "Start new chats as temporary"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The + menu button has no visible text found in the code, and the Settings default applies to new chats only.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a new chat.",
+   "Click the + button under the message box and click Temporary chat.",
+   "Look for the Temporary chat banner in the top bar and the line Stays out of your history, search, memory and Library.",
+   "Compare with Expected: a temporary chat can be started from the chat surface."
+  ],
+  "where": "The + button under the message box > Temporary chat. Or Settings > Privacy > Start new chats as temporary (sets the default for new chats)."
+ },
+ "S41.02": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Temporary chat"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Personalized"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The banner is hidden on small screens for the explanation text only (CSS hidden sm:inline), the label stays.",
+  "reachable": "yes",
+  "steps": [
+   "Start a temporary chat as in S41.01.",
+   "Send a message and wait for the reply.",
+   "Check that the label Temporary chat stays in the top bar while the chat is open, with the Personalized or Unpersonalized switch beside it.",
+   "Compare with Expected: the banner stays visible for as long as the chat is open."
+  ],
+  "where": "Start a chat with the + button > Temporary chat. The label Temporary chat sits in the top bar of the chat, and hovering it shows the retention note."
+ },
+ "S41.03": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Temporary chat"
+   },
+   {
+    "file": "apps/web/features/settings/sections/PrivacySection.tsx",
+    "text": "How we protect your data"
+   }
+  ],
+  "needs": "a signed-in account; a second search after the chat is finished",
+  "note": "The code says temporary chats are left out of search, but the earlier check reported the completed chat appearing in global search, so the expected behaviour may not match.",
+  "reachable": "yes",
+  "steps": [
+   "Start a temporary chat and hover the Temporary chat label in the top bar.",
+   "Read the text shown: Won't be saved to your history and skips memory for this turn.",
+   "Open Settings > Privacy and expand How we protect your data.",
+   "Send a temporary chat, then search the history for a word from it and compare with Expected."
+  ],
+  "where": "Chat top bar: hover the Temporary chat label. Also Settings > Privacy > How we protect your data."
+ },
+ "S41.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Temporary chats never read or save memory."
+   }
+  ],
+  "needs": "a signed-in account with Memory on",
+  "note": "The code disables the + menu Memory row in a temporary chat (memoryDisabled when isIncognito) and says memory is never read, so no choice is offered; I searched ChatComposerNew.tsx for memory handling and found no per-chat read choice.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S41.05": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Won't be saved to your history and skips memory for this turn."
+   }
+  ],
+  "needs": "a signed-in account with Memory on",
+  "note": "A tester cannot see the memory store directly from the UI in the code I read, so this can only be compared through the note.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Start a temporary chat and hover the Temporary chat label.",
+   "Read the text Won't be saved to your history and skips memory for this turn.",
+   "Compare with Expected: nothing from the temporary chat should appear in memory."
+  ],
+  "where": "No control; the effect is that the memory of a temporary turn is skipped, shown only by the note on the temporary chat."
+ },
+ "S41.06": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Personalized"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Unpersonalized"
+   }
+  ],
+  "needs": "a signed-in account with custom instructions set",
+  "note": "none",
+  "reachable": "yes",
+  "steps": [
+   "Start a temporary chat.",
+   "Look at the switch in the top bar, which reads Personalized by default.",
+   "Click it and read the title hint: Personalized uses your profile, instructions and response style.",
+   "Send a message and compare the reply with Expected: custom instructions apply only when Personalized is on."
+  ],
+  "where": "Chat top bar > Personalized / Unpersonalized switch, shown only in a temporary chat."
+ },
+ "S41.07": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Plugins"
+   },
+   {
+    "file": "apps/web/lib/temporary-chat-policy.ts",
+    "text": "Won't be saved to your history or show up in search, and skips memory."
+   }
+  ],
+  "needs": "a signed-in account; a connector connected",
+  "note": "The connector wording is in the retention note under the Temporary chat row, not next to Plugins itself.",
+  "reachable": "yes",
+  "steps": [
+   "Start a temporary chat.",
+   "Click the + button under the message box and open Plugins.",
+   "Read the note under the Temporary chat row: Won't be saved to your history or show up in search, and skips memory.",
+   "Compare with Expected: the note should say how a connector behaves in a temporary chat, such as asking before each call."
+  ],
+  "where": "The + button under the message box > Plugins, while a temporary chat is open."
+ },
+ "S41.08": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Kept out of your Library and deleted with this temporary chat."
+   },
+   {
+    "file": "apps/web/features/settings/sections/PrivacySection.tsx",
+    "text": "How we protect your data"
+   }
+  ],
+  "needs": "a file to upload; a signed-in account",
+  "note": "The attach row's exact visible label was not located; the note is shown on that row.",
+  "reachable": "yes",
+  "steps": [
+   "Start a temporary chat and click the + button.",
+   "Hover or read the attach row note: Kept out of your Library and deleted with this temporary chat.",
+   "Open Settings > Privacy > How we protect your data and read: A temporary chat and its attachments are removed after 30 days.",
+   "Compare with Expected: the note should match what happens to an attached file."
+  ],
+  "where": "The + button under the message box > the file attach row while a temporary chat is open. Also Settings > Privacy > How we protect your data."
+ },
+ "S41.09": {
+  "labels": [],
+  "needs": "a signed-in account and an image or video generated in a temporary chat",
+  "note": "I searched apps/web/lib/server/media-assets.ts and apps/web/app/api/media/video/generate/route.ts; they set a temporary_chat flag but I found no visible keep or save control for generated output.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S41.10": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/pages/WebChatPage.tsx",
+    "text": "Save this chat?"
+   },
+   {
+    "file": "apps/web/features/chat/pages/WebChatPage.tsx",
+    "text": "Save chat"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The dialog appears only when the chat has messages to keep; an empty chat changes without a dialog.",
+  "reachable": "yes",
+  "steps": [
+   "Open a temporary chat with a few messages.",
+   "Click the + button and click Temporary chat to turn it off.",
+   "In the dialog Save this chat?, click Save chat.",
+   "Open the chat from the sidebar history and check the messages are there, and compare with Expected: everything is kept."
+  ],
+  "where": "The + button under the message box > Temporary chat (switch it off) > Save chat in the dialog."
+ },
+ "S41.11": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/pages/WebChatPage.tsx",
+    "text": "Save this chat?"
+   },
+   {
+    "file": "apps/web/features/chat/pages/WebChatPage.tsx",
+    "text": "Save chat"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "This dialog and the one for S41.10 are the same dialog; it states the count of messages and says the chat then follows memory and data settings.",
+  "reachable": "yes",
+  "steps": [
+   "Open a temporary chat with messages.",
+   "Click the + button and click Temporary chat to turn it off.",
+   "Read the dialog text: the number of messages, and any files, will be kept in your history.",
+   "Click Save chat, or close the dialog to cancel, and compare with Expected: the user sees what is kept before confirming."
+  ],
+  "where": "The + button under the message box > Temporary chat (switch it off), then read the dialog Save this chat?."
+ },
+ "S41.18": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/PrivacySection.tsx",
+    "text": "Start new chats as temporary"
+   },
+   {
+    "file": "apps/web/features/settings/sections/PrivacySection.tsx",
+    "text": "Only use models that do not train on your chats"
+   },
+   {
+    "file": "apps/web/features/settings/sections/PrivacySection.tsx",
+    "text": "How we use your data"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The earlier check marked the privacy controls as UI-only, and the retention text is inside expandable sections.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Privacy.",
+   "Find the switch Start new chats as temporary and read its line: Not saved to history or search, and deleted after 30 days.",
+   "Expand How we protect your data and How we use your data.",
+   "Compare with Expected: history, model training and retention each have a separate control or statement."
+  ],
+  "where": "Settings > Privacy (Start new chats as temporary, How we protect your data, How we use your data, and the Only use models that do not train on your chats switch)."
+ },
+ "S41.19": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/PrivacySection.tsx",
+    "text": "Start new chats as temporary"
+   },
+   {
+    "file": "apps/web/features/settings/sections/PrivacySection.tsx",
+    "text": "Not saved to history or search, and deleted after 30 days. Project chats are saved."
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The explanation for each setting is in the Privacy page, not on the chat surface.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Privacy.",
+   "Read the grey line under Start new chats as temporary: Not saved to history or search, and deleted after 30 days. Project chats are saved.",
+   "Read the grey line under Privacy requests and expand How we protect your data.",
+   "Compare with Expected: each setting explains what it does in place."
+  ],
+  "where": "Settings > Privacy: the short line under each switch, such as Start new chats as temporary, and the expandable sections."
+ },
+ "S41.20": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/PrivacySection.tsx",
+    "text": "Where each feature processes your data"
+   },
+   {
+    "file": "apps/web/features/settings/sections/PrivacySection.tsx",
+    "text": "Cloud, then the AI provider that serves the model you chose."
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "none",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Privacy.",
+   "Expand Where each feature processes your data.",
+   "Read the rows, for example Chat: Cloud, then the AI provider that serves the model you chose.",
+   "Compare with Expected: each feature names where its data is processed."
+  ],
+  "where": "Settings > Privacy > Where each feature processes your data."
+ }
+}

@@ -1,0 +1,540 @@
+{
+ "S19.01": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Send (Enter)"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Running"
+   }
+  ],
+  "needs": "a signed-in account that can run a model",
+  "note": "\"Running\" is CSS text on the user message, set when the turn starts; no separate accepted message was found.",
+  "reachable": "yes",
+  "steps": [
+   "Click the AGI Code icon in the activity bar, or run \"Code: Open Chat\" from the Command Palette.",
+   "Click the box \"Describe a task\u2026\", type a short question, and press Enter or click \"Send (Enter)\".",
+   "Look at your message: it should show \"Sending\", then \"Running\", and the AGI typing mark (aria label \"AGI is responding\") should appear before any answer text."
+  ],
+  "where": "AGI Code (activity bar icon) > chat box \"Describe a task\u2026\" > Send (Enter)"
+ },
+ "S19.02": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Queued"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Starting queued follow-up"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a signed-in account that can run a model",
+  "note": "Queued messages also show \"Edit this queued message\" and \"Cancel this queued message\" controls (aria labels only).",
+  "reachable": "yes",
+  "steps": [
+   "Send a question that takes a while to answer.",
+   "While the reply is still streaming, type a second message and press Enter or click \"Send (Enter)\".",
+   "Look at the second message: it should show \"Queued\".",
+   "When the first reply finishes, look for \"Starting queued follow-up\" above the box, with a count of waiting messages if others are queued."
+  ],
+  "where": "AGI Code > chat box \"Describe a task\u2026\" > Send (Enter) while a reply is still running"
+ },
+ "S19.03": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Attach or use tools"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "AGI is responding"
+   }
+  ],
+  "needs": "a file to attach (optional)",
+  "note": "No preparing-context wording was found; only the generic typing mark and the attached-context label are shown, so the Expected text naming context or memory reading is not visible.",
+  "reachable": "yes",
+  "steps": [
+   "Click the \"+\" button (title \"Attach or use tools\") and add a file or the editor context.",
+   "Type a question and press Enter or click \"Send (Enter)\".",
+   "Look between sending and the first answer: the AGI typing mark (aria label \"AGI is responding\") shows, and \"Context (N)\" appears under your message."
+  ],
+  "where": "AGI Code > chat box \"Describe a task\u2026\" > \"+\" button (\"Attach or use tools\") to add a file or context > Send (Enter)"
+ },
+ "S19.04": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Browse the web"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Attach or use tools"
+   }
+  ],
+  "needs": "a signed-in account that can run a model; the model must choose to search",
+  "note": "The search query text is not written by the webview; it appears only if the runtime puts it in the row summary.",
+  "reachable": "yes",
+  "steps": [
+   "Click the \"+\" button and choose \"Browse the web\"; the chip \"Browse the web for current sources\" appears.",
+   "Ask a question that needs current facts, for example a news question, and press Enter.",
+   "Look for a tool row with a search icon while the search runs, and the search summary text the runtime sends in that row."
+  ],
+  "where": "AGI Code > \"+\" button (\"Attach or use tools\") > Browse the web > chat box \"Describe a task\u2026\""
+ },
+ "S19.05": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   },
+   {
+    "file": "packages/contracts/local-runtime/src/developer-session.ts",
+    "text": "Ask"
+   }
+  ],
+  "needs": "a signed-in account that can run a model; a project folder open in VS Code",
+  "note": "The running-code wording comes from the runtime summary; the webview shows a terminal icon and a pending row.",
+  "reachable": "yes",
+  "steps": [
+   "Set the mode with the control labelled \"Mode and reasoning effort\" to \"Auto\" or \"Ask\".",
+   "Type \"run the tests in this project\" and press Enter.",
+   "Look for a tool row with a terminal icon. It shows as pending until it ends, then changes to done or error."
+  ],
+  "where": "AGI Code > chat box \"Describe a task\u2026\" > ask for a command to run, such as \"run the tests\""
+ },
+ "S19.06": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Connected apps"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Ask with it"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Open Agent Configuration"
+   }
+  ],
+  "needs": "a connected app or MCP server",
+  "note": "The plug icon is set for category mcp or connector; the service name must come from the tool row label, which was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Connect an app or MCP server (Settings via \"Code: Open Settings\" or \"Code: Open Agent Configuration\").",
+   "Open the chat, click \"Ask with it\" under \"Connected apps\", type a request, and press Enter.",
+   "Look for a tool row with a plug icon that names the connected service and shows as pending until it ends."
+  ],
+  "where": "AGI Code > start screen \"Connected apps\" > \"Ask with it\""
+ },
+ "S19.07": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Mode and reasoning effort"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Abort turn"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Approve"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Deny"
+   }
+  ],
+  "needs": "a signed-in account that can run a model; a project folder open in VS Code",
+  "note": "Button text is built from the approve verb plus \"once\" or \"for session\", so the full words are not literal in one file.",
+  "reachable": "yes",
+  "steps": [
+   "Open the mode control (aria label \"Mode and reasoning effort\") and choose \"Ask\".",
+   "Type a request that edits a file or runs a command, such as \"add a comment to README\", and press Enter.",
+   "Look for an approval card in the chat with buttons \"Approve once\", \"Approve \u2026 for session\", \"Deny\" and \"Abort turn\" (and \"Review change\" when offered). The reply should pause there."
+  ],
+  "where": "AGI Code > controls \"Mode and reasoning effort\" > Ask > chat box \"Describe a task\u2026\""
+ },
+ "S19.09": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "AGI is responding"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a signed-in account that can run a model",
+  "note": "The token handler re-shows the typing mark after each text update, so the mark stays under the streaming text rather than giving way to it; compare this with Expected.",
+  "reachable": "yes",
+  "steps": [
+   "Send any question and press Enter.",
+   "Watch the AGI typing mark (aria label \"AGI is responding\") after sending.",
+   "Look for the first answer text to appear in the reply bubble."
+  ],
+  "where": "AGI Code > chat box \"Describe a task\u2026\" > Send (Enter)"
+ },
+ "S19.10": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Stop response"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a signed-in account that can run a model",
+  "note": "The token handler appends and re-renders the text on each token.",
+  "reachable": "yes",
+  "steps": [
+   "Send a question that gets a long answer, for example \"explain how a hash map works\", and press Enter.",
+   "Watch the reply bubble while it is still streaming.",
+   "Look for the text to grow piece by piece, with the \"Stop response\" button available in the box."
+  ],
+  "where": "AGI Code > chat box \"Describe a task\u2026\" > Send (Enter)"
+ },
+ "S19.11": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Stop response"
+   }
+  ],
+  "needs": "a signed-in account that can run a model",
+  "note": "Rendering is incremental through renderAssistantInto; the exact markdown behaviour mid-stream was not traced further.",
+  "reachable": "yes",
+  "steps": [
+   "Send \"give me a list, a table and a short code example of a for loop\" and press Enter.",
+   "Watch the reply while it streams.",
+   "Look for the list, table and code block to show as formatted parts (not raw markdown symbols) while the reply is still streaming, and the code block to get its copy actions."
+  ],
+  "where": "AGI Code > chat box \"Describe a task\u2026\" > Send (Enter)"
+ },
+ "S19.15": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Completed"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a signed-in account that can run a model",
+  "note": "A plain text reply with no tool calls shows no completed label; only the typing mark stops and the stop button is replaced.",
+  "reachable": "yes",
+  "steps": [
+   "Send a question and press Enter.",
+   "Wait until the reply stops growing and the typing mark is gone.",
+   "For a reply that used tools, open the activity group above the reply and look for \"Completed\" in its summary line."
+  ],
+  "where": "AGI Code > chat box \"Describe a task\u2026\" > Send (Enter), then wait for the reply to end"
+ },
+ "S19.16": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Completed with errors"
+   }
+  ],
+  "needs": "a signed-in account that can run a model; a project folder open in VS Code",
+  "note": "No separate \"Partially completed\" wording exists in the code; \"Completed with errors\" is the only partial-style label, so it is not distinct from a failed run that shows \"error\" status.",
+  "reachable": "yes",
+  "steps": [
+   "Send a request that runs a command likely to fail, such as \"run a command that does not exist\", and press Enter.",
+   "Wait for the reply to end.",
+   "Look at the activity group summary above the reply: it should read \"Completed with errors\" when a tool step failed and the rest finished."
+  ],
+  "where": "AGI Code > chat box \"Describe a task\u2026\" > a request where one tool step fails (for example a command that exits with an error)"
+ },
+ "S19.17": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Stop response"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Stopping\u2026"
+   }
+  ],
+  "needs": "a signed-in account that can run a model",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Send a long question and wait until the reply is streaming.",
+   "Click the \"Stop response\" button in the box (title \"Stop response\").",
+   "Look just above the box: the status line should read \"Stopping\u2026\" and the button should be busy until the stop takes effect."
+  ],
+  "where": "AGI Code > chat box while a reply runs > \"Stop response\" button"
+ },
+ "S19.18": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "The turn was stopped."
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Stop response"
+   }
+  ],
+  "needs": "a signed-in account that can run a model",
+  "note": "\"The turn was stopped.\" is the interrupted failure headline in errorPresentation.ts; a separate cancelled state appears only on queued messages (\"Cancelled\"). Whether an error card appears on a user stop was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Send a long question, wait for some text to appear, then click \"Stop response\".",
+   "Wait for the stop to take effect.",
+   "Look at the reply: the text that already arrived should stay, and the turn should end with the stop copy or the status clearing."
+  ],
+  "where": "AGI Code > chat box while a reply runs > \"Stop response\" button"
+ },
+ "S19.20": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Search sessions"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Show Sessions History"
+   }
+  ],
+  "needs": "a signed-in account that can run a model",
+  "note": "The code reattaches a running turn on resume (ChatStateManager.ts), but closing the view calls cancelInFlight (sidebarProvider.ts) which interrupts the active turn, so a conflict is likely; no \"Resuming\" wording exists.",
+  "reachable": "yes",
+  "steps": [
+   "Start a long reply in a chat, then close the AGI Code view or editor chat tab while it runs.",
+   "Reopen AGI Code, find the session in the list (placeholder \"Search sessions\"), and open it.",
+   "Look for the running reply to continue with its activity rows still updating, rather than starting over."
+  ],
+  "where": "AGI Code > Search sessions (sessions list) > open the session that was running"
+ },
+ "S19.21": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "{provider} is taking too many requests right now. Try again in a moment, or switch model."
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Switch model"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Retry"
+   }
+  ],
+  "needs": "a provider that is rate-limiting this account; not forced by the tester",
+  "note": "Only reachable when the provider rate-limits; the copy and buttons are in code (errorPresentation.ts, provider_rate_limited).",
+  "reachable": "yes",
+  "steps": [
+   "Send a request on a model whose provider is rate-limiting this account (a tester cannot force this on demand).",
+   "Look for the error card with the rate-limit text and the buttons \"Retry\" and \"Switch model\".",
+   "Check that a wait time appears when the provider gave one."
+  ],
+  "where": "AGI Code > chat box \"Describe a task\u2026\" > Send (Enter) on a model whose provider is rate-limiting this account"
+ },
+ "S19.22": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Upgrade your plan"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "See your usage"
+   }
+  ],
+  "needs": "an account that has reached its usage limit",
+  "note": "The headline changes to a reset time or wait when the server supplies one.",
+  "reachable": "yes",
+  "steps": [
+   "Send a request from an account that has reached its usage limit.",
+   "Look for the error card with \"You have reached a usage limit on your account\u2026\".",
+   "Check that the card offers \"Upgrade your plan\" or \"See your usage\"."
+  ],
+  "where": "AGI Code > chat box \"Describe a task\u2026\" > Send (Enter) on an account that has used its usage limit"
+ },
+ "S19.23": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Sign Out of AGI Cloud"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Sign in to AGI"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account to sign out of",
+  "note": "Expired sign-in is not forced on demand; signing out is the nearest reproducible path, and an invalid provider key shows \"{provider}'s key was rejected\" with \"Sign in to {provider}\" instead.",
+  "reachable": "yes",
+  "steps": [
+   "Run \"Code: Sign Out of AGI Cloud\" from the Command Palette.",
+   "Open AGI Code and send a message.",
+   "Look for the error card \"Sign in to AGI to run this model on your plan.\" with the button \"Sign in to AGI\"."
+  ],
+  "where": "Command Palette > \"Code: Sign Out of AGI Cloud\" > AGI Code > chat box \"Describe a task\u2026\" > Send (Enter)"
+ },
+ "S19.24": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Restart Local Runtime"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Developer runtime needs setup"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "AGI's local runtime isn't running."
+   }
+  ],
+  "needs": "a computer where the local runtime can be stopped",
+  "note": "The message is set in errorPresentation.ts when the runtime is not running; the exact panel placement was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Stop the local runtime, or make it unavailable on this computer.",
+   "Open AGI Code and try to send a message.",
+   "Look for the runtime status panel titled \"Developer runtime needs setup\" with the message \"AGI's local runtime isn't running.\" and the \"Try again\" button."
+  ],
+  "where": "Command Palette > \"Code: Restart Local Runtime\" (or stop the local runtime) > AGI Code > runtime status panel"
+ },
+ "S19.25": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Switch model"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Retry"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "{provider} could not answer."
+   }
+  ],
+  "needs": "a provider that is down; not forced by the tester",
+  "note": "The card and its buttons are in code (provider_unavailable in errorPresentation.ts); the outage itself cannot be produced on demand.",
+  "reachable": "yes",
+  "steps": [
+   "Send a request on a model whose provider is unavailable (a tester cannot force this on demand).",
+   "Look for the error card \"\u2026 could not answer.\" with \"Retry\" and \"Switch model\" buttons.",
+   "Click \"Switch model\" and check that the request can continue on another model."
+  ],
+  "where": "AGI Code > chat box \"Describe a task\u2026\" > Send (Enter) on a model whose provider is down"
+ },
+ "S19.26": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "This conversation is longer than the model can read at once."
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a very long text to paste",
+  "note": "The card has no explicit fix suggestion or action for this code; a retry button appears only if the failure is marked retryable.",
+  "reachable": "yes",
+  "steps": [
+   "Paste a very long text (or keep one chat going until it is very long) and press Enter.",
+   "Look for the error card \"This conversation is longer than the model can read at once.\"",
+   "Check that the card tells you what to change before resending."
+  ],
+  "where": "AGI Code > chat box \"Describe a task\u2026\" > Send (Enter) with a very long message or conversation"
+ },
+ "S19.27": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "{provider} stopped replying part way through."
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Switch model"
+   }
+  ],
+  "needs": "a provider stream that breaks mid-answer; not forced by the tester",
+  "note": "The mid-stream failure cannot be forced; the stream_interrupted mapping is in errorPresentation.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Send a long question and wait for some answer text to appear (a provider fault is needed to break it).",
+   "Look for the error card \"\u2026 stopped replying part way through.\" with the text received so far still above it.",
+   "Check that the card offers \"Switch model\"."
+  ],
+  "where": "AGI Code > chat box \"Describe a task\u2026\" > Send (Enter); the provider stream breaks part way through"
+ },
+ "S19.28": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Search sessions"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "The previous turn stopped early. You can continue here."
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "AGI Code"
+   }
+  ],
+  "needs": "a signed-in account that can run a model; one stopped chat",
+  "note": "Only the stopped-turn notice was found for restored final state; failed-turn restore was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Have one finished chat and one chat where you pressed \"Stop response\" midway.",
+   "Quit VS Code completely and open it again.",
+   "Open AGI Code, find the chat in the list (placeholder \"Search sessions\"), and open it.",
+   "Look for the messages and the notice \"The previous turn stopped early. You can continue here.\" on the stopped chat."
+  ],
+  "where": "Quit and reopen VS Code > AGI Code (activity bar) > Search sessions > open the chat"
+ },
+ "S19.29": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Search sessions"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "The turn was stopped."
+   }
+  ],
+  "needs": "a device that stays on while you wait",
+  "note": "Code audit suggests the opposite of Expected: closing the view calls cancelInFlight (apps/extension-vscode/src/features/sidebar-webview/sidebarProvider.ts, view dispose) and the editor panel does the same (apps/extension-vscode/src/providers/chatEditorPanel.ts), which interrupts the active turn. Not verified by running.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Start a long reply and close the AGI Code view or the editor chat tab while it is still streaming.",
+   "Wait a minute, then reopen AGI Code and open the same session from \"Search sessions\".",
+   "Look at whether the reply finished and is there, or is still running, or shows \"The turn was stopped.\"."
+  ],
+  "where": "Close the AGI Code view or editor chat tab while a reply runs, then reopen the chat from the sessions list"
+ }
+}

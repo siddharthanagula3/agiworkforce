@@ -1,0 +1,222 @@
+{
+ "S76.01": {
+  "labels": [],
+  "needs": "none",
+  "note": "Searched apps/extension-vscode for text input; the rule lives in the model registry and routing, not in a screen.",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": "No control of its own; the registry and routing hold it"
+ },
+ "S76.02": {
+  "labels": [],
+  "needs": "none",
+  "note": "Searched apps/extension-vscode for text output; the rule lives in the model registry and routing, not in a screen.",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": "No control of its own; the registry and routing hold it"
+ },
+ "S76.03": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Select Model"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/model-picker/modelConstants.ts",
+    "text": "cannot read images you attach"
+   }
+  ],
+  "needs": "a model that reads images and one that does not (the app does not label this)",
+  "note": "The warning fires on any switch from an image-capable model to a non-capable one, not only when an image is attached. No refusal or reroute of image turns was found in the extension code; the picker does not show image support.",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P, type Code: Select Model, press Enter.",
+   "Click a model that cannot read images (the app does not label which models read images).",
+   "Look for the modal \"Switch to ...?\" whose detail says it \"cannot read images you attach\"; compare with Expected."
+  ],
+  "where": "Command Palette > Code: Select Model > pick a model that cannot read images while the current model can"
+ },
+ "S76.21": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Select Model"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/model-picker/modelConstants.ts",
+    "text": "cannot use tools, so it cannot read or edit files or run commands"
+   }
+  ],
+  "needs": "a model with tools and one without (the app does not label this)",
+  "note": "The only visible tool-capability signal is this switch warning; no refusal of tool-dependent turns was found in the extension code.",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P, type Code: Select Model, press Enter.",
+   "Click a model that cannot use tools (the picker does not show tool support).",
+   "Look for the modal \"Switch to ...?\" whose detail says it \"cannot use tools, so it cannot read or edit files or run commands\"; compare with Expected."
+  ],
+  "where": "Command Palette > Code: Select Model > pick a model without tools while the current model has tools"
+ },
+ "S76.22": {
+  "labels": [],
+  "needs": "none",
+  "note": "Searched for a parallel tool-call setting in the extension; none is shown to a person.",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": "No control of its own; the tool loop and harness catalog hold it"
+ },
+ "S76.23": {
+  "labels": [],
+  "needs": "none",
+  "note": "No screen names multi-round tool use; the registry value is not shown to a person.",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": "No control of its own; a multi-step tool task is only visible as the steps it runs"
+ },
+ "S76.26": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Mode and reasoning effort"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Reasoning effort"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "This model does not take a reasoning effort."
+   }
+  ],
+  "needs": "none",
+  "note": "The effort button is hidden while a reply streams; the picker does not say which models take effort.",
+  "reachable": "yes",
+  "steps": [
+   "In the chat composer, click the button labelled Mode and reasoning effort.",
+   "Read the Reasoning effort group in the popover.",
+   "Click the model pill (Auto) and choose a model; reopen Mode and reasoning effort.",
+   "Compare: the group lists only the levels that model takes, or shows This model does not take a reasoning effort. when it takes none."
+  ],
+  "where": "Chat composer > Mode and reasoning effort button > Reasoning effort group"
+ },
+ "S76.28": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Select Model"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Context after the last turn"
+   }
+  ],
+  "needs": "none",
+  "note": "Trimming or refusal of over-long requests is not visible in the app; the context figure appears only after a reply.",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P, type Code: Select Model, press Enter.",
+   "Read the grey detail line under a model: its id, then N context and N output.",
+   "Close the picker, send a message in chat, then hover over the context figure in the composer.",
+   "Compare the tooltip text Context after the last turn with Expected and with the context figure from the picker."
+  ],
+  "where": "Command Palette > Code: Select Model (the N context figure), and the context figure in the chat composer after a reply"
+ },
+ "S76.29": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Select Model"
+   }
+  ],
+  "needs": "none",
+  "note": "The output cap applied to a request is not shown; only the limit figure in the picker is visible.",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P, type Code: Select Model, press Enter.",
+   "Read the detail line under a model: its id, N context, then N output.",
+   "Compare the N output figure with Expected."
+  ],
+  "where": "Command Palette > Code: Select Model (the N output figure on each model's detail line)"
+ },
+ "S76.31": {
+  "labels": [],
+  "needs": "none",
+  "note": "Searched the extension for a streaming setting; none is shown to a person.",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": "No control of its own; the request path picks the transport"
+ },
+ "S76.32": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Prompt cache"
+   }
+  ],
+  "needs": "a chat whose route reports prompt-cache tokens (the app does not say which routes do)",
+  "note": "Whether routing chooses a model or route for its cache class is not visible in the app.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, open a chat and send a message; wait for the reply.",
+   "Send a second message in the same chat and wait for the reply.",
+   "Look under the second reply for a line starting Prompt cache with reused or written token counts.",
+   "Compare with Expected; the line appears only when the reply reports cache tokens."
+  ],
+  "where": "Chat reply > Prompt cache line under the reply (after a second message in the same chat)"
+ },
+ "S76.34": {
+  "labels": [],
+  "needs": "none",
+  "note": "Searched apps/extension-vscode/src for region and residency; no region setting or region text was found.",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": "No control of its own; routing refuses routes outside a region"
+ },
+ "S76.35": {
+  "labels": [],
+  "needs": "none",
+  "note": "Searched apps/extension-vscode/src for retention; none found. Local privacy mode concerns network access, not retention.",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": "No control of its own; routing honours retention rules"
+ },
+ "S76.37": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Select Model"
+   }
+  ],
+  "needs": "none",
+  "note": "The picker shows no deprecated or retired label; a tester cannot see which models were removed without the registry.",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P, type Code: Select Model, press Enter.",
+   "Scroll through every provider group in the list.",
+   "Compare the models listed with Expected: models whose availability is not live are left out of the list."
+  ],
+  "where": "Command Palette > Code: Select Model"
+ },
+ "S76.38": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/model-picker/modelConstants.ts",
+    "text": "Add another provider key"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/model-picker/modelConstants.ts",
+    "text": "Sign in to AGI Cloud"
+   }
+  ],
+  "needs": "a session whose route locks some models (for example a signed-out or Free session)",
+  "note": "Per-route price, retention and cache class are not shown in the picker; route ranking is not visible.",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P, type Code: Select Model, press Enter.",
+   "Scroll to the bottom and read the locked group headings.",
+   "Click a locked model and read the message that explains it cannot run on this session's route.",
+   "Compare the headings and message with Expected."
+  ],
+  "where": "Command Palette > Code: Select Model (locked group headings at the bottom of the list)"
+ }
+}

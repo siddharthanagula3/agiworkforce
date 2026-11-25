@@ -1,0 +1,561 @@
+{
+ "S59.01": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "text": "Run it this once. Tab adds a note for the agent."
+   }
+  ],
+  "needs": "a working AI sign-in or provider, and an empty test folder",
+  "reachable": "yes",
+  "steps": [
+   "Start agi in an empty test folder.",
+   "Type: create a file named notes.txt with one line of text.",
+   "At the approval prompt press y (Yes).",
+   "Check the file is created and the agent carries on with its reply. Try again and press n instead: the file is not created and the agent carries on."
+  ],
+  "where": "agi, then ask the agent to create a file; the approval prompt (Tool Approval) appears in the chat"
+ },
+ "S59.02": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "text": "Allow All"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "text": "Deny All"
+   }
+  ],
+  "needs": "a working AI sign-in or provider, and an empty test folder",
+  "note": "Allow All skips high-risk requests, so some may still prompt.",
+  "reachable": "yes",
+  "steps": [
+   "Type: create three files named a.txt, b.txt and c.txt, each with one line.",
+   "At the first approval prompt press t (Allow All), or press d (Deny All) on a second try.",
+   "Check the remaining file requests in that turn are approved, or refused, without more prompts."
+  ],
+  "where": "agi, then ask for several file changes in one request; the approval prompt has Allow All and Deny All"
+ },
+ "S59.03": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "text": "Allow Session"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "text": "Allow it without asking again until this session ends."
+   }
+  ],
+  "needs": "a working AI sign-in or provider, and an empty test folder",
+  "note": "Allow Session is not offered for requests that need an explicit decision.",
+  "reachable": "yes",
+  "steps": [
+   "Type: create a file named s1.txt with one line.",
+   "At the approval prompt press s (Allow Session).",
+   "Type: create a file named s2.txt with one line.",
+   "Check no prompt appears for the second file this session. Restart agi and check it asks again."
+  ],
+  "where": "agi, then at an approval prompt press s (Allow Session)"
+ },
+ "S59.04": {
+  "labels": [],
+  "needs": "none",
+  "note": "No per-app allow, ask or deny screen was found. MCP tool rules (mcp__<server>__<tool>) are read from a policy.toml file (apps/cli/src/platform/policy/engine.rs lines 357 and 456-464); the in-app /permissions controls cover command prefixes and domain rules only.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S59.05": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "/add-dir"
+   },
+   {
+    "file": "apps/cli/src/permissions.rs",
+    "text": "Directories the agent may read and change."
+   }
+  ],
+  "needs": "two test folders, one to grant and one not granted",
+  "reachable": "yes",
+  "steps": [
+   "Type /add-dir alone to list the folders the agent may change.",
+   "Type /add-dir <path of a test folder> and read the reply.",
+   "Ask the agent to create a file in that folder and check it does.",
+   "Type /remove-dir <same path>, then ask again and check the agent no longer changes that folder."
+  ],
+  "where": "agi, then type /add-dir <folder> and /remove-dir <folder> in the chat"
+ },
+ "S59.06": {
+  "labels": [
+   {
+    "file": "apps/cli/src/repl/slash_commands.rs",
+    "text": "/permissions"
+   },
+   {
+    "file": "apps/cli/src/repl/registry.rs",
+    "text": "domain:<host>"
+   }
+  ],
+  "needs": "an internet connection",
+  "reachable": "yes",
+  "steps": [
+   "Type /permissions deny domain:example.com and read the reply.",
+   "Ask the agent to fetch https://example.com.",
+   "Check the fetch is refused and no page content comes back.",
+   "Type /permissions remove deny domain:example.com to undo, then ask again and check the fetch is allowed or asked for."
+  ],
+  "where": "agi, then type /permissions deny domain:example.com in the chat"
+ },
+ "S59.07": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Show saved approval rules."
+   },
+   {
+    "file": "apps/cli/src/repl/slash_commands.rs",
+    "text": "/permissions"
+   }
+  ],
+  "needs": "none",
+  "note": "Rules are saved on this computer only, in the AGI config folder; the code has no sync between devices, and agi approvals export and import move them by hand.",
+  "reachable": "yes",
+  "steps": [
+   "In the chat type /permissions allow ls.",
+   "Quit agi, then in a terminal run agi approvals list.",
+   "Start agi again and type /permissions; check the rule is still listed under Allow.",
+   "Check the rule shows in the list from agi approvals list."
+  ],
+  "where": "agi, then type /permissions allow <command prefix> in the chat; check later with agi approvals list in a terminal"
+ },
+ "S59.08": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/screen_renderers.rs",
+    "text": "Shift+Tab"
+   },
+   {
+    "file": "apps/cli/src/tui/mod.rs",
+    "text": "Auto"
+   },
+   {
+    "file": "apps/cli/src/tui/mod.rs",
+    "text": "Plan"
+   }
+  ],
+  "needs": "none",
+  "note": "Bypass and FullAuto join the cycle only when agi starts with --allow-dangerously-skip-permissions (apps/cli/src/lib.rs). The Shift+Tab help line in screen_renderers.rs says Cycle plan / accept / reject, which is older wording.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi and read the mode badge in the status bar.",
+   "Press Shift+Tab once and read the banner and the badge.",
+   "Keep pressing Shift+Tab through Plan and Auto, then back to Default.",
+   "Check the badge shows the mode you just chose each time."
+  ],
+  "where": "agi, then press Shift+Tab to cycle the permission modes"
+ },
+ "S59.09": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "read-only tools only, no file edits. The model plans before acting."
+   },
+   {
+    "file": "apps/cli/src/tui/mod.rs",
+    "text": "Plan"
+   }
+  ],
+  "needs": "none",
+  "note": "No mode is named read-only; Plan is the closest. Its description does not mention send or execute tools, so check those separately.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi and press Shift+Tab until the badge says Plan.",
+   "Read the banner: it says read-only tools only, no file edits.",
+   "Type: create a file named p.txt.",
+   "Check no file is written and the agent offers a plan instead."
+  ],
+  "where": "agi, then press Shift+Tab until the badge says Plan"
+ },
+ "S59.10": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/mod.rs",
+    "text": "Default"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "file edits and commands ask first, except read-only ones like ls."
+   }
+  ],
+  "needs": "a working AI sign-in or provider, and an empty test folder",
+  "reachable": "yes",
+  "steps": [
+   "Start agi and check the badge says Default.",
+   "Type: list the files in this folder. It should run without a prompt.",
+   "Type: create a file named ask.txt with one line.",
+   "Check an approval prompt appears before the file is written."
+  ],
+  "where": "agi, in the Default mode (the badge says Default when agi starts)"
+ },
+ "S59.11": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/mod.rs",
+    "text": "Auto"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "file edits, read-only tools and commands the safety classifier clears run; everything else asks."
+   }
+  ],
+  "needs": "a working AI sign-in or provider, and an empty test folder",
+  "note": "In Auto, file edits run without asking, which is broader than the item's reads and searches only; compare the real behaviour with Expected.",
+  "reachable": "yes",
+  "steps": [
+   "Press Shift+Tab until the badge says Auto.",
+   "Read the banner: file edits, read-only tools and commands the safety classifier clears run; everything else asks.",
+   "Type: list the files in this folder. It should run without a prompt.",
+   "Type: create a file named auto.txt. Check whether it asks before writing."
+  ],
+  "where": "agi, then press Shift+Tab until the badge says Auto"
+ },
+ "S59.12": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "text": "Tool Approval"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "text": "Allow write_file to modify:"
+   }
+  ],
+  "needs": "a working AI sign-in or provider, and an empty test folder",
+  "note": "No separate line saying why approval is needed was found; the prompt shows the action and its target.",
+  "reachable": "yes",
+  "steps": [
+   "Type: create a file named summary.txt with one line.",
+   "At the approval prompt read the first line, which names the tool and the target.",
+   "Read the lines under it that show what the change does.",
+   "Compare with Expected: the summary says what will happen."
+  ],
+  "where": "agi, then ask for a change that needs approval and read the top of the Tool Approval prompt"
+ },
+ "S59.13": {
+  "labels": [],
+  "needs": "a connected app that can send a message",
+  "note": "A recipients line is built from tool arguments (apps/cli/src/approval_details.rs line 97). The only send tool found in the CLI is send_message for agent teams (apps/cli/src/agent/tools.rs line 10); connector approvals are in apps/cli/src/models/managed_approvals.rs. No send prompt was confirmed in the UI.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S59.14": {
+  "labels": [
+   {
+    "file": "apps/cli/src/features/exec/tools/mod.rs",
+    "text": "The agent wants to fetch a page from"
+   },
+   {
+    "file": "apps/cli/src/features/exec/tools/mod.rs",
+    "text": "destination:"
+   }
+  ],
+  "needs": "an internet connection, and a site not already allowed (a prompt appears only then)",
+  "note": "The destination lines are built around apps/cli/src/features/exec/tools/mod.rs line 1532; the cited line 708 was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Type: fetch https://example.com and summarize it.",
+   "At the approval prompt read the destination and address lines.",
+   "Check the host and full address match what you typed."
+  ],
+  "where": "agi, then ask the agent to fetch a web page; the approval prompt shows the destination"
+ },
+ "S59.15": {
+  "labels": [],
+  "needs": "none",
+  "note": "No payment or purchase tool was found in apps/cli. Amount and What is bought lines are built from tool arguments in apps/cli/src/approval_details.rs lines 99-100, but no prompt that uses them was confirmed.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S59.16": {
+  "labels": [
+   {
+    "file": "apps/cli/src/features/exec/tools/bash/mod.rs",
+    "text": "Allow this command?"
+   },
+   {
+    "file": "apps/cli/src/features/exec/tools/bash/mod.rs",
+    "text": "Command:"
+   }
+  ],
+  "needs": "a working AI sign-in or provider",
+  "note": "The command line is shown; where it will run (the working folder) was not confirmed in the overlay code.",
+  "reachable": "yes",
+  "steps": [
+   "Type: run the command ls -la in this folder.",
+   "At the approval prompt read the command line under Allow this command?.",
+   "Check the command matches what you asked for.",
+   "Press n to refuse; the command should not run."
+  ],
+  "where": "agi, then ask the agent to run a shell command; the approval prompt shows the command line"
+ },
+ "S59.17": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "text": "Allow write_file to modify:"
+   },
+   {
+    "file": "apps/cli/src/features/exec/tools/file_ops/mod.rs",
+    "text": "Allow this edit?"
+   }
+  ],
+  "needs": "a working AI sign-in or provider, and an empty test folder",
+  "note": "The prompt names the file; record-level detail was not found.",
+  "reachable": "yes",
+  "steps": [
+   "Type: create a file named records.txt with the line one.",
+   "Type: change the word one to two in records.txt.",
+   "At the approval prompt read the file path under the prompt line.",
+   "Check the path shown is the file that will change."
+  ],
+  "where": "agi, then ask the agent to change a file; the approval prompt names the file"
+ },
+ "S59.18": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "text": "scroll to the end before allowing"
+   },
+   {
+    "file": "apps/cli/src/features/exec/tools/file_ops/mod.rs",
+    "text": "Allow this edit?"
+   }
+  ],
+  "needs": "a working AI sign-in or provider",
+  "note": "The separate Diff Review screen (/diff-review) is not part of approvals.",
+  "reachable": "yes",
+  "steps": [
+   "Create a test file with several lines first.",
+   "Type: change the second line of that file to a new sentence.",
+   "At the approval prompt read the lines with + and - in the preview.",
+   "Scroll with the arrow keys or PgDn until the end is shown, then press y."
+  ],
+  "where": "agi, then ask the agent to edit a file that already has lines; the approval shows the change"
+ },
+ "S59.19": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "text": "Run it this once. Tab adds a note for the agent."
+   }
+  ],
+  "needs": "a working AI sign-in or provider, and an empty test folder",
+  "reachable": "yes",
+  "steps": [
+   "Type: create a file named allow.txt with one line.",
+   "At the approval prompt press y.",
+   "Check allow.txt is created and the chat shows the result."
+  ],
+  "where": "agi, then at an approval prompt press y (Yes)"
+ },
+ "S59.20": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "text": "Skip this call; the agent carries on. Tab adds a note saying what to do instead."
+   }
+  ],
+  "needs": "a working AI sign-in or provider, and an empty test folder",
+  "note": "Whether the model is told the call was denied was not confirmed in the overlay code.",
+  "reachable": "yes",
+  "steps": [
+   "Type: create a file named deny.txt with one line.",
+   "At the approval prompt press n.",
+   "Check deny.txt is not created and the agent carries on with its reply."
+  ],
+  "where": "agi, then at an approval prompt press n (No)"
+ },
+ "S59.22": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "text": "Enter answers with the note"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "text": "Skip this call; the agent carries on. Tab adds a note saying what to do instead."
+   }
+  ],
+  "needs": "a working AI sign-in or provider, and an empty test folder",
+  "reachable": "yes",
+  "steps": [
+   "Type: create a file named alt.txt.",
+   "At the approval prompt press Tab and type: write it to alt-two.txt instead.",
+   "Press Enter to answer with the note.",
+   "Check the agent follows the note and writes alt-two.txt instead of alt.txt."
+  ],
+  "where": "agi, then at an approval prompt press Tab, type a note and press Enter"
+ },
+ "S59.23": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "without an answer, so it did not run."
+   }
+  ],
+  "needs": "about 10 minutes of waiting and a pending approval",
+  "note": "No countdown was found in the overlay; the expiry message in the chat is the only sign.",
+  "reachable": "yes",
+  "steps": [
+   "Type: create a file named late.txt.",
+   "Press no key at the approval prompt for 10 minutes.",
+   "Check the chat shows: The approval for ... expired after 10 minutes without an answer, so it did not run.",
+   "Check late.txt was not created."
+  ],
+  "where": "agi, then leave an approval prompt unanswered for 10 minutes"
+ },
+ "S59.24": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Show recent approval decisions, newest first."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "No approval decisions recorded yet."
+   }
+  ],
+  "needs": "none",
+  "note": "Inside the chat, /permissions recent shows only the Recently denied list.",
+  "reachable": "yes",
+  "steps": [
+   "In agi, approve one request and deny another.",
+   "Quit agi and run agi approvals history.",
+   "Check the newest decision is listed first and says approved or denied.",
+   "Run agi approvals history --limit 1 and check one row is shown."
+  ],
+  "where": "a terminal, then agi approvals history"
+ },
+ "S59.25": {
+  "labels": [
+   {
+    "file": "apps/cli/src/repl/registry.rs",
+    "text": "/permissions remove <allow|ask|deny|session> <command-prefix>"
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Remove a saved or session rule."
+   }
+  ],
+  "needs": "a saved rule to remove",
+  "reachable": "yes",
+  "steps": [
+   "Type /permissions allow ls to save a rule.",
+   "Type /permissions remove allow ls.",
+   "Ask the agent to run ls and check it asks again.",
+   "For a folder, type /remove-dir <folder>; for a site, type /permissions remove deny domain:<host>."
+  ],
+  "where": "agi, then type /permissions remove allow <command prefix> in the chat"
+ },
+ "S59.26": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "List the approvals cloud Code sessions are waiting on."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Approve a waiting cloud Code step, by the handle"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "on your phone"
+   }
+  ],
+  "needs": "two signed-in devices and a cloud Code session paused on an approval",
+  "note": "The phone path needs Remote Control running; the cloud path is driven by agi code approve and agi code reject.",
+  "reachable": "yes",
+  "steps": [
+   "Start a cloud Code session that pauses for an approval.",
+   "In a terminal run agi code approvals and note the handle.",
+   "On a second signed-in device answer the approval, or run agi code approve <handle> in a terminal.",
+   "Check the first device shows the result: the chat shows Allowed on your phone or Denied on your phone for a phone answer."
+  ],
+  "where": "a terminal, then agi code approvals for cloud Code sessions; the phone path is Remote Control"
+ },
+ "S59.28": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "text": "Always allow"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "text": "Allow Session"
+   },
+   {
+    "file": "apps/cli/src/features/exec/tools/bash/mod.rs",
+    "text": "DANGEROUS:"
+   }
+  ],
+  "needs": "a Free account or a paid account (no sign-in noted in code); a request that makes the agent run a shell command",
+  "note": "Stronger confirmation is in code (requires_explicit_decision hides Allow Session; Always allow hidden for commands without a saved prefix), but the DANGEROUS: line is printed on a non-overlay path (eprintln) so a tester may not see it in the TUI; re-ask on each run was not verified.",
+  "reachable": "yes",
+  "steps": [
+   "Start the app by typing agi in the terminal and wait for the chat prompt.",
+   "Type a request that makes the agent run a shell command that needs approval, for example: run sudo ls.",
+   "When the Tool Approval prompt opens, look at the buttons: a request that needs explicit decision hides Allow Session, and a command with no saved rule hides Always allow.",
+   "Look for the danger wording on the command line (DANGEROUS:) and compare with Expected: a stronger warning, no permanent allow, and the agent asks again next time."
+  ],
+  "where": "agi (start the app), then type a chat request that makes the agent run a shell command, such as \"run sudo ls\", and look at the approval prompt that opens (buttons: Yes, No, Allow Session, Always allow, Deny All, Allow All)"
+ },
+ "S59.30": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "text": "Yes"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Waiting for your approval"
+   }
+  ],
+  "needs": "none beyond a request that triggers an approval prompt",
+  "note": "The resume behaviour is inner (the parked turn is continued by the broker callback in tui_app.rs); it is visible only as the turn continuing. The phone path (\"Allowed on your phone:\" in tui_app.rs) depends on Remote Control, which the owner hid in v1.",
+  "reachable": "yes",
+  "steps": [
+   "Start the app by typing agi and send a request that makes the agent change a file or run a command.",
+   "When the Tool Approval prompt opens, press y (Yes) or select Yes with the arrow keys and press Enter.",
+   "Watch the chat: the same tool row should run and the agent should continue the same reply without a new prompt.",
+   "Compare with Expected: the run continues from where it stopped, with no need to send the request again."
+  ],
+  "where": "agi (start the app), then type a chat request that needs approval, such as \"create a file named test.txt\", then at the Tool Approval prompt choose Yes and watch the chat"
+ },
+ "S59.31": {
+  "labels": [
+   {
+    "file": "apps/cli/src/features/exec/tools/mod.rs",
+    "text": "Command was not approved and did not run."
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Waiting for your approval"
+   }
+  ],
+  "needs": "none beyond a request that triggers an approval prompt",
+  "note": "The transcript shows the tool outcome and the denial text, but no separate line naming the button chosen was found; the decision itself is not written as its own receipt line.",
+  "reachable": "yes",
+  "steps": [
+   "Start the app by typing agi and send a request that triggers an approval, for example: create a file named test.txt.",
+   "At the Tool Approval prompt choose Yes, then choose a second request and choose No.",
+   "Look at the tool row in the transcript: a run tool shows its completed state, and a denied call shows the text it did not run.",
+   "Compare with Expected: the transcript shows what was decided and what happened (ran, result, or denied)."
+  ],
+  "where": "agi (start the app), then type a chat request that needs approval, answer the Tool Approval prompt (Yes, No or Deny All), and read the transcript row for the tool"
+ }
+}

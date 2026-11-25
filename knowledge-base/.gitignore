@@ -1,0 +1,14 @@
+# Stays on the computer where the work is done.
+
+# Screenshots, recordings and server logs from hands-on runs.
+/70-qa/evidence/*
+!/70-qa/evidence/README.md
+
+# A link to saved copies of third-party pages, which are not copied into the project.
+/50-competitors/data/leader-pages-saved
+
+# Leads from studying the leaders' apps. They do not enter the repository.
+/50-competitors/data/reverse-engineer-extra.csv
+/50-competitors/data/lists-to-read/reverse-engineer-new.md
+
+__pycache__/

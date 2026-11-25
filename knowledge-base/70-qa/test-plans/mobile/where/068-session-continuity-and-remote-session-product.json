@@ -1,0 +1,282 @@
+{
+ "S68.01": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/pairing.ts",
+    "text": "AGI Code"
+   },
+   {
+    "file": "apps/mobile/src/features/cloud-code/CloudCodeSessionsScreen.tsx",
+    "text": "Sessions"
+   }
+  ],
+  "needs": "a second client signed in to the same account, with at least one cloud session",
+  "note": "No session ID is shown on the screens read, so the tester compares title and repository. The button that opens the side menu was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in on the phone, open the side menu and tap \"AGI Code\".",
+   "Note the title and repository of one session in the \"Sessions\" list.",
+   "On a second client (web app or desktop app) signed in to the same account, find the session with the same title.",
+   "Compare: both clients should show the same session with the same title and repository, not a copy."
+  ],
+  "where": "AGI Code > Sessions list (tap a session row)"
+ },
+ "S68.02": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/pairing.ts",
+    "text": "AGI Code"
+   },
+   {
+    "file": "packages/contracts/types/src/cloud-code.ts",
+    "text": "Earlier turns of this session are not shown here."
+   }
+  ],
+  "needs": "a second client signed in to the same account, with a session that has several turns",
+  "note": "The phone can show a notice that earlier turns are not shown, so the history may be cut short by design.",
+  "reachable": "yes",
+  "steps": [
+   "Open AGI Code and tap a session.",
+   "Scroll the transcript up to the oldest turn.",
+   "On the second client, open the same session.",
+   "Compare the turns: both should show the same conversation history."
+  ],
+  "where": "AGI Code > tap a session row"
+ },
+ "S68.03": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/cloud-code/presentation.ts",
+    "text": "Changes"
+   },
+   {
+    "file": "packages/contracts/types/src/pairing.ts",
+    "text": "AGI Code"
+   }
+  ],
+  "needs": "a second client signed in to the same account, with a session that has a working branch",
+  "note": "The branch appears in the workspace line built by cloudCodeWorkspaceLabel; the exact text format was not confirmed on screen.",
+  "reachable": "yes",
+  "steps": [
+   "Open AGI Code and tap a session.",
+   "Read the small line under the session title, which shows the workspace (repository and branch).",
+   "Tap the \"Changes\" button in the session header (git-branch icon) to open the changes sheet.",
+   "Compare the branch with the branch shown on the second client for the same session."
+  ],
+  "where": "AGI Code > tap a session > small line under the session title, then the Changes button"
+ },
+ "S68.04": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/cloud-code/presentation.ts",
+    "text": "Group by repository"
+   },
+   {
+    "file": "packages/contracts/types/src/pairing.ts",
+    "text": "AGI Code"
+   }
+  ],
+  "needs": "a second client signed in to the same account, with a session linked to a repository",
+  "note": "Sessions without a repository go under the heading \"No repository\" (presentation.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Open AGI Code.",
+   "Tap the sort button at the top right (its label starts with \"View and sort sessions\").",
+   "Tick \"Group by repository\".",
+   "Check that the list is split into sections named by repository, and that the session sits under the same repository as on the second client."
+  ],
+  "where": "AGI Code > View and sort sessions button > Group by repository"
+ },
+ "S68.06": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/cloud-code/presentation.ts",
+    "text": "Task options and usage"
+   },
+   {
+    "file": "apps/mobile/src/features/cloud-code/presentation.ts",
+    "text": "Task options"
+   }
+  ],
+  "needs": "a second client signed in to the same account, with a cloud session",
+  "note": "The model name is shown on the composer line. No visible instruction-file setting was found in the mobile cloud session screens (searched apps/mobile/src/features/cloud-code and companion for \"instruction\").",
+  "reachable": "yes",
+  "steps": [
+   "Open a session in AGI Code.",
+   "Read the line under the message box that shows the model name and, when known, the context percentage.",
+   "Tap \"Task options and usage\" and read the \"Task options\" sheet (Mode and Usage).",
+   "Compare the model with the second client for the same session."
+  ],
+  "where": "AGI Code > tap a session > Task options and usage"
+ },
+ "S68.08": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/cloud-code.ts",
+    "text": "Approval required"
+   },
+   {
+    "file": "packages/contracts/types/src/pairing.ts",
+    "text": "AGI Code"
+   }
+  ],
+  "needs": "a second client signed in to the same account, and a task that asks for an approval",
+  "note": "The session reloads about every 4 seconds while a turn runs (CLOUD_CODE_SESSION_POLL_INTERVAL_MS in useCloudCodeSession.ts), so the card can take a few seconds to show.",
+  "reachable": "yes",
+  "steps": [
+   "Start a task on the second client (desktop or web) that needs a tool approval.",
+   "On the phone, open AGI Code and that session.",
+   "Look for the \"Approval required\" card in the session with its approve and reject buttons.",
+   "Tap approve on the phone and check that the approval card clears on the second client."
+  ],
+  "where": "AGI Code > open a session that is waiting for approval"
+ },
+ "S68.09": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/cloud-code.ts",
+    "text": "Describe a task or ask a question"
+   },
+   {
+    "file": "packages/contracts/types/src/cloud-code.ts",
+    "text": "Working"
+   },
+   {
+    "file": "packages/contracts/types/src/cloud-code.ts",
+    "text": "Ran a command"
+   }
+  ],
+  "needs": "a second client signed in to the same account, and a task that runs tools",
+  "note": "The phone reloads the session about every 4 seconds while a turn runs, so activity may appear with a short delay.",
+  "reachable": "yes",
+  "steps": [
+   "Open the same session on the phone and on a second client, side by side.",
+   "On the phone, type a task in the box that says \"Describe a task or ask a question\" and send it.",
+   "Watch the \"Working\" row on the phone and on the second client.",
+   "Look for tool activity lines such as \"Ran a command\" on both clients."
+  ],
+  "where": "AGI Code > open a session > type in the message box and send"
+ },
+ "S68.11": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/cloud-code.ts",
+    "text": "Stop the task"
+   },
+   {
+    "file": "packages/contracts/types/src/cloud-code.ts",
+    "text": "Stopping the task"
+   }
+  ],
+  "needs": "a second client signed in to the same account, and a task that is still running",
+  "note": "Send, stop and approve use the same composer and approval card, so one client can drive the session the same way as the other.",
+  "reachable": "yes",
+  "steps": [
+   "Send a task that runs for a while.",
+   "Open the same session on the phone while it is running.",
+   "Check that the composer shows the \"Stop the task\" control, and that a pending approval can be answered from the phone.",
+   "Tap \"Stop the task\" and watch the label change to \"Stopping the task\"; check the second client shows the same change."
+  ],
+  "where": "AGI Code > open a running session > Stop the task"
+ },
+ "S68.14": {
+  "labels": [],
+  "needs": "a paired desktop computer with its sessions running locally",
+  "note": "The remote screens (companion index and companion code thread) show \"Remote\" as unavailable in this build, because FEATURES.companion is false in apps/mobile/lib/v1FeatureFlags.ts. The computer session list in AGI Code (useComputerCodeSessions) was not traced to a visible control that continues a local session.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S68.19": {
+  "labels": [],
+  "needs": "a paired desktop, CLI or VS Code client on the same account",
+  "note": "The \"Devices\" heading (CodeDevicesSection.tsx) and the \"Your computers\" card (AccountComputersCard.tsx) both return nothing while FEATURES.companion is false in apps/mobile/lib/v1FeatureFlags.ts, so they are not visible in this build.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S68.20": {
+  "labels": [],
+  "needs": "a paired desktop, CLI or VS Code client on the same account",
+  "note": "The card is titled \"Your computers\" and shows presence as Online, Asleep or Offline (PRESENCE_LABELS in AccountComputersCard.tsx), but it is hidden while FEATURES.companion is false in apps/mobile/lib/v1FeatureFlags.ts.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S68.21": {
+  "labels": [],
+  "needs": "a paired desktop with its capabilities set",
+  "note": "Capability names are Remote control, Browser, Computer use, Local models and Local MCP (CAPABILITY_LABELS in AccountComputersCard.tsx). The card is hidden while FEATURES.companion is false in apps/mobile/lib/v1FeatureFlags.ts.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S68.22": {
+  "labels": [],
+  "needs": "a computer with AGI Desktop open, and a phone with camera access for the QR code",
+  "note": "Pairing controls exist (\"Add device\" in packages/contracts/types/src/pairing.ts, \"Pair with Desktop\" and \"Scan QR Code\" in ConnectionStateViews.tsx), but all are hidden while FEATURES.companion is false in apps/mobile/lib/v1FeatureFlags.ts.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S68.23": {
+  "labels": [],
+  "needs": "a paired desktop and a phone that is paired with it",
+  "note": "The phone side is the \"Disconnect\" button in DesktopInfoCard.tsx with a confirmation alert in companion/index.tsx, but both are hidden while FEATURES.companion is false. The desktop side was not checked.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S68.25": {
+  "labels": [],
+  "needs": "a paired desktop that can be put to sleep or closed",
+  "note": "The text \"is offline\" and the explanation about remote access stopping are in companion/code/[threadId].tsx, but that screen shows \"Remote\" as unavailable while FEATURES.companion is false in apps/mobile/lib/v1FeatureFlags.ts.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S68.26": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/pairing.ts",
+    "text": "AGI Code"
+   }
+  ],
+  "needs": "a second client signed in to the same account, and a running session",
+  "note": "This covers only the cloud session reloading when the app returns to the front (AppState listener in useCloudCodeSession.ts). The desktop reconnect screen (\"Reconnecting to\" in companion/code/[threadId].tsx) is hidden while FEATURES.companion is false.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open AGI Code and tap a session.",
+   "Switch away from AGI Mobile or lock the phone for a short while, and start a new turn on the second client for the same session.",
+   "Come back to AGI Mobile without reopening the session.",
+   "Check that the session shows the new turns and state."
+  ],
+  "where": "Effect seen on an open AGI Code session after the app comes back to the front"
+ },
+ "S68.30": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/drawer/components/DrawerContent.tsx",
+    "text": "AGI Work"
+   },
+   {
+    "file": "apps/mobile/src/features/tasks/CloudTasksScreen.tsx",
+    "text": "Open notification settings"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/notifications/categories.ts",
+    "text": "Task and approval updates"
+   }
+  ],
+  "needs": "a second client signed in to the same account, push notifications allowed for AGI Mobile on the phone",
+  "note": "The notification titles come from apps/web/lib/services/agent-notification-service.ts, and the push is triggered by apps/web/app/api/code/local-sessions/activity/route.ts. The tester needs a second client to produce the activity. The reach of the notification settings from the main Settings screen was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in on the phone, open the side menu and tap \"AGI Work\".",
+   "Tap \"Open notification settings\" and check that \"Task and approval updates\" is on. Its description reads \"Approval requests and finished or failed tasks\".",
+   "On a second client, start a cloud session task that needs approval or finishes.",
+   "Check the phone shows a notification titled \"Approval needed\", \"Agent run finished\" or \"Agent run failed\"."
+  ],
+  "where": "AGI Work > Open notification settings > Task and approval updates"
+ }
+}

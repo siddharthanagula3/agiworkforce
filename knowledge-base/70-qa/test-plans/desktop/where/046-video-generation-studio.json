@@ -1,0 +1,233 @@
+{
+ "S46.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Create video"
+   }
+  ],
+  "needs": "a paid account (Create video is offered only to an entitled tier)",
+  "note": "The + button's exact visible label was not confirmed in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a new chat.",
+   "Click the + button in the composer and click Create video.",
+   "Type a text prompt in the composer and press send.",
+   "Look for a video placeholder in the chat that becomes a playable clip, and compare with Expected."
+  ],
+  "where": "Composer > + menu > Create video, then type a prompt and send"
+ },
+ "S46.05": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Select video model"
+   }
+  ],
+  "needs": "a paid account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Turn on video mode with Composer > + menu > Create video.",
+   "Click the model button in the composer that shows a model name (aria-label Select video model).",
+   "Look at the list of video models that opens and pick one.",
+   "Check that the button now shows the chosen model name."
+  ],
+  "where": "Composer (video mode on) > Select video model button"
+ },
+ "S46.06": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Select video length"
+   }
+  ],
+  "needs": "a paid account",
+  "note": "The length pill is inside the video-mode controls; the options depend on the chosen model and quality.",
+  "reachable": "yes",
+  "steps": [
+   "Turn on video mode with Composer > + menu > Create video.",
+   "Click the pill button that shows a length such as 5s (aria-label Select video length).",
+   "Look at the menu of options, each shown as N seconds, and pick one.",
+   "Check that the pill now shows the chosen length before sending."
+  ],
+  "where": "Composer (video mode on) > Select video length button"
+ },
+ "S46.07": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Select video aspect ratio"
+   }
+  ],
+  "needs": "a paid account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Turn on video mode with Composer > + menu > Create video.",
+   "Click the pill that shows a ratio such as 16:9 (aria-label Select video aspect ratio).",
+   "Pick another ratio from the menu labelled Video aspect ratio.",
+   "Check that the pill shows the new ratio and the menu closes."
+  ],
+  "where": "Composer (video mode on) > Select video aspect ratio button"
+ },
+ "S46.08": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Select video quality"
+   }
+  ],
+  "needs": "a paid account, a finished clip to check the resolution",
+  "note": "The UI offers quality labels, not raw pixel sizes; checking the output resolution needs a file tool outside the app.",
+  "reachable": "yes",
+  "steps": [
+   "Turn on video mode with Composer > + menu > Create video.",
+   "Click the pill that shows a quality label (aria-label Select video quality).",
+   "Pick another quality from the menu labelled Video quality.",
+   "Send a prompt and compare the clip's resolution with the chosen quality."
+  ],
+  "where": "Composer (video mode on) > Select video quality button"
+ },
+ "S46.26": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MediaGenerationPlaceholder.tsx",
+    "text": "Video progress"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/MediaGenerationPlaceholder.tsx",
+    "text": "Stop generating"
+   }
+  ],
+  "needs": "a paid account, a video generation in progress",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Send a video prompt in video mode.",
+   "Look at the placeholder that appears in the reply, with a progress bar named Video progress and a percentage.",
+   "Watch the percentage and the elapsed time change while the clip is generated.",
+   "Compare with Expected: the user sees progress until the clip is ready."
+  ],
+  "where": "Chat, after sending a video prompt > progress placeholder in the reply"
+ },
+ "S46.27": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/VideoCostEstimate.tsx",
+    "text": "This video is estimated at"
+   }
+  ],
+  "needs": "a paid account with credits",
+  "note": "The estimate text is built as a template in the code; whether it is shown as visible text or only as a tooltip was not fully confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Turn on video mode with Composer > + menu > Create video and pick a video model.",
+   "Choose a length, ratio and quality.",
+   "Look for the note that starts with This video is estimated at near the video pills; hover it to see the full text in the tooltip.",
+   "Compare the amount with your available credits, and after sending check the cost once the clip is done."
+  ],
+  "where": "Composer (video mode on, a video model selected) > estimate note near the video pills"
+ },
+ "S46.28": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MediaGenerationPlaceholder.tsx",
+    "text": "Stop generating"
+   }
+  ],
+  "needs": "a paid account, a video generation still in progress",
+  "note": "Server-side cancellation has special cases for providers; whether the job ends for every provider was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Start a video generation in video mode.",
+   "While the progress placeholder is shown, click Stop generating at its top-right.",
+   "Look for the button to change to Stopping\u2026 and then for the note Cancellation requested.",
+   "Check that the placeholder stops progressing and the job ends, and compare with Expected."
+  ],
+  "where": "Chat, during a video generation > Stop generating button on the progress placeholder"
+ },
+ "S46.29": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Try video again"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Video generation ended"
+   }
+  ],
+  "needs": "a failed video job marked retryable (hard to produce on demand)",
+  "note": "A second Retry button also appears on a video player that fails to load; it is not the failed-job retry.",
+  "reachable": "yes",
+  "steps": [
+   "Find a failed video reply titled Video generation ended.",
+   "Read the text under it; the button shows only when the job is marked as retryable.",
+   "Click Try video again.",
+   "Check that a new video starts with the same model, ratio, quality and length as before."
+  ],
+  "where": "Chat, a failed video reply > Try video again button"
+ },
+ "S46.30": {
+  "labels": [
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Library"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Videos"
+   }
+  ],
+  "needs": "a Free or paid account with at least one finished clip",
+  "note": "The Library entry in the sidebar can be hidden by a setting; the tab labels are All, Images, Videos, Documents, Artifacts, Uploads and Generated files.",
+  "reachable": "yes",
+  "steps": [
+   "Click Library in the sidebar.",
+   "Click the Videos tab.",
+   "Look for all finished clips listed together in the gallery."
+  ],
+  "where": "Sidebar > Library > Videos tab"
+ },
+ "S46.31": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Videos"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Generated video"
+   }
+  ],
+  "needs": "a finished clip in the account",
+  "note": "The chat clip has native controls labelled Generated video; the opening step in the Library viewer was not traced in detail.",
+  "reachable": "yes",
+  "steps": [
+   "Open Library > Videos.",
+   "Click a clip to open it in the viewer.",
+   "Use the player controls to play, pause and drag the timeline.",
+   "Compare with Expected: the clip plays, pauses and scrubs."
+  ],
+  "where": "Library > Videos tab > click a clip; or the clip in the chat reply"
+ },
+ "S46.32": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Download video"
+   }
+  ],
+  "needs": "a finished clip in a chat",
+  "note": "The Library viewer also has a Download button named Download plus the file name.",
+  "reachable": "yes",
+  "steps": [
+   "Open a finished clip in a chat reply.",
+   "Hover over the clip, or Tab to it, so the round Download video button shows at its top-right.",
+   "Click Download video.",
+   "Check that the file saves to the Downloads folder as a playable video."
+  ],
+  "where": "Chat, finished video reply > Download video button (top-right of the clip)"
+ }
+}

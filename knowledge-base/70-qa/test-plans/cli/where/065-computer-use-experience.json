@@ -1,0 +1,29 @@
+{
+ "S65.12": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "/add-dir"
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "Added directories the agent may read and change:"
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "the agent can no longer reach it"
+   }
+  ],
+  "needs": "a folder on this Mac to add and remove",
+  "note": "The grant is a direct command with no approval prompt, and the code gives no separate on-screen permission dialog for folders. The code path for the agent's own folder access also says 'Local file access: explicit workspace roots only' in the privacy screen. I did not confirm the agent's behaviour after revoke, only the message text.",
+  "reachable": "yes",
+  "steps": [
+   "Open a terminal, run agi, and wait for the prompt.",
+   "Type /add-dir ~/Desktop/some-folder (use a real folder on this Mac) and press Return. Look for a line starting with 'added:' that shows the folder path and whether instructions were found.",
+   "Type /add-dir alone and press Return. Look for the heading 'Added directories the agent may read and change:' with the folder listed under it.",
+   "Type /remove-dir ~/Desktop/some-folder and press Return. Look for 'removed:' followed by 'the agent can no longer reach it'.",
+   "Type /add-dir alone again. Compare with Expected: the folder should be gone from the list after the revoke."
+  ],
+  "where": "Start the app with agi, then type /add-dir <folder> at the prompt (for example /add-dir ~/Desktop/some-folder). To see the list, type /add-dir with no folder. To revoke, type /remove-dir <folder>. The same grant can also be made at launch with agi --add-dir <folder>."
+ }
+}

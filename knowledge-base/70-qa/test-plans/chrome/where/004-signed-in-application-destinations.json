@@ -1,0 +1,294 @@
+{
+ "S4.01": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "New chat"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "If an unsent draft is open, the panel shows \"Send or clear your draft before leaving this unsent chat.\" instead of starting a new chat. The command palette (Ctrl/Cmd+K) also has New chat.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI side panel while signed in.",
+   "Click the pen icon in the header whose tooltip and accessible name is New chat.",
+   "Look for an empty chat with the composer ready to type in."
+  ],
+  "where": "Side panel header > New chat (pen icon)"
+ },
+ "S4.02": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Recent chats"
+   }
+  ],
+  "needs": "a signed-in account with at least one saved chat",
+  "note": "The command palette (Ctrl/Cmd+K) > Search chats opens the same Recent chats list.",
+  "reachable": "yes",
+  "steps": [
+   "Click the clock icon in the header to open Recent chats.",
+   "Click a chat title in the list.",
+   "Look for that chat's transcript and check that the composer lets you send a new message to continue it."
+  ],
+  "where": "Side panel header > Recent chats (clock icon)"
+ },
+ "S4.03": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Recent chats"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Search recent chats"
+   }
+  ],
+  "needs": "a signed-in account with several saved chats",
+  "note": "The search field is in the Recent chats sheet, not a separate page. Code for matching titles and message text was not checked in detail.",
+  "reachable": "yes",
+  "steps": [
+   "Click the clock icon in the header to open Recent chats.",
+   "Click the Search recent chats field and type a word from a past chat title or message.",
+   "Check that only matching past chats are listed.",
+   "Click one of them and check that its transcript opens."
+  ],
+  "where": "Side panel header > Recent chats (clock icon) > Search recent chats"
+ },
+ "S4.06": {
+  "labels": [],
+  "needs": "a signed-in account with projects",
+  "note": "No Projects index screen found in apps/extension. Project choices appear only in the chat history menu (Move to project, Add to project) and as a Projects group when typing @ in the composer. Searched the locale file and src for Projects, project list and project keys.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S4.07": {
+  "labels": [],
+  "needs": "a signed-in account with a project",
+  "note": "No project overview screen found in apps/extension. The only project element is the chip that reads \"Project \u00b7 NAME\" with a clear button, shown after a project is selected. Searched the locale file and src for project keys.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S4.08": {
+  "labels": [],
+  "needs": "a signed-in account with a project that has chats",
+  "note": "No list of project conversations found in apps/extension. Searched the locale file and src for project keys.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S4.10": {
+  "labels": [],
+  "needs": "a signed-in account with a project",
+  "note": "No project instructions editor found in apps/extension. Searched the locale file for instruction and project keys and src for project screens.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S4.13": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "AI Assistant"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "AGI Work"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Tasks"
+   }
+  ],
+  "needs": "a paid account with the AGI Work capability (a Free account sees a gated note instead)",
+  "note": "The button shows AI Assistant by default and the current model name after a model is chosen. The AGI Work switch appears only when the plan allows it.",
+  "reachable": "yes",
+  "steps": [
+   "Click the AI Assistant button above the composer to open the model menu.",
+   "Turn on the AGI Work switch.",
+   "Type a goal in the composer and send it. Check that a multi-step AGI Work run starts.",
+   "Click More (...) > Tasks and check that the run appears in the list of recent work."
+  ],
+  "where": "AI Assistant button above the composer > AGI Work switch; recent work under More (...) > Tasks"
+ },
+ "S4.14": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Tasks"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "All tasks on the web"
+   }
+  ],
+  "needs": "a signed-in account with at least one running or finished task",
+  "note": "The Tasks sheet has no filter control in the code, so the Expected filter between active and finished tasks was not found. Only Stop appears on live tasks.",
+  "reachable": "yes",
+  "steps": [
+   "Click More (...) in the header, then click Tasks.",
+   "Look at the list: each row shows a title, a state label and a time.",
+   "Check whether any finished tasks can be hidden or filtered out.",
+   "Click All tasks on the web at the bottom to compare the full list."
+  ],
+  "where": "More (...) > Tasks"
+ },
+ "S4.15": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Tasks"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Open"
+   }
+  ],
+  "needs": "a signed-in account with a task that has a conversation",
+  "note": "The side panel shows only the title, state and time. Status, steps, outputs and pending decisions are expected on the web page, which the extension code does not show.",
+  "reachable": "yes",
+  "steps": [
+   "Click More (...) in the header, then click Tasks.",
+   "Click Open on a task row.",
+   "Look for a new browser tab on the AGI web app at that task's chat."
+  ],
+  "where": "More (...) > Tasks > Open on a task row"
+ },
+ "S4.16": {
+  "labels": [],
+  "needs": "a signed-in account with pending approvals",
+  "note": "No approvals inbox found in apps/extension. Approvals appear inside a chat (Approve / Decline) and in the Schedules list for paused steps (Approve / Deny). Searched the locale file and src for approval and inbox keys.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S4.17": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Shortcuts"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Schedules"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "New schedule"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The schedule manager sits inside the Shortcuts page of the options settings, not in its own destination. Schedule... in a chat's history menu opens the same page with a draft.",
+  "reachable": "yes",
+  "steps": [
+   "Click More (...) in the header, then click Shortcuts. This opens the settings page on Shortcuts.",
+   "Scroll to the Schedules heading.",
+   "Click New schedule, fill in Name, Instructions and Repeat, then click Create schedule.",
+   "In the list, use Pause or Resume, Run now, Edit and Delete on a row, and check each result against Expected."
+  ],
+  "where": "More (...) > Shortcuts > Schedules"
+ },
+ "S4.18": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Runs"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Schedules"
+   }
+  ],
+  "needs": "a schedule that has at least one run",
+  "note": "Cadence is not shown on the row or in the runs block. The Repeat setting is visible only in the create form, and it is hidden while editing.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Schedules section as in S4.17.",
+   "Click Runs on a schedule row.",
+   "Look for the Instructions text (shown under Prompt), the Next and Last times on the row, and the list of past runs under Runs."
+  ],
+  "where": "More (...) > Shortcuts > Schedules > a schedule row > Runs"
+ },
+ "S4.25": {
+  "labels": [],
+  "needs": "a signed-in account with generated artifacts",
+  "note": "No artifact gallery found in apps/extension. Artifacts appear as cards inside a chat reply (Artifacts in this reply, with Open and Hide). Searched the locale file and src for gallery and artifact list keys.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S4.39": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Usage"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Plan and usage"
+   }
+  ],
+  "needs": "a paid account (the Usage row is hidden on the Free plan)",
+  "note": "The extension shows only a percent meter. The per-window and reset detail is on the web page, which the extension code does not render. The web page content was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Click More (...) in the header and read the Usage row, which shows a percent meter.",
+   "Click Usage. A new tab opens the AGI web usage page.",
+   "Compare the usage windows, reset times and history on that page with Expected."
+  ],
+  "where": "More (...) > Usage, or Options > Account > Plan and usage > Open"
+ },
+ "S4.41": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Extension settings"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Options"
+   },
+   {
+    "file": "apps/extension/src/features/options/appearance-section.ts",
+    "text": "Theme"
+   }
+  ],
+  "needs": "none",
+  "note": "More (...) > Settings opens the web settings page instead. The autofill profile is saved on this device, not in the account. The save button label for the profile was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Click More (...) in the header, then click Extension settings. This opens the Permissions page.",
+   "Click Options in the left menu. Change a notification setting or the Theme under Appearance.",
+   "Click Account in the left menu and open Autofill profile (optional). Change a field and save it.",
+   "Reopen the page and check that the changes were kept."
+  ],
+  "where": "More (...) > Extension settings > Options (left menu); Account for the autofill profile"
+ },
+ "S4.44": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Help"
+   },
+   {
+    "file": "apps/extension/src/options.ts",
+    "text": "Help center"
+   },
+   {
+    "file": "apps/extension/src/options.ts",
+    "text": "Contact support"
+   }
+  ],
+  "needs": "none",
+  "note": "No in-product feedback or bug report form was found in apps/extension, so that part of Expected is not met in the code. Searched the locale file and src for feedback and bug report text.",
+  "reachable": "yes",
+  "steps": [
+   "Click More (...) in the header, then click Help. This opens the settings page on Help.",
+   "Check the Help center, Documentation and Contact support rows. Each has an Open link that opens the AGI web app in a new tab.",
+   "Look for a way to send product feedback or a bug report inside the product."
+  ],
+  "where": "More (...) > Help"
+ }
+}

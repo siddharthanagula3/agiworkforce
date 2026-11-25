@@ -1,0 +1,95 @@
+{
+ "S33.04": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+    "text": "Publish artifact to a public link"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+    "text": "Publish to a public link?"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+    "text": "Switch to AGI Cloud to publish"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account",
+  "note": "The prompt step itself (how the assistant turns a request into an artifact) was not traced in these files; the path above starts at the artifact screen, and how that screen is opened from the chat was not traced either.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to AGI Cloud and make sure the app is in AGI Cloud mode (not Local).",
+   "In the chat, ask the assistant to build a small one-page website.",
+   "Open the page the assistant creates so the artifact screen appears.",
+   "Tap the globe icon labelled 'Publish artifact to a public link'.",
+   "Tap 'Publish' in the confirmation box.",
+   "Compare: the globe icon turns green and a link appears under the page (Expected: the site is hosted)."
+  ],
+  "where": "Chat > ask the assistant for a small web page > open the page it makes > tap the globe icon 'Publish artifact to a public link' in the top bar"
+ },
+ "S33.07": {
+  "labels": [],
+  "needs": "a signed-in AGI Cloud account",
+  "note": "No separate preview deployment was found. The only publish action creates a shared link (shareUrl in apps/mobile/src/features/chat/services/artifactPublishing.ts); 'Preview' in ArtifactFullScreen.tsx is an in-app view, not a shareable URL. Searched rg -i 'preview|deploy' in ArtifactFullScreen.tsx and artifactPublishing.ts, and rg -i 'deploy' across apps/mobile/src.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S33.10": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+    "text": "Publish artifact to a public link"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+    "text": "Open in Safari"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/PublishedArtifactControls.tsx",
+    "text": "Who can open this"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account",
+  "note": "The 'Open in Safari' / 'Open in browser' text is returned by a function in ArtifactFullScreen.tsx and was not checked on screen; the 'Anyone with the link' visibility option is in PublishedArtifactControls.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Open a page that was made by the assistant and tap the globe icon 'Publish artifact to a public link'.",
+   "Tap 'Publish' in the confirmation box.",
+   "Wait for the globe icon to turn green and for the 'Who can open this' section to appear below the page.",
+   "Tap 'Open in Safari' (or 'Open in browser' on Android).",
+   "Compare: the published site opens in the system browser at a public web address (Expected: a public URL)."
+  ],
+  "where": "Artifact screen > globe icon 'Publish artifact to a public link' > 'Publish' > 'Open in Safari' (iPhone) or 'Open in browser' (Android)"
+ },
+ "S33.23": {
+  "labels": [],
+  "needs": "a signed-in AGI Cloud account",
+  "note": "No control to roll a live published site back was found. The nearest control is 'Restore version N' with 'Version history' (ArtifactFullScreen.tsx and ArtifactVersionHistorySheet.tsx), but restoreArtifactVersion in apps/mobile/src/features/artifacts/store.ts only changes the local artifact and queues an artifact sync; it does not republish the live site. Searched rg -i 'rollback|roll back|rolled back' in apps/mobile/src and found only test comments.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S33.26": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+    "text": "Download artifact"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+    "text": "Download"
+   }
+  ],
+  "needs": "none",
+  "note": "Only one source file is exported per artifact (artifactExport.ts); a multi-file site is not packaged as a project. The option label for code is built as a template in apps/mobile/src/features/chat/utils/artifactExport.ts ('<EXT> file' or the file name), so its exact text was not fixed.",
+  "reachable": "yes",
+  "steps": [
+   "Open a code page made by the assistant (for example an HTML page) so the artifact screen appears.",
+   "Tap the download icon labelled 'Download artifact'.",
+   "If a choice list titled 'Download' appears, pick the option that says 'The source exactly as written'; otherwise the system share sheet opens with the file.",
+   "Compare: the share sheet offers a file with the page's source code (Expected: the owner downloads the source).'"
+  ],
+  "where": "Artifact screen > download icon 'Download artifact' (top bar)"
+ }
+}

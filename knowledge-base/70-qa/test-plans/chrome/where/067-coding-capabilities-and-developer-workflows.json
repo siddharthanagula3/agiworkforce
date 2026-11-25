@@ -1,0 +1,83 @@
+{
+ "S67.16": {
+  "labels": [
+   {
+    "file": "apps/extension/src/side_panel.ts",
+    "text": "Computer Use"
+   },
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Start"
+   },
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Allow browser control on"
+   }
+  ],
+  "needs": "A signed-in AGI Cloud account and a site you can approve for browser control.",
+  "note": "The run is driven by the agent, which calls these inspection tools only when the task needs them; the tester should name the inspection in the task.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to AGI Cloud from the extension drawer, then open the side panel and click the Computer Use tab.",
+   "If the site is not approved yet, click \"Allow browser control on\" followed by the site name, and accept Chrome's site-access prompt.",
+   "In the Task box, type a task that makes the agent visit the open page, click something, read text and take a screenshot, for example: \"Open this page, click the first link, read the heading and take a screenshot\".",
+   "Click Start.",
+   "Compare with Expected: the agent navigates, clicks, reads the page and shows screenshots in the run's progress. Open \"Assistant steps\" to see each action."
+  ],
+  "where": "Side panel > Computer Use tab > Task box > Start"
+ },
+ "S67.17": {
+  "labels": [
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Assistant steps"
+   },
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Read page console"
+   },
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Start"
+   }
+  ],
+  "needs": "A signed-in AGI Cloud account, an approved site, and a page that produces console errors.",
+  "note": "The step appears only if the agent chooses to call read_console; asking for it in the task makes this likely but does not guarantee it.",
+  "reachable": "yes",
+  "steps": [
+   "Follow the first three steps of S67.16 on a page that logs errors to the browser console (a page with a known script error is best).",
+   "In the Task box, type: \"Check the browser console for errors and tell me what they say\".",
+   "Click Start and wait for the run to finish.",
+   "Open \"Assistant steps\" and look for the step \"Read page console\".",
+   "Compare with Expected: the step is present and the reply lists the console errors the page shows."
+  ],
+  "where": "Side panel > Computer Use tab > Task box > Start > Assistant steps"
+ },
+ "S67.18": {
+  "labels": [
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Assistant steps"
+   },
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Read page network"
+   },
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Start"
+   }
+  ],
+  "needs": "A signed-in AGI Cloud account, an approved site, and a page that makes failing requests.",
+  "note": "The step appears only if the agent chooses to call read_network; the failed-only filter is an argument the agent sets, so the tester cannot choose it directly.",
+  "reachable": "yes",
+  "steps": [
+   "Follow the first three steps of S67.16 on a page that makes requests which fail, such as a page with a broken image or a missing API call.",
+   "In the Task box, type: \"Check the page for failed network requests and tell me which ones failed\".",
+   "Click Start and wait for the run to finish.",
+   "Open \"Assistant steps\" and look for the step \"Read page network\".",
+   "Compare with Expected: the step is present and the reply lists the failed requests with their status codes."
+  ],
+  "where": "Side panel > Computer Use tab > Task box > Start > Assistant steps"
+ }
+}

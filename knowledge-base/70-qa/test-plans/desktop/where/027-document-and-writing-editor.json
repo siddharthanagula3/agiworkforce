@@ -1,0 +1,276 @@
+{
+ "S27.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactLabels.tsx",
+    "text": "Untitled"
+   }
+  ],
+  "needs": "a signed-in account and a document made in chat",
+  "note": "The fallback text is Untitled in the card and viewer; the card uses artifactTitle() and the viewer uses artifact.title || 'Untitled'.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a chat that has a document made by Claude.",
+   "Look at the document card in the reply: it shows the document title.",
+   "Click the card to open the document in the side panel.",
+   "Look at the viewer title. Compare with Expected: a title shows, and a document with no title shows Untitled."
+  ],
+  "where": "Chat > open a conversation that has a document > the document card in the reply shows its title. Open it: the viewer header shows the same title."
+ },
+ "S27.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Edit"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Edit source"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Save"
+   }
+  ],
+  "needs": "a signed-in account and a document made in chat (not a code artifact)",
+  "note": "Edit opens the rich editor, which falls back to a plain Markdown text view for content it cannot keep (math, footnotes, raw HTML); there is no separate raw-source toggle found for normal Markdown documents.",
+  "reachable": "yes",
+  "steps": [
+   "Open a document made in chat in the side panel. Stay on the Preview tab.",
+   "Click Edit in the header (or open the More menu and choose Edit source).",
+   "Change the text in the editor.",
+   "Click Save. Compare with Expected: the text is saved as a new version and the viewer shows it."
+  ],
+  "where": "Chat > open a document > Preview tab > Edit (Edit document). Or More menu > Edit source. Then Save or Cancel."
+ },
+ "S27.06": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/DocumentFormattingToolbar.tsx",
+    "text": "Bold"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/DocumentFormattingToolbar.tsx",
+    "text": "Italic"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/DocumentFormattingToolbar.tsx",
+    "text": "Link"
+   }
+  ],
+  "needs": "a signed-in account and a document made in chat",
+  "note": "Underline has no control in DocumentFormattingToolbar.tsx, and the editor extensions list did not show it, so the Expected underline part is not met by the code.",
+  "reachable": "yes",
+  "steps": [
+   "Open a document in the side panel and click Edit.",
+   "Select some words.",
+   "Click Bold, then Italic, then Link (Link asks for a web address and adds it to the selection).",
+   "Look at the text. Compare with Expected: bold and italic show, and the link is set. Underline was not found in the toolbar."
+  ],
+  "where": "Chat > open a document > Preview tab > Edit > select text > formatting toolbar: Bold, Italic, Link."
+ },
+ "S27.07": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/DocumentFormattingToolbar.tsx",
+    "text": "Bulleted list"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/DocumentFormattingToolbar.tsx",
+    "text": "Numbered list"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/DocumentFormattingToolbar.tsx",
+    "text": "Checklist"
+   }
+  ],
+  "needs": "a signed-in account and a document made in chat",
+  "note": "Checklist ticks in the Preview tab save as a new version after a short pause, according to CHECKLIST_COMMIT_IDLE_MS.",
+  "reachable": "yes",
+  "steps": [
+   "Open a document in the side panel and click Edit.",
+   "Click Bulleted list, then Numbered list, and type items.",
+   "Click Checklist and type a few items.",
+   "Tick a checklist box in the Preview tab. Compare with Expected: all three list types appear and checkboxes toggle."
+  ],
+  "where": "Chat > open a document > Preview tab > Edit > formatting toolbar: Bulleted list, Numbered list, Checklist."
+ },
+ "S27.08": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/DocumentFormattingToolbar.tsx",
+    "text": "Insert table"
+   }
+  ],
+  "needs": "a signed-in account and a document made in chat",
+  "note": "Table rendering is in packages/ui/unified-chat/src/components/markdown/remarkPlugins.ts; the tester should check that cell editing and row/column controls exist, since the code only shows the insert control.",
+  "reachable": "yes",
+  "steps": [
+   "Open a document in the side panel and click Edit.",
+   "Click Insert table in the formatting toolbar.",
+   "Type text into the table cells.",
+   "Look at the table. Compare with Expected: a table is inserted and it can be edited."
+  ],
+  "where": "Chat > open a document > Preview tab > Edit > formatting toolbar: Insert table."
+ },
+ "S27.09": {
+  "labels": [],
+  "needs": "a document that has an image link",
+  "note": "Images render in the Markdown preview (MarkdownContent.tsx renders img and asks approval for external hosts), but no insert-image control was found in DocumentFormattingToolbar.tsx or ArtifactPreview.tsx; searched for Insert image and label=\"Image\" under apps/web/features/chat/components/artifacts and packages/ui/unified-chat.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S27.11": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/DocumentFormattingToolbar.tsx",
+    "text": "Code block"
+   }
+  ],
+  "needs": "a signed-in account and a document made in chat",
+  "note": "Math equations have no insert control; remarkMath is enabled for rendering only, and the editor says math documents open as Markdown.",
+  "reachable": "yes",
+  "steps": [
+   "Open a document in the side panel and click Edit.",
+   "Click Code block in the toolbar and type a few lines of code.",
+   "Click Save and go to the Preview tab.",
+   "Look at the code block. Compare with Expected: it shows as a code block. Math has no toolbar control."
+  ],
+  "where": "Chat > open a document > Preview tab > Edit > formatting toolbar: Code block (also under the Text style menu)."
+ },
+ "S27.12": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Outline"
+   }
+  ],
+  "needs": "a document with 3 or more headings",
+  "note": "The Outline control appears only when the document has at least 3 headings (OUTLINE_MIN_HEADINGS = 3).",
+  "reachable": "yes",
+  "steps": [
+   "Open a document that has at least 3 headings in the side panel.",
+   "Stay on the Preview tab and click Outline.",
+   "Click one heading in the list.",
+   "Look at the page. Compare with Expected: the view jumps to that section."
+  ],
+  "where": "Chat > open a document with 3 or more headings > Preview tab > Outline."
+ },
+ "S27.27": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Draft kept on this device"
+   }
+  ],
+  "needs": "a signed-in account and a document made in chat",
+  "note": "The code keeps a local draft on the device and shows Draft kept on this device or Draft not kept; there is no Saving or Saved state, and a version is created only on Save (or a checklist pause).",
+  "reachable": "yes",
+  "steps": [
+   "Open a document in the side panel and click Edit.",
+   "Type a sentence.",
+   "Look at the header next to Save: it shows Draft kept on this device, or Draft not kept.",
+   "Click Save and check that a new version is listed in Version history. Compare with Expected: the document saves on its own and shows saving and saved states."
+  ],
+  "where": "Chat > open a document > Preview tab > Edit > type text > look at the header next to Save."
+ },
+ "S27.28": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Undo last change"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Redo change"
+   }
+  ],
+  "needs": "a signed-in account and a document with more than one saved version",
+  "note": "Undo and Redo step through saved versions, not each keystroke, and show only in the side panel for saved documents; keyboard undo inside the editor was not verified.",
+  "reachable": "yes",
+  "steps": [
+   "Open a saved document that has been edited at least once, in the side panel.",
+   "Click Edit, change text, and click Save so a new version exists.",
+   "Click the Undo last change button in the header.",
+   "Click Redo change, and compare with Expected: the previous text returns and then the newer text returns."
+  ],
+  "where": "Chat > open a document with more than one version > side panel header: Undo last change and Redo change buttons (also in the More menu as Undo and Redo)."
+ },
+ "S27.29": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Version history"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactVersionHistory.tsx",
+    "text": "Restore"
+   }
+  ],
+  "needs": "a signed-in account and a document with several versions",
+  "note": "The date and time use the browser locale (toLocaleString, medium date and short time).",
+  "reachable": "yes",
+  "steps": [
+   "Open a document that has several versions in the side panel.",
+   "Click the Version history button in the header.",
+   "Read the list: each version shows its number, Latest on the newest, and its date and time.",
+   "Click a version to open it, click Restore, confirm Restore in the dialog, and compare with Expected: the restored text shows and a new version is added."
+  ],
+  "where": "Chat > open a document with more than one version > Version history button in the header > click Version 1 (or any version) > Restore."
+ },
+ "S27.35": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Download as Word (.docx)"
+   }
+  ],
+  "needs": "a signed-in account and a document made in chat",
+  "note": "The item appears only for text documents (isTextDocument).",
+  "reachable": "yes",
+  "steps": [
+   "Open a document in the side panel.",
+   "Click the Download button in the header (aria label Download artifact).",
+   "Click Download as Word (.docx).",
+   "Open the saved file in Word or Pages. Compare with Expected: a .docx file with the document text opens."
+  ],
+  "where": "Chat > open a document > Download (the Download artifact button) > Download as Word (.docx)."
+ },
+ "S27.36": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Download as PDF"
+   }
+  ],
+  "needs": "a signed-in account and a document made in chat",
+  "note": "The same label also appears for deck export; for a text document it is the document PDF export.",
+  "reachable": "yes",
+  "steps": [
+   "Open a document in the side panel.",
+   "Click the Download button in the header.",
+   "Click Download as PDF.",
+   "Open the saved PDF. Compare with Expected: a PDF file with the document text opens."
+  ],
+  "where": "Chat > open a document > Download (the Download artifact button) > Download as PDF."
+ },
+ "S27.37": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Download as Markdown"
+   }
+  ],
+  "needs": "a signed-in account and a document made in chat",
+  "note": "For a Markdown document the file contains the document text as is; for other artifacts it wraps the code in a fenced block.",
+  "reachable": "yes",
+  "steps": [
+   "Open a document in the side panel.",
+   "Click the Download button in the header.",
+   "Click Download as Markdown.",
+   "Open the saved .md file in a text editor. Compare with Expected: the file is Markdown text with the document content."
+  ],
+  "where": "Chat > open a document > Download (the Download artifact button) > Download as Markdown."
+ }
+}

@@ -1,0 +1,67 @@
+{
+ "S32.31": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Download as HTML"
+   }
+  ],
+  "needs": "a chat artifact (the app must have made one)",
+  "note": "The Code line's quoted locations (ArtifactPreview.tsx:745 and WebChatPage.tsx:5834) are gone; the real code is the handleDownload function at ArtifactPreview.tsx:1381 and the menu at ArtifactPreview.tsx:3494, which writes a preview document built by buildArtifactPreviewDocument; the offline check is not confirmed by the code.",
+  "reachable": "yes",
+  "steps": [
+   "In a chat, ask for a single-page web design, for example \"make a one-page landing page\", and wait for the artifact card to appear.",
+   "Click the artifact card so the artifact opens in the artifacts panel.",
+   "Click the download icon in the artifact's top bar (tooltip \"Download\").",
+   "Click \"Download as HTML\" in the menu.",
+   "Open the saved .html file in a browser with no internet connection and check that the design shows on its own, matching the preview in the app."
+  ],
+  "where": "Chat > open an artifact from the chat (the artifact card opens the artifacts panel) > Download (download icon, tooltip \"Download\") > Download as HTML"
+ },
+ "S32.33": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactsPanel.tsx",
+    "text": "Download all"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Download as SVG"
+   }
+  ],
+  "needs": "two or more artifacts in one chat, and for the image check an image artifact",
+  "note": "Code confirmed: ArtifactsPanel.tsx:745, downloadArtifacts.ts:108, ArtifactPreview.tsx:2385 and 1888 exist; the image button's label \"Download image\" is an icon-only aria label, and no PNG export was found, only the SVG for diagrams.",
+  "reachable": "yes",
+  "steps": [
+   "Make two or more artifacts in one chat, for example two designs or a design and a diagram.",
+   "Open the artifacts panel and click \"Download all\" (title \"Download all artifacts as zip\").",
+   "Wait for the toast \"Artifact download ready\" and open the downloaded zip to check that each artifact is inside as a file.",
+   "For an image artifact, click the download icon (tooltip \"Download\") to save the image file.",
+   "For a diagram, open the download icon menu and click \"Download as SVG\"; open the .svg file and compare with the preview."
+  ],
+  "where": "Artifacts panel > Download all (zip archive, shown only when the panel holds two or more artifacts); for a single image artifact, the download icon labelled \"Download image\"; for a diagram, the download menu item \"Download as SVG\""
+ },
+ "S32.34": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Show changes"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactVersionHistory.tsx",
+    "text": "Restore"
+   }
+  ],
+  "needs": "a chat artifact with at least two versions",
+  "note": "Code confirmed: ArtifactPreview.tsx:994 and 3211, ArtifactChangesView.tsx:53 and 103, theme-contrast test at line 385 exist; \"Show changes\" is hidden for PDF, DOCX and image artifacts; the version history button's label is aria-only (\"Show version history\"), so the tester sees only the v-number.",
+  "reachable": "yes",
+  "steps": [
+   "Ask the chat to change the same design once, so the artifact has two versions.",
+   "Open that artifact and click the \"More\" icon at the top right of its top bar, then click \"Show changes\".",
+   "Read the summary line (it starts \"Since version\") and the added and removed marks, and compare with Expected.",
+   "Click the version counter in the header (it shows v and two numbers, for example v1/2), then click \"Restore\" on the older version.",
+   "Click \"Restore\" in the dialog titled \"Restore version N?\" and check that the older content shows and a new latest version appears in the list."
+  ],
+  "where": "Artifacts panel > open an artifact with two or more versions > More (the \"...\" icon at the top right of the artifact) > Show changes; then the version counter in the artifact header > Restore"
+ }
+}

@@ -1,0 +1,460 @@
+{
+ "S66.01": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Open folder"
+   },
+   {
+    "file": "apps/extension-vscode/src/platform/workspaceFolders.ts",
+    "text": "Select a workspace folder for this operation"
+   }
+  ],
+  "needs": "none",
+  "note": "When several folders are open and the active editor is not in one of them, VS Code asks which folder to use via the quick pick named in the second label.",
+  "reachable": "yes",
+  "steps": [
+   "Open VS Code with no folder open and click the AGI Code icon in the activity bar.",
+   "Read the onboarding text that says to choose a folder before AGI can read project context.",
+   "Click Open folder and pick a project folder in the system dialog.",
+   "Look for the chat to show that folder as its scope, and compare with Expected."
+  ],
+  "where": "AGI Code sidebar (activity bar icon) > Open folder"
+ },
+ "S66.02": {
+  "labels": [],
+  "needs": "a git repository with more than one branch",
+  "note": "Searched apps/extension-vscode for branch pickers. The branch is only shown on session rows and tooltips (conversationTreeProvider.ts) and recorded by the CLI at start (apps/cli/src/app_server/developer_host.rs). Worktree creation takes only a name. No control to choose a branch was found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S66.05": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Sessions"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Local"
+   }
+  ],
+  "needs": "at least one earlier session",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click the AGI Code icon in the activity bar.",
+   "Click the Sessions icon at the top right of the chat header.",
+   "Look at the Local tab for a list of your sessions with titles and ages.",
+   "Click one session and check that it opens, and compare with Expected."
+  ],
+  "where": "AGI Code sidebar > Sessions (history icon in the chat header)"
+ },
+ "S66.06": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Sessions"
+   }
+  ],
+  "needs": "at least one earlier session",
+  "note": "Rename was found only for cloud task detail (renameConversation in commandSetup.ts), not for local sessions in the Sessions list.",
+  "reachable": "yes",
+  "steps": [
+   "Open Sessions from the chat header.",
+   "Look at each row's title, age and source.",
+   "Look for a rename control on a row; none was found for local sessions.",
+   "Compare the readable titles with Expected."
+  ],
+  "where": "AGI Code sidebar > Sessions (session rows)"
+ },
+ "S66.07": {
+  "labels": [],
+  "needs": "sessions in more than one state (running, waiting for approval)",
+  "note": "Status values in code are idle, running, awaiting_approval, archived, failed and unknown (localRuntimeClient.ts). The session list shows only a spinner for running (conversationTreeProvider.ts) and a notice for running or awaiting approval elsewhere (ChatStateManager.ts). No visible words for idle, failed or closed were found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S66.09": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Workspace files and symbols"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Attach or use tools"
+   }
+  ],
+  "needs": "a workspace folder open",
+  "note": "The + button (Attach or use tools) > Attach workspace files is an alternative route to picking files.",
+  "reachable": "yes",
+  "steps": [
+   "Click the message box in the AGI Code chat.",
+   "Type @ followed by part of a file name.",
+   "Look for the dropdown titled Workspace files and symbols listing matching files.",
+   "Pick one and check that it is added to the message, and compare with Expected."
+  ],
+  "where": "AGI Code chat composer > type @ > file names"
+ },
+ "S66.10": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Workspace files and symbols"
+   }
+  ],
+  "needs": "a project with a language that has a symbol provider",
+  "note": "Symbols come from the editor's language servers (symbolMatches in mentionSearch.ts), so results depend on the language support installed.",
+  "reachable": "yes",
+  "steps": [
+   "Click the message box in the AGI Code chat.",
+   "Type @ followed by a function or class name from an open project file.",
+   "Look in the dropdown titled Workspace files and symbols for symbol entries.",
+   "Pick one and check it is added as a reference, and compare with Expected."
+  ],
+  "where": "AGI Code chat composer > type @ > symbol names"
+ },
+ "S66.11": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Open File Reference"
+   }
+  ],
+  "needs": "a file in the workspace",
+  "note": "Editing happens in the standard VS Code editor, not in the AGI panel.",
+  "reachable": "yes",
+  "steps": [
+   "Run Code: Open File Reference from the Command Palette and enter a file path, or click a file path in a chat answer.",
+   "Check that the file opens in the VS Code editor.",
+   "Type a small change and save.",
+   "Compare the open and edit result with Expected."
+  ],
+  "where": "Command Palette > Code: Open File Reference, or a file reference in a chat answer"
+ },
+ "S66.13": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Selection"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Send Selection to a New Chat"
+   }
+  ],
+  "needs": "an open file with a selection",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "In an editor, select a few lines of code.",
+   "Open the AGI Code chat and click the + button labelled Attach or use tools.",
+   "Click Selection and check that a context chip appears in the composer.",
+   "Send a question and check the answer uses the selection, and compare with Expected."
+  ],
+  "where": "Editor: select code > AGI Code chat > + (Attach or use tools) > Selection"
+ },
+ "S66.14": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Problems"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Explain Error"
+   }
+  ],
+  "needs": "a file with an error",
+  "note": "No separate diagnostics panel was found. Actions are Problems as context and Code: Explain Error, which says No errors on this line. when none apply.",
+  "reachable": "yes",
+  "steps": [
+   "Open a file with a compiler or linter error and put the cursor on that line.",
+   "Open the AGI Code chat and click + then Problems.",
+   "Check that the problem is added as context in the composer.",
+   "Compare with Expected, which asks for a panel where the user can act on diagnostics."
+  ],
+  "where": "AGI Code chat > + (Attach or use tools) > Problems"
+ },
+ "S66.15": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Run Terminal Command"
+   }
+  ],
+  "needs": "a workspace folder open",
+  "note": "The terminal is named by the product constant TERMINAL_NAME in terminalProvider.ts, so its tab shows the product name.",
+  "reachable": "yes",
+  "steps": [
+   "Run Code: Run Terminal Command from the Command Palette and enter a command such as echo hello.",
+   "Check that a VS Code terminal opens with the product name.",
+   "Read the output in that terminal.",
+   "Compare with Expected."
+  ],
+  "where": "Command Palette > Code: Run Terminal Command"
+ },
+ "S66.17": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Exit code:"
+   }
+  ],
+  "needs": "a session where the agent runs a command",
+  "note": "No separate command-history panel was found; the history lives in the tool cards of the transcript.",
+  "reachable": "yes",
+  "steps": [
+   "Ask AGI to run a shell command in the chat, for example to list files.",
+   "Find the tool card for that command in the transcript.",
+   "Expand it and read the output.",
+   "Look for the line Exit code: and compare with Expected."
+  ],
+  "where": "AGI Code chat > command tool card in the transcript"
+ },
+ "S66.18": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/providers/diffDecorationProvider.ts",
+    "text": "$(check) Accept"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Git Diff"
+   }
+  ],
+  "needs": "an agent edit to a file",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Ask the agent to edit a file in the workspace and let the change appear.",
+   "Open that file in the editor.",
+   "Look for highlighted changed lines with Accept and Reject buttons above them.",
+   "Run Code: Git Diff from the Command Palette and compare the line-level changes with Expected."
+  ],
+  "where": "Editor: a file the agent changed > highlighted lines and Accept / Reject buttons above them; or Command Palette > Code: Git Diff"
+ },
+ "S66.19": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/sessionReceipt.ts",
+    "text": "Files changed"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Show Session Activity"
+   }
+  ],
+  "needs": "a session that changed files",
+  "note": "The receipt opens for the active session only.",
+  "reachable": "yes",
+  "steps": [
+   "Use a session in which the agent created, changed or deleted files.",
+   "Run Code: Show Session Activity from the Command Palette.",
+   "Read the Files changed section, which lists each file with Created, Modified or Deleted.",
+   "Compare the list with the actual changes, and compare with Expected."
+  ],
+  "where": "Command Palette > Code: Show Session Activity"
+ },
+ "S66.21": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/providers/diffDecorationProvider.ts",
+    "text": "$(check) Accept"
+   },
+   {
+    "file": "apps/extension-vscode/src/providers/diffDecorationProvider.ts",
+    "text": "$(close) Reject"
+   }
+  ],
+  "needs": "an agent edit with at least two changes in one file",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Ask the agent to change two separate places in one file.",
+   "Open the file and find the Accept and Reject buttons above the first change.",
+   "Click Reject on the first change and check only that change reverts.",
+   "Click Accept on the second change and compare with Expected."
+  ],
+  "where": "Editor: a file with an agent change > Accept / Reject buttons above each change"
+ },
+ "S66.22": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Checkpoints"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts",
+    "text": "Pick the prompt to go back to"
+   }
+  ],
+  "needs": "a session with checkpoints",
+  "note": "Checkpoints appear only when the installed AGI CLI offers them (checkpointsAvailable in ChatStateManager.ts). A Checkpoints item is also in the session history menu.",
+  "reachable": "yes",
+  "steps": [
+   "Use a session in which the agent has made earlier changes.",
+   "Run Code: Checkpoints from the Command Palette.",
+   "Read the list of prompts, each with its tracked file count.",
+   "Compare with Expected."
+  ],
+  "where": "Command Palette > Code: Checkpoints"
+ },
+ "S66.23": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts",
+    "text": "What goes back to this point"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Checkpoints"
+   }
+  ],
+  "needs": "a session with a checkpoint that tracked files",
+  "note": "The choices come from REWIND_CHOICES and depend on whether the checkpoint has a conversation and tracked files.",
+  "reachable": "yes",
+  "steps": [
+   "Run Code: Checkpoints and pick a prompt.",
+   "Pick an option at What goes back to this point.",
+   "In the modal dialog, read the Rewind question and confirm.",
+   "Check that the files and the chat return to that point, and compare with Expected."
+  ],
+  "where": "Command Palette > Code: Checkpoints > pick a prompt > What goes back to this point > confirm"
+ },
+ "S66.24": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Mode and reasoning effort"
+   },
+   {
+    "file": "packages/contracts/local-runtime/src/developer-session.ts",
+    "text": "Plan"
+   }
+  ],
+  "needs": "a workspace folder open and a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click the Mode and reasoning effort button under the chat box.",
+   "Choose Plan.",
+   "Send a request to change code, such as moving a function to a new API.",
+   "Check that the reply is a step-by-step plan and no file is edited until you approve, and compare with Expected."
+  ],
+  "where": "AGI Code chat > Mode and reasoning effort > Mode > Plan; or Command Palette > Code: Choose Agent Mode"
+ },
+ "S66.25": {
+  "labels": [
+   {
+    "file": "packages/contracts/local-runtime/src/developer-session.ts",
+    "text": "Auto"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Mode and reasoning effort"
+   }
+  ],
+  "needs": "a workspace folder open",
+  "note": "No mode is named edit or agent. The modes are Ask, Auto, Plan and Bypass permissions, and Auto is the closest match to edit or agent mode.",
+  "reachable": "yes",
+  "steps": [
+   "Click the Mode and reasoning effort button under the chat box.",
+   "Choose Auto.",
+   "Ask for a small edit to a file and watch whether it is made without asking.",
+   "Compare with Expected."
+  ],
+  "where": "AGI Code chat > Mode and reasoning effort > Mode > Auto; or Command Palette > Code: Choose Agent Mode"
+ },
+ "S66.26": {
+  "labels": [
+   {
+    "file": "packages/contracts/local-runtime/src/developer-session.ts",
+    "text": "Bypass permissions"
+   },
+   {
+    "file": "packages/contracts/local-runtime/src/developer-session.ts",
+    "text": "Ask"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Set Agent Mode"
+   }
+  ],
+  "needs": "a workspace folder open",
+  "note": "The labels differ from Expected (ask every time, auto-approve safe, autonomous). Honouring the mode in the running session is inner behaviour; only the control is visible.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Mode and reasoning effort button and look at the options Ask, Auto, Plan and Bypass permissions.",
+   "Choose Ask and send a request that edits a file, and check that the agent asks first.",
+   "Choose Bypass permissions and send the same request, and check that it does not ask.",
+   "Compare with Expected."
+  ],
+  "where": "AGI Code chat > Mode and reasoning effort > Mode; or Command Palette > Code: Set Agent Mode"
+ },
+ "S66.27": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "This chat has used"
+   }
+  ],
+  "needs": "a long chat",
+  "note": "The notice wording uses the percentage of the model context; the exact placement of the indicator should be checked on screen.",
+  "reachable": "yes",
+  "steps": [
+   "Send several long messages in one chat.",
+   "Look at the context usage text beside the chat controls.",
+   "Keep chatting until a notice appears above the composer.",
+   "Compare the percentage with Expected."
+  ],
+  "where": "AGI Code chat > context usage text next to the Mode and reasoning effort button"
+ },
+ "S66.28": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Account & usage\u2026"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Account & Usage"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The meter is for managed plan usage; the estimated cost counter in tokenCounter.ts is not shown directly in the chat as far as the code shows.",
+  "reachable": "yes",
+  "steps": [
+   "Click the model button in the chat controls, which shows Auto by default.",
+   "Choose Account & usage\u2026.",
+   "Read the plan usage meter and usage label.",
+   "Compare with Expected."
+  ],
+  "where": "AGI Code chat > Auto (model button) > Account & usage\u2026; or Command Palette > Code: Account & Usage"
+ },
+ "S66.41": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Continue in the cloud"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Continue This Session in the Terminal"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account and a second client (terminal, desktop or phone)",
+  "note": "The Continue in the cloud button is hidden by default and is shown only when the code allows it; when it shows was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Open a session in AGI Code and click Sessions.",
+   "Click the Continue in the cloud icon button.",
+   "Open the same session in the cloud or terminal client.",
+   "Check it continues there, and compare with Expected."
+  ],
+  "where": "AGI Code sidebar > Sessions > Continue in the cloud (cloud icon); or Command Palette > Code: Continue This Session in the Terminal"
+ }
+}

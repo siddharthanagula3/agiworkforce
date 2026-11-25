@@ -1,0 +1,357 @@
+{
+ "S9.01": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Projects"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Start the chat in this project"
+   }
+  ],
+  "needs": "a signed-in account with at least one project",
+  "note": "The @ menu lists only open tabs and projects; I found no file or skill picker in the code, and models use the picker in S9.02.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a chat in the side panel.",
+   "Click the message box and type @.",
+   "Look for the \"Projects\" heading and the project rows under it, each with \"Start the chat in this project\".",
+   "Type part of a project name after the @ and check that the list narrows to matches."
+  ],
+  "where": "Chat composer > type @ > the list under the heading \"Projects\" (open tabs are listed above it); type part of a project name to narrow the list"
+ },
+ "S9.02": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "AI Assistant"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "All models ($COUNT$)"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Search models"
+   }
+  ],
+  "needs": "a signed-in account (without it the menu shows \"Sign in for models\")",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a chat in the side panel.",
+   "Click the model button at the top of the chat.",
+   "Click \"All models\" and type part of a model name in \"Search models\".",
+   "Click a model row and check the model button now shows the model you picked."
+  ],
+  "where": "Chat, top of the composer > model button showing \"AI Assistant\" (or the current model name) > \"All models (n)\" > type in \"Search models\" > click a model row"
+ },
+ "S9.06": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Recent chats"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Move to project"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Project for this chat"
+   }
+  ],
+  "needs": "a signed-in account with at least one project",
+  "note": "A second route exists: the chat title menu has \"Add to project\". The active project also shows as a chip \"Project \u00b7 NAME\" in the header.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and click the clock icon labelled \"Recent chats\".",
+   "Click \"More actions\" on a chat row.",
+   "Click \"Move to project\".",
+   "Open the list \"Project for this chat\" and pick a project.",
+   "Check the status line \"Moved to [project name].\" and compare with Expected."
+  ],
+  "where": "Recent chats (clock icon in the side panel header) > \"More actions\" on a chat > \"Move to project\" > pick a project in the list labelled \"Project for this chat\""
+ },
+ "S9.10": {
+  "labels": [
+   {
+    "file": "apps/extension/src/features/options/site-permission-policy.ts",
+    "text": "Browser control"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Ask first"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Extension settings"
+   }
+  ],
+  "needs": "none",
+  "note": "No once-versus-always choice was found on this page; the closest is \"Allow for this chat\" on an approval card (S9.32). The background.ts line in the Code note is a scheduled-task path, not a permission choice.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"More\" in the side panel header.",
+   "Click \"Extension settings\"; a new tab opens on the Permissions page.",
+   "Find \"Browser control\" and open its menu.",
+   "Pick \"Ask first\" or \"Full access\" and read the line under the menu.",
+   "Compare what is shown with Expected."
+  ],
+  "where": "More (button in the side panel header) > \"Extension settings\" (opens the Permissions page) > \"Browser control\" menu with Auto, Ask first, Full access, YOLO"
+ },
+ "S9.12": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "New schedule"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Repeat"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Schedule\u2026"
+   }
+  ],
+  "needs": "none",
+  "note": "No custom rule option is in the code; the choices are once, daily, weekly and monthly. A chat's title menu \"Schedule\u2026\" also opens this form.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"More\" in the side panel header, then \"Shortcuts\".",
+   "In the Schedules section, click \"New schedule\".",
+   "Open \"Repeat\" and read its choices: Once, Every day, On chosen days of the week, Once a month.",
+   "Fill in the form and save; check the new schedule shows its next run time."
+  ],
+  "where": "More > \"Shortcuts\" (opens the Shortcuts page) > \"Schedules\" section > \"New schedule\" > \"Repeat\" menu"
+ },
+ "S9.19": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Working for $ELAPSED$"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Worked for $ELAPSED$"
+   }
+  ],
+  "needs": "a request that runs several steps",
+  "note": "Per-step time is shown only on tool steps; the state word appears on a step only when it was cancelled or failed.",
+  "reachable": "yes",
+  "steps": [
+   "Send a request that makes AGI run several steps, such as a browser task.",
+   "While it runs, look at the summary line that starts \"Working for\" above the reply.",
+   "Click the summary and read the steps from top to bottom.",
+   "Compare the step order and each step's time with Expected."
+  ],
+  "where": "Chat, above an assistant reply that ran several steps: the summary line starting \"Working for\" or \"Worked for\" (click it to expand the step list)"
+ },
+ "S9.21": {
+  "labels": [],
+  "needs": "live-web",
+  "note": "I searched apps/extension for board, kanban and column layouts and found none; the only task view is a list sheet opened from \"Tasks\".",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S9.22": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Getting started with AGI"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Next"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Let's go"
+   }
+  ],
+  "needs": "a profile where the side panel tour is not done",
+  "note": "The tour has two cards that advance with Next; the code shows no step count and no Back button.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side panel for the first time, on a profile where the tour has not been finished.",
+   "Read the card titled \"Getting started with AGI\" and click \"Next\".",
+   "Read the second card and click \"Let's go\".",
+   "Check whether a step count or a Back button appears, and compare with Expected."
+  ],
+  "where": "Side panel on first open (before the tour is finished) > card \"Getting started with AGI\" > \"Next\" > \"Let's go\""
+ },
+ "S9.23": {
+  "labels": [],
+  "needs": "none",
+  "note": "I searched the onboarding and side panel code for an ordered setup flow; the only setup screen is a welcome page with a sign-in button and a start button, with no name or model step.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S9.28": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "$SITE$ +$COUNT$"
+   }
+  ],
+  "needs": "a question that returns web sources (live web)",
+  "note": "Whether a source appears depends on the answer the assistant gives.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and ask a question that needs web sources.",
+   "Find the source chip in the answer and hover over it (tap it on touch).",
+   "Read each source's title, site and excerpt in the card.",
+   "Click a source title to open it in a new tab and compare with Expected."
+  ],
+  "where": "Chat, an answer that used web sources: the source chip under the answer (shows a site name, or \"$SITE$ +$COUNT$\" when there are several) > hover or focus it to open the source card"
+ },
+ "S9.29": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Usage"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "More"
+   }
+  ],
+  "needs": "a paid account",
+  "note": "The row shows only the highest window's percent. The reset time appears in the usage notice when a limit is near or reached, and the screen-reader label is \"$PERCENT$% of usage budget used\".",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to a paid account; the Usage row is not shown on Free.",
+   "Click \"More\" in the side panel header.",
+   "Find the \"Usage\" row and read its bar and percent.",
+   "Compare the percent with Expected; the reset time is not on this row."
+  ],
+  "where": "More (button in the side panel header) > \"Usage\" row with a thin bar and a percent"
+ },
+ "S9.31": {
+  "labels": [
+   {
+    "file": "apps/extension/src/options.ts",
+    "text": "Browser access"
+   },
+   {
+    "file": "apps/extension/src/features/options/site-permission-policy.ts",
+    "text": "Browser control"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Permissions"
+   }
+  ],
+  "needs": "none",
+  "note": "I did not find connected-app scopes on this page; the code covers browser sites only.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"More\" in the side panel header, then \"Extension settings\".",
+   "On the Permissions page, read the \"Browser access\" text.",
+   "Read \"Browser control\" and its hint about what AGI may do.",
+   "Scroll to the approved sites and blocked sites sections and compare with Expected."
+  ],
+  "where": "More > \"Extension settings\" (opens the Permissions page) > \"Browser access\" text, then \"Browser control\" and the approved-sites list"
+ },
+ "S9.32": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Approve"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Decline"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Your approval is required before this tool can run."
+   }
+  ],
+  "needs": "a signed-in account and a run that asks for approval",
+  "note": "The ledger had no code location; the card is in apps/extension/src/features/side-panel/bubbles.ts (appendApprovalActions). \"Allow for this chat\" is a third choice on the card.",
+  "reachable": "yes",
+  "steps": [
+   "Send a request that makes AGI run a tool step needing approval.",
+   "Look for the activity block that opens by itself with the approval message.",
+   "Click the step row if its buttons are not visible.",
+   "Click \"Approve\" or \"Decline\" and check the recorded message and whether the run continues or stops."
+  ],
+  "where": "Chat, an activity summary that needs approval (it opens by itself): click the step row that says \"Your approval is required before this tool can run.\" > \"Approve\" or \"Decline\""
+ },
+ "S9.35": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Working for $ELAPSED$"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Tasks"
+   }
+  ],
+  "needs": "a request that runs a multi-step task",
+  "note": "No separate latest-action field was found; the newest step is the last row when the summary is expanded.",
+  "reachable": "yes",
+  "steps": [
+   "Send a request that makes AGI run a multi-step task.",
+   "Watch the summary line \"Working for [time]\" with its step count.",
+   "Wait and check that the time and step count change while it runs.",
+   "Click \"More\" then \"Tasks\" and check the running task's state."
+  ],
+  "where": "Chat, the activity summary above the reply that starts \"Working for\" and shows the step count; it updates while the run is active"
+ },
+ "S9.36": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Send answers"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "View product"
+   }
+  ],
+  "needs": "a signed-in account and a question that makes AGI show a choice card",
+  "note": "The assistant decides when a card appears; there is no control to request one. Product comparison and itinerary cards are also in interactiveCards.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and ask a question that leads AGI to offer choices.",
+   "In the card, pick one or more answers.",
+   "Click \"Send answers\".",
+   "Check that your answers appear as a new message in the chat."
+  ],
+  "where": "Chat, a reply that shows a choice card (clarifying question with choices): pick answers in the card > \"Send answers\""
+ },
+ "S9.38": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Search commands and chats"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Commands"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "No command or chat matches."
+   }
+  ],
+  "needs": "none",
+  "note": "The code accepts Command or Ctrl with K; the palette opens only when the side panel has focus.",
+  "reachable": "yes",
+  "steps": [
+   "Click inside the side panel.",
+   "Press Command+K.",
+   "Type part of a command name or chat title.",
+   "Use the arrow keys to move the highlight, then press Enter.",
+   "Check the chosen command or chat runs, and that a word with no match shows \"No command or chat matches.\""
+  ],
+  "where": "Side panel, with focus inside it: press Command+K > type in \"Search commands and chats\" > Enter on a result"
+ }
+}

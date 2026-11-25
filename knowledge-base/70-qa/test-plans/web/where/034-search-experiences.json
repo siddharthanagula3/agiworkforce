@@ -1,0 +1,397 @@
+{
+ "S34.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageSearch.tsx",
+    "text": "Search messages..."
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/MessageSearch.tsx",
+    "text": "Go to next match"
+   }
+  ],
+  "needs": "a conversation with several messages that contain a shared word",
+  "note": "The Command+F listener is in apps/web/features/chat/components/messages/ChatMessageList.tsx; the on-screen control for opening it was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open a conversation that has several messages.",
+   "Press Command+F. A bar with the placeholder \"Search messages...\" appears.",
+   "Type a word that appears in the conversation.",
+   "Click \"Go to next match\" or \"Go to previous match\" (or press Enter and Shift+Enter in the box).",
+   "Check the match count beside the box and that the view jumps between the matching messages, as Expected says."
+  ],
+  "where": "Open a conversation with messages > press Command+F (or click the search control in the chat header if shown)"
+ },
+ "S34.02": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Search"
+   },
+   {
+    "file": "apps/web/features/chat/components/dialogs/GlobalSearchDialog.tsx",
+    "text": "Search your workspace"
+   },
+   {
+    "file": "apps/web/features/chat/lib/global-search-categories.ts",
+    "text": "All"
+   }
+  ],
+  "needs": "a Free or paid account with at least one past conversation containing a known word",
+  "note": "Which conversations are visible in history is decided by the server route apps/web/app/api/search/route.ts, not by visible text.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Search\" in the sidebar, or press Shift+Command+F.",
+   "Type a word from a past conversation's title or messages in the box \"Search your workspace\" and press Enter.",
+   "Leave the category on \"All\" and read the results list.",
+   "Click a result that is a conversation and check that it opens that chat.",
+   "Compare with Expected: titles and message text are both matched and the chat opens."
+  ],
+  "where": "Sidebar > Search > Search your workspace (type a title or message text, press Enter)"
+ },
+ "S34.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/lib/global-search-categories.ts",
+    "text": "Projects"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/ProjectGallery.tsx",
+    "text": "Search projects..."
+   }
+  ],
+  "needs": "a Free or paid account with at least one Project",
+  "note": "The Projects page search field was found in ProjectGallery.tsx; I did not confirm that the Projects page is the screen a person reaches from the sidebar label.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Search\" in the sidebar.",
+   "Type the name or a word from the description of a project.",
+   "Click the category chip \"Projects\" under the box, then read the results.",
+   "Click a result with the project's name and check that it opens that project.",
+   "Compare with Expected: the project is found by name or description."
+  ],
+  "where": "Sidebar > Search > Projects (category chip), or Sidebar > Projects > Search projects..."
+ },
+ "S34.04": {
+  "labels": [
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Library"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Search files and projects"
+   }
+  ],
+  "needs": "a Free or paid account with some saved files, images or documents in Library",
+  "note": "The box's accessible name is \"Search the library by name\"; the API passes the query to the server, and I did not verify whether prompt text is also matched.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Library\" in the sidebar.",
+   "Click in the box \"Search files and projects\" and type part of a file name.",
+   "Watch the list narrow to matching items.",
+   "Clear the box and check that the full list returns.",
+   "Compare with Expected: the box filters Library items by name."
+  ],
+  "where": "Sidebar > Library > Search files and projects"
+ },
+ "S34.05": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Artifacts"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Search files and projects"
+   }
+  ],
+  "needs": "a Free or paid account with at least one saved artifact",
+  "note": "The old route /chat/artifacts redirects to the Library surface filter; content matching beyond the title was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Library\" in the sidebar.",
+   "Click the tab \"Artifacts\" under the search box.",
+   "Type part of an artifact's title in \"Search files and projects\".",
+   "Click the matching artifact to open it.",
+   "Compare with Expected: the artifact is found by title and opens."
+  ],
+  "where": "Sidebar > Library > Artifacts (tab) > Search files and projects"
+ },
+ "S34.06": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "No connectors connected yet."
+   }
+  ],
+  "needs": "a paid account with at least one connected work source (Drive, Slack or Notion)",
+  "note": "The submenu shows a coming-soon item when connectors are not released, and the server-side retrieval was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Open a new chat and click the \"+\" in the composer.",
+   "Click \"Connectors\" to open its submenu.",
+   "Turn on a connected source (for example Drive or Slack) with its checkbox.",
+   "Send a question that asks for information stored in that source.",
+   "Compare with Expected: the answer draws on the connected source."
+  ],
+  "where": "Chat composer > + > Connectors"
+ },
+ "S34.07": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/AttachmentMenu.tsx",
+    "text": "Search the web"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Web search"
+   }
+  ],
+  "needs": "none",
+  "note": "The menu item was found in AttachmentMenu.tsx; I did not confirm it is the exact menu the web composer shows.",
+  "reachable": "yes",
+  "steps": [
+   "Open a new chat and click the \"+\" in the composer.",
+   "Click \"Search the web\" to turn it on, then check the chip that shows \"Web search\".",
+   "Ask a question about a current public topic.",
+   "Read the answer and look for sources or citations from the web."
+  ],
+  "where": "Chat composer > + > Search the web (menu item; the active chip reads \"Web search\")"
+ },
+ "S34.15": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/dialogs/GlobalSearchDialog.tsx",
+    "text": "Filters"
+   },
+   {
+    "file": "apps/web/features/chat/components/dialogs/GlobalSearchDialog.tsx",
+    "text": "From Date"
+   }
+  ],
+  "needs": "a Free or paid account with past conversations spread over several dates",
+  "note": "The Filters panel only appears when the search can filter conversations; filtered-result accuracy is not verified by the code read.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Search\" in the sidebar and type a query.",
+   "Click the \"Filters\" button under the box.",
+   "Click \"From Date\" and pick a date, then \"To Date\" and pick a later date.",
+   "Read the results list and check that every result falls inside the chosen range.",
+   "Compare with Expected: results outside the range are not shown."
+  ],
+  "where": "Sidebar > Search > Filters > From Date / To Date"
+ },
+ "S34.19": {
+  "labels": [],
+  "needs": "a Project with sources added",
+  "note": "Found the project Sources panel (apps/web/features/projects/components/SourcesPanel.tsx) with filter, sort and search controls, but found no visible control for a named source collection or for limiting chats to one.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S34.20": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/dialogs/GlobalSearchDialog.tsx",
+    "text": "Recent Searches"
+   },
+   {
+    "file": "apps/web/features/chat/components/dialogs/GlobalSearchDialog.tsx",
+    "text": "Clear"
+   }
+  ],
+  "needs": "none",
+  "note": "Only recent searches were found; no popular or typed-completion suggestions were found in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Search\" in the sidebar and run one search so it is stored.",
+   "Close the dialog, open \"Search\" again and leave the box empty.",
+   "Look for the \"Recent Searches\" heading with query chips under it.",
+   "Click a chip and check that the query runs.",
+   "Compare with Expected: a previous query is offered and can be picked."
+  ],
+  "where": "Sidebar > Search > Recent Searches (shown when the box is empty)"
+ },
+ "S34.21": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/FollowUpSuggestions.tsx",
+    "text": "Follow-up suggestions"
+   },
+   {
+    "file": "apps/web/features/chat/components/FollowUpSuggestions.tsx",
+    "text": "Hide suggestions"
+   }
+  ],
+  "needs": "a Free or paid account; follow-up suggestions must be turned on in settings",
+  "note": "The suggestions show only when the follow-up setting is on, so the settings label was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Send a question that uses web search and wait for the answer to finish.",
+   "Look below the answer for the region \"Follow-up suggestions\".",
+   "Click one suggestion.",
+   "Check that it is sent as the next message in the chat.",
+   "Compare with Expected: a tap sends the refined query."
+  ],
+  "where": "Chat > under the latest answer > Follow-up suggestions"
+ },
+ "S34.22": {
+  "labels": [],
+  "needs": "a query that the assistant finds ambiguous",
+  "note": "Found the clarify tool name ask_clarifying_questions in apps/web/lib/services/clarify-tool-service.ts and a clarify card at apps/web/features/chat/components/messages/cards/ClarifyCard.tsx, but did not read its visible wording or confirm the path a person takes.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S34.23": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/dialogs/GlobalSearchDialog.tsx",
+    "text": "Search your workspace"
+   },
+   {
+    "file": "apps/web/features/chat/components/dialogs/GlobalSearchDialog.tsx",
+    "text": "Title"
+   }
+  ],
+  "needs": "a Free or paid account with a known word in past chats",
+  "note": "Result previews in the dialog were found; citation previews are covered under S34.25.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Search\" in the sidebar and type a word you know is in a chat.",
+   "Press Enter and wait for the results.",
+   "Read each result: it shows a type label (for example \"Title\", \"Project\" or \"Artifact\") and the matched word in highlight.",
+   "Compare with Expected: each result shows a preview before it is opened."
+  ],
+  "where": "Sidebar > Search > type a query > results list"
+ },
+ "S34.24": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "text": "Citations"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "text": "Sources"
+   }
+  ],
+  "needs": "a Free or paid account with web search turned on",
+  "note": "Card fields (title, site, link) were not read line by line.",
+  "reachable": "yes",
+  "steps": [
+   "Ask a question that uses web search and wait for the answer.",
+   "Click the \"Sources\" button under the answer.",
+   "Read the sections \"Citations\" and \"More\" in the panel.",
+   "Check that each source card shows a title, site and link.",
+   "Compare with Expected: each source card has at least title, site and link."
+  ],
+  "where": "Chat > answer with web sources > \"Sources\" button under the answer > Citations / More"
+ },
+ "S34.25": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/markdown/citationPublisher.ts",
+    "text": "Retrieved"
+   }
+  ],
+  "needs": "a Free or paid account with web search turned on",
+  "note": "The chip preview is built in packages/ui/unified-chat/src/components/markdown/CitationChip.tsx; the exact preview words for title and snippet were not extracted.",
+  "reachable": "yes",
+  "steps": [
+   "Ask a question that uses web search and wait for the answer.",
+   "Hover (or tap on a touch screen) over a citation chip in the answer text.",
+   "Read the preview that opens over the answer.",
+   "Check it shows the source title, site and snippet.",
+   "Compare with Expected: the preview shows without leaving the answer."
+  ],
+  "where": "Chat > answer with citations > hover or tap a numbered citation chip"
+ },
+ "S34.26": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "text": "More"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "View {{count}} sources"
+   }
+  ],
+  "needs": "a Free or paid account with web search turned on, and an answer with several sources",
+  "note": "The count label is a translation template; the spoken number depends on how many sources the answer has.",
+  "reachable": "yes",
+  "steps": [
+   "Ask a question that uses web search and wait for the answer.",
+   "Click the compact line \"View N sources\" under the answer.",
+   "Look for the \"More\" section after \"Citations\".",
+   "Compare the full list with the sources the answer used and consulted.",
+   "Compare with Expected: the compact summary expands to the full list."
+  ],
+  "where": "Chat > answer > \"View N sources\" button > More"
+ },
+ "S34.27": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "text": "Sources"
+   }
+  ],
+  "needs": "a Free or paid account with web search turned on",
+  "note": "The links open in a new tab (target _blank) in CitationChip.tsx and ResearchPanel.tsx; the visible link text was not extracted.",
+  "reachable": "yes",
+  "steps": [
+   "Ask a question that uses web search and wait for the answer.",
+   "Click a citation chip, or a source in the Sources panel.",
+   "Check that a new browser tab opens with the original page.",
+   "Compare with Expected: the original page or document opens."
+  ],
+  "where": "Chat > answer > click a citation chip or a source card title"
+ },
+ "S34.31": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/markdown/citationPublisher.ts",
+    "text": "Retrieved"
+   }
+  ],
+  "needs": "a Free or paid account with web search turned on",
+  "note": "The date appears only when the source has the date data; the Sources panel date display was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Ask a question that uses web search and wait for the answer.",
+   "Hover or tap a citation chip.",
+   "Read the date line that starts with \"Retrieved\" and any published date above it.",
+   "Compare with Expected: the source shows its publication or retrieval date."
+  ],
+  "where": "Chat > answer > hover or tap a citation chip > read the \"Retrieved\" line"
+ },
+ "S34.32": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/dialogs/GlobalSearchDialog.tsx",
+    "text": "No results found"
+   },
+   {
+    "file": "apps/web/features/chat/components/dialogs/GlobalSearchDialog.tsx",
+    "text": "Search unavailable"
+   }
+  ],
+  "needs": "none",
+  "note": "The unavailable state shows \"Search could not be completed\" with a \"Retry\" button; reaching it needs the search service to fail, which a tester cannot trigger from the UI.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Search\" in the sidebar.",
+   "Type a word that matches nothing and press Enter.",
+   "Read the empty state: \"No results found\" with \"Try different keywords or clear filters\".",
+   "Check that old results are not kept on screen.",
+   "Compare with Expected: an explicit empty state is shown."
+  ],
+  "where": "Sidebar > Search > type a nonsense word (for example zzqx9) and press Enter"
+ }
+}

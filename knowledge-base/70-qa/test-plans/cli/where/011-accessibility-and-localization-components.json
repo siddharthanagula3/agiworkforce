@@ -1,0 +1,159 @@
+{
+ "S11.03": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/command_popup.rs",
+    "text": "Type to filter   \u2191\u2193 navigate   Enter select   Esc cancel"
+   }
+  ],
+  "needs": "none",
+  "note": "Only the slash command list was checked for arrow and Esc handling; other menus were not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi in Terminal and wait for the input box.",
+   "With the input box empty, type / . The command list opens.",
+   "Press the Down arrow key a few times, then the Up arrow key. The highlighted row should move.",
+   "Type a few letters to filter the list, then press Esc. The list should close and the input should be ready again.",
+   "Compare with Expected: every step should work with the keyboard only."
+  ],
+  "where": "agi (full-screen screen), then type / with the input box empty"
+ },
+ "S11.04": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/command_popup.rs",
+    "text": "Type to filter   \u2191\u2193 navigate   Enter select   Esc cancel"
+   }
+  ],
+  "needs": "none",
+  "note": "The only focus cue found in code is the \u276f text marker; no colour or style for focus was found.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi and type / with the input box empty to open the command list.",
+   "Press the Down arrow key once.",
+   "Look for the marker \u276f at the start of the highlighted row. It should move to the new row.",
+   "Compare with Expected: the focused row should be clearly visible, not just a faint change."
+  ],
+  "where": "agi (full-screen screen), then type / with the input box empty"
+ },
+ "S11.14": {
+  "labels": [
+   {
+    "file": "apps/cli/src/config.rs",
+    "text": "Reduced motion:"
+   },
+   {
+    "file": "apps/cli/src/repl/registry.rs",
+    "text": "Usage: /config set <key> <value>"
+   }
+  ],
+  "needs": "none",
+  "note": "Code does not read the OS reduced-motion preference; it only reads this app setting or plain mode. The setting is applied at start (apps/cli/src/tui/tui_app.rs:7122), not live when changed.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi and type /config set reduced-motion true, then press Enter.",
+   "Type /config and press Enter. The output should show the line Reduced motion: true.",
+   "Quit agi with Ctrl+D and start agi again, because the setting is read only at start.",
+   "Send a message and watch the waiting spinner and the moving shine on text. With the setting on, the spinner should stay as one still dot and the shine should not sweep.",
+   "Compare with Expected: looping and moving animation should stop or be replaced."
+  ],
+  "where": "agi (full-screen screen), then type /config set reduced-motion true, then /config to check"
+ },
+ "S11.15": {
+  "labels": [],
+  "needs": "a microphone",
+  "note": "No live captions found. The closest feature is /voice, which shows the text only after each recording as You said:. Searched apps/cli/src for caption and transcript; the Code line's release-cli.yml reference no longer contains the quoted code.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S11.16": {
+  "labels": [
+   {
+    "file": "apps/cli/src/voice.rs",
+    "text": "You said:"
+   },
+   {
+    "file": "apps/cli/src/voice.rs",
+    "text": "[ENTER to agree, ESC to cancel]"
+   }
+  ],
+  "needs": "a microphone, and agreement to voice mode",
+  "note": "The transcript is kept only as the chat message that was sent; no separate transcript file or saved transcript view was found in voice.rs.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi and type /voice, then press Enter.",
+   "Read the agreement prompt and press Enter to agree.",
+   "Press SPACE, speak a sentence, and follow the on-screen prompt to stop recording.",
+   "Read the line You said: and press Enter to send it.",
+   "Compare with Expected: the sent words should appear as a message in the chat, and can be read back later in that chat."
+  ],
+  "where": "agi (full-screen screen), then type /voice and press Enter"
+ },
+ "S11.23": {
+  "labels": [
+   {
+    "file": "apps/cli/src/output.rs",
+    "text": "/1M tokens"
+   },
+   {
+    "file": "apps/cli/src/output.rs",
+    "text": "Tokens:"
+   }
+  ],
+  "needs": "a Free or paid account for the /cost step",
+  "note": "Money in session cost lines is shown as credits (for example 1 credit), not dollars. The dollar sign appears only in the pricing report from agi --cost.",
+  "reachable": "yes",
+  "steps": [
+   "In Terminal, run agi --cost.",
+   "Read the Input: and Output: lines. Each should show a dollar sign and /1M tokens.",
+   "Start agi, send one short message, then type /cost and press Enter.",
+   "Compare with Expected: session totals show Tokens: ... with the word credits, not a currency symbol, and large numbers should have comma grouping."
+  ],
+  "where": "Terminal: agi --cost (prints the pricing report); then inside agi: /cost"
+ },
+ "S11.27": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "catalog est."
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/command_popup.rs",
+    "text": "Type to filter   \u2191\u2193 navigate   Enter select   Esc cancel"
+   }
+  ],
+  "needs": "none",
+  "note": "No translation files were found in apps/cli/src (a search for i18n, locales and translations matched only routing/classify.rs), so translated copy cannot be tested from the code.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Run agi in a wide Terminal window and note the bottom status line.",
+   "Slowly make the window narrower.",
+   "Watch the keyboard hints drop out and the context meter change to catalog est. with a short bar, then to a bare percentage.",
+   "Compare with Expected: no text should overlap or be cut through a control; the meter should keep its percentage."
+  ],
+  "where": "The bottom status line of the agi screen, and the command list hint row, when the terminal window is made narrow"
+ },
+ "S11.28": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "--plain"
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "--screen-reader"
+   }
+  ],
+  "needs": "none",
+  "note": "NO_COLOR alone does not turn on plain mode (apps/cli/src/output.rs:33); it is checked only in the colour detection at apps/cli/src/output.rs:100, not verified on every output path.",
+  "reachable": "yes",
+  "steps": [
+   "In Terminal, run agi --plain. The app should use the line-based screen, not the full-screen layout.",
+   "Type a short message and check that there are no coloured words, no animated spinner frames and no redrawn screen.",
+   "Quit, then run NO_COLOR=1 agi --cost and check that the pricing report has no colour.",
+   "Compare with Expected: plain output has no colour, spinners or redraws, and NO_COLOR removes colour."
+  ],
+  "where": "Terminal: agi --plain (or agi --screen-reader); NO_COLOR=1 agi --cost"
+ }
+}

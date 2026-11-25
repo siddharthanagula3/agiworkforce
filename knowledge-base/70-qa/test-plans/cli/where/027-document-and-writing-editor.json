@@ -1,0 +1,76 @@
+{
+ "S27.01": {
+  "labels": [
+   {
+    "file": "apps/cli/src/repl/slash_commands.rs",
+    "text": "/artifacts"
+   },
+   {
+    "file": "apps/cli/src/cloud/artifacts.rs",
+    "text": "Untitled artifact"
+   }
+  ],
+  "needs": "a CLI sign-in to an AGI account that has artifacts; an artifact with no title is optional",
+  "note": "The CLI has no separate card or viewer for artifacts; the title appears on each list line and in the JSON from show. The code audit's line 660 is the list renderer, not a card.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to the AGI CLI so the account has at least one artifact, and optionally publish or create one.",
+   "In a terminal, run: agi artifacts list",
+   "Check that each artifact line shows its title after its id and type in brackets.",
+   "Find an artifact with no title (if one exists) and check that its line shows \"Untitled artifact\" instead.",
+   "Run: agi artifacts show <id> --json and check that the \"title\" field matches the list, with \"Untitled artifact\" when there is no title.",
+   "Type /artifacts in the chat and compare the same titles with the list output."
+  ],
+  "where": "Type \"agi artifacts list\" in a terminal, or type \"/artifacts\" in the chat. Each artifact prints as an id, then its title, then its type in brackets; the title shows \"Untitled artifact\" when it has none. Run \"agi artifacts show <id> --json\" to see the \"title\" field."
+ },
+ "S27.37": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Print an artifact's content, or write it to a file."
+   },
+   {
+    "file": "apps/cli/src/repl/slash_commands.rs",
+    "text": "/export"
+   }
+  ],
+  "needs": "a CLI sign-in to an AGI account with a markdown artifact",
+  "note": "The artifact export is the code at lib.rs:1375, and it writes .md only when the artifact type is markdown (or the language is markdown). The chat /export markdown path is for whole conversations, not documents, and was not checked against Expected beyond its existence.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to the AGI CLI and find an artifact of type markdown with: agi artifacts list",
+   "Run: agi artifacts show <id> --out notes (replace notes with a folder or file name you want)",
+   "Look at the printed path; it should end in .md for a markdown artifact.",
+   "Open the written .md file in a text editor and compare its text with the artifact content shown by agi artifacts show <id>.",
+   "Optional: in the chat, type /export markdown my-chat.md and open the file the message names, to check the conversation export."
+  ],
+  "where": "Type \"agi artifacts show <id> --out <folder or file>\" in a terminal. A file path with no extension gains the artifact's extension, and a Markdown artifact gets \".md\". For a conversation, type \"/export markdown <path>\" in the chat."
+ },
+ "S27.41": {
+  "labels": [
+   {
+    "file": "apps/cli/src/agent/tools.rs",
+    "text": "Allow MCP tool '{tool_name}' from server '{server_name}'?"
+   },
+   {
+    "file": "apps/cli/src/approval_details.rs",
+    "text": "Who receives it"
+   },
+   {
+    "file": "apps/cli/src/approval_details.rs",
+    "text": "Subject"
+   }
+  ],
+  "needs": "a credential for an email MCP server (a connected email account) and a test address you control",
+  "note": "The prompt only appears when the session can ask for approval, and the body is shown only as the raw argument JSON, with no separate Body line; the approval key labels were not found as visible strings in the code, so the tester should use the prompt's own choices.",
+  "reachable": "yes",
+  "steps": [
+   "Connect an email MCP server in the CLI so a send-email tool is available, and sign in with its credential.",
+   "In the chat, ask: \"Send an email to <a test address you control> with subject 'QA test' and body 'hello'.\"",
+   "When the approval prompt opens, read its title \"Allow MCP tool ... from server ...?\".",
+   "Check that the detail shows \"Who receives it\" with the recipient, \"Subject\" with the subject, and the body in the argument text below.",
+   "Decline or allow the call with the prompt's keys and check that the email is sent only after you allow it."
+  ],
+  "where": "In the chat, ask the agent to send an email using a connected email tool (an MCP server). The approval prompt \"Allow MCP tool '<tool>' from server '<server>'?\" appears before the send, and it lists \"Who receives it\" and \"Subject\" when those fields are in the call, followed by the full arguments (the body)."
+ }
+}

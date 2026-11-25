@@ -1,0 +1,224 @@
+{
+ "S14.01": {
+  "labels": [
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Upload from device"
+   }
+  ],
+  "needs": "a file to upload, and an account where file uploads are allowed (the Upload from device item is hidden otherwise)",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the side panel on a normal web page.",
+   "Click the + button beside the message box.",
+   "Click Upload from device and pick one file in the file chooser.",
+   "Look at the attachment bar above the message box: the file should show as a chip, and it should go with your next message."
+  ],
+  "where": "Composer > + button (its tooltip is \"Add attachment\") > Upload from device"
+ },
+ "S14.02": {
+  "labels": [],
+  "needs": "a file to drag, and an account where file uploads are allowed",
+  "note": "No visible control or hint text for drag-and-drop was found in the code; it is a drop target on the composer only.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the side panel.",
+   "Drag an image or PDF from a Finder window onto the message box.",
+   "Drop it there.",
+   "Look at the attachment bar above the message box: the file should appear as a chip, and it should go with your next message."
+  ],
+  "where": "Composer > drag a file from Finder onto the message box"
+ },
+ "S14.03": {
+  "labels": [],
+  "needs": "an image on the clipboard, and an account where file uploads are allowed",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Copy an image to the clipboard, for example with Shift-Command-Control-4 or by copying an image from a web page.",
+   "Sign in and click in the message box.",
+   "Press Command-V.",
+   "Look at the attachment bar: the image should appear as an image chip, not as text, and it should go with your next message."
+  ],
+  "where": "Composer > click the message box and press Command-V after copying an image"
+ },
+ "S14.05": {
+  "labels": [],
+  "needs": "none",
+  "note": "Searched for \"photo\" and \"library\" in apps/extension/src and apps/extension/_locales/en. No photo-library control was found; the only file route is Upload from device, which opens the file chooser.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S14.06": {
+  "labels": [
+   {
+    "file": "apps/extension/src/side_panel.ts",
+    "text": "Take a screenshot"
+   }
+  ],
+  "needs": "a regular website open in the active tab, and an account where file uploads are allowed (the item is disabled otherwise)",
+  "note": "If capture fails the composer shows \"This page could not be captured. Try again on a regular website tab.\"",
+  "reachable": "yes",
+  "steps": [
+   "Open a regular website (not a Chrome settings or store page) in the active tab and sign in to the side panel.",
+   "Click the + button beside the message box.",
+   "Click Take a screenshot.",
+   "Look at the attachment bar: a Screenshot chip should appear, and it should go with your next message."
+  ],
+  "where": "Composer > + button > Take a screenshot"
+ },
+ "S14.08": {
+  "labels": [
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Add a web page by link"
+   }
+  ],
+  "needs": "a web address on a site the extension has approved",
+  "note": "An address on a site that is not approved shows \"Enter a valid, approved web address\"-type error from spLinkInvalid; the exact wording was not checked against the file.",
+  "reachable": "yes",
+  "steps": [
+   "Click the + button beside the message box.",
+   "Click Add a web page by link.",
+   "Type a web address on a site the extension has approved, then press the button in the link form to add it.",
+   "Look at the attachment bar: the page should appear as a chip, and it should go with your next message."
+  ],
+  "where": "Composer > + button > Add a web page by link"
+ },
+ "S14.15": {
+  "labels": [
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Upload from device"
+   }
+  ],
+  "needs": "two or three files to upload, and an account where file uploads are allowed",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click the + button beside the message box.",
+   "Click Upload from device.",
+   "In the file chooser, select two or three files together (for example with Command-click), then click Open.",
+   "Look at the attachment bar: every selected file should appear as its own chip, and all of them should go with your next message."
+  ],
+  "where": "Composer > + button > Upload from device"
+ },
+ "S14.16": {
+  "labels": [
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Upload from device"
+   }
+  ],
+  "needs": "an image file, and an account where file uploads are allowed",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click the + button beside the message box.",
+   "Click Upload from device and pick a PNG, JPEG, WebP or GIF image.",
+   "Look at the attachment bar: the image chip should show a small picture of the image, not just a file icon.",
+   "Compare the chip with the image before sending."
+  ],
+  "where": "Composer > + button > Upload from device"
+ },
+ "S14.22": {
+  "labels": [
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Ready to send"
+   }
+  ],
+  "needs": "a file to upload, and an account where file uploads are allowed",
+  "note": "The code shows the Ready to send text under each file chip; the send-button rule itself was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Click the + button and pick a file with Upload from device.",
+   "While it reads, look at the attachment bar: the notice \"Adding attachments\u2026 Send will be available when they are ready.\" appears.",
+   "When the file is done, look under its name: the text \"Ready to send\" should appear.",
+   "Compare the chip with Expected: the message should only be sendable once it shows Ready to send."
+  ],
+  "where": "Composer > + button > Upload from device, then look under the file name in the attachment bar"
+ },
+ "S14.24": {
+  "labels": [
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Upload from device"
+   }
+  ],
+  "needs": "a file the chat cannot read, such as a .zip or .docx file",
+  "note": "The file chooser is filtered by an accept list, so an unsupported file may not show in it.",
+  "reachable": "yes",
+  "steps": [
+   "Click the + button beside the message box.",
+   "Click Upload from device and try to pick a file type the chat does not read, such as a .zip or .docx file.",
+   "If the chooser hides that type, drag the file onto the message box instead.",
+   "Look at the attachment bar: a notice should name the file and say that only PNG, JPEG, WebP or GIF images, PDF, and text or Markdown files can be attached."
+  ],
+  "where": "Composer > + button > Upload from device"
+ },
+ "S14.28": {
+  "labels": [
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Remove $FILE$"
+   }
+  ],
+  "needs": "two files to upload, and an account where file uploads are allowed",
+  "note": "The remove control is an icon whose tooltip and label read Remove plus the file name.",
+  "reachable": "yes",
+  "steps": [
+   "Attach two files with Upload from device.",
+   "Hover over one chip and click its remove control.",
+   "Look at the attachment bar: that chip should disappear and the other should stay.",
+   "Send the message and check that the removed file is not in the sent message."
+  ],
+  "where": "Composer > attachment chip > its remove control (tooltip \"Remove <file name>\")"
+ },
+ "S14.32": {
+  "labels": [
+   {
+    "file": "_locales/en/messages.json",
+    "text": "$FILE$ is too large. Each file must be under $LIMIT$."
+   },
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Retry"
+   }
+  ],
+  "needs": "a file over the size limit, and a way to make an upload fail (for example turning Wi-Fi off)",
+  "note": "The size limit value was not read from the code.",
+  "reachable": "yes",
+  "steps": [
+   "Click the + button and pick a file that is over the per-file size limit.",
+   "Look at the attachment bar: a notice should name that file and state the limit.",
+   "Pick a file while the network is off, or otherwise make an upload fail.",
+   "Look at that file's chip: it should show the file name with \"could not be uploaded\" and a Retry button, not one generic message."
+  ],
+  "where": "Composer > + button > Upload from device"
+ },
+ "S14.34": {
+  "labels": [
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Temporary chat"
+   },
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Stays out of your history, search, memory and Library."
+   }
+  ],
+  "needs": "an account that can use Temporary chat",
+  "note": "The text explains that attached files stay out of the Library, but no text was found about how long files are kept, and no retention text was found for normal chats.",
+  "reachable": "yes",
+  "steps": [
+   "Click the + button beside the message box.",
+   "Read the Temporary chat item and its line \"Stays out of your history, search, memory and Library.\"; hover it to read the full text.",
+   "Click Temporary chat to turn it on.",
+   "Look at the notice above the message box, and compare it with Expected: it should say whether attached files are kept and for how long."
+  ],
+  "where": "Composer > + button > Temporary chat (hover for the full text)"
+ }
+}

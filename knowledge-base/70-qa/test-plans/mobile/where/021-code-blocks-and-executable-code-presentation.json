@@ -1,0 +1,247 @@
+{
+ "S21.01": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/CodeCard.tsx",
+    "text": "Plain text"
+   }
+  ],
+  "needs": "none",
+  "note": "The name shown is the language written in the reply's code fence, lower-cased; the app does not pick it.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a chat.",
+   "Type in the message box: Write a short Python function that adds two numbers, in a code block. Send it.",
+   "Wait until the reply finishes.",
+   "Look at the small grey text at the top-left of the code block. Compare with Expected: it should show the language name in lower case (for example python). A block with no language shows Plain text."
+  ],
+  "where": "Chat > send a message that asks for code > read the bar above the finished code block"
+ },
+ "S21.02": {
+  "labels": [],
+  "needs": "none",
+  "note": "Highlighting is on by default in code blocks and no setting turns it off; the colouring is decided in apps/mobile/src/features/chat/components/CodeCard.tsx and apps/mobile/src/features/chat/utils/syntaxHighlight.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a chat.",
+   "Type in the message box: Write a short Python function that adds two numbers, in a code block. Send it.",
+   "Wait until the reply finishes; the block is not coloured while it is still streaming.",
+   "Look at the keywords, strings and numbers in the code. Compare with Expected: different parts of the code should have different colours."
+  ],
+  "where": "Chat > send a message that asks for code > look at the colours in the finished code block"
+ },
+ "S21.03": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/CodeBlockCopyButton.tsx",
+    "text": "Copy code"
+   }
+  ],
+  "needs": "none",
+  "note": "The button is icon-only. Its accessible name is Copy code, and after a copy it reads Copied, or Could not copy on failure (apps/mobile/src/shared/hooks/useCopyAction.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, open a chat and ask for a short code sample in a code block. Wait until the reply finishes.",
+   "Tap the copy icon in the header bar of the code block.",
+   "Paste into the message box (or any text field) and compare the pasted text with the code block.",
+   "Compare with Expected: the pasted text should be exactly the code, with no language name or header text, and the icon should briefly show a check mark."
+  ],
+  "where": "Chat > send a message that asks for code > tap the copy button in the top-right of the code block (its accessible name is Copy code)"
+ },
+ "S21.04": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/CodeCard.tsx",
+    "text": "Download"
+   }
+  ],
+  "needs": "none",
+  "note": "The download button is icon-only and opens the system share sheet (shareFile in apps/mobile/services/fileCreation.ts), not a direct save. Unknown languages get a .txt file.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, open a chat and ask for a short Python function in a code block. Wait until the reply finishes.",
+   "Tap the download icon in the header bar of the code block.",
+   "In the sheet that opens, choose a place to keep the file (for example Files), then open the saved file.",
+   "Compare with Expected: the file should have a sensible extension (for example .py for Python) and its content should match the code block."
+  ],
+  "where": "Chat > send a message that asks for code > tap the download icon in the code block header (its accessible name is Download plus the file name, for example Download code.py)"
+ },
+ "S21.09": {
+  "labels": [],
+  "needs": "none",
+  "note": "The colour comes from the diff code block (apps/mobile/src/features/chat/components/CodeCard.tsx, DiffCodeLines). Whether the model writes a diff fence is up to the reply. Artifact version changes use a similar colour view under Show changes in apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a chat.",
+   "Type in the message box: Show the change as a unified diff inside a diff code block: rename the variable x to total in this Python snippet, x = 1 then print(x). Send it.",
+   "Wait until the reply finishes.",
+   "Compare with Expected: added lines should have a green fill and removed lines a red fill, each line on its own row."
+  ],
+  "where": "Chat > ask for a change as a diff > look at the added and removed lines in the diff code block"
+ },
+ "S21.10": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/code/index.tsx",
+    "text": "Show + and - signs in diffs"
+   },
+   {
+    "file": "packages/contracts/types/src/pairing.ts",
+    "text": "AGI Code"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Settings"
+   }
+  ],
+  "needs": "none (the AGI Code row may depend on the account mode; not traced)",
+  "note": "The side-menu entry word Settings comes from the shared translation file, and the Settings row labelled AGI Code is in apps/mobile/src/features/settings/index.tsx. Hunks are shown as text from the model's reply, not reformatted by the app.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and ask for a diff in a diff code block, as in S21.09. Wait until the reply finishes.",
+   "Read the lines: each line should keep its own row, and the hunk header lines (starting with @@) should be readable.",
+   "Open the side menu, tap Settings, then tap AGI Code.",
+   "Turn on Show + and - signs in diffs, go back to the chat and open the same diff. Compare with Expected: + and - signs now show at the start of changed lines, with their colours."
+  ],
+  "where": "Chat > ask for a diff > read the diff block; Settings > AGI Code > Show + and - signs in diffs"
+ },
+ "S21.12": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Add to Chat"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Run code"
+   }
+  ],
+  "needs": "a Cloud account with cloud code execution granted, and a model with code execution",
+  "note": "The Run code row is only offered in Cloud mode (appMode === 'cloud'); no local sandbox was found in the mobile app. How to switch to Cloud mode was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to a Cloud account whose plan includes cloud code execution, and choose a model that supports code execution.",
+   "Tap the button labelled Add to chat next to the message box.",
+   "In the sheet titled Add to Chat, turn on the Run code row.",
+   "Type: Run this Python code and show the output: print(sum(range(10))). Send it, then wait for the reply.",
+   "Compare with Expected: a Run code row should appear in the reply with its output, showing the printed result 45."
+  ],
+  "where": "Add to chat (the button labelled Add to chat next to the message box) > Add to Chat sheet > turn on Run code, then send a request that runs code"
+ },
+ "S21.15": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ToolCallTimeline.tsx",
+    "text": "Output"
+   }
+  ],
+  "needs": "a Cloud account with cloud code execution granted, and a model with code execution",
+  "note": "Long output is cut to 12 lines in the row; a full-output control exists with accessible name View full output for Run code.",
+  "reachable": "yes",
+  "steps": [
+   "Run S21.12 first so that a Run code row exists.",
+   "Tap the Run code row to open its details.",
+   "Look under the heading Output (or Response for non-code tools).",
+   "Compare with Expected: the printed text of the program (45 for the example) should appear under Output."
+  ],
+  "where": "Chat > Run code reply > tap the Run code row > read the Output heading"
+ },
+ "S21.16": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ToolCallTimeline.tsx",
+    "text": "Stderr"
+   }
+  ],
+  "needs": "a Cloud account with cloud code execution granted, and a model with code execution",
+  "note": "The Stderr section appears only when the program writes to the error stream.",
+  "reachable": "yes",
+  "steps": [
+   "Run this Python code and wait for the reply: import sys then print('ok') then print('problem', file=sys.stderr).",
+   "Tap the Run code row to open its details.",
+   "Compare the Output section (ok) with the Stderr section (problem).",
+   "Compare with Expected: Stderr should show in its own section, in red, separate from Output."
+  ],
+  "where": "Chat > Run code reply > tap the Run code row > look for the red Stderr heading"
+ },
+ "S21.17": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/tool-display.ts",
+    "text": "Run code"
+   }
+  ],
+  "needs": "a Cloud account with cloud code execution granted, and a model with code execution",
+  "note": "The duration chip shows only when the run reports a duration; otherwise the row shows Script or Result.",
+  "reachable": "yes",
+  "steps": [
+   "Run S21.12 in Cloud mode.",
+   "Look at the Run code row in the reply, on the right-hand side.",
+   "Compare with Expected: a time such as 450ms or 1.2s should show after the run finishes."
+  ],
+  "where": "Chat > Run code reply > the right-hand label on the Run code row (for example 450ms or 1.2s)"
+ },
+ "S21.18": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ToolCallTimeline.tsx",
+    "text": "Exit code"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-status.ts",
+    "text": "Failed"
+   }
+  ],
+  "needs": "a Cloud account with cloud code execution granted, and a model with code execution",
+  "note": "A sandbox error shows as Code execution failed: <error> from apps/mobile/src/features/chat/utils/toolCallAccumulator.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Run S21.12 (success) and then a failing program such as: import sys then sys.exit(3).",
+   "Read the status word on each Run code row: Done for success, Failed for failure.",
+   "Tap the failing row and look for the line Exit code 3.",
+   "Compare with Expected: success shows Done and exit code 0 in green; the failure shows Failed and a red exit code line."
+  ],
+  "where": "Chat > Run code reply > read the status word on the Run code row, then tap the row and read Exit code"
+ },
+ "S21.19": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+    "text": "Download artifact"
+   }
+  ],
+  "needs": "a Cloud account; a reply that produces a file",
+  "note": "The link from a code run to a generated file card was not traced end to end; the card is built from generatedFile data in apps/mobile/src/features/chat/components/InlineArtifactCard.tsx and GeneratedFileCard.tsx. The download icon is icon-only.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to a Cloud account with a chat that produces a file (for example: Create a CSV file with three rows of sample data).",
+   "Look for the file card in the reply, showing the file name.",
+   "Tap the file card to open the full screen view.",
+   "Tap the download icon at the top (accessible name Download artifact), then check the file that is saved or shared.",
+   "Compare with Expected: the file should be listed and openable or downloadable."
+  ],
+  "where": "Chat > reply with a generated file card > tap the file card to open it > tap the download icon at the top (accessible name Download artifact)"
+ },
+ "S21.21": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/CodeRunAgain.tsx",
+    "text": "Run again"
+   },
+   {
+    "file": "packages/contracts/cloud-contracts/src/chat-code-runs.ts",
+    "text": "Run this code again?"
+   }
+  ],
+  "needs": "a Cloud account with cloud code execution granted, and a model with code execution",
+  "note": "Partly unfinished: the server side needs AGI_E2B_EXECUTION=1 and E2B_API_KEY in production, which a tester cannot set; if the run fails, record it. The button is hidden while a run is still going or when cloud execution is not granted.",
+  "reachable": "yes",
+  "steps": [
+   "Run S21.12 in Cloud mode and wait until the row shows Done or Failed.",
+   "Under the reply's code block, find the button labelled Run again.",
+   "If the approval setting is Ask every time, a dialog titled Run this code again? appears; tap its Run again button.",
+   "Compare with Expected: a new run should appear with its own output and status, and the earlier run should stay visible."
+  ],
+  "where": "Chat > Run code reply (after the run has finished) > tap Run again under the code"
+ }
+}

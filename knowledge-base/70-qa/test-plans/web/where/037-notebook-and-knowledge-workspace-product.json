@@ -1,0 +1,399 @@
+{
+ "S37.01": {
+  "labels": [
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Projects"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/ProjectGallery.tsx",
+    "text": "Search projects..."
+   }
+  ],
+  "needs": "a Free account with at least one notebook (or an empty account to see the empty list)",
+  "note": "The sidebar item can be hidden by the user (hideable), and the nav label also has a translation key, navProjects.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and click Projects in the sidebar.",
+   "Look for the list of your notebooks, with the search box that says Search projects....",
+   "Click one notebook to open it.",
+   "Compare the list and the opened notebook with Expected."
+  ],
+  "where": "Sidebar > Projects"
+ },
+ "S37.02": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/ProjectGallery.tsx",
+    "text": "New project"
+   },
+   {
+    "file": "apps/web/features/chat/components/dialogs/CreateProjectDialog.tsx",
+    "text": "Create project"
+   },
+   {
+    "file": "apps/web/features/chat/components/dialogs/CreateProjectDialog.tsx",
+    "text": "Project name"
+   }
+  ],
+  "needs": "a Free account",
+  "reachable": "yes",
+  "steps": [
+   "Click Projects in the sidebar.",
+   "Click New project.",
+   "Type a name in the Project name field and click Create project.",
+   "Look for the new notebook in the list, and for the notebook page opening after creation."
+  ],
+  "where": "Sidebar > Projects > New project"
+ },
+ "S37.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/dialogs/CreateProjectDialog.tsx",
+    "text": "Description"
+   },
+   {
+    "file": "apps/web/app/chat/projects/[id]/page.tsx",
+    "text": "Project settings"
+   }
+  ],
+  "needs": "a Free account",
+  "note": "The save button wording was not confirmed in the code, and the Project updated toast text was seen in ProjectSettingsDialog.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Create a notebook with a name and a Description, as in S37.02.",
+   "Open the notebook and click the Project options button.",
+   "Click Project settings.",
+   "Change the Name or the Description and save; look for the Project updated message and the new text."
+  ],
+  "where": "Sidebar > Projects > New project > Description, then open the notebook > Project options > Project settings"
+ },
+ "S37.04": {
+  "labels": [
+   {
+    "file": "apps/web/app/chat/projects/[id]/page.tsx",
+    "text": "Chats"
+   },
+   {
+    "file": "apps/web/features/projects/components/ProjectSourcesPanel.tsx",
+    "text": "Project sources"
+   },
+   {
+    "file": "apps/web/features/projects/components/SourcesPanel.tsx",
+    "text": "Add sources"
+   }
+  ],
+  "needs": "a notebook with at least one source",
+  "note": "The position of the toggle button inside the chat header was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open a notebook from Projects.",
+   "Click the Chats tab and open a chat.",
+   "Click the icon button whose tooltip is Project sources.",
+   "Look for the source list beside the conversation, with the Add sources button and the file list."
+  ],
+  "where": "Projects > open a notebook > Chats > open a chat > click the icon button titled Project sources"
+ },
+ "S37.06": {
+  "labels": [
+   {
+    "file": "apps/web/app/chat/projects/[id]/page.tsx",
+    "text": "Sources"
+   },
+   {
+    "file": "apps/web/features/projects/components/SourcesPanel.tsx",
+    "text": "Add sources"
+   },
+   {
+    "file": "apps/web/features/projects/components/AddSourcesModal.tsx",
+    "text": "Upload"
+   }
+  ],
+  "needs": "a file to upload (PDF, doc or text)",
+  "note": "The cited knowledge-files route line moved; the upload path was found through SourcesPanel handleUpload. Indexing is not visible on screen.",
+  "reachable": "yes",
+  "steps": [
+   "Open a notebook and click the Sources tab.",
+   "Click Add sources, then click Upload.",
+   "Choose a PDF, doc or text file and wait for the progress to finish.",
+   "Look for the file in the source list, then ask a chat in the notebook about it and compare with Expected."
+  ],
+  "where": "Projects > open a notebook > Sources > Add sources > Upload"
+ },
+ "S37.10": {
+  "labels": [
+   {
+    "file": "apps/web/features/projects/components/AddSourcesModal.tsx",
+    "text": "Google Drive"
+   }
+  ],
+  "needs": "an outside account (Google) with Drive files",
+  "note": "Unfinished: the picker needs GOOGLE_PICKER_API_KEY and GOOGLE_PICKER_APP_ID. Without them the tile may show Coming soon or the error Adding files from Google Drive is not available yet.",
+  "reachable": "yes",
+  "steps": [
+   "Open a notebook and click the Sources tab.",
+   "Click Add sources, then click Google Drive.",
+   "Pick files in the Google picker window and confirm.",
+   "Look for the picked files in the source list."
+  ],
+  "where": "Projects > open a notebook > Sources > Add sources > Google Drive"
+ },
+ "S37.11": {
+  "labels": [
+   {
+    "file": "apps/web/features/projects/components/AddSourcesModal.tsx",
+    "text": "Text input"
+   },
+   {
+    "file": "apps/web/features/projects/components/SourcesPanel.tsx",
+    "text": "Add sources"
+   }
+  ],
+  "needs": "none",
+  "note": "The cited route line moved. The Sources tab also has a separate Notes section (ProjectNotes.tsx), not checked as a source route.",
+  "reachable": "yes",
+  "steps": [
+   "Open a notebook, click the Sources tab, click Add sources.",
+   "Click Text input.",
+   "Type a title in the field with the placeholder e.g. Project notes, and paste or type text in the box.",
+   "Save it as a source and look for the new text source in the list."
+  ],
+  "where": "Projects > open a notebook > Sources > Add sources > Text input"
+ },
+ "S37.14": {
+  "labels": [
+   {
+    "file": "apps/web/app/chat/projects/[id]/page.tsx",
+    "text": "Chats"
+   }
+  ],
+  "needs": "a notebook with sources",
+  "reachable": "yes",
+  "steps": [
+   "Open a notebook and open the Chats tab.",
+   "Start a chat and type a question that the sources can answer.",
+   "Read the answer and look for source names or citation chips under it.",
+   "Compare the answer with the sources in the notebook."
+  ],
+  "where": "Projects > open a notebook > Chats"
+ },
+ "S37.15": {
+  "labels": [
+   {
+    "file": "apps/web/app/chat/projects/[id]/page.tsx",
+    "text": "Project settings"
+   },
+   {
+    "file": "apps/web/features/projects/components/ProjectSettingsDialog.tsx",
+    "text": "Instructions"
+   }
+  ],
+  "needs": "none",
+  "reachable": "yes",
+  "steps": [
+   "Open the notebook and click the Project options button.",
+   "Click Project settings.",
+   "Type a rule in the Instructions box, for example Respond in Spanish, and save.",
+   "Start a new chat in the notebook, ask a question, and check that the reply follows the rule."
+  ],
+  "where": "Projects > open a notebook > Project options > Project settings > Instructions"
+ },
+ "S37.19": {
+  "labels": [
+   {
+    "file": "apps/web/app/chat/projects/[id]/page.tsx",
+    "text": "Chats"
+   }
+  ],
+  "needs": "a notebook with sources",
+  "note": "The code does not show the chip is a button; the preview opens from the knowledgeFile and page link. Click behaviour was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open a notebook and ask a question in a chat that the sources answer.",
+   "Look under the answer for a source chip with the file name and page.",
+   "Click the chip.",
+   "Check that the source preview opens at the cited page."
+  ],
+  "where": "Projects > open a notebook > Chats > ask a question > click the source chip under the answer"
+ },
+ "S37.23": {
+  "labels": [
+   {
+    "file": "apps/web/features/projects/components/ProjectStudio.tsx",
+    "text": "Briefing doc"
+   }
+  ],
+  "needs": "a notebook with sources",
+  "note": "The button sends a prompt into a chat; the output was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Open a notebook with sources and click the Sources tab.",
+   "Click Briefing doc in the studio section.",
+   "Look for a new chat in the notebook that produces a briefing document."
+  ],
+  "where": "Projects > open a notebook > Sources > Briefing doc"
+ },
+ "S37.24": {
+  "labels": [
+   {
+    "file": "apps/web/features/projects/components/ProjectStudio.tsx",
+    "text": "Study guide"
+   }
+  ],
+  "needs": "a notebook with sources",
+  "note": "The button sends a prompt into a chat; the output was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Open a notebook with sources and click the Sources tab.",
+   "Click Study guide in the studio section.",
+   "Look for a new chat that produces a study guide."
+  ],
+  "where": "Projects > open a notebook > Sources > Study guide"
+ },
+ "S37.25": {
+  "labels": [
+   {
+    "file": "apps/web/features/projects/components/ProjectStudio.tsx",
+    "text": "FAQ"
+   }
+  ],
+  "needs": "a notebook with sources",
+  "note": "The button sends a prompt into a chat; the output was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Open a notebook with sources and click the Sources tab.",
+   "Click FAQ in the studio section.",
+   "Look for a new chat that produces an FAQ."
+  ],
+  "where": "Projects > open a notebook > Sources > FAQ"
+ },
+ "S37.26": {
+  "labels": [
+   {
+    "file": "apps/web/features/projects/components/ProjectStudio.tsx",
+    "text": "Timeline"
+   }
+  ],
+  "needs": "a notebook with sources",
+  "note": "The button sends a prompt into a chat; the output was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Open a notebook with sources and click the Sources tab.",
+   "Click Timeline in the studio section.",
+   "Look for a new chat that produces a timeline."
+  ],
+  "where": "Projects > open a notebook > Sources > Timeline"
+ },
+ "S37.27": {
+  "labels": [
+   {
+    "file": "apps/web/features/projects/components/ProjectStudio.tsx",
+    "text": "Mind map"
+   }
+  ],
+  "needs": "a notebook with sources",
+  "note": "The button sends a prompt into a chat; the output was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Open a notebook with sources and click the Sources tab.",
+   "Click Mind map in the studio section.",
+   "Look for a new chat that produces a mind map."
+  ],
+  "where": "Projects > open a notebook > Sources > Mind map"
+ },
+ "S37.28": {
+  "labels": [
+   {
+    "file": "apps/web/features/projects/components/ProjectStudio.tsx",
+    "text": "Data table"
+   }
+  ],
+  "needs": "a notebook with sources",
+  "note": "The button sends a prompt into a chat; the output was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Open a notebook with sources and click the Sources tab.",
+   "Click Data table in the studio section.",
+   "Look for a new chat that produces a data table."
+  ],
+  "where": "Projects > open a notebook > Sources > Data table"
+ },
+ "S37.30": {
+  "labels": [
+   {
+    "file": "apps/web/features/projects/components/ProjectStudio.tsx",
+    "text": "Slide deck"
+   }
+  ],
+  "needs": "a notebook with sources",
+  "note": "The code asks for a PowerPoint file (officeCreationEnabled). The output was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Open a notebook with sources and click the Sources tab.",
+   "Click Slide deck in the studio section.",
+   "Look for a new chat that produces a slide deck file."
+  ],
+  "where": "Projects > open a notebook > Sources > Slide deck"
+ },
+ "S37.34": {
+  "labels": [
+   {
+    "file": "apps/web/app/chat/projects/[id]/page.tsx",
+    "text": "Share"
+   },
+   {
+    "file": "apps/web/features/projects/components/ProjectSharingControls.tsx",
+    "text": "Everyone in the workspace can view"
+   },
+   {
+    "file": "apps/web/features/projects/components/ProjectSharingControls.tsx",
+    "text": "Can edit"
+   }
+  ],
+  "needs": "a team workspace and a second account in the same workspace",
+  "note": "The audit marks the UI as unfinished. Outside a team workspace the dialog says Only you can open this project.",
+  "reachable": "yes",
+  "steps": [
+   "Open the notebook and click the Project options button.",
+   "Click Share. The dialog title is Share followed by the notebook name.",
+   "Choose Everyone in the workspace can view, or set a member to Can view or Can edit.",
+   "Sign in as the other account and check that it can open the notebook with that access."
+  ],
+  "where": "Projects > open a notebook > Project options > Share"
+ },
+ "S37.37": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Project"
+   }
+  ],
+  "needs": "a notebook with sources",
+  "note": "The audit marks the UI as unfinished. No separate bring-context control was found; the project picker is the handoff.",
+  "reachable": "yes",
+  "steps": [
+   "In the main chat, click the Project button in the composer bar.",
+   "Pick a notebook from the list.",
+   "Send a question that needs the notebook sources.",
+   "Check that the answer uses the notebook sources."
+  ],
+  "where": "Main chat > composer bar Project button > pick a notebook"
+ },
+ "S37.38": {
+  "labels": [
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Projects"
+   }
+  ],
+  "needs": "a second app signed in with the same account",
+  "note": "Sync is server-side; no control was found in the code, and the other apps were not checked.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Sign in with the same account in another app (desktop, mobile or the Chrome extension).",
+   "Open Projects in that app.",
+   "Check that the same notebook list appears and that the notebook opens with its sources."
+  ],
+  "where": "Projects list in another app signed in with the same account"
+ }
+}

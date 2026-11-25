@@ -1,0 +1,278 @@
+{
+ "S25.01": {
+  "labels": [
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Library"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Documents"
+   }
+  ],
+  "needs": "a PDF file uploaded to the library",
+  "note": "The PDF reader is an iframe with data-testid library-pdf-reader; it has no visible label of its own.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and click Library in the sidebar.",
+   "Click the Documents tab.",
+   "Click a PDF file tile.",
+   "Look for a reader inside the product (a frame that holds the PDF, with the file name in the top breadcrumb after Library) and compare with Expected."
+  ],
+  "where": "Sidebar > Library > Documents > click a PDF file"
+ },
+ "S25.02": {
+  "labels": [
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Library"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Documents"
+   }
+  ],
+  "needs": "a plain-text file uploaded to the library",
+  "note": "The same text view is also used in project knowledge files (FilePreviewModal, plain text in a pre block).",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and click Library in the sidebar.",
+   "Click the Documents tab.",
+   "Click a plain-text file tile.",
+   "Look for a readable text view inside the viewer (top breadcrumb shows Library and the file name) and compare with Expected."
+  ],
+  "where": "Sidebar > Library > Documents > click a .txt file"
+ },
+ "S25.03": {
+  "labels": [
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Projects"
+   },
+   {
+    "file": "apps/web/features/projects/components/FilePreviewModal.tsx",
+    "text": "Download"
+   }
+  ],
+  "needs": "a project with a .md file uploaded",
+  "note": "In the Library viewer a .md file shows as raw text in a pre block, not formatted; only the project preview renders Markdown. The name of the knowledge-files list heading was not confirmed in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and click Projects in the sidebar.",
+   "Open a project that has a Markdown file in its knowledge files.",
+   "Click the .md file name in the file list.",
+   "Look for formatted Markdown in the preview dialog (headings, lists, not raw # and * symbols) and compare with Expected."
+  ],
+  "where": "Sidebar > Projects > open a project > click a .md file name in its knowledge files"
+ },
+ "S25.04": {
+  "labels": [
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Projects"
+   },
+   {
+    "file": "apps/web/features/projects/components/FilePreviewModal.tsx",
+    "text": "Download"
+   }
+  ],
+  "needs": "a project with a source-code file uploaded",
+  "note": "In the Library viewer source files show as plain text, not syntax-aware; only the project preview highlights code.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and click Projects in the sidebar.",
+   "Open a project that has a source-code file (for example .ts or .py) in its knowledge files.",
+   "Click that file name.",
+   "Look for the code in a syntax-aware, fenced code block with a language, and compare with Expected."
+  ],
+  "where": "Sidebar > Projects > open a project > click a source-code file name in its knowledge files"
+ },
+ "S25.05": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Images"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Zoom in"
+   }
+  ],
+  "needs": "an image uploaded to the library",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and click Library in the sidebar.",
+   "Click the Images tab.",
+   "Click an image tile.",
+   "Look for the image shown large in the viewer with the file name as its alt text and a Close file viewer button in the top right, and compare with Expected."
+  ],
+  "where": "Sidebar > Library > Images > click an image tile"
+ },
+ "S25.07": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Videos"
+   },
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Library"
+   }
+  ],
+  "needs": "a video file uploaded to the library",
+  "note": "The player is a plain HTML video element with the controls attribute; no custom control label was found.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and click Library in the sidebar.",
+   "Click the Videos tab.",
+   "Click a video tile.",
+   "Look for a video player with playback controls (data-testid library-video-player) and press play, then compare with Expected."
+  ],
+  "where": "Sidebar > Library > Videos > click a video tile"
+ },
+ "S25.08": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Documents"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/library/FileTextPreview.tsx",
+    "text": "Showing the start of this file. Download it to see all of it."
+   }
+  ],
+  "needs": "a spreadsheet file uploaded to the library",
+  "note": "Table output depends on the server returning kind table; which extensions get that was not confirmed in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and click Library in the sidebar.",
+   "Click the Documents tab.",
+   "Click a spreadsheet tile.",
+   "Look for a table with a header row and cells, and for the note Showing the start of this file when the file is long, then compare with Expected."
+  ],
+  "where": "Sidebar > Library > Documents > click a spreadsheet file (.csv or .xlsx) tile"
+ },
+ "S25.10": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Documents"
+   },
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Library"
+   }
+  ],
+  "needs": "a .docx file uploaded to the library",
+  "note": "The library viewer shows extracted text in a plain pre block, not the Word layout; the server extracts the text (apps/web/lib/server/office-document-text.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and click Library in the sidebar.",
+   "Click the Documents tab.",
+   "Click a .docx file tile.",
+   "Look for the document's text in the viewer and compare with Expected."
+  ],
+  "where": "Sidebar > Library > Documents > click a .docx file tile"
+ },
+ "S25.14": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Zoom in"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Zoom out"
+   }
+  ],
+  "needs": "an image uploaded to the library",
+  "note": "Zoom controls appear only for images; the zoom group is labelled Zoom.",
+  "reachable": "yes",
+  "steps": [
+   "Open an image in Library as in S25.05.",
+   "Note the percentage shown between the zoom buttons (starts at 100%).",
+   "Click Zoom in and look for the image getting larger and the percentage rising.",
+   "Click Zoom out and check it shrinks back, then compare with Expected."
+  ],
+  "where": "Sidebar > Library > Images > click an image tile > Zoom in or Zoom out (top right)"
+ },
+ "S25.25": {
+  "labels": [],
+  "needs": "none",
+  "note": "No full-screen control was found in the Library viewer, the project file preview (FilePreviewModal) or the library components; the only Enter fullscreen and Exit fullscreen controls are for artifacts in apps/web/features/chat/components/artifacts/ArtifactPreview.tsx, not files. Searched for full-screen, fullscreen and requestFullscreen in those folders.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S25.26": {
+  "labels": [
+   {
+    "file": "apps/web/features/projects/components/FilePreviewModal.tsx",
+    "text": "Download"
+   },
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Library"
+   }
+  ],
+  "needs": "a file uploaded to the library",
+  "note": "The Library download is an icon with the aria label Download plus the file name; the project preview has a text Download button.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and click Library in the sidebar.",
+   "Click a file tile that opens a viewer.",
+   "Click the Download icon at the top right of the viewer.",
+   "Open the downloaded file and compare its bytes and content with the source file, then compare with Expected."
+  ],
+  "where": "Sidebar > Library > click a file tile > Download icon (top right, labelled Download with the file name)"
+ },
+ "S25.27": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Download as text"
+   }
+  ],
+  "needs": "a .docx file uploaded to the library",
+  "note": "The button is icon-only with title Download as text; it appears only after the text preview is ready and the file is not already text. The downloaded file type was not confirmed beyond a text/plain blob at LibraryView.tsx line 1132.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and click Library in the sidebar.",
+   "Click the Documents tab and open a .docx file.",
+   "Hover the top-right icons and find the one whose tooltip reads Download as text.",
+   "Click it, open the downloaded file, and compare with Expected."
+  ],
+  "where": "Sidebar > Library > Documents > click a .docx file tile > Download as text icon (top right)"
+ },
+ "S25.28": {
+  "labels": [],
+  "needs": "a live web browser",
+  "note": "No copy control or selection handling was found in the library viewer, FilePreviewModal or KnowledgeFilesPanel (searched for copy, clipboard, selection and user-select). Browser text selection may still work but was not confirmed in the code. The ledger says this needs the live web.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S25.30": {
+  "labels": [
+   {
+    "file": "apps/web/features/projects/components/FilePreviewModal.tsx",
+    "text": "Preview is not available for this file type."
+   },
+   {
+    "file": "apps/web/features/projects/components/FilePreviewModal.tsx",
+    "text": "Download"
+   }
+  ],
+  "needs": "a project with a file that has no preview, such as a .zip",
+  "note": "The Library viewer shows Preview isn&rsquo;t available for this file inline. with a Download to view button instead, and offers no Open option in either place.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and click Projects in the sidebar.",
+   "Open a project and click a file that cannot be previewed, such as a .zip.",
+   "Look for the text Preview is not available for this file type. with the file's type under it.",
+   "Look for the Download button and compare with Expected (the text does not offer Open)."
+  ],
+  "where": "Sidebar > Projects > open a project > click a file that has no preview (for example a .zip) > Download"
+ }
+}

@@ -1,0 +1,106 @@
+{
+ "S41.14": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Session history"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Where your data goes"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Open Settings"
+   }
+  ],
+  "needs": "none",
+  "note": "The text is the only evidence in the code: the old quoted code in conversationTreeProvider.ts is gone, and there is no device-only toggle in the settings panel, so the tester can only confirm the statement, not a setting.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Command Palette and run \"Code: Open Settings\".",
+   "Click \"Runtime\" in the Settings navigation on the left.",
+   "Scroll to the card \"Where your data goes\".",
+   "Read the \"Session history\" row and compare it with Expected: it should say developer sessions are saved on this computer and are not uploaded to the account."
+  ],
+  "where": "Code: Open Settings > Runtime > Where your data goes > Session history"
+ },
+ "S41.18": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Where your data goes"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Privacy settings"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Memory"
+   }
+  ],
+  "needs": "none to read the panel; a web browser for the \"Privacy settings\" button, which opens a Web page",
+  "note": "Model training is a sentence inside the AGI Cloud row, not its own control; data retention has no wording in this panel and is only reached through the Privacy settings button, which opens the Web page.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Command Palette and run \"Code: Open Settings\".",
+   "Click \"Runtime\" in the Settings navigation, then scroll to \"Where your data goes\".",
+   "Look at the separate rows: \"Session history\" and \"Memory\" each have their own row, and the \"AGI Cloud\" row states the model-training position.",
+   "Click the \"Privacy settings\" button and the \"Memory\" button in that card; compare with Expected: history, training and retention each need a clear control or statement."
+  ],
+  "where": "Code: Open Settings > Runtime > Where your data goes (Session history, Memory, AGI Cloud rows; buttons Privacy settings and Memory)"
+ },
+ "S41.19": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Where your data goes"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Local models"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Open Settings"
+   }
+  ],
+  "needs": "none",
+  "note": "The explanations sit beside the data paths rather than beside individual toggles, and the Memory row explains the Memory setting only as a statement.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Command Palette and run \"Code: Open Settings\".",
+   "Click \"Runtime\" in the Settings navigation, then scroll to \"Where your data goes\".",
+   "Read the intro line and each row: \"Local models\", \"Your own provider key\", \"AGI Cloud\", \"Session history\", \"Memory\".",
+   "Compare with Expected: each row should say, in place, what that setting or path does to the data."
+  ],
+  "where": "Code: Open Settings > Runtime > Where your data goes"
+ },
+ "S41.20": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Where your data goes"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "AGI Cloud"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Local models"
+   }
+  ],
+  "needs": "none",
+  "note": "The card covers five data paths, not a per-feature list, and the AGI Cloud row does not name the provider; a \"Who processes AGI Cloud requests\" button in the same card opens the sub-processor list.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Command Palette and run \"Code: Open Settings\".",
+   "Click \"Runtime\" in the Settings navigation, then scroll to \"Where your data goes\".",
+   "Read each row for where it is processed: \"Local models\" (this computer), \"Your own provider key\" (that provider), \"AGI Cloud\" (AGI servers, then the provider serving the chosen model).",
+   "Compare with Expected: each feature should say on device, AGI cloud or a named provider; the AGI Cloud row names no provider, only \"the provider that serves the model you picked\"."
+  ],
+  "where": "Code: Open Settings > Runtime > Where your data goes"
+ }
+}

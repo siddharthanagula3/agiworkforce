@@ -1,0 +1,271 @@
+{
+ "S7.01": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "New chat"
+   },
+   {
+    "file": "packages/platform/utils/src/greeting.ts",
+    "text": "Good morning"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The centred start view is built in apps/mobile/app/(app)/(tabs)/chat.tsx (testID chat.new-chat.middle). ChatEmptyState.tsx is not referenced from any file under apps/mobile/app. The greeting wording changes with the time of day.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with a signed-in account.",
+   "Look at the first screen before typing: it should open on the new chat, not a chat that already has messages.",
+   "If a conversation is open, tap \"Open menu\" (top left), then tap \"New chat\" in the sidebar.",
+   "Compare: the greeting and the message box sit in the middle of the empty area, not at the top of an empty transcript."
+  ],
+  "where": "First screen after sign-in (the new chat). On a phone, tap \"Open menu\" then \"New chat\" from a conversation."
+ },
+ "S7.02": {
+  "labels": [],
+  "needs": "none",
+  "note": "No reading-width cap found for chat messages. MessageBubble.tsx uses maxWidth '85%' (lines 686, 2301), and MessageList.tsx does not use contentColumn. contentColumn('reading') in apps/mobile/src/shared/layout/contentColumn.ts is used only by other screens (Toast, ApprovalModal, AgentsScreen, CustomizeScreen and similar) and MemoryUsedChip/ConversationExportSheet. Searched apps/mobile for contentColumn( and READING_COLUMN_MAX_WIDTH.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S7.12": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/chat/[id].tsx",
+    "text": "Open menu"
+   }
+  ],
+  "needs": "none",
+  "note": "On a wide window the sidebar stays permanently open and the \"Open menu\" button is not shown (the slot is blank).",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open any chat from the list.",
+   "Tap \"Open menu\" at the top left of the chat header.",
+   "Look: the sidebar slides over the chat.",
+   "Tap the dimmed area beside the sidebar, or swipe it left, to close it.",
+   "Tap \"Open menu\" again and compare: the sidebar reopens."
+  ],
+  "where": "Conversation screen on a phone-width window: tap \"Open menu\" at the top left to open the sidebar, and close it again."
+ },
+ "S7.15": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Expand message"
+   }
+  ],
+  "needs": "none",
+  "note": "The \"Expand message\" button only appears once the text is multi-line. The close control's visible words were not found in apps/mobile/src/features/chat/components/ComposerFullScreenEditor.tsx, so check its label on screen.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat, or tap \"New chat\".",
+   "Type several lines into the message box until it grows.",
+   "Tap the \"Expand message\" button at the top right of the box.",
+   "Look: a full-screen editor covers the screen with the same text and a send control.",
+   "Close the editor and check you are back in the chat with your text kept."
+  ],
+  "where": "Chat message box: tap \"Expand message\" at its top right corner after typing a long message."
+ },
+ "S7.16": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Reports"
+   },
+   {
+    "file": "apps/mobile/src/features/research/ReportsScreen.tsx",
+    "text": "Reports"
+   }
+  ],
+  "needs": "a saved research report on the account",
+  "note": "\"Reports\" appears in the sidebar only when the research feature is switched on. The empty state says \"Research reports are saved to your Managed Cloud account.\"",
+  "reachable": "yes",
+  "steps": [
+   "Tap \"Open menu\" (top left) in a chat to open the sidebar.",
+   "Tap \"Reports\".",
+   "Tap a report in the list.",
+   "Look: the report opens on a full screen with a \"Reports\" header and a back control, and the report text fills the screen."
+  ],
+  "where": "Sidebar > Reports > tap a report in the list."
+ },
+ "S7.17": {
+  "labels": [],
+  "needs": "a chat with an image in it",
+  "note": "The viewer's close and counter wording was not confirmed by exact visible text. The \"Open image\" link in MarkdownImage.tsx opens an outside browser, not this viewer.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat that has an image in it (a photo you sent, or a generated image).",
+   "Tap the image.",
+   "Look: the image opens over the chat on a full-screen dark viewer.",
+   "Use the viewer's close control, or swipe it away, and check you are back in the chat."
+  ],
+  "where": "A chat that contains an image: tap the image in the message."
+ },
+ "S7.20": {
+  "labels": [],
+  "needs": "a chat with enough messages to scroll",
+  "note": "",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open a chat with many messages.",
+   "Scroll the transcript up and down.",
+   "Look: the message box stays fixed at the bottom while the messages move above it."
+  ],
+  "where": "Any long chat: the message box at the bottom of the screen."
+ },
+ "S7.21": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Expand message"
+   }
+  ],
+  "needs": "none",
+  "note": "The code caps the box at a maximum height of 160 and scrolls past that; compare what you see with that.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat, or tap \"New chat\".",
+   "Type a long prompt of several sentences into the message box.",
+   "Look: the box grows taller as you type instead of staying one line.",
+   "Once it is multi-line, check the \"Expand message\" button appears at the top right of the box."
+  ],
+  "where": "Chat message box: type a long prompt; the box grows and shows \"Expand message\" at its top right."
+ },
+ "S7.22": {
+  "labels": [],
+  "needs": "a chat with a long transcript",
+  "note": "",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open a chat with a long history.",
+   "Scroll the messages up and down.",
+   "Look: the header at the top and the message box at the bottom do not move while the messages scroll."
+  ],
+  "where": "Any chat with a long transcript: the messages scroll, the header and message box stay in place."
+ },
+ "S7.23": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+    "text": "Download artifact"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+    "text": "Copy content"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+    "text": "More artifact actions"
+   }
+  ],
+  "needs": "a chat that has an artifact in it",
+  "note": "\"Copy content\" is a default value passed to copyControlLabel in the file, so the on-screen text may change with copy status.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat where the assistant made an artifact (a document or code).",
+   "Tap the artifact card in the reply.",
+   "Look at the top toolbar: \"Download artifact\", \"Copy content\" and \"More artifact actions\" should be visible.",
+   "Scroll the artifact body down.",
+   "Compare: the toolbar stays at the top while the content scrolls."
+  ],
+  "where": "An artifact card in a chat reply: tap the card, then look at the toolbar at the top of the full-screen artifact."
+ },
+ "S7.25": {
+  "labels": [],
+  "needs": "a window that can be resized (tablet or wide simulator)",
+  "note": "The threshold is in apps/mobile/src/shared/hooks/useResponsiveLayout.ts (280 sidebar plus 720 content). The app's _layout.tsx uses useTabletLayout, which was not opened.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open a chat in a narrow window (phone size).",
+   "Tap \"Open menu\": the sidebar slides over the chat.",
+   "Widen the window (iPad or wide simulator) past about 1000 points.",
+   "Look: the sidebar now stays beside the chat and \"Open menu\" is gone."
+  ],
+  "where": "Chat screen when the window is resized: narrow windows show the sidebar over the chat, wide windows keep it beside the chat."
+ },
+ "S7.26": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   }
+  ],
+  "needs": "none",
+  "note": "The model picker is also a bottom sheet, but the only entry found in code is \"Choose a model\", shown when the retired-model notice appears (apps/mobile/app/(app)/chat/[id].tsx). The regular model entry was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat, or tap \"New chat\".",
+   "Tap \"Add to chat\" beside the message box.",
+   "Look: a sheet rises from the bottom of the screen with attachment, mode and feature options.",
+   "Drag the sheet down, or tap outside it, to close.",
+   "Compare: the options appear as a bottom sheet, not a small popover."
+  ],
+  "where": "Chat message box: tap \"Add to chat\" to open a bottom sheet."
+ },
+ "S7.27": {
+  "labels": [],
+  "needs": "a tablet-width window",
+  "note": "Threshold in apps/mobile/src/shared/hooks/useResponsiveLayout.ts. The sidebar is a permanent drawer in apps/mobile/app/(app)/_layout.tsx.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open the app on an iPad simulator, or widen the window past about 1000 points.",
+   "Open a chat.",
+   "Look: the sidebar stays on the left as a fixed column and the chat sits beside it.",
+   "Tap a different chat in the sidebar and check the chat on the right changes."
+  ],
+  "where": "Chat screen on a tablet-width window: the sidebar stays on the left and the chat fills the right."
+ },
+ "S7.28": {
+  "labels": [],
+  "needs": "a phone-size simulator",
+  "note": "",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open a chat on an iPhone simulator.",
+   "Look: the header sits below the notch and the message box above the home indicator.",
+   "Tap the message box so the keyboard opens.",
+   "Look: the message box rises above the keyboard and the latest message stays visible."
+  ],
+  "where": "Chat screen on a phone: header clear of the notch, message box clear of the home bar, and the layout lifts when the keyboard opens."
+ },
+ "S7.29": {
+  "labels": [],
+  "needs": "a window that can be resized",
+  "note": "Limits are constants in apps/mobile/src/shared/hooks/useResponsiveLayout.ts. A minimum width for the chat column is not a separate control.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open a chat in a narrow window and tap \"Open menu\" to show the sidebar.",
+   "Look: the sidebar is at most 300 points wide and no more than 88 percent of the window.",
+   "Widen the window past about 1000 points and look: the sidebar is a fixed 280 points beside the chat."
+  ],
+  "where": "Sidebar width when the window is resized (wide or narrow)."
+ },
+ "S7.32": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/chat/[id].tsx",
+    "text": "Conversation menu"
+   },
+   {
+    "file": "apps/mobile/app/(app)/chat/[id].tsx",
+    "text": "Export"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ConversationExportSheet.tsx",
+    "text": "Print"
+   }
+  ],
+  "needs": "a chat with messages (a printer is optional)",
+  "note": "Printing uses the system print dialog. Report printing was not found; only conversation printing was.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat that has messages.",
+   "Tap \"Conversation menu\" at the top right.",
+   "Tap \"Export\".",
+   "Tap \"Print\" in the export sheet.",
+   "Look: the system print preview shows the conversation text without the app's buttons. Cancel the dialog."
+  ],
+  "where": "Conversation menu > Export > Print (top right of a chat)."
+ }
+}

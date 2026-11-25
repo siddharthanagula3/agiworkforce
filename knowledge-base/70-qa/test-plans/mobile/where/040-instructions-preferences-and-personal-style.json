@@ -1,0 +1,436 @@
+{
+ "S40.01": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/personalization/index.tsx",
+    "text": "Nickname"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Personalization"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Settings"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The reply uses the nickname if set, otherwise the full name, per renderPersonalizationBlock in apps/mobile/src/features/memory/services/personalization.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Tap \"Open menu\" at the top left of a chat.",
+   "Tap \"Settings\" in the side menu.",
+   "Under \"Assistant\", tap \"Personalization\".",
+   "Type a name in \"Nickname\" (placeholder \"What should AGI call you?\").",
+   "Tap \"Save personalization settings\" (Save at the top right).",
+   "Start a new chat, ask \"What is my name?\" and check the reply uses that name."
+  ],
+  "where": "Open menu > Settings > Personalization (under Assistant) > Nickname"
+ },
+ "S40.02": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/personalization/index.tsx",
+    "text": "More about you"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Personalization"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The field is saved as aboutYou and sent to chat as \"More about the user, in their words\" in apps/mobile/src/features/memory/services/personalization.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Tap \"Open menu\", then \"Settings\".",
+   "Under \"Assistant\", tap \"Personalization\".",
+   "Type interests, values or background into \"More about you\" (placeholder \"Interests, values or background to keep in mind\").",
+   "Tap \"Save personalization settings\".",
+   "Start a new chat and ask for a suggestion that depends on your background, and check the reply takes it into account."
+  ],
+  "where": "Open menu > Settings > Personalization > More about you"
+ },
+ "S40.03": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/personalization/index.tsx",
+    "text": "Occupation"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Personalization"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The screen field is named Occupation, not role or profession; the saved text is sent to chat as \"The user works as\" with \"Tailor examples accordingly\".",
+  "reachable": "yes",
+  "steps": [
+   "Tap \"Open menu\", then \"Settings\".",
+   "Under \"Assistant\", tap \"Personalization\".",
+   "Type your work into \"Occupation\" (placeholder \"e.g. Founder & Engineer\").",
+   "Tap \"Save personalization settings\".",
+   "Start a new chat, ask for an example, and check the example fits your work."
+  ],
+  "where": "Open menu > Settings > Personalization > Occupation"
+ },
+ "S40.05": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Choose style"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/StyleSelector.tsx",
+    "text": "Explanatory"
+   }
+  ],
+  "needs": "a signed-in account and a chat",
+  "note": "Choosing Normal in the same sheet falls back to the saved style from Personalization.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat or start a new one.",
+   "Tap the \"+\" button labelled \"Add to chat\" next to the message box.",
+   "Tap \"Choose style\".",
+   "Tap \"Explanatory\" (or another option) in the style sheet.",
+   "Send a question and check the reply follows that one style."
+  ],
+  "where": "Chat screen > Add to chat (+ button by the message box) > Choose style"
+ },
+ "S40.06": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/personalization/index.tsx",
+    "text": "Response Length"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/personalization/constants.ts",
+    "text": "Shorter"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Tap \"Open menu\", then \"Settings\".",
+   "Under \"Assistant\", tap \"Personalization\".",
+   "Under \"Response Length\", tap \"Shorter\" or \"Longer\" (or \"Default\").",
+   "Tap \"Save personalization settings\".",
+   "Start a new chat, ask a question, and compare the reply length with the choice."
+  ],
+  "where": "Open menu > Settings > Personalization > Response Length"
+ },
+ "S40.07": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/personalization/index.tsx",
+    "text": "Style Preset"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/personalization/constants.ts",
+    "text": "Formal"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The code has no separate formality control; Formal is the Style Preset value. The quoted line in the plan no longer matches, but the chip exists.",
+  "reachable": "yes",
+  "steps": [
+   "Tap \"Open menu\", then \"Settings\".",
+   "Under \"Assistant\", tap \"Personalization\".",
+   "Under \"Style Preset\", tap \"Formal\" (description \"Professional, precise language\").",
+   "Tap \"Save personalization settings\".",
+   "Start a new chat, ask a question, and check the reply uses a more formal register."
+  ],
+  "where": "Open menu > Settings > Personalization > Style Preset > Formal"
+ },
+ "S40.08": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/personalization/index.tsx",
+    "text": "Style Preset"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Choose style"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Tap \"Open menu\", then \"Settings\", then \"Personalization\".",
+   "Under \"Style Preset\", tap one preset: Default, Concise, Explanatory, Learning or Formal.",
+   "Tap \"Save personalization settings\".",
+   "Start a new chat, ask a question, and check the reply follows only that preset."
+  ],
+  "where": "Open menu > Settings > Personalization > Style Preset (or Chat > Add to chat > Choose style)"
+ },
+ "S40.09": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/response-style-preferences.ts",
+    "text": "Warmth"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/personalization/index.tsx",
+    "text": "Response Style"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The trait is set by Less, Default or More, not a slider.",
+  "reachable": "yes",
+  "steps": [
+   "Tap \"Open menu\", then \"Settings\", then \"Personalization\".",
+   "Under \"Response Style\", tap the \"Warmth\" row.",
+   "In the sheet, tap \"More\" (warmer) or \"Less\" (cooler), or \"Default\".",
+   "Tap \"Save personalization settings\".",
+   "Start a new chat, ask a question, and compare the warmth of the reply."
+  ],
+  "where": "Open menu > Settings > Personalization > Response Style > Warmth"
+ },
+ "S40.10": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/response-style-preferences.ts",
+    "text": "Enthusiasm"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/personalization/index.tsx",
+    "text": "Response Style"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Tap \"Open menu\", then \"Settings\", then \"Personalization\".",
+   "Under \"Response Style\", tap the \"Enthusiasm\" row.",
+   "In the sheet, tap \"More\" or \"Less\" (or \"Default\").",
+   "Tap \"Save personalization settings\".",
+   "Start a new chat, ask a question, and compare how energetic the reply sounds."
+  ],
+  "where": "Open menu > Settings > Personalization > Response Style > Enthusiasm"
+ },
+ "S40.11": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/response-style-preferences.ts",
+    "text": "Headers and lists"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/personalization/index.tsx",
+    "text": "Response Style"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Tap \"Open menu\", then \"Settings\", then \"Personalization\".",
+   "Under \"Response Style\", tap the \"Headers and lists\" row.",
+   "In the sheet, tap \"More\" for headings and lists, or \"Less\" for prose.",
+   "Tap \"Save personalization settings\".",
+   "Start a new chat, ask a question that has several parts, and check whether the reply uses headers and lists."
+  ],
+  "where": "Open menu > Settings > Personalization > Response Style > Headers and lists"
+ },
+ "S40.12": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/response-style-preferences.ts",
+    "text": "Emoji"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/personalization/index.tsx",
+    "text": "Response Style"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Tap \"Open menu\", then \"Settings\", then \"Personalization\".",
+   "Under \"Response Style\", tap the \"Emoji\" row.",
+   "In the sheet, tap \"Less\" (no emoji) or \"More\".",
+   "Tap \"Save personalization settings\".",
+   "Start a new chat, ask a question, and check whether the reply has emoji."
+  ],
+  "where": "Open menu > Settings > Personalization > Response Style > Emoji"
+ },
+ "S40.13": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/personalization/index.tsx",
+    "text": "Technical Level"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/personalization/constants.ts",
+    "text": "Expert"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Tap \"Open menu\", then \"Settings\", then \"Personalization\".",
+   "Under \"Technical Level\", tap \"Beginner\", \"Intermediate\" or \"Expert\" (or \"Not set\").",
+   "Tap \"Save personalization settings\".",
+   "Start a new chat, ask the same technical question, and compare the depth of the reply."
+  ],
+  "where": "Open menu > Settings > Personalization > Technical Level"
+ },
+ "S40.14": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/personalization/index.tsx",
+    "text": "Response Language"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/personalization/index.tsx",
+    "text": "Match my message"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Tap \"Open menu\", then \"Settings\", then \"Personalization\".",
+   "Under \"Response Language\", tap a language name, or \"Match my message\" to keep the default.",
+   "Tap \"Save personalization settings\".",
+   "Start a new chat, ask a question, and check the reply is written in the chosen language."
+  ],
+  "where": "Open menu > Settings > Personalization > Response Language"
+ },
+ "S40.16": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/personalization/index.tsx",
+    "text": "Custom Instructions"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Personalization"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "No on/off switch for instructions was found; the only way to turn them off without the text being lost is not provided, so clearing the field deletes the text.",
+  "reachable": "yes",
+  "steps": [
+   "Tap \"Open menu\", then \"Settings\", then \"Personalization\".",
+   "Type standing instructions into \"Custom Instructions\" (placeholder \"e.g. I prefer direct, technical answers...\").",
+   "Tap \"Save personalization settings\", then start a new chat and check a reply follows them.",
+   "To switch them off, clear the \"Custom Instructions\" field, tap save, and check the next reply no longer follows them."
+  ],
+  "where": "Open menu > Settings > Personalization > Custom Instructions"
+ },
+ "S40.17": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/projects/components/ProjectInstructionsSheet.tsx",
+    "text": "Instructions"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Projects"
+   }
+  ],
+  "needs": "a signed-in account and a project",
+  "note": "Project settings also has a switch, \"Use your profile and instructions\", in apps/mobile/src/features/projects/components/ProjectSettingsScreen.tsx that controls account instructions per project.",
+  "reachable": "yes",
+  "steps": [
+   "Tap \"Open menu\" and tap \"Projects\".",
+   "Tap a project in the list.",
+   "Tap the \"Instructions\" row.",
+   "Type into \"Project instructions\" and save.",
+   "Start a new chat inside that project, ask a question, and check the reply follows the project instructions."
+  ],
+  "where": "Open menu > Projects > (a project) > Instructions"
+ },
+ "S40.19": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Choose style"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   }
+  ],
+  "needs": "a signed-in account and a chat",
+  "note": "The choice is saved per conversation (chatStyleByConversation in apps/mobile/stores/chat/chatViewStore.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat with a saved conversation.",
+   "Tap \"Add to chat\" (+), then \"Choose style\".",
+   "Tap \"Concise\" and send a question.",
+   "Check the reply is short, then open Settings > Personalization and check the saved Style Preset is unchanged."
+  ],
+  "where": "Chat screen > Add to chat (+) > Choose style"
+ },
+ "S40.23": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/personalization/index.tsx",
+    "text": "Reset response style"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "Reset covers style, length, technical level, language and the four Response Style levels only; name, occupation and instructions are kept.",
+  "reachable": "yes",
+  "steps": [
+   "Tap \"Open menu\", then \"Settings\", then \"Personalization\".",
+   "Change a few Response Style or Style Preset choices.",
+   "Tap \"Reset response style\".",
+   "Check the choices return to Default, then tap \"Save personalization settings\" to keep them."
+  ],
+  "where": "Open menu > Settings > Personalization > Reset response style"
+ },
+ "S40.24": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/StyleSelector.tsx",
+    "text": "Explanatory"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Choose style"
+   }
+  ],
+  "needs": "a signed-in account and a chat",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat.",
+   "Tap \"Add to chat\" (+), then \"Choose style\".",
+   "Tap \"Explanatory\" (description \"Reasoning and context\").",
+   "Send a question and check the reply explains reasoning and context."
+  ],
+  "where": "Chat screen > Add to chat (+) > Choose style > Explanatory"
+ },
+ "S40.26": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/StyleSelector.tsx",
+    "text": "Concise"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Choose style"
+   }
+  ],
+  "needs": "a signed-in account and a chat",
+  "note": "Personalization > Style Preset also offers Concise, described as \"Short, to the point\" in apps/mobile/src/features/settings/personalization/constants.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat.",
+   "Tap \"Add to chat\" (+), then \"Choose style\".",
+   "Tap \"Concise\" (description \"Short, direct answers\").",
+   "Send a question and check the reply is short and direct."
+  ],
+  "where": "Chat screen > Add to chat (+) > Choose style > Concise"
+ }
+}

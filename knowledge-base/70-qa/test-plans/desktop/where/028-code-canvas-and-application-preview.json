@@ -1,0 +1,220 @@
+{
+ "S28.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Edit source"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactMoreMenu.tsx",
+    "text": "More artifact actions"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Save"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "Edit source only appears on the latest version and not for PDF, DOCX or image artifacts; the Save text is hidden on a narrow panel, so use its icon (title Save as a new version).",
+  "reachable": "yes",
+  "steps": [
+   "Start a chat and ask for a short code file, for example a Python script, so a code artifact opens in the side panel.",
+   "Click the Source tab (icon with title Source) in the artifact header.",
+   "Click More artifact actions, then Edit source.",
+   "Change a line in the code editor, then click Save (title Save as a new version).",
+   "Compare: the edited code stays, and the version counter shows a new version (for example v2/2)."
+  ],
+  "where": "Artifact panel > Source (tab) > More artifact actions > Edit source"
+ },
+ "S28.10": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Preview"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "Without NEXT_PUBLIC_SANDBOX_ORIGIN the code uses a fallback frame where scripts may not run (apps/web/features/chat/components/SandboxedIframe.tsx:336-347), so the live result depends on the build; the plan says the sandbox switch-on is unfinished.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and start a new chat.",
+   "Ask for a single-page web page in HTML, such as a page with a button and a text box.",
+   "Open the artifact from the chat so it shows in the side panel.",
+   "Make sure the Preview (eye icon) is selected in the artifact header.",
+   "Click the button or type in the text box on the page; compare: the page is live and responds."
+  ],
+  "where": "Chat > open an HTML artifact in the side panel > Preview (eye icon)"
+ },
+ "S28.11": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Preview"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "Same sandbox dependency as S28.10: without NEXT_PUBLIC_SANDBOX_ORIGIN the fallback frame may not run React scripts (apps/web/features/chat/components/SandboxedIframe.tsx:336-347).",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and start a new chat.",
+   "Ask for a React component, such as a counter with two buttons.",
+   "Open the artifact in the side panel and make sure Preview (eye icon) is selected.",
+   "Click the buttons; compare: the component renders live and its state changes."
+  ],
+  "where": "Chat > open a React artifact in the side panel > Preview (eye icon)"
+ },
+ "S28.16": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "This artifact couldn&apos;t be rendered."
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Retry"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "View source"
+   }
+  ],
+  "needs": "none",
+  "note": "The Expected says overlay; the code replaces the preview area with a message panel (data-testid artifact-render-error) and also writes the error into the frame (infrastructure/sandbox/index.html:374-380). The message text is written with an HTML entity for the apostrophe.",
+  "reachable": "yes",
+  "steps": [
+   "Ask for an HTML page whose script calls a function that does not exist as soon as it loads.",
+   "Open the artifact in the side panel with Preview selected.",
+   "Look for the message This artifact couldn't be rendered. with a detail line under it.",
+   "Click Retry to reload, or View source to open the code; compare: a way to recover is shown."
+  ],
+  "where": "Chat > open an HTML artifact that throws an error > Preview > error message in the panel"
+ },
+ "S28.18": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Refresh preview"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactMoreMenu.tsx",
+    "text": "More artifact actions"
+   }
+  ],
+  "needs": "none",
+  "note": "The same action is also an icon button with aria-label Refresh preview in a different header layout.",
+  "reachable": "yes",
+  "steps": [
+   "Open an HTML or React artifact in the side panel with Preview selected.",
+   "Click More artifact actions.",
+   "Click Refresh preview.",
+   "Compare: the preview reloads and shows the same content again, with any error message cleared."
+  ],
+  "where": "Artifact panel > More artifact actions > Refresh preview"
+ },
+ "S28.19": {
+  "labels": [],
+  "needs": "none",
+  "note": "No control named Restart or a restart of the runtime was found. I searched Restart and restart in apps/web/features/chat/components/artifacts, apps/web/app/chat/live-artifacts and apps/desktop/src. Closest are Refresh preview (ArtifactPreview.tsx, which only bumps a refresh key) and Refresh data (apps/web/app/chat/live-artifacts/LiveArtifactControls.tsx, which reloads connected-app data, not the runtime).",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S28.24": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Download source"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Download artifact"
+   }
+  ],
+  "needs": "none",
+  "note": "The menu item text is built as Download source followed by the file extension in brackets; the button opens a menu only when the artifact has more than one download option.",
+  "reachable": "yes",
+  "steps": [
+   "Open a code artifact, such as a Python script, in the side panel.",
+   "Click the Download artifact button (download icon) in the header.",
+   "If a menu opens, click Download source (.<extension>), where the extension matches the artifact language.",
+   "Open the saved file and compare: it holds the same code as the artifact."
+  ],
+  "where": "Artifact panel > Download artifact (button) > Download source (.<language>)"
+ },
+ "S28.25": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactsPanel.tsx",
+    "text": "Download all"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactsPanel.tsx",
+    "text": "Artifacts"
+   }
+  ],
+  "needs": "two or more artifacts in one account",
+  "note": "The button shows only when there are more than one artifacts, and the zip holds every artifact as a flat set (apps/web/features/chat/utils/downloadArtifacts.ts:157-162), not a project tree; the first step to open the panel was taken from the code's button title, not checked on screen.",
+  "reachable": "yes",
+  "steps": [
+   "Create at least two artifacts in a chat, such as a code file and an HTML page.",
+   "Click the Artifacts button to open the artifacts panel.",
+   "Click Download all (title Download all artifacts as zip).",
+   "Open the downloaded artifacts.zip and compare: it contains the artifacts from the panel."
+  ],
+  "where": "Chat > Artifacts (button, title Artifacts) > Download all"
+ },
+ "S28.27": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Publish"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Published \u00b7 link copied to clipboard"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Anyone with the link"
+   }
+  ],
+  "needs": "a signed-in account; a private window for the last step",
+  "note": "The dialog and audience option text were found in the file, but I did not confirm the exact order of the dialog and the toast.",
+  "reachable": "yes",
+  "steps": [
+   "Open a finished HTML or document artifact in the side panel.",
+   "Click Publish (on a narrow panel use More artifact actions, then Publish).",
+   "If a dialog asks about sharing, read it and confirm; the audience choice includes Anyone with the link.",
+   "Look for the message Published \u00b7 link copied to clipboard, then open the link in a private window.",
+   "Compare: the shared artifact opens without signing in."
+  ],
+  "where": "Artifact panel > Publish (button) or More artifact actions > Publish"
+ },
+ "S28.30": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Version history"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactVersionHistory.tsx",
+    "text": "Restore"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Undo"
+   }
+  ],
+  "needs": "an artifact with two or more versions",
+  "note": "Restore adds the old version as a new latest version; Undo and Redo in More artifact actions also step between edits.",
+  "reachable": "yes",
+  "steps": [
+   "Open an artifact that has at least two versions, for example after one Save in Edit source.",
+   "Click the version counter button (title Version history).",
+   "In the version list, click Restore on an earlier version.",
+   "Click Restore in the confirmation dialog titled Restore version N?.",
+   "Compare: the content goes back to the earlier version and the counter shows one more version."
+  ],
+  "where": "Artifact panel > Version history (version counter, for example v2/2) > Restore"
+ }
+}

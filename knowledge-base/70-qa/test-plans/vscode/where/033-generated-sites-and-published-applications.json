@@ -1,0 +1,25 @@
+{
+ "S33.26": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Show Artifacts"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/index.ts",
+    "text": "Save into the workspace"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account with at least one artifact, and a folder open in VS Code",
+  "note": "No whole-app source download exists in the code (searched 'download source', 'downloadSource', 'source archive', 'zip' in apps/extension-vscode/src and package.json); plan's package.json:593 no longer holds it. The closest feature saves one artifact file into the workspace (registered at apps/extension-vscode/src/core/commandSetup.ts:2650), not the app's full source, and the command itself is hidden from the palette.",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P, type \"Code: Show Artifacts\" and press Return.",
+   "If the list says the artifacts belong to your AGI Cloud account, select that item and sign in first.",
+   "Make sure a folder is open in VS Code, because the save needs a workspace folder (File > Open Folder).",
+   "Select an artifact row, hover it, and click the save icon with the tooltip \"Save into the workspace\".",
+   "In the save dialog, pick a place inside the open folder and click Save, then check the file appears in the Explorer with the artifact's content and compare with Expected."
+  ],
+  "where": "Command Palette > Code: Show Artifacts > pick an artifact row > hover it and click the save icon (tooltip: Save into the workspace)"
+ }
+}

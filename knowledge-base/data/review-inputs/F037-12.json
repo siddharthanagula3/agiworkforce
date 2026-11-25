@@ -1,0 +1,461 @@
+{
+ "feature": {
+  "id": "F037-12",
+  "aliases": [
+   "Storage meter",
+   "Knowledge storage",
+   "File storage used",
+   "Notebook allowance",
+   "Notebook export",
+   "S37.35",
+   "S37.39"
+  ],
+  "summary": "Web and Desktop show how many files a notebook holds and, when known, the account's file storage used against its plan limit, in the project settings file list. The meter covers the whole account, not one notebook. No per-notebook generation allowance and no notebook export exist.",
+  "purpose": {
+   "what_it_does": "Shows the file count against the 40-file cap and the account's used and total file storage on the project's knowledge file panel; the server uses the same numbers to refuse uploads over the plan limit.",
+   "why_it_exists": "People need to know why an upload is refused. The brief also asks for a notebook's own generation allowance and a notebook export (S37.39, S37.35); neither was built.",
+   "who_uses_it": "Anyone adding files to a notebook on Web or Desktop.",
+   "problems_solved": [
+    "Uploads failing without warning.",
+    "Not knowing how much of the plan's storage is used."
+   ],
+   "use_cases": [
+    "Check storage before adding large PDFs.",
+    "See that a notebook is full at 40 files.",
+    "Understand the message when the plan has no storage."
+   ]
+  },
+  "user_experience": {
+   "where_to_find_it": [
+    "Web and Desktop: project settings dialog, file list header: '<n> of <max> files \u00b7 <size> KB \u00b7 <used> of <limit> storage used' (apps/web/features/projects/components/KnowledgeFilesPanel.tsx:225-250; mounted at ProjectSettingsDialog.tsx:414).",
+    "Not shown on the Sources tab list (SourcesPanel.tsx has no storage text).",
+    "Mobile, CLI, VS Code, Chrome: no meter found.",
+    "Allowance and export: no screen."
+   ],
+   "prerequisites": [
+    "Signed in with access to the project; both numbers must be known for the storage text to show."
+   ],
+   "screens_and_controls": [
+    "Header line in the file list; the storage figure turns primary-coloured at 90 percent or more."
+   ],
+   "journey": [
+    "Open project settings.",
+    "Read the header line of the file list.",
+    "Upload; if over the limit an error message states the plan's limit."
+   ],
+   "feedback_and_outputs": [
+    "Header text, a full-project message at the cap (KnowledgeCapacityVisible.test.tsx:57), and the server's limit error: for a plan without storage 'Your current subscription does not include file storage. Choose an eligible plan and try again.' (free-plan-entitlements.ts:43)."
+   ],
+   "settings": [
+    "The plan decides the limit; per-plan values are in the billing catalog (packages/contracts/types/src/billing-catalog.ts:527,617-715)."
+   ]
+  },
+  "current_implementation": {
+   "working": [
+    "Web/Desktop: list route returns files and the meter in one response (apps/web/app/api/projects/[id]/knowledge-files/route.ts:52,60-65).",
+    "Meter sums library media and project sources over the active workspace and reads the plan limit (apps/web/lib/server/file-storage.ts:30-60,77-91).",
+    "Upload checks the same limit (file-storage.ts:63-75).",
+    "A failed meter read does not break the file list (storage-meter-matches-cap.test.ts:55).",
+    "The cap of 40 files is shown (suite-contracts.ts:502; KnowledgeCapacityVisible.test.tsx)."
+   ],
+   "incomplete": [
+    "The meter is account-wide, not per notebook (file-storage.ts:30-51 sums all projects of the user and workspace).",
+    "Shown only in the settings dialog, not on the Sources tab."
+   ],
+   "disconnected_or_disabled": [
+    "none found."
+   ],
+   "not_available": [
+    "Per-notebook generation or compute allowance: no code found on any app.",
+    "Notebook export: no code found; the founder list says the leaders have no notebook export (docs/decisions/2026-09-27-founder-decisions.md:102-105)."
+   ]
+  },
+  "required_behaviour": {
+   "established": [
+    {
+     "statement": "Notebooks have their own generation or compute allowance shown to the user.",
+     "source": "brief S37.39 (status missing on all apps)"
+    },
+    {
+     "statement": "The user can export a notebook (sources, notes, chats) as a file. Marked not applicable.",
+     "source": "brief S37.35"
+    },
+    {
+     "statement": "No notes, saved answers or notebook export, as the leaders do not offer them.",
+     "source": "doc: docs/decisions/2026-09-27-founder-decisions.md:102-105"
+    },
+    {
+     "statement": "Aggregate storage quota across all of a user's projects, enforced in the upload path.",
+     "source": "doc: docs/decisions/wire-or-cut.md:375-379 (numbers there are older; the catalog is current)"
+    },
+    {
+     "statement": "Free usage screens show only Upgrade, never meters.",
+     "source": "owner memory entry 'Free usage = Upgrade only'; not a repository document; its relation to this storage meter is unknown"
+    }
+   ],
+   "acceptance_criteria": [
+    "The header shows the file count against 40.",
+    "With a known plan limit the header shows used and total storage.",
+    "At 90 percent or more the storage text changes colour.",
+    "An upload that would exceed the limit is refused with the plan message.",
+    "A failed meter read still shows the file list without storage text.",
+    "With no storage cap the storage text is not shown."
+   ],
+   "inferred": [
+    "[inferred] Because the meter is account-wide it will not match what a person sees in one notebook; labelling matters.",
+    "[inferred] Showing the meter on a Free plan may conflict with the Free-usage rule in the owner's notes; to be confirmed."
+   ],
+   "proposed": [
+    "[proposed] Decide whether notebook allowance is wanted at all, since plan usage is already metered per account.",
+    "[proposed] Show the meter on the Sources tab where people add files."
+   ]
+  },
+  "implementation_map": [
+   {
+    "kind": "component",
+    "name": "KnowledgeFilesPanel",
+    "path": "apps/web/features/projects/components/KnowledgeFilesPanel.tsx",
+    "role": "Header with count and storage text"
+   },
+   {
+    "kind": "component",
+    "name": "ProjectSettingsDialog",
+    "path": "apps/web/features/projects/components/ProjectSettingsDialog.tsx",
+    "role": "Hosts the panel (line 414)"
+   },
+   {
+    "kind": "endpoint",
+    "name": "knowledge-files list",
+    "path": "apps/web/app/api/projects/[id]/knowledge-files/route.ts",
+    "role": "Returns files plus storage meter"
+   },
+   {
+    "kind": "service",
+    "name": "file-storage",
+    "path": "apps/web/lib/server/file-storage.ts",
+    "role": "Sum of bytes, plan allowance, meter, upload check"
+   },
+   {
+    "kind": "service",
+    "name": "free-plan-entitlements",
+    "path": "apps/web/lib/services/free-plan-entitlements.ts",
+    "role": "Plan limit lookup and limit messages"
+   },
+   {
+    "kind": "config",
+    "name": "billing-catalog",
+    "path": "packages/contracts/types/src/billing-catalog.ts",
+    "role": "knowledgeStorageBytes per plan (527, 617-715)"
+   },
+   {
+    "kind": "config",
+    "name": "MAX_PROJECT_KNOWLEDGE_FILES",
+    "path": "packages/contracts/types/src/suite-contracts.ts",
+    "role": "File cap of 40 shared by server and UI"
+   },
+   {
+    "kind": "service",
+    "name": "entitlement-resolution",
+    "path": "apps/web/lib/services/entitlement-resolution.ts",
+    "role": "Resolves the entitled plan tier for the meter (imported by file-storage.ts)"
+   },
+   {
+    "kind": "table",
+    "name": "project_knowledge_files",
+    "path": "apps/web/lib/server/file-storage.ts",
+    "role": "byte_count summed (lines 41-50)"
+   },
+   {
+    "kind": "table",
+    "name": "media_assets",
+    "path": "apps/web/lib/server/file-storage.ts",
+    "role": "Library files summed into the same total (lines 33-40)"
+   },
+   {
+    "kind": "service",
+    "name": "project-knowledge-files",
+    "path": "apps/web/lib/server/project-knowledge-files.ts",
+    "role": "Registration path that checks the allowance"
+   },
+   {
+    "kind": "test",
+    "name": "KnowledgeCapacityVisible.test.tsx",
+    "path": "apps/web/features/projects/components/__tests__/KnowledgeCapacityVisible.test.tsx",
+    "role": "Cap and storage text"
+   },
+   {
+    "kind": "test",
+    "name": "storage-meter-matches-cap.test.ts",
+    "path": "apps/web/app/api/projects/[id]/knowledge-files/__tests__/storage-meter-matches-cap.test.ts",
+    "role": "Meter and cap use one module and scope"
+   }
+  ],
+  "execution_and_data_flow": {
+   "steps": [
+    {
+     "what_happens": "Open settings; the panel requests the file list.",
+     "runs_on": "device and our servers",
+     "evidence": "KnowledgeFilesPanel.tsx:~90-100; route.ts:23-66"
+    },
+    {
+     "what_happens": "Server resolves the person's plan tier and its storage limit, then sums bytes of library files and project sources.",
+     "runs_on": "our servers",
+     "evidence": "file-storage.ts:53-60,30-51,77-91"
+    },
+    {
+     "what_happens": "The response carries files and {usedBytes, limitBytes}; the panel shows the text only if both are non-null.",
+     "runs_on": "device",
+     "evidence": "route.ts:60-65; KnowledgeFilesPanel.tsx:236"
+    },
+    {
+     "what_happens": "On upload the server rechecks used plus incoming against the limit and rejects with the plan message.",
+     "runs_on": "our servers",
+     "evidence": "file-storage.ts:63-75"
+    }
+   ],
+   "data": [
+    {
+     "what": "Byte counts of files",
+     "where_stored": "table project_knowledge_files (byte_count) and media_assets (byte_size)",
+     "synced": "Server-side",
+     "retained_or_deleted": "Deleted or superseded rows are excluded from the sum (file-storage.ts:47-49)"
+    },
+    {
+     "what": "Plan limit",
+     "where_stored": "billing catalog in code; entitled tier from entitlement data",
+     "synced": "Server-side",
+     "retained_or_deleted": "n/a"
+    }
+   ],
+   "models_and_providers": "No model involved."
+  },
+  "access_and_usage": {
+   "account": "Signed in; user-scoped database.",
+   "permissions": "Anyone who can read the project sees the list; the meter is computed for the caller (route.ts:27,52).",
+   "subscription": "Limit per plan from the one subscription system (resolveEntitledPlanTier). Some plans are unlimited or negotiated (billing-catalog.ts:585,602,715).",
+   "limits_and_metering": "Used bytes summed live, not cached; 40 files per project.",
+   "flags": "none found.",
+   "model_compatibility": "Not applicable.",
+   "provider_restrictions": "none found in the code.",
+   "local_mode": "Local-only and own-key use are shown uncapped in the catalog because nothing is stored on the platform (billing-catalog.ts:585-602, with doc: docs/decisions/wire-or-cut.md:379); a notebook itself is not available in Local mode."
+  },
+  "states_and_edge_cases": [
+   {
+    "state": "Plan read fails",
+    "behaviour": "limitBytes null, storage text hidden",
+    "evidence": "file-storage.ts:79-83"
+   },
+   {
+    "state": "Usage read fails",
+    "behaviour": "usedBytes null, text hidden, file list still returned",
+    "evidence": "file-storage.ts:84-89"
+   },
+   {
+    "state": "At 90 percent",
+    "behaviour": "Storage text coloured",
+    "evidence": "KnowledgeFilesPanel.tsx:~240"
+   },
+   {
+    "state": "At file cap",
+    "behaviour": "Panel says the project is full and how to make room",
+    "evidence": "KnowledgeCapacityVisible.test.tsx:57"
+   },
+   {
+    "state": "No storage cap",
+    "behaviour": "Nothing shown",
+    "evidence": "KnowledgeCapacityVisible.test.tsx:93"
+   },
+   {
+    "state": "Plan with no storage",
+    "behaviour": "Upload refused with the 'does not include file storage' message",
+    "evidence": "free-plan-entitlements.ts:43"
+   },
+   {
+    "state": "Offline",
+    "behaviour": "not handled in the code read",
+    "evidence": "KnowledgeFilesPanel.tsx fetch path has only an error load state"
+   }
+  ],
+  "verification": {
+   "existing_tests": [
+    {
+     "path": "apps/web/features/projects/components/__tests__/KnowledgeCapacityVisible.test.tsx",
+     "covers": "File cap text, full state, shared cap constant, storage text, hidden when uncapped"
+    },
+    {
+     "path": "apps/web/app/api/projects/[id]/knowledge-files/__tests__/storage-meter-matches-cap.test.ts",
+     "covers": "One module for meter and cap, live rows of active workspace, same plan sizing, meter failure isolation"
+    }
+   ],
+   "scenarios": [
+    {
+     "name": "Meter shown",
+     "steps": [
+      "Sign in on a plan with a storage cap.",
+      "Open project settings."
+     ],
+     "expected": "Header shows 'used of limit storage used'."
+    },
+    {
+     "name": "Over the limit",
+     "steps": [
+      "Upload files until used plus a new file exceeds the limit."
+     ],
+     "expected": "Upload refused with the plan's limit message."
+    },
+    {
+     "name": "Account-wide",
+     "steps": [
+      "Add a file in notebook A.",
+      "Open settings of notebook B."
+     ],
+     "expected": "Used storage includes notebook A's file."
+    },
+    {
+     "name": "File cap",
+     "steps": [
+      "Add 40 files."
+     ],
+     "expected": "Panel says the project is full; a 41st is refused."
+    },
+    {
+     "name": "Absence checks",
+     "steps": [
+      "Look for a per-notebook allowance and an export control."
+     ],
+     "expected": "None present."
+    }
+   ],
+   "diagnostics": [
+    "Log 'File storage meter: plan read failed' and 'usage read failed' (file-storage.ts:82,87).",
+    "API response field storage on the list route.",
+    "Tables project_knowledge_files, media_assets."
+   ]
+  },
+  "gaps": [
+   {
+    "gap": "No per-notebook generation allowance",
+    "affects": "All apps",
+    "evidence": "no code found; brief S37.39",
+    "work_needed": "Decide if wanted; define against the one subscription system."
+   },
+   {
+    "gap": "No notebook export",
+    "affects": "All apps",
+    "evidence": "no code found; brief S37.35",
+    "work_needed": "Only if the owner reverses the founder decision."
+   },
+   {
+    "gap": "Meter hidden on the Sources tab and on other apps",
+    "affects": "Web Sources tab, Mobile, CLI",
+    "evidence": "SourcesPanel.tsx has no storage text",
+    "work_needed": "Add where people upload."
+   },
+   {
+    "gap": "Meter is account-wide but sits in a notebook screen",
+    "affects": "Web, Desktop",
+    "evidence": "file-storage.ts:30-51",
+    "work_needed": "Label as account storage."
+   },
+   {
+    "gap": "Possible conflict with the Free-usage rule",
+    "affects": "Free plan on Web",
+    "evidence": "owner memory note, relation unknown",
+    "work_needed": "Owner confirms."
+   }
+  ],
+  "depends_on": [
+   "surface:web",
+   "surface:desktop",
+   "mode:cloud",
+   "SYS-subscriptions-entitlements-and-usage",
+   "SYS-files-artifacts-and-storage",
+   "SYS-data-model-and-migrations",
+   "table:project_knowledge_files",
+   "table:media_assets",
+   "F037-07",
+   "F037-09"
+  ],
+  "relationships": [
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/web/lib/server/file-storage.ts",
+    "evidence": "file-storage.ts:30-91"
+   },
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/web/features/projects/components/KnowledgeFilesPanel.tsx",
+    "evidence": "KnowledgeFilesPanel.tsx:225-250"
+   },
+   {
+    "rel": "exposes_api",
+    "to": "api:GET /api/projects/{id}/knowledge-files",
+    "evidence": "route.ts:60-65 returns storage"
+   },
+   {
+    "rel": "stores_data_in",
+    "to": "table:project_knowledge_files",
+    "evidence": "file-storage.ts:41-50"
+   },
+   {
+    "rel": "stores_data_in",
+    "to": "table:media_assets",
+    "evidence": "file-storage.ts:33-40"
+   },
+   {
+    "rel": "governed_by_subscription",
+    "to": "SYS-subscriptions-entitlements-and-usage",
+    "evidence": "file-storage.ts:53-60; billing-catalog.ts:527"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/web/features/projects/components/__tests__/KnowledgeCapacityVisible.test.tsx",
+    "evidence": "lines 49-93"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/web/app/api/projects/[id]/knowledge-files/__tests__/storage-meter-matches-cap.test.ts",
+    "evidence": "lines 19-55"
+   },
+   {
+    "rel": "depends_on",
+    "to": "SYS-authorization-and-workspaces",
+    "evidence": "meter scoped to the active workspace (file-storage.ts:34,45)"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:desktop",
+    "evidence": "Desktop shows the hosted web app (AGENTS.md section 5)"
+   }
+  ],
+  "unknowns": [
+   "Exact number format and line of the 90 percent rule beyond what was seen.",
+   "Whether the storage text is allowed on the Free plan under the owner's Free-usage rule.",
+   "Whether Mobile or CLI show storage anywhere.",
+   "Any plan for notebook allowance beyond the brief."
+  ]
+ },
+ "corrections": [
+  {
+   "section": "3",
+   "claim": "Meter sums library media and project sources over the active workspace (file-storage.ts:30-60)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The media_assets part is not just library files. It sums every non-deleted media asset of the user and org, and for temporary chats it counts only chat attachments larger than MAX_CHAT_ATTACHMENT_BYTES. So chat attachments count toward the limit. Project sources count only if the project and the file are not deleted and the file is not superseded.",
+   "evidence": "apps/web/lib/server/file-storage.ts:31-51",
+   "correction": "The meter sums all of the user's media_assets in the workspace (including large chat attachments, excluding small temporary-chat files) plus live project knowledge files."
+  },
+  {
+   "section": "2/8",
+   "claim": "Plan with no storage: upload refused with 'does not include file storage' message (free-plan-entitlements.ts:43)",
+   "verdict": "wrong",
+   "what_the_code_shows": "That message is returned only when planLabel() is empty, i.e. the tier lacks the managed_chat capability. The error is thrown only when limitBytes is non-null. A normal plan over its limit gets '<Plan> accounts include X of file storage, shared by your Library and project sources. Delete a file or upgrade to add another.' No catalog plan has a storage limit of 0 (Free is 500 MiB).",
+   "evidence": "free-plan-entitlements.ts:38-46,48-52; billing-catalog.ts:619",
+   "correction": "Over-limit uploads on a paid or Free plan are refused with the message '<Plan> accounts include X of file storage, shared by your Library and project sources...'. The 'does not include file storage' text appears only for a tier with no managed-chat plan label that still has a numeric limit. Free has a 500 MiB cap, so Free shows the meter and gets the plan message."
+  }
+ ],
+ "missing_facts": [
+  "The same assertFileStorageAvailable limit also gates chat attachments and chat file intake, not just project knowledge uploads. The storage figure is a shared quota across chat files, Library and projects: chat-attachment-completion.ts:388, chat-file-intake/seal.ts:342.",
+  "The meter counts chat attachments and library media, not only project files: file-storage.ts:31-40 (temporary-chat attachments larger than MAX_CHAT_ATTACHMENT_BYTES count). The page's 'library media' wording and its test scenario 'Account-wide' miss this.",
+  "The over-limit error text for ordinary plans is '<Plan> accounts include X of file storage, shared by your Library and project sources. Delete a file or upgrade to add another.' (free-plan-entitlements.ts:43-46). The page lists only the no-plan message, and it describes that one wrongly."
+ ]
+}

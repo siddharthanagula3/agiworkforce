@@ -1,0 +1,431 @@
+{
+ "feature": {
+  "id": "F056-11",
+  "aliases": [
+   "Consumer services not built yet",
+   "S56.40 Licensed research retrieval",
+   "S56.41 Shopping/product lookup",
+   "S56.42 Reservations and bookings",
+   "S56.43 Media playback",
+   "S56.44 Native messaging applications"
+  ],
+  "summary": "Planned connections to licensed research, shopping, bookings, media playback and messaging apps (iMessage, SMS, WhatsApp, Telegram). No finished connector exists for any of them. The directory lists some vendors, but the release gate keeps them off, and the messaging catalog entries cannot be connected. Native messaging code was not found.",
+  "purpose": {
+   "what_it_does": "Nothing is promised to users yet. The aim is for the assistant to retrieve licensed research, look up products, make bookings, control media and read or send messages through connected services.",
+   "why_it_exists": "ChatGPT and Claude are moving toward consumer actions; the brief lists these as wave 3 items that are not built (doc: audit/partial/056-concrete-integration-families.md).",
+   "who_uses_it": "No one today. Intended for consumers on paid managed plans.",
+   "problems_solved": [
+    "Not applicable yet.",
+    "Future: ordering, booking and messaging from chat.",
+    "Future: reading licensed research the user already pays for."
+   ],
+   "use_cases": [
+    "Future: 'book a table for two on Friday'.",
+    "Future: 'play my focus playlist'.",
+    "Future: 'send this to Sam on WhatsApp'.",
+    "Future: 'summarise the licensed report I have access to'."
+   ]
+  },
+  "user_experience": {
+   "where_to_find_it": [
+    "Web, Desktop (hosted web) and Mobile: the connector directory may list vendors such as Booking.com, Expedia, Spotify, Instacart, Taskrabbit and Twilio from a vendor snapshot (apps/web/lib/connectors/directory/sources/vendor-directory.json); they read 'Coming soon' while unreleased (mobile index.tsx:162-164).",
+    "Web Connectors settings catalog lists Telegram, WhatsApp and Twilio as api-key entries (apps/web/features/connectors/data/connectors.ts:637-662).",
+    "CLI, VS Code, Chrome: nothing."
+   ],
+   "prerequisites": [
+    "None can be met: no working connector exists in the code read."
+   ],
+   "screens_and_controls": [
+    "Directory cards that read 'Coming soon' or show a setup message such as 'has no remote MCP server this deployment can reach' (apps/web/lib/connectors/oauth-setup.ts:155-162)."
+   ],
+   "journey": [
+    "A person browsing Connectors sees a vendor card.",
+    "They cannot connect it; the card says Coming soon or setup is needed.",
+    "Asking the assistant for the action reaches no connector tool."
+   ],
+   "feedback_and_outputs": [
+    "'Coming soon' label (connector-release.ts:38).",
+    "Setup requirement message from the server."
+   ],
+   "settings": [
+    "None specific."
+   ]
+  },
+  "current_implementation": {
+   "working": [
+    "Directory listing and 'Coming soon' labelling for these vendors exist as part of the general connector directory (apps/web/lib/connectors/directory/; mobile index.tsx:162).",
+    "General custom remote MCP connectors exist, which could reach a vendor that publishes an MCP server, but they are blocked by the release gate today (user-connector-tools.ts:2491-2493)."
+   ],
+   "incomplete": [
+    "Telegram, WhatsApp and Twilio are catalog entries with api-key auth (catalog.ts:226-228) but no MCP endpoint, so describeConnectorSetup reports no remote server (oauth-setup.ts:155-162).",
+    "The vendor snapshot lists Booking.com, Expedia, Spotify, Instacart and Taskrabbit with MCP URLs, but nothing in AGI declares tool metadata or approval rules for booking, purchase or playback actions."
+   ],
+   "disconnected_or_disabled": [
+    "All of these ids are outside the 13 released connectors (connector-release.ts:16-30), so their tools never reach a turn."
+   ],
+   "not_available": [
+    "Native messaging (iMessage, SMS, WhatsApp, Telegram): no integration code found in apps, packages or crates (searched for iMessage; the only matches were unrelated names ending in UiMessage).",
+    "Licensed research retrieval: no connector or tool found; PitchBook appears in the vendor snapshot with no MCP URL.",
+    "Media playback: Spotify appears in the snapshot with a pilot gateway URL only; no tool code.",
+    "All apps: CLI and VS Code have no connector of their own."
+   ]
+  },
+  "required_behaviour": {
+   "established": [
+    {
+     "statement": "The assistant can retrieve content from licensed research sources through a connected account.",
+     "source": "brief S56.40"
+    },
+    {
+     "statement": "The assistant can look up products and prices through a connected shopping service.",
+     "source": "brief S56.41"
+    },
+    {
+     "statement": "The assistant can search for and make reservations or bookings through a connected service.",
+     "source": "brief S56.42"
+    },
+    {
+     "statement": "The assistant can control media playback in a connected media service.",
+     "source": "brief S56.43"
+    },
+    {
+     "statement": "The assistant can read or send messages in native messaging apps on the user's behalf.",
+     "source": "brief S56.44"
+    },
+    {
+     "statement": "Connectors stay 'coming soon' until the release state changes.",
+     "source": "doc: docs/product/definition.md:309"
+    }
+   ],
+   "acceptance_criteria": [
+    "No page, label or assistant answer claims that bookings, shopping, playback or messaging work.",
+    "Directory cards for these vendors cannot be connected while unreleased.",
+    "Asking the assistant to send a WhatsApp message does not run any connector tool and the assistant says it cannot.",
+    "Any future build declares tool metadata (read or external send) before it can be offered.",
+    "A future messaging or booking send always asks for approval and is irreversible-class (matches tool-metadata.ts external_send rules)."
+   ],
+   "inferred": [
+    "Anything that sends a message, books or buys is an external send or irreversible write and must ask every time [inferred from tool-metadata.ts:933-939 risk tiers]."
+   ],
+   "proposed": [
+    "[proposed] Write a design and approval rules per family before any build, as the brief row states.",
+    "[proposed] Keep these ids out of public copy until released."
+   ]
+  },
+  "implementation_map": [
+   {
+    "kind": "config",
+    "name": "CONNECTOR_CAPABILITIES",
+    "path": "apps/web/lib/connectors/catalog.ts",
+    "role": "telegram, whatsapp, twilio api-key entries (lines 226-228)."
+   },
+   {
+    "kind": "config",
+    "name": "web connector catalog",
+    "path": "apps/web/features/connectors/data/connectors.ts",
+    "role": "Settings catalog entries for telegram, whatsapp, twilio (lines 637-662)."
+   },
+   {
+    "kind": "config",
+    "name": "vendor-directory.json",
+    "path": "apps/web/lib/connectors/directory/sources/vendor-directory.json",
+    "role": "Vendor snapshot with booking, shopping and media vendors."
+   },
+   {
+    "kind": "service",
+    "name": "oauth-setup",
+    "path": "apps/web/lib/connectors/oauth-setup.ts",
+    "role": "Reports no remote server for entries without an endpoint."
+   },
+   {
+    "kind": "config",
+    "name": "connector-release.ts",
+    "path": "packages/contracts/types/src/connector-release.ts",
+    "role": "Gate that keeps these ids off."
+   },
+   {
+    "kind": "screen",
+    "name": "Connectors screen (mobile)",
+    "path": "apps/mobile/src/features/settings/cloud-connectors/index.tsx",
+    "role": "Shows 'Coming soon' for unreleased rows (line 162)."
+   },
+   {
+    "kind": "service",
+    "name": "directory listing",
+    "path": "apps/web/lib/connectors/directory/listing.ts",
+    "role": "Builds directory listings from the snapshot."
+   },
+   {
+    "kind": "service",
+    "name": "connectable",
+    "path": "apps/web/lib/connectors/directory/connectable.ts",
+    "role": "Decides connect, needs-setup or unavailable per entry."
+   },
+   {
+    "kind": "service",
+    "name": "loadUserConnectorToolCatalog",
+    "path": "apps/web/lib/user-connector-tools.ts",
+    "role": "Skips unreleased ids (lines 2537, 2572)."
+   },
+   {
+    "kind": "service",
+    "name": "tool-metadata",
+    "path": "apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts",
+    "role": "Would need declared metadata for any future send, booking or purchase tool."
+   },
+   {
+    "kind": "endpoint",
+    "name": "GET /api/connectors/directory",
+    "path": "apps/web/app/api/connectors/directory/route.ts",
+    "role": "Directory listing endpoint."
+   },
+   {
+    "kind": "test",
+    "name": "connector-release test",
+    "path": "packages/contracts/types/src/__tests__/connector-release.test.ts",
+    "role": "Keeps unlisted ids unreleased."
+   }
+  ],
+  "execution_and_data_flow": {
+   "steps": [
+    {
+     "what_happens": "The person opens Connectors and sees a vendor card.",
+     "runs_on": "device",
+     "evidence": "apps/mobile/src/features/settings/cloud-connectors/index.tsx:162"
+    },
+    {
+     "what_happens": "The server builds the listing and marks the entry unavailable or needs-setup.",
+     "runs_on": "our servers",
+     "evidence": "apps/web/lib/connectors/directory/connectable.ts:9-30"
+    },
+    {
+     "what_happens": "Nothing further runs: unreleased ids are skipped when the tool catalog is built.",
+     "runs_on": "our servers",
+     "evidence": "apps/web/lib/user-connector-tools.ts:2537, :2572"
+    }
+   ],
+   "data": [
+    {
+     "what": "Directory snapshot of vendors",
+     "where_stored": "File in the repository (vendor-directory.json)",
+     "synced": "Shipped with the web app",
+     "retained_or_deleted": "Replaced when the snapshot is refreshed"
+    }
+   ],
+   "models_and_providers": "No model or provider takes part because no tool is offered."
+  },
+  "access_and_usage": {
+   "account": "Browsing the directory needs the same signed-in access as other connectors; nothing can be connected.",
+   "permissions": "none found in the code for these services.",
+   "subscription": "Connectors capability on paid managed plans (billing-catalog.ts:351); no service-specific rule found.",
+   "limits_and_metering": "none found in the code.",
+   "flags": "connector-release.ts state and ids.",
+   "model_compatibility": "not applicable.",
+   "provider_restrictions": "Vendors Telegram, WhatsApp, Twilio have no reachable MCP endpoint in AGI's records.",
+   "local_mode": "Not available. No local messaging, playback or booking tool was found on Desktop, mobile or CLI; phone steps cover calendar and reminders only (packages/contracts/types/src/phone-steps.ts:5-10)."
+  },
+  "states_and_edge_cases": [
+   {
+    "state": "Unreleased vendor",
+    "behaviour": "Card reads 'Coming soon'; no connect.",
+    "evidence": "apps/mobile/src/features/settings/cloud-connectors/index.tsx:162-164"
+   },
+   {
+    "state": "Entry without MCP endpoint",
+    "behaviour": "Server message: no remote MCP server this deployment can reach.",
+    "evidence": "apps/web/lib/connectors/oauth-setup.ts:155-162"
+   },
+   {
+    "state": "Asking the assistant for these actions",
+    "behaviour": "No tool exists; the model can only answer in text. A guard that stops the model from claiming it acted was not looked for [unknown].",
+    "evidence": "no tool offered per user-connector-tools.ts:2537"
+   },
+   {
+    "state": "Offline, retry, cancel, timeout",
+    "behaviour": "not applicable; nothing runs.",
+    "evidence": "none"
+   }
+  ],
+  "verification": {
+   "existing_tests": [
+    {
+     "path": "packages/contracts/types/src/__tests__/connector-release.test.ts",
+     "covers": "Ids outside the selective list are not released."
+    },
+    {
+     "path": "apps/web/lib/connectors/__tests__/plugin-connectors.coming-soon.test.ts",
+     "covers": "Coming-soon handling for plugin connectors (named for it; body not read in detail)."
+    },
+    {
+     "path": "apps/web/app/connectors/page.test.tsx",
+     "covers": "Connectors page (named for it; body not read in detail)."
+    }
+   ],
+   "scenarios": [
+    {
+     "name": "Vendor card is not connectable",
+     "steps": [
+      "Open Connectors on web and mobile.",
+      "Find Booking.com or Spotify if listed, and Telegram."
+     ],
+     "expected": "None can be connected; labels read Coming soon or a setup message."
+    },
+    {
+     "name": "No false claim",
+     "steps": [
+      "Ask the assistant to send a WhatsApp message and to book a table."
+     ],
+     "expected": "No connector tool call; the answer states it cannot do it."
+    },
+    {
+     "name": "Gate holds",
+     "steps": [
+      "Run connector-release.test.ts."
+     ],
+     "expected": "Unlisted ids stay unreleased."
+    }
+   ],
+   "diagnostics": [
+    "GET /api/connectors/directory shows connectable mode per entry.",
+    "oauth-setup requirement 'no-remote'."
+   ]
+  },
+  "gaps": [
+   {
+    "gap": "No connector for research, shopping, bookings, media or messaging.",
+    "affects": "All apps.",
+    "evidence": "No code found; catalog entries lack endpoints (catalog.ts:226-228).",
+    "work_needed": "Design, approval rules and build per family; owner decision on scope."
+   },
+   {
+    "gap": "The brief marks web, desktop, mobile and Chrome as partial or unverified while the code shows only directory listings.",
+    "affects": "Audit accuracy.",
+    "evidence": "vendor-directory.json entries have no AGI tool code.",
+    "work_needed": "Correct the status."
+   },
+   {
+    "gap": "No native messaging integration of any kind.",
+    "affects": "All apps.",
+    "evidence": "Search for iMessage found only unrelated names.",
+    "work_needed": "Decide if in scope; messaging needs per-app OS integration and strict consent."
+   }
+  ],
+  "depends_on": [
+   "SYS-connectors-plugins-and-skills",
+   "SYS-agents-tools-and-automation",
+   "SYS-security-and-privacy",
+   "SYS-subscriptions-entitlements-and-usage",
+   "SYS-execution-boundaries",
+   "mode:cloud",
+   "surface:web",
+   "surface:mobile",
+   "surface:desktop",
+   "surface:chrome",
+   "surface:cli",
+   "surface:vscode",
+   "file:packages/contracts/types/src/connector-release.ts"
+  ],
+  "relationships": [
+   {
+    "rel": "blocked_by",
+    "to": "file:packages/contracts/types/src/connector-release.ts",
+    "evidence": "connector-release.ts:14-30."
+   },
+   {
+    "rel": "depends_on",
+    "to": "file:apps/web/lib/connectors/oauth-setup.ts",
+    "evidence": "oauth-setup.ts:155-162 reports no remote server."
+   },
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/web/lib/connectors/catalog.ts",
+    "evidence": "catalog.ts:226-228 lists the messaging entries only as records."
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:mobile",
+    "evidence": "Mobile shows the 'Coming soon' rows (index.tsx:162)."
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:web",
+    "evidence": "apps/web/features/connectors/data/connectors.ts:637-662."
+   },
+   {
+    "rel": "exposes_api",
+    "to": "api:GET /api/connectors/directory",
+    "evidence": "apps/web/app/api/connectors/directory/route.ts."
+   },
+   {
+    "rel": "governed_by_subscription",
+    "to": "plan:basic",
+    "evidence": "billing-catalog.ts:351 (connectors capability for paid tiers)."
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:packages/contracts/types/src/__tests__/connector-release.test.ts",
+    "evidence": "Asserts ids outside the list are not released."
+   },
+   {
+    "rel": "depends_on",
+    "to": "F056-07",
+    "evidence": "Shares the same connector gate, approval rules and catalog."
+   },
+   {
+    "rel": "depends_on",
+    "to": "F056-10",
+    "evidence": "Phone steps cover calendar and reminders only, not messaging."
+   },
+   {
+    "rel": "configured_by",
+    "to": "file:docs/product/definition.md",
+    "evidence": "definition.md:309 says connectors stay coming soon until released."
+   }
+  ],
+  "unknowns": [
+   "Whether any guard stops the model from claiming it sent a message or made a booking when no tool exists.",
+   "Whether the vendor snapshot entries for Booking.com, Expedia, Spotify and Instacart would be connectable through the directory path once released.",
+   "The owner's plan and timing for each family.",
+   "Whether Desktop, CLI or mobile could host native messaging without store policy problems (not researched)."
+  ]
+ },
+ "corrections": [
+  {
+   "section": "3",
+   "claim": "General custom remote MCP connectors exist ... but they are blocked by the release gate today (user-connector-tools.ts:2491-2493).",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "Lines 2491-2493 are the first checks in dialPermitted (connectorReleased(serverId) false -> not permitted). Custom connectors reach it at 2598 (customServerId, member=true), org-shared at 2618, and 2581. The block holds because custom ids are not in the 13-id list, but the cited lines do not mention custom connectors.",
+   "evidence": "apps/web/lib/user-connector-tools.ts:2491-2493,2581,2598,2618",
+   "correction": "Custom remote MCP connectors are dropped because dialPermitted calls connectorReleased on their custom or org-shared server ids (user-connector-tools.ts:2491, 2598, 2618), and those ids are not among the 13 released ids."
+  },
+  {
+   "section": "6",
+   "claim": "The server builds the listing and marks the entry unavailable or needs-setup (connectable.ts:9-30).",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "connectable.ts:9-14 returns 'desktop-and-cli', 'connect', 'unavailable' or 'needs-setup'. It never reads the release gate, so a catalog entry with an endpoint returns 'connect' whether released or not. Lines 16-30 return 'desktop-and-cli', 'connect', 'needs-setup' or 'api-key-form'. 'Coming soon' is applied client-side from connectorReleased (mobile index.tsx:162).",
+   "evidence": "apps/web/lib/connectors/directory/connectable.ts:9-30; apps/mobile/src/features/settings/cloud-connectors/index.tsx:162",
+   "correction": "The server computes only the connectable mode and ignores the release gate. The Coming soon label is applied on the client from connectorReleased."
+  },
+  {
+   "section": "8",
+   "claim": "Unreleased vendor: Card reads 'Coming soon'; no connect (mobile index.tsx:162-164).",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "index.tsx:162 sets comingSoon = !row.connection && !connectorReleased(row.routeId); 163 uses it only for the detail text, and the accessibility label at ~168-170. The row still has onPress. These lines do not show that connecting is blocked.",
+   "evidence": "apps/mobile/src/features/settings/cloud-connectors/index.tsx:155-170",
+   "correction": "Unreleased, unconnected rows show the Coming soon label (index.tsx:162-163). Blocking of connect is not shown at these lines; check the onPress handler."
+  },
+  {
+   "section": "7",
+   "claim": "Limits and metering: none found in the code.",
+   "verdict": "wrong",
+   "what_the_code_shows": "Per-plan connector tool caps exist: maxConnectorTools is 0 on one plan (line 626) and 50/150/500/unlimited/custom on others, read by getPlanMaxConnectorTools (812-813). resolveConnectorToolLimit is used at user-connector-tools.ts:2441. General, not service-specific, but they apply.",
+   "evidence": "packages/contracts/types/src/billing-catalog.ts:533,571-722,812-813; apps/web/lib/user-connector-tools.ts:2441",
+   "correction": "Connector tools are capped per plan by maxConnectorTools (billing-catalog.ts:571-722). No service-specific limit exists."
+  }
+ ],
+ "missing_facts": [
+  "Telegram, WhatsApp and Twilio already have declared risk classes (telegram read-write, whatsapp and twilio high-impact) and display names. The page's claim that nothing declares approval rules overlooks this pre-wired classification: apps/web/lib/connectors/mcp-endpoints.ts:117-119,220-221.",
+  "Plan limits apply to connectors: maxConnectorTools caps per plan (packages/contracts/types/src/billing-catalog.ts:571-722,812-813), contradicting the 'none found' limits row.",
+  "The web Settings catalog gives telegram, whatsapp and twilio a build phase (3 or 4) and capability summaries such as 'message sending' (apps/web/features/connectors/data/connectors.ts:637-662), which can read as promises while the gate and missing endpoint block connecting."
+ ]
+}

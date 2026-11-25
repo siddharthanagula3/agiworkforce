@@ -1,0 +1,238 @@
+{
+ "S42.01": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/notifications/dailyBrief.ts",
+    "text": "Daily brief"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/screenTitles.ts",
+    "text": "Notifications"
+   }
+  ],
+  "needs": "A signed-in AGI Cloud account, on a plan that allows scheduled tasks.",
+  "note": "A second route is Schedules > Try a template > 'Daily briefing' (the template from packages/contracts/cloud-contracts/src/schedules.ts), which then needs Create Schedule. The delivery itself runs on the server and is not visible in the code, so the tester must wait for a run.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to AGI Cloud, then open the side menu and tap Settings.",
+   "Tap Notifications.",
+   "Turn on the Daily brief switch. Wait for the row 'Daily brief time, 08:00' to appear.",
+   "Open Schedules from the side menu and look for a schedule named Daily brief, which the app should have created. Compare with Expected: a recurring daily briefing is set up."
+  ],
+  "where": "Side menu > Settings > Notifications > Daily brief (turn the switch on)"
+ },
+ "S42.04": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/schedules/components/TimezonePickerField.tsx",
+    "text": "Time zone"
+   },
+   {
+    "file": "apps/mobile/src/features/schedules/components/RecurrencePicker.tsx",
+    "text": "Preferred time"
+   },
+   {
+    "file": "apps/mobile/src/features/schedules/components/ScheduleForm.tsx",
+    "text": "Create Schedule"
+   }
+  ],
+  "needs": "A signed-in AGI Cloud account, on a plan that allows scheduled tasks.",
+  "note": "The Daily brief time in Settings > Notifications offers only 07:00, 08:00 and 09:00 and uses the device time zone, with no time zone control. The zone can be set only on a schedule form.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu and tap Schedules, then tap Create schedule.",
+   "Set Recurrence to Daily and tap the Preferred time field to pick a time.",
+   "Scroll to the Time zone field and tap it. Pick a different zone from the list.",
+   "Tap Create Schedule and open the new schedule. Compare with Expected: the time and time zone you chose are shown."
+  ],
+  "where": "Side menu > Schedules > Create Schedule (form) > Preferred time and Time zone"
+ },
+ "S42.15": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/schedules/components/ScheduleCard.tsx",
+    "text": "Pause"
+   },
+   {
+    "file": "apps/mobile/app/(app)/schedules/index.tsx",
+    "text": "Paused"
+   }
+  ],
+  "needs": "A schedule already set up (for example Daily brief) on a signed-in AGI Cloud account.",
+  "note": "A schedule paused for approval cannot be resumed from the card. The card says 'Paused for your approval, so approve or deny it in History.' instead.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu and tap Schedules. Make sure at least one schedule exists, such as Daily brief.",
+   "Tap the switch on a schedule card to turn it off, or tap its More actions button and choose Pause.",
+   "Look at the card: it should show as paused, and the Paused filter should list it.",
+   "Tap the switch again, or choose Resume from More actions. Compare with Expected: the schedule pauses and resumes."
+  ],
+  "where": "Side menu > Schedules > (a schedule card) > switch on the card, or More actions > Pause / Resume"
+ },
+ "S42.16": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/notifications/TimeFocusScreen.tsx",
+    "text": "Enable quiet hours"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/notifications/TimeFocusReminder.tsx",
+    "text": "Quiet hours are active"
+   }
+  ],
+  "needs": "None for the setting. Holding push notifications needs a second device or push delivery, which the tester cannot see from the app.",
+  "note": "The holding of push notifications and nudges happens on the server (apps/web/lib/services/quiet-hours-service.ts). The app shows no visible sign of the hold, so only the setting and the on-screen alert can be checked from the UI.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, tap Time and focus.",
+   "Turn on Enable quiet hours, then set the Days, Start time and End time so the current time falls inside the window.",
+   "Return to the app or switch away and back during that window.",
+   "Look for the alert 'Quiet hours are active' with the text 'This is a reminder, not a lock.' Compare with Expected: quiet hours are active on the device."
+  ],
+  "where": "Side menu > Settings > Time and focus > Quiet hours > Enable quiet hours"
+ },
+ "S42.17": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/notifications/categories.ts",
+    "text": "Scheduled tasks"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/notifications/categories.ts",
+    "text": "Task and approval updates"
+   },
+   {
+    "file": "apps/mobile/src/features/schedules/components/ScheduleCard.tsx",
+    "text": "Run now"
+   }
+  ],
+  "needs": "A phone that allows notifications for the app, and a schedule to run (or an agent task).",
+  "note": "Agent-task completion falls under Task and approval updates, which says 'finished or failed tasks'.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, tap Notifications. Turn on notifications if it asks.",
+   "Find the row Scheduled tasks, described as 'When a scheduled task runs, finishes or needs you', and set it on.",
+   "On a schedule card, tap More actions and choose Run now, then wait for the run to finish.",
+   "Look for a phone notification when the run completes. Compare with Expected: the user is notified when background work completes."
+  ],
+  "where": "Side menu > Settings > Notifications > Scheduled tasks (and Task and approval updates)"
+ },
+ "S42.19": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Reflect"
+   },
+   {
+    "file": "apps/mobile/src/features/reflect/service.ts",
+    "text": "30 days"
+   }
+  ],
+  "needs": "A signed-in AGI Cloud account. Reflect may ask for memory to be on (ReflectMemoryRequiredError).",
+  "note": "Reflect needs a signed-in cloud account and may show a memory-required message; the exact wording was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and tap Reflect. Sign in if asked.",
+   "Wait for 'Building your recap\u2026' to finish.",
+   "Read the headline, the period label and the stats (Conversations, Active days, Most active day, Peak start time).",
+   "Compare with Expected: a reflection on how the user uses the product is shown."
+  ],
+  "where": "Side menu > Settings > Reflect (shows the page titled Reflect, with range choices 30 days, 3 months, 6 months, 1 year)"
+ },
+ "S42.21": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/reflect/service.ts",
+    "text": "1 year"
+   },
+   {
+    "file": "apps/mobile/app/(app)/settings/reflect.tsx",
+    "text": "Reflect"
+   }
+  ],
+  "needs": "A signed-in AGI Cloud account with enough chat history for the past year.",
+  "note": "No screen or label named 'Annual recap' exists. The past-year recap is the 1 year range on Reflect, and the 365-day option is labelled '1 year'.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and tap Reflect.",
+   "Tap the range choice 1 year (accessibility label 'Show the past 1 year').",
+   "Wait for the recap to load and read its period label, headline and stats.",
+   "Compare with Expected: a recap of the past year is shown."
+  ],
+  "where": "Side menu > Settings > Reflect > 1 year"
+ },
+ "S42.22": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/notifications/TimeFocusScreen.tsx",
+    "text": "Break reminders"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/notifications/TimeFocusReminder.tsx",
+    "text": "Time for a break?"
+   }
+  ],
+  "needs": "None. Use the app for the full chosen time, or pick 30 minutes to shorten the test.",
+  "note": "The reminder counts active app time. The menu choices are Off, 30 minutes, 1 hour, 2 hours and 4 hours.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, tap Time and focus, then tap the Break reminders row.",
+   "Choose a time, such as 30 minutes, from the menu. The row then reads 'After 30 min'.",
+   "Keep using the app until about that much time has passed in one day.",
+   "Look for the alert 'Time for a break?' with 'You have spent about 30 minutes in AGI today.' Compare with Expected."
+  ],
+  "where": "Side menu > Settings > Time and focus > Break reminders"
+ },
+ "S42.23": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/screenTitles.ts",
+    "text": "Time and focus"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/notifications/TimeFocusScreen.tsx",
+    "text": "Break reminders"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/notifications/TimeFocusScreen.tsx",
+    "text": "Quiet hours"
+   }
+  ],
+  "needs": "None.",
+  "note": "The same page can also be reached from Settings > Notifications > Quiet hours (the row reads 'Quiet hours. On' or 'Off').",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu, tap Settings, then tap Time and focus.",
+   "Look for the section Break reminders with its row, and the section Quiet hours with Enable quiet hours.",
+   "Change one value, go back, and open the page again.",
+   "Compare with Expected: the page holds break reminders and quiet hours, and the change is kept."
+  ],
+  "where": "Side menu > Settings > Time and focus"
+ },
+ "S42.25": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/schedules/runs.tsx",
+    "text": "Scheduled runs"
+   },
+   {
+    "file": "apps/mobile/src/features/schedules/components/ScheduleCard.tsx",
+    "text": "Show history"
+   },
+   {
+    "file": "apps/mobile/src/features/schedules/components/ScheduleRunHistory.tsx",
+    "text": "Run History"
+   }
+  ],
+  "needs": "A schedule that has already run at least once (use Run now on a schedule card).",
+  "note": "No label named 'saved editions' was found. The run list is the closest match, and the tester should check that past outputs can be opened.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu and tap Schedules.",
+   "Tap the Scheduled runs button in the header.",
+   "Scroll the list of past runs. Compare with Expected: past outputs are kept as a browsable history.",
+   "Go back, tap More actions on a schedule card and choose Show history. Look for the heading Run History with the last runs."
+  ],
+  "where": "Side menu > Schedules > Scheduled runs (header button); or on a schedule card, More actions > Show history"
+ }
+}

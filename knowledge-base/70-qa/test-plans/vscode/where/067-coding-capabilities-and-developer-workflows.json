@@ -1,0 +1,672 @@
+{
+ "S67.01": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Open Chat"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a trusted workspace folder open, with the developer runtime set up",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P, type \"Code: Open Chat\" and press Enter.",
+   "Click the box that says \"Describe a task\u2026\" and type: Explain the structure of this repository: main parts, entry points and how they fit together.",
+   "Press Enter and wait for the answer.",
+   "Compare the answer with Expected: it should name the main parts, the entry points and how they connect."
+  ],
+  "where": "Command Palette > \"Code: Open Chat\", then the box \"Describe a task\u2026\""
+ },
+ "S67.02": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Open Chat"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a trusted workspace folder open, with the developer runtime set up",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P, type \"Code: Open Chat\" and press Enter.",
+   "Click the box that says \"Describe a task\u2026\" and type: Where is the main entry point of this project implemented? Give the file and line.",
+   "Press Enter and wait for the answer.",
+   "Compare the answer with Expected: it should name the defining file and a line number."
+  ],
+  "where": "Command Palette > \"Code: Open Chat\", then the box \"Describe a task\u2026\""
+ },
+ "S67.03": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Open Chat"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a trusted workspace folder open, with the developer runtime set up",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P, type \"Code: Open Chat\" and press Enter.",
+   "Click the box that says \"Describe a task\u2026\" and type: Where is a function of this project used? Find every reference across the repository.",
+   "Press Enter and wait for the answer.",
+   "Compare the answer with Expected: it should list the places across the repository that use the symbol."
+  ],
+  "where": "Command Palette > \"Code: Open Chat\", then the box \"Describe a task\u2026\""
+ },
+ "S67.04": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Open Chat"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a trusted workspace folder open, with the developer runtime set up",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P, type \"Code: Open Chat\" and press Enter.",
+   "Click the box that says \"Describe a task\u2026\" and type: Trace how a request flows from the first entry point to the place where it takes effect, step by step.",
+   "Press Enter and wait for the answer.",
+   "Compare the answer with Expected: it should walk the call path from entry point to effect with file references."
+  ],
+  "where": "Command Palette > \"Code: Open Chat\", then the box \"Describe a task\u2026\""
+ },
+ "S67.05": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Open Chat"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a trusted workspace folder open, with the developer runtime set up",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P, type \"Code: Open Chat\" and press Enter.",
+   "Click the box that says \"Describe a task\u2026\" and type a free question about the project, for example: How are settings loaded?",
+   "Press Enter and wait for the answer.",
+   "Compare the answer with Expected: it should answer from the repository's files."
+  ],
+  "where": "Command Palette > \"Code: Open Chat\", then the box \"Describe a task\u2026\""
+ },
+ "S67.06": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Open Chat"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   },
+   {
+    "file": "apps/extension-vscode/src/providers/diffDecorationProvider.ts",
+    "text": "Accept"
+   }
+  ],
+  "needs": "a trusted workspace folder open, with the developer runtime set up",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P, type \"Code: Open Chat\" and press Enter.",
+   "Click the box that says \"Describe a task\u2026\" and type a small feature request, for example: Add a helper file that formats a date as YYYY-MM-DD.",
+   "Press Enter and wait for the agent to finish.",
+   "Compare with Expected: a new or changed file should appear in the Explorer, and proposed edits show Accept and Reject above the changed lines."
+  ],
+  "where": "Command Palette > \"Code: Open Chat\", then the box \"Describe a task\u2026\""
+ },
+ "S67.07": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Fix Issue"
+   },
+   {
+    "file": "apps/extension-vscode/src/providers/diffDecorationProvider.ts",
+    "text": "Accept"
+   }
+  ],
+  "needs": "a trusted workspace folder open, with the developer runtime set up, and a file with a defect",
+  "reachable": "yes",
+  "steps": [
+   "Open a file that has a defect, select the code that is wrong, and press Cmd+Shift+P.",
+   "Type \"Code: Fix Issue\" and press Enter.",
+   "Wait for the agent to finish in the chat panel.",
+   "Compare with Expected: the agent should explain the cause and propose an edit, shown with Accept and Reject above the changed lines."
+  ],
+  "where": "Select code in an editor, then Command Palette > \"Code: Fix Issue\""
+ },
+ "S67.08": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Refactor Code"
+   },
+   {
+    "file": "apps/extension-vscode/src/providers/diffDecorationProvider.ts",
+    "text": "Accept"
+   }
+  ],
+  "needs": "a trusted workspace folder open, with the developer runtime set up",
+  "reachable": "yes",
+  "steps": [
+   "Open a file, select the code to restructure, and press Cmd+Shift+P.",
+   "Type \"Code: Refactor Code\" and press Enter.",
+   "Wait for the agent to finish in the chat panel.",
+   "Compare with Expected: the proposed changes should restructure the code across files, and the behaviour should stay the same, with Accept and Reject above each change."
+  ],
+  "where": "Select code in an editor, then Command Palette > \"Code: Refactor Code\""
+ },
+ "S67.09": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Generate Tests"
+   },
+   {
+    "file": "apps/extension-vscode/src/providers/diffDecorationProvider.ts",
+    "text": "Accept"
+   }
+  ],
+  "needs": "a trusted workspace folder open, with the developer runtime set up",
+  "reachable": "yes",
+  "steps": [
+   "Open a file with existing code, select a function, and press Cmd+Shift+P.",
+   "Type \"Code: Generate Tests\" and press Enter.",
+   "Wait for the agent to finish in the chat panel.",
+   "Compare with Expected: a new test file or new test cases should appear for the selected code."
+  ],
+  "where": "Select code in an editor, then Command Palette > \"Code: Generate Tests\""
+ },
+ "S67.10": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Run Tests"
+   }
+  ],
+  "needs": "a trusted workspace folder with a test suite",
+  "note": "This command runs the project's test command directly; the agent running tests on request is done in chat, which I did not trace separately.",
+  "reachable": "yes",
+  "steps": [
+   "Open the workspace folder, press Cmd+Shift+P, and type \"Code: Run Tests\".",
+   "Press Enter.",
+   "Compare with Expected: the project's test command should run and report a result. The command picks npm, pnpm, yarn, cargo or pytest from the project files."
+  ],
+  "where": "Command Palette > \"Code: Run Tests\""
+ },
+ "S67.11": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Open Chat"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a trusted workspace folder with a failing test",
+  "reachable": "yes",
+  "steps": [
+   "Run a test suite that fails, for example with \"Code: Run Tests\".",
+   "Press Cmd+Shift+P, type \"Code: Open Chat\" and press Enter.",
+   "Click the box that says \"Describe a task\u2026\" and type: Why did the tests fail? Explain the cause and fix it.",
+   "Compare with Expected: the answer should read the failure output and explain or fix the cause."
+  ],
+  "where": "Command Palette > \"Code: Open Chat\", then the box \"Describe a task\u2026\""
+ },
+ "S67.12": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Open Chat"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a trusted workspace folder open, with the developer runtime set up",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P, type \"Code: Open Chat\" and press Enter.",
+   "Click the box that says \"Describe a task\u2026\" and type: Run the project's type checker and report the errors.",
+   "Press Enter and wait for the answer.",
+   "Compare with Expected: the answer should report the type checker output and any errors with their locations."
+  ],
+  "where": "Command Palette > \"Code: Open Chat\", then the box \"Describe a task\u2026\""
+ },
+ "S67.13": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Open Chat"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a trusted workspace folder open, with the developer runtime set up",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P, type \"Code: Open Chat\" and press Enter.",
+   "Click the box that says \"Describe a task\u2026\" and type: Run the project's linter and report the findings.",
+   "Press Enter and wait for the answer.",
+   "Compare with Expected: the answer should list the linter findings."
+  ],
+  "where": "Command Palette > \"Code: Open Chat\", then the box \"Describe a task\u2026\""
+ },
+ "S67.14": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Open Chat"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a trusted workspace folder open, with the developer runtime set up",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P, type \"Code: Open Chat\" and press Enter.",
+   "Click the box that says \"Describe a task\u2026\" and type: Build the application with the project's build command and report the result.",
+   "Press Enter and wait for the answer.",
+   "Compare with Expected: the answer should report the build result from the project's build command."
+  ],
+  "where": "Command Palette > \"Code: Open Chat\", then the box \"Describe a task\u2026\""
+ },
+ "S67.15": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Open Chat"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a trusted workspace folder with a dev server script, with the developer runtime set up",
+  "note": "The server is started by the agent's shell tool running a command in the background; I did not find where a running server is shown in this app.",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P, type \"Code: Open Chat\" and press Enter.",
+   "Click the box that says \"Describe a task\u2026\" and type: Start the development server and keep it running while you continue.",
+   "Press Enter and wait for the agent to report that the server started.",
+   "Compare with Expected: the server should keep running after the agent moves on to another request."
+  ],
+  "where": "Command Palette > \"Code: Open Chat\", then the box \"Describe a task\u2026\""
+ },
+ "S67.16": {
+  "labels": [],
+  "needs": "a browser-driven app to inspect",
+  "note": "Searched apps/extension-vscode/src for \"browser\" and for \"Inspect browser\" and browser pairing; no control for agent browser inspection was found. The plan says it needs CLI-side browser pairing outside AGI Desktop.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S67.20": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Code Review"
+   }
+  ],
+  "needs": "a repository with uncommitted changes and an open editor",
+  "reachable": "yes",
+  "steps": [
+   "Open a file that has uncommitted changes in the editor.",
+   "Press Cmd+Shift+P, type \"Code: Code Review\" and press Enter.",
+   "Wait for the review to finish in the chat panel.",
+   "Compare with Expected: the review should list issues with file and line references."
+  ],
+  "where": "Command Palette > \"Code: Code Review\""
+ },
+ "S67.21": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Review a Pull Request"
+   },
+   {
+    "file": "apps/extension-vscode/src/extension.ts",
+    "text": "A pull request number, such as 128, or a branch name"
+   }
+  ],
+  "needs": "a repository with a pull request or branch, and GitHub access",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P, type \"Code: Review a Pull Request\" and press Enter.",
+   "In the box that asks \"A pull request number, such as 128, or a branch name\", type a pull request number or a branch name and press Enter.",
+   "Wait for the review to appear in the chat panel.",
+   "Compare with Expected: the review should read the pull request's diff and report findings."
+  ],
+  "where": "Command Palette > \"Code: Review a Pull Request\""
+ },
+ "S67.22": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Security Review of Pending Changes"
+   }
+  ],
+  "needs": "a repository with pending changes",
+  "note": "It scans only the pending changes on the current branch, not the whole repository.",
+  "reachable": "yes",
+  "steps": [
+   "Make some uncommitted changes in a repository.",
+   "Press Cmd+Shift+P, type \"Code: Security Review of Pending Changes\" and press Enter.",
+   "Wait for the review to finish in the chat panel.",
+   "Compare with Expected: findings should list the file, line, why it is exploitable, its severity and the fix."
+  ],
+  "where": "Command Palette > \"Code: Security Review of Pending Changes\""
+ },
+ "S67.23": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Code Review"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a repository with changes to review",
+  "reachable": "yes",
+  "steps": [
+   "Run \"Code: Code Review\" or \"Code: Security Review of Pending Changes\" first.",
+   "Click the box that says \"Describe a task\u2026\" and type: Explain each finding in plain words, with its file and line.",
+   "Press Enter and wait for the answer.",
+   "Compare with Expected: each finding should be explained in plain language with its location."
+  ],
+  "where": "Command Palette > \"Code: Open Chat\", then the box \"Describe a task\u2026\""
+ },
+ "S67.24": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Open Chat"
+   },
+   {
+    "file": "apps/extension-vscode/src/providers/diffDecorationProvider.ts",
+    "text": "Accept"
+   },
+   {
+    "file": "apps/extension-vscode/src/providers/diffDecorationProvider.ts",
+    "text": "Reject"
+   }
+  ],
+  "needs": "a trusted workspace folder open, with the developer runtime set up",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P, type \"Code: Open Chat\" and press Enter.",
+   "Click the box that says \"Describe a task\u2026\" and ask for a small edit to a file, for example: Rename the variable count to total in this file.",
+   "Open the changed file in the editor and look above the changed lines.",
+   "Compare with Expected: the change should appear as a proposal with Accept and Reject above it, before you accept it."
+  ],
+  "where": "Command Palette > \"Code: Open Chat\", then the box \"Describe a task\u2026\"; the proposal shows in the editor"
+ },
+ "S67.25": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/providers/diffDecorationProvider.ts",
+    "text": "Accept"
+   },
+   {
+    "file": "apps/extension-vscode/src/providers/diffDecorationProvider.ts",
+    "text": "Accept All in File"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Accept Current Diff"
+   }
+  ],
+  "needs": "a trusted workspace folder open, with the developer runtime set up, and proposed changes",
+  "reachable": "yes",
+  "steps": [
+   "Ask the agent for edits in two places, as in the item above, so two proposals appear.",
+   "Click Accept above the first change and Reject above the second.",
+   "Or click Accept All in File above the proposals in one file.",
+   "Compare with Expected: only the changes you picked are applied and the rejected one stays out of the file."
+  ],
+  "where": "In the editor, above a proposed change, click Accept or Reject; or Command Palette > \"Code: Accept Current Diff\""
+ },
+ "S67.26": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Generate Docs"
+   },
+   {
+    "file": "apps/extension-vscode/src/providers/diffDecorationProvider.ts",
+    "text": "Accept"
+   }
+  ],
+  "needs": "a trusted workspace folder open, with the developer runtime set up",
+  "reachable": "yes",
+  "steps": [
+   "Open a file with code, select a function or the whole file, and press Cmd+Shift+P.",
+   "Type \"Code: Generate Docs\" and press Enter.",
+   "Wait for the agent to finish in the chat panel.",
+   "Compare with Expected: doc comments or a README section should appear or be updated, as proposed changes with Accept and Reject."
+  ],
+  "where": "Select code in an editor, then Command Palette > \"Code: Generate Docs\""
+ },
+ "S67.27": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Open Chat"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a trusted workspace folder open, with the developer runtime set up",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P, type \"Code: Open Chat\" and press Enter.",
+   "Click the box that says \"Describe a task\u2026\" and type a migration request, for example: Replace every use of the old function name with the new one across the repository.",
+   "Press Enter and wait for the agent to finish.",
+   "Compare with Expected: the changes should appear across several files, shown as proposals with Accept and Reject."
+  ],
+  "where": "Command Palette > \"Code: Open Chat\", then the box \"Describe a task\u2026\""
+ },
+ "S67.28": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Open Chat"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a trusted workspace folder open, with the developer runtime set up",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P, type \"Code: Open Chat\" and press Enter.",
+   "Click the box that says \"Describe a task\u2026\" and type: Upgrade the dependency named in package.json to its newest version and adjust the code to it.",
+   "Press Enter and wait for the agent to finish.",
+   "Compare with Expected: the manifest and the affected code should change, shown as proposals with Accept and Reject."
+  ],
+  "where": "Command Palette > \"Code: Open Chat\", then the box \"Describe a task\u2026\""
+ },
+ "S67.29": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Git Commit"
+   },
+   {
+    "file": "apps/extension-vscode/src/core/commandSetup.ts",
+    "text": "Commit message"
+   }
+  ],
+  "needs": "a git repository open in VS Code with uncommitted changes",
+  "note": "The command is listed only in the Command Palette. I did not check whether the agent in chat can commit on its own, so that part of Expected is unverified from the code.",
+  "reachable": "yes",
+  "steps": [
+   "Open a folder that is a git repository with changes, in VS Code.",
+   "Press Cmd+Shift+P and type \"Code: Git Commit\", then press Enter.",
+   "In the box labelled \"Commit message\", type a message such as \"feat: test commit\", then press Enter.",
+   "Open the Source Control view and the git history, and look for a new commit with that message and the changes in it."
+  ],
+  "where": "Command Palette > Code: Git Commit"
+ },
+ "S67.30": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: New Session in a Worktree"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/sessionWorktrees.ts",
+    "text": "Enter a worktree name"
+   }
+  ],
+  "needs": "a git repository open in VS Code",
+  "note": "VS Code has no plain create-branch control. A branch is made through a session worktree, which the CLI creates (apps/cli/src/platform/runtime/git_tools.rs:168 is in the CLI, not this app, and I did not read it). The worktree list shows its branch, and removing a worktree deletes its branch. Branch creation by the agent itself was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Open a git repository folder in VS Code.",
+   "Press Cmd+Shift+P, type \"Code: New Session in a Worktree\", then press Enter.",
+   "Or press Cmd+Shift+P, type \"Code: Session Worktrees\", choose the named option, and type a name in the box labelled \"Enter a worktree name\".",
+   "A new window opens on the new worktree folder. Check that the branch name shown for it in the list is not the branch you started from."
+  ],
+  "where": "Command Palette > Code: New Session in a Worktree (or Code: Session Worktrees, then a name)"
+ },
+ "S67.31": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Create Pull Request"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Pull request title"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Push and Open"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Open Pull Request"
+   }
+  ],
+  "needs": "a branch with commits and an account on the code host (the exact account requirement was not checked)",
+  "note": "The base-branch prompt text was not read, so the tester should answer it by what it asks. The agent in chat creating a pull request was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Work on a branch that has commits not yet in the base branch, in a git repository folder.",
+   "Press Cmd+Shift+P, type \"Code: Create Pull Request\", then press Enter.",
+   "If a warning appears, it names the reason no pull request can be opened. Otherwise, type a title in the box labelled \"Pull request title\", then answer the next box for the base branch.",
+   "If the branch is not pushed yet, click \"Push and Open\". If it is already pushed, click \"Open Pull Request\". Look for the message \"Code: pull request opened.\" with a View button, and check the pull request on the code host."
+  ],
+  "where": "Command Palette > Code: Create Pull Request"
+ },
+ "S67.37": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Remember for This Repository"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/repositoryMemory.ts",
+    "text": "Remember for this repository"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/repositoryMemory.ts",
+    "text": "Open memory file"
+   }
+  ],
+  "needs": "a trusted workspace folder that is a repository",
+  "note": "The reuse in later sessions is inner behaviour; the tester sees it only by asking in a new session. The confirmation message's buttons were not fully read, so \"Open memory file\" is the constant in the file, not confirmed as a visible button.",
+  "reachable": "yes",
+  "steps": [
+   "Open a trusted workspace folder that is a repository.",
+   "Press Cmd+Shift+P, type \"Code: Remember for This Repository\", then press Enter.",
+   "Choose the repository folder if asked, type a note such as \"Run pnpm test:unit before committing\" in the box titled \"Remember for this repository\", then press Enter.",
+   "Read the confirmation message. Then start a new session in the same repository and ask the agent what it was told to remember. Compare its answer with the note you saved."
+  ],
+  "where": "Command Palette > Code: Remember for This Repository"
+ },
+ "S67.38": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Show Instructions"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "Instructions"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "More actions"
+   }
+  ],
+  "needs": "a workspace folder with AGENTS.md or CLAUDE.md",
+  "note": "The Instructions list shows only files the CLI loads, and says \"The CLI loads no instruction files in this workspace.\" when there are none. That the agent follows them is inner behaviour seen only in its answers.",
+  "reachable": "yes",
+  "steps": [
+   "Open a workspace folder that holds AGENTS.md or CLAUDE.md, and open the AGI sidebar.",
+   "Click the \"More\" (...) button at the top of the sidebar, then click \"Instructions\".",
+   "In the list, pick a file to open it and check it is the repository's instruction file.",
+   "Ask the agent a question that one of those rules governs, and check that its answer follows the rule in the file."
+  ],
+  "where": "More actions (the \"...\" button at the top of the sidebar) > Instructions"
+ },
+ "S67.39": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Show Skills"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "Skills"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/capabilityManagement.ts",
+    "text": "Allow this folder\u2019s project skills"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/capabilityManagement.ts",
+    "text": "Turn off"
+   }
+  ],
+  "needs": "a workspace folder with project skills; a second check needs a chat question",
+  "note": "Turn on and Turn off are icon tooltips, not visible words. Plugins are a separate screen (Code: Show Plugins) and were not walked through.",
+  "reachable": "yes",
+  "steps": [
+   "Open a workspace folder and the AGI sidebar.",
+   "Press Cmd+Shift+P, type \"Code: Show Skills\", then press Enter. Or click \"More\" (...) > \"Skills\".",
+   "If the item \"Allow this folder\u2019s project skills\" appears, choose it to allow the folder's project skills.",
+   "Select a skill, then use its \"Turn off\" or \"Turn on\" button (the tooltip on its icon). Ask the agent something a skill covers and compare its answer with the skill's state."
+  ],
+  "where": "Command Palette > Code: Show Skills (or More actions > Skills, or type /skills in the chat box)"
+ }
+}

@@ -1,0 +1,484 @@
+{
+ "feature": {
+  "id": "F008-09",
+  "aliases": [
+   "Tabs",
+   "Tablist",
+   "Accordion",
+   "Disclosure",
+   "Collapsible",
+   "Show or hide details",
+   "Thinking process toggle",
+   "S8.31",
+   "S8.32",
+   "S8.33"
+  ],
+  "summary": "Tabs switch panels, accordions open and close stacked sections, and disclosure toggles show one block of detail. Web, mobile and Chrome have tab lists; web and mobile expose expanded state on toggles. The CLI uses a tab strip in two screens and Ctrl-O to expand tool output.",
+  "purpose": {
+   "what_it_does": "Organises dense content: tabs for views (Sources and Report), expandable steps in a plan, and Show or Hide for thinking text and tool detail.",
+   "why_it_exists": "Chat output can be long. Collapsing detail keeps the conversation readable and the state must reach assistive technology (doc: knowledge-base/data/area-briefs/008-basic-interactive-elements.md S8.31 to S8.33).",
+   "who_uses_it": "Every user reading answers, research and agent steps.",
+   "problems_solved": [
+    "Walls of detail in the transcript.",
+    "Screen reader users not knowing whether a section is open.",
+    "Keyboard users unable to move between tabs."
+   ],
+   "use_cases": [
+    "Switch between Sources and Report in the web research panel.",
+    "Expand a plan step in the web StepsCard.",
+    "Open 'Thinking process' under an answer.",
+    "Switch plugin tabs in the CLI with Left and Right."
+   ]
+  },
+  "user_experience": {
+   "where_to_find_it": [
+    "Web: research panel tablist 'Research views' with tabs Sources and Report (apps/web/features/chat/components/research/ResearchPanel.tsx:403-440); steps list with expandable rows (apps/web/features/chat/components/cards/StepsCard.tsx:186-260); button 'Toggle thinking process visibility' (apps/web/features/chat/components/messages/MessageBubble.tsx:3478-3490).",
+    "Desktop: public Electron window shows hosted web (doc: AGENTS.md section 5); retained Tauri code has its own tab pieces such as apps/desktop/src/ui/Tabs.tsx and role=tablist in apps/desktop/src/features/agi/AgentTaskPanel.tsx:73.",
+    "Mobile: project tabs with role tab (apps/mobile/app/(app)/projects/[id].tsx:245-275); agent activity steps (AgentActivityTimeline.tsx:417-422); 'Show fewer sources' toggle (CollapsibleSources.tsx:693-695).",
+    "CLI: plugin tabs Discover, Installed, Marketplaces, Errors with Left and Right (apps/cli/src/tui/widgets/screen_renderers.rs:590-663); agents tabs Agents, Running, Library (screen_renderers.rs:275-292); Ctrl-O expands or collapses tool output (apps/cli/src/tui/tui_app.rs:4056-4066).",
+    "VS Code: tablist 'Session source' with Local and Cloud (apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:3036-3038); toggles with aria-expanded.",
+    "Chrome: tablist 'AGI views' (apps/extension/src/side_panel.ts:13489-13496)."
+   ],
+   "prerequisites": [
+    "Some content to show: thinking steps exist only when the message has thinking steps (MessageBubble.tsx:3476)."
+   ],
+   "screens_and_controls": [
+    "Web tab buttons role=tab with aria-selected inside role=tablist (ResearchPanel.tsx:403-413).",
+    "Web step toggle: button with aria-expanded inside a Radix collapsible (StepsCard.tsx:229-236).",
+    "Mobile tabs: role tab with selected state (projects/[id].tsx:258-261).",
+    "CLI tab strip: active tab shown in brackets on the agents screen (screen_renderers.rs:275-292)."
+   ],
+   "journey": [
+    "See the tab row or the toggle.",
+    "Click or press a key to switch or expand.",
+    "Content for that tab or block appears; the control's selected or expanded state changes.",
+    "Click again to collapse."
+   ],
+   "feedback_and_outputs": [
+    "Chevron icons flip between right and down (StepsCard.tsx:243-249; MessageBubble.tsx:3484-3488).",
+    "Mobile hint reads 'Shows the details of this step' or 'Hides the details of this step' (AgentActivityTimeline.tsx:419-421).",
+    "CLI status notice 'showing full tool output, Ctrl-O to collapse' (tui_app.rs:4060)."
+   ],
+   "settings": [
+    "None found for tabs and disclosure; web reduced motion or density settings were not checked."
+   ]
+  },
+  "current_implementation": {
+   "working": [
+    "Web research tabs set role tab and aria-selected (ResearchPanel.tsx:403-413).",
+    "Shared Tabs primitive wraps Radix tabs (packages/ui/ui/src/primitives/Tabs.tsx:1-63) and is used in several web screens, for example ArtifactPreview.tsx and AgentEditorPage.tsx.",
+    "Shared useTablistKeyboard hook gives ArrowLeft/Right/Up/Down, Home and End (packages/ui/ui/src/primitives/useTablistKeyboard.ts:5-56).",
+    "Web StepsCard uses a collapsible with aria-expanded (StepsCard.tsx:229-236) and a progress label '% complete' (line 177).",
+    "Web thinking toggle has aria-expanded (MessageBubble.tsx:3481).",
+    "Mobile steps and sources toggles expose expanded state (AgentActivityTimeline.tsx:422; CollapsibleSources.tsx:695).",
+    "CLI tabs move with Right/Tab and Left/Shift-Tab (screen_renderers.rs:658-665).",
+    "Chrome and VS Code expose a tablist role (side_panel.ts:13489; webviewContent.ts:3036)."
+   ],
+   "incomplete": [
+    "Web ResearchPanel tabs set aria-selected but the file does not use the arrow-key hook or tab panels (ResearchPanel.tsx has no ArrowRight or useTablistKeyboard match), so keyboard moves rely on Tab. The hook is used only in marketing CodeTabs among the apps searched (apps/web/features/marketing/components/system/CodeTabs.tsx).",
+    "VS Code session toggle: whether arrow keys work was not checked.",
+    "No accordion primitive exists; accordion behaviour is built from the Collapsible primitive per screen (packages/ui/ui/src/primitives/Collapsible.tsx:1-9)."
+   ],
+   "disconnected_or_disabled": [],
+   "not_available": [
+    "Accordion in the CLI, VS Code and Chrome: brief says missing and no accordion was found in the files read."
+   ]
+  },
+  "required_behaviour": {
+   "established": [
+    {
+     "statement": "Tabs are a tablist switching panels with the selected tab exposed.",
+     "source": "S8.31 in knowledge-base/data/area-briefs/008-basic-interactive-elements.md"
+    },
+    {
+     "statement": "An accordion is a stack of sections that expand and collapse, each with a labelled header.",
+     "source": "S8.32 in the same brief"
+    },
+    {
+     "statement": "A disclosure control toggles one block of detail and exposes its expanded state.",
+     "source": "S8.33 in the same brief"
+    }
+   ],
+   "acceptance_criteria": [
+    "On web, the research panel exposes a tablist named 'Research views' and the active tab has aria-selected true.",
+    "With focus on a shared Tabs tab, Right Arrow moves to the next tab and Home moves to the first.",
+    "On web, the Thinking process button reports aria-expanded false then true after a click.",
+    "On mobile, an agent step with details announces expanded or collapsed.",
+    "In the CLI plugin screen, Right changes tab and Left goes back, wrapping at the ends.",
+    "In the CLI, Ctrl-O toggles full tool output and shows a status notice."
+   ],
+   "inferred": [
+    "Tab lists should support arrow keys everywhere (WAI-ARIA pattern) [inferred; the shared hook exists for it]."
+   ],
+   "proposed": [
+    "[proposed] Use useTablistKeyboard in ResearchPanel and other hand-built tablists.",
+    "[proposed] Decide if a shared Accordion primitive is wanted or keep Collapsible and mark accordion n/a on CLI, VS Code, Chrome."
+   ]
+  },
+  "implementation_map": [
+   {
+    "kind": "component",
+    "name": "Tabs primitives",
+    "path": "packages/ui/ui/src/primitives/Tabs.tsx",
+    "role": "Radix tab wrappers"
+   },
+   {
+    "kind": "hook",
+    "name": "useTablistKeyboard",
+    "path": "packages/ui/ui/src/primitives/useTablistKeyboard.ts",
+    "role": "Arrow, Home, End movement"
+   },
+   {
+    "kind": "component",
+    "name": "Collapsible primitives",
+    "path": "packages/ui/ui/src/primitives/Collapsible.tsx",
+    "role": "Radix collapsible re-export"
+   },
+   {
+    "kind": "component",
+    "name": "ResearchPanel",
+    "path": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "role": "Sources and Report tabs"
+   },
+   {
+    "kind": "component",
+    "name": "StepsCard",
+    "path": "apps/web/features/chat/components/cards/StepsCard.tsx",
+    "role": "Expandable steps"
+   },
+   {
+    "kind": "component",
+    "name": "MessageBubble (web)",
+    "path": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "role": "Thinking toggle and long-message toggle"
+   },
+   {
+    "kind": "component",
+    "name": "SettingsModal",
+    "path": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "role": "Shared tablist at line 1212"
+   },
+   {
+    "kind": "component",
+    "name": "Desktop Tabs",
+    "path": "apps/desktop/src/ui/Tabs.tsx",
+    "role": "Retained Tauri tab component"
+   },
+   {
+    "kind": "screen",
+    "name": "Mobile project screen tabs",
+    "path": "apps/mobile/app/(app)/projects/[id].tsx",
+    "role": "Tabs with selected state"
+   },
+   {
+    "kind": "component",
+    "name": "AgentActivityTimeline",
+    "path": "apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx",
+    "role": "Expandable steps"
+   },
+   {
+    "kind": "component",
+    "name": "CollapsibleSources",
+    "path": "apps/mobile/src/features/chat/components/CollapsibleSources.tsx",
+    "role": "Show more or fewer sources"
+   },
+   {
+    "kind": "component",
+    "name": "CLI plugin tabs",
+    "path": "apps/cli/src/tui/widgets/screen_renderers.rs",
+    "role": "PluginTabsView and agents tab strip"
+   },
+   {
+    "kind": "service",
+    "name": "CLI Ctrl-O toggle",
+    "path": "apps/cli/src/tui/tui_app.rs",
+    "role": "EXPAND_TOOL_OUTPUT flag"
+   },
+   {
+    "kind": "component",
+    "name": "VS Code webview",
+    "path": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "role": "Session source tablist and aria-expanded toggles"
+   },
+   {
+    "kind": "component",
+    "name": "Chrome side panel tab bar",
+    "path": "apps/extension/src/side_panel.ts",
+    "role": "sp-tab-bar tablist"
+   },
+   {
+    "kind": "test",
+    "name": "useTablistKeyboard.test",
+    "path": "packages/ui/ui/src/primitives/__tests__/useTablistKeyboard.test.tsx",
+    "role": "Arrow key contract"
+   },
+   {
+    "kind": "test",
+    "name": "tablist-keyboard-contract.test",
+    "path": "apps/web/features/marketing/components/__tests__/tablist-keyboard-contract.test.ts",
+    "role": "Marketing tablist keyboard"
+   }
+  ],
+  "execution_and_data_flow": {
+   "steps": [
+    {
+     "what_happens": "Person clicks or presses a key on a tab or toggle.",
+     "runs_on": "device",
+     "evidence": "ResearchPanel.tsx:407; StepsCard.tsx:229"
+    },
+    {
+     "what_happens": "Local component state flips (selected tab or open flag) and the view re-renders.",
+     "runs_on": "device",
+     "evidence": "MessageBubble.tsx:3477 (showThinking state); ResearchPanel.tsx:407 setTab"
+    },
+    {
+     "what_happens": "CLI toggles a process-wide flag and redraws.",
+     "runs_on": "device",
+     "evidence": "tui_app.rs:4058"
+    }
+   ],
+   "data": [
+    {
+     "what": "Selected tab and open state",
+     "where_stored": "Component memory only; persistence was not found",
+     "synced": "No",
+     "retained_or_deleted": "Lost when the view closes [inferred]"
+    }
+   ],
+   "models_and_providers": "None. Thinking text shown by the toggle comes from a model's reasoning output, but the toggle itself does not call a model."
+  },
+  "access_and_usage": {
+   "account": "None found in the code for tabs, accordions and disclosure.",
+   "permissions": "None found.",
+   "subscription": "None found.",
+   "limits_and_metering": "None found.",
+   "flags": "None found.",
+   "model_compatibility": "Thinking disclosure appears only when the message has thinking steps (MessageBubble.tsx:3476).",
+   "provider_restrictions": "None found.",
+   "local_mode": "Works fully on the device in Local mode; no network is involved."
+  },
+  "states_and_edge_cases": [
+   {
+    "state": "No details",
+    "behaviour": "Mobile step has no button role when there are no details; web chevron hidden",
+    "evidence": "AgentActivityTimeline.tsx:417; StepsCard.tsx:241"
+   },
+   {
+    "state": "Keyboard use of tabs",
+    "behaviour": "Shared hook handles arrows; hand-built web research tabs do not",
+    "evidence": "useTablistKeyboard.ts; ResearchPanel.tsx"
+   },
+   {
+    "state": "Wrap-around",
+    "behaviour": "CLI and the hook wrap from last to first",
+    "evidence": "screen_renderers.rs:629-637; useTablistKeyboard.ts:44"
+   },
+   {
+    "state": "Loading, empty, error, offline",
+    "behaviour": "Not handled in these controls",
+    "evidence": "not found"
+   }
+  ],
+  "verification": {
+   "existing_tests": [
+    {
+     "path": "packages/ui/ui/src/primitives/__tests__/useTablistKeyboard.test.tsx",
+     "covers": "Arrow, Home and End movement"
+    },
+    {
+     "path": "apps/web/features/marketing/components/__tests__/tablist-keyboard-contract.test.ts",
+     "covers": "Marketing tablist uses the hook"
+    },
+    {
+     "path": "apps/web/features/chat/components/messages/MessageBubble.test.tsx",
+     "covers": "Web message bubble (exact toggle checks not opened)"
+    },
+    {
+     "path": "apps/web/features/chat/components/messages/ToolTimeline.test.tsx",
+     "covers": "Tool timeline (content not opened)"
+    }
+   ],
+   "scenarios": [
+    {
+     "name": "Research tabs",
+     "steps": [
+      "Open a research answer on web.",
+      "Click Report, then Sources."
+     ],
+     "expected": "aria-selected moves with the click."
+    },
+    {
+     "name": "Keyboard tabs",
+     "steps": [
+      "Focus a shared Tabs trigger.",
+      "Press Right, Home, End."
+     ],
+     "expected": "Focus and selection follow."
+    },
+    {
+     "name": "Thinking toggle",
+     "steps": [
+      "Find an answer with thinking steps.",
+      "Activate the toggle twice."
+     ],
+     "expected": "aria-expanded true then false and content shows then hides."
+    },
+    {
+     "name": "Mobile step",
+     "steps": [
+      "Open an agent run.",
+      "Tap a step with details."
+     ],
+     "expected": "Details show and the hint changes to Hides."
+    },
+    {
+     "name": "CLI tabs",
+     "steps": [
+      "Open the plugin screen.",
+      "Press Right four times."
+     ],
+     "expected": "Tabs cycle and return to Discover."
+    },
+    {
+     "name": "CLI Ctrl-O",
+     "steps": [
+      "Run a tool.",
+      "Press Ctrl-O."
+     ],
+     "expected": "Full output and a notice for two seconds."
+    }
+   ],
+   "diagnostics": [
+    "No logs; inspect aria attributes in browser tools; CLI snapshot tests live in apps/cli/src/tui/widgets/snapshots."
+   ]
+  },
+  "gaps": [
+   {
+    "gap": "Web research tabs lack arrow-key handling and tab panels.",
+    "affects": "Web keyboard and screen reader users",
+    "evidence": "ResearchPanel.tsx:403-440",
+    "work_needed": "Adopt useTablistKeyboard and add role tabpanel with aria-controls."
+   },
+   {
+    "gap": "Brief marks accordion missing on CLI, VS Code and Chrome and lists CLI tabs and disclosure as done; the CLI tab and disclosure code exists but not an accordion.",
+    "affects": "CLI, VS Code, Chrome",
+    "evidence": "S8.32; screen_renderers.rs; tui_app.rs:4056",
+    "work_needed": "Decide if accordion applies there."
+   },
+   {
+    "gap": "Brief line references stale (for example tui_app.rs:2605).",
+    "affects": "Documentation",
+    "evidence": "brief S8.33",
+    "work_needed": "Refresh."
+   },
+   {
+    "gap": "Open or selected state is not remembered.",
+    "affects": "All apps",
+    "evidence": "state is local to components",
+    "work_needed": "Only if product wants persistence [proposed]."
+   }
+  ],
+  "depends_on": [
+   "surface:web",
+   "surface:mobile",
+   "surface:cli",
+   "surface:vscode",
+   "surface:chrome",
+   "SYS-shared-ui-and-design",
+   "file:packages/ui/ui/src/primitives/Tabs.tsx",
+   "file:packages/ui/ui/src/primitives/Collapsible.tsx",
+   "file:packages/ui/ui/src/primitives/useTablistKeyboard.ts"
+  ],
+  "relationships": [
+   {
+    "rel": "implemented_by",
+    "to": "file:packages/ui/ui/src/primitives/Tabs.tsx",
+    "evidence": "Tabs.tsx:1-63"
+   },
+   {
+    "rel": "implemented_by",
+    "to": "file:packages/ui/ui/src/primitives/useTablistKeyboard.ts",
+    "evidence": "useTablistKeyboard.ts:10"
+   },
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/web/features/chat/components/cards/StepsCard.tsx",
+    "evidence": "StepsCard.tsx:229"
+   },
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "evidence": "ResearchPanel.tsx:403"
+   },
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx",
+    "evidence": "lines 417-422"
+   },
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/cli/src/tui/widgets/screen_renderers.rs",
+    "evidence": "lines 590-663"
+   },
+   {
+    "rel": "depends_on",
+    "to": "SYS-shared-ui-and-design",
+    "evidence": "primitives live in packages/ui/ui"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:cli",
+    "evidence": "tui_app.rs:4056"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:chrome",
+    "evidence": "side_panel.ts:13489"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:vscode",
+    "evidence": "webviewContent.ts:3036"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:packages/ui/ui/src/primitives/__tests__/useTablistKeyboard.test.tsx",
+    "evidence": "file exists"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/web/features/marketing/components/__tests__/tablist-keyboard-contract.test.ts",
+    "evidence": "file exists"
+   }
+  ],
+  "unknowns": [
+   "Whether VS Code and Chrome tab lists handle arrow keys.",
+   "Whether any accordion exists in VS Code or Chrome beyond the searches done.",
+   "Which retained desktop components ship.",
+   "Exact assertions inside the MessageBubble and ToolTimeline tests."
+  ]
+ },
+ "corrections": [
+  {
+   "section": "2/3",
+   "claim": "Mobile 'Show fewer sources' toggle and sources toggle expose expanded state (CollapsibleSources.tsx:693-695, :695)",
+   "verdict": "wrong",
+   "what_the_code_shows": "CollapsibleSources.tsx has 287 lines, so lines 693-695 do not exist. The file has no 'Show fewer' text, no 'expanded' and no accessibilityState. The string 'Show fewer sources' is in AgentActivityTimeline.tsx and research/ResearchSourcesAppendix.tsx.",
+   "evidence": "apps/mobile/src/features/chat/components/CollapsibleSources.tsx (287 lines; grep for fewer/expanded/accessibilityState finds nothing)",
+   "correction": "The 'Show fewer sources' toggle is in AgentActivityTimeline.tsx and research/ResearchSourcesAppendix.tsx. CollapsibleSources.tsx does not expose expanded state."
+  },
+  {
+   "section": "2/3",
+   "claim": "Web research panel tablist 'Research views' has tabs Sources and Report (ResearchPanel.tsx:403-440)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The tablist labelled 'Research views' has three tabs: sources, report and library. The third tab starts at about line 438. The tabs set role=tab and aria-selected as stated.",
+   "evidence": "apps/web/features/chat/components/research/ResearchPanel.tsx:403-440",
+   "correction": "The 'Research views' tablist has three tabs: Sources, Report and Library."
+  }
+ ],
+ "missing_facts": [
+  "ResearchPanel has a third tab, Library (apps/web/features/chat/components/research/ResearchPanel.tsx:~438), that the page leaves out of its description, test scenario and acceptance criteria.",
+  "Mobile project tabs set accessibilityState selected, but apps/mobile/app/(app)/projects/[id].tsx:245-275 has no keyboard or arrow handling. Mobile 'Show fewer sources' is in AgentActivityTimeline.tsx and research/ResearchSourcesAppendix.tsx, not CollapsibleSources.tsx.",
+  "Shared Radix Tabs and the separate useTablistKeyboard hook give arrow keys through different routes (packages/ui/ui/src/primitives/Tabs.tsx:3-6 and useTablistKeyboard.ts:5-56). The page conflates them in criterion 2."
+ ]
+}

@@ -1,0 +1,492 @@
+{
+ "S3.01": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ModeToggle.tsx",
+    "text": "Cloud"
+   },
+   {
+    "file": "apps/mobile/src/features/auth/components/MobileSignIn.tsx",
+    "text": "Log in or sign up"
+   },
+   {
+    "file": "apps/mobile/src/features/auth/components/MobileSignIn.tsx",
+    "text": "Continue"
+   }
+  ],
+  "needs": "signed out; an email inbox or a Google account",
+  "note": "The same Cloud segment is also in Settings (apps/mobile/src/features/settings/index.tsx:1063); I did not confirm the drawer's handler calls the sign-in path.",
+  "reachable": "yes",
+  "steps": [
+   "Open the menu icon at the top left of the chat screen to open the side drawer.",
+   "Tap the Cloud segment of the Local and Cloud switch while signed out.",
+   "On the sign-in screen, type your email in the Email address field and tap Continue, or tap Continue with Google.",
+   "Finish the sign-in in the browser sheet or on the code or password screen.",
+   "Check that the app is now in AGI Cloud with no sign-in prompt left. Compare with Expected."
+  ],
+  "where": "Menu icon (top left of the chat screen) > Cloud > Log in or sign up"
+ },
+ "S3.02": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/auth/components/MobileSignUp.tsx",
+    "text": "Create an account"
+   },
+   {
+    "file": "apps/mobile/src/features/auth/components/MobileSignUp.tsx",
+    "text": "Continue"
+   }
+  ],
+  "needs": "signed out; an email address with no AGI account",
+  "note": "The app sends unknown emails to sign-up straight away (apps/mobile/src/features/auth/components/MobileSignIn.tsx:265-266), so the Create an account instead button only appears for a remembered account.",
+  "reachable": "yes",
+  "steps": [
+   "Open the sign-in screen as in S3.01.",
+   "Type an email address that has no AGI account in the Email address field.",
+   "Tap Continue. The app moves to the Create an account screen with your email filled in.",
+   "Look for the Create an account screen with a Continue button under the email field. Compare with Expected."
+  ],
+  "where": "Menu icon > Cloud > Log in or sign up > type a new email > Continue"
+ },
+ "S3.03": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/auth/components/MobileSignUp.tsx",
+    "text": "Verify your email"
+   },
+   {
+    "file": "apps/mobile/src/features/auth/components/MobileSignUp.tsx",
+    "text": "Create an account"
+   }
+  ],
+  "needs": "signed out; an email inbox you can read",
+  "note": "The app sends the email code as soon as the email is accepted (apps/mobile/src/features/auth/components/MobileSignUp.tsx:125-126).",
+  "reachable": "yes",
+  "steps": [
+   "Follow S3.02 with a new email and tap Continue on the Create an account screen.",
+   "Look for the Verify your email screen and the line that says Enter the code sent to your email address.",
+   "Leave the screen without entering a code, then try to use Cloud chat.",
+   "Compare with Expected: the account should not be usable until the email is confirmed."
+  ],
+  "where": "Menu icon > Cloud > Log in or sign up > new email > Continue > Continue"
+ },
+ "S3.04": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/auth/components/MobileSignUp.tsx",
+    "text": "Verification code"
+   },
+   {
+    "file": "apps/mobile/src/features/auth/components/MobileSignUp.tsx",
+    "text": "Verify and continue"
+   },
+   {
+    "file": "apps/mobile/src/features/auth/components/MobileSignUp.tsx",
+    "text": "Send a new code"
+   }
+  ],
+  "needs": "signed out; an email inbox you can read",
+  "note": "This screen accepts only the emailed code; authenticator codes are handled by the sign-in screen, not here.",
+  "reachable": "yes",
+  "steps": [
+   "Reach the Verify your email screen as in S3.03.",
+   "Tap the Verification code field and type or autofill the code from the email.",
+   "Tap Verify and continue.",
+   "If the code is wrong, read the red error text, then tap Send a new code and check that a new email arrives.",
+   "With the right code, look for the app moving on to the next screen. Compare with Expected."
+  ],
+  "where": "Menu icon > Cloud > Log in or sign up > new email > Continue > Continue > Verify your email"
+ },
+ "S3.06": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/auth/components/MobileSignIn.tsx",
+    "text": "Enter your password"
+   },
+   {
+    "file": "apps/mobile/src/features/auth/components/MobileSignIn.tsx",
+    "text": "Forgot password or try another way"
+   }
+  ],
+  "needs": "signed out; an account with a password; an email inbox",
+  "note": "The reset request itself runs in Clerk's native view (apps/mobile/app/(auth)/login.tsx:384), which is not in this repo.",
+  "reachable": "yes",
+  "steps": [
+   "Type the email of an existing account with a password and tap Continue.",
+   "On the Enter your password screen, tap Forgot password or try another way.",
+   "The built-in account screen opens. Its wording comes from Clerk, not this repo.",
+   "Look for a reset option that sends a code or link to your email. Compare with Expected."
+  ],
+  "where": "Menu icon > Cloud > Log in or sign up > your email > Continue > Enter your password > Forgot password or try another way"
+ },
+ "S3.07": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(auth)/reset-password.tsx",
+    "text": "Recover your AGI account"
+   },
+   {
+    "file": "apps/mobile/app/(auth)/reset-password.tsx",
+    "text": "Open Web Account"
+   }
+  ],
+  "needs": "signed out; a reset link from email on this phone",
+  "note": "Expected says the password is set in the app, but this screen only hands off to the web (apps/mobile/app/(auth)/reset-password.tsx:28-38).",
+  "reachable": "yes",
+  "steps": [
+   "Open the password-reset link from your email on this phone.",
+   "The app opens the Recover your AGI account screen.",
+   "Tap Open Web Account. The AGI web account opens in the in-app browser.",
+   "Look for a new-password step. The app itself has no password field and does not sign you in. Compare with Expected."
+  ],
+  "where": "Open the password-reset link from your email on this phone > Recover your AGI account > Open Web Account"
+ },
+ "S3.08": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/auth/components/MobileSignIn.tsx",
+    "text": "Continue with ${provider.label}"
+   },
+   {
+    "file": "packages/client/client-runtime/src/authProviders.ts",
+    "text": "Google"
+   }
+  ],
+  "needs": "signed out; a Google or GitHub account (an outside account)",
+  "note": "The providers come from EXPO_PUBLIC_AGI_AUTH_PROVIDERS and default to Google and GitHub (packages/client/client-runtime/src/authProviders.ts:17).",
+  "reachable": "yes",
+  "steps": [
+   "Open the sign-in screen.",
+   "Look above the Email address field for Continue with Google and Continue with GitHub. On iPhone builds, Continue with Apple may also show.",
+   "Tap Continue with Google and finish in the browser sheet.",
+   "Look for the app signed in to AGI Cloud. Compare with Expected."
+  ],
+  "where": "Menu icon > Cloud > Log in or sign up"
+ },
+ "S3.09": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/auth/components/MobileSignIn.tsx",
+    "text": "Email address"
+   },
+   {
+    "file": "apps/mobile/src/features/auth/components/MobileSignIn.tsx",
+    "text": "Continue"
+   }
+  ],
+  "needs": "signed out; an account in an SSO organisation",
+  "note": "The app starts SSO only when the account lookup returns enterprise_sso (apps/mobile/src/features/auth/components/MobileSignIn.tsx:202-203); which organisations are set up was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Open the sign-in screen.",
+   "Type a work email for an organisation that uses single sign-on in the Email address field.",
+   "Tap Continue.",
+   "Look for a browser sheet opening your organisation's sign-in page. The app has no separate SSO button.",
+   "Finish there and check the app is signed in. Compare with Expected."
+  ],
+  "where": "Menu icon > Cloud > Log in or sign up > Email address > Continue"
+ },
+ "S3.10": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/auth/components/MobileSignIn.tsx",
+    "text": "Email address"
+   },
+   {
+    "file": "apps/mobile/src/features/auth/components/MobileSignIn.tsx",
+    "text": "Continue"
+   }
+  ],
+  "needs": "a work email on an SSO domain",
+  "note": "The domain lookup runs on Clerk's side; the app only reads the enterprise_sso answer (apps/mobile/src/features/auth/components/MobileSignIn.tsx:202-203).",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Type a work email on a company domain that has single sign-on set up, and tap Continue.",
+   "Look whether the browser sheet opens the company's sign-in page without asking you for an organisation name.",
+   "Compare with Expected: entering the work email should route you to that organisation."
+  ],
+  "where": "Log in or sign up > Email address > Continue (the browser sheet that opens)"
+ },
+ "S3.12": {
+  "labels": [],
+  "needs": "a passkey registered on this phone",
+  "note": "Searched for passkey sign-in: passkeySignInEnabled (packages/client/client-runtime/src/authProviders.ts) is not called by any file in apps/mobile, and the sign-in screen has no passkey button; only the error text in apps/mobile/src/features/auth/components/authErrorMessage.ts:48-49 mentions it.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S3.14": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/auth/components/MobileSignIn.tsx",
+    "text": "Check your email"
+   },
+   {
+    "file": "apps/mobile/src/features/auth/components/MobileSignIn.tsx",
+    "text": "Use an email code instead"
+   },
+   {
+    "file": "apps/mobile/src/features/auth/components/MobileSignIn.tsx",
+    "text": "More sign-in options"
+   }
+  ],
+  "needs": "an account with two-step sign-in turned on",
+  "note": "The plan says the owner still has to enable Authenticator and Backup codes in the Clerk Dashboard, and backup codes show only in Clerk's native view, which is not in this repo.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with an account that has two-step sign-in turned on.",
+   "Enter the email, tap Continue, enter the password, and tap Continue.",
+   "If the second step is an email code, look for Check your email, type the code, and tap Continue. You can also tap Use an email code instead.",
+   "If the second step is not an email code, the built-in account screen opens. Look for More sign-in options and backup codes there.",
+   "Compare with Expected."
+  ],
+  "where": "Menu icon > Cloud > Log in or sign up > your email > Continue > Enter your password > Continue"
+ },
+ "S3.16": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(auth)/reset-password.tsx",
+    "text": "Recover your AGI account"
+   },
+   {
+    "file": "apps/mobile/app/(auth)/reset-password.tsx",
+    "text": "Lost Your Email or Two-Factor Device?"
+   }
+  ],
+  "needs": "signed out; a reset link from email on this phone",
+  "note": "Only an https link on the AGI host ending in /auth/reset-password opens this screen (apps/mobile/app/_layout.tsx:931-938).",
+  "reachable": "yes",
+  "steps": [
+   "Open the recovery link from your email on this phone while signed out.",
+   "Look for the Recover your AGI account screen.",
+   "Tap Lost Your Email or Two-Factor Device?. The account recovery page opens in the in-app browser.",
+   "Look for the recovery steps on that web page. The app does not restore access itself. Compare with Expected."
+  ],
+  "where": "Open the password-reset link from your email on this phone > Recover your AGI account > Lost Your Email or Two-Factor Device?"
+ },
+ "S3.18": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/auth/components/MobileSignUp.tsx",
+    "text": "Log in instead"
+   },
+   {
+    "file": "apps/mobile/src/features/auth/components/MobileSignUp.tsx",
+    "text": "Create an account"
+   }
+  ],
+  "needs": "signed out; one unused email and one email with an account",
+  "note": "Create an account instead appears only for a remembered account that no longer exists (apps/mobile/src/features/auth/components/MobileSignIn.tsx:265-270 and 753).",
+  "reachable": "yes",
+  "steps": [
+   "Enter an email that has no AGI account and tap Continue. The app moves to Create an account with the email filled in.",
+   "On Create an account, enter an email that already has an account and tap Continue.",
+   "Look for the message This email already has an account. and the Log in instead link.",
+   "Tap Log in instead and check it returns you to sign in. Compare with Expected."
+  ],
+  "where": "Menu icon > Cloud > Log in or sign up > type an email > Continue"
+ },
+ "S3.19": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(auth)/login.tsx",
+    "text": "Review the Terms for AGI Cloud"
+   },
+   {
+    "file": "apps/mobile/app/(auth)/login.tsx",
+    "text": "Agree and continue"
+   }
+  ],
+  "needs": "a Cloud account whose Terms are not yet accepted",
+  "note": "The Terms screen appears only after the age answer is confirmed (apps/mobile/app/(auth)/login.tsx:172-176).",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to an AGI Cloud account that has not accepted the current Terms, or one where the Terms version has changed.",
+   "Look for the Review the Terms for AGI Cloud screen with the line Version dated and the checkbox.",
+   "Tap Read Terms or Read Privacy Policy to open them.",
+   "Tick the checkbox and tap Agree and continue.",
+   "Look for the app opening AGI Cloud without the screen coming back. Compare with Expected."
+  ],
+  "where": "Menu icon > Cloud > sign in (S3.01) > Review the Terms for AGI Cloud"
+ },
+ "S3.20": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(public)/age-gate.tsx",
+    "text": "Your age"
+   },
+   {
+    "file": "apps/mobile/app/(public)/age-gate.tsx",
+    "text": "Enter your age"
+   },
+   {
+    "file": "apps/mobile/app/(public)/age-gate.tsx",
+    "text": "Continue"
+   }
+  ],
+  "needs": "a fresh install; a throwaway install for the under-age test",
+  "note": "Signed-in users also get a Your age question on the AccountAgeCheck screen (apps/mobile/src/features/auth/components/AccountAgeCheck.tsx:66).",
+  "reachable": "yes",
+  "steps": [
+   "Use a fresh install, since the age answer stays on the device.",
+   "On the Your age screen, type a number in Enter your age and tap Continue.",
+   "Do the under-age check last, on a throwaway install: an age under the minimum shows the refusal screen with Continue in Local Mode.",
+   "With an adult age, look for the app moving on to onboarding. Compare with Expected."
+  ],
+  "where": "First launch > Your age"
+ },
+ "S3.21": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(public)/onboarding.tsx",
+    "text": "Start chatting"
+   },
+   {
+    "file": "apps/mobile/app/(public)/onboarding.tsx",
+    "text": "What should AGI call you?"
+   },
+   {
+    "file": "apps/mobile/app/(public)/onboarding.tsx",
+    "text": "Your name"
+   }
+  ],
+  "needs": "a fresh install; no account needed",
+  "note": "The name is saved to both local and Cloud personalization (apps/mobile/app/(public)/onboarding.tsx:317-319).",
+  "reachable": "yes",
+  "steps": [
+   "On a fresh install, tap Start chatting on the intro screen.",
+   "If the disclosure appears, read it and tap I understand, continue.",
+   "On What should AGI call you?, type a name in Your name and tap Continue, or tap Skip for now.",
+   "Open Settings and look for the name at the top. Compare with Expected."
+  ],
+  "where": "First launch > Start chatting > I understand, continue > What should AGI call you?"
+ },
+ "S3.23": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(public)/onboarding.tsx",
+    "text": "What best describes your work?"
+   },
+   {
+    "file": "apps/mobile/app/(public)/onboarding.tsx",
+    "text": "For example, product design"
+   }
+  ],
+  "needs": "a fresh install; no account needed",
+  "note": "The answer is free text, not a list of roles, and saved as occupation; whether replies use it was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "On a fresh install, tap Start chatting, then accept the disclosure if it appears.",
+   "On What should AGI call you?, type in the What best describes your work? field (placeholder For example, product design).",
+   "Tap Continue.",
+   "Open Settings and look for the saved work description. Compare with Expected."
+  ],
+  "where": "First launch > Start chatting > I understand, continue > What best describes your work?"
+ },
+ "S3.26": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/settings/memory-import.tsx",
+    "text": "Choose a text or JSON file"
+   },
+   {
+    "file": "apps/mobile/app/(app)/settings/memory-import.tsx",
+    "text": "Preview"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Memory"
+   }
+  ],
+  "needs": "a text or JSON export from another assistant, or pasted text",
+  "note": "The import icon has no visible word (its label is Import memories in apps/mobile/app/(app)/settings/memory.tsx:720), and the import button text is a translation key that was not checked in the locale files.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and tap Memory. Memory must be turned on for the import icon to show.",
+   "Tap the import icon at the top right of the Memory screen.",
+   "Pick a source (ChatGPT, Claude, Gemini, Copilot or Other), then paste memories or tap Choose a text or JSON file.",
+   "Tap Preview, then the import button, and look for the Added memories message and Done. Compare with Expected."
+  ],
+  "where": "Settings > Memory > Import memories icon (top right of the Memory screen)"
+ },
+ "S3.31": {
+  "labels": [],
+  "needs": "a desktop app signed in to Managed Cloud, and a phone",
+  "note": "The pairing screen sits under Settings > Remote control > Connections, but FEATURES.companion is false (apps/mobile/lib/v1FeatureFlags.ts:16), so the row is hidden and the Remote screen shows FeatureUnavailable (apps/mobile/app/(app)/companion/index.tsx:183); the pairing screen cannot be reached in this build.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S3.32": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/screenTitles.ts",
+    "text": "Notifications"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/notifications/index.tsx",
+    "text": "Turn on notifications"
+   }
+  ],
+  "needs": "a phone where notifications are not yet allowed",
+  "note": "After a denial the card offers Open Settings, which opens the phone's settings (apps/mobile/src/features/settings/notifications/index.tsx:216).",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and tap Notifications.",
+   "Look for the Turn on notifications card: Get alerts when an agent needs approval, finishes or fails.",
+   "Tap Turn on notifications and choose Don't Allow in the system prompt.",
+   "Look for the card to change to Open Settings, then open the screen again later. Compare with Expected."
+  ],
+  "where": "Settings > Notifications > Turn on notifications"
+ },
+ "S3.35": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(public)/onboarding.tsx",
+    "text": "Start chatting"
+   },
+   {
+    "file": "apps/mobile/app/(public)/onboarding.tsx",
+    "text": "Continue without downloading"
+   }
+  ],
+  "needs": "a fresh install",
+  "note": "Onboarding has no first-chat tips; the empty chat screen was not checked for them.",
+  "reachable": "yes",
+  "steps": [
+   "On a fresh install, read the intro screen notes about settings, local chats and AI mistakes.",
+   "Tap Start chatting, then accept the disclosure if it appears.",
+   "Fill in or skip What should AGI call you?",
+   "On the device step, tap Continue (or Continue without downloading) to reach the chat.",
+   "Look for the first chat screen opening. Compare with Expected."
+  ],
+  "where": "First launch > Start chatting"
+ },
+ "S3.37": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(public)/onboarding.tsx",
+    "text": "Continue without downloading"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/data-controls/index.tsx",
+    "text": "Sync Local Chats to Cloud"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Data Controls"
+   }
+  ],
+  "needs": "a fresh install for the guest step; a Cloud account for the sync step",
+  "note": "The sync copies chat text only; files and memory stay on the device (apps/mobile/src/features/settings/data-controls/index.tsx:561).",
+  "reachable": "yes",
+  "steps": [
+   "On a fresh install, skip sign-in at the device step with Continue without downloading, then send a message in Local mode.",
+   "Check that the chat works without an account, and that local chats stay on the device.",
+   "Later, sign in (S3.01), then open Settings and tap Data Controls.",
+   "Under Sync to AGI Cloud, tap Sync Local Chats to Cloud, read the summary, and confirm.",
+   "Compare with Expected: the chosen chat text is copied and the local originals stay on the device."
+  ],
+  "where": "First launch > Continue without downloading > chat in Local mode; later Settings > Data Controls > Sync to AGI Cloud > Sync Local Chats to Cloud"
+ }
+}

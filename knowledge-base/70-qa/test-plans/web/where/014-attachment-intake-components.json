@@ -1,0 +1,476 @@
+{
+ "S14.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Add photos & files"
+   }
+  ],
+  "needs": "a file to upload",
+  "note": "The More composer options name is an accessible label (aria-label) on the menu button, so it is not drawn as text.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat so the message box (composer) is on screen.",
+   "Click the button labelled More composer options.",
+   "Click Add photos & files and choose a file in the system file chooser.",
+   "Look for the file's chip above the message box, then type a message and send it.",
+   "Compare with Expected: the chooser opened and the chosen file is attached to the sent message."
+  ],
+  "where": "Chat composer > More composer options > Add photos & files"
+ },
+ "S14.02": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/DragDropOverlay.tsx",
+    "text": "Drop files here"
+   }
+  ],
+  "needs": "a file to upload",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat.",
+   "Drag a file from Finder over the chat window and hold it there.",
+   "Look for the overlay with the words Drop files here.",
+   "Release the file, then check that its chip appears above the message box.",
+   "Compare with Expected: the dropped file is attached and is sent with the next message."
+  ],
+  "where": "Chat composer > drag a file onto the chat window"
+ },
+ "S14.03": {
+  "labels": [],
+  "needs": "an image on the clipboard",
+  "note": "The paste handler is at apps/web/features/chat/components/Composer/ChatComposerNew.tsx:5870, but no on-screen text was found for it.",
+  "reachable": "yes",
+  "steps": [
+   "Copy an image to the clipboard (for example with a screenshot tool).",
+   "Click in the message box of a chat.",
+   "Press Cmd+V.",
+   "Look for an image chip with a thumbnail above the message box.",
+   "Compare with Expected: the pasted image is attached as an image."
+  ],
+  "where": "Chat composer > paste with Cmd+V into the message box"
+ },
+ "S14.05": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Add photos & files"
+   }
+  ],
+  "needs": "two or more photo files on the Mac",
+  "note": "No separate photo library control was found. The photos come from the system file chooser opened by the same row.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat and click the button labelled More composer options.",
+   "Click Add photos & files.",
+   "In the system file chooser, select two or more photo files (hold Cmd while clicking).",
+   "Look for one chip per photo above the message box.",
+   "Compare with Expected: each selected photo is attached."
+  ],
+  "where": "Chat composer > More composer options > Add photos & files"
+ },
+ "S14.06": {
+  "labels": [],
+  "needs": "a Mac with screen recording permission for the browser",
+  "note": "Searched the chat composer and ComposerPlusMenu.tsx for Screenshot and Capture. The only Capture screen button is in apps/web/features/chat/components/Composer/ComposerFeedbackDialog.tsx:344, which is a feedback dialog, not a composer control.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S14.07": {
+  "labels": [],
+  "needs": "a Mac with screen recording permission for the browser",
+  "note": "Searched features/chat and the composer for window capture controls and found none. Nothing matched Capture window or window picker in the composer.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S14.10": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Add from library"
+   },
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Library"
+   }
+  ],
+  "needs": "at least one file already in Library (upload one from the Library page first)",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click the button labelled More composer options in the chat composer.",
+   "Click Add from library and wait for the list to load.",
+   "Click a file in the list.",
+   "Look for that file's chip above the message box.",
+   "Compare with Expected: the Library file is attached to the next message."
+  ],
+  "where": "Chat composer > More composer options > Add from library"
+ },
+ "S14.11": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Select repository"
+   }
+  ],
+  "needs": "a connected GitHub account with at least one repository (an outside account)",
+  "note": "Code is confirmed as a surface name in apps/web/features/code/code-surface.ts; its sidebar entry was not confirmed in the navigation file.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Code surface from the app's navigation (the entry labelled Code).",
+   "Click the Select repository control in the task composer.",
+   "Choose a repository from the list.",
+   "Look for the chosen repository name in the composer.",
+   "Compare with Expected: the repository is set as context for the task."
+  ],
+  "where": "Code > Select repository"
+ },
+ "S14.15": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Add photos & files"
+   }
+  ],
+  "needs": "three or more files of any allowed type",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat and click More composer options.",
+   "Click Add photos & files.",
+   "In the system file chooser, select several files in one pick.",
+   "Look for a chip for every selected file above the message box.",
+   "Compare with Expected: all selected files are attached."
+  ],
+  "where": "Chat composer > More composer options > Add photos & files"
+ },
+ "S14.16": {
+  "labels": [],
+  "needs": "an image file",
+  "note": "The thumbnail is an img with the file name as alt text, so no visible words appear on it.",
+  "reachable": "yes",
+  "steps": [
+   "Attach a PNG or JPG with Add photos & files.",
+   "Look at the chip above the message box before sending.",
+   "Compare with Expected: a small square thumbnail of the image is shown."
+  ],
+  "where": "Chat composer > attached image chip above the message box"
+ },
+ "S14.17": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/AttachmentPreview.tsx",
+    "text": "PDF"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/AttachmentPreview.tsx",
+    "text": "Spreadsheet"
+   }
+  ],
+  "needs": "a PDF file and a spreadsheet file (for example .csv or .xlsx)",
+  "note": "The kind words come from the label field of each kind entry. Whether those words are drawn on screen or only given to screen readers was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Attach a PDF and a spreadsheet file with Add photos & files.",
+   "Look at the icon on each non-image chip above the message box.",
+   "Compare with Expected: the PDF and the spreadsheet each show a different icon that matches their type."
+  ],
+  "where": "Chat composer > attached PDF or spreadsheet chip"
+ },
+ "S14.18": {
+  "labels": [],
+  "needs": "any file",
+  "note": "For image chips the name and size appear as a hover title, not as drawn text.",
+  "reachable": "yes",
+  "steps": [
+   "Attach any text file with Add photos & files.",
+   "Read the file name and size shown on the chip above the message box.",
+   "Compare with Expected: the name and size are shown before sending."
+  ],
+  "where": "Chat composer > attached file chip shows name and size"
+ },
+ "S14.19": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/AttachmentPreview.tsx",
+    "text": "Uploading\u2026"
+   }
+  ],
+  "needs": "a large enough file to see the upload run, or a throttled network",
+  "note": "A small file may finish before the label can be seen.",
+  "reachable": "yes",
+  "steps": [
+   "Attach a large file with Add photos & files, so the upload takes a few seconds.",
+   "Look at the chip while the bar is moving.",
+   "Compare with Expected: the chip shows Uploading\u2026 or Preparing\u2026 or Verifying\u2026 until the upload finishes."
+  ],
+  "where": "Chat composer > attach a file > its chip while uploading"
+ },
+ "S14.21": {
+  "labels": [
+   {
+    "file": "apps/web/features/projects/components/ProjectSettingsDialog.tsx",
+    "text": "Project settings"
+   },
+   {
+    "file": "apps/web/features/projects/components/KnowledgeIndexStatus.tsx",
+    "text": "Indexing for search"
+   },
+   {
+    "file": "apps/web/features/projects/components/KnowledgeIndexStatus.tsx",
+    "text": "Retry indexing"
+   }
+  ],
+  "needs": "a paid account whose plan includes project knowledge storage (the earlier Free check showed a plan gate)",
+  "note": "How a project is opened from the Projects list was not traced. The Indexed state shows no text, because the status line hides when indexing finishes with chunks.",
+  "reachable": "yes",
+  "steps": [
+   "Click Projects in the sidebar and open a project.",
+   "Open Project settings and go to the Files section.",
+   "Add a file, then watch its status line under the file name.",
+   "Compare with Expected: Indexing for search shows while indexing, then either Keyword search only or Not indexed when it ends, and a failed index offers Retry indexing."
+  ],
+  "where": "Projects > open a project > Project settings > Files"
+ },
+ "S14.22": {
+  "labels": [],
+  "needs": "none",
+  "note": "AttachmentPreview.tsx UploadStatus returns nothing for ready or complete, so no ready text was found in the chip. The send button state was not traced.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S14.23": {
+  "labels": [
+   {
+    "file": "packages/contracts/cloud-contracts/src/chat-attachment-truncation.ts",
+    "text": "Only part of"
+   },
+   {
+    "file": "packages/contracts/cloud-contracts/src/chat-attachment-truncation.ts",
+    "text": "was read because it is too long to read in full"
+   }
+  ],
+  "needs": "a long file that exceeds the extraction limit",
+  "note": "The notice appears only when the server reports truncation, so it is shown after sending, not on attach.",
+  "reachable": "yes",
+  "steps": [
+   "Attach a long text file that is larger than the chat can read in full, using Add photos & files.",
+   "Type a short message and send it.",
+   "Look under your sent message for the notice.",
+   "Compare with Expected: the notice says only part of the file was read."
+  ],
+  "where": "Chat > send a long text file > notice under your message"
+ },
+ "S14.24": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/hooks/use-attachments.ts",
+    "text": "has an unsupported file type"
+   }
+  ],
+  "needs": "a file of a type the chat cannot read",
+  "note": "The message text was found in use-attachments.ts, but which on-screen element shows it was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Attach a file type the chat does not support with Add photos & files.",
+   "Read the notice that appears for that file.",
+   "Compare with Expected: the notice names the file and says its type is unsupported."
+  ],
+  "where": "Chat composer > attach a file the chat cannot read"
+ },
+ "S14.25": {
+  "labels": [
+   {
+    "file": "apps/web/lib/server/pdf-attachment-content.ts",
+    "text": "Remove the password and upload it again."
+   }
+  ],
+  "needs": "a password-protected PDF",
+  "note": "The message comes from the server when reading the PDF. Whether it shows at attach or only at send was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Attach a password-protected PDF with Add photos & files.",
+   "Send the message if the notice does not appear on attach.",
+   "Read the notice that names the file.",
+   "Compare with Expected: the notice says the file is locked and how to fix it."
+  ],
+  "where": "Chat composer > attach a password-protected PDF > notice"
+ },
+ "S14.26": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/AttachmentPreview.tsx",
+    "text": "Retry"
+   }
+  ],
+  "needs": "a way to make one upload fail, such as turning off Wi-Fi during the upload",
+  "note": "Retry is not shown when the error is marked as not retryable.",
+  "reachable": "yes",
+  "steps": [
+   "Make one upload fail, for example by turning off Wi-Fi during the upload of one file.",
+   "Look at the failed chip above the message box.",
+   "Click Retry next to Upload failed.",
+   "Compare with Expected: the file uploads again and the chip changes away from the failed state."
+  ],
+  "where": "Chat composer > failed file chip > Retry"
+ },
+ "S14.27": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/AttachmentPreview.tsx",
+    "text": "Cancel upload of"
+   }
+  ],
+  "needs": "a file large enough to catch mid-upload",
+  "note": "The X button has an accessible label Cancel upload of followed by the file name; it is drawn as an icon only.",
+  "reachable": "yes",
+  "steps": [
+   "Attach a large file with Add photos & files.",
+   "While the chip shows Uploading\u2026, click its X button.",
+   "Look for the chip to disappear.",
+   "Compare with Expected: the upload stops and the file is not attached."
+  ],
+  "where": "Chat composer > a chip while uploading > X button"
+ },
+ "S14.28": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/AttachmentPreview.tsx",
+    "text": "Remove"
+   }
+  ],
+  "needs": "two files",
+  "note": "The X button has an accessible label Remove followed by the file name; it is drawn as an icon only.",
+  "reachable": "yes",
+  "steps": [
+   "Attach two files with Add photos & files.",
+   "Click the X button on one chip.",
+   "Send the message and read the sent message.",
+   "Compare with Expected: the removed file is not in the chip row or the sent message."
+  ],
+  "where": "Chat composer > each attached chip > X button"
+ },
+ "S14.31": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/hooks/use-attachments.ts",
+    "text": "is already attached"
+   }
+  ],
+  "needs": "any file",
+  "note": "The text is built in use-attachments.ts; which element shows it was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Attach a file with Add photos & files.",
+   "Attach the same file again.",
+   "Look for a message about the repeat.",
+   "Send and check that the file is not sent twice.",
+   "Compare with Expected: the repeat is skipped and the message says it is already attached."
+  ],
+  "where": "Chat composer > add the same file twice with Add photos & files"
+ },
+ "S14.32": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/AttachmentPreview.tsx",
+    "text": "Upload failed"
+   }
+  ],
+  "needs": "a way to make one upload fail",
+  "note": "For non-retryable errors the chip shows the error text instead of Upload failed.",
+  "reachable": "yes",
+  "steps": [
+   "Make one file fail to upload, for example by turning off Wi-Fi during the upload.",
+   "Look at the chip for that file above the message box.",
+   "Compare with Expected: the chip shows the file name with Upload failed and its reason, not one generic message for all files."
+  ],
+  "where": "Chat composer > a failed file chip"
+ },
+ "S14.33": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/hooks/use-attachments.ts",
+    "text": "Not attached:"
+   }
+  ],
+  "needs": "several files, with at least one that will be refused (too large or already attached)",
+  "note": "The summary text was found in use-attachments.ts; the element that shows it was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Add several files at once with Add photos & files, including one that is too large or a duplicate.",
+   "Read the message that appears after the add.",
+   "Compare with Expected: one summary says how many were attached and lists the refused file with its reason."
+  ],
+  "where": "Chat composer > add several files at once, including one refused > summary message"
+ },
+ "S14.34": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Saved to your Library until you delete them."
+   }
+  ],
+  "needs": "none",
+  "note": "In a temporary chat the tooltip says files are deleted with that chat instead. The restore window is taken from RESOURCE_RECOVERY_WINDOW_DAYS.",
+  "reachable": "yes",
+  "steps": [
+   "Click the button labelled More composer options.",
+   "Hover over Add photos & files and wait about a second.",
+   "Read the tooltip that appears.",
+   "Compare with Expected: the tooltip says whether files are kept and for how long."
+  ],
+  "where": "Chat composer > More composer options > hover Add photos & files"
+ },
+ "S14.35": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Use Auto"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Choose a compatible model"
+   }
+  ],
+  "needs": "a file to upload, a Free account (the Free wording uses \"Use Free Auto\" and only the image-capable Free model passes images), a model that cannot read the file type (text-only)",
+  "note": "The warning text is built inline in ChatComposerNew.tsx (around line 5440) and the send is blocked while hasAttachmentConflict is true (around line 3593). The exact model picker and attach control visible labels were not confirmed; the attach control is an input labelled \"File upload\" in code, which is not necessarily its visible text. Free accounts see \"Use Free Auto\" instead of \"Use Auto\".",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a new chat.",
+   "Attach a document or image to the composer using the file upload control.",
+   "Select a model that cannot read the attached file type from the model picker.",
+   "Look for the warning above the composer that starts \"The selected model can't read the attached ...\" and check that it appears before you press send and that it offers \"Use Auto\" or \"Choose a compatible model\"."
+  ],
+  "where": "Chat screen > attach a file in the composer > choose a model that cannot read that file type from the model picker > a warning appears above the composer with the buttons \"Use Auto\" and \"Choose a compatible model\""
+ },
+ "S14.36": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Choose a compatible model"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Remove attachments"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Switch to a cloud model"
+   }
+  ],
+  "needs": "a file to upload, a model that cannot read the file type (text-only)",
+  "note": "The code offers switching model, choosing a compatible model or removing the file, but no convert option and no 'what is sent instead' text was found in ChatComposerNew.tsx, so Expected's convert or sent-instead part is not met by the code. The local-model block (around lines 5318-5366) appears when a local model is selected with an attachment and offers \"Switch to a cloud model\" and \"Remove attachments\" with the text from LOCAL_ATTACHMENT_REFUSAL in packages/contracts/local-runtime/src/inference.ts. WebChatPage.tsx line 7670 only mounts ChatComposerNew and holds no alternative text.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a new chat.",
+   "Attach an image or a document while a model that cannot read it is selected.",
+   "Read the warning above the composer and note the alternatives it gives (switch to Auto, choose a compatible model, or remove the file).",
+   "Press \"Choose a compatible model\" and check that the list shows models that can read the file, or the text \"No model on your plan can read this attachment.\" appears."
+  ],
+  "where": "Chat screen > attach a file in the composer > choose a model that cannot read that file type > read the warning above the composer for the alternatives: \"Use Auto\", \"Choose a compatible model\" or \"Remove attachments\"; for a local model, the warning offers \"Switch to a cloud model\""
+ }
+}

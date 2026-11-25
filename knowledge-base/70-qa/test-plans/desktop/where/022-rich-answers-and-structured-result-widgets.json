@@ -1,0 +1,360 @@
+{
+ "S22.01": {
+  "labels": [],
+  "needs": "web search turned on",
+  "note": "The chip text is the site name only; it is not a fixed label in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a new chat.",
+   "Turn on web search in the chat input, then ask a current-events question such as \"What is the latest news on <topic>?\".",
+   "Wait for the answer to finish streaming.",
+   "Look for small rounded chips with a site name placed after sentences; a \"+N\" on a chip means more sources.",
+   "Click a chip and confirm it opens the source page in a new tab."
+  ],
+  "where": "Chat with web search on > ask a question about a current topic > after the answer sentences, click the small rounded chip that shows a site name"
+ },
+ "S22.02": {
+  "labels": [],
+  "needs": "web search turned on",
+  "note": "The card is a Radix tooltip. On touch, a tap may open the link before the card appears; the code does not special-case this.",
+  "reachable": "yes",
+  "steps": [
+   "Get an answer that shows citation chips, as in S22.01.",
+   "Move the pointer over one chip and wait for the card to appear.",
+   "Check the card shows the source title, the site name, the date if known, and a snippet if known.",
+   "Move the pointer away and confirm the card closes."
+  ],
+  "where": "Chat with web search on > hover (or tap) a citation chip from S22.01"
+ },
+ "S22.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "text": "Sources"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "text": "No sources yet"
+   }
+  ],
+  "needs": "web search turned on",
+  "reachable": "yes",
+  "steps": [
+   "Ask a web-search question and wait for the answer.",
+   "Look for the \"Sources\" button under the answer; it shows a count when there are more than 3 sources.",
+   "Click \"Sources\" to open the side panel on its Sources tab.",
+   "Check each row shows a title, site, link and optional snippet, and click one to open it.",
+   "If there are no sources, check the panel shows \"No sources yet\"."
+  ],
+  "where": "Chat with web search on > under the answer click the \"Sources\" button"
+ },
+ "S22.05": {
+  "labels": [],
+  "needs": "an image-search provider and key (not set up)",
+  "note": "The carousel component exists (Previous and Next controls in packages/ui/unified-chat/src/components/markdown/AnswerGallery.tsx), but only the model writes it, and apps/web/lib/web-search/web-search-providers.json lists only perplexity-search, so no image provider is wired. Searched for carousel and image search.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S22.08": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactCard.tsx",
+    "text": "Open artifact"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/artifact-components/ChartArtifact.tsx",
+    "text": "View chart data"
+   }
+  ],
+  "needs": "none",
+  "note": "The quoted code line moved; the chart renders through ChartArtifact.tsx and ChartCanvas.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Ask the assistant for a chart with a few rows of numbers.",
+   "When the chart card appears in the answer, click \"Open artifact\".",
+   "In the panel, hover over bars or points and check a value appears.",
+   "Check the legend shows when there is more than one series.",
+   "Click the chart's download button and check a PNG file is saved."
+  ],
+  "where": "Chat > ask for a chart (for example \"Make a bar chart of ...\") > click \"Open artifact\" on the chart card"
+ },
+ "S22.09": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/artifact-components/ChartArtifact.tsx",
+    "text": "View chart data"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Download"
+   }
+  ],
+  "needs": "none",
+  "note": "The chart plots only the first rows (CHART_ROW_CAP); the note says the full data is in the JSON download.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chart as in S22.08.",
+   "Under the chart, click \"View chart data\" to expand a table of the values.",
+   "Check the table has the same values as the chart.",
+   "Click the panel's \"Download\" button and check the data can be saved.",
+   "Check a note appears if the chart has more rows than it plots."
+  ],
+  "where": "Chat > open a chart artifact (\"Open artifact\") > under the chart click \"View chart data\""
+ },
+ "S22.10": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/markdown/AnswerSurface.tsx",
+    "text": "Map data \u00a9 OpenStreetMap"
+   }
+  ],
+  "needs": "a web search or place tool that returns coordinates",
+  "note": "The map appears only when the model writes a map block. The tile provider needs AGI_MAP_TILE_URL_TEMPLATE set, and the owner's setup is unfinished, so a live check is needed.",
+  "reachable": "yes",
+  "steps": [
+   "Ask for several real places, for example \"Show me 3 coffee shops in <city> on a map\".",
+   "Look for a card titled \"Map\" under the answer.",
+   "Check markers appear and the map shows the basemap credit line.",
+   "Try moving and zooming the map, if it is interactive."
+  ],
+  "where": "Chat > ask for several places to be shown on a map > a card titled \"Map\" appears in the answer"
+ },
+ "S22.11": {
+  "labels": [],
+  "needs": "a Google Places key with billing (GOOGLE_PLACES_API_KEY), not set up",
+  "note": "A place search tool exists (label \"Place search\" in apps/web/lib/tool-copy.ts) and is not offered without the key. I searched for PlaceCard, place card and search_places and found no card component that renders name, rating, address, hours and links.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S22.17": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/cards/MessageFormatCard.tsx",
+    "text": "View as"
+   },
+   {
+    "file": "apps/web/features/chat/components/cards/ComparisonCard.tsx",
+    "text": "Pros"
+   }
+  ],
+  "needs": "none",
+  "note": "The button shows only when the answer is typed as a comparison.",
+  "reachable": "yes",
+  "steps": [
+   "Ask the assistant to compare two or three products.",
+   "Look for the \"View as comparison\" button under the answer.",
+   "Click it and check the side-by-side comparison card appears.",
+   "Check each item shows \"Pros\" and \"Cons\" where given, and a \"Winner\" mark where one is set.",
+   "Click \"Hide comparison view\" to return to the text."
+  ],
+  "where": "Chat > ask to compare products (for example \"Compare X and Y\") > click \"View as comparison\" under the answer"
+ },
+ "S22.25": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/artifact-components/EmailArtifact.tsx",
+    "text": "Copy email as text"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/artifact-components/EmailArtifact.tsx",
+    "text": "Subject"
+   }
+  ],
+  "needs": "none",
+  "note": "Expected lists copy, send and open actions, but EmailArtifact.tsx has only the copy action. Searched for Send, Open and mailto in that file.",
+  "reachable": "yes",
+  "steps": [
+   "Ask the assistant to draft an email with a recipient and a subject.",
+   "Click \"Open artifact\" on the card.",
+   "Check the widget shows To, Subject and the body.",
+   "Click \"Copy email as text\" and paste it somewhere to check the text.",
+   "Look for a send or open action; none was found in the code."
+  ],
+  "where": "Chat > ask for an email draft (for example \"Draft an email to ...\") > click \"Open artifact\" on the draft card"
+ },
+ "S22.28": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+    "text": "This tool requires approval before execution."
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Allow"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Allow for this chat"
+   }
+  ],
+  "needs": "a setting that makes the assistant ask before a tool runs",
+  "note": "The Tool approvals panel is at apps/web/features/settings/components/ToolApprovalDefaultsPanel.tsx, but it is not mounted in any page I found, so the settings path is unknown.",
+  "reachable": "yes",
+  "steps": [
+   "Set Tool Approvals to ask before each action, if you can find the setting; the settings panel was not found mounted in the app.",
+   "Ask the assistant to do an action that needs a tool, such as a file change or a web fetch.",
+   "When the card appears, read \"This tool requires approval before execution.\" and the buttons below it.",
+   "Click \"Deny\" and check the action stops; run again and click \"Allow\" to check it continues."
+  ],
+  "where": "Chat > ask for an action that needs approval (Tool Approvals set to ask before running) > the approval card under the tool step"
+ },
+ "S22.29": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/cards/ClarifyCard.tsx",
+    "text": "Send answers"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/cards/ClarifyCard.tsx",
+    "text": "Other answer for"
+   }
+  ],
+  "needs": "none",
+  "note": "The assistant decides when to ask; the tester cannot open the form directly.",
+  "reachable": "yes",
+  "steps": [
+   "Ask a vague request so the assistant needs details, for example \"Plan a trip for me\".",
+   "Look for an inline form with questions and options.",
+   "Pick options or type in \"Other answer for\" when offered.",
+   "Click \"Send answers\" and check the form shows \"Sending\" and then the reply continues.",
+   "Check a skipped question shows \"Skipped\"."
+  ],
+  "where": "Chat > the assistant asks questions in an inline form > type or pick answers > click \"Send answers\""
+ },
+ "S22.30": {
+  "labels": [],
+  "needs": "none",
+  "note": "The table is ordinary Markdown from the answer; no title or control is added by the app.",
+  "reachable": "yes",
+  "steps": [
+   "Ask for a comparison of three options in a table.",
+   "Check the answer shows a table with a header row and aligned columns.",
+   "Resize the window narrow and check the table scrolls sideways instead of breaking the page."
+  ],
+  "where": "Chat > ask for a comparison table (for example \"Make a table comparing X, Y and Z\")"
+ },
+ "S22.31": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/markdown/MermaidDiagram.tsx",
+    "text": "Show source"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/markdown/MermaidDiagram.tsx",
+    "text": "Expand diagram"
+   }
+  ],
+  "needs": "none",
+  "note": "Mind maps are drawn as Mermaid diagrams; the model chooses the diagram type.",
+  "reachable": "yes",
+  "steps": [
+   "Ask for a mind map of a topic.",
+   "Check a drawn diagram appears under the answer.",
+   "Click \"Show source\" to see the diagram code, then \"Hide source\" to return.",
+   "Click \"Expand diagram\" to open it full size, then close it with the close button."
+  ],
+  "where": "Chat > ask for a mind map (for example \"Make a mind map of ...\") > the diagram card under the answer"
+ },
+ "S22.32": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/markdown/MermaidDiagram.tsx",
+    "text": "Show source"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/markdown/MermaidDiagram.tsx",
+    "text": "Expand diagram"
+   }
+  ],
+  "needs": "none",
+  "note": "Flowcharts are drawn as Mermaid diagrams; the model chooses the diagram type.",
+  "reachable": "yes",
+  "steps": [
+   "Ask for a flowchart of a process.",
+   "Check a drawn flowchart appears under the answer with boxes and arrows.",
+   "Click \"Show source\" and then \"Hide source\".",
+   "Click \"Expand diagram\" and check it opens larger."
+  ],
+  "where": "Chat > ask for a flowchart (for example \"Draw a flowchart of ...\") > the diagram card under the answer"
+ },
+ "S22.33": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/markdown/MermaidDiagram.tsx",
+    "text": "Expand diagram"
+   }
+  ],
+  "needs": "none",
+  "note": "A separate timeline answer block also exists in packages/ui/unified-chat/src/components/markdown/AnswerSurface.tsx; the tester may see either.",
+  "reachable": "yes",
+  "steps": [
+   "Ask for a timeline of events in order.",
+   "Check a drawn timeline appears under the answer.",
+   "Click \"Show source\" and then \"Hide source\".",
+   "Click \"Expand diagram\" and check it opens larger."
+  ],
+  "where": "Chat > ask for a timeline (for example \"Make a timeline of ...\") > the diagram card under the answer"
+ },
+ "S22.36": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactCard.tsx",
+    "text": "Open artifact"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Preview"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Fullscreen"
+   }
+  ],
+  "needs": "none",
+  "reachable": "yes",
+  "steps": [
+   "Ask for a small interactive page or React component, such as a counter or a slider.",
+   "Click \"Open artifact\" on the card.",
+   "In the panel, click \"Preview\" and try the controls in the demo.",
+   "Click \"Fullscreen\" and check the demo fills the screen, then return.",
+   "Click \"Source\" to see the code."
+  ],
+  "where": "Chat > ask for an interactive demo (for example \"Build a small interactive ...\") > click \"Open artifact\" on the card"
+ },
+ "S22.37": {
+  "labels": [],
+  "needs": "a connected third-party app that returns an interactive view",
+  "note": "The embedded panel is an iframe titled \"<tool name> interactive result\" in apps/web/features/chat/components/messages/cards/McpAppCard.tsx. I did not find the menu path that connects a third-party app, so no visible path was found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S22.38": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactCard.tsx",
+    "text": "Open artifact"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Fullscreen"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Open in new tab"
+   }
+  ],
+  "needs": "none",
+  "reachable": "yes",
+  "steps": [
+   "Ask the assistant to build a small website or app.",
+   "Click \"Open artifact\" on the card.",
+   "Check the live preview loads in the panel.",
+   "Click \"Fullscreen\" and check the preview expands; click it again to return.",
+   "Open the more menu and click \"Open in new tab\" to check the preview opens in a new tab."
+  ],
+  "where": "Chat > ask for a small app or website (for example \"Build a simple website for ...\") > click \"Open artifact\" on the card"
+ }
+}

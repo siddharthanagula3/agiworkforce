@@ -1,0 +1,652 @@
+{
+ "S83.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Compare plans"
+   },
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Upgrade plan"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/pricing.json",
+    "text": "Compare plans"
+   }
+  ],
+  "needs": "a paid account to see Compare plans; a Free account for Upgrade plan",
+  "note": "The chat upgrade dialog (UpgradePlanDialog.tsx) also has See all plans and a Compare plans link to /pricing; those are a second route to the same comparison.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open Settings, then Billing.",
+   "On a paid plan, click Compare plans. On the Free plan, click Upgrade plan, which opens the plan chooser instead.",
+   "On the pricing page, scroll to the Compare plans heading and the table under it.",
+   "Check that prices, Usage rows and feature rows can be compared across plans before choosing one."
+  ],
+  "where": "Settings > Billing > Compare plans (paid plan); Settings > Billing > Upgrade plan (Free plan)"
+ },
+ "S83.02": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/pricing.json",
+    "text": "Monthly"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/pricing.json",
+    "text": "Annual"
+   }
+  ],
+  "needs": "none for viewing prices; a signed-in account to see the plan-state wording",
+  "note": "The toggle is shown only on the Team & Enterprise tab and only when yearly checkout is ready; the Individual plans on the same page are monthly only in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Billing, then click Compare plans.",
+   "On the pricing page, click the Team & Enterprise button in the audience toggle.",
+   "Find the group with the buttons Monthly and Annual.",
+   "Click Annual, then Monthly, and compare the displayed seat prices and the line that says billed yearly or billed monthly."
+  ],
+  "where": "Settings > Billing > Compare plans > Team & Enterprise tab > Monthly / Annual"
+ },
+ "S83.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Upgrade plan"
+   },
+   {
+    "file": "apps/web/app/upgrade/UpgradeChooser.tsx",
+    "text": "Continue with"
+   },
+   {
+    "file": "apps/web/features/billing/components/UpgradeOrderPanel.tsx",
+    "text": "Subscribe to"
+   }
+  ],
+  "needs": "a Free account that is not on the billing waitlist, and a Stripe test card",
+  "note": "Owner decision is open on this item. Paid checkout is behind the billing waitlist and an access code, so a waitlisted account sees a waitlist or access-code message instead of checkout.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with a Free account and open Settings, then Billing.",
+   "Click Upgrade plan, then click Continue with and the plan name.",
+   "Read the Order details box, then click Subscribe to and the plan name (or Start free trial if shown).",
+   "Expect a Stripe Checkout page to open; then look for the plan showing as active in Billing."
+  ],
+  "where": "Settings > Billing > Upgrade plan > Continue with (plan name) > Subscribe to (plan name)"
+ },
+ "S83.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Switch to a smaller plan"
+   },
+   {
+    "file": "apps/web/features/billing/components/DowngradeReviewDialog.tsx",
+    "text": "Plan price, plus tax"
+   }
+  ],
+  "needs": "a paid Stripe-billed account with no scheduled change; Team and Enterprise plans change in Manage billing instead",
+  "note": "The button is hidden when the account has no Stripe billing, is on a Team or Enterprise plan, or already has a scheduled change.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with a paid Stripe-billed account and open Settings, then Billing.",
+   "Click Switch to a smaller plan.",
+   "In the dialog, pick a plan under the Plan heading and read the panel titled What changes on that plan.",
+   "Look for the rows Plan price, plus tax, Usage, Limits and Not included, and the line that says when the change starts, then compare with the Switch on (date) or Switch to (plan) button."
+  ],
+  "where": "Settings > Billing > Switch to a smaller plan"
+ },
+ "S83.05": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Adjust plan"
+   },
+   {
+    "file": "apps/web/app/upgrade/UpgradeChooser.tsx",
+    "text": "Upgrading starts a new billing period today, with credit for unused time on your plan."
+   },
+   {
+    "file": "apps/web/features/billing/components/UpgradeOrderPanel.tsx",
+    "text": "Total due today"
+   }
+  ],
+  "needs": "a paid Stripe-billed account that has a higher plan to move to, and a Stripe test card",
+  "note": "The proration rows are Stripe lines shown from the preview, so the exact credit amount depends on the account.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with a paid Stripe-billed account and open Settings, then Billing.",
+   "Click Adjust plan, then Continue with and a higher plan name.",
+   "Read the note that starts with Upgrading starts a new billing period today, and the Order details box with its credit row.",
+   "Look for the Total due today line and the renewal sentence below it, and compare them with the note."
+  ],
+  "where": "Settings > Billing > Adjust plan > Continue with (plan name) > Order details"
+ },
+ "S83.06": {
+  "labels": [
+   {
+    "file": "apps/web/features/billing/components/UpgradeOrderPanel.tsx",
+    "text": "Order details"
+   },
+   {
+    "file": "apps/web/features/billing/components/UpgradeOrderPanel.tsx",
+    "text": "Tax is calculated at checkout."
+   }
+  ],
+  "needs": "a Free or paid account; the order box needs a working price preview",
+  "note": "Tax appears as a line only when the preview returns it; otherwise the order box says tax is calculated at checkout.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Billing, then click Upgrade plan (Free) or Adjust plan (paid).",
+   "Click Continue with and a plan name to open the order page.",
+   "Read the Order details box: Subtotal, Tax, Total and Total due today.",
+   "Compare the Tax line with the note Tax is calculated at checkout."
+  ],
+  "where": "Settings > Billing > Upgrade plan > Continue with (plan name) > Order details"
+ },
+ "S83.07": {
+  "labels": [
+   {
+    "file": "apps/web/features/billing/components/UpgradePromotionCode.tsx",
+    "text": "Add a promotion code"
+   },
+   {
+    "file": "apps/web/features/billing/components/UpgradePromotionCode.tsx",
+    "text": "Promotion code"
+   }
+  ],
+  "needs": "a Free or paid account and a valid promotion code",
+  "note": "The same code box is inside the upgrade confirm dialog, which is opened from the chat upgrade flow.",
+  "reachable": "yes",
+  "steps": [
+   "Open the order page: Settings, then Billing, then Upgrade plan, then Continue with and a plan name.",
+   "Click Add a promotion code.",
+   "Type a code into the field with the placeholder Promotion code and click the apply button.",
+   "Check that the Order details box updates with a Discount line, or shows an error if the code is not valid."
+  ],
+  "where": "Settings > Billing > Upgrade plan > Continue with (plan name) > Add a promotion code"
+ },
+ "S83.08": {
+  "labels": [
+   {
+    "file": "apps/web/features/billing/components/UpgradeOrderPanel.tsx",
+    "text": "Start free trial"
+   },
+   {
+    "file": "apps/web/features/billing/components/UpgradeOrderPanel.tsx",
+    "text": "Your free trial ends on"
+   }
+  ],
+  "needs": "a Free account for a plan that offers a trial, and a Stripe test card",
+  "note": "Trial terms are built in apps/web/app/api/checkout/route.ts (trialDisclosure) and in BillingPlanNotices; whether a trial is offered depends on the plan.",
+  "reachable": "yes",
+  "steps": [
+   "Open the order page: Settings, then Billing, then Upgrade plan, then Continue with and a plan name.",
+   "Read the trial line in Order details, which gives the end date and the charge after it.",
+   "Compare the trial line with the button Start free trial, and note that Checkout asks for a card.",
+   "After starting a trial, open Settings > Billing and read the notice that starts with Your and the trial length and says free trial."
+  ],
+  "where": "Settings > Billing > Upgrade plan > Continue with (plan name) > Start free trial"
+ },
+ "S83.09": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Payment"
+   },
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Add payment method"
+   }
+  ],
+  "needs": "an account with no saved card; a Stripe test card",
+  "note": "On the order page, the Payment method box also has an Add button; the card form itself is Stripe-hosted.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with an account that has no card on file and open Settings, then Billing.",
+   "Find the Payment heading and read the line saying No card on file.",
+   "Click Add payment method, which opens the billing portal in a new page (Stripe).",
+   "Add a Stripe test card in the portal, return to Billing and check the card appears under Payment."
+  ],
+  "where": "Settings > Billing > Payment > Add payment method"
+ },
+ "S83.10": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Payment"
+   },
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Manage cards"
+   }
+  ],
+  "needs": "a paid account with at least one saved card",
+  "note": "Setting a default card and removing a card are done in the Stripe portal, not in an AGI control.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Billing, and find the Payment heading.",
+   "Look for the saved card line with a Default tag on the default card.",
+   "Click Manage cards to open the billing portal.",
+   "In the portal, change or remove a card, then return to Billing and check the Payment list again."
+  ],
+  "where": "Settings > Billing > Payment"
+ },
+ "S83.11": {
+  "labels": [
+   {
+    "file": "apps/web/features/billing/components/UpgradeOrderPanel.tsx",
+    "text": "Subscribe to"
+   }
+  ],
+  "needs": "a Free account with checkout open, and a Stripe test card",
+  "note": "No AGI screen has an address field; the address is collected on Stripe's own page (apps/web/lib/billing/tax-policy.ts sets billing_address_collection required).",
+  "reachable": "yes",
+  "steps": [
+   "Start a paid checkout as in S83.03 until the Stripe Checkout page opens.",
+   "On the Stripe page, find the billing address fields, which are required.",
+   "Enter an address, then go back to Settings > Billing to see if it was kept.",
+   "Compare with the address shown in the Stripe billing portal after Manage billing."
+  ],
+  "where": "Settings > Billing > Upgrade plan > Continue with (plan name) > Subscribe to (plan name), then the Stripe Checkout page"
+ },
+ "S83.12": {
+  "labels": [],
+  "needs": "a Free account with checkout open, and a business test customer",
+  "note": "Searched for Tax ID and VAT in apps/web and packages/ui: the code turns on tax_id_collection in Stripe Checkout (apps/web/lib/billing/tax-policy.ts:103), but no AGI screen has a tax ID input; the Tax ID key in packages/ui/i18n/locales/en/pricing.json is not used by any component. Whether Stripe's page shows the field is not verified in code.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S83.13": {
+  "labels": [
+   {
+    "file": "apps/web/app/billing/UpgradeWelcome.tsx",
+    "text": "Payment received."
+   },
+   {
+    "file": "apps/web/app/billing/UpgradeWelcome.tsx",
+    "text": "Checkout confirmed."
+   }
+  ],
+  "needs": "a Free account and a Stripe test card",
+  "note": "The confirmation page lives at /billing after success=true; it shows You're all set. with the plan name.",
+  "reachable": "yes",
+  "steps": [
+   "Complete a paid checkout in Stripe (see S83.03).",
+   "Wait on the page after Stripe returns; the app polls the plan for a short time.",
+   "Look for the heading Payment received. or Checkout confirmed. and the plan name with its status.",
+   "Open Settings > Billing and check the plan name and status match the confirmation."
+  ],
+  "where": "Settings > Billing > Upgrade plan > Continue with (plan name) > Subscribe to (plan name), then return to the app"
+ },
+ "S83.14": {
+  "labels": [
+   {
+    "file": "apps/web/features/billing/components/BillingPlanNotices.tsx",
+    "text": "Update payment method"
+   },
+   {
+    "file": "apps/web/features/billing/components/BillingPlanNotices.tsx",
+    "text": "why a payment fails and what to do"
+   }
+  ],
+  "needs": "a paid Stripe account with a failed renewal",
+  "note": "The notice shows only for past_due or unpaid status; it is not shown on the first payment attempt at checkout, which uses the payment-failure page instead.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with an account whose renewal payment failed (needs a Stripe test card that declines).",
+   "Open Settings, then Billing.",
+   "Look at the red notice that says your payment did not go through and the plan is past due or unpaid.",
+   "Check that the notice names the buttons Update payment method and, when an invoice is open, Pay (amount) now."
+  ],
+  "where": "Settings > Billing (red notice at the top of the plan card)"
+ },
+ "S83.15": {
+  "labels": [
+   {
+    "file": "apps/web/features/billing/components/BillingPlanNotices.tsx",
+    "text": "Update payment method"
+   },
+   {
+    "file": "apps/web/app/payment-failure/page.tsx",
+    "text": "Open billing"
+   }
+  ],
+  "needs": "a paid account with a failed or open invoice, and a Stripe test card",
+  "note": "There is no separate retry button; retry happens by paying the open invoice or updating the card. Try again on the billing page only reloads the data.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with an account in a failed-payment state and open Settings, then Billing.",
+   "Click Update payment method; the billing portal opens in a new page.",
+   "Or click Pay (amount) now to open the open invoice in a new page.",
+   "Also open the link why a payment fails and what to do, which opens the Open billing help page; click Open billing and check the notice returns to a normal state after payment."
+  ],
+  "where": "Settings > Billing > red payment notice > Update payment method or Pay (amount) now"
+ },
+ "S83.16": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Invoices"
+   },
+   {
+    "file": "apps/web/features/billing/components/BillingPaymentHistory.tsx",
+    "text": "Credit purchases"
+   }
+  ],
+  "needs": "a paid account with at least one invoice; a credit purchase for the second list",
+  "note": "The separate /billing/invoices page has no link from any app screen; it can be reached only by typing its address.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Billing.",
+   "Scroll to the Invoices heading and read the list of dates, totals and status.",
+   "Scroll further to the Credit purchases heading and the Refunds heading below it.",
+   "Compare the rows with the purchases you made."
+  ],
+  "where": "Settings > Billing > Invoices, and Settings > Billing > Credit purchases"
+ },
+ "S83.17": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Invoices"
+   },
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "View"
+   }
+  ],
+  "needs": "a paid account with at least one issued invoice",
+  "note": "A PDF link (invoice_pdf) exists only on /billing/invoices (InvoiceList.tsx), which no app screen links to; whether the Stripe-hosted page offers a PDF is not verified in code.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Billing, then find the Invoices list.",
+   "Click the View link on a paid invoice; it opens the invoice in a new page.",
+   "Check the invoice opens with the right date, total and status.",
+   "Look for a PDF download on that page."
+  ],
+  "where": "Settings > Billing > Invoices > View (or Pay for an open invoice)"
+ },
+ "S83.18": {
+  "labels": [
+   {
+    "file": "apps/web/features/billing/components/BillingPaymentHistory.tsx",
+    "text": "View receipt"
+   }
+  ],
+  "needs": "an account that has bought a credit pack",
+  "note": "This list covers credit purchases; plan payments are listed under Invoices, not here.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Billing, and scroll to the Credit purchases list.",
+   "Find a credit purchase row with a View receipt link.",
+   "Click View receipt; it opens the receipt in a new page.",
+   "Check the receipt amount matches the row. Rows with no receipt show Not issued yet."
+  ],
+  "where": "Settings > Billing > Credit purchases > View receipt"
+ },
+ "S83.20": {
+  "labels": [
+   {
+    "file": "apps/web/features/billing/components/BillingPaymentHistory.tsx",
+    "text": "Refunds"
+   },
+   {
+    "file": "apps/web/features/billing/components/BillingPaymentHistory.tsx",
+    "text": "Action needed"
+   }
+  ],
+  "needs": "an account with at least one refund (created by the owner or a Stripe test refund)",
+  "note": "The code has no status labelled requested; the first state shown is Processing.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Billing, and scroll to the Refunds list (newest first).",
+   "Find a refund row and read its status: Processing, Action needed, Refunded, Failed or Canceled.",
+   "Compare the status with the refund's state in the payment provider.",
+   "Check the amount and date on the row."
+  ],
+  "where": "Settings > Billing > Refunds"
+ },
+ "S83.21": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Cancel plan"
+   }
+  ],
+  "needs": "a paid Stripe-billed account (not Apple, Google or organization billing)",
+  "note": "The confirmation happens in the Stripe portal, not in an AGI dialog.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with a paid Stripe-billed account and open Settings, then Billing.",
+   "Click Cancel plan; the billing portal opens on the cancel screen.",
+   "Confirm the cancellation in the portal.",
+   "Return to Billing and check that the plan shows an Ends on date and the button Resume (plan) appears."
+  ],
+  "where": "Settings > Billing > Cancel plan"
+ },
+ "S83.22": {
+  "labels": [
+   {
+    "file": "apps/web/features/billing/components/BillingPlanNotices.tsx",
+    "text": "Resume ${planLabel}"
+   }
+  ],
+  "needs": "a paid Stripe account with a scheduled cancellation",
+  "note": "The same resume control is used for a trial that is set to end ('Continue (plan) after the trial').",
+  "reachable": "yes",
+  "steps": [
+   "After a cancellation (S83.21), open Settings, then Billing.",
+   "Find the notice that says Your (plan) plan ends on (date).",
+   "Click the button Resume (plan name).",
+   "Check that the notice disappears and the Cancel plan button comes back."
+  ],
+  "where": "Settings > Billing > Resume (plan name)"
+ },
+ "S83.23": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Ends on"
+   }
+  ],
+  "needs": "a paid Stripe account with a scheduled cancellation",
+  "note": "The row label changes with the state: Trial ends on, Renews on or Current period ends are the other labels.",
+  "reachable": "yes",
+  "steps": [
+   "Cancel a paid Stripe plan (S83.21).",
+   "Open Settings, then Billing, and look at the plan card rows.",
+   "Find the row labelled Ends on with a date.",
+   "Compare the date with the notice that says Your (plan) plan ends on (date)."
+  ],
+  "where": "Settings > Billing > plan card row Ends on"
+ },
+ "S83.24": {
+  "labels": [
+   {
+    "file": "apps/web/features/billing/components/BillingPlanNotices.tsx",
+    "text": "Free; your chats, projects and files stay."
+   }
+  ],
+  "needs": "a paid Stripe account with a scheduled cancellation",
+  "note": "The same explanation appears on the Upgrade page (apps/web/app/upgrade/UpgradeChooser.tsx) for an ending plan.",
+  "reachable": "yes",
+  "steps": [
+   "Cancel a paid Stripe plan (S83.21).",
+   "Open Settings, then Billing, and read the notice below the plan card.",
+   "Read the sentence starting You keep (plan) features and credits until then.",
+   "Check that it ends with Free; your chats, projects and files stay."
+  ],
+  "where": "Settings > Billing > notice after Cancel plan"
+ },
+ "S83.26": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Manage in the App Store"
+   },
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Manage on Google Play"
+   }
+  ],
+  "needs": "an account billed through the Apple App Store or Google Play",
+  "note": "The Billed through row text comes from BILLING_SOURCE_LABEL in BillingSection.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with an account whose plan is billed by Apple or Google (bought in the mobile app).",
+   "Open Settings, then Billing, and find the Billed through row, which names the store.",
+   "Click Manage in the App Store (or Manage on Google Play); the store page opens in a new window.",
+   "Check that Cancel plan and Switch to a smaller plan are not shown for this account."
+  ],
+  "where": "Settings > Billing > Manage in the App Store or Manage on Google Play"
+ },
+ "S83.27": {
+  "labels": [
+   {
+    "file": "apps/web/app/api/checkout/route.ts",
+    "text": "This account already has an active subscription with our payment provider."
+   }
+  ],
+  "needs": "an account with an active Stripe subscription that the app does not show as paid (hard to set up)",
+  "note": "Paid accounts normally see Adjust plan instead of Upgrade plan, so the warning appears only on a conflict; the code returns it from the server, and no pre-purchase warning dialog was found.",
+  "reachable": "yes",
+  "steps": [
+   "Use an account that already has an active subscription with the payment provider but does not show it as a paid plan.",
+   "Open the order page and click Subscribe to (plan name).",
+   "Read the red error line under the order box.",
+   "Check that the message says to open Billing to manage it, or contact support."
+  ],
+  "where": "Settings > Billing > Upgrade plan > Continue with (plan name) > Subscribe to (plan name)"
+ },
+ "S83.28": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Compare plans"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/pricing.json",
+    "text": "Seats"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/pricing.json",
+    "text": "Get Team"
+   }
+  ],
+  "needs": "a Free account (or a team owner account to test adding seats); a second account is not needed. Paid checkout is held behind the billing waitlist by the owner's decision, so a Free tester may see the waitlist or access-code message instead of checkout.",
+  "note": "The Team button label switches to Join the {plan} waitlist, You're on the waitlist and Enter access code while upgrades are waitlisted (apps/web/app/pricing/page.tsx:424-430 and around line 596). Plain Settings > Workspace > Choose Team seats (apps/web/features/settings/sections/TeamSection.tsx) is the entry for a non-Team user. Whether the Settings entry in the account menu is labelled Settings was not traced; the Settings nav labels are in packages/ui/i18n/locales/en/settings.json.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in as the account that would own the Team workspace. Open Settings, then Billing, then click Compare plans.",
+   "On the Team card, change the number in the Seats box (minimum 2) and read the total line that shows Seats: N and the monthly total.",
+   "Click Get Team. If upgrades are on the waitlist, the button reads Join the Team waitlist, or Enter access code if you already joined.",
+   "Compare with Expected: the seat count is chosen before purchase, and checkout or the waitlist/access-code message appears. For adding seats later, use Settings > Workspace > Seats & billing > Change seats and check the Seats box is pre-filled with the current licensed count."
+  ],
+  "where": "Settings > Billing > Compare plans (opens /pricing) > Team card > Seats box > Get Team. A team owner whose plan already bills per seat sees Update seats instead. Adding seats later: Settings > Workspace > Seats & billing > Change seats (opens /pricing with the seat count)."
+ },
+ "S83.29": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/TeamSection.tsx",
+    "text": "Seats & billing"
+   },
+   {
+    "file": "apps/web/features/settings/sections/TeamSection.tsx",
+    "text": "Licensed"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceBillingSummary.tsx",
+    "text": "Seats used"
+   }
+  ],
+  "needs": "a workspace owner or admin account; a workspace with seat billing (Premium seats) for the dropdown to appear; a second member in the same workspace to change a seat on. Without seat billing the row shows static text instead of the dropdown.",
+  "note": "The seat dropdown is only shown to admins on seat-billed workspaces (TeamSection.tsx, around line 1325). Invitations also reserve a seat (the note Active members and pending invitations each reserve one seat). How a person reaches the Workspace console from the first screen was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in as the workspace owner or an admin. Open Settings, then Workspace.",
+   "Find the card titled Seats & billing and read the Licensed, In use and Available figures.",
+   "On a member row, open the seat dropdown (it reads Standard seat or Premium seat) and pick the other seat type.",
+   "Confirm the dialog that appears, then compare the In use count and the Premium seats assigned count with Expected: admins can assign seats and see seats used against licensed."
+  ],
+  "where": "Settings > Workspace > Seats & billing (figures Licensed, In use, Available, and Premium seats if the workspace bills seats). On each member row, the Seat type dropdown. Workspace console: Workspace > Billing shows Seats used as X of Y."
+ },
+ "S83.30": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/TeamSection.tsx",
+    "text": "Review contract"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceEnterpriseContract.tsx",
+    "text": "Enterprise contract"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceEnterpriseContract.tsx",
+    "text": "Contacts"
+   }
+  ],
+  "needs": "an owner or admin account on a workspace with a contract on record (the contract is entered by billing staff, not in the app). Without a contract, a contract-priced workspace shows No contract is on record for this workspace.; other plans see no contract card at all.",
+  "note": "Review contract shows only when the workspace is contract-priced; otherwise the button reads Change seats. The Billing contact and Procurement contact row labels are in WorkspaceEnterpriseContract.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in as an owner or admin of a workspace that has an enterprise contract on record. Open Settings, then Workspace.",
+   "In the Seats & billing card, click Review contract.",
+   "On the billing page, scroll to the Enterprise contract card and find the Contacts section.",
+   "Read the Billing contact and Procurement contact rows and compare with Expected: each shows a name and email, or Not on record. The card is read only."
+  ],
+  "where": "Settings > Workspace > Seats & billing > Review contract (opens Workspace > Billing) > Enterprise contract > Contacts. Rows: Billing contact and Procurement contact."
+ },
+ "S83.31": {
+  "labels": [
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceEnterpriseContract.tsx",
+    "text": "Payment terms"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceEnterpriseContract.tsx",
+    "text": "Purchase order"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceEnterpriseContract.tsx",
+    "text": "Invoices"
+   }
+  ],
+  "needs": "an owner or admin account on a contract-priced workspace with a contract on record and at least one invoice (created by billing staff, not in the app).",
+  "note": "Offline payment reporting (bank transfer with a remittance reference) exists only as the POST API route apps/web/app/api/settings/organization/billing-contract/route.ts; no button or form for it was found in apps/web or packages/ui, so a person cannot reach it from the UI. Purchase-order buying has no screen either. Only the display of PO and terms is reachable.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in as an owner or admin of a contract-priced workspace. Open Settings, then Workspace, then click Review contract.",
+   "In the Enterprise contract card, read the Payment terms row (Net N, Due on receipt, or As stated on each invoice).",
+   "Read the Purchase order row (a PO number or Not on record).",
+   "Scroll to the Invoices section and read the Invoice, Period, Due, Status and Amount columns, then check the Links column; compare with Expected: PO numbers and invoice terms are shown. Buying by purchase order or reporting a bank transfer has no control on any screen."
+  ],
+  "where": "Settings > Workspace > Seats & billing > Review contract > Enterprise contract card (rows Payment terms and Purchase order) and the Invoices table in the same page."
+ },
+ "S83.32": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Credit history"
+   },
+   {
+    "file": "apps/web/features/billing/components/BillingPaymentHistory.tsx",
+    "text": "Credit purchases"
+   },
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Top-up purchase"
+   }
+  ],
+  "needs": "an account that has bought credits (a top-up). The Credit purchases section appears only when Stripe billing exists for the account.",
+  "note": "The Credit history table holds all credit activity (purchases, refunds, bonuses, usage); the purchase-only list is the Credit purchases section. The /billing/invoices page lists invoices and credit purchases, but no in-app link to it was found.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with an account that has bought credits (a top-up). Open Settings, then Billing.",
+   "Scroll to the Credit history card and read the rows; a credit purchase appears with the description Top-up purchase.",
+   "Scroll further to the Credit purchases section and read each purchase row, including its receipt link.",
+   "Compare with Expected: every credit purchase is listed, newest first. A Free account with no purchases sees No credit activity yet... or No credit purchases yet."
+  ],
+  "where": "Settings > Billing > Credit history (table with Date, Description, Amount), and the Credit purchases section below it."
+ }
+}

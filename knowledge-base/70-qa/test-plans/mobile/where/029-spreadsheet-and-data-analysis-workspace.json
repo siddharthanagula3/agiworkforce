@@ -1,0 +1,78 @@
+{
+ "S29.27": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/CodeExecutionBlock.tsx",
+    "text": "Code Execution"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/CodeExecutionBlock.tsx",
+    "text": "Running Python\u2026"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/CodeRunAgain.tsx",
+    "text": "Run again"
+   }
+  ],
+  "needs": "a Free or paid account; the run may ask for approval first (plan requirement not verified in the code); a phone or Mac with the app signed in",
+  "note": "The plan's line numbers were stale; the feature was found in CodeExecutionBlock.tsx, MessageBubble.tsx (renders it) and CodeRunAgain.tsx. Chart display under the output was not traced to a visible label, and the entry route into the panel depends on the model deciding to run code, so the exact words in the reply are not known.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a chat on the main chat screen.",
+   "Send a request that needs Python, for example: \"Using this small table of numbers I type, calculate the average and draw a chart in Python.\" Type the numbers in the message.",
+   "Wait for the reply. Look for the block titled \"Code Execution\" under the reply; it shows \"Running Python\u2026\" while it runs.",
+   "Tap the \"Code Execution\" block to expand it and check that the \"Output\" heading shows the printed result.",
+   "Look for the code the run used (its code card in the tool row) and for any chart drawn below the output, and compare with Expected: code, output and charts all visible. Optionally tap \"Run again\" to repeat the run."
+  ],
+  "where": "Chat screen > send a message asking for Python analysis of some data > under the assistant's reply, the block titled \"Code Execution\" (status \"Running Python\u2026\"); tap it to expand \"Output\"; the run's code is in the tool row, where \"Run again\" re-runs it"
+ },
+ "S29.35": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/MessageContentRenderer.tsx",
+    "text": "Download table as CSV"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/artifact-viewers/TabularGridView.tsx",
+    "text": "Share as CSV"
+   }
+  ],
+  "needs": "a signed-in account and a chat that contains a table; a phone or Mac to see the share sheet",
+  "note": "The plan's line 394 moved; the table download control is now at MessageContentRenderer.tsx lines 373-379 and 438-442. The CSV download is also present in the spreadsheet viewer as \"Share as CSV\".",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a chat where the assistant has returned a table (ask for a small table, e.g. \"make a table of 3 fruits and their prices\").",
+   "Find the table's action buttons in the table header area and tap the one labeled \"Download table as CSV\".",
+   "Check that the share sheet opens with a file ending in .csv (the file name is built from the table title or \"table\").",
+   "Optional route: open a CSV file artifact and tap the icon labeled \"Share as CSV\", then check the share sheet and that a .csv file is offered."
+  ],
+  "where": "Chat screen > an assistant answer that contains a table > tap the table's \"Download table as CSV\" button (an icon; its label is that text), then the share sheet opens. Or open a CSV/spreadsheet file in the answer's artifact view and tap the share icon labeled \"Share as CSV\""
+ },
+ "S29.36": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ReportChart.tsx",
+    "text": "Save image"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ReportChart.tsx",
+    "text": "Show data"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ReportChart.tsx",
+    "text": "Could not save the chart"
+   }
+  ],
+  "needs": "a signed-in account and a chat answer that contains a chart; a phone or Mac to see the share sheet",
+  "note": "The plan's line numbers were stale; the export is at ReportChart.tsx lines 817-836 and the button at 910-924, and it calls exportPngImage in apps/mobile/services/fileCreation.ts. The only export is a PNG image, not a data file.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a chat where the assistant returns a chart (ask for a simple bar or line chart of a few values).",
+   "Look at the chart's footer row for the buttons \"Show data\" and \"Save image\".",
+   "Tap \"Save image\"; the label changes to \"Saving\u2026\" while it works, then the share sheet opens with a PNG picture of the chart.",
+   "If saving fails, check that the alert \"Could not save the chart\" appears instead of a share sheet.",
+   "Compare with Expected: the user can export the chart as an image file. Tap \"Show data\" to confirm the table of values is also visible."
+  ],
+  "where": "Chat screen > an assistant answer that shows a chart > tap \"Show data\" to see the numbers, and tap \"Save image\" at the bottom of the chart to save it as a picture through the share sheet"
+ }
+}

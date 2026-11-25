@@ -1,0 +1,132 @@
+{
+ "S58.01": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/index.tsx",
+    "text": "No connectors connected yet."
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/index.tsx",
+    "text": "Not connected"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account with Connectors access (tier-dependent) and at least one connector or custom MCP server added",
+  "note": "The quoted Code lines moved; the list is rendered in apps/mobile/src/features/settings/cloud-connectors/index.tsx (ConnectorCard and the filtered rows). The Settings entry control (how the tester first opens Settings) was not confirmed; the path above starts at the Settings screen. Listing is per signed-in account; I found no workspace-level list.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and tap Cloud, then tap Connectors.",
+   "Wait for the connector list to load (a loading label may show first).",
+   "Look at the filter chips (All, Connected, Custom) and the connector rows; each row shows a status such as Connected or Not connected.",
+   "Compare with Expected: your configured MCP servers (custom ones show under the Custom filter) should appear in this list."
+  ],
+  "where": "Settings > Cloud > Connectors"
+ },
+ "S58.03": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/index.tsx",
+    "text": "Add custom MCP"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/AddCustomConnectorModal.tsx",
+    "text": "Add custom MCP connector"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/AddCustomConnectorModal.tsx",
+    "text": "Add a remote MCP server by its HTTPS URL to use its tools in chat."
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account with Connectors access, and a remote MCP server HTTPS URL to test with",
+  "note": "The URL must be HTTPS (the modal shows a reason line for a non-HTTPS URL). The Add button text is just Add; the sheet's accessibility label is Add connector.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, tap Cloud, then tap Connectors.",
+   "Scroll to the bottom of the list and tap Add custom MCP.",
+   "In the Add custom MCP connector sheet, type a Name, type an https:// Connector URL, and optionally an Auth token, then tap Add.",
+   "Look for the new server in the connector list (filter Custom) with a status; compare with Expected. Tool use in chat is at the + sheet under Connectors (apps/mobile/src/features/chat/components/AddToChatSheet.tsx), not confirmed on device."
+  ],
+  "where": "Settings > Cloud > Connectors > Add custom MCP"
+ },
+ "S58.06": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/AddCustomConnectorModal.tsx",
+    "text": "Auth token (optional)"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorApiKeySheet.tsx",
+    "text": "Test and save"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx",
+    "text": "Connect"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account with Connectors access, and a valid token or API key or an outside account to sign in to",
+  "note": "Secure storage is server-side: the custom connector's description reads Your encrypted remote MCP endpoint (apps/mobile/src/features/settings/cloud-connectors/index.tsx). I did not confirm the on-device storage mechanism. The Connect button is shown only for listings not yet connected, so its exact condition was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "For a custom server: open Settings, tap Cloud, tap Connectors, tap Add custom MCP.",
+   "Type the URL and fill the Auth token (optional) field; the field hides the text as you type.",
+   "Tap Add, then open the new server and check that it shows as connected.",
+   "For a listed connector: open it from the Connectors list and tap Connect. For an API-key connector, enter the key in the sheet and tap Test and save; for an account sign-in connector, follow the sign-in step that opens. Compare with Expected: the token or key is accepted and the connector shows as connected, with no key shown back."
+  ],
+  "where": "Settings > Cloud > Connectors > Add custom MCP (Auth token field); for a listed connector, Settings > Cloud > Connectors > [connector name] > Connect"
+ },
+ "S58.08": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx",
+    "text": "Tool permissions"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx",
+    "text": "Read-only tools"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx",
+    "text": "Loading tools\u2026"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account with Connectors access and a connected MCP server or connector",
+  "note": "Tool names are read from the catalog only after the connector is connected; an unconnected listing shows a note that it lists tools once connected.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, tap Cloud, tap Connectors, and tap a connector that is Connected.",
+   "Scroll down to the Tool permissions heading.",
+   "Wait for Loading tools to finish; if it fails, tap Retry loading tools.",
+   "Look at the groups Read-only tools and Write and delete tools and the tool names under them. Compare with Expected: the connector's tools are listed."
+  ],
+  "where": "Settings > Cloud > Connectors > [a connected connector] > Tool permissions"
+ },
+ "S58.12": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorTrustSections.tsx",
+    "text": "Connection health"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorCallLog.tsx",
+    "text": "Recent calls"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorTrustSections.tsx",
+    "text": "Check again"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account with Connectors access, a connected connector, and ideally a few tool calls made in chat first",
+  "note": "The Recent calls copy says it shows what the connector was asked to do, without arguments or results. I did not confirm the empty-state text shown before any calls exist.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, tap Cloud, tap Connectors, and tap a connected connector.",
+   "Scroll to the Connection health card and read its state and summary line.",
+   "Tap Check again to refresh the health reading.",
+   "Scroll to the Recent calls section and read the rows (outcomes Worked, Failed or Blocked here). Compare with Expected: health and recent call history are visible for this server."
+  ],
+  "where": "Settings > Cloud > Connectors > [a connected connector] > Connection health (then Recent calls below it)"
+ }
+}

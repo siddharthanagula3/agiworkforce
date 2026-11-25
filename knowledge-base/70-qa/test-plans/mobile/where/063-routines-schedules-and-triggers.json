@@ -1,0 +1,360 @@
+{
+ "S63.01": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/schedules/index.tsx",
+    "text": "Try a template"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Schedules"
+   }
+  ],
+  "needs": "a paid account (Basic or above) with AGI Cloud switched on",
+  "note": "The gallery only shows when the account can create schedules; Free accounts see a lock message instead.",
+  "reachable": "yes",
+  "steps": [
+   "Tap the Open menu button (it has no visible text) and tap Schedules.",
+   "Scroll to the bottom of the list. If there are no routines, the empty screen shows the gallery.",
+   "Look under the heading Try a template for the ready-made cards (for example Weekly review).",
+   "Tap a card and check that the Create form opens with that template filled in."
+  ],
+  "where": "Open menu > Schedules > scroll to the bottom > Try a template"
+ },
+ "S63.02": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/schedules/components/QuickSchedule.tsx",
+    "text": "Schedule a task"
+   },
+   {
+    "file": "apps/mobile/src/features/schedules/components/QuickSchedule.tsx",
+    "text": "Create Schedule"
+   }
+  ],
+  "needs": "a paid account (Basic or above) with AGI Cloud switched on",
+  "note": "The arrow button is an icon with no visible text; its accessibility label is Continue scheduling task.",
+  "reachable": "yes",
+  "steps": [
+   "Open Schedules from the Open menu.",
+   "Tap the Schedule a task box at the bottom and type a prompt, for example: Summarise today's news headlines.",
+   "Tap the arrow button (Continue scheduling task), type a time such as Every day at 9am in When should it run?, then tap Create Schedule.",
+   "Check that a new card with your prompt appears in the list."
+  ],
+  "where": "Open menu > Schedules > Schedule a task box at the bottom > Continue scheduling task (arrow) > Create Schedule"
+ },
+ "S63.05": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/schedules/components/ScheduleForm.tsx",
+    "text": "Prompt"
+   },
+   {
+    "file": "apps/mobile/src/features/schedules/components/ScheduleForm.tsx",
+    "text": "Save Changes"
+   }
+  ],
+  "needs": "a paid account (Basic or above) with AGI Cloud switched on",
+  "reachable": "yes",
+  "steps": [
+   "Open Schedules and tap the + icon at the top right (accessibility label Create schedule).",
+   "Tap the Prompt box and type several lines of instructions; press return to start a new line.",
+   "Tap Create Schedule, then tap the new card to open it for editing.",
+   "Check that the Prompt box still shows the full multi-line text, then change one line and tap Save Changes."
+  ],
+  "where": "Open menu > Schedules > + (Create schedule) > Prompt"
+ },
+ "S63.11": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/schedules/components/RecurrencePicker.tsx",
+    "text": "Once"
+   },
+   {
+    "file": "apps/mobile/src/features/schedules/components/RecurrencePicker.tsx",
+    "text": "Date"
+   },
+   {
+    "file": "apps/mobile/src/features/schedules/components/RecurrencePicker.tsx",
+    "text": "Recurrence"
+   }
+  ],
+  "needs": "a paid account (Basic or above) with AGI Cloud switched on",
+  "reachable": "yes",
+  "steps": [
+   "Open Schedules, tap the + icon (Create schedule).",
+   "Under Recurrence tap Once, then tap the Date field and pick a future date.",
+   "Set Preferred time, enter a name and prompt, then tap Create Schedule.",
+   "Check that the card shows Once on <month> <day> at <time> and that Next run shows a future time."
+  ],
+  "where": "Open menu > Schedules > + (Create schedule) > Recurrence > Once > Date"
+ },
+ "S63.12": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/schedules/components/RecurrencePicker.tsx",
+    "text": "Daily"
+   },
+   {
+    "file": "apps/mobile/src/features/schedules/components/RecurrencePicker.tsx",
+    "text": "Weekly"
+   },
+   {
+    "file": "apps/mobile/src/features/schedules/components/RecurrencePicker.tsx",
+    "text": "Monthly"
+   }
+  ],
+  "needs": "a paid account (Basic or above) with AGI Cloud switched on",
+  "note": "The card note says runs are checked on a sweep, so a run can start later in the Cloud window.",
+  "reachable": "yes",
+  "steps": [
+   "Open Schedules, tap the + icon (Create schedule).",
+   "Under Recurrence tap Daily, Weekly or Monthly. For Weekly tap the day chips (Su to Sa); for Monthly pick a Day of Month.",
+   "Set Preferred time, enter a name and prompt, then tap Create Schedule.",
+   "Check the card text: Daily at <time>, Every <days> at <time>, or Monthly on the <n>th at <time>, and that Next run changes to match."
+  ],
+  "where": "Open menu > Schedules > + (Create schedule) > Recurrence > Daily, Weekly or Monthly"
+ },
+ "S63.13": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/schedules/components/TimezonePickerField.tsx",
+    "text": "Time zone"
+   },
+   {
+    "file": "apps/mobile/src/features/schedules/components/TimezonePickerField.tsx",
+    "text": "Search time zones"
+   }
+  ],
+  "needs": "a paid account (Basic or above) with AGI Cloud switched on",
+  "reachable": "yes",
+  "steps": [
+   "Open Schedules, tap the + icon (Create schedule) and scroll down to the Time zone field.",
+   "Tap the Time zone field (accessibility label starts with Time zone:), type a city in Search time zones, and pick a zone.",
+   "Set a Preferred time, then tap Create Schedule.",
+   "Tap the card to edit it and check that Time zone still shows the zone you picked."
+  ],
+  "where": "Open menu > Schedules > + (Create schedule) > scroll down to Time zone"
+ },
+ "S63.19": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/schedules/components/ScheduleCard.tsx",
+    "text": "Run now"
+   },
+   {
+    "file": "apps/mobile/src/features/schedules/components/ScheduleCard.tsx",
+    "text": "History"
+   }
+  ],
+  "needs": "a paid account (Basic or above) with AGI Cloud switched on and a routine that is switched on",
+  "note": "A paused routine has no Run now; the card hint says Resume this schedule to run it now.",
+  "reachable": "yes",
+  "steps": [
+   "Open Schedules and find a routine whose switch is on.",
+   "Tap its More actions button (...), then tap Run now.",
+   "Watch the card: it shows Starting... and the History section opens.",
+   "Check that a new run row appears in Run History with a status and time, and that Last run updates once it finishes."
+  ],
+  "where": "Open menu > Schedules > card's More actions (...) button > Run now"
+ },
+ "S63.20": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/schedules/components/ScheduleCard.tsx",
+    "text": "Next run"
+   }
+  ],
+  "needs": "a paid account (Basic or above) with AGI Cloud switched on",
+  "reachable": "yes",
+  "steps": [
+   "Open Schedules and look at the bottom left of a card.",
+   "Read the Next run text (for example in 2h, tomorrow, Overdue or Not scheduled).",
+   "Pause the routine with its switch, then check that the text changes to show it will not run.",
+   "Resume it and check that the text shows a time again."
+  ],
+  "where": "Open menu > Schedules > card, line Next run"
+ },
+ "S63.21": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/schedules/components/ScheduleCard.tsx",
+    "text": "Last run failed"
+   },
+   {
+    "file": "apps/mobile/src/features/schedules/components/ScheduleCard.tsx",
+    "text": "Not run yet"
+   }
+  ],
+  "needs": "a paid account (Basic or above) with AGI Cloud switched on and a routine that has run at least once",
+  "reachable": "yes",
+  "steps": [
+   "Open Schedules and read the line under each card's prompt.",
+   "Check the text: Last run <time ago>, Last run failed <time ago> (in red), or Not run yet.",
+   "Run a routine with Run now and check the line updates after the run.",
+   "Compare with Expected: the line should show when it last ran and whether it failed."
+  ],
+  "where": "Open menu > Schedules > card, line under the prompt"
+ },
+ "S63.22": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/schedules/components/ScheduleRunHistory.tsx",
+    "text": "Run History"
+   },
+   {
+    "file": "apps/mobile/app/(app)/schedules/runs.tsx",
+    "text": "Scheduled runs"
+   },
+   {
+    "file": "apps/mobile/src/features/schedules/components/ScheduleRunHistory.tsx",
+    "text": "No runs yet"
+   }
+  ],
+  "needs": "a paid account (Basic or above) with AGI Cloud switched on and a routine that has runs",
+  "note": "The card shows the latest five runs; the full list is on the Scheduled runs screen.",
+  "reachable": "yes",
+  "steps": [
+   "Open Schedules and tap History at the bottom right of a card.",
+   "Read the Run History list under the card: each row shows a status, a duration and a time.",
+   "Tap the refresh icon (Refresh run history) to reload.",
+   "Tap the clock icon at the top (Scheduled runs) to see runs from all routines, and compare with Expected."
+  ],
+  "where": "Open menu > Schedules > card > History > Run History"
+ },
+ "S63.23": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/schedules/components/ScheduleRunHistory.tsx",
+    "text": "Run History"
+   },
+   {
+    "file": "apps/mobile/src/features/schedules/components/ScheduleRunHistory.tsx",
+    "text": "Report this run"
+   }
+  ],
+  "needs": "a paid account (Basic or above) with AGI Cloud switched on and a routine with a finished run that has output",
+  "note": "There is no separate run page; the output shows inside the run row, and the Scheduled runs rows open the routine editor instead.",
+  "reachable": "yes",
+  "steps": [
+   "Open Schedules, tap History on a card that has runs.",
+   "Look at a run row: the result text appears under its status line, up to six lines.",
+   "Long-press the result text to select it, or tap the flag icon (Report this run) if you want to report it.",
+   "Compare with Expected: the row should show what that run produced, not only its status."
+  ],
+  "where": "Open menu > Schedules > card > History > run row text"
+ },
+ "S63.24": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/schedules/components/ScheduleCard.tsx",
+    "text": "Pause"
+   },
+   {
+    "file": "apps/mobile/src/features/schedules/components/ScheduleCard.tsx",
+    "text": "Resume"
+   }
+  ],
+  "needs": "a paid account (Basic or above) with AGI Cloud switched on",
+  "reachable": "yes",
+  "steps": [
+   "Open Schedules and turn off the switch at the top right of a card.",
+   "Check that the card stays in the list and its Next run text changes.",
+   "Tap its More actions button (...) and tap Resume.",
+   "Check the switch is on again and the routine was not deleted."
+  ],
+  "where": "Open menu > Schedules > card switch (top right) or More actions (...) > Pause / Resume"
+ },
+ "S63.26": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/schedules/components/ScheduleForm.tsx",
+    "text": "Save Changes"
+   },
+   {
+    "file": "apps/mobile/src/features/schedules/components/ScheduleCard.tsx",
+    "text": "Edit"
+   }
+  ],
+  "needs": "a paid account (Basic or above) with AGI Cloud switched on",
+  "note": "A routine with an unsupported cadence shows Edit this cadence on Web and cannot be edited on mobile.",
+  "reachable": "yes",
+  "steps": [
+   "Open Schedules and tap a card's body, or open its More actions button (...) and tap Edit.",
+   "Change the Schedule Name, the Preferred time or the prompt.",
+   "Tap Save Changes.",
+   "Reopen the same card and check the new values are shown on the card and in the form."
+  ],
+  "where": "Open menu > Schedules > tap the card (or More actions (...) > Edit) > Save Changes"
+ },
+ "S63.27": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/schedules/deleteConfirmation.ts",
+    "text": "Delete schedule?"
+   },
+   {
+    "file": "apps/mobile/src/features/schedules/components/ScheduleCard.tsx",
+    "text": "Delete"
+   }
+  ],
+  "needs": "a paid account (Basic or above) with AGI Cloud switched on",
+  "note": "The edit form also has a Delete Schedule button that goes to the same dialog.",
+  "reachable": "yes",
+  "steps": [
+   "Open Schedules and tap a card's More actions button (...), then tap Delete.",
+   "Read the Delete schedule? dialog, then tap Cancel and check the card is still there.",
+   "Repeat, and tap Delete in the dialog.",
+   "Check the card disappears from the list and its Run History no longer appears."
+  ],
+  "where": "Open menu > Schedules > card's More actions (...) > Delete > Delete schedule?"
+ },
+ "S63.32": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/schedules/components/ScheduleRunHistory.tsx",
+    "text": "Needs approval"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Approve"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Deny"
+   }
+  ],
+  "needs": "a paid account (Basic or above) with AGI Cloud switched on and a scheduled run that is waiting for approval",
+  "note": "The approval request is created by the server during an unattended run, so a tester cannot start one from the app; the approval block itself is in apps/mobile/src/features/schedules/components/ScheduleRunHistory.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Open Schedules and find a card that says Paused for your approval, so approve or deny it in History.",
+   "Tap History on that card.",
+   "Find the run row marked Needs approval and read the tool action it asks for.",
+   "Tap Approve, then check the run continues; or tap Deny and check the run stops."
+  ],
+  "where": "Open menu > Schedules > card text Paused for your approval > History > Needs approval > Approve or Deny"
+ },
+ "S63.33": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/schedules/components/ScheduleRunHistory.tsx",
+    "text": "Run History"
+   },
+   {
+    "file": "packages/contracts/cloud-contracts/src/schedules.ts",
+    "text": "Ran late: scheduled for"
+   }
+  ],
+  "needs": "a paid account (Basic or above) with AGI Cloud switched on and a routine whose run was missed or skipped by the server",
+  "note": "The note comes from the server's missed-run record, so a tester cannot force a missed run from the app; the mobile rendering is in apps/mobile/src/features/schedules/components/ScheduleRunHistory.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Open Schedules and tap History on a card.",
+   "Look at a run row for a note under its status line: Ran late: scheduled for <time>, or Skipped the run scheduled for <time>.",
+   "Read the reason in the note (missed by a set amount of time, and whether the schedule skips missed runs).",
+   "Compare with Expected: the run history should say that a run was skipped or late and why."
+  ],
+  "where": "Open menu > Schedules > card > History > Run History row note"
+ }
+}

@@ -1,0 +1,50 @@
+{
+ "S32.06": {
+  "labels": [],
+  "needs": "live-web",
+  "note": "The plan's Code line names no file, and the Chrome extension has no design-element editing. I searched apps/extension for contenteditable, inline edit, design canvas, design workspace and design mode and found nothing relevant. The only design hits are design-token imports and colour styling.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S32.26": {
+  "labels": [],
+  "needs": "live-web",
+  "note": "The plan's Code line names no file, and apps/extension has no prototype feature. I searched for prototype, interaction, navigate-between-screens and screen terms. The only 'prototype' hits are JavaScript prototype accesses in content.ts and jobAutofill.runtime.js.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S32.27": {
+  "labels": [],
+  "needs": "live-web",
+  "note": "The plan's Code line names no file, and apps/extension has no interactive-state preview for a design. The hover, pressed, disabled and empty matches are CSS states on the options page and side panel, and a hover action in content.ts that is a browser automation step, not a design preview.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S32.31": {
+  "labels": [],
+  "needs": "live-web",
+  "note": "The plan's Code line names no file, and apps/extension has no export-to-HTML feature. I searched for export html, download html and standalone export terms and found none.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S32.33": {
+  "labels": [],
+  "needs": "live-web",
+  "note": "The plan's Code line names no file, and apps/extension has no design export to image or archive. I searched for export, archive, image download and zip terms. The only hits are icon helpers in assets/icons.ts and the package verification script, which is a build step, not a user feature.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S32.34": {
+  "labels": [],
+  "needs": "live-web",
+  "note": "The plan's Code line names no file, and apps/extension has no design version comparison or restore feature. I searched for version history, restore version and compare terms. The only 'compare' hit is a chat-intent regex in chat-state.ts, and the only 'version' hits are the extension's own version metadata.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ }
+}

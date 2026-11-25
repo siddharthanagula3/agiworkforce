@@ -1,0 +1,563 @@
+{
+ "S57.01": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/lib/slashCommands.ts",
+    "text": "/search"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-display.ts",
+    "text": "Searched the web"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/WebSearchCard.tsx",
+    "text": "Web search"
+   }
+  ],
+  "needs": "none",
+  "note": "Whether a search runs on a given turn is decided by the model and the plan, so the tester may need to repeat the request.",
+  "reachable": "yes",
+  "steps": [
+   "On the chat screen, click the message box and type /search latest AI news.",
+   "Press Send.",
+   "Watch the reply: a tool row shows 'Search the web' or 'Searched the web' and a 'Web search' card lists the results.",
+   "Click the 'Used tools' row to expand it and check that the searches and their sources are listed."
+  ],
+  "where": "Chat screen > message box > type /search latest AI news > Send. The web search also runs on its own when the model decides it needs current information."
+ },
+ "S57.02": {
+  "labels": [
+   {
+    "file": "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts",
+    "text": "Fetching"
+   }
+  ],
+  "needs": "none",
+  "note": "The fetch row text is built from the host name, so the exact words depend on the address used.",
+  "reachable": "yes",
+  "steps": [
+   "Click the message box and paste a full page address such as https://example.com.",
+   "Type: read this page and tell me what it says.",
+   "Press Send.",
+   "Look for a tool row that reads 'Fetching' followed by the host name, then check that the reply uses the page's content."
+  ],
+  "where": "Chat screen > message box > paste a page address (https://...) and ask 'read this page and tell me what it says' > Send."
+ },
+ "S57.03": {
+  "labels": [],
+  "needs": "none",
+  "note": "The plan says this is unfinished (switch-on of the url-fetch description in routing-policies.json is pending) and I found no user control for opening a cited PDF, Office file or page by reference; searched apps/web for the fetch tool name and the source-reader wording and found only the fetch tool.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S57.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Add photos & files"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Add from library"
+   }
+  ],
+  "needs": "a file to upload",
+  "note": "The search tool row has no fixed visible name in the code I read, so it may appear under its raw tool name.",
+  "reachable": "yes",
+  "steps": [
+   "Click + and choose Add photos & files, then attach two or more files.",
+   "Type a question such as: which of these files mentions invoices?",
+   "Press Send.",
+   "Look for a tool row for the file search and check that the reply names matching files or shows snippets."
+  ],
+  "where": "Chat screen > + (Add attachments and tools) > Add photos & files > attach two or more files > message box: ask which file mentions a word > Send."
+ },
+ "S57.05": {
+  "labels": [],
+  "needs": "none",
+  "note": "The plan says the sandbox file-read tool is switched off until AGI_E2B_EXECUTION and E2B_API_KEY are set in production; I found the gate in apps/web/lib/e2b/gate.ts but no user control that reads a named file.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S57.06": {
+  "labels": [],
+  "needs": "none",
+  "note": "The plan says the sandbox file-write tool is switched off until AGI_E2B_EXECUTION and E2B_API_KEY are set in production; I found the gate in apps/web/lib/e2b/gate.ts but no user control that writes a named file.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S57.07": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Output"
+   },
+   {
+    "file": "packages/contracts/cloud-contracts/src/skills.ts",
+    "text": "Spreadsheet"
+   }
+  ],
+  "needs": "none",
+  "note": "The Output rows appear only for models that can create Office files.",
+  "reachable": "yes",
+  "steps": [
+   "Click + and open the Output group.",
+   "Click Spreadsheet so it is checked.",
+   "Type: make a spreadsheet of three months of expenses.",
+   "Press Send and look for a file card for an .xlsx file with a download or open control."
+  ],
+  "where": "Chat screen > + (Add attachments and tools) > Output > Spreadsheet, then ask for a spreadsheet and press Send."
+ },
+ "S57.08": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Output"
+   },
+   {
+    "file": "packages/contracts/cloud-contracts/src/skills.ts",
+    "text": "Document"
+   }
+  ],
+  "needs": "none",
+  "note": "The Output rows appear only for models that can create Office files.",
+  "reachable": "yes",
+  "steps": [
+   "Click + and open the Output group.",
+   "Click Document so it is checked.",
+   "Type: write a one-page letter thanking a customer.",
+   "Press Send and look for a file card for a .docx file with a download or open control."
+  ],
+  "where": "Chat screen > + (Add attachments and tools) > Output > Document, then ask for a document and press Send."
+ },
+ "S57.09": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Output"
+   },
+   {
+    "file": "packages/contracts/cloud-contracts/src/skills.ts",
+    "text": "Presentation"
+   }
+  ],
+  "needs": "none",
+  "note": "The Output rows appear only for models that can create Office files.",
+  "reachable": "yes",
+  "steps": [
+   "Click + and open the Output group.",
+   "Click Presentation so it is checked.",
+   "Type: make a five-slide deck about our quarterly results.",
+   "Press Send and look for a file card for a .pptx file with a download or open control."
+  ],
+  "where": "Chat screen > + (Add attachments and tools) > Output > Presentation, then ask for a presentation and press Send."
+ },
+ "S57.10": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/lib/slashCommands.ts",
+    "text": "/code"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-display.ts",
+    "text": "Run code"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-display.ts",
+    "text": "Ran code"
+   }
+  ],
+  "needs": "none",
+  "note": "The Run code option is also in the + menu as an active chip, and the Capabilities setting 'Cloud code execution and file creation' is in Settings.",
+  "reachable": "yes",
+  "steps": [
+   "Click the message box and type /code chart the first 20 prime numbers.",
+   "Press Send.",
+   "Watch the tool row: it reads 'Running code' while it runs and 'Ran code' when done.",
+   "Expand the row and check that the output of the code appears in the transcript."
+  ],
+  "where": "Chat screen > message box > type /code chart the first 20 prime numbers > Send."
+ },
+ "S57.11": {
+  "labels": [],
+  "needs": "none",
+  "note": "The plan says the sandbox shell tool is switched off until the production E2B switch is set; the + menu has a 'Run a local command' row (ComposerPlusMenu.tsx) that may be a desktop-only shell, not verified.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S57.12": {
+  "labels": [],
+  "needs": "none",
+  "note": "The plan says the sandbox patch tool is switched off until the production E2B switch is set; I found no user control for targeted edits of an existing file.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S57.16": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Create image"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/lib/slashCommands.ts",
+    "text": "/image"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/lib/slashCommands.ts",
+    "text": "Generate an image"
+   }
+  ],
+  "needs": "none",
+  "note": "The Create image row shows only when the host can generate images.",
+  "reachable": "yes",
+  "steps": [
+   "Click + and choose Create image, or click the message box and type /image a futuristic city at dusk.",
+   "Type or keep a short picture description.",
+   "Press Send.",
+   "Look for the generated image in the reply, under the tool row that shows image creation."
+  ],
+  "where": "Chat screen > + (Add attachments and tools) > Create image, then type a picture description > Send. Or type /image a futuristic city at dusk > Send."
+ },
+ "S57.17": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "What to do with the attached image"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Edit"
+   }
+  ],
+  "needs": "a file to upload",
+  "note": "The Edit, Variation and Mask edit choices appear only in image mode after an image is attached; I did not trace how the tester enters image mode beyond the Create image row.",
+  "reachable": "yes",
+  "steps": [
+   "Click + and choose Add photos & files, then attach one image.",
+   "Click the button labelled 'What to do with the attached image' and choose Edit.",
+   "Type the change you want, for example: make the sky red.",
+   "Press Send and look for the edited image in the reply."
+  ],
+  "where": "Chat screen > + (Add attachments and tools) > Add photos & files > attach one image > click the button 'What to do with the attached image' > choose Edit > type a change > Send."
+ },
+ "S57.21": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/components/web-settings-navigation.ts",
+    "text": "Persistent memory"
+   },
+   {
+    "file": "apps/web/features/settings/components/web-settings-navigation.ts",
+    "text": "Save memories from chats"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Memory"
+   }
+  ],
+  "needs": "none",
+  "note": "I did not find a visible name for the save-memory tool row, so it may show under a raw tool name.",
+  "reachable": "yes",
+  "steps": [
+   "Click the message box and type: remember that I like short answers.",
+   "Press Send.",
+   "Open Settings and click Personalization, then Persistent memory.",
+   "Check that the saved fact appears in the memory list, and that Save memories from chats is on."
+  ],
+  "where": "Chat screen > message box > type 'remember that I like short answers' > Send. Then Settings > Personalization > Persistent memory."
+ },
+ "S57.22": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Google Calendar"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/settings.json",
+    "text": "Connectors"
+   }
+  ],
+  "needs": "an outside account (Google)",
+  "note": "The plan says the Google Calendar OAuth client is not yet set in production, so connecting may fail; Outlook calendar needs Microsoft app credentials too.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Connectors.",
+   "Find Google Calendar and connect it with your account.",
+   "Back in a chat, type: what is on my calendar today?",
+   "Press Send and look for a tool row that reads the calendar, then check the reply lists the events."
+  ],
+  "where": "Settings > Connectors > Google Calendar (connect it), then chat: ask what is on my calendar today."
+ },
+ "S57.23": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Slack"
+   }
+  ],
+  "needs": "an outside account (Slack)",
+  "note": "Use a test channel only, because the send is real.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, click Connectors, and connect Slack.",
+   "Back in a chat, type: send 'hello from QA' to a Slack channel you own.",
+   "Press Send and wait for the approval card.",
+   "Approve it and check that the tool row shows completed and the message arrives in Slack."
+  ],
+  "where": "Settings > Connectors > Slack (connect it), then chat: ask the assistant to send a message to a channel and approve it when asked."
+ },
+ "S57.24": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/SchedulesPage.tsx",
+    "text": "New task"
+   },
+   {
+    "file": "apps/web/features/schedules/components/SchedulesPage.tsx",
+    "text": "Scheduled"
+   },
+   {
+    "file": "apps/web/features/chat/components/ChatsAndTasksList.tsx",
+    "text": "Tasks"
+   }
+  ],
+  "needs": "none",
+  "note": "The sidebar label 'Tasks' was read from code, not confirmed on screen.",
+  "reachable": "yes",
+  "steps": [
+   "In the sidebar, open Tasks and then the scheduled page.",
+   "Click New task, fill in a name and what it should do, choose a time, and save.",
+   "Check the page lists the new task under Scheduled.",
+   "Optionally, in a chat, ask the assistant to schedule a task and check it appears on the same page."
+  ],
+  "where": "Tasks > New task (scheduled page), or chat: type 'remind me every day at 9am to check the report' > Send."
+ },
+ "S57.26": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/cards/ClarifyCard.tsx",
+    "text": "Send answers"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/cards/ClarifyCard.tsx",
+    "text": "Other answer for"
+   }
+  ],
+  "needs": "none",
+  "note": "The assistant decides when to ask, so the tester may need to try several requests.",
+  "reachable": "yes",
+  "steps": [
+   "Click the message box and type a vague request such as: plan my trip.",
+   "Press Send.",
+   "When the assistant asks a question with choices, pick one or type in 'Other answer for' the question.",
+   "Press Send answers and check that the reply continues from your answer."
+  ],
+  "where": "Chat screen > message box > send a vague request such as 'plan my trip' > look for the question card with the 'Send answers' button."
+ },
+ "S57.28": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/CapabilitiesSection.tsx",
+    "text": "Tool access"
+   },
+   {
+    "file": "apps/web/features/settings/sections/CapabilitiesSection.tsx",
+    "text": "On demand"
+   },
+   {
+    "file": "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts",
+    "text": "Load connector tools"
+   }
+  ],
+  "needs": "a connected app (Connectors)",
+  "note": "Which other tools the model is told about is not visible on screen.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, click Capabilities, and find Tool access.",
+   "Choose On demand.",
+   "Back in a chat with a connected app, ask for a task that needs one of its tools.",
+   "Look for a 'Load connector tools' row in the tool timeline and check the reply uses a loaded tool."
+  ],
+  "where": "Settings > Capabilities > Tool access > On demand, then chat with a connected app and ask for a task that needs its tools."
+ },
+ "S57.29": {
+  "labels": [
+   {
+    "file": "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts",
+    "text": "Load connector tools"
+   }
+  ],
+  "needs": "a connected app (Connectors)",
+  "note": "No search box was found in the UI; the keyword search runs inside the model's load call (apps/web/lib/connectors/tool-search.ts), so the tester sees only its results.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Set Settings > Capabilities > Tool access to On demand.",
+   "In a chat with a connected app, ask for a task that needs a tool you did not name.",
+   "Open the tool timeline and look for the 'Load connector tools' row and the tools it lists."
+  ],
+  "where": "Visible only inside the 'Load connector tools' row of a chat reply when Tool access is On demand."
+ },
+ "S57.30": {
+  "labels": [
+   {
+    "file": "apps/web/features/connectors/components/ConnectorCapabilitiesPanel.tsx",
+    "text": "Tools"
+   },
+   {
+    "file": "apps/web/features/connectors/components/ConnectorCapabilitiesPanel.tsx",
+    "text": "Close"
+   },
+   {
+    "file": "apps/web/features/connectors/components/ConnectorCapabilitiesPanel.tsx",
+    "text": "Live MCP capabilities"
+   }
+  ],
+  "needs": "a connected app (Connectors)",
+  "note": "The panel appears only for connectors that expose live tools.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Connectors.",
+   "Open a connector that is connected.",
+   "In the panel with the heading Tools, click a tool name.",
+   "Check the description and the parameter list (name, type, required or optional) under the tool, then click Close."
+  ],
+  "where": "Settings > Connectors > [a connected connector] > capabilities panel > click a name under Tools."
+ },
+ "S57.31": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+    "text": "Request"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/ToolTimeline.tsx",
+    "text": "Used tools"
+   }
+  ],
+  "needs": "none",
+  "note": "The Request block is missing when a call has no arguments; the card then shows 'No parameters'.",
+  "reachable": "yes",
+  "steps": [
+   "Send /search latest AI news.",
+   "Click the 'Used tools' row to expand it.",
+   "Click the tool row to open its details.",
+   "Check the Request block shows the query or the JSON arguments the tool was called with."
+  ],
+  "where": "Chat screen > send a message that uses a tool (for example /search latest AI news) > click the tool row to expand it > look under Request."
+ },
+ "S57.32": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/ToolTimeline.tsx",
+    "text": "Working..."
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/ToolTimeline.tsx",
+    "text": "Running:"
+   }
+  ],
+  "needs": "none",
+  "note": "I did not confirm a visible elapsed-time label; durationMs is stored on each entry and passed to the card as a duration label.",
+  "reachable": "yes",
+  "steps": [
+   "Send /search latest AI news and watch the reply area.",
+   "While the tool runs, look for the row text 'Running:' or 'Working...' in the timeline header.",
+   "Wait for it to finish and check the header changes away from running.",
+   "Open the row and check the status of the call."
+  ],
+  "where": "Chat screen > send a message that uses a tool > watch the tool timeline while it runs and after it finishes."
+ },
+ "S57.33": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+    "text": "Response"
+   }
+  ],
+  "needs": "none",
+  "note": "The result appears in the expanded row; I did not find a separate one-line result preview on the collapsed row, so this is unverified.",
+  "reachable": "yes",
+  "steps": [
+   "Send /search latest AI news and wait for the reply.",
+   "Click the 'Used tools' row to expand it.",
+   "Click the finished tool row to open its details.",
+   "Check the Response block shows the result (a short preview of the output)."
+  ],
+  "where": "Chat screen > send a message that uses a tool > open the finished tool row and read the Response block."
+ },
+ "S57.34": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/ToolTimeline.tsx",
+    "text": "Tool run complete"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+    "text": "Request"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+    "text": "Response"
+   }
+  ],
+  "needs": "a chat where the assistant has used a tool",
+  "note": "The tool list uses a shared card from packages/ui; the Request and Response blocks are there, but the expand and collapse control was read from code only and has not been checked in the browser.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat where the assistant has used at least one tool.",
+   "Click the tool summary line, such as \"Tool run complete\", to open the tool list.",
+   "Click one tool row to expand it.",
+   "Look for the \"Request\" block (the arguments) and the \"Response\" block (the result) and compare with Expected.",
+   "Click the same tool row again and check that the Request and Response blocks disappear."
+  ],
+  "where": "Chat > a reply that used tools > the tool summary line (for example \"Tool run complete\") > click one tool row"
+ },
+ "S57.36": {
+  "labels": [
+   {
+    "file": "apps/web/lib/tool-copy.ts",
+    "text": "Read a stored tool result"
+   }
+  ],
+  "needs": "a chat where a tool returns a very long result",
+  "note": "No control for the user was found. The stored copy is read back by the assistant through the read_tool_result tool (apps/web/app/api/llm/v1/chat/completions/lib/tool-result-store.ts); the Expected phrase that the user can open it later is not confirmed by the code. Stored copies are kept for 24 hours.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Ask the assistant to run a tool that returns a very long result, such as reading a long file.",
+   "Open the tool list and look for a tool row labelled \"Read a stored tool result\" when the assistant reads an earlier result back, and compare with Expected."
+  ],
+  "where": "Chat, when a long tool result is kept in full and trimmed from the context"
+ },
+ "S57.37": {
+  "labels": [
+   {
+    "file": "apps/web/features/connectors/hooks/useConnectorsSettingsAdapter.tsx",
+    "text": "Tool permissions"
+   },
+   {
+    "file": "apps/web/features/connectors/components/ConnectorCallLog.tsx",
+    "text": "Recent calls"
+   },
+   {
+    "file": "apps/web/features/connectors/components/ConnectorCallLog.tsx",
+    "text": "Worked"
+   }
+  ],
+  "needs": "a connected connector that the assistant has already called",
+  "note": "The receipt covers connectors only, not built-in tools such as search or file tools, and it does not record the input arguments or the result, which differs from Expected.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and choose Connectors.",
+   "Click a connected connector, then click \"Tool permissions\".",
+   "Scroll to the \"Recent calls\" section.",
+   "Read the rows: each shows an outcome word such as \"Worked\", \"Failed\" or \"Blocked here\".",
+   "Compare with Expected. The section text says \"Arguments and results are never recorded\", so the input part of Expected is not met by this screen."
+  ],
+  "where": "Settings > Connectors > [a connected connector] > Tool permissions > Recent calls"
+ }
+}

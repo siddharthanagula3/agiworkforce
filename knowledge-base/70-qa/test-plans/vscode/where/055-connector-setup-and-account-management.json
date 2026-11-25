@@ -1,0 +1,83 @@
+{
+ "S55.06": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/connectors/connectorPresentation.ts",
+    "text": "Can read only"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/connectors/connectorPresentation.ts",
+    "text": "Connecting and disconnecting happen in the browser, not in VS Code."
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account; a connector that is listed but not connected yet (its scopes must come from the server)",
+  "note": "The read and change lines come from a name-based guess at each scope (write words like send, edit, delete make \"Can make changes\"; read, list, view make \"Can read only\"), and they appear only if the server sends scopes for an unconnected connector. The explanation before connecting is not a separate screen in VS Code; the connect step itself happens on the web app. Not verified in the running app.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to AGI Cloud in the AGI sidebar. Connectors need a signed-in account.",
+   "Click the \"More\" icon at the top of the AGI sidebar.",
+   "Click \"Connectors\" in the menu. A list opens titled \"Code, Connectors\".",
+   "Hover over a connector row, or select it, and read the detail text. Look for the lines \"Can make changes: ...\" and \"Can read only: ...\", plus the line \"Connecting and disconnecting happen in the browser, not in VS Code.\"",
+   "Compare with Expected: before connecting, the read and change lines should say in plain words what the connector can read and change."
+  ],
+  "where": "Sidebar \"More\" button (icon only, tooltip \"More\") > Connectors, then select a connector row. Or Command Palette > Code: Show Connectors."
+ },
+ "S55.17": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/connectors/connectorPresentation.ts",
+    "text": "Can make changes"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/connectors/connectorPresentation.ts",
+    "text": "Other access"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account with at least one connector connected on the web app; a connector that has scopes",
+  "note": "The lines are sorted by name pattern, not shown as a raw list; scope names that match neither pattern appear under \"Other access\". Whether the list is the granted set depends on the server response, which the code does not check. Not verified in the running app.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to AGI Cloud and connect a connector on the web app first (Connectors are set up on the web, not in VS Code).",
+   "Click the \"More\" icon at the top of the AGI sidebar, then click \"Connectors\".",
+   "Hover over or select the connector row. Read the detail text after the connector name.",
+   "Look for \"Can make changes: ...\", \"Can read only: ...\" and \"Other access: ...\", which list the scope names the server returned.",
+   "Compare with Expected: the scopes shown should be the ones granted on the account, and they should match what the web app shows."
+  ],
+  "where": "Sidebar \"More\" button (icon only, tooltip \"More\") > Connectors, then select a connected connector row. Or Command Palette > Code: Show Connectors."
+ },
+ "S55.18": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/connectors/connectorPresentation.ts",
+    "text": "Connected"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/connectors/connectorPresentation.ts",
+    "text": "Needs reauthorization"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/connectors/connectorPresentation.ts",
+    "text": "Not responding"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account; a connector in a \"needs reauthorization\" or \"not responding\" state to see those states (they come from the server and are hard to make on demand)",
+  "note": "The health label comes from the server's health field. If the server sends no health field, the app shows only \"Connected\" or \"Needs reauthorization\". The list refreshes itself every 2 minutes. Not verified in the running app.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to AGI Cloud with at least one connector connected on the web app.",
+   "Click the \"More\" icon at the top of the AGI sidebar, then click \"Connectors\".",
+   "Read the description on each connector row. The first words are the health state, such as \"Connected\", \"Needs reauthorization\", \"Not responding\", \"Not connected\", \"Not configured here\" or \"Not available on the web app\".",
+   "To refresh, click the refresh control in the list title (tooltip \"Refresh connectors\") and read the rows again.",
+   "Compare with Expected: each connector should show whether it is healthy, needs reauthorization or is not responding."
+  ],
+  "where": "Sidebar \"More\" button (icon only, tooltip \"More\") > Connectors. Each connector row shows its health in the row description, after the connector name."
+ }
+}

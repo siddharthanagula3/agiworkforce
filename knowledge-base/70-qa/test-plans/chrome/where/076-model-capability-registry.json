@@ -1,0 +1,216 @@
+{
+ "S76.01": {
+  "labels": [],
+  "needs": "none",
+  "note": "Registry and routing rule only; no extension screen or setting exposes it.",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": "No control. Routing rule that the model menu and chat routing apply; no screen shows text input."
+ },
+ "S76.02": {
+  "labels": [],
+  "needs": "none",
+  "note": "Registry and routing rule only; no extension screen or setting exposes it.",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": "No control. Routing rule for text output; no screen shows it."
+ },
+ "S76.03": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Available models"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "All capabilities"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Vision"
+   }
+  ],
+  "needs": "a signed-in account; a PNG or JPEG image file",
+  "note": "The Vision filter only narrows the list. I found no code in the extension that refuses or reroutes an image turn to a model without vision.",
+  "reachable": "yes",
+  "steps": [
+   "Click the model selector button that shows the current model name.",
+   "In the menu labelled Available models, open the drop-down labelled All capabilities and choose Vision.",
+   "Check that the list now shows only models with the Vision capability.",
+   "Click Add attachment > Upload from device and choose a PNG or JPEG image, then send a message about it.",
+   "Compare with Expected: the picker shows image support, and an image turn should not go to a model that cannot read images."
+  ],
+  "where": "Model selector button (shows the current model name) > Available models > All capabilities > Vision"
+ },
+ "S76.04": {
+  "labels": [
+   {
+    "file": "apps/extension/src/side_panel.ts",
+    "text": "Add attachment"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Upload from device"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Remove some to send."
+   }
+  ],
+  "needs": "a signed-in account with file uploads on; two or more image files; a model with a per-message image limit",
+  "note": "The image count comes from model and harness metadata, which I did not read; the exact number shown depends on the chosen model.",
+  "reachable": "yes",
+  "steps": [
+   "Choose a model in the model selector (Available models).",
+   "Click Add attachment, then Upload from device, and pick two or more image files.",
+   "Click Send.",
+   "If the chosen model accepts fewer images, look for the notice that says it accepts up to a number of images and to remove some to send. The message should not send until the count is lowered.",
+   "Compare with Expected: the request is checked against the model's image count."
+  ],
+  "where": "Add attachment > Upload from device (then Send) with a model that has an image limit"
+ },
+ "S76.06": {
+  "labels": [
+   {
+    "file": "apps/extension/src/side_panel.ts",
+    "text": "Add attachment"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Upload from device"
+   }
+  ],
+  "needs": "a signed-in account with file uploads on; a PDF file",
+  "note": "The composer accepts PDFs; whether a PDF goes natively to a model is not visible in the UI.",
+  "reachable": "yes",
+  "steps": [
+   "Click Add attachment, then Upload from device.",
+   "Pick a PDF file and check it is listed in the attachment preview.",
+   "Click Send and ask a question that needs the PDF's content.",
+   "Compare with Expected: the reply should use the PDF content. The native route versus text extraction is not shown on screen."
+  ],
+  "where": "Add attachment > Upload from device (then Send)"
+ },
+ "S76.21": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Available models"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "All capabilities"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Tools"
+   }
+  ],
+  "needs": "none",
+  "note": "The code gates browser tools on the tools capability (selectedModelSupportsChatTools in apps/extension/src/side_panel.ts). I did not find a separate refusal message for tool turns.",
+  "reachable": "yes",
+  "steps": [
+   "Click the model selector button that shows the current model name.",
+   "In the menu labelled Available models, open the drop-down labelled All capabilities and choose Tools.",
+   "Check that only models with the Tools capability remain in the list.",
+   "Compare with Expected: tool-using chat turns are offered only to tool-capable models."
+  ],
+  "where": "Model selector button (shows the current model name) > Available models > All capabilities > Tools"
+ },
+ "S76.22": {
+  "labels": [],
+  "needs": "none",
+  "note": "Parallel tool-call support is set in the harness catalog and the server tool loop; no extension setting.",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": "No control. Effect would only show in a chat reply where several tool calls run in one turn."
+ },
+ "S76.23": {
+  "labels": [],
+  "needs": "none",
+  "note": "Multi-round tool use is handled by the request path; the cited provider file moved, and I did not verify the current location.",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": "No control. Effect would only show in a chat reply where the model runs several rounds of tool use."
+ },
+ "S76.26": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Effort"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Available on $PLAN$ and higher plans"
+   },
+   {
+    "file": "packages/contracts/types/src/design-system/effort.ts",
+    "text": "Deep"
+   }
+  ],
+  "needs": "a signed-in account; a model with effort levels; a Free or lower-plan account to see locked levels",
+  "note": "The Effort section shows only for a model with effort levels; Auto shows effort only after routing.",
+  "reachable": "yes",
+  "steps": [
+   "Click the model selector button and choose a model that has reasoning effort (its menu shows an Effort heading).",
+   "Under the Effort heading, look at the rows. Each row name comes from the effort label list (Direct, Brief, Quick, Balanced, Deep, Extended, Maximum); only the levels the model supports appear.",
+   "Click a different level and check the row shows as selected and the model badge shows that level.",
+   "If a higher level is locked, check its row says Available on [plan] and higher plans.",
+   "Compare with Expected: only the model's supported levels are offered and sent."
+  ],
+  "where": "Model selector button (shows the current model name) > Effort"
+ },
+ "S76.31": {
+  "labels": [],
+  "needs": "none",
+  "note": "No extension setting or screen exposes streaming support; the cited provider file moved, and I did not verify the current location.",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": "No control. Transport choice is internal and is not shown on screen."
+ },
+ "S76.32": {
+  "labels": [],
+  "needs": "none",
+  "note": "Cache class and routing decisions are server-side; nothing in the extension UI shows them.",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": "No control. Prompt-cache routing has no screen in the extension."
+ },
+ "S76.34": {
+  "labels": [],
+  "needs": "none",
+  "note": "I searched the extension's English messages and side panel for region and route text and found none.",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": "No control. No region setting or region text was found in the extension."
+ },
+ "S76.35": {
+  "labels": [],
+  "needs": "none",
+  "note": "I searched the extension's English messages for retention and data-use text and found none.",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": "No control. No retention or data-use setting was found in the extension."
+ },
+ "S76.37": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Available models"
+   }
+  ],
+  "needs": "none",
+  "note": "The picker drops models whose status is deprecated (apps/extension/src/features/cloud-bridge/managedModelPicker.ts); no stage or retirement label is shown, so the exclusion is only visible as an absence.",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": "Available models list: deprecated models are left out of the picker. No lifecycle label was found."
+ },
+ "S76.38": {
+  "labels": [],
+  "needs": "none",
+  "note": "No route picker or route-detail text was found in the extension; routing ranks routes internally.",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": "No control. Route differences (capabilities, cache class, retention, price) are not shown in the extension."
+ }
+}

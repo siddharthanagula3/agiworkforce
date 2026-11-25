@@ -1,0 +1,142 @@
+{
+ "S81.09": {
+  "labels": [
+   {
+    "file": "apps/cli/src/plans.rs",
+    "text": "Plans, with credits per 5 hours / week / month"
+   },
+   {
+    "file": "apps/cli/src/plans.rs",
+    "text": "Adds over"
+   }
+  ],
+  "needs": "A Free account and a paid account (to compare \"Adds over\" lines from a different current plan). Without sign-in only \"Includes:\" lines appear.",
+  "note": "Plan feature lists come from the shared billing catalog; the CLI only renders them. Server enforcement of each gate is not in apps/cli and I did not verify it.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with agi login, then run agi plans in a terminal.",
+   "Read the first line: \"Plans, with credits per 5 hours / week / month\".",
+   "Find the line for your plan marked \"(your plan)\" and the lines under the other plans that start with \"Adds over\" (or \"Includes:\" when not signed in).",
+   "Compare the feature lists between plans. Expected: each higher plan lists features it adds over the current plan. The server-side enforcement is not visible from the CLI; check it by trying a blocked feature if one is available."
+  ],
+  "where": "Type \"agi plans\" in a terminal (prints the plan table). Inside chat, type \"/usage\" for account usage."
+ },
+ "S81.14": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/model_picker.rs",
+    "text": "Effort:"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/model_picker.rs",
+    "text": "needs"
+   }
+  ],
+  "needs": "A signed-in paid account, and a Free or lower-plan account to see the \"needs\" tags.",
+  "note": "The CLI treats Free and Basic as having no CLI model access (model_catalog.rs can_access_model_for_tier), so a Free account sees \"needs\" tags on every model. The effort bar shows only for models that support it. The request clamp happens on the server and is not visible in CLI code.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi and type /model in the chat.",
+   "Highlight a model that supports reasoning. Look for the bar \"Thinking: on\" with \"Effort: \u25c0 Medium \u25b6   Tab/\u2190\u2192\" under the list.",
+   "Press Tab or the arrow keys to change the effort. Expected: the effort level changes and the choice is shown.",
+   "Highlight a model your plan cannot use. Look for the row tag \"needs\" followed by the plan name. The server-side clamp of requests is not visible here."
+  ],
+  "where": "Type \"/model\" in the chat (the model picker opens). Use Tab or the left and right arrows on the \"Effort:\" bar."
+ },
+ "S81.15": {
+  "labels": [
+   {
+    "file": "apps/cli/src/usage_summary.rs",
+    "text": "Flagship weekly"
+   },
+   {
+    "file": "apps/cli/src/usage_summary.rs",
+    "text": "Account usage"
+   }
+  ],
+  "needs": "A Max or Ultra account. The flagship line appears only when the server reports a flagship window. Reaching the cap needs heavy use of a flagship model.",
+  "note": "The CLI has no \"Max 5x\" label: plan Max shows as \"Max\" and plan max_15x shows as \"Ultra\" (tier_cache.rs label()). The enforcement on admission is server-side (flagship_weekly_limit_reached code in usage_summary.rs); I did not verify the exact blocked-message text, and the flagship cap is not listed on agi plans in the CLI code.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with a Max or Ultra account, then run agi usage.",
+   "Find the \"Flagship weekly\" line under \"Account usage\" (shows \"X of Y credits used, Z left\" with a reset time).",
+   "Use flagship models until the cap is reached, or check the limit message the CLI shows when the server returns the flagship limit code.",
+   "Compare the number shown with the cap for your plan on agi plans. Expected: the flagship cap is shown to the user and blocks use once reached."
+  ],
+  "where": "Type \"agi usage\" in a terminal, or \"/usage\" in the chat. Look for the \"Account usage\" block."
+ },
+ "S81.25": {
+  "labels": [
+   {
+    "file": "apps/cli/src/usage_summary.rs",
+    "text": "Your last payment did not go through"
+   },
+   {
+    "file": "apps/cli/src/usage_summary.rs",
+    "text": "Settings > Billing"
+   },
+   {
+    "file": "apps/cli/src/usage_summary.rs",
+    "text": "Account usage"
+   }
+  ],
+  "needs": "A paid account whose renewal has failed (hard to set up for a tester; a seeded account on the server is needed). Other states: \"paused\" shows \"Resume it at\", and ended shows \"Choose a plan at\".",
+  "note": "The CLI text says the account is on Free until the payment is settled; no grace-period length appears in the CLI code. The grace rule is decided on the server, which I did not verify.",
+  "reachable": "yes",
+  "steps": [
+   "Use an account whose renewal payment failed (status past_due, unpaid or incomplete) and run agi usage.",
+   "Read the \"Subscription:\" line and the message \"Your last payment did not go through, so this subscription is ...\".",
+   "Read the next line \"Update your payment method in Settings > Billing: ...\" and open that link.",
+   "Expected: the message says the account is on Free until the payment is settled, and says which features and purchased credits are paused. The CLI shows no length for a grace window."
+  ],
+  "where": "Type \"agi usage\" in a terminal, or \"/usage\" in the chat. Look under \"Account usage\" for the \"Subscription:\" line."
+ },
+ "S81.27": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "signed in, {} plan"
+   },
+   {
+    "file": "apps/cli/src/usage_summary.rs",
+    "text": "Plan:"
+   }
+  ],
+  "needs": "A signed-in account, plus a second surface (web or another app) signed in to the same account.",
+  "note": "Only the CLI side was checked. The /status plan comes from the local tier cache, and agi usage refreshes it from the server (adopt_server_plan). Per-surface enforcement lives on the server and I did not check it on the other surfaces.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to the CLI with an account that has a plan on the web or another app.",
+   "Type /status in the chat and read \"signed in, ... plan\".",
+   "Run agi usage in a terminal and read the \"Plan:\" line.",
+   "Open the same account on the web or another app and compare the plan name. Expected: all surfaces show the same plan, and the server enforces limits on each."
+  ],
+  "where": "Type \"/status\" in the chat for the plan name from the local cache. Type \"agi usage\" in a terminal for the plan the server reports (line \"Plan:\" under \"Account usage\")."
+ },
+ "S81.28": {
+  "labels": [
+   {
+    "file": "apps/cli/src/plans.rs",
+    "text": "Plans, with credits per 5 hours / week / month"
+   },
+   {
+    "file": "apps/cli/src/plans.rs",
+    "text": "Adds over"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/model_picker.rs",
+    "text": "needs"
+   }
+  ],
+  "needs": "A signed-in account; a Free or lower-plan account shows the most \"needs\" tags.",
+  "note": "The CLI has no \"Max 5x\" label (Max shows as \"Max\", max_15x shows as \"Ultra\"). Blocked-feature text outside the model picker was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, then run agi plans.",
+   "Find your plan marked \"(your plan)\" and read its \"Includes:\" line.",
+   "Read the \"Adds over\" line under each higher plan to see what it adds over your plan.",
+   "Type /model in the chat and find a model tagged \"needs\" with a plan name. Expected: the blocked feature points to the plan that unlocks it."
+  ],
+  "where": "Type \"agi plans\" in a terminal (the command is described as \"Show what each plan includes and its credits per window\")."
+ }
+}

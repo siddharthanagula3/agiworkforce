@@ -1,0 +1,618 @@
+{
+ "feature": {
+  "id": "F066-11",
+  "aliases": [
+   "Pull-request panel (S66.36)",
+   "CI-status panel (S66.37)",
+   "Test-results panel (S66.38)",
+   "Session recap (S66.39)",
+   "LocalPullRequest",
+   "PullRequestChecks",
+   "Run tests",
+   "/recap",
+   "Think Back recap"
+  ],
+  "summary": "Shows a coding session's pull request (number, link, state, check status) and lets the person push and open one. A tests button runs the folder's test command and shows pass or fail with output. In the CLI, /recap asks the model to summarise the session. Check status shows on web local, web cloud and mobile cloud sessions.",
+  "purpose": {
+   "what_it_does": "For local sessions on the desktop it reads the branch's pull request from GitHub through our servers, shows 'Pull request #N \u00b7 state \u00b7 checks ...' as a link, and can push and open a pull request. For cloud sessions on web and mobile it shows checks with failed check names. The tests button runs the detected test command on the computer. In the CLI, /recap turns the session into a written summary.",
+   "why_it_exists": "Finishing a coding session means a reviewed, tested change. People need the pull request and results where they work (S66.36-S66.39).",
+   "who_uses_it": "Developers finishing agent work.",
+   "problems_solved": [
+    "Leaving the app to find the pull request.",
+    "Not knowing whether CI passed.",
+    "Forgetting what a long session did."
+   ],
+   "use_cases": [
+    "After a local session press 'Push and open a pull request'.",
+    "Watch 'checks running' turn to 'checks passing'.",
+    "Press 'Run tests' and read the failing output.",
+    "Run /recap in the terminal interface before closing."
+   ]
+  },
+  "user_experience": {
+   "where_to_find_it": [
+    "Desktop-hosted web local session: changes side panel shows the pull request block (apps/web/features/code/components/LocalChangesPanel.tsx:383) and a header button with the label 'Run tests' / 'Stop tests' (LocalSessionPanel.tsx:1129-1141; labels in local-code.ts).",
+    "Web cloud sessions: changes panel with PullRequestChecks (apps/web/features/code/components/CodeChangesPanel.tsx:142-210).",
+    "Mobile cloud code session: 'Create pull request' action, a pull request link and checks line with refresh (apps/mobile/src/features/cloud-code/useCloudCodeChanges.ts:128-152; CloudCodeChangesSheet.tsx:231-293; CloudCodeSessionScreen.tsx:364-502).",
+    "CLI: slash command /recap (apps/cli/src/claude_parity.rs:300,1946).",
+    "Mobile remote (companion) code sessions and VS Code: no pull request or test panel found."
+   ],
+   "prerequisites": [
+    "GitHub connected through the AGI GitHub App for lookups and opening (apps/web/app/api/code/local-pull-requests/route.ts:21-27).",
+    "Local: a git remote and a current branch; the base branch must be known.",
+    "Tests: a test command that detectTestCommand can find."
+   ],
+   "screens_and_controls": [
+    "Pull request chip: 'Pull request #N \u00b7 open \u00b7 checks passing' (local-code.ts:384-411).",
+    "'Push and open a pull request', 'Create branch and open pull request', 'Open a pull request on GitHub' (compare link when GitHub is not connected), and a reauthorize link after a failed open.",
+    "Cloud/mobile check wording: 'Checks passing', 'Checks failing', 'Checks running', 'No checks reported', 'Check status is unavailable', 'Refresh the checks' (apps/mobile/src/features/cloud-code/presentation.ts:326-331).",
+    "Test notice with output (LocalSessionPanel.tsx:1700-1715)."
+   ],
+   "journey": [
+    "1. Finish work on a branch.",
+    "2. Open the changes panel; the pull request block loads the branch state.",
+    "3. If none exists press 'Push and open a pull request'; the app pushes, then opens it.",
+    "4. The chip shows number, state and checks; checks poll every 30 seconds while running.",
+    "5. Press 'Run tests' to run the project's test command; read the message and output.",
+    "6. In the CLI run /recap for a summary."
+   ],
+   "feedback_and_outputs": [
+    "Not connected: 'Open a pull request on GitHub' link and a text asking to connect (local-code.ts:223-225).",
+    "Read failure: 'The pull request for this branch could not be read.'; open failure: 'The pull request could not be opened.' (local-code.ts:231-232).",
+    "Tests: '<command> passed.', '<command> failed ...', '<command> ran past its time limit and was stopped.', 'The tests could not be started.' (local-code.ts:57-63).",
+    "Recap: a model-written answer in the chat."
+   ],
+   "settings": [
+    "The branch name base used when a pull request needs a new branch is a preference in Local worktree settings (local-code.ts:1886 area; LocalWorktreeSettings.tsx)."
+   ]
+  },
+  "current_implementation": {
+   "working": [
+    "Local pull request lookup and open through GET and POST /api/code/local-pull-requests, including audit event and CSRF check on open (apps/web/app/api/code/local-pull-requests/route.ts:30-95).",
+    "Local pull request component with push, open, compare link, checks polling every 30000 ms while pending, reauthorize link (apps/web/features/code/components/LocalPullRequest.tsx).",
+    "Check status states passing, failing, pending, none are computed from GitHub check runs (apps/web/lib/github-app.ts:1384-1392).",
+    "Cloud session pull request creation POST and status GET (apps/web/app/api/code/sessions/[sessionId]/pull-request/route.ts:49; .../status/route.ts:33), shown on web and on mobile.",
+    "Test run hook with detection, timeout, stop, and a validation summary record (apps/web/features/code/hooks/use-local-tests.ts).",
+    "CLI /recap sends a summary prompt to the model (apps/cli/src/claude_parity.rs:1946-1955)."
+   ],
+   "incomplete": [
+    "Test results on web are a notice with output, not a structured pass and fail count panel (LocalSessionPanel.tsx:1700-1715).",
+    "CLI recap is a prompt to the model, not a stored recap; the brief's 'goal, decisions, files, checks, next steps' is the prompt's wording (claude_parity.rs:1949-1955).",
+    "VS Code: no pull request, CI or test panel; the founder decision cuts a test or task panel there (docs/decisions/2026-09-27-founder-decisions.md:103-107)."
+   ],
+   "disconnected_or_disabled": [
+    "Cloud pull requests need the managed Code switch and compute gate: both checked in the route (apps/web/app/api/code/sessions/[sessionId]/pull-request/route.ts:22-33)."
+   ],
+   "not_available": [
+    "Mobile companion (remote desktop) sessions: no pull request or test panel found.",
+    "CLI: no test results panel or pull request panel found.",
+    "Chrome: not applicable.",
+    "Brief says CI status is missing in every app; code shows check state on web local, web cloud and mobile cloud."
+   ]
+  },
+  "required_behaviour": {
+   "established": [
+    {
+     "statement": "The workspace shows the session's pull request (open one, see number, link and state).",
+     "source": "S66.36 Should"
+    },
+    {
+     "statement": "The workspace shows CI check status for the session's branch or pull request.",
+     "source": "S66.37 Should"
+    },
+    {
+     "statement": "The workspace shows test results: pass or fail, counts and failing output.",
+     "source": "S66.38 Should"
+    },
+    {
+     "statement": "The user gets a recap: goal, decisions, files touched, checks run, next steps.",
+     "source": "S66.39 Should"
+    },
+    {
+     "statement": "The pull request lookup reports whether GitHub is connected; if not, the person is told to connect.",
+     "source": "apps/web/features/code/services/local-pull-request-api.ts:9-20; apps/web/lib/services/cloud-code-local-pull-request.ts:152-170"
+    },
+    {
+     "statement": "A failed lookup shows a message, not an empty state.",
+     "source": "apps/web/features/code/components/LocalPullRequest.tsx:46-62,150-160"
+    },
+    {
+     "statement": "No second test or task panel in VS Code.",
+     "source": "docs/decisions/2026-09-27-founder-decisions.md:103-107"
+    }
+   ],
+   "acceptance_criteria": [
+    "Not connected: lookup returns connected false and the page shows the compare link and the connect text.",
+    "Connected, no pull request: the button 'Push and open a pull request' is enabled except on the base branch.",
+    "After opening, the chip shows the number and state and links to GitHub in a new tab.",
+    "Pending checks re-read after about 30 seconds until they settle.",
+    "A GitHub token problem on open shows an error and the reauthorize link.",
+    "Tests: a passing run says '<command> passed.'; a non-zero exit says failed with the exit code; a timeout is never a pass.",
+    "/recap in the CLI sends the recap prompt for 'this session' or the given focus.",
+    "Stop tests ends a running test."
+   ],
+   "inferred": [
+    "Because test outcome 'unknown' is recorded for timeouts, validation summaries never claim a pass over a timeout [inferred from use-local-tests.ts:44-52]."
+   ],
+   "proposed": [
+    "[proposed] Show test counts and failing test names as a panel.",
+    "[proposed] Keep a saved recap with the session instead of a one-off answer.",
+    "[proposed] Show check status in the mobile companion and VS Code via the same API."
+   ]
+  },
+  "implementation_map": [
+   {
+    "kind": "component",
+    "name": "LocalPullRequest",
+    "path": "apps/web/features/code/components/LocalPullRequest.tsx",
+    "role": "Pull request block with push, open, checks polling."
+   },
+   {
+    "kind": "service",
+    "name": "local-pull-request-api",
+    "path": "apps/web/features/code/services/local-pull-request-api.ts",
+    "role": "Client for the local pull request route; error with reconnect flag."
+   },
+   {
+    "kind": "endpoint",
+    "name": "GET and POST /api/code/local-pull-requests",
+    "path": "apps/web/app/api/code/local-pull-requests/route.ts",
+    "role": "Lookup and open; rate limit, CSRF, audit."
+   },
+   {
+    "kind": "service",
+    "name": "cloud-code-local-pull-request",
+    "path": "apps/web/lib/services/cloud-code-local-pull-request.ts",
+    "role": "Reads or opens a pull request through the GitHub App."
+   },
+   {
+    "kind": "service",
+    "name": "github-app",
+    "path": "apps/web/lib/github-app.ts",
+    "role": "Check-run reading and checks state (lines 1299, 1376-1392)."
+   },
+   {
+    "kind": "endpoint",
+    "name": "POST /api/code/sessions/{sessionId}/pull-request",
+    "path": "apps/web/app/api/code/sessions/[sessionId]/pull-request/route.ts",
+    "role": "Opens a cloud session's pull request."
+   },
+   {
+    "kind": "endpoint",
+    "name": "GET /api/code/sessions/{sessionId}/pull-request/status",
+    "path": "apps/web/app/api/code/sessions/[sessionId]/pull-request/status/route.ts",
+    "role": "Pull request and checks status for a cloud session."
+   },
+   {
+    "kind": "component",
+    "name": "PullRequestChecks (web)",
+    "path": "apps/web/features/code/components/CodeChangesPanel.tsx",
+    "role": "Checks line for cloud sessions (lines 142-210)."
+   },
+   {
+    "kind": "component",
+    "name": "PullRequestChecks (mobile)",
+    "path": "apps/mobile/src/features/cloud-code/components/CloudCodeChangesSheet.tsx",
+    "role": "Checks line with refresh."
+   },
+   {
+    "kind": "hook",
+    "name": "useCloudCodeChanges",
+    "path": "apps/mobile/src/features/cloud-code/useCloudCodeChanges.ts",
+    "role": "Create pull request and load status on mobile."
+   },
+   {
+    "kind": "hook",
+    "name": "useLocalTests",
+    "path": "apps/web/features/code/hooks/use-local-tests.ts",
+    "role": "Detect and run tests through the desktop shell."
+   },
+   {
+    "kind": "service",
+    "name": "cloud-code-result",
+    "path": "apps/web/lib/services/cloud-code-result.ts",
+    "role": "Validation summary from check results."
+   },
+   {
+    "kind": "config",
+    "name": "local-code strings",
+    "path": "apps/web/features/code/local-code.ts",
+    "role": "Pull request and tests wording, localPullRequestLabel."
+   },
+   {
+    "kind": "service",
+    "name": "runtime-client branches and push",
+    "path": "apps/web/features/desktop-host/lib/runtime-client.ts",
+    "role": "listLocalBranches and pushLocalBranch via the desktop host."
+   },
+   {
+    "kind": "command",
+    "name": "/recap",
+    "path": "apps/cli/src/claude_parity.rs",
+    "role": "recap_prompt (line 1946) and dispatch (line 300)."
+   },
+   {
+    "kind": "test",
+    "name": "LocalPullRequest test",
+    "path": "apps/web/features/code/components/LocalPullRequest.test.tsx",
+    "role": "Pull request component."
+   },
+   {
+    "kind": "test",
+    "name": "local pull request service test",
+    "path": "apps/web/lib/services/__tests__/cloud-code-local-pull-request.test.ts",
+    "role": "Service."
+   },
+   {
+    "kind": "test",
+    "name": "use-local-tests test",
+    "path": "apps/web/features/code/hooks/use-local-tests.test.ts",
+    "role": "Test run hook."
+   },
+   {
+    "kind": "test",
+    "name": "pull request status route test",
+    "path": "apps/web/app/api/code/sessions/[sessionId]/pull-request/status/__tests__/route.test.ts",
+    "role": "Status route."
+   }
+  ],
+  "execution_and_data_flow": {
+   "steps": [
+    {
+     "what_happens": "The page asks the desktop host for the branch list and remote URL.",
+     "runs_on": "device",
+     "evidence": "LocalPullRequest.tsx:46-53; runtime-client.ts (listLocalBranches)"
+    },
+    {
+     "what_happens": "The page sends remote URL, head and base to our server.",
+     "runs_on": "device and our servers",
+     "evidence": "local-pull-request-api.ts:68-80"
+    },
+    {
+     "what_happens": "Our server checks the GitHub App is available and reads the pull request with the user's connection; if not connected it returns a compare link.",
+     "runs_on": "our servers",
+     "evidence": "route.ts:21-52; cloud-code-local-pull-request.ts:152-175"
+    },
+    {
+     "what_happens": "GitHub is asked for the pull request and its check runs.",
+     "runs_on": "outside service",
+     "evidence": "apps/web/lib/github-app.ts:1299,1376-1392"
+    },
+    {
+     "what_happens": "Open: the host pushes the branch, then the server opens the pull request through GitHub and writes an audit event.",
+     "runs_on": "device and our servers",
+     "evidence": "LocalPullRequest.tsx:64-84; route.ts:55-92"
+    },
+    {
+     "what_happens": "Tests: the page detects the command and runs it in the folder through the desktop shell, which asks and sandboxes it.",
+     "runs_on": "device",
+     "evidence": "use-local-tests.ts:55-100"
+    },
+    {
+     "what_happens": "CLI /recap sends a prompt to the session's model and prints the answer.",
+     "runs_on": "outside service",
+     "evidence": "claude_parity.rs:300,1946-1955"
+    }
+   ],
+   "data": [
+    {
+     "what": "Pull request on GitHub",
+     "where_stored": "GitHub",
+     "synced": "By GitHub",
+     "retained_or_deleted": "Under GitHub's rules"
+    },
+    {
+     "what": "Audit event of an opened pull request",
+     "where_stored": "security audit log via recordAuditEvent",
+     "synced": "Server",
+     "retained_or_deleted": "unknown"
+    },
+    {
+     "what": "Test output",
+     "where_stored": "page state and CLI shell output",
+     "synced": "No",
+     "retained_or_deleted": "Cleared on a new run or folder change (use-local-tests.ts:65-72)"
+    }
+   ],
+   "models_and_providers": "Pull request and checks use no model. Pull request creation for cloud sessions may include a model-written description [unknown]. /recap uses the session's model like any prompt (SYS-chat-turn-pipeline)."
+  },
+  "access_and_usage": {
+   "account": "Signed-in account and a GitHub connection through the AGI GitHub App. If not connected the person gets a compare link (route.ts; cloud-code-local-pull-request.ts:168).",
+   "permissions": "GitHub installation access; a 'reconnect required' reason is passed to the page (local-pull-request-api.ts:13,50-52).",
+   "subscription": "none found in the code for the local pull request route. Cloud session pull requests need the managed Code gates (pull-request/route.ts:22-33).",
+   "limits_and_metering": "Lookups use the 'default' rate limit and opens use 'chat-conversation' per user (route.ts:38-41,60-62).",
+   "flags": "Cloud: AGI_E2B_EXECUTION and E2B_API_KEY, and the managed compute private-beta switch (pull-request/route.ts:22-33). The route also needs the GitHub App configured (route.ts:21-27).",
+   "model_compatibility": "none found in the code, except /recap which works with any model.",
+   "provider_restrictions": "Pull requests are GitHub only (GitHub remote patterns in apps/web/app/api/code/sessions/handoff/route.ts:27-31 show the same assumption).",
+   "local_mode": "Tests run fully on the device. The pull request lookup and opening still call our servers and GitHub, so they need the network and a signed-in account; this is not local-only."
+  },
+  "states_and_edge_cases": [
+   {
+    "state": "GitHub not connected",
+    "behaviour": "compare link and connect text",
+    "evidence": "LocalPullRequest.tsx:165-180"
+   },
+   {
+    "state": "Read failure",
+    "behaviour": "error text shown with role alert",
+    "evidence": "LocalPullRequest.tsx:58-62,150-160"
+   },
+   {
+    "state": "Open failure with reconnect",
+    "behaviour": "Error plus reauthorize link",
+    "evidence": "LocalPullRequest.tsx:87-93,208-212"
+   },
+   {
+    "state": "On the base branch",
+    "behaviour": "Open button disabled with a hint",
+    "evidence": "LocalPullRequest.tsx:182-196"
+   },
+   {
+    "state": "Detached head (no branch)",
+    "behaviour": "'Create branch and open pull request'",
+    "evidence": "LocalPullRequest.tsx:130-160"
+   },
+   {
+    "state": "Checks pending",
+    "behaviour": "Re-read every 30 seconds",
+    "evidence": "LocalPullRequest.tsx:17,105-118"
+   },
+   {
+    "state": "Tests not found",
+    "behaviour": "Status unavailable with 'testsNotFound' message",
+    "evidence": "use-local-tests.ts:97-101"
+   },
+   {
+    "state": "Tests timeout",
+    "behaviour": "Message says it ran past its limit; outcome unknown not pass",
+    "evidence": "use-local-tests.ts:44-52"
+   },
+   {
+    "state": "Cloud checks unavailable",
+    "behaviour": "'Check status is unavailable'",
+    "evidence": "CodeChangesPanel.tsx:203; presentation.ts:330"
+   },
+   {
+    "state": "Offline",
+    "behaviour": "not handled in the code beyond generic error text.",
+    "evidence": "LocalPullRequest.tsx:58-62"
+   }
+  ],
+  "verification": {
+   "existing_tests": [
+    {
+     "path": "apps/web/features/code/components/LocalPullRequest.test.tsx",
+     "covers": "Local pull request block (case list not read)."
+    },
+    {
+     "path": "apps/web/lib/services/__tests__/cloud-code-local-pull-request.test.ts",
+     "covers": "Server lookup and open."
+    },
+    {
+     "path": "apps/web/app/api/code/local-pull-requests/__tests__",
+     "covers": "Route tests (folder exists; files not read)."
+    },
+    {
+     "path": "apps/web/app/api/code/sessions/[sessionId]/pull-request/route.test.ts",
+     "covers": "Cloud pull request open route."
+    },
+    {
+     "path": "apps/web/app/api/code/sessions/[sessionId]/pull-request/status/__tests__/route.test.ts",
+     "covers": "Status route."
+    },
+    {
+     "path": "apps/web/lib/github-app.issues.test.ts",
+     "covers": "Checks state from check runs (lines 147-199)."
+    },
+    {
+     "path": "apps/web/features/code/hooks/use-local-tests.test.ts",
+     "covers": "Test run hook."
+    },
+    {
+     "path": "apps/web/lib/services/__tests__/cloud-code-changes-and-pull-request.test.ts",
+     "covers": "Cloud changes and pull request service."
+    },
+    {
+     "path": "apps/mobile/__tests__/CloudCodeSessionScreenChanges.test.tsx",
+     "covers": "Mobile changes card and sheet."
+    },
+    {
+     "path": "apps/cli/src/claude_parity.rs",
+     "covers": "In-file test shared_recap_command_returns_prompt (line 4059)."
+    }
+   ],
+   "scenarios": [
+    {
+     "name": "Open a pull request",
+     "steps": [
+      "Connect GitHub.",
+      "Finish work on a feature branch in a local session.",
+      "Press 'Push and open a pull request'."
+     ],
+     "expected": "A chip 'Pull request #N \u00b7 open' linking to GitHub."
+    },
+    {
+     "name": "Not connected",
+     "steps": [
+      "Use an account without GitHub connected.",
+      "Open the pull request block."
+     ],
+     "expected": "Compare link and connect text; no error."
+    },
+    {
+     "name": "Checks settle",
+     "steps": [
+      "Open a pull request with running checks.",
+      "Wait over 30 seconds."
+     ],
+     "expected": "Label changes from 'checks running' to passing or failing."
+    },
+    {
+     "name": "Failing tests",
+     "steps": [
+      "Break a test.",
+      "Press 'Run tests'."
+     ],
+     "expected": "Alert with '<command> failed' and the output."
+    },
+    {
+     "name": "Recap",
+     "steps": [
+      "In the CLI after some work run /recap."
+     ],
+     "expected": "A summary answer with objective, decisions, files, checks, next steps."
+    }
+   ],
+   "diagnostics": [
+    "Error name LocalPullRequestRequestError.",
+    "Reason constant GITHUB_RECONNECT_REQUIRED_REASON.",
+    "Audit event type 'tool_executed' with status pull_request_opened (route.ts:76-86)."
+   ]
+  },
+  "gaps": [
+   {
+    "gap": "Brief says CI status is missing in every app; code shows check status in three places.",
+    "affects": "Brief accuracy",
+    "evidence": "LocalPullRequest.tsx; CodeChangesPanel.tsx:142-210; CloudCodeChangesSheet.tsx:231-293",
+    "work_needed": "Update the brief; live-verify."
+   },
+   {
+    "gap": "Brief says mobile has test results and no pull request; the files cited are unrelated, and mobile cloud sessions do have pull request and checks while test results were not found.",
+    "affects": "surface:mobile",
+    "evidence": "CodeSessionView.tsx:272 holds unrelated code; useCloudCodeChanges.ts:128",
+    "work_needed": "Correct the brief."
+   },
+   {
+    "gap": "No structured test counts or failing test list.",
+    "affects": "web and desktop",
+    "evidence": "LocalSessionPanel.tsx:1700-1715",
+    "work_needed": "Parse results into a panel."
+   },
+   {
+    "gap": "CLI has no pull request or test panel; recap is not stored.",
+    "affects": "surface:cli",
+    "evidence": "claude_parity.rs:1946",
+    "work_needed": "Decide whether to add."
+   },
+   {
+    "gap": "Mobile companion sessions and VS Code have no pull request view.",
+    "affects": "surface:mobile, surface:vscode",
+    "evidence": "No code found",
+    "work_needed": "VS Code is cut by decision for test and task panels; pull request view needs a decision."
+   }
+  ],
+  "depends_on": [
+   "surface:web",
+   "surface:desktop",
+   "surface:mobile",
+   "surface:cli",
+   "SYS-connectors-plugins-and-skills",
+   "SYS-authentication-and-identity",
+   "SYS-api-and-contracts",
+   "SYS-execution-boundaries",
+   "mode:local",
+   "mode:cloud",
+   "api:GET /api/code/local-pull-requests",
+   "api:POST /api/code/local-pull-requests"
+  ],
+  "relationships": [
+   {
+    "rel": "exposes_api",
+    "to": "api:GET /api/code/local-pull-requests",
+    "evidence": "route.ts:94"
+   },
+   {
+    "rel": "exposes_api",
+    "to": "api:POST /api/code/local-pull-requests",
+    "evidence": "route.ts:95"
+   },
+   {
+    "rel": "exposes_api",
+    "to": "api:POST /api/code/sessions/{sessionId}/pull-request",
+    "evidence": "pull-request/route.ts:49"
+   },
+   {
+    "rel": "exposes_api",
+    "to": "api:GET /api/code/sessions/{sessionId}/pull-request/status",
+    "evidence": "status/route.ts:33"
+   },
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/web/features/code/components/LocalPullRequest.tsx",
+    "evidence": "Whole component"
+   },
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/web/features/code/hooks/use-local-tests.ts",
+    "evidence": "Test runs"
+   },
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/cli/src/claude_parity.rs",
+    "evidence": "recap_prompt line 1946"
+   },
+   {
+    "rel": "depends_on",
+    "to": "SYS-connectors-plugins-and-skills",
+    "evidence": "GitHub App connection (route.ts:21-27)"
+   },
+   {
+    "rel": "blocked_by",
+    "to": "api:POST /api/code/sessions/{sessionId}/pull-request",
+    "evidence": "Cloud PR blocked when managed Code is off (pull-request/route.ts:22-33)"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/web/features/code/components/LocalPullRequest.test.tsx",
+    "evidence": "file exists"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/web/lib/github-app.issues.test.ts",
+    "evidence": "checks state cases"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:mobile",
+    "evidence": "CloudCodeSessionScreen.tsx:476-502"
+   }
+  ],
+  "unknowns": [
+   "Whether a cloud session's pull request body uses a model.",
+   "Case list of LocalPullRequest.test.tsx and the local-pull-requests route tests.",
+   "Whether recap output is saved anywhere.",
+   "How the desktop app (Tauri build) handles pull requests; only the hosted web path was read."
+  ]
+ },
+ "corrections": [
+  {
+   "section": "3",
+   "claim": "CLI /recap sends a summary prompt to the model; the 'goal, decisions, files, checks, next steps' brief is the prompt's wording (claude_parity.rs:1949-1955)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "Dispatch and prompt exist, but the prompt wording is 'current objective, decisions made, files or commands touched, verification already run, open risks, and the next concrete actions'. It adds open risks. It does not say 'goal' or 'checks'.",
+   "evidence": "apps/cli/src/claude_parity.rs:300,1946-1955",
+   "correction": "The brief's items are not the prompt's wording. The prompt asks for objective, decisions, files or commands touched, verification run, open risks and next actions."
+  },
+  {
+   "section": "3",
+   "claim": "Cloud pull requests need the managed Code switch and compute gate: both checked in the route (pull-request/route.ts:22-33)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The open (POST) route checks e2bProvisioningReady() (needs AGI_E2B_EXECUTION=1, a non-empty E2B_API_KEY and sandboxComputeIsPriceable) and isManagedComputePrivateBetaEnabled(). That second check is on unless the env var is 0, false or off, so it works as a kill switch. The status GET route has neither gate, only the chat-conversation rate limit.",
+   "evidence": "apps/web/app/api/code/sessions/[sessionId]/pull-request/route.ts:22-33; apps/web/lib/e2b/gate.ts:20-28; apps/web/lib/managed-compute-gate.ts:55-58; .../pull-request/status/route.ts:14-31",
+   "correction": "Only creating a cloud pull request is gated. It needs the E2B cutover flag, the E2B key, a priceable compute rate and the managed-compute switch, which is on unless set to 0, false or off. Reading checks status is not gated. The page's 'AGI_E2B_EXECUTION and E2B_API_KEY' list omits the priceable-compute condition."
+  },
+  {
+   "section": "2/8",
+   "claim": "Run tests control is a header button 'Run tests' / 'Stop tests' (LocalSessionPanel.tsx:1129-1141)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The button renders only when !remoteSsh. A session over SSH has no Run tests button. The button is icon-only (ListChecks), and the label is its aria-label and title.",
+   "evidence": "apps/web/features/code/components/LocalSessionPanel.tsx:1129-1141",
+   "correction": "The icon-only Run tests / Stop tests header button is hidden in remote SSH sessions. The page's edge-case table omits this state."
+  }
+ ],
+ "missing_facts": [
+  "The managed-compute switch is a kill switch that is on by default. It turns off only when set to 0, false or off (apps/web/lib/managed-compute-gate.ts:55-58). The page calls it a 'private-beta switch' without saying that, and without saying that e2bProvisioningReady also needs sandboxComputeIsPriceable (apps/web/lib/e2b/gate.ts:20-28).",
+  "The cloud pull-request status route (the one behind web and mobile checks) has no E2B or managed-compute gate. It is signed-in, per-user 'chat-conversation' rate limit only (apps/web/app/api/code/sessions/[sessionId]/pull-request/status/route.ts:14-31). Section 7 lumps it under the cloud gates.",
+  "Opening a local pull request needs write access to the repository. repositoryAccess calls assertRepositoryIsWritable for 'open' and requests a token with contents:read and pull_requests:write, while lookup only asks for pull_requests:read (apps/web/lib/services/cloud-code-local-pull-request.ts:20-23,81-98). The page's Permissions row mentions only 'reconnect required'."
+ ]
+}

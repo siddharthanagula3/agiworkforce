@@ -1,0 +1,329 @@
+{
+ "S17.01": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "AGI replied:"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "AGI Code"
+   }
+  ],
+  "needs": "an account or local runtime that can answer",
+  "note": "The author label is a visually hidden line that prefixes the answer as 'AGI (<model>) replied:' in the code; the visible difference is by layout and the model name shown in the meta line.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI Code view from the activity bar and type a short question in the composer.",
+   "Press Send and wait for the answer to finish.",
+   "Look for the model name shown with the answer (hover the answer's small meta line for the token detail).",
+   "Turn on VoiceOver and move to the answer: it should announce the answer as from AGI with the model name, not as your message.",
+   "Compare with Expected: the answer must look and sound different from your own message, and name the model."
+  ],
+  "where": "AGI Code sidebar (activity bar icon \"AGI Code\") > type a question and press Send > look at the answer"
+ },
+ "S17.02": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Stop response"
+   }
+  ],
+  "needs": "an account or local runtime that can answer",
+  "note": "The 'Stop response' control is icon-only with a tooltip, so it is a useful marker to find while the answer streams.",
+  "reachable": "yes",
+  "steps": [
+   "Ask for a longer answer that uses a list, bold text and a code block, for example 'Explain a sorting algorithm with a code example'.",
+   "Watch the answer while it arrives, without clicking anything.",
+   "Check that text appears a little at a time, not all at once at the end.",
+   "Check that the list, bold words and code block are formatted as they arrive.",
+   "Compare with Expected: the answer must fill in gradually with formatting shown on the way."
+  ],
+  "where": "AGI Code sidebar > type a question and press Send > watch the answer area while it is still arriving"
+ },
+ "S17.03": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "AGI is responding"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Starting\u2026"
+   }
+  ],
+  "needs": "an account or local runtime that can answer",
+  "note": "The indicator is an image mark with an aria-label, and the 'Starting\u2026' text only appears with the Activity row.",
+  "reachable": "yes",
+  "steps": [
+   "Send a question that takes a few seconds to answer.",
+   "Look straight after you press Send, before any text appears, for the small AGI mark that appears as the answer's placeholder.",
+   "Turn on VoiceOver and move to that mark: it should be announced as 'AGI is responding'.",
+   "Look for the 'Activity' row with 'Starting\u2026' if the answer uses tools.",
+   "Compare with Expected: a working indicator must show before and during the answer, and be announced."
+  ],
+  "where": "AGI Code sidebar > type a question and press Send > watch the space under your message before the text arrives"
+ },
+ "S17.04": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Activity"
+   }
+  ],
+  "needs": "an account or local runtime that can answer, and a workspace folder",
+  "note": "Only a collapsible Activity (tool steps) summary was found; no separate reasoning-summary disclosure was found in the webview code.",
+  "reachable": "yes",
+  "steps": [
+   "Ask a question that needs AGI to read a file or run a tool.",
+   "When the answer shows an 'Activity' row above it, click that row.",
+   "Check that the row opens and closes, showing its steps and a chevron.",
+   "Press Tab to the row and press Return or Space to open and close it with the keyboard.",
+   "Compare with Expected: the summary of work must collapse and expand on demand. The model's reasoning text itself was not found in this screen."
+  ],
+  "where": "AGI Code sidebar > send a message that makes AGI use a tool (for example 'Read the README in this workspace') > click the 'Activity' row above the answer"
+ },
+ "S17.05": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Activity"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Completed"
+   }
+  ],
+  "needs": "an account or local runtime that can answer, and a workspace folder",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Ask for something that uses a tool, such as 'List the files in this folder'.",
+   "Wait for the 'Activity' row to appear above the answer and click it open.",
+   "Click one of the tool steps to expand it.",
+   "Check that each step shows the tool's name, a status (running, done or error) and its result.",
+   "Compare with Expected: each tool call must show its name, status and result."
+  ],
+  "where": "AGI Code sidebar > send a message that makes AGI use a tool > click the 'Activity' row > expand one tool step"
+ },
+ "S17.15": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Copy"
+   }
+  ],
+  "needs": "an account or local runtime that can answer",
+  "note": "The copy takes the answer's stored source text (the text the code keeps for the answer), not a separately rendered plain-text version; the tester should judge the pasted result against Expected.",
+  "reachable": "yes",
+  "steps": [
+   "Send a question and wait for the answer to finish.",
+   "Move the pointer over the answer to show its action icons.",
+   "Click the copy icon, the first one, whose tooltip is 'Copy'.",
+   "Paste into a text editor (Cmd+V) to see the copied text.",
+   "Compare with Expected: the whole answer's text must be on the clipboard, and the icon should briefly show 'Copied'."
+  ],
+  "where": "AGI Code sidebar > send a message > hover the answer > click the copy icon (tooltip 'Copy')"
+ },
+ "S17.19": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Regenerate"
+   }
+  ],
+  "needs": "an account or local runtime that can answer",
+  "note": "The button is shown only on the latest answer (CSS class message--latest).",
+  "reachable": "yes",
+  "steps": [
+   "Send a question and wait until the answer is complete.",
+   "Hover over the latest answer and find the refresh icon, tooltip 'Regenerate'.",
+   "Click it.",
+   "Check that a new answer replaces the previous attempt for the same question in the same place.",
+   "Compare with Expected: a new attempt for the same prompt must appear, not a copy of the old one."
+  ],
+  "where": "AGI Code sidebar > send a message > wait for the answer to finish > hover the latest answer > click the refresh icon (tooltip 'Regenerate')"
+ },
+ "S17.20": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Retry"
+   }
+  ],
+  "needs": "a way to make the next answer fail (for example, turn off the internet)",
+  "note": "The Retry button appears only when the failure is marked retryable; the code shows it as a button in the error block.",
+  "reachable": "yes",
+  "steps": [
+   "Turn off the internet connection, or otherwise make the next answer fail.",
+   "Send a question and wait for the error block to appear.",
+   "Read the error block and find the 'Retry' button.",
+   "Turn the internet back on, then click 'Retry'.",
+   "Compare with Expected: the failure must be replaced by the new outcome; the error block should disappear and the new answer should appear."
+  ],
+  "where": "AGI Code sidebar > cause a failed answer (for example, turn off the internet and press Send) > click 'Retry' in the error block"
+ },
+ "S17.27": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Branch from here"
+   }
+  ],
+  "needs": "an account or local runtime that can answer",
+  "note": "The new session's history and the unchanged original were not checked against code beyond the branch handler.",
+  "reachable": "yes",
+  "steps": [
+   "Send two or more messages so there is an earlier answer.",
+   "Hover an earlier answer and click the fork icon, tooltip 'Branch from here'.",
+   "Check that a new session opens with the conversation up to that answer.",
+   "Go back to the original session and check it still has all its messages.",
+   "Compare with Expected: the new session keeps history up to that answer and the original is unchanged."
+  ],
+  "where": "AGI Code sidebar > send a message > hover an answer > click the fork icon 'Branch from here'"
+ },
+ "S17.29": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Good response"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Remove rating"
+   }
+  ],
+  "needs": "an account or local runtime that can answer",
+  "note": "The recorded feedback is sent to the server; the UI only shows the pressed state.",
+  "reachable": "yes",
+  "steps": [
+   "Send a question and wait for the answer to finish.",
+   "Hover the answer and click the thumbs-up icon, tooltip 'Good response'.",
+   "Check that the icon fills in and reads as pressed.",
+   "Click it again and check the tooltip changes to 'Remove rating' and the icon clears.",
+   "Compare with Expected: a thumbs-up must record positive feedback for that answer; the UI shows only the pressed state, so the record itself cannot be seen here."
+  ],
+  "where": "AGI Code sidebar > send a message > hover the answer > click the thumbs-up icon 'Good response'"
+ },
+ "S17.30": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Bad response"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Remove rating"
+   }
+  ],
+  "needs": "an account or local runtime that can answer",
+  "note": "The recorded feedback is sent to the server; the UI only shows the pressed state.",
+  "reachable": "yes",
+  "steps": [
+   "Send a question and wait for the answer to finish.",
+   "Hover the answer and click the thumbs-down icon, tooltip 'Bad response'.",
+   "Check that the icon fills in and reads as pressed.",
+   "Click it again and check the tooltip changes to 'Remove rating' and the icon clears.",
+   "Compare with Expected: a thumbs-down must record negative feedback for that answer; the UI shows only the pressed state, so the record itself cannot be seen here."
+  ],
+  "where": "AGI Code sidebar > send a message > hover the answer > click the thumbs-down icon 'Bad response'"
+ },
+ "S17.36": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Prompt cache"
+   }
+  ],
+  "needs": "an account or local runtime that can answer",
+  "note": "No cost figure was found in the answer details; time is shown only per tool step in the Activity row.",
+  "reachable": "yes",
+  "steps": [
+   "Send a question and wait for the answer to finish.",
+   "Look at the small text line under the answer; it shows the model that answered.",
+   "Hover that line to see the token details (input and output tokens).",
+   "If the answer used prompt caching, look for the 'Prompt cache' line below it.",
+   "Compare with Expected: the model that actually answered and its token usage must be visible. No cost figure was found in this area."
+  ],
+  "where": "AGI Code sidebar > send a message > look at the small line under the answer (the model name), then hover it"
+ },
+ "S17.37": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "{provider} stopped replying part way through."
+   }
+  ],
+  "needs": "a way to cut the connection while an answer streams (for example, turn off the internet)",
+  "note": "The label is the English template with a {provider} placeholder that the app fills in; the code keeps partial text and marks it retryable, but no separate 'incomplete' wording was found.",
+  "reachable": "yes",
+  "steps": [
+   "Send a long question that streams for a while.",
+   "Turn off the internet while the answer is still arriving.",
+   "Look at the partial text that already arrived; it should stay on screen.",
+   "Read the error block below it for the words about the stop and its reason.",
+   "Compare with Expected: the partial answer must stay and be marked incomplete, with the reason shown in the error block."
+  ],
+  "where": "AGI Code sidebar > send a message > the answer stops partway (for example, the connection drops while it streams) > read the error block below the partial answer"
+ },
+ "S17.38": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "The safety system stopped this response. Rephrase the request, or try a different model."
+   }
+  ],
+  "needs": "a request the safety system refuses",
+  "note": "The refusal has its own sentence, but it uses the same error block as other failures; no separate visual refusal state was found.",
+  "reachable": "yes",
+  "steps": [
+   "Send a request that the safety system is likely to refuse.",
+   "Wait for the error block to appear under the turn.",
+   "Read the words in the error block.",
+   "Compare with Expected: it must say a safety refusal with a next step ('Rephrase the request, or try a different model.'), not a generic error."
+  ],
+  "where": "AGI Code sidebar > send a message that the safety system refuses > read the error block"
+ },
+ "S17.39": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Stop response"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Stopped"
+   }
+  ],
+  "needs": "an account or local runtime that can answer",
+  "note": "The stop path posts a done message with stopped set, but the webview's handling of that flag did not show which words appear; 'The turn was stopped.' is the words for an interrupted failure.",
+  "reachable": "yes",
+  "steps": [
+   "Send a long question.",
+   "While the answer is still arriving, click the 'Stop response' button.",
+   "Check that the answer stops and keeps the text that already arrived.",
+   "Look for the 'Stopped' marker or the note about the stopped turn, and whether a Retry option is offered.",
+   "Compare with Expected: the answer must be marked stopped, keep what arrived, and offer to try again. The exact words shown after a user stop were not confirmed in the code."
+  ],
+  "where": "AGI Code sidebar > send a message > click the 'Stop response' button while the answer streams > read the note on the answer"
+ },
+ "S17.40": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "{provider} could not answer."
+   }
+  ],
+  "needs": "a turn that returns no output (hard to trigger on demand)",
+  "note": "The CLI maps an empty response to a provider-unavailable failure, and the extension shows the words '{provider} could not answer.'; no separate 'no response' wording was found in the English strings, and whether Retry is offered depends on the protocol's retryable flag, which was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message that the model answers with nothing (this depends on the provider; it may be hard to trigger).",
+   "Wait for the error block under the turn.",
+   "Read the words: they should say the provider could not answer.",
+   "Check whether a 'Retry' button is offered.",
+   "Compare with Expected: an explicit error with retry must appear, not an empty bubble."
+  ],
+  "where": "AGI Code sidebar > send a message that gets no reply from the model > read the error block"
+ }
+}

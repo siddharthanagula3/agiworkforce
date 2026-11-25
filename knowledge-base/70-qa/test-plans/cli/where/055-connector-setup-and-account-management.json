@@ -1,0 +1,270 @@
+{
+ "S55.04": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "transport"
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "`agi mcp list` shows the registered names."
+   }
+  ],
+  "needs": "a registered MCP server (agi mcp add first)",
+  "note": "The detail view shows only name, status, transport, target, file and rules. The CLI has no connector detail page with description, publisher or links.",
+  "reachable": "yes",
+  "steps": [
+   "Type agi mcp list to see the registered server names.",
+   "Type agi mcp get <name> with one of those names.",
+   "Look at the lines name, status, transport, target and file, and compare them with Expected. The description, publisher, sign-in requirement, tools and links are not shown here."
+  ],
+  "where": "agi mcp list, then agi mcp get <name>"
+ },
+ "S55.05": {
+  "labels": [
+   {
+    "file": "apps/cli/src/repl/registry.rs",
+    "text": "MCP tools:"
+   }
+  ],
+  "needs": "a registered MCP server; /mcp tools lists only servers connected in this session",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Type agi mcp get <name> in a terminal.",
+   "Look for the Tools (N): list with each tool name and description.",
+   "Start agi, type /mcp tools and look for the MCP tools: list."
+  ],
+  "where": "agi mcp get <name>, or /mcp tools [server] inside an agi session"
+ },
+ "S55.07": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "The token is stored in the OS credential store."
+   },
+   {
+    "file": "apps/cli/src/cloud/connectors.rs",
+    "text": "Connect one in your browser, for example"
+   }
+  ],
+  "needs": "a remote server address, a browser, and an outside account for that service",
+  "note": "There is no in-app Connect button. Connecting is a command plus a browser step, and login needs an interactive terminal.",
+  "reachable": "yes",
+  "steps": [
+   "Type agi mcp add <name> --url <https address> to register a remote server.",
+   "Type agi mcp login <name> in an interactive terminal and complete the step in the browser.",
+   "Look for The token is stored in the OS credential store. For account connectors, run agi connectors and look for Connect one in your browser."
+  ],
+  "where": "agi mcp login <name> (remote server); for account connectors, agi connectors shows the browser address to connect"
+ },
+ "S55.08": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "The token is stored in the OS credential store."
+   }
+  ],
+  "needs": "an account at an OAuth provider and a browser",
+  "note": "Login requires an interactive terminal; the code says it needs one to open the browser.",
+  "reachable": "yes",
+  "steps": [
+   "Register an OAuth remote server with agi mcp add <name> --url <https URL>.",
+   "Type agi mcp login <name>; the provider consent page should open in the browser.",
+   "Approve access in the browser, then look in the terminal for The token is stored in the OS credential store.",
+   "Type agi mcp get <name> and check that it lists tools."
+  ],
+  "where": "agi mcp login <name>"
+ },
+ "S55.09": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Header for a remote server as \"Name: value\", for example an API key. Repeat for each."
+   }
+  ],
+  "needs": "the API key for the service",
+  "note": "There is no entry form; the key is typed as a header flag. Encryption of the stored key was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Type agi mcp add <name> --url <https URL> --header \"<Header name>: <your API key>\".",
+   "Press Enter and read the success line the command prints.",
+   "Type agi mcp get <name> and check that it connects and lists tools."
+  ],
+  "where": "agi mcp add <name> --url <URL> --header \"Name: value\""
+ },
+ "S55.18": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/screen_renderers.rs",
+    "text": "\u2714 connected"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/screen_renderers.rs",
+    "text": "\u25b3 needs authentication"
+   },
+   {
+    "file": "apps/cli/src/repl/registry.rs",
+    "text": "not responding"
+   }
+  ],
+  "needs": "at least one registered MCP server or a connected account connector",
+  "note": "Account connectors show health text only when it is not healthy.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi and type /mcp.",
+   "Read the status after each server name: connected, disabled, needs authentication, failed, blocked by your workspace or starting.",
+   "Type /mcp info <server> and look for responding or not responding.",
+   "Type agi connectors and look for needs reconnecting or connected since <date>, <health>."
+  ],
+  "where": "/mcp inside an agi session; /mcp info <server>; agi connectors for account connectors"
+ },
+ "S55.20": {
+  "labels": [
+   {
+    "file": "apps/cli/src/cloud/connectors.rs",
+    "text": "needs reconnecting: open"
+   },
+   {
+    "file": "apps/cli/src/mcp/mod.rs",
+    "text": "needs sign-in, run"
+   }
+  ],
+  "needs": "an account connector whose connection expired or was revoked, or a remote MCP server that needs sign-in",
+  "note": "There is no Reconnect button in the CLI. The CLI prints a URL to open.",
+  "reachable": "yes",
+  "steps": [
+   "Type agi connectors.",
+   "Find a connector that shows needs reconnecting: open <url>.",
+   "Open that URL in the browser and reconnect, then run agi connectors again.",
+   "Look for connected since on that connector. For an MCP server showing needs authentication, run agi mcp login <name>."
+  ],
+  "where": "agi connectors (account connectors); agi mcp login <name> (remote MCP servers)"
+ },
+ "S55.21": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "did not answer within 20 seconds"
+   },
+   {
+    "file": "apps/cli/src/repl/registry.rs",
+    "text": "MCP reconnected:"
+   }
+  ],
+  "needs": "a registered MCP server",
+  "note": "/mcp test runs the same reconnect as /mcp restart and takes no server name.",
+  "reachable": "yes",
+  "steps": [
+   "Type agi mcp get <name> in a terminal.",
+   "Look at the connection line: could not connect with a reason, or did not answer within 20 seconds, or the server name and Tools list when it works.",
+   "Start agi, type /mcp restart and look for MCP reconnected: N tool(s) available. or MCP restart failed."
+  ],
+  "where": "agi mcp get <name>; /mcp restart inside an agi session"
+ },
+ "S55.22": {
+  "labels": [
+   {
+    "file": "apps/cli/src/cloud/connectors.rs",
+    "text": "Disconnected {connector} from your account."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Its saved sign-in and tool permissions are removed"
+   }
+  ],
+  "needs": "a connector connected to your account",
+  "note": "Removing an MCP server with agi mcp remove is a separate path from disconnecting an account connector.",
+  "reachable": "yes",
+  "steps": [
+   "Type agi connectors and note the connector id.",
+   "Type agi connectors disconnect <id>, read the prompt and its consequence, then answer it.",
+   "Look for Disconnected <id> from your account.",
+   "Type agi connectors again and ask the assistant to use that connector; check that it is no longer offered."
+  ],
+  "where": "agi connectors disconnect <connector> (account connectors); agi mcp remove <name> (MCP servers)"
+ },
+ "S55.23": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Revoked the OAuth grant for"
+   }
+  ],
+  "needs": "a remote MCP server signed in over OAuth, and the provider account",
+  "note": "Account connectors have only disconnect in the CLI, with no separate revoke.",
+  "reachable": "yes",
+  "steps": [
+   "Use a remote server already signed in with agi mcp login <name>.",
+   "Type agi mcp logout <name>.",
+   "Look for Revoked the OAuth grant for '<name>' at its provider and removed the stored token.",
+   "If the provider did not confirm, read the line that tells you to remove the app's access in the provider's own settings, and check that page."
+  ],
+  "where": "agi mcp logout <name>"
+ },
+ "S55.27": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "now asks before it runs"
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "Workspace connectors"
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "write tools"
+   }
+  ],
+  "needs": "a registered MCP server; a Managed session to see workspace rules",
+  "note": "The CLI sets rules per server or per tool. A read and write split exists only in the workspace policy.",
+  "reachable": "yes",
+  "steps": [
+   "Type agi mcp block <server> <tool>; look for the message that says the tool is now blocked.",
+   "Type agi mcp get <server> and look for the rule line showing blocked, asks first or runs without asking.",
+   "Type agi mcp unset <server> <tool> to remove the setting.",
+   "In a Managed session type /connectors and look for the Workspace connectors section; write tools rules there are set by the workspace, not here."
+  ],
+  "where": "agi mcp ask|allow|block <server> [tool] to set it; agi mcp get <server> to view it; /connectors shows workspace tool rules"
+ },
+ "S55.29": {
+  "labels": [
+   {
+    "file": "apps/cli/src/agent/tools.rs",
+    "text": "Allow MCP tool"
+   }
+  ],
+  "needs": "a connector that supplied data in an answer",
+  "note": "Searched apps/cli/src for attribution and provider text near answers and tool output. Only the approval prompt Allow MCP tool '<tool>' from server '<server>'? (agent/tools.rs:150) names a server; no provider label on answers was found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S55.30": {
+  "labels": [
+   {
+    "file": "apps/cli/src/mcp/mod.rs",
+    "text": "needs the additional permission"
+   }
+  ],
+  "needs": "a remote MCP server whose tool needs a scope your grant lacks; hard to set up",
+  "note": "The product prints the instruction in the error. It does not show a grant prompt inside the session.",
+  "reachable": "yes",
+  "steps": [
+   "Use a remote server whose tool needs a wider permission than your grant.",
+   "Ask the assistant to run that tool.",
+   "Look for the error text needs the additional permission '<scope>'. Run agi mcp login <name> to grant it.",
+   "Type agi mcp login <name>, approve in the browser, then ask again and check that the tool runs."
+  ],
+  "where": "agi mcp login <name>, after a tool error in an agi session"
+ },
+ "S55.32": {
+  "labels": [],
+  "needs": "a service on a private network",
+  "note": "Searched apps/cli/src for private network, VPN and tunnel. Only refusals for private addresses in fetch tools (features/exec/tools/mod.rs:1523, permissions.rs:173) were found; validate_remote_url in mcp/registry.rs accepts only http and https. No private-network setup was found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ }
+}

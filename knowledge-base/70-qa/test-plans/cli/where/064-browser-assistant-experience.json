@@ -1,0 +1,208 @@
+{
+ "S64.01": {
+  "labels": [
+   {
+    "file": "apps/cli/src/command_registry.rs",
+    "text": "/chrome"
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "Chrome integration"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Ask AGI about this page"
+   }
+  ],
+  "needs": "AGI Desktop paired with Chrome through the extension, and a signed-in account",
+  "note": "The browser tools are offered to the model only while Chrome is paired (apps/cli/src/platform/runtime/tool_catalog.rs, browser_tool_definitions). The /chrome text in the Paired state is in render_chrome_state.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to AGI Desktop, pair it with Chrome through the extension, and open a web page in Chrome.",
+   "In a terminal run agi, then type /chrome and check that it says Chrome integration and Paired. This session can read and act in the browser you are looking at.",
+   "At the prompt, ask a question such as: What is the page open in my Chrome about?",
+   "Compare the answer with the open page: it should name the page's title and visible content.",
+   "For the side-panel route: right-click the page background and choose Ask AGI about this page, then ask a question and check the answer uses the page."
+  ],
+  "where": "Terminal: run agi, then type /chrome. Or in Chrome, right-click the page background > Ask AGI about this page (side panel)."
+ },
+ "S64.02": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Send selected text to a local app\u2026"
+   },
+   {
+    "file": "apps/extension/src/features/context-handoff/index.ts",
+    "text": "Copy CLI command"
+   },
+   {
+    "file": "apps/extension/src/features/context-handoff/index.ts",
+    "text": "Send selected context?"
+   }
+  ],
+  "needs": "a web page with text to select, the AGI Chrome extension, the AGI CLI installed",
+  "note": "A second route exists: right-click the selection and choose Ask AGI about \"%s\", which opens the side panel with the selection attached (apps/extension/_locales/en/messages.json). The code line side_panel.ts:16719 is the Copy CLI command handler.",
+  "reachable": "yes",
+  "steps": [
+   "On a web page, highlight some text.",
+   "Right-click the highlighted text and choose Send selected text to a local app\u2026.",
+   "In the preview titled Send selected context?, click Copy CLI command.",
+   "Paste into a terminal and run it; the command starts with agi and passes an agi-context:// link to --context-url.",
+   "Ask a question about the text at the prompt and check the answer uses the highlighted text and its source page."
+  ],
+  "where": "Chrome: select text on a web page > right-click the selection > Send selected text to a local app\u2026 > Copy CLI command. Then paste the copied command in a terminal."
+ },
+ "S64.06": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Ask AGI about this page"
+   }
+  ],
+  "needs": "a Chrome with the AGI extension, a signed-in account",
+  "note": "The CLI route is the same as S64.01: agi, then a free question at the prompt while Chrome is paired.",
+  "reachable": "yes",
+  "steps": [
+   "Open a web page with clear content in Chrome.",
+   "Right-click an empty part of the page and choose Ask AGI about this page.",
+   "In the AGI side panel, type a free question about the page, such as: What are the main points of this page?",
+   "Send it and wait for the answer.",
+   "Compare the answer with the page: it should use what the page says, not general knowledge."
+  ],
+  "where": "Chrome: right-click the background of a web page > Ask AGI about this page, then type a question in the side panel."
+ },
+ "S64.10": {
+  "labels": [
+   {
+    "file": "apps/cli/src/platform/runtime/tool_catalog.rs",
+    "text": "Open({})"
+   },
+   {
+    "file": "apps/cli/src/features/exec/tools/mod.rs",
+    "text": "The agent wants to open an address in your signed-in Chrome."
+   }
+  ],
+  "needs": "AGI Desktop paired with Chrome, a signed-in Chrome",
+  "note": "The tool is browser_navigate; there is no separate button for it.",
+  "reachable": "yes",
+  "steps": [
+   "Pair AGI Desktop with Chrome, and run agi in a terminal.",
+   "At the prompt type: Open https://example.com in my browser.",
+   "When the permission prompt appears reading The agent wants to open an address in your signed-in Chrome., approve it.",
+   "Look at the terminal line that starts with Open(https://example.com).",
+   "Compare with Chrome: the address should open in a tab in the user's own Chrome."
+  ],
+  "where": "Terminal: run agi, then ask the assistant at the prompt to open a web address, for example: Open https://example.com in my browser."
+ },
+ "S64.14": {
+  "labels": [
+   {
+    "file": "apps/cli/src/platform/runtime/tool_catalog.rs",
+    "text": "Find({query})"
+   },
+   {
+    "file": "apps/cli/src/platform/runtime/tool_catalog.rs",
+    "text": "Read the active tab"
+   }
+  ],
+  "needs": "AGI Desktop paired with Chrome, a site with a search box",
+  "note": "The search box is found through browser_find, which marks the site's own search field as search (tool_catalog.rs browser_find description). No dedicated search command exists.",
+  "reachable": "yes",
+  "steps": [
+   "Pair Chrome, open a site that has its own search box, and run agi.",
+   "At the prompt ask the assistant to search that site for a term.",
+   "Approve any permission prompts that appear for Find or Type actions.",
+   "Watch the terminal lines such as Find(...) and Read the active tab.",
+   "Compare the reply with the site's search results page: it should report the results shown there."
+  ],
+  "where": "Terminal: run agi, then ask the assistant at the prompt to search a site, for example: Search the site for pricing and tell me the results."
+ },
+ "S64.15": {
+  "labels": [
+   {
+    "file": "apps/cli/src/platform/runtime/tool_catalog.rs",
+    "text": "Fill in the form"
+   },
+   {
+    "file": "apps/cli/src/features/exec/tools/mod.rs",
+    "text": "No active tab is open in the paired Chrome, so no fields were filled."
+   }
+  ],
+  "needs": "AGI Desktop paired with Chrome, a web form open in a signed-in Chrome",
+  "note": "If no tab is open the error No active tab is open in the paired Chrome, so no fields were filled. appears instead, from apps/cli/src/features/exec/tools/mod.rs.",
+  "reachable": "yes",
+  "steps": [
+   "Pair Chrome, open a web form in Chrome, and run agi.",
+   "At the prompt ask the assistant to fill in the fields it can see, giving the values.",
+   "Approve the permission prompt that lists the tab and fields.",
+   "Watch for the terminal line Fill in the form.",
+   "Compare the form in Chrome: the fields should hold the values you gave, and the submit button should not have been pressed."
+  ],
+  "where": "Terminal: run agi, then ask the assistant at the prompt to fill a form on the open page, for example: Fill in the form on this page with my name and email."
+ },
+ "S64.16": {
+  "labels": [
+   {
+    "file": "apps/cli/src/platform/runtime/tool_catalog.rs",
+    "text": "Open({})"
+   },
+   {
+    "file": "apps/cli/src/platform/runtime/tool_catalog.rs",
+    "text": "Read the active tab"
+   }
+  ],
+  "needs": "AGI Desktop paired with Chrome, a signed-in Chrome",
+  "note": "There is no separate multi-step control; the steps come from the assistant's own tool loop. The code line desktopCommands.ts:202 is the browser_history handler, not the loop.",
+  "reachable": "yes",
+  "steps": [
+   "Pair Chrome with a tab open and run agi.",
+   "At the prompt type a goal that needs several website steps.",
+   "Approve each permission prompt as it appears.",
+   "Watch the terminal lines for each step, such as Open(...), Find(...) and Read the active tab.",
+   "Compare the final reply with the goal: it should say what was done across the steps."
+  ],
+  "where": "Terminal: run agi, then type a multi-step goal at the prompt, for example: Open https://example.com, find the contact page and read me the email address."
+ },
+ "S64.18": {
+  "labels": [
+   {
+    "file": "apps/cli/src/platform/runtime/tool_catalog.rs",
+    "text": "Click({})"
+   },
+   {
+    "file": "apps/cli/src/platform/runtime/tool_catalog.rs",
+    "text": "Open({})"
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "The desktop app asks before the first action and records each one in its activity."
+   }
+  ],
+  "needs": "AGI Desktop paired with Chrome, a signed-in Chrome",
+  "note": "print_tool_status (apps/cli/src/features/exec/tools/common/mod.rs) prints nothing while the full-screen TUI is active, so confirm the lines show in the TUI transcript too (agent/chat.rs:191).",
+  "reachable": "yes",
+  "steps": [
+   "Pair Chrome with a tab open and run agi.",
+   "Ask for a browser task that takes at least two actions, such as: Open https://example.com and click the first link.",
+   "Watch the terminal while it runs: each action should appear as its own line, such as Open(...) or Click(...), before the next action starts.",
+   "Also check the AGI Desktop activity list, which the /chrome text says records each action.",
+   "Compare: every action taken should have a line and nothing should be missing."
+  ],
+  "where": "Terminal: run agi, then give a browser task at the prompt; each browser action appears as a terminal line."
+ },
+ "S64.32": {
+  "labels": [],
+  "needs": "AGI Desktop paired with Chrome, a signed-in Chrome",
+  "note": "The summary is the assistant's final message; the code (apps/cli/src/features/exec/tools/mod.rs) only returns tool results, and no separate summary screen was found.",
+  "reachable": "yes",
+  "steps": [
+   "Pair Chrome and run agi.",
+   "Give a browser task that is only partly possible, such as: Open https://example.com and submit the login form.",
+   "Wait for the task to end, with the final reply shown in the terminal.",
+   "Read the reply: it should say what was done and what still needs the user.",
+   "Compare with the Chrome tab: the reply should match what actually happened."
+  ],
+  "where": "Terminal: run agi, give a browser task at the prompt, and read the final reply after the task ends."
+ }
+}

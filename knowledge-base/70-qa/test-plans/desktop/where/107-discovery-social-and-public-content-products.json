@@ -1,0 +1,94 @@
+{
+ "S107.13": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/ConversationHeader.tsx",
+    "text": "Share conversation"
+   },
+   {
+    "file": "apps/web/features/chat/components/share/SharedSessionViewer.tsx",
+    "text": "Shared by"
+   }
+  ],
+  "needs": "A second account in the same workspace",
+  "note": "Only the sharer name, message count and expiry are shown; no version, source or \"copied from\" text was found in the code, and the exact share-link button label in the dialog was not verified.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with account A, open a conversation, and click \"Share conversation\" in the chat header.",
+   "In the dialog, choose a workspace or organization share and create the link.",
+   "Sign in with account B in the same workspace (or open the link in a new window) and open the link.",
+   "Look under the title for \"Shared by <name>\", \"<n> messages\" and \"Expires <time>\". Compare with Expected: publisher, author, source, versions and \"copied from\" were not found on this page."
+  ],
+  "where": "Chat header > \"Share conversation\", then open the share link as a second account. The viewer shows \"Shared by <name>\", the message count and \"Expires\"."
+ },
+ "S107.15": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "More message actions"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Report this response"
+   }
+  ],
+  "needs": "A conversation that already has an AI reply",
+  "note": "No report control was found on public share pages, and the code only sends category harmful. Infringement reports are not offered here.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, open a conversation that has an AI reply.",
+   "Hover or click the AI reply, then click the \"More message actions\" button.",
+   "Click \"Report this response\". The item changes to \"Reporting\u2026\" and then \"Reported\".",
+   "Compare with Expected: the report is sent to /api/content-report with category harmful. Confirming it reaches operators needs the operator dashboard (see S107.23)."
+  ],
+  "where": "An AI reply > \"More message actions\" > \"Report this response\". Report is offered only on AI replies, not on public share pages."
+ },
+ "S107.20": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Plugins"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Submit to the directory"
+   },
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "Partners"
+   }
+  ],
+  "needs": "A plugin you created that is submittable",
+  "note": "The exact Settings path to the directory was inferred from the nav labels, not confirmed in the directory's own code. The user-added publisher source was not found; the Partners page is a public marketing page, not an in-app screen.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, open Settings, and choose \"Plugins\".",
+   "Open a plugin you created so its detail page shows.",
+   "Click \"Submit to the directory\" and confirm in the dialog.",
+   "Look for the submission note and the review note on the plugin page. Compare with Expected: the publisher is named and the submission goes to review."
+  ],
+  "where": "Settings > Plugins > open a plugin you created > \"Submit to the directory\". Public information: the \"Partners\" page (site navigation) says \"List a plugin in the directory\"."
+ },
+ "S107.23": {
+  "labels": [
+   {
+    "file": "apps/web/features/admin/components/CopyrightNoticeQueuePanel.tsx",
+    "text": "Rights notices"
+   },
+   {
+    "file": "apps/web/features/admin/components/CopyrightNoticeQueuePanel.tsx",
+    "text": "Unpublish"
+   }
+  ],
+  "needs": "A staff operator account",
+  "note": "The tab's visible label for the content tab was not found, so the tester should look for the content tab by its contents. The admin console also lists a \"Content report queue\" and \"Content takedown\" entry in apps/web/features/admin/pages/AdminConsolePage.tsx, which the audit did not confirm as the same path.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with a staff operator account and open /operator.",
+   "Open the content tab, which holds the \"Rights notices\" list.",
+   "Pick a notice, read its details, and choose a status; for an unpublish, click \"Unpublish\" and confirm the dialog.",
+   "Compare with Expected: the notice is reviewed here and the public item is taken down, with the decision recorded in the audit log."
+  ],
+  "where": "Operator dashboard (/operator) > content tab > \"Rights notices\" (staff account only)."
+ }
+}

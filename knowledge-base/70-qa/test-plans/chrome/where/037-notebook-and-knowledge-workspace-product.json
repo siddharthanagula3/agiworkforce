@@ -1,0 +1,50 @@
+{
+ "S37.01": {
+  "labels": [],
+  "needs": "a Free account",
+  "note": "No notebook or knowledge-workspace code in apps/extension. Searched the folder with rg for notebook, knowledge workspace, knowledgeWorkspace and knowledge_workspace; no matches.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S37.02": {
+  "labels": [],
+  "needs": "a Free account",
+  "note": "No notebook creation code in apps/extension. The same rg search found no notebook or knowledge-workspace matches.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S37.03": {
+  "labels": [],
+  "needs": "a Free account",
+  "note": "No notebook title or description code in apps/extension. The same rg search found no matches.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S37.14": {
+  "labels": [],
+  "needs": "a Free account",
+  "note": "The cited lines do not match: side_panel.ts lines 7342 and 7359 are in the computer-use start flow, not notebook chat. conversationSync.ts:195 is ensureCloudConversation and background.ts:6194 is the ENSURE_CLOUD_CONVERSATION handler. None of them read notebook sources. Searched for notebook, knowledge and grounded with no notebook match.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S37.15": {
+  "labels": [],
+  "needs": "a Free account",
+  "note": "No notebook instructions code in apps/extension. The same rg search found no notebook or knowledge-workspace matches.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S37.37": {
+  "labels": [],
+  "needs": "a Free account",
+  "note": "The cited lines do not match a notebook handoff. The closest module, apps/extension/src/features/context-handoff/index.ts, hands selected page context to AGI Desktop or VS Code, not a notebook. Searched for notebook and knowledge with no notebook match.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ }
+}

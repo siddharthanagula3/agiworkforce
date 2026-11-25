@@ -1,0 +1,141 @@
+{
+ "S40.01": {
+  "labels": [],
+  "needs": "a signed-in account",
+  "note": "No preferred-name field exists in apps/extension. The name is read from the account profile only for the greeting (apps/extension/src/features/cloud-bridge/capabilityDocument.ts), and no control for it was found. Searched apps/extension for preferred name, nickname, about you, and call me.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S40.02": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "More"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Memory"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Add"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The Memory row only appears when signed in. The same memory can also be added in chat with a message starting \"Remember that ...\" (packages/ai/agent-core/src/memory.ts), which is not a separate background setting.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, then click the \u22ee button labelled More at the top right of the side panel.",
+   "Click Memory in the menu. The Memory dialog opens.",
+   "Click the box labelled \"Add something for AGI to remember\" and type a line of background about yourself, for example your situation or interests.",
+   "Click Add.",
+   "Compare: the message \"Memory saved.\" appears and your line shows in the list. In a new chat, check that replies take it into account."
+  ],
+  "where": "More (\u22ee, top right) > Memory > New memory field > Add"
+ },
+ "S40.03": {
+  "labels": [],
+  "needs": "none",
+  "note": "No role or profession field or control was found in apps/extension. Searched apps/extension for role, profession, personalization, and about you. The only related screen is Memory (see S40.02), which has no role field.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S40.05": {
+  "labels": [],
+  "needs": "none",
+  "note": "No response style setting was found in apps/extension. Searched apps/extension for response style, tone, and personalization strings.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S40.07": {
+  "labels": [],
+  "needs": "none",
+  "note": "No formality setting was found in apps/extension. Searched apps/extension for formal, formality, and tone strings.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S40.08": {
+  "labels": [],
+  "needs": "none",
+  "note": "No tone preset picker was found in apps/extension. Searched apps/extension for tone, preset, and style strings.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S40.09": {
+  "labels": [],
+  "needs": "none",
+  "note": "No warmth setting was found in apps/extension. Searched apps/extension for warm, warmth, and tone strings.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S40.10": {
+  "labels": [],
+  "needs": "none",
+  "note": "No enthusiasm setting was found in apps/extension. Searched apps/extension for enthusiasm and tone strings.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S40.11": {
+  "labels": [],
+  "needs": "none",
+  "note": "No headings or lists preference was found in apps/extension. Searched apps/extension for heading, list, and prose strings.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S40.12": {
+  "labels": [],
+  "needs": "none",
+  "note": "No emoji preference was found in apps/extension. The only emoji code is for the computer-use step icons (apps/extension/src/features/side-panel/computerUsePanel.ts), not a reply setting.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S40.13": {
+  "labels": [],
+  "needs": "none",
+  "note": "No technical-depth setting was found in apps/extension. Searched apps/extension for technical, depth, and expertise strings.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S40.14": {
+  "labels": [],
+  "needs": "none",
+  "note": "No reply-language setting was found. The only language control is Dictation language (apps/extension/src/features/options/preference-rows.ts), which sets the microphone transcription language, not the language replies are written in.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S40.16": {
+  "labels": [],
+  "needs": "none",
+  "note": "No standing custom instructions feature was found in apps/extension. The Memory dialog stores facts with Edit and Delete only, with no on or off switch, so it does not match the Expected behaviour. Searched apps/extension for custom instructions and instructions strings.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S40.24": {
+  "labels": [],
+  "needs": "none",
+  "note": "No explanatory output style was found in apps/extension. Searched apps/extension for explanatory, style, and output strings.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S40.26": {
+  "labels": [],
+  "needs": "none",
+  "note": "No concise output style setting was found in apps/extension. The only concise strings are page-summary prompts (apps/extension/src/features/side-panel/pageCommands.ts), not a setting.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ }
+}

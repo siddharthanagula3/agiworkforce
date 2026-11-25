@@ -1,0 +1,276 @@
+{
+ "S69.01": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Work"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Chat"
+   }
+  ],
+  "needs": "a paid account",
+  "note": "The Chat | Work switch renders only for a paid account with a project picker (canUseAgiWork and projectPicker in ChatComposerNew.tsx); the run itself was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with a paid account and open Chat.",
+   "Look at the message box for the two-part switch with \"Chat\" and \"Work\" (at narrow widths only icons show).",
+   "Click \"Work\" so it is pressed.",
+   "Type a multi-step goal (for example \"List three files in my project and summarise each\") and send.",
+   "Compare: the conversation runs in Work mode with a plan and tool steps, as in Expected."
+  ],
+  "where": "Chat page (sign in, then Chat) > composer toggle at the right of the message box: click \"Work\""
+ },
+ "S69.02": {
+  "labels": [
+   {
+    "file": "apps/web/shared/components/layout/WebAppShell.tsx",
+    "text": "Open navigation"
+   }
+  ],
+  "needs": "a resizable browser window or phone width",
+  "note": "Layout tiers are defined in apps/web/shared/components/layout/app-shell-layout.ts (768px and 1024px breakpoints).",
+  "reachable": "yes",
+  "steps": [
+   "Open the web app and make the window narrower than 768px (or use a phone-width browser emulation).",
+   "Click \"Open navigation\" in the header; the drawer slides in.",
+   "Click any item in the drawer; the drawer closes.",
+   "Widen the window to 1024px or more; the sidebar stays open beside the content.",
+   "Compare: drawer below 768px, icon rail on portrait tablet widths, persistent sidebar on wide windows, as in Expected."
+  ],
+  "where": "Resize the browser window: under 768px tap \"Open navigation\" in the header; 768px to 1023px in portrait uses the icon rail; 1024px and wider keeps the sidebar open"
+ },
+ "S69.03": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "New chat"
+   }
+  ],
+  "needs": "none",
+  "note": "The URL is replaced after the first send in WebChatPage.tsx (router.replace to the conversation href).",
+  "reachable": "yes",
+  "steps": [
+   "Click \"New chat\" and type a first message, then send it.",
+   "Read the address bar: it changes from /chat to /chat/<id> after the send.",
+   "Open another conversation from the Sidebar, then copy the address.",
+   "Open the copied address in a new tab.",
+   "Compare: the same conversation loads from its own URL, as in Expected."
+  ],
+  "where": "Sidebar > New chat > send a first message, then read the address bar; open a conversation from the Sidebar and read the address bar"
+ },
+ "S69.04": {
+  "labels": [],
+  "needs": "none",
+  "note": "Back/Forward behaviour depends on router navigation in WebChatPage.tsx; no visible control exists in the app for it.",
+  "reachable": "yes",
+  "steps": [
+   "Open conversation A from the Sidebar, then open conversation B.",
+   "Click the browser Back button; conversation A should load.",
+   "Click the browser Forward button; conversation B should load.",
+   "Compare: each step opens the conversation its URL names, as in Expected."
+  ],
+  "where": "Sidebar > open conversation A, then open conversation B > browser Back and Forward buttons"
+ },
+ "S69.05": {
+  "labels": [],
+  "needs": "none",
+  "note": "Draft storage is in apps/web/features/chat/components/Composer/composer-draft-storage.ts; this checks same-browser reload only.",
+  "reachable": "yes",
+  "steps": [
+   "Open a conversation and type text in the message box without sending.",
+   "Press Cmd+R to reload the page.",
+   "Compare: the same conversation is open and the unsent text is back in the message box, as in Expected.",
+   "Reload once more to confirm it still holds in the same browser."
+  ],
+  "where": "Open a conversation, type an unsent draft in the message box, then reload the browser page (Cmd+R)"
+ },
+ "S69.06": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/DragDropOverlay.tsx",
+    "text": "Drop files here"
+   }
+  ],
+  "needs": "a file to upload",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Chat in the browser.",
+   "In Finder, select a file and drag it over the chat window.",
+   "Look for the overlay titled \"Drop files here\".",
+   "Release the file over the window, then check the message box for an attached file.",
+   "Compare: the overlay appeared and the dropped file is attached, as in Expected."
+  ],
+  "where": "Chat page > drag a file from Finder onto the chat window"
+ },
+ "S69.07": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Copy message"
+   }
+  ],
+  "needs": "a file to upload and a clipboard",
+  "note": "Code-block paste and the Strikethrough Markdown case were not traced here.",
+  "reachable": "yes",
+  "steps": [
+   "Copy a line of text in Notes, click the message box and press Cmd+V; the text appears.",
+   "Copy a file in Finder and press Cmd+V in the message box; check that it is attached.",
+   "Send any message, then hover over the reply and click \"Copy message\".",
+   "Paste the result into Notes with Cmd+V.",
+   "Compare: the pasted text and files appear, and the reply text is on the clipboard, as in Expected."
+  ],
+  "where": "Message box (composer) > paste with Cmd+V; reply under a message > hover and click \"Copy message\""
+ },
+ "S69.08": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/VoiceInputButton.tsx",
+    "text": "Start voice input"
+   }
+  ],
+  "needs": "a microphone and a browser that asks for permission",
+  "note": "The refusal text is in apps/web/features/chat/lib/live-voice-session.ts. No camera request was found in the traced files.",
+  "reachable": "yes",
+  "steps": [
+   "Click the microphone button next to the message box.",
+   "Allow the browser's microphone prompt when it appears.",
+   "Deny the prompt on a second try (or block it in site settings) and click the button again.",
+   "Compare: a refusal shows \"Microphone access was denied. Allow the microphone to use voice mode.\" and voice starts again after access is allowed, as in Expected."
+  ],
+  "where": "Message box (composer) > microphone button \"Start voice input\" (click it)"
+ },
+ "S69.10": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/CapabilitiesSection.tsx",
+    "text": "Cloud code execution and file creation"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/settings.json",
+    "text": "Capabilities"
+   }
+  ],
+  "needs": "a model that can run code on this deployment",
+  "note": "The sandbox description names GitHub, npm and PyPI only; E2B was not confirmed in the traced files, and the control that opens Settings was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and choose Capabilities.",
+   "Turn on the switch \"Cloud code execution and file creation\".",
+   "Go back to Chat, type /code followed by a request (for example \"/code print the sum of 2 and 3\") and send.",
+   "Turn the switch off and repeat the /code request.",
+   "Compare: with it on the code runs in the sandbox; with it off the server refuses, as in Expected."
+  ],
+  "where": "Settings > Capabilities > \"Cloud code execution and file creation\" switch; in Chat type /code in the message box and send"
+ },
+ "S69.13": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/NotificationsSection.tsx",
+    "text": "Agent run updates"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/settings.json",
+    "text": "Notifications"
+   }
+  ],
+  "needs": "a browser that supports web push and a Work run",
+  "note": "The notice says \"Enable separately in each browser\"; the closed-tab delivery depends on apps/web/public/sw.js and was not run.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and choose Notifications.",
+   "Turn on the switch \"Agent run updates\" and allow the browser notification prompt.",
+   "Start a Work run that takes a while, then close the tab.",
+   "Wait for the run to finish and watch for a system notification.",
+   "Compare: a notification arrives after the run ends with the tab closed, as in Expected."
+  ],
+  "where": "Settings > Notifications > \"Agent run updates\" switch"
+ },
+ "S69.17": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/ConversationTitleMenu.tsx",
+    "text": "Export\u2026"
+   },
+   {
+    "file": "apps/web/features/chat/components/dialogs/EnhancedExportDialog.tsx",
+    "text": "Export Chat History"
+   }
+  ],
+  "needs": "a conversation with messages",
+  "note": "Artifact and file downloads were not traced; the Export entry is in the conversation options menu, not the chat header.",
+  "reachable": "yes",
+  "steps": [
+   "Open a conversation with a few messages.",
+   "Click \"Conversation options\" and choose \"Export\u2026\".",
+   "In the \"Export Chat History\" dialog, pick a format: Markdown, PDF, Word Document, HTML or JSON.",
+   "Click the export button and check the file in Downloads.",
+   "Compare: the file downloads in the chosen format with the conversation in it, as in Expected."
+  ],
+  "where": "Open a conversation > \"Conversation options\" menu > \"Export\u2026\" > choose a format > Export"
+ },
+ "S69.18": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Voice input not supported in this browser"
+   }
+  ],
+  "needs": "a browser that lacks microphone capture (hard to reach on a current browser)",
+  "note": "Other capability checks (web push in apps/web/features/notifications/lib/web-push-client.ts) were not traced to a visible control.",
+  "reachable": "yes",
+  "steps": [
+   "Open the app in a browser where navigator.mediaDevices.getUserMedia is missing.",
+   "Look at the microphone button; it appears dimmed.",
+   "Click it; a hint appears for a few seconds.",
+   "Compare: the hint says \"Voice input is not supported in this browser\" instead of a failure, as in Expected."
+  ],
+  "where": "Message box (composer) > microphone button \"Start voice input\" in a browser without microphone support (click it)"
+ },
+ "S69.19": {
+  "labels": [
+   {
+    "file": "apps/web/lib/browser-support.ts",
+    "text": "This browser is too old to run AGI."
+   }
+  ],
+  "needs": "an old browser or JavaScript turned off",
+  "note": "The JavaScript-off notice (\"AGI needs JavaScript.\") is in the same file and the banner is in apps/web/app/layout.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Open the app in a browser too old to meet the feature checks, or turn JavaScript off and reload.",
+   "Look at the top of the page for the notice.",
+   "Compare: the notice says to open AGI in a current Chrome, Edge, Firefox or Safari, or to turn JavaScript on, as in Expected."
+  ],
+  "where": "Open AGI in an unsupported browser (too old) or with JavaScript off; the notice appears at the top of the page"
+ },
+ "S69.20": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/ConversationTitleMenu.tsx",
+    "text": "Share\u2026"
+   },
+   {
+    "file": "apps/web/app/copyright/report/ReportContentLink.tsx",
+    "text": "Report infringement or impersonation"
+   },
+   {
+    "file": "apps/web/features/chat/components/share/ExpiredShareBanner.tsx",
+    "text": "Shared conversation unavailable"
+   }
+  ],
+  "needs": "a second browser profile or private window, and a shared conversation",
+  "note": "The link preview title comes from generateMetadata in apps/web/app/share/[token]/page.tsx; the link preview was not checked in a real browser.",
+  "reachable": "yes",
+  "steps": [
+   "Open a conversation and click \"Conversation options\", then \"Share\u2026\".",
+   "Create a share link in \"Share conversation\" and copy it.",
+   "Open the link in a private window (signed out); check the page loads with the conversation.",
+   "Scroll to the bottom and find \"Report infringement or impersonation\".",
+   "Open a link that has expired or was revoked; check for \"Shared conversation unavailable\". Compare with Expected."
+  ],
+  "where": "Open a conversation > \"Conversation options\" > \"Share\u2026\" > create the share link, copy it, then open it signed out"
+ }
+}

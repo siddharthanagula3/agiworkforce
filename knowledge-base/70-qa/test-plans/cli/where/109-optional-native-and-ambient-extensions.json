@@ -1,0 +1,25 @@
+{
+ "S109.22": {
+  "labels": [
+   {
+    "file": "apps/cli/src/local_models.rs",
+    "text": "Local model servers"
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Show local model server status."
+   }
+  ],
+  "needs": "a terminal with the AGI CLI installed; optional: a local model server such as Ollama to see a running state",
+  "note": "The Expected line says the app shows health; here it is a CLI command output, and the TUI /models screen only points to agi models status and does not show health; agi doctor does not check the local runtime.",
+  "reachable": "yes",
+  "steps": [
+   "Open a terminal and type: agi models status, then press Return.",
+   "Read the first line of output, which should be \"Local model servers\".",
+   "Look at each provider line: it shows the provider name, \"running\" or \"not running\", and the base URL.",
+   "If a provider shows \"not running\", check for the indented \"error:\" line under it and the models list (\"models: none discovered\" when nothing is found).",
+   "Start a local model server (such as Ollama), run agi models status again, and confirm the line changes to \"running\" and lists its models."
+  ],
+  "where": "Terminal: type \"agi models status\" (the same check runs with \"agi models scan\"; add --json for JSON output)"
+ }
+}

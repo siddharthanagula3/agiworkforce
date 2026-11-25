@@ -1,0 +1,892 @@
+{
+ "S56.01": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Gmail"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/index.tsx",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   }
+  ],
+  "needs": "a Google account; a cloud account that can use connectors",
+  "note": "The ledger says the Gmail OAuth client pair is not yet in CONNECTOR_OAUTH_PROVIDERS_JSON, so Connect may fail or show Needs setup.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, tap the Cloud group, then tap Connectors.",
+   "Tap Gmail, then tap Connect and finish the Google sign-in.",
+   "Open a new chat, tap Add to chat, tap Connectors and turn Gmail on.",
+   "Type: Find emails from [a sender you know] about [a subject you know].",
+   "Compare: the reply lists matching messages from that mailbox, as Expected says."
+  ],
+  "where": "Settings > Cloud > Connectors > Gmail > Connect, then Add to chat > Connectors (turn Gmail on) in a new chat"
+ },
+ "S56.02": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Gmail"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/index.tsx",
+    "text": "Connectors"
+   }
+  ],
+  "needs": "a Google account; a cloud account that can use connectors",
+  "note": "Same Gmail OAuth gap as S56.01: the ledger says the client pair is not yet configured.",
+  "reachable": "yes",
+  "steps": [
+   "Connect Gmail as in S56.01 (Settings, Cloud, Connectors, Gmail, Connect).",
+   "Open a new chat, tap Add to chat, tap Connectors and turn Gmail on.",
+   "Type: Open the email from [a sender] about [a subject] and tell me what it says.",
+   "Compare: the reply shows the full text of that email or thread, not only a summary of the subject line."
+  ],
+  "where": "Settings > Cloud > Connectors > Gmail > Connect, then Add to chat > Connectors (turn Gmail on) in a new chat"
+ },
+ "S56.03": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Gmail"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   }
+  ],
+  "needs": "a Google account with Gmail; a cloud account that can use connectors",
+  "note": "The directory lists a create_draft tool for Gmail; the Gmail OAuth gap in S56.01 applies.",
+  "reachable": "yes",
+  "steps": [
+   "Connect Gmail and turn it on in a new chat (as in S56.01).",
+   "Type: Draft a reply to [a sender] saying [a short message].",
+   "Check the reply: it says a draft was created.",
+   "Open Gmail in a browser or the Gmail app and look in Drafts for the new draft, as Expected says."
+  ],
+  "where": "Settings > Cloud > Connectors > Gmail > Connect, then Add to chat > Connectors (turn Gmail on) in a new chat"
+ },
+ "S56.04": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx",
+    "text": "Tool permissions"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/index.tsx",
+    "text": "Action approvals"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Gmail"
+   }
+  ],
+  "needs": "a Google account with Gmail; a second mailbox you control to receive the test",
+  "note": "The approval card text was not read in the chat code; the approval rule is set per tool in Gmail's Tool permissions.",
+  "reachable": "yes",
+  "steps": [
+   "Connect Gmail and turn it on in a new chat (as in S56.01).",
+   "Type: Send the draft to [a sender you control] with the subject [test subject].",
+   "Look for the approval card that asks before the send runs.",
+   "Compare: nothing is sent until you approve; after approval the reply confirms the send."
+  ],
+  "where": "Settings > Cloud > Connectors > Gmail > Connect, then in a chat with Gmail on, the approval card when a send is requested"
+ },
+ "S56.05": {
+  "labels": [],
+  "needs": "a Google account with Gmail; a file to attach",
+  "note": "Gmail is reachable, but I did not find an attachment tool in the Gmail directory list I read (the first eight tool names only), so the attachment behaviour is not confirmed.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S56.07": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Google Calendar"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/index.tsx",
+    "text": "Connectors"
+   }
+  ],
+  "needs": "a Google account with Calendar; a cloud account that can use connectors",
+  "note": "The ledger says the Google Calendar OAuth client is not yet created, so Connect may fail. The phone's own calendar is separate: Settings > Device > Device Integrations.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, tap Cloud, tap Connectors, tap Google Calendar, tap Connect.",
+   "Finish the Google sign-in, then open a new chat.",
+   "Tap Add to chat, tap Connectors and turn Google Calendar on.",
+   "Type: What is on my calendar on [a date] with [a word in an event title]?",
+   "Compare: the reply lists the matching events for that date or text."
+  ],
+  "where": "Settings > Cloud > Connectors > Google Calendar > Connect, then Add to chat > Connectors (turn Google Calendar on) in a new chat"
+ },
+ "S56.08": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Google Calendar"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   }
+  ],
+  "needs": "a Google account with Calendar; a cloud account that can use connectors",
+  "note": "The directory lists a suggest_time tool for Google Calendar; the OAuth gap in S56.07 applies.",
+  "reachable": "yes",
+  "steps": [
+   "Connect Google Calendar and turn it on in a new chat (as in S56.07).",
+   "Type: When am I free tomorrow between [a start time] and [an end time] for a 30 minute call?",
+   "Compare: the reply names open slots that do not overlap your existing events.",
+   "Check one slot against the Google Calendar app on a computer."
+  ],
+  "where": "Settings > Cloud > Connectors > Google Calendar > Connect, then Add to chat > Connectors (turn Google Calendar on) in a new chat"
+ },
+ "S56.09": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Google Calendar"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx",
+    "text": "Tool permissions"
+   }
+  ],
+  "needs": "a Google account with Calendar; a cloud account that can use connectors",
+  "note": "The approval card wording was not read in the chat code.",
+  "reachable": "yes",
+  "steps": [
+   "Connect Google Calendar and turn it on in a new chat (as in S56.07).",
+   "Type: Create an event called [a test title] on [a date] from [start] to [end].",
+   "Look for the approval card and approve it.",
+   "Compare: the event appears in Google Calendar with that title and time."
+  ],
+  "where": "Settings > Cloud > Connectors > Google Calendar > Connect, then a chat with Google Calendar on (approval card before the event is created)"
+ },
+ "S56.10": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Google Calendar"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   }
+  ],
+  "needs": "a Google account with Calendar and an existing test event",
+  "note": "The directory lists update_event and delete_event for Google Calendar.",
+  "reachable": "yes",
+  "steps": [
+   "Connect Google Calendar and turn it on in a new chat (as in S56.07).",
+   "Type: Move the [test event title] event to [a new time].",
+   "Then type: Cancel the [test event title] event.",
+   "Approve any approval card shown.",
+   "Compare: Google Calendar shows the new time, then the event is removed."
+  ],
+  "where": "Settings > Cloud > Connectors > Google Calendar > Connect, then a chat with Google Calendar on"
+ },
+ "S56.11": {
+  "labels": [],
+  "needs": "a Google account with Calendar",
+  "note": "Google Calendar is reachable, but I did not find an invitation or RSVP tool in the directory tool list I read (first eight names); not confirmed.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S56.12": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Google Contacts"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/index.tsx",
+    "text": "Connectors"
+   }
+  ],
+  "needs": "a Google account with Contacts",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, tap Cloud, tap Connectors, tap Google Contacts, tap Connect.",
+   "Finish the Google sign-in, then open a new chat.",
+   "Tap Add to chat, tap Connectors and turn Google Contacts on.",
+   "Type: What is the email address of [a name in your contacts]?",
+   "Compare: the reply gives the email address shown in your Google contacts."
+  ],
+  "where": "Settings > Cloud > Connectors > Google Contacts > Connect, then Add to chat > Connectors (turn Google Contacts on) in a new chat"
+ },
+ "S56.13": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Google Drive"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   }
+  ],
+  "needs": "a Google account with Drive",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, tap Cloud, tap Connectors, tap Google Drive, tap Connect.",
+   "Finish the Google sign-in, then open a new chat.",
+   "Tap Add to chat, tap Connectors and turn Google Drive on.",
+   "Type: Search my Drive for files named [a word in a file name you know].",
+   "Compare: the reply lists the matching files from your Drive."
+  ],
+  "where": "Settings > Cloud > Connectors > Google Drive > Connect, then Add to chat > Connectors (turn Google Drive on) in a new chat"
+ },
+ "S56.14": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Google Drive"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/index.tsx",
+    "text": "Connectors"
+   }
+  ],
+  "needs": "a Google account with Drive and a test file",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Connect Google Drive and turn it on in a new chat (as in S56.13).",
+   "Type: Open the file [a file name you know] and summarize its content.",
+   "Compare: the reply shows the file's text or a summary of it, as Expected says."
+  ],
+  "where": "Settings > Cloud > Connectors > Google Drive > Connect, then Add to chat > Connectors (turn Google Drive on) in a new chat"
+ },
+ "S56.15": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Google Drive"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/index.tsx",
+    "text": "Connectors"
+   }
+  ],
+  "needs": "a Google account with Drive",
+  "note": "The ledger says the Google Drive OAuth client pair is not yet in CONNECTOR_OAUTH_PROVIDERS_JSON, so Connect may fail.",
+  "reachable": "yes",
+  "steps": [
+   "Connect Google Drive and turn it on in a new chat (as in S56.13).",
+   "Type: Create a new file called [a test name] with the text [a short line].",
+   "Approve the approval card if it appears.",
+   "Compare: the new file appears in your Google Drive."
+  ],
+  "where": "Settings > Cloud > Connectors > Google Drive > Connect, then Add to chat > Connectors (turn Google Drive on) in a new chat"
+ },
+ "S56.16": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Google Drive"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   }
+  ],
+  "needs": "a Google account with Drive and a test file",
+  "note": "The directory tool list I read does not name the Drive edit tool; the path is confirmed only as the Drive connector.",
+  "reachable": "yes",
+  "steps": [
+   "Connect Google Drive and turn it on in a new chat (as in S56.13).",
+   "Type: Change the text in [a test file name] so that it says [new text].",
+   "Approve the approval card if it appears.",
+   "Compare: the file in Google Drive shows the new text."
+  ],
+  "where": "Settings > Cloud > Connectors > Google Drive > Connect, then Add to chat > Connectors (turn Google Drive on) in a new chat"
+ },
+ "S56.17": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Box"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/index.tsx",
+    "text": "Connectors"
+   }
+  ],
+  "needs": "a Box account",
+  "note": "The ledger gave no code location; the folder tools are in the Box directory entry. Link and collaborator management is not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, tap Cloud, tap Connectors, tap Box, tap Connect.",
+   "Finish the Box sign-in, then open a new chat.",
+   "Tap Add to chat, tap Connectors and turn Box on.",
+   "Type: Create a folder named [a test name] in [a folder you know].",
+   "Compare: the folder appears in Box. Sharing settings are not confirmed by the tool list I read."
+  ],
+  "where": "Settings > Cloud > Connectors > Box > Connect, then Add to chat > Connectors (turn Box on) in a new chat"
+ },
+ "S56.18": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Microsoft 365"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/index.tsx",
+    "text": "Connectors"
+   }
+  ],
+  "needs": "a Microsoft account with Word",
+  "note": "The Microsoft 365 directory entry lists generic Graph tools; a Word-editing action is not confirmed in the code I read.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, tap Cloud, tap Connectors, tap Microsoft 365, tap Connect.",
+   "Finish the Microsoft sign-in, then open a new chat.",
+   "Tap Add to chat, tap Connectors and turn Microsoft 365 on.",
+   "Type: In my Word document [a file name], change [a sentence] to [new text].",
+   "Compare: the document in Microsoft 365 shows the new text."
+  ],
+  "where": "Settings > Cloud > Connectors > Microsoft 365 > Connect, then Add to chat > Connectors (turn Microsoft 365 on) in a new chat"
+ },
+ "S56.19": {
+  "labels": [],
+  "needs": "a spreadsheet account",
+  "note": "I found no Google Sheets or Excel-specific entry; Microsoft 365 lists only generic Graph tools and Airtable lists no tool names. Not confirmed.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S56.20": {
+  "labels": [],
+  "needs": "a presentation account",
+  "note": "No Slides or PowerPoint entry found; Canva lists read_design and edit_design, which are design tools, not presentations. Not confirmed.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S56.21": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Slack"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/index.tsx",
+    "text": "Connectors"
+   }
+  ],
+  "needs": "a Slack workspace and account",
+  "note": "The ledger says the Slack connector app is not yet registered with search:read scopes, so Connect or search may fail. Teams is out of scope.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, tap Cloud, tap Connectors, tap Slack, tap Connect.",
+   "Finish the Slack sign-in, then open a new chat.",
+   "Tap Add to chat, tap Connectors and turn Slack on.",
+   "Type: Search Slack for messages about [a word you know].",
+   "Compare: the reply lists matching messages from your workspace."
+  ],
+  "where": "Settings > Cloud > Connectors > Slack > Connect, then Add to chat > Connectors (turn Slack on) in a new chat"
+ },
+ "S56.22": {
+  "labels": [],
+  "needs": "a Slack workspace; an outside account",
+  "note": "A Slack entry exists, but the directory lists no post or draft tool for it and the ledger gave no code location. Not confirmed.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S56.23": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Notion"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Confluence"
+   }
+  ],
+  "needs": "a Notion or Confluence account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, tap Cloud, tap Connectors, tap Notion, tap Connect.",
+   "Finish the Notion sign-in, then open a new chat.",
+   "Tap Add to chat, tap Connectors and turn Notion on.",
+   "Type: Search Notion for pages about [a topic you know].",
+   "Compare: the reply lists matching pages from your Notion workspace."
+  ],
+  "where": "Settings > Cloud > Connectors > Notion > Connect (or Confluence), then Add to chat > Connectors in a new chat"
+ },
+ "S56.24": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Notion"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   }
+  ],
+  "needs": "a Notion account with a test page",
+  "note": "Confluence also lists write_confluence; Notion is the connector used here.",
+  "reachable": "yes",
+  "steps": [
+   "Connect Notion and turn it on in a new chat (as in S56.23).",
+   "Type: Create a page called [a test title] with the text [a short line].",
+   "Or type: Update the page [a test title] to add [a line].",
+   "Compare: the page in Notion shows the new page or change."
+  ],
+  "where": "Settings > Cloud > Connectors > Notion > Connect, then Add to chat > Connectors (turn Notion on) in a new chat"
+ },
+ "S56.25": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Jira"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   }
+  ],
+  "needs": "a Jira account with a test project",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, tap Cloud, tap Connectors, tap Jira, tap Connect.",
+   "Finish the Atlassian sign-in, then open a new chat.",
+   "Tap Add to chat, tap Connectors and turn Jira on.",
+   "Type: Create a Jira issue in [a project you know] titled [a test title].",
+   "Approve the approval card if it appears.",
+   "Compare: the issue appears in Jira with that title."
+  ],
+  "where": "Settings > Cloud > Connectors > Jira > Connect, then Add to chat > Connectors (turn Jira on) in a new chat"
+ },
+ "S56.26": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Asana"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/index.tsx",
+    "text": "Connectors"
+   }
+  ],
+  "needs": "an Asana account with a test task",
+  "note": "The directory lists update_tasks for Asana. The Jira list shows no update tool in the names I read, so Asana is used here.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, tap Cloud, tap Connectors, tap Asana, tap Connect.",
+   "Finish the Asana sign-in, then open a new chat.",
+   "Tap Add to chat, tap Connectors and turn Asana on.",
+   "Type: Mark the task [a test task name] as complete.",
+   "Compare: the task in Asana shows the new status."
+  ],
+  "where": "Settings > Cloud > Connectors > Asana > Connect, then Add to chat > Connectors (turn Asana on) in a new chat"
+ },
+ "S56.27": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Asana"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx",
+    "text": "Connect"
+   }
+  ],
+  "needs": "Cloud access, an outside account (Asana)",
+  "note": "Settings is reached from the first screen by a control not confirmed in code; Linear, Jira and Monday.com are also listed as boards tools.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Cloud, then Connectors (Cloud access needed).",
+   "Type Asana in the bottom search bar, or scroll the list, and tap Asana.",
+   "Tap Connect and finish the Asana sign-in in the in-app browser.",
+   "In a new chat ask: Show my Asana project boards. Compare with Expected: the assistant can view and work with the boards."
+  ],
+  "where": "Settings > Cloud > Connectors, then search or scroll to Asana and tap it"
+ },
+ "S56.28": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "HubSpot"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx",
+    "text": "Connect"
+   }
+  ],
+  "needs": "Cloud access, an outside account (HubSpot)",
+  "note": "Salesforce appears only as an ID in apps/web/lib/connectors/catalog.ts, with no listing name found in the app, so it is not offered as a visible choice.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Cloud, then Connectors (Cloud access needed).",
+   "Type HubSpot in the search bar, tap HubSpot, then tap Connect and sign in.",
+   "In a new chat ask: Find the HubSpot contact or account named [a name you choose].",
+   "Compare with Expected: the assistant returns matching accounts or contacts from HubSpot."
+  ],
+  "where": "Settings > Cloud > Connectors, then search or scroll to HubSpot and tap it"
+ },
+ "S56.29": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/index.tsx",
+    "text": "Action approvals"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "HubSpot"
+   }
+  ],
+  "needs": "Cloud access, an outside account (HubSpot)",
+  "note": "The approval prompt text was not traced in code; the tester should compare what is shown with the Expected line.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Cloud, then Connectors, and check that HubSpot is connected.",
+   "Look at the Action approvals row on the Connectors screen and read its setting.",
+   "In a new chat ask the assistant to change the stage of one HubSpot deal.",
+   "Compare with Expected: the assistant asks for your approval before it updates the deal."
+  ],
+  "where": "Settings > Cloud > Connectors, then HubSpot (connect it first), with Action approvals on the same screen"
+ },
+ "S56.30": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Intercom"
+   }
+  ],
+  "needs": "Cloud access, an outside account (Intercom)",
+  "note": "Zendesk and Freshdesk appear only as IDs in apps/web/lib/connectors/catalog.ts, not as visible listing names.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Cloud, then Connectors (Cloud access needed).",
+   "Type Intercom in the search bar and tap Intercom, then tap Connect and sign in.",
+   "In a new chat ask: Find my open support tickets.",
+   "Compare with Expected: the assistant lists tickets from the help desk and can act on one when you ask."
+  ],
+  "where": "Settings > Cloud > Connectors, then search for Intercom and tap it"
+ },
+ "S56.31": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "GitHub MCP"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Connectors"
+   }
+  ],
+  "needs": "Cloud access, an outside account (GitHub)",
+  "note": "The plan marks this unfinished: the GitHub App and its client ID and secret are owner setup, so the listing may not connect. GitLab is listed in apps/web/lib/connectors/directory/sources/vendor-directory.json without a pinned server.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Cloud, then Connectors (Cloud access needed).",
+   "Type GitHub in the search bar and tap GitHub MCP, then tap Connect.",
+   "In a new chat ask: Search the code in my repository for the word [a word you choose].",
+   "Compare with Expected: the assistant returns code matches from the connected repository."
+  ],
+  "where": "Settings > Cloud > Connectors, then search for GitHub MCP and tap it"
+ },
+ "S56.32": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "GitHub MCP"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx",
+    "text": "Connect"
+   }
+  ],
+  "needs": "Cloud access, an outside account (GitHub), a pull request you can review",
+  "note": "Depends on the same unfinished GitHub setup as S56.31.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Cloud, then Connectors, and connect GitHub MCP.",
+   "In a new chat paste a pull request link from your GitHub repository and ask: Review this pull request.",
+   "Ask the assistant to post a review comment on it.",
+   "Compare with Expected: the assistant reads the pull request and can post comments on the hosted repository."
+  ],
+  "where": "Settings > Cloud > Connectors, then GitHub MCP"
+ },
+ "S56.33": {
+  "labels": [],
+  "needs": "Cloud access, an outside account (a CI provider)",
+  "note": "No visible CI listing found in apps/web/lib/connectors/directory/sources or apps/mobile/src. CircleCI appears only as an ID in apps/web/lib/connectors/catalog.ts. The plan says CI reads depend on the unfinished GitHub App setup.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S56.34": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Figma"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx",
+    "text": "Connect"
+   }
+  ],
+  "needs": "Cloud access, an outside account (Figma), a Figma file link",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Cloud, then Connectors (Cloud access needed).",
+   "Type Figma in the search bar, tap Figma, then tap Connect and sign in.",
+   "In a new chat ask: Describe the frames and components in my Figma file [paste its link].",
+   "Compare with Expected: the assistant names the frames, components and file details it finds."
+  ],
+  "where": "Settings > Cloud > Connectors, then search for Figma and tap it"
+ },
+ "S56.35": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Figma"
+   }
+  ],
+  "needs": "Cloud access, an outside account (Figma), a Figma file link",
+  "note": "No separate control was found; it works through the Figma connector.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Cloud, then Connectors, and confirm Figma is connected.",
+   "In a new chat paste a Figma file link and ask: Give me the code references and dev resources for this file.",
+   "Compare with Expected: the assistant returns code context and dev resource details from that file."
+  ],
+  "where": "Settings > Cloud > Connectors, then Figma (connect it first)"
+ },
+ "S56.36": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Neon"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Supabase"
+   }
+  ],
+  "needs": "Cloud access, an outside account (Neon)",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Cloud, then Connectors (Cloud access needed).",
+   "Type Neon in the search bar, tap Neon, then tap Connect and sign in.",
+   "In a new chat ask: List the tables in my Neon database.",
+   "Compare with Expected: the assistant lists tables and can run a query you approve."
+  ],
+  "where": "Settings > Cloud > Connectors, then Neon or Supabase"
+ },
+ "S56.38": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/vendor-directory.json",
+    "text": "Metabase"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Connectors"
+   }
+  ],
+  "needs": "Cloud access, an outside account (Metabase)",
+  "note": "The Metabase listing exists, but no dashboard-creating action was confirmed in code, and the ledger gave no code location.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Cloud, then Connectors (Cloud access needed).",
+   "Type Metabase in the search bar, tap Metabase, then tap Connect and sign in.",
+   "In a new chat ask: Create a dashboard in Metabase for my sales table.",
+   "Compare with Expected: the assistant creates a dashboard in Metabase."
+  ],
+  "where": "Settings > Cloud > Connectors, then search for Metabase and tap it"
+ },
+ "S56.39": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Vercel"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx",
+    "text": "Connect"
+   }
+  ],
+  "needs": "Cloud access, an outside account (Vercel)",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Cloud, then Connectors (Cloud access needed).",
+   "Type Vercel in the search bar, tap Vercel, then tap Connect and sign in.",
+   "In a new chat ask: List my latest Vercel deployments.",
+   "Compare with Expected: the assistant lists deployments and can inspect or deploy one when you ask."
+  ],
+  "where": "Settings > Cloud > Connectors, then Vercel"
+ },
+ "S56.40": {
+  "labels": [],
+  "needs": "Cloud access, an outside account (a research service)",
+  "note": "No licensed research listing found. Searched the connector directory and apps/mobile/src for JSTOR and Semantic Scholar; only PubMed appears in descriptive text in apps/web/lib/connectors/directory/sources/vendor-directory.json.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S56.41": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/vendor-directory.json",
+    "text": "Instacart"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Connectors"
+   }
+  ],
+  "needs": "Cloud access, an outside account (Instacart)",
+  "note": "Instacart is a grocery service listing; the code does not show a general product or price lookup.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Cloud, then Connectors (Cloud access needed).",
+   "Type Instacart in the search bar, tap Instacart, then tap Connect and sign in.",
+   "In a new chat ask: Find the price of [a product you choose] through Instacart.",
+   "Compare with Expected: the assistant returns a product and price from the connected service."
+  ],
+  "where": "Settings > Cloud > Connectors, then search for Instacart and tap it"
+ },
+ "S56.42": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/vendor-directory.json",
+    "text": "Resy"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Connectors"
+   }
+  ],
+  "needs": "Cloud access, an outside account (Resy)",
+  "note": "The booking confirmation step was not traced in code.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Cloud, then Connectors (Cloud access needed).",
+   "Type Resy in the search bar, tap Resy, then tap Connect and sign in.",
+   "In a new chat ask: Find a table for two tonight through Resy.",
+   "Compare with Expected: the assistant searches availability and asks you to confirm before it books."
+  ],
+  "where": "Settings > Cloud > Connectors, then search for Resy and tap it"
+ },
+ "S56.43": {
+  "labels": [],
+  "needs": "Cloud access, an outside account (a media service)",
+  "note": "No media playback listing found. Searched apps/web/lib and apps/mobile/src for Spotify and Apple Music with no connector match.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S56.45": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/integrations/presentation.ts",
+    "text": "Device Integrations"
+   },
+   {
+    "file": "apps/mobile/src/features/integrations/components/DeviceIntegrationStatus.tsx",
+    "text": "Apple Calendar"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Permissions"
+   }
+  ],
+  "needs": "A phone with calendar access granted, phone width",
+  "note": "Device steps cover calendar events and reminders only; no notes step was found in apps/mobile/src/features/integrations/services/phoneDeviceSteps.ts. Reminders are iOS only.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then the Device group, then Device Integrations.",
+   "Read the Apple Calendar row and its status (Active, Inactive, Needs Permission or Unavailable).",
+   "In a chat ask: What is on my calendar today?",
+   "Compare with Expected: the assistant reads events from the calendar on this phone. Ask it to add a reminder and check it appears in the Reminders app."
+  ],
+  "where": "Settings > Device > Device Integrations"
+ },
+ "S56.46": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/vendor-directory.json",
+    "text": "HealthEx (beta)"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx",
+    "text": "Connect"
+   }
+  ],
+  "needs": "Cloud access, an outside account (HealthEx and a healthcare portal login), ID and biometrics for the identity check",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Cloud, then Connectors (Cloud access needed).",
+   "Type HealthEx in the search bar, tap HealthEx (beta), then tap Connect.",
+   "Complete the identity check and connect your healthcare portal logins as the connector asks.",
+   "In a new chat ask: Summarize my latest lab results. Compare with Expected: the assistant reads your records from the connected provider."
+  ],
+  "where": "Settings > Cloud > Connectors, then search for HealthEx (beta) and tap it"
+ },
+ "S56.47": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/index.tsx",
+    "text": "Link a bank account"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/LinkedBanks.tsx",
+    "text": "Linked banks"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Plaid"
+   }
+  ],
+  "needs": "Cloud access, a US bank with online login, a Plaid-supported bank",
+  "note": "The bank button shows only when the bank-linking feature flag is on and no bank is linked yet; the plan says the owner's Plaid setup is still open, so it may not appear.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Cloud, then Connectors (Cloud access needed).",
+   "Tap Link a bank account and complete the Plaid link with your bank login.",
+   "Check the Linked banks section: each account shows a switch to include or exclude it.",
+   "Compare with Expected: balances and transactions from the linked account appear to the assistant when you ask for them."
+  ],
+  "where": "Settings > Cloud > Connectors, then Link a bank account"
+ }
+}

@@ -1,0 +1,309 @@
+{
+ "S78.01": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Select Model"
+   }
+  ],
+  "needs": "a Free account and a paid account, to compare",
+  "note": "The resolver itself has no screen. Its effect is seen only in the picker rows. Server-side checks are not visible in the UI.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Sign in to AGI Cloud in the VS Code extension",
+   "Press Cmd+Shift+M, or run \"Code: Select Model\" from the Command Palette",
+   "Look at which rows are usable and which show a lock icon, then compare with the plan on the account",
+   "Expected: the list matches the plan and route the session resolved"
+  ],
+  "where": "Code: Select Model (Cmd+Shift+M) shows the combined result of plan, model and route; locked rows show a lock icon"
+ },
+ "S78.02": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Mode and reasoning effort"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Select Model"
+   }
+  ],
+  "needs": "a signed-in account with at least two models that differ in effort support",
+  "note": "Attachment options per model were not located as a separate control. The only model-based attachment wording found is \"cannot read images you attach\" in modelConstants.ts. The sidebar view name was not verified.",
+  "reachable": "yes",
+  "steps": [
+   "Open the chat composer",
+   "Note the \"Mode and reasoning effort\" button and its label",
+   "Press Cmd+Shift+M, or run \"Code: Select Model\", and choose a different model",
+   "Look at the model pill and the \"Mode and reasoning effort\" button: effort should appear, change or show \"effort unavailable for this model\" to match Expected"
+  ],
+  "where": "The composer button titled \"Mode and reasoning effort\" (its summary shows the mode and effort), then pick a model in Code: Select Model (Cmd+Shift+M)"
+ },
+ "S78.04": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "This model does not take a reasoning effort."
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Mode and reasoning effort"
+   }
+  ],
+  "needs": "a signed-in account with one model that takes effort and one that does not",
+  "note": "Whether unsupported levels are dropped from the request was only checked in the code, through supportedEffort in modelConstants.ts. The tester can see only what the menu offers.",
+  "reachable": "yes",
+  "steps": [
+   "Pick a model that supports effort in Code: Select Model (Cmd+Shift+M)",
+   "Open the \"Mode and reasoning effort\" button and note the levels offered",
+   "Pick a model that does not take effort",
+   "Open the same button: it should read \"This model does not take a reasoning effort.\" and no unsupported level should be sent, as Expected says"
+  ],
+  "where": "The \"Mode and reasoning effort\" composer button, then the effort list after choosing a model"
+ },
+ "S78.07": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/model-picker/modelConstants.ts",
+    "text": "Upgrade your AGI plan"
+   }
+  ],
+  "needs": "a Free account",
+  "note": "The server-side check is not visible to a tester. Only the UI gate can be seen.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Sign in with a Free account",
+   "Press Cmd+Shift+M, or run \"Code: Select Model\"",
+   "Choose a row with a lock icon",
+   "Expected: the message \"is not in the plan this session resolved. Upgrade your AGI plan to use it.\" appears and no turn starts"
+  ],
+  "where": "Locked rows in Code: Select Model (Cmd+Shift+M). The entitlement check runs in the app for each model and on the server for each route"
+ },
+ "S78.08": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Usage"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Show usage details"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account",
+  "note": "The rules that decide when the meter is shown were not traced. The pill and the list are the visible part.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to an AGI Cloud account",
+   "Find the \"Usage\" pill in the chat panel",
+   "Click it to show usage details",
+   "Compare the remaining allowance and per-limit list with the server's numbers on the account's usage page"
+  ],
+  "where": "The \"Usage\" pill in the chat panel (expand it to see \"Per-limit usage breakdown\")"
+ },
+ "S78.09": {
+  "labels": [],
+  "needs": "a workspace administrator policy and a member account",
+  "note": "Found only \"A workspace administrator can turn it off for every member.\" at apps/extension-vscode/src/features/settings/settingsWebviewContent.ts (line 1979). The setting it belongs to was not traced. Searched the extension's features, integrations and core folders for policy or admin wording.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S78.12": {
+  "labels": [],
+  "needs": "an account and a sign-in",
+  "note": "The code lines named in the plan are gone or changed: deviceAuth.ts has no age or eligibility check, and AuthSwitchLine.tsx no longer exists. Searched deviceAuth.ts and webviewContent.ts for age and eligibility wording with no match. The web app device page was not searched.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S78.15": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Check the CLI in This Environment"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Install AGI CLI"
+   }
+  ],
+  "needs": "none",
+  "note": "Whether the check command shows the localRuntimeClient message in the UI was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Command Palette",
+   "Run \"Code: Check the CLI in This Environment\"",
+   "Read the result message",
+   "Optional: set the agiWorkforce.cliPath setting to a path that does not exist, run the check again, and read the message \"The AGI CLI could not be started.\" to compare with Expected"
+  ],
+  "where": "Command Palette > \"Code: Check the CLI in This Environment\" (or \"Code: Install AGI CLI\")"
+ },
+ "S78.17": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Select Model"
+   }
+  ],
+  "needs": "a signed-in account with a model that takes no effort",
+  "note": "The hidden-control rule is inside the webview. The visible part is the wording on the pill.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Choose a model without reasoning effort in Code: Select Model (Cmd+Shift+M)",
+   "Hover the model pill",
+   "Expected: the effort part of the pill and its tooltip are absent or say \"effort unavailable\" instead of a broken control"
+  ],
+  "where": "The model pill tooltip on the composer, which reads \"effort unavailable for this model\" when the model has no effort control"
+ },
+ "S78.18": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/model-picker/modelConstants.ts",
+    "text": "Upgrade your AGI plan"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Select Model"
+   }
+  ],
+  "needs": "a Free account",
+  "note": "The sentence shown on choosing a locked row was read in code, not seen in the UI.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with a Free account",
+   "Press Cmd+Shift+M, or run \"Code: Select Model\"",
+   "Look for rows with a lock icon: they stay in the list but are disabled",
+   "Choose a locked row and read the reason that appears, as Expected says"
+  ],
+  "where": "Code: Select Model (Cmd+Shift+M) > a locked row, shown with a lock icon and disabled"
+ },
+ "S78.19": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Upgrade Your Plan"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/model-picker/modelConstants.ts",
+    "text": "Upgrade your AGI plan"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Upgrade"
+   }
+  ],
+  "needs": "a Free account",
+  "note": "The plan name in a locked row comes from the picker capability label. The paywall actions in cloudUtilityErrorActions.ts were not triggered.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with a Free account",
+   "Press Cmd+Shift+M, choose a locked row, and read which plan it names (for example \"Max plan\")",
+   "Close the picker and click the \"Upgrade\" button in the chat panel, or run \"Code: Upgrade Your Plan\"",
+   "Expected: the plan that unlocks the feature and the way to upgrade are shown"
+  ],
+  "where": "Code: Select Model (Cmd+Shift+M) > a locked row, or the \"Upgrade\" button in the chat panel, or Command Palette > \"Code: Upgrade Your Plan\""
+ },
+ "S78.21": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/permissions/agentModeConsent.ts",
+    "text": "Turn on Bypass Permissions?"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Set Agent Mode"
+   }
+  ],
+  "needs": "a folder open in VS Code",
+  "note": "The visible label for the Bypass option was not found as plain text outside the tests. It likely comes from a mode label constant that was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open a folder in VS Code",
+   "Run \"Code: Set Agent Mode\" from the Command Palette",
+   "Choose the Bypass option",
+   "Read the warning \"Turn on Bypass Permissions?\" and its detail text, then press Cancel to compare with Expected"
+  ],
+  "where": "Command Palette > \"Code: Set Agent Mode\", then choose Bypass"
+ },
+ "S78.22": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Switch model\u2026"
+   }
+  ],
+  "needs": "a condition that makes a turn fail, such as a Free account whose allowance is spent",
+  "note": "The failure button text \"Switch model\" was found in tests and in errorPresentation.ts logic, not verbatim in the source. The listed label is the picker entry.",
+  "reachable": "yes",
+  "steps": [
+   "Choose a model and send a message that fails (for example, a model at its rate limit)",
+   "Read the failure message in the chat",
+   "Click the \"Switch model\" action",
+   "Expected: the model picker opens so another model can be chosen"
+  ],
+  "where": "A chat turn that fails with provider unavailable, rate limit, spent free allowance, stream interrupted or safety refusal shows a \"Switch model\" action"
+ },
+ "S78.23": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Continue in the Cloud"
+   }
+  ],
+  "needs": "an AGI Cloud account and a cloud task",
+  "note": "The when-clause that decides when the command appears was not checked. Pulling a cloud result back is a separate command, Code: Pull Cloud Task Into Workspace.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to AGI Cloud and have a cloud task on a repository",
+   "Open the Command Palette and run \"Code: Continue in the Cloud\"",
+   "Read the result: the branch should be handed to a cloud session",
+   "Expected: the work continues in the other app or device"
+  ],
+  "where": "Command Palette > \"Code: Continue in the Cloud\""
+ },
+ "S78.24": {
+  "labels": [],
+  "needs": "a signed-in account and a provider key",
+  "note": "No explicit chooser for local model, own key or managed cloud was found. The picker shows the route through the \"Sign in to AGI Cloud\" and \"Add another provider key\" lock wording in modelConstants.ts, and a command agi-workforce.manageProviderKeys exists in package.json, but its title was not confirmed. Reachability.ts was only partly read.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S78.26": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Mode and reasoning effort"
+   }
+  ],
+  "needs": "a signed-in account with two models that have different effort ladders",
+  "note": "The correction happens in supportedEffort in modelConstants.ts. The request itself is not visible in the UI, so only the button label can be compared.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Choose a model with fewer effort levels in Code: Select Model (Cmd+Shift+M)",
+   "Set the effort to the highest level in the \"Mode and reasoning effort\" button",
+   "Send a short message",
+   "Expected: the effort sent is moved to the nearest level the model accepts, and the button shows that level"
+  ],
+  "where": "The \"Mode and reasoning effort\" composer button, after changing model"
+ },
+ "S78.28": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Select Model"
+   }
+  ],
+  "needs": "a second account or plan change to test with",
+  "note": "The revalidation listener is in tierRevalidation.ts. What triggers the revalidation was not traced.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open Code: Select Model (Cmd+Shift+M) and note the lock icons",
+   "Change the plan on the account (outside VS Code)",
+   "Return to VS Code and open Code: Select Model again without restarting",
+   "Expected: the locked rows update to match the new plan"
+  ],
+  "where": "Code: Select Model (Cmd+Shift+M) rows change after a plan change, without restarting VS Code"
+ }
+}

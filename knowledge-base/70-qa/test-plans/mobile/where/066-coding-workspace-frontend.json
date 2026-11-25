@@ -1,0 +1,187 @@
+{
+ "S66.05": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/pairing.ts",
+    "text": "AGI Code"
+   }
+  ],
+  "needs": "a paired computer with at least one coding session, or a cloud session",
+  "note": "The list is built in apps/mobile/src/features/cloud-code/CloudCodeSessionsScreen.tsx and holds both computer and cloud sessions.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu on the first screen after sign-in.",
+   "Tap AGI Code.",
+   "Look for a list of sessions. Each row shows a title, a status badge, and a line with the time and a location such as On <computer name> or In the cloud.",
+   "Tap one session. Its page should open, with the session title at the top."
+  ],
+  "where": "Side menu > AGI Code > tap a session row"
+ },
+ "S66.06": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/pairing.ts",
+    "text": "AGI Code"
+   }
+  ],
+  "needs": "a paired computer with at least one coding session, or a cloud session",
+  "note": "No rename action is offered on the coding session pages; the More menu lists only Changes, Plan usage and This computer.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu and tap AGI Code.",
+   "Read the title on each session row.",
+   "Tap a session and read the title in the header. It should match the row.",
+   "If the title is empty, the header shows AGI Code instead."
+  ],
+  "where": "Side menu > AGI Code > tap a session > title at the top of the page"
+ },
+ "S66.07": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/companion/components/CodeSessionsCard.tsx",
+    "text": "Needs approval"
+   },
+   {
+    "file": "packages/contracts/types/src/cloud-code.ts",
+    "text": "Needs attention"
+   },
+   {
+    "file": "packages/contracts/types/src/cloud-code.ts",
+    "text": "Closed"
+   }
+  ],
+  "needs": "a paired computer with coding sessions in different states, or cloud sessions",
+  "note": "Computer sessions have no Closed status in the code; Closed and Archived appear only on cloud sessions.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu and tap AGI Code.",
+   "Read the badge on each computer session row: Idle, Running, Needs approval, Failed or Unknown.",
+   "Read the badge on each cloud session row: Ready, Running a command, Provisioning, Needs attention or Closed.",
+   "Tap a session. A spinner shows while it runs; a badge shows for Needs approval or Failed. Compare with Expected."
+  ],
+  "where": "Side menu > AGI Code > badge on each row, and the badge next to the title inside a session"
+ },
+ "S66.17": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/cloud-code/presentation.ts",
+    "text": "Commands"
+   },
+   {
+    "file": "apps/mobile/src/features/cloud-code/presentation.ts",
+    "text": "Changes"
+   }
+  ],
+  "needs": "a session where commands have run",
+  "note": "For computer sessions the expanded rows show each step's name and summary; no exit status line was found in the code for that view.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu and tap AGI Code.",
+   "Open a cloud session that has run commands, then tap the Changes icon at the top right.",
+   "Scroll to the Commands section. Each entry shows the command with a $ prefix, its output, and exit N.",
+   "For a computer session, tap the Ran N steps row in the transcript to expand the steps. Compare with Expected."
+  ],
+  "where": "Side menu > AGI Code > open a cloud session > Changes icon (top right) > Commands. For a computer session, tap the Ran N steps row in the transcript."
+ },
+ "S66.18": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/companion/components/codeSessionTimeline.ts",
+    "text": "Changes"
+   },
+   {
+    "file": "apps/mobile/src/features/cloud-code/presentation.ts",
+    "text": "Changes"
+   }
+  ],
+  "needs": "a session in which the agent changed files",
+  "note": "On computer sessions a very long diff shows a note to open it on Desktop instead.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu and tap AGI Code.",
+   "Open a session where files changed.",
+   "Tap the Changes pill under the transcript (cloud sessions: the Changes icon at the top right).",
+   "Scroll to a file's diff. Added and removed lines should appear marked inside that file's section. Compare with Expected."
+  ],
+  "where": "Side menu > AGI Code > open a computer session > Changes pill under the transcript. For a cloud session, Changes icon at the top right."
+ },
+ "S66.19": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/companion/components/codeSessionTimeline.ts",
+    "text": "Files"
+   },
+   {
+    "file": "apps/mobile/src/features/companion/components/codeSessionTimeline.ts",
+    "text": "New file"
+   }
+  ],
+  "needs": "a paired computer with a session in which files were created or changed",
+  "note": "The computer session data records only created and modified files, so a deleted file has no place in the summary.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu and tap AGI Code.",
+   "Open a computer session where files changed.",
+   "Tap the Changes pill under the transcript.",
+   "Look at the Files section: each file path is listed. Created files show a New file label, and modified files show an edit icon. Compare with Expected."
+  ],
+  "where": "Side menu > AGI Code > open a computer session > Changes pill > Files"
+ },
+ "S66.28": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/cloud-code/presentation.ts",
+    "text": "Task options"
+   },
+   {
+    "file": "apps/mobile/src/features/cloud-code/presentation.ts",
+    "text": "Usage"
+   },
+   {
+    "file": "apps/mobile/src/features/companion/components/codeSessionTimeline.ts",
+    "text": "Plan usage"
+   }
+  ],
+  "needs": "a signed-in account with a cloud session",
+  "note": "The screens show plan usage percentages, not money spent, as far as the code shows.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu and tap AGI Code, then open a cloud session.",
+   "Tap the small control under the message box (accessibility name: Task options and usage).",
+   "Read the Usage section in Task options: Context window and usage buckets with percentages, plus See detailed usage.",
+   "For a computer session, tap the More about this session icon at the top right and choose Plan usage. Compare with Expected."
+  ],
+  "where": "Side menu > AGI Code > open a cloud session > the Task options control under the message box. For a computer session: More about this session (top right) > Plan usage."
+ },
+ "S66.38": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/companion/components/CodeSessionView.tsx",
+    "text": "Tests passed"
+   },
+   {
+    "file": "apps/mobile/src/features/companion/components/codeSessionTimeline.ts",
+    "text": "Test results"
+   }
+  ],
+  "needs": "a paired computer with a session in which tests were run",
+  "note": "Cloud sessions show command exit codes and pull request checks, not a test-results panel, in the code read.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu and tap AGI Code.",
+   "Open a computer session where tests were run.",
+   "Read the Tests passed or Tests failed text in the pill under the transcript.",
+   "Tap the pill. Under Test results, check each command, its Passed or Failed badge, the counts such as N passed \u00b7 N failed, and the output of a failed run.",
+   "Compare with Expected."
+  ],
+  "where": "Side menu > AGI Code > open a computer session where tests ran > Tests passed or Tests failed pill under the transcript > Test results"
+ },
+ "S66.41": {
+  "labels": [],
+  "needs": "none",
+  "note": "Searched apps/mobile for continue, handoff, hand off, open on, pick up and move session in the cloud-code and companion folders. The only match is the text You can continue here, which refers to the same session. The More menu item This computer only opens the companion screen and does not move the session. No way to continue in another client was found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ }
+}

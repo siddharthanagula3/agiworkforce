@@ -1,0 +1,563 @@
+{
+ "feature": {
+  "id": "F073-01",
+  "aliases": [
+   "AGI Code sidebar chat",
+   "AGI Code view (agi-workforce.sidebar)",
+   "Code: Open Chat",
+   "Code: Open Chat in Editor",
+   "AGI Chat editor tab (ChatEditorPanel)",
+   "S73.01",
+   "S73.02",
+   "S73.28"
+  ],
+  "summary": "Main chat of the AGI Workforce VS Code extension. It lives in the AGI Code activity-bar view or in an editor tab titled AGI Chat. It sends turns to a local developer runtime on the machine and shows loading, setup-needed, trust and error states with retry. Only the VS Code app has it.",
+  "purpose": {
+   "what_it_does": "Gives the VS Code extension a graphical chat. A person types a request, the extension starts a turn on a local runtime (the AGI CLI run as an app server) for the open folder, and the reply streams back into the panel. The same chat can sit in the side panel or open as a tab beside code. It also shows what the runtime is doing: checking, needing setup, waiting for a folder, or blocked by workspace trust.",
+   "why_it_exists": "Developers want to talk to the assistant without leaving the editor, with the code and the folder they already have open. The brief requires a sidebar chat, an editor-adjacent chat and clear loading, setup-needed and error states with retry (brief S73.01, S73.02, S73.28).",
+   "who_uses_it": "Developers using the AGI Workforce VS Code extension. Testers of the extension. Not available in Web, Desktop, Mobile, CLI or Chrome as this feature.",
+   "problems_solved": [
+    "No need to switch to a browser or terminal to ask about code.",
+    "A setup problem (no CLI, no folder, untrusted folder) is shown as a state with a button instead of a silent failure.",
+    "A failed turn gets an error category and a retry when resending could work."
+   ],
+   "use_cases": [
+    "Open the AGI Code view and ask how a function works.",
+    "Open the chat in an editor tab beside the file being changed.",
+    "Open a folder that is not trusted yet and be told to trust it before chat can start.",
+    "Hit a rate limit or provider error and press retry."
+   ]
+  },
+  "user_experience": {
+   "where_to_find_it": [
+    "VS Code: activity-bar container titled 'AGI Code' with one webview view named 'AGI Code' (apps/extension-vscode/package.json:953-970).",
+    "VS Code: command palette titles 'Code: Open Chat' (agi-workforce.chat) and 'Code: Open Chat in Editor' (agi-workforce.openChatInEditor) (apps/extension-vscode/package.json:88-96).",
+    "VS Code: keyboard shortcut Cmd+Shift+A (Ctrl+Shift+A on Windows/Linux) runs agi-workforce.chat when no AGI diff is under the cursor (apps/extension-vscode/package.json:1487-1491).",
+    "VS Code: the editor-tab chat is titled 'AGI Chat', then 'AGI Chat 2' and so on (apps/extension-vscode/src/providers/chatEditorPanel.ts:63).",
+    "VS Code native Chat: participant named 'agi' (full name 'AGI Code') (apps/extension-vscode/package.json:891-896).",
+    "Web, Desktop, Mobile, CLI, Chrome: not part of this feature."
+   ],
+   "prerequisites": [
+    "A folder open in VS Code (runtime status 'workspace-required' otherwise) (apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:4341-4350).",
+    "A trusted workspace; the local runtime is not started in an untrusted one (apps/extension-vscode/package.json:54-57).",
+    "The AGI CLI available on the machine; if missing the panel offers an install button (webviewContent.ts:4356-4359).",
+    "Not virtual workspaces; a real filesystem is needed (apps/extension-vscode/package.json:78-80).",
+    "Sign-in or a provider key is needed only for non-Local models; the model picker says 'Sign in or add a provider key to unlock these models' when none is set (apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:2119-2121)."
+   ],
+   "screens_and_controls": [
+    "Composer with send; Enter behaviour setting agiWorkforce.composer.enterBehavior with values enter (default), modifierIfMultiline, modifier (apps/extension-vscode/package.json:1251-1265; webviewContent.ts:5944-5955).",
+    "Stop control; cancel message handled in ChatStateManager.ts:1537-1545. Escape can stop if agiWorkforce.composer.escapeStops is on (package.json:1266-1269; webviewContent.ts:5939-5942).",
+    "Runtime status block with a title, a message and one action button: Open folder, Manage Trust, Install CLI or Open setup (webviewContent.ts:4344-4361).",
+    "Start-of-chat headline 'Start a conversation' and 'Ask about your code or describe a change.' (webviewContent.ts:4337-4339).",
+    "Start suggestions and the five most recent conversations pushed when the view opens (ChatStateManager.ts:2463-2490).",
+    "Model picker grouped 'On this device', 'Your providers', 'Managed Cloud', 'Unavailable' (ChatStateManager.ts:2034-2121)."
+   ],
+   "journey": [
+    "Click the 'AGI Code' icon in the activity bar, or run 'Code: Open Chat'. With setting chatLocation 'editor' the command opens the tab instead (apps/extension-vscode/src/core/commandSetup.ts:1111-1125; package.json:1456-1465).",
+    "Wait while the panel shows 'Checking the developer runtime\u2026' (webviewContent.ts:4303-4307).",
+    "If a status block shows, use its button (open folder, manage trust, install CLI, setup).",
+    "When ready, type a message and send with Enter (or the key chosen in settings).",
+    "Watch the reply stream; press stop to cancel (ChatStateManager.ts:1537).",
+    "If an error block shows, press retry when offered; the host handles 'retryRuntime' for runtime problems (ChatStateManager.ts:1509-1521)."
+   ],
+   "feedback_and_outputs": [
+    "Streamed reply in the chat; 'done' message when finished.",
+    "Error block with a category (for example rate-limit, provider, sign-in, subscription, network, runtime, tool, permission) and a retry flag (apps/extension-vscode/src/features/sidebar-webview/errorPresentation.ts:58-80).",
+    "Runtime status block with text and a button.",
+    "Screen-reader live region: the runtime status element has role=status and aria-live=polite (webviewContent.ts:3122)."
+   ],
+   "settings": [
+    "agiWorkforce.chatLocation: sidebar or editor (package.json:1456-1465).",
+    "agiWorkforce.chat.lockEditorGroups (package.json:1466).",
+    "agiWorkforce.useTerminal: opens the CLI in a terminal instead of graphical chat (commandSetup.ts:1112-1115; package.json:1472).",
+    "agiWorkforce.composer.enterBehavior and agiWorkforce.composer.escapeStops (package.json:1251-1269)."
+   ]
+  },
+  "current_implementation": {
+   "working": [
+    "Sidebar webview provider is registered with retainContextWhenHidden true (apps/extension-vscode/src/core/chatSetup.ts:61-64).",
+    "Editor-tab chat panels are created with retainContextWhenHidden true and can be opened several times (apps/extension-vscode/src/providers/chatEditorPanel.ts:63-72).",
+    "sendMessage hands the text to _handleSendMessage, which calls runtime.startTurn with the folder as cwd (ChatStateManager.ts:1523-1534, 5386-5392).",
+    "Cancel interrupts the active turn and records a 'generation_stopped' product event (ChatStateManager.ts:1537-1545).",
+    "Runtime states probing, ready, workspace-required, workspace-untrusted, needs-setup are rendered (webviewContent.ts:4303-4361).",
+    "Error text is mapped to categories with a retryable flag (errorPresentation.ts:110-150, 533-549).",
+    "Model picker data is grouped by boundary and managed models are marked unavailable when the plan blocks them (ChatStateManager.ts:2034-2121)."
+   ],
+   "incomplete": [
+    "The exact screen text for every error category and its translation was not read in full; only the mapping code was opened (errorPresentation.ts:110-150)."
+   ],
+   "disconnected_or_disabled": [
+    "agiWorkforce.useTerminal (off by default per its restricted-configuration entry, value not read) routes 'Code: Open Chat' to a terminal session instead of the webview (commandSetup.ts:1112-1115)."
+   ],
+   "not_available": [
+    "Web, Desktop, Mobile, CLI and Chrome do not have this feature; the brief marks only vscode (area brief S73.01, S73.02, S73.28).",
+    "Virtual workspaces are unsupported (package.json:78-80).",
+    "Untrusted workspaces: chat is unavailable until trusted (package.json:54-57)."
+   ]
+  },
+  "required_behaviour": {
+   "established": [
+    {
+     "statement": "An AGI Workforce view in the VS Code sidebar hosts a chat that sends turns and streams replies.",
+     "source": "S73.01 (area brief)"
+    },
+    {
+     "statement": "Chat can open as an editor tab beside code, and @agi works in VS Code native Chat.",
+     "source": "S73.02 (area brief)"
+    },
+    {
+     "statement": "The chat webview shows loading, setup-needed and error states with a retry.",
+     "source": "S73.28 (area brief)"
+    },
+    {
+     "statement": "Model agnostic and provider agnostic; Local, own key and Cloud are separate boundaries and nothing may silently move a Local chat to another boundary.",
+     "source": "doc: AGENTS.md section 6"
+    }
+   ],
+   "acceptance_criteria": [
+    "With a trusted folder open and the CLI installed, clicking the AGI Code icon shows the chat and the status block disappears.",
+    "Sending a message streams a reply; pressing stop ends it and the composer is usable again.",
+    "Opening 'Code: Open Chat in Editor' twice gives tabs 'AGI Chat' and 'AGI Chat 2'.",
+    "Opening a window with no folder shows 'Open a workspace' style text and an Open folder button.",
+    "Opening an untrusted folder shows a Manage Trust button and sends nothing.",
+    "A simulated 429 shows a rate-limit error with a retry control; a 402 shows a subscription error without a plain retry."
+   ],
+   "inferred": [
+    "Switching the sidebar to another view and back keeps typed draft and scroll position because the webview context is retained [inferred from retainContextWhenHidden true, chatSetup.ts:61-64].",
+    "Local-boundary chats run with no payment because the picker has an 'On this device' group that stays inside the local runtime (ChatStateManager.ts:2034-2038) [inferred]."
+   ],
+   "proposed": [
+    "[proposed] Document the exact keyboard accept for retry so keyboard users do not need the mouse."
+   ]
+  },
+  "implementation_map": [
+   {
+    "kind": "config",
+    "name": "viewsContainers and views",
+    "path": "apps/extension-vscode/package.json",
+    "role": "Declares the AGI Code activity-bar container and the webview view agi-workforce.sidebar (lines 953-970)."
+   },
+   {
+    "kind": "command",
+    "name": "agi-workforce.chat",
+    "path": "apps/extension-vscode/src/core/commandSetup.ts",
+    "role": "Opens chat in the sidebar, the editor tab or a terminal depending on settings (lines 1111-1125)."
+   },
+   {
+    "kind": "command",
+    "name": "agi-workforce.openChatInEditor",
+    "path": "apps/extension-vscode/src/core/commandSetup.ts",
+    "role": "Creates a new editor-tab chat panel (lines 1130-1140)."
+   },
+   {
+    "kind": "service",
+    "name": "setupChat",
+    "path": "apps/extension-vscode/src/core/chatSetup.ts",
+    "role": "Registers the sidebar view provider with retainContextWhenHidden and the native chat participant (lines 40-66)."
+   },
+   {
+    "kind": "component",
+    "name": "SidebarProvider",
+    "path": "apps/extension-vscode/src/features/sidebar-webview/sidebarProvider.ts",
+    "role": "Hosts the sidebar webview and owns a ChatStateManager."
+   },
+   {
+    "kind": "component",
+    "name": "ChatEditorPanel",
+    "path": "apps/extension-vscode/src/providers/chatEditorPanel.ts",
+    "role": "Editor-tab webview panel with title numbering and optional editor-group lock."
+   },
+   {
+    "kind": "store",
+    "name": "ChatStateManager",
+    "path": "apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts",
+    "role": "Host-side brain of the chat: message handling, turn start, cancel, retryRuntime, model picker data, recent conversations."
+   },
+   {
+    "kind": "screen",
+    "name": "Chat webview HTML and script",
+    "path": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "role": "Renders composer, runtime status block, start copy, Enter handling and mention popover."
+   },
+   {
+    "kind": "service",
+    "name": "errorPresentation",
+    "path": "apps/extension-vscode/src/features/sidebar-webview/errorPresentation.ts",
+    "role": "Turns provider and runtime failures into a category, headline and retryable flag."
+   },
+   {
+    "kind": "service",
+    "name": "LocalRuntimeClient",
+    "path": "apps/extension-vscode/src/integrations/localRuntimeClient.ts",
+    "role": "Spawns the AGI CLI with the app-server argument and speaks to it over stdio (lines 2544-2579)."
+   },
+   {
+    "kind": "service",
+    "name": "startSuggestions",
+    "path": "apps/extension-vscode/src/features/sidebar-webview/startSuggestions.ts",
+    "role": "Resolves the empty-state suggestion list pushed on open."
+   },
+   {
+    "kind": "integration",
+    "name": "Chat participant @agi",
+    "path": "apps/extension-vscode/src/features/chat-participant/chatParticipant.ts",
+    "role": "Same runtime through VS Code native Chat (startTurn at line ~591)."
+   },
+   {
+    "kind": "config",
+    "name": "composer settings",
+    "path": "apps/extension-vscode/package.json",
+    "role": "enterBehavior, escapeStops, chatLocation, lockEditorGroups, useTerminal (lines 1251-1272, 1456-1475)."
+   },
+   {
+    "kind": "test",
+    "name": "chat and shell tests",
+    "path": "apps/extension-vscode/src/__tests__/chatStateManager.test.ts",
+    "role": "Host chat behaviour tests."
+   }
+  ],
+  "execution_and_data_flow": {
+   "steps": [
+    {
+     "what_happens": "Person opens the AGI Code view; VS Code resolves the webview provider.",
+     "runs_on": "device",
+     "evidence": "apps/extension-vscode/src/core/chatSetup.ts:61-64"
+    },
+    {
+     "what_happens": "Host probes the local runtime for the active workspace folder and posts runtimeStatus to the webview.",
+     "runs_on": "device",
+     "evidence": "ChatStateManager.ts:1509-1521; apps/extension-vscode/src/integrations/localRuntimeClient.ts:2544-2579"
+    },
+    {
+     "what_happens": "Person sends text; webview posts sendMessage; host calls _handleSendMessage then runtime.startTurn with cwd and inputs.",
+     "runs_on": "device",
+     "evidence": "ChatStateManager.ts:1523-1534, 5386-5392"
+    },
+    {
+     "what_happens": "The runtime sends the prompt to the selected model. For an on-device model this stays on the machine; for own-key it goes to that provider; for Managed Cloud to AGI infrastructure (picker descriptions).",
+     "runs_on": "device and our servers",
+     "evidence": "ChatStateManager.ts:2034-2121 (group descriptions). The runtime's own network code is not in this repo path and was not opened."
+    },
+    {
+     "what_happens": "Reply events stream back and are posted to the webview; on failure errorPresentation maps the error.",
+     "runs_on": "device",
+     "evidence": "errorPresentation.ts:110-150"
+    },
+    {
+     "what_happens": "Stop posts cancel and interrupts the active turn.",
+     "runs_on": "device",
+     "evidence": "ChatStateManager.ts:1537-1545"
+    }
+   ],
+   "data": [
+    {
+     "what": "Chat thread and messages for the folder",
+     "where_stored": "Held by the local runtime per workspace folder; exact on-disk location not opened (unknown).",
+     "synced": "Not synced by this feature; cloud chats are a separate list (see F073-06).",
+     "retained_or_deleted": "Auto-archive of inactive sessions after agiWorkforce.archiveInactiveSessionsDays (package.json:74); deletion rules unknown."
+    },
+    {
+     "what": "Composer drafts per thread",
+     "where_stored": "Webview state (vscode.setState) (webviewContent.ts:5972-5979).",
+     "synced": "No.",
+     "retained_or_deleted": "Lives with the webview state."
+    }
+   ],
+   "models_and_providers": "The picker lists on-device models (Ollama and LM Studio), the person's own providers and Managed Cloud models; a model is chosen per thread and revalidated before every turn (ChatStateManager.ts:2034-2121). No model names are recorded here."
+  },
+  "access_and_usage": {
+   "account": "Local models: none found in the code that forces sign-in; picker text implies sign-in or a key unlocks other models (ChatStateManager.ts:2119-2121). Cloud models need a browser sign-in or API key [inferred].",
+   "permissions": "Workspace must be trusted; agent mode and shell approval are separate settings (package.json:54-75).",
+   "subscription": "Managed models can be shown as 'Unavailable' when the plan blocks them; text says to upgrade (ChatStateManager.ts:2100-2121, 1000-1010).",
+   "limits_and_metering": "Rate-limit and plan errors surface as rate-limit and subscription categories (errorPresentation.ts:119-140). A usage meter is posted from managed-plan data (ChatStateManager.ts:925-962).",
+   "flags": "None found in the code beyond settings listed above.",
+   "model_compatibility": "Any model offered by the picker; none-in-picker models are not selectable.",
+   "provider_restrictions": "Own-key requests go directly to the provider with the person's key (ChatStateManager.ts:2112-2114).",
+   "local_mode": "Chat runs through the local runtime on an on-device model with no AGI Cloud call by this host; the picker shows a disabled 'No local models found' item when none is running (ChatStateManager.ts:2043-2056)."
+  },
+  "states_and_edge_cases": [
+   {
+    "state": "Loading",
+    "behaviour": "'Checking the developer runtime\u2026' with status block shown.",
+    "evidence": "webviewContent.ts:4303-4307"
+   },
+   {
+    "state": "Empty",
+    "behaviour": "Headline 'Start a conversation', start suggestions, recent conversations.",
+    "evidence": "webviewContent.ts:4337-4339; ChatStateManager.ts:2463-2490"
+   },
+   {
+    "state": "No folder",
+    "behaviour": "Title from openWorkspaceToBegin, Open folder button.",
+    "evidence": "webviewContent.ts:4341-4358"
+   },
+   {
+    "state": "Untrusted workspace",
+    "behaviour": "Restricted mode text and Manage Trust button; runtime not started.",
+    "evidence": "webviewContent.ts:4344-4358; package.json:54-57"
+   },
+   {
+    "state": "CLI missing",
+    "behaviour": "Install CLI button.",
+    "evidence": "webviewContent.ts:4356-4359"
+   },
+   {
+    "state": "Error and retry",
+    "behaviour": "Category plus retryable flag; retry resends only when flagged.",
+    "evidence": "errorPresentation.ts:119-146; ChatStateManager.ts:287-296"
+   },
+   {
+    "state": "Cancel",
+    "behaviour": "Interrupts the turn; if none active posts done.",
+    "evidence": "ChatStateManager.ts:1537-1545"
+   },
+   {
+    "state": "Hidden view",
+    "behaviour": "State kept.",
+    "evidence": "chatSetup.ts:61-64"
+   },
+   {
+    "state": "Offline",
+    "behaviour": "Network category exists; offline wording not read.",
+    "evidence": "errorPresentation.ts:229"
+   },
+   {
+    "state": "Accessibility",
+    "behaviour": "Status block is a polite live region and its title takes focus on recovery.",
+    "evidence": "webviewContent.ts:3122, 3698-3699"
+   }
+  ],
+  "verification": {
+   "existing_tests": [
+    {
+     "path": "apps/extension-vscode/src/__tests__/chatStateManager.test.ts",
+     "covers": "Host message handling for the chat."
+    },
+    {
+     "path": "apps/extension-vscode/src/__tests__/chatEditorPanel.test.ts",
+     "covers": "Editor-tab chat panel."
+    },
+    {
+     "path": "apps/extension-vscode/src/__tests__/chatRetry.test.ts",
+     "covers": "Retry of the last message and refusal while streaming."
+    },
+    {
+     "path": "apps/extension-vscode/src/__tests__/errorPresentation.webview.test.ts",
+     "covers": "Error block rendering."
+    },
+    {
+     "path": "apps/extension-vscode/src/__tests__/sidebarShell.webview.test.ts",
+     "covers": "Sidebar shell rendering."
+    },
+    {
+     "path": "apps/extension-vscode/src/__tests__/viewContainerContribution.test.ts",
+     "covers": "Activity-bar container contribution."
+    },
+    {
+     "path": "apps/extension-vscode/src/__tests__/runtimePill.webview.test.ts",
+     "covers": "Runtime status display."
+    },
+    {
+     "path": "apps/extension-vscode/src/__tests__/composerControls.send.webview.test.ts",
+     "covers": "Send controls."
+    },
+    {
+     "path": "apps/extension-vscode/src/__tests__/lazyActivation.test.ts",
+     "covers": "Activation behaviour."
+    }
+   ],
+   "scenarios": [
+    {
+     "name": "First chat",
+     "steps": [
+      "Open a trusted folder with the CLI installed.",
+      "Click the AGI Code icon.",
+      "Send a short question."
+     ],
+     "expected": "Reply streams and ends; no status block remains."
+    },
+    {
+     "name": "No folder",
+     "steps": [
+      "Open VS Code with no folder.",
+      "Open the AGI Code view."
+     ],
+     "expected": "Open a workspace text and an Open folder button."
+    },
+    {
+     "name": "Untrusted",
+     "steps": [
+      "Open a folder in Restricted Mode.",
+      "Open the view."
+     ],
+     "expected": "Manage Trust button; no message can start a turn."
+    },
+    {
+     "name": "Editor tab",
+     "steps": [
+      "Run 'Code: Open Chat in Editor' twice."
+     ],
+     "expected": "Two tabs, AGI Chat and AGI Chat 2."
+    },
+    {
+     "name": "Stop",
+     "steps": [
+      "Send a long request.",
+      "Press stop."
+     ],
+     "expected": "Streaming ends and the composer is ready."
+    },
+    {
+     "name": "Rate limit",
+     "steps": [
+      "Cause a provider 429 on an own-key model."
+     ],
+     "expected": "Rate-limit error with retry."
+    }
+   ],
+   "diagnostics": [
+    "Developer output channel registered by registerDeveloperOutput (chatSetup.ts:45).",
+    "Command 'Code: Export Diagnostics' (agi-workforce.exportDiagnostics) requires sign-in (commandSetup.ts:1518-1530).",
+    "Runtime spawn failures logged from localRuntimeClient.ts around line 2573."
+   ]
+  },
+  "gaps": [
+   {
+    "gap": "No recorded run proves the full flow in a real VS Code window in this knowledge base.",
+    "affects": "Testers, VS Code app",
+    "evidence": "No result file read; only unit test files exist.",
+    "work_needed": "Run the integration suite (package.json test:integration) and record results."
+   },
+   {
+    "gap": "Where the local runtime stores threads on disk was not established.",
+    "affects": "Privacy review",
+    "evidence": "Not opened.",
+    "work_needed": "Read the CLI thread store and document it."
+   }
+  ],
+  "depends_on": [
+   "surface:vscode",
+   "mode:local",
+   "mode:own-key",
+   "mode:cloud",
+   "SYS-chat-turn-pipeline",
+   "SYS-inference-providers",
+   "SYS-local-inference",
+   "SYS-execution-boundaries",
+   "SYS-subscriptions-entitlements-and-usage",
+   "SYS-authentication-and-identity",
+   "file:apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts",
+   "file:apps/extension-vscode/src/integrations/localRuntimeClient.ts"
+  ],
+  "relationships": [
+   {
+    "rel": "available_on",
+    "to": "surface:vscode",
+    "evidence": "apps/extension-vscode/package.json:953-970"
+   },
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts",
+    "evidence": "ChatStateManager.ts:1523-1545"
+   },
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/extension-vscode/src/providers/chatEditorPanel.ts",
+    "evidence": "chatEditorPanel.ts:63-72"
+   },
+   {
+    "rel": "depends_on",
+    "to": "file:apps/extension-vscode/src/integrations/localRuntimeClient.ts",
+    "evidence": "localRuntimeClient.ts:2544-2579"
+   },
+   {
+    "rel": "depends_on",
+    "to": "SYS-local-inference",
+    "evidence": "Picker group 'On this device' ChatStateManager.ts:2034-2038"
+   },
+   {
+    "rel": "depends_on",
+    "to": "SYS-execution-boundaries",
+    "evidence": "Picker boundaries local/byok/cloud ChatStateManager.ts:2034-2121"
+   },
+   {
+    "rel": "governed_by_subscription",
+    "to": "SYS-subscriptions-entitlements-and-usage",
+    "evidence": "ChatStateManager.ts:925-962, 2100-2121"
+   },
+   {
+    "rel": "configured_by",
+    "to": "file:apps/extension-vscode/package.json",
+    "evidence": "package.json:1251-1272, 1456-1475"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/extension-vscode/src/__tests__/chatStateManager.test.ts",
+    "evidence": "File exists in src/__tests__"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/extension-vscode/src/__tests__/chatEditorPanel.test.ts",
+    "evidence": "File exists in src/__tests__"
+   },
+   {
+    "rel": "blocked_by",
+    "to": "SYS-security-and-privacy",
+    "evidence": "Untrusted workspace stops the runtime, package.json:54-57"
+   }
+  ],
+  "unknowns": [
+   "Where the local runtime stores thread data on disk.",
+   "Whether Local chat works fully signed out; no code was found requiring sign-in but this was not exercised.",
+   "Exact value of agiWorkforce.useTerminal default.",
+   "Which exact cloud route the runtime uses for Managed Cloud models."
+  ]
+ },
+ "corrections": [
+  {
+   "section": "3",
+   "claim": "agiWorkforce.useTerminal is off by default per its restricted-configuration entry, value not read",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The default is declared as false, and the restricted-configuration list is only about untrusted workspaces, not defaults. commandSetup.ts:1111-1115 does route to the terminal when the setting is on.",
+   "evidence": "apps/extension-vscode/package.json:1472-1476 (default false); commandSetup.ts:1111-1115",
+   "correction": "agiWorkforce.useTerminal defaults to false. The 'Unknown: exact default' item can be removed."
+  },
+  {
+   "section": "6",
+   "claim": "Data table: auto-archive of inactive sessions after agiWorkforce.archiveInactiveSessionsDays (package.json:74)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "package.json:74 is only the restricted-configuration list entry. The setting itself defaults to 0, which keeps archiving off. It archives closed Local sessions, needs a CLI that supports inactivity checks, and has a 365-day maximum.",
+   "evidence": "apps/extension-vscode/package.json:1224-1231 (default 0, 'Set to 0 to keep the feature off')",
+   "correction": "Auto-archive is off by default (0). When set to 1-365 days it archives closed Local sessions. Cite package.json:1224-1231."
+  },
+  {
+   "section": "7",
+   "claim": "Account: Local models need no sign-in; picker text implies sign-in or a key unlocks other models (ChatStateManager.ts:2119-2121)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The 'Sign in or add a provider key to unlock these models' text is shown only when tier === 'local'. isManagedModelAccessBlocked returns true for tier 'local', so every managed model is blocked in the Local tier. For other blocked tiers the text is manualModelUnlockText ('Your plan uses Auto; upgrade ...'). The code does not require sign-in for local models, but the page's 'Unknown: whether Local works signed out' is hedged more than needed.",
+   "evidence": "ChatStateManager.ts:2105-2123; apps/extension-vscode/src/features/model-picker/modelConstants.ts:100-103",
+   "correction": "The 'Sign in or add a provider key' hint is shown only for the Local tier. The text for plan-blocked tiers is 'Your plan uses Auto; upgrade to <plan> to choose these models'."
+  },
+  {
+   "section": "7",
+   "claim": "Subscription: managed models shown 'Unavailable' when the plan blocks them; text says to upgrade (ChatStateManager.ts:2100-2121, 1000-1010)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "2105-2123 is correct: group boundary 'unavailable' with label 'Unavailable \u00b7 <heading>' when isManagedModelAccessBlocked(tier), and the upgrade text comes from manualModelUnlockText at :983-990. Lines 1000-1010 are unrelated constants (ReplyBookmark, storage keys). Access depends on the 'developer_surfaces' billing capability.",
+   "evidence": "ChatStateManager.ts:983-990, 2105-2123; modelConstants.ts:100-103",
+   "correction": "Cite ChatStateManager.ts:983-990 for the upgrade text. Add that access is gated by the developer_surfaces plan capability, and that this text is generated from the plan ladder rather than being static."
+  },
+  {
+   "section": "7",
+   "claim": "Local mode: chat runs through the local runtime on an on-device model with no AGI Cloud call by this host; 'No local models found' item when none is running (ChatStateManager.ts:2043-2056)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The disabled 'No local models found' item appears only when localModels is empty AND no local servers were detected. If servers were detected, per-server disabled setup items are shown instead (health text). Separately, the host does call a server for the usage meter and Export Diagnostics, so 'no AGI Cloud call by this host' is not shown by the cited lines. The group text only says Ollama and LM Studio stay inside the local runtime.",
+   "evidence": "ChatStateManager.ts:2034-2061; commandSetup.ts:1504-1530 (diagnostics sent to the cloud web origin)",
+   "correction": "'No local models found' shows only when neither models nor local servers are found. Otherwise the picker shows one disabled row per detected server with its health text. The 'no AGI Cloud call' claim is not proven by these lines."
+  }
+ ],
+ "missing_facts": [
+  "Export Diagnostics (agi-workforce.exportDiagnostics) is sign-in gated and sends data to the cloud web origin, so it is one server call that the page leaves out of the Local mode rule. The page mentions the sign-in gate but not the server call. apps/extension-vscode/src/core/commandSetup.ts:1504-1530",
+  "The Local privacy boundary can refuse network access for web search. The web-search request text tells the model to state that limitation, so Local mode has a documented network restriction. apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:~283 (WEB_SEARCH_REQUEST)",
+  "The localRuntimeClient spawn passes --workspace-consent with the folder and consent time, may add --no-memory when memory is disabled, and may add --allow-dangerously-skip-permissions. The page's data flow omits these. apps/extension-vscode/src/integrations/localRuntimeClient.ts:2553-2579"
+ ]
+}

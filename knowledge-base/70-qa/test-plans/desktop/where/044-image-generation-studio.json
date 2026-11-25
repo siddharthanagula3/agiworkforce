@@ -1,0 +1,411 @@
+{
+ "S44.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Create image"
+   },
+   {
+    "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+    "text": "Generating image"
+   }
+  ],
+  "needs": "a paid account (plan not verified in code)",
+  "note": "The plus button's own label was not found; only the menu row text was verified.",
+  "reachable": "yes",
+  "steps": [
+   "Open the composer's plus menu and click Create image. The composer shows an Image chip with the button Exit image generation mode.",
+   "Type a prompt in the message box.",
+   "Press the send button.",
+   "Look for the Generating image card in the conversation, then check that a generated image appears in the same conversation, matching Expected."
+  ],
+  "where": "Composer plus menu > Create image, then type a prompt and send"
+ },
+ "S44.02": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Select image model"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Image model"
+   }
+  ],
+  "needs": "a paid account with more than one image model enabled",
+  "note": "The list only shows models the account's media admission marks enabled, plus promotional image models.",
+  "reachable": "yes",
+  "steps": [
+   "Turn on image mode with Create image from the composer plus menu.",
+   "Click the button labelled with the current model name (its aria-label is Select image model). The menu is titled Image model.",
+   "Pick a different model from the list.",
+   "Generate an image and check that the picked model is the one shown in the card caption (Generated with ...)."
+  ],
+  "where": "Create image (image mode) > Select image model button"
+ },
+ "S44.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Style"
+   },
+   {
+    "file": "apps/web/features/chat/lib/imageGenerationOptions.ts",
+    "text": "Photorealistic"
+   }
+  ],
+  "needs": "none beyond image mode access",
+  "note": "A preset does not set a separate field; it appends style words to the prompt text, so the look change depends on the model.",
+  "reachable": "yes",
+  "steps": [
+   "Turn on image mode with Create image.",
+   "Click the Style button (aria-label Add a style to the prompt).",
+   "Click a preset: Photorealistic, Illustration, Watercolor, Oil painting or 3D render.",
+   "Check that the preset's wording is added to the message box, then generate and compare the look with Expected."
+  ],
+  "where": "Create image (image mode) > Style button > pick a preset"
+ },
+ "S44.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "What to do with the attached image"
+   }
+  ],
+  "needs": "one to several image files to upload",
+  "note": "No separately labelled reference slots were found; the code treats extra attachments as references by order. Confirm on screen.",
+  "reachable": "yes",
+  "steps": [
+   "Turn on image mode with Create image.",
+   "Attach one or more pictures using the composer's attach control (File upload).",
+   "Open the menu named by the button What to do with the attached image to choose the operation.",
+   "Check that the first picture is edited and the others guide the result, as the send-time message says: Attach up to N images."
+  ],
+  "where": "Create image (image mode) > attach a picture with the attach control, then What to do with the attached image"
+ },
+ "S44.07": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Select aspect ratio"
+   }
+  ],
+  "needs": "none beyond image mode access",
+  "note": "The button is hidden for promotional image models; the options come from the chosen model.",
+  "reachable": "yes",
+  "steps": [
+   "Turn on image mode with Create image.",
+   "Click the button for the aspect ratio (aria-label Select aspect ratio; shows Auto by default).",
+   "Pick a ratio from the menu titled Image aspect ratio.",
+   "Generate an image and check the picture's shape against the ratio chosen."
+  ],
+  "where": "Create image (image mode) > Select aspect ratio button"
+ },
+ "S44.11": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Return the image on a transparent background"
+   }
+  ],
+  "needs": "a paid account and a model that supports editing",
+  "note": "The button only appears when the chosen model supports edit; its visible text was not read in code, so the tester should find it by its title.",
+  "reachable": "yes",
+  "steps": [
+   "Turn on image mode with Create image and choose a model that can edit images.",
+   "Hover the button titled Return the image on a transparent background to read its title.",
+   "Turn it on (it shows as pressed), then generate an image.",
+   "Check that the returned image has a transparent background, as Expected says."
+  ],
+  "where": "Create image (image mode) > the button titled Return the image on a transparent background"
+ },
+ "S44.18": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+    "text": "Generating image"
+   }
+  ],
+  "needs": "a paid account, and time to click before the image finishes",
+  "note": "No stop button labelled for images was found on the card; cancel is wired through the composer stop action. Whether billing stops is not verified in this read.",
+  "reachable": "yes",
+  "steps": [
+   "Start an image generation with a prompt.",
+   "While the Generating image card shows, click the composer's send button, which becomes the stop control during a turn.",
+   "Check that the Generating image card ends with Image generation stopped and that no image is added.",
+   "Check the card offers Try again."
+  ],
+  "where": "Composer send button (turns into stop) while an image generation runs"
+ },
+ "S44.19": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+    "text": "Try again"
+   },
+   {
+    "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+    "text": "Image generation stopped"
+   }
+  ],
+  "needs": "a way to cause a failure or stop",
+  "note": "The retry label can change to retryLabel or a countdown text, so match on Try again.",
+  "reachable": "yes",
+  "steps": [
+   "Make an image generation fail or stop it (see S44.18).",
+   "Find the card labelled Image generation stopped or the error card.",
+   "Click Try again (it may show a countdown such as Try again in 30s first).",
+   "Check that a new generation starts with the same prompt in the same place."
+  ],
+  "where": "A stopped or failed image card > Try again"
+ },
+ "S44.20": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+    "text": "Variation"
+   }
+  ],
+  "needs": "a paid account and a generated image",
+  "note": "The button is disabled while generating or while a retry is blocked.",
+  "reachable": "yes",
+  "steps": [
+   "Generate an image so its card shows under the chat.",
+   "Click the Variation button below the image card.",
+   "Wait for the new generation to appear.",
+   "Check that a new image is made from the same picture, as Expected says."
+  ],
+  "where": "A generated image card > Variation button under the image"
+ },
+ "S44.21": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Images"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Library layout"
+   }
+  ],
+  "needs": "a few generated images in the account",
+  "note": "The sidebar label that leads to the Library was not confirmed in code; the page is /chat/library.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Library page from the app's navigation.",
+   "Click the Images tab.",
+   "Check that generated images show together as a grid of thumbnails.",
+   "Use the Library layout control to switch view if you want to compare."
+  ],
+  "where": "Library (/chat/library) > Images tab"
+ },
+ "S44.22": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Close file viewer"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Zoom in"
+   }
+  ],
+  "needs": "a generated image in the Library",
+  "note": "No control named Full screen was found; the viewer is a zoomable panel, so compare with Expected.",
+  "reachable": "yes",
+  "steps": [
+   "Open Library > Images.",
+   "Click a generated image.",
+   "Check that the viewer opens over the page with Zoom in, Zoom out and Download, and a Close file viewer button.",
+   "Use Zoom in to confirm it enlarges the picture."
+  ],
+  "where": "Library > Images > click a picture to open the file viewer"
+ },
+ "S44.23": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+    "text": "Generated with"
+   }
+  ],
+  "needs": "a generated image",
+  "note": "The caption shows model and ratio; a prompt, size or quality display was not confirmed in the code read.",
+  "reachable": "yes",
+  "steps": [
+   "Generate or open an image card in a conversation.",
+   "Read the caption under the image.",
+   "Check that it shows the model and the aspect ratio (for example Generated with ... \u00b7 16:9).",
+   "Look for the prompt and any size or quality setting, and compare with Expected."
+  ],
+  "where": "A generated image card in chat > the caption under the image Generated with"
+ },
+ "S44.24": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Remix"
+   }
+  ],
+  "needs": "a saved generated image in the Library",
+  "note": "The item menu's own trigger label was not confirmed; the Remix row is shown only for image items.",
+  "reachable": "yes",
+  "steps": [
+   "Open Library > Images.",
+   "Open the menu of a generated image.",
+   "Click Remix.",
+   "Check that the composer opens in image mode with the image's prompt filled in."
+  ],
+  "where": "Library > Images > item menu > Remix"
+ },
+ "S44.25": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Remix"
+   }
+  ],
+  "needs": "a saved image made with a non-default model or ratio",
+  "note": "The handoff code shown stages the asset, prompt and image mode; the model and ratio carry-over is set through pending image settings in the composer and was not walked through on screen.",
+  "reachable": "yes",
+  "steps": [
+   "Open Library > Images and pick an image made with a specific model and aspect ratio.",
+   "Click Remix in its menu.",
+   "Check that the composer's model and aspect ratio match that image before generating.",
+   "Generate again and compare with Expected."
+  ],
+  "where": "Library > Images > item menu > Remix (settings carry over)"
+ },
+ "S44.27": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+    "text": "Save to Library"
+   },
+   {
+    "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+    "text": "More actions"
+   }
+  ],
+  "needs": "a generated image",
+  "note": "Save to Library only appears on cards where the app passes a keep action.",
+  "reachable": "yes",
+  "steps": [
+   "Generate an image so its card shows.",
+   "Click the More actions button on the card.",
+   "Click Save to Library.",
+   "Open Library from the app and check that the image is listed, and still there after a reload."
+  ],
+  "where": "A generated image card > More actions > Save to Library"
+ },
+ "S44.28": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Add to project"
+   }
+  ],
+  "needs": "a Project and a generated image in the Library",
+  "note": "The menu row shows only when the file type is an accepted attachment type; not confirmed for image types on screen. The card itself has no Add to Project control.",
+  "reachable": "yes",
+  "steps": [
+   "Open Library > Images.",
+   "Open the menu of a generated image.",
+   "Click Add to project.",
+   "In the dialog titled Add to project, pick a project folder and check that the image shows up in that project."
+  ],
+  "where": "Library > Images > item menu > Add to project"
+ },
+ "S44.29": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+    "text": "Download"
+   }
+  ],
+  "needs": "a generated image",
+  "note": "Full quality was not verified; the code fetches the image blob and saves it.",
+  "reachable": "yes",
+  "steps": [
+   "Click the More actions button on the image card.",
+   "Click Download.",
+   "Open the downloaded file in Preview and check its size and sharpness against Expected.",
+   "Compare with the Download button on the image's hover bar."
+  ],
+  "where": "A generated image card > More actions > Download"
+ },
+ "S44.30": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+    "text": "Copy image"
+   }
+  ],
+  "needs": "a generated image",
+  "note": "The copy button in the preview modal copies a link, not the image; only the card's Copy image is the image copy.",
+  "reachable": "yes",
+  "steps": [
+   "Generate an image so its card shows.",
+   "Click the Copy button under the image (its title is Copy image).",
+   "Paste into another app such as Notes or a chat box.",
+   "Check that the picture itself pastes, not only a link."
+  ],
+  "where": "A generated image card > Copy image"
+ },
+ "S44.33": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+    "text": "New version"
+   },
+   {
+    "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+    "text": "Revise this image"
+   }
+  ],
+  "needs": "a generated image, or a picture you upload in image mode",
+  "note": "The button's title is Revise this image; for an uploaded picture, use image mode and the operation menu in S44.04.",
+  "reachable": "yes",
+  "steps": [
+   "Click the New version button on the generated image.",
+   "In the Revise this image panel, type a change to describe.",
+   "Click send and wait for the new version.",
+   "Check that the new image keeps the source picture and applies the change, as Expected says."
+  ],
+  "where": "A generated image card > New version"
+ },
+ "S44.35": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Report this response"
+   }
+  ],
+  "needs": "a generated image reply in a conversation",
+  "note": "The message menu's trigger label was not confirmed; the report item is shown for non-user messages.",
+  "reachable": "yes",
+  "steps": [
+   "Find the image reply in the conversation.",
+   "Open the message's menu.",
+   "Click Report this response.",
+   "Check that the menu shows Reported and a toast says Reported. Thank you: our trust and safety team will review it."
+  ],
+  "where": "A generated image reply > message menu > Report this response"
+ },
+ "S44.36": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+    "text": "Generated with"
+   }
+  ],
+  "needs": "a generated image; a file inspection tool for the metadata check",
+  "note": "The visible caption says Generated with <model>, not AI-generated; machine-readable provenance is set in apps/web/app/api/files/[id]/route.ts and is not visible in the UI.",
+  "reachable": "yes",
+  "steps": [
+   "Look at the caption under any generated image card.",
+   "Check whether it says the image is AI-generated.",
+   "Download the image and check whether AI-generation metadata exists in the file (provenance is set by the server in the file route)."
+  ],
+  "where": "A generated image card > caption Generated with"
+ }
+}

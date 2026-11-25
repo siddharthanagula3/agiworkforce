@@ -1,0 +1,1327 @@
+[
+ {
+  "sec": "2",
+  "title": "Public website and acquisition screens",
+  "slug": "002-public-website-and-acquisition-screens",
+  "items": 40,
+  "built": {
+   "web": 32,
+   "cli": 1,
+   "mobile": 2
+  }
+ },
+ {
+  "sec": "3",
+  "title": "Authentication and onboarding screens",
+  "slug": "003-authentication-and-onboarding-screens",
+  "items": 37,
+  "built": {
+   "web": 25,
+   "desktop": 26,
+   "mobile": 13,
+   "cli": 7,
+   "vscode": 7,
+   "chrome": 7,
+   "api": 1
+  }
+ },
+ {
+  "sec": "4",
+  "title": "Signed-in application destinations",
+  "slug": "004-signed-in-application-destinations",
+  "items": 44,
+  "built": {
+   "web": 39,
+   "desktop": 39,
+   "mobile": 32,
+   "cli": 22,
+   "vscode": 20,
+   "chrome": 8,
+   "api": 3
+  }
+ },
+ {
+  "sec": "5",
+  "title": "Application shell and navigation components",
+  "slug": "005-application-shell-and-navigation-components",
+  "items": 39,
+  "built": {
+   "web": 32,
+   "desktop": 33,
+   "mobile": 29,
+   "cli": 19,
+   "vscode": 16,
+   "chrome": 14
+  }
+ },
+ {
+  "sec": "6",
+  "title": "Visual foundations and spacing conventions",
+  "slug": "006-visual-foundations-and-spacing-conventions",
+  "items": 35,
+  "built": {
+   "web": 35,
+   "desktop": 35,
+   "mobile": 35,
+   "cli": 23,
+   "vscode": 35,
+   "chrome": 35
+  }
+ },
+ {
+  "sec": "7",
+  "title": "Layout systems",
+  "slug": "007-layout-systems",
+  "items": 32,
+  "built": {
+   "web": 25,
+   "desktop": 26,
+   "mobile": 16,
+   "cli": 6,
+   "vscode": 14,
+   "chrome": 10
+  }
+ },
+ {
+  "sec": "8",
+  "title": "Basic interactive elements",
+  "slug": "008-basic-interactive-elements",
+  "items": 50,
+  "built": {
+   "web": 47,
+   "desktop": 47,
+   "mobile": 39,
+   "cli": 29,
+   "vscode": 31,
+   "chrome": 28
+  }
+ },
+ {
+  "sec": "9",
+  "title": "Compound interface components",
+  "slug": "009-compound-interface-components",
+  "items": 38,
+  "built": {
+   "web": 35,
+   "desktop": 35,
+   "mobile": 27,
+   "cli": 20,
+   "vscode": 17,
+   "chrome": 13
+  }
+ },
+ {
+  "sec": "10",
+  "title": "Modal and dialog inventory",
+  "slug": "010-modal-and-dialog-inventory",
+  "items": 48,
+  "built": {
+   "web": 43,
+   "desktop": 46,
+   "mobile": 34,
+   "cli": 24,
+   "vscode": 14,
+   "chrome": 9
+  }
+ },
+ {
+  "sec": "11",
+  "title": "Accessibility and localization components",
+  "slug": "011-accessibility-and-localization-components",
+  "items": 28,
+  "built": {
+   "mobile": 14,
+   "vscode": 15,
+   "web": 24,
+   "desktop": 24,
+   "chrome": 13,
+   "cli": 8
+  }
+ },
+ {
+  "sec": "12",
+  "title": "New-chat experience",
+  "slug": "012-new-chat-experience",
+  "items": 24,
+  "built": {
+   "web": 20,
+   "desktop": 20,
+   "mobile": 20,
+   "cli": 15,
+   "vscode": 14,
+   "chrome": 9
+  }
+ },
+ {
+  "sec": "13",
+  "title": "Composer text interaction",
+  "slug": "013-composer-text-interaction",
+  "items": 41,
+  "built": {
+   "web": 34,
+   "desktop": 36,
+   "mobile": 27,
+   "cli": 25,
+   "vscode": 22,
+   "chrome": 21
+  }
+ },
+ {
+  "sec": "14",
+  "title": "Attachment intake components",
+  "slug": "014-attachment-intake-components",
+  "items": 36,
+  "built": {
+   "web": 27,
+   "desktop": 27,
+   "mobile": 21,
+   "cli": 15,
+   "vscode": 15,
+   "chrome": 13
+  }
+ },
+ {
+  "sec": "15",
+  "title": "Model-selector interface",
+  "slug": "015-model-selector-interface",
+  "items": 35,
+  "built": {
+   "web": 31,
+   "desktop": 32,
+   "mobile": 17,
+   "cli": 27,
+   "vscode": 16,
+   "chrome": 13,
+   "api": 11
+  }
+ },
+ {
+  "sec": "16",
+  "title": "User-message components",
+  "slug": "016-user-message-components",
+  "items": 22,
+  "built": {
+   "web": 17,
+   "desktop": 17,
+   "mobile": 12,
+   "cli": 9,
+   "vscode": 10,
+   "chrome": 8
+  }
+ },
+ {
+  "sec": "17",
+  "title": "Assistant-message components",
+  "slug": "017-assistant-message-components",
+  "items": 40,
+  "built": {
+   "web": 31,
+   "desktop": 31,
+   "mobile": 31,
+   "cli": 16,
+   "vscode": 16,
+   "chrome": 19,
+   "api": 3
+  }
+ },
+ {
+  "sec": "18",
+  "title": "Conversation-level controls",
+  "slug": "018-conversation-level-controls",
+  "items": 28,
+  "built": {
+   "web": 22,
+   "desktop": 22,
+   "mobile": 15,
+   "cli": 16,
+   "vscode": 9,
+   "chrome": 5
+  }
+ },
+ {
+  "sec": "19",
+  "title": "Streaming and response-presentation states",
+  "slug": "019-streaming-and-response-presentation-states",
+  "items": 29,
+  "built": {
+   "web": 28,
+   "desktop": 28,
+   "mobile": 26,
+   "cli": 24,
+   "vscode": 23,
+   "chrome": 27,
+   "api": 17
+  }
+ },
+ {
+  "sec": "20",
+  "title": "Markdown and text rendering",
+  "slug": "020-markdown-and-text-rendering",
+  "items": 30,
+  "built": {
+   "web": 29,
+   "desktop": 29,
+   "mobile": 25,
+   "cli": 20,
+   "vscode": 24,
+   "chrome": 24
+  }
+ },
+ {
+  "sec": "21",
+  "title": "Code blocks and executable code presentation",
+  "slug": "021-code-blocks-and-executable-code-presentation",
+  "items": 30,
+  "built": {
+   "web": 19,
+   "desktop": 19,
+   "mobile": 13,
+   "cli": 13,
+   "vscode": 16,
+   "chrome": 1
+  }
+ },
+ {
+  "sec": "22",
+  "title": "Rich answers and structured result widgets",
+  "slug": "022-rich-answers-and-structured-result-widgets",
+  "items": 38,
+  "built": {
+   "web": 19,
+   "desktop": 19,
+   "mobile": 12,
+   "chrome": 5,
+   "cli": 3,
+   "vscode": 2
+  }
+ },
+ {
+  "sec": "23",
+  "title": "Project workspace",
+  "slug": "023-project-workspace",
+  "items": 38,
+  "built": {
+   "web": 23,
+   "desktop": 23,
+   "mobile": 11,
+   "cli": 13,
+   "vscode": 8
+  }
+ },
+ {
+  "sec": "24",
+  "title": "Library and file-management experience",
+  "slug": "024-library-and-file-management-experience",
+  "items": 40,
+  "built": {
+   "web": 17,
+   "desktop": 17,
+   "mobile": 11,
+   "cli": 1,
+   "vscode": 1
+  }
+ },
+ {
+  "sec": "25",
+  "title": "File previews and readers",
+  "slug": "025-file-previews-and-readers",
+  "items": 31,
+  "built": {
+   "web": 13,
+   "desktop": 13,
+   "cli": 5,
+   "vscode": 5,
+   "mobile": 7
+  }
+ },
+ {
+  "sec": "26",
+  "title": "Artifact container and panel",
+  "slug": "026-artifact-container-and-panel",
+  "items": 40,
+  "built": {
+   "web": 32,
+   "desktop": 31,
+   "mobile": 20,
+   "cli": 10,
+   "vscode": 10,
+   "chrome": 1
+  }
+ },
+ {
+  "sec": "27",
+  "title": "Document and writing editor",
+  "slug": "027-document-and-writing-editor",
+  "items": 41,
+  "built": {
+   "web": 14,
+   "desktop": 14,
+   "mobile": 5,
+   "cli": 3,
+   "vscode": 3,
+   "chrome": 1
+  }
+ },
+ {
+  "sec": "28",
+  "title": "Code Canvas and application preview",
+  "slug": "028-code-canvas-and-application-preview",
+  "items": 32,
+  "built": {
+   "web": 12,
+   "desktop": 10,
+   "vscode": 9,
+   "mobile": 4,
+   "cli": 3
+  }
+ },
+ {
+  "sec": "29",
+  "title": "Spreadsheet and data-analysis workspace",
+  "slug": "029-spreadsheet-and-data-analysis-workspace",
+  "items": 40,
+  "built": {
+   "web": 10,
+   "desktop": 10,
+   "chrome": 7,
+   "mobile": 3
+  }
+ },
+ {
+  "sec": "30",
+  "title": "Presentation workspace",
+  "slug": "030-presentation-workspace",
+  "items": 33,
+  "built": {
+   "web": 1,
+   "desktop": 1,
+   "mobile": 1,
+   "chrome": 1
+  }
+ },
+ {
+  "sec": "31",
+  "title": "PDF and document-transformation products",
+  "slug": "031-pdf-and-document-transformation-products",
+  "items": 25,
+  "built": {
+   "web": 11,
+   "desktop": 11,
+   "mobile": 8
+  }
+ },
+ {
+  "sec": "32",
+  "title": "Design workspace",
+  "slug": "032-design-workspace",
+  "items": 34,
+  "built": {
+   "web": 3,
+   "desktop": 3,
+   "mobile": 2,
+   "cli": 1,
+   "vscode": 1
+  }
+ },
+ {
+  "sec": "33",
+  "title": "Generated Sites and published applications",
+  "slug": "033-generated-sites-and-published-applications",
+  "items": 30,
+  "built": {
+   "web": 13,
+   "desktop": 12,
+   "cli": 7,
+   "mobile": 5,
+   "vscode": 1
+  }
+ },
+ {
+  "sec": "34",
+  "title": "Search experiences",
+  "slug": "034-search-experiences",
+  "items": 32,
+  "built": {
+   "web": 19,
+   "desktop": 19,
+   "cli": 8,
+   "mobile": 14,
+   "vscode": 7,
+   "chrome": 8,
+   "api": 3
+  }
+ },
+ {
+  "sec": "35",
+  "title": "Research workspace",
+  "slug": "035-research-workspace",
+  "items": 34,
+  "built": {
+   "web": 26,
+   "desktop": 26,
+   "mobile": 17,
+   "api": 7,
+   "vscode": 1
+  }
+ },
+ {
+  "sec": "36",
+  "title": "Sources and grounding interface",
+  "slug": "036-sources-and-grounding-interface",
+  "items": 25,
+  "built": {
+   "web": 14,
+   "desktop": 14,
+   "mobile": 10,
+   "chrome": 3,
+   "cli": 1,
+   "vscode": 1
+  }
+ },
+ {
+  "sec": "37",
+  "title": "Notebook and knowledge-workspace product",
+  "slug": "037-notebook-and-knowledge-workspace-product",
+  "items": 39,
+  "built": {
+   "web": 20,
+   "desktop": 20,
+   "mobile": 9,
+   "cli": 6,
+   "vscode": 5,
+   "chrome": 2
+  }
+ },
+ {
+  "sec": "38",
+  "title": "Learning and study products",
+  "slug": "038-learning-and-study-products",
+  "items": 35,
+  "built": {
+   "web": 4,
+   "desktop": 4,
+   "cli": 1
+  }
+ },
+ {
+  "sec": "39",
+  "title": "Memory product",
+  "slug": "039-memory-product",
+  "items": 32,
+  "built": {
+   "web": 27,
+   "desktop": 27,
+   "mobile": 23,
+   "cli": 19,
+   "vscode": 17,
+   "api": 2,
+   "chrome": 14
+  }
+ },
+ {
+  "sec": "40",
+  "title": "Instructions, preferences, and personal style",
+  "slug": "040-instructions-preferences-and-personal-style",
+  "items": 30,
+  "built": {
+   "web": 23,
+   "desktop": 23,
+   "mobile": 19,
+   "cli": 23,
+   "vscode": 17,
+   "chrome": 15
+  }
+ },
+ {
+  "sec": "41",
+  "title": "Temporary and private experiences",
+  "slug": "041-temporary-and-private-experiences",
+  "items": 20,
+  "built": {
+   "web": 14,
+   "desktop": 14,
+   "mobile": 13,
+   "cli": 6,
+   "vscode": 4,
+   "chrome": 4
+  }
+ },
+ {
+  "sec": "42",
+  "title": "Proactive assistance, briefings, and reflection",
+  "slug": "042-proactive-assistance-briefings-and-reflection",
+  "items": 25,
+  "built": {
+   "web": 10,
+   "desktop": 10,
+   "mobile": 10,
+   "chrome": 5,
+   "cli": 3,
+   "vscode": 1
+  }
+ },
+ {
+  "sec": "43",
+  "title": "Image and visual understanding",
+  "slug": "043-image-and-visual-understanding",
+  "items": 20,
+  "built": {
+   "web": 12,
+   "desktop": 12,
+   "mobile": 12,
+   "cli": 12,
+   "vscode": 11,
+   "chrome": 11,
+   "api": 13
+  }
+ },
+ {
+  "sec": "44",
+  "title": "Image-generation studio",
+  "slug": "044-image-generation-studio",
+  "items": 36,
+  "built": {
+   "web": 21,
+   "desktop": 21,
+   "mobile": 18,
+   "cli": 16
+  }
+ },
+ {
+  "sec": "45",
+  "title": "Image editor",
+  "slug": "045-image-editor",
+  "items": 37,
+  "built": {
+   "web": 11,
+   "desktop": 11,
+   "mobile": 4
+  }
+ },
+ {
+  "sec": "46",
+  "title": "Video-generation studio",
+  "slug": "046-video-generation-studio",
+  "items": 37,
+  "built": {
+   "web": 12,
+   "desktop": 12,
+   "mobile": 13
+  }
+ },
+ {
+  "sec": "47",
+  "title": "Video editing and media continuity",
+  "slug": "047-video-editing-and-media-continuity",
+  "items": 27,
+  "built": {}
+ },
+ {
+  "sec": "48",
+  "title": "Voice conversation interface",
+  "slug": "048-voice-conversation-interface",
+  "items": 41,
+  "built": {
+   "web": 27,
+   "desktop": 27,
+   "mobile": 24,
+   "cli": 16
+  }
+ },
+ {
+  "sec": "49",
+  "title": "Dictation, transcription, and recording",
+  "slug": "049-dictation-transcription-and-recording",
+  "items": 30,
+  "built": {
+   "web": 10,
+   "desktop": 10,
+   "mobile": 11,
+   "cli": 9,
+   "chrome": 4,
+   "api": 4
+  }
+ },
+ {
+  "sec": "50",
+  "title": "Audio overviews, speech generation, and music",
+  "slug": "050-audio-overviews-speech-generation-and-music",
+  "items": 32,
+  "built": {
+   "web": 3,
+   "desktop": 3,
+   "mobile": 3
+  }
+ },
+ {
+  "sec": "51",
+  "title": "Voice-agent builder and telephony extensions",
+  "slug": "051-voice-agent-builder-and-telephony-extensions",
+  "items": 25,
+  "built": {}
+ },
+ {
+  "sec": "52",
+  "title": "Custom-assistant builder",
+  "slug": "052-custom-assistant-builder",
+  "items": 41,
+  "built": {
+   "cli": 13
+  }
+ },
+ {
+  "sec": "53",
+  "title": "Skill creation and management",
+  "slug": "053-skill-creation-and-management",
+  "items": 36,
+  "built": {
+   "web": 17,
+   "desktop": 17,
+   "mobile": 8,
+   "cli": 12,
+   "vscode": 10,
+   "api": 1,
+   "chrome": 1
+  }
+ },
+ {
+  "sec": "54",
+  "title": "Plugin marketplace and customization",
+  "slug": "054-plugin-marketplace-and-customization",
+  "items": 40,
+  "built": {
+   "web": 33,
+   "desktop": 33,
+   "vscode": 5,
+   "cli": 17,
+   "mobile": 2
+  }
+ },
+ {
+  "sec": "55",
+  "title": "Connector setup and account management",
+  "slug": "055-connector-setup-and-account-management",
+  "items": 32,
+  "built": {
+   "web": 24,
+   "desktop": 24,
+   "mobile": 14,
+   "cli": 14,
+   "vscode": 3,
+   "chrome": 1
+  }
+ },
+ {
+  "sec": "56",
+  "title": "Concrete integration families",
+  "slug": "056-concrete-integration-families",
+  "items": 47,
+  "built": {
+   "web": 38,
+   "desktop": 38,
+   "mobile": 38,
+   "cli": 25,
+   "vscode": 18,
+   "chrome": 38
+  }
+ },
+ {
+  "sec": "57",
+  "title": "Tool catalog and invocation experience",
+  "slug": "057-tool-catalog-and-invocation-experience",
+  "items": 38,
+  "built": {
+   "web": 28,
+   "desktop": 31,
+   "mobile": 25,
+   "cli": 28,
+   "vscode": 25,
+   "chrome": 27,
+   "api": 18
+  }
+ },
+ {
+  "sec": "58",
+  "title": "MCP and interactive extension products",
+  "slug": "058-mcp-and-interactive-extension-products",
+  "items": 28,
+  "built": {
+   "web": 19,
+   "desktop": 19,
+   "mobile": 5,
+   "cli": 15,
+   "vscode": 6,
+   "chrome": 2
+  }
+ },
+ {
+  "sec": "59",
+  "title": "Approvals and human-in-the-loop UI",
+  "slug": "059-approvals-and-human-in-the-loop-ui",
+  "items": 31,
+  "built": {
+   "web": 27,
+   "desktop": 29,
+   "mobile": 25,
+   "cli": 28,
+   "vscode": 28,
+   "chrome": 22,
+   "api": 11
+  }
+ },
+ {
+  "sec": "60",
+  "title": "Agentic work product",
+  "slug": "060-agentic-work-product",
+  "items": 34,
+  "built": {
+   "web": 27,
+   "desktop": 28,
+   "mobile": 16,
+   "cli": 23,
+   "vscode": 21,
+   "chrome": 2
+  }
+ },
+ {
+  "sec": "61",
+  "title": "Persistent agents and agent rosters",
+  "slug": "061-persistent-agents-and-agent-rosters",
+  "items": 24,
+  "built": {
+   "cli": 15,
+   "mobile": 1
+  }
+ },
+ {
+  "sec": "62",
+  "title": "Multi-agent and multi-model interfaces",
+  "slug": "062-multi-agent-and-multi-model-interfaces",
+  "items": 28,
+  "built": {
+   "cli": 13,
+   "mobile": 11,
+   "web": 5,
+   "desktop": 5,
+   "vscode": 5
+  }
+ },
+ {
+  "sec": "63",
+  "title": "Routines, schedules, and triggers",
+  "slug": "063-routines-schedules-and-triggers",
+  "items": 35,
+  "built": {
+   "web": 27,
+   "desktop": 27,
+   "mobile": 16,
+   "cli": 17,
+   "chrome": 11,
+   "api": 2,
+   "vscode": 8
+  }
+ },
+ {
+  "sec": "64",
+  "title": "Browser-assistant experience",
+  "slug": "064-browser-assistant-experience",
+  "items": 32,
+  "built": {
+   "desktop": 11,
+   "mobile": 4,
+   "cli": 9,
+   "vscode": 10,
+   "chrome": 21
+  }
+ },
+ {
+  "sec": "65",
+  "title": "Computer-use experience",
+  "slug": "065-computer-use-experience",
+  "items": 29,
+  "built": {
+   "desktop": 24,
+   "chrome": 11,
+   "cli": 1,
+   "vscode": 1,
+   "web": 2,
+   "mobile": 2
+  }
+ },
+ {
+  "sec": "66",
+  "title": "Coding-workspace frontend",
+  "slug": "066-coding-workspace-frontend",
+  "items": 41,
+  "built": {
+   "web": 16,
+   "desktop": 20,
+   "cli": 23,
+   "vscode": 23,
+   "mobile": 9
+  }
+ },
+ {
+  "sec": "67",
+  "title": "Coding capabilities and developer workflows",
+  "slug": "067-coding-capabilities-and-developer-workflows",
+  "items": 39,
+  "built": {
+   "web": 29,
+   "desktop": 34,
+   "mobile": 30,
+   "cli": 32,
+   "vscode": 31,
+   "chrome": 3
+  }
+ },
+ {
+  "sec": "68",
+  "title": "Session continuity and remote-session product",
+  "slug": "068-session-continuity-and-remote-session-product",
+  "items": 30,
+  "built": {
+   "web": 17,
+   "desktop": 18,
+   "mobile": 17,
+   "cli": 16,
+   "vscode": 18
+  }
+ },
+ {
+  "sec": "69",
+  "title": "Web application",
+  "slug": "069-web-application",
+  "items": 20,
+  "built": {
+   "web": 14
+  }
+ },
+ {
+  "sec": "70",
+  "title": "Desktop application",
+  "slug": "070-desktop-application",
+  "items": 32,
+  "built": {
+   "desktop": 24
+  }
+ },
+ {
+  "sec": "71",
+  "title": "Mobile application",
+  "slug": "071-mobile-application",
+  "items": 32,
+  "built": {
+   "mobile": 23
+  }
+ },
+ {
+  "sec": "72",
+  "title": "CLI and terminal application",
+  "slug": "072-cli-and-terminal-application",
+  "items": 37,
+  "built": {
+   "cli": 37
+  }
+ },
+ {
+  "sec": "73",
+  "title": "VS Code and IDE extension",
+  "slug": "073-vs-code-and-ide-extension",
+  "items": 30,
+  "built": {
+   "vscode": 30
+  }
+ },
+ {
+  "sec": "74",
+  "title": "Browser extension",
+  "slug": "074-browser-extension",
+  "items": 28,
+  "built": {
+   "chrome": 19,
+   "desktop": 2,
+   "cli": 1
+  }
+ },
+ {
+  "sec": "76",
+  "title": "Model-capability registry",
+  "slug": "076-model-capability-registry",
+  "items": 38,
+  "built": {
+   "web": 26,
+   "desktop": 26,
+   "mobile": 24,
+   "cli": 21,
+   "vscode": 15,
+   "chrome": 15,
+   "api": 23
+  }
+ },
+ {
+  "sec": "78",
+  "title": "UI gating and adaptation components",
+  "slug": "078-ui-gating-and-adaptation-components",
+  "items": 28,
+  "built": {
+   "web": 25,
+   "desktop": 26,
+   "mobile": 22,
+   "cli": 21,
+   "vscode": 17,
+   "chrome": 16,
+   "api": 10
+  }
+ },
+ {
+  "sec": "79",
+  "title": "Routing and model-neutral orchestration",
+  "slug": "079-routing-and-model-neutral-orchestration",
+  "items": 31,
+  "built": {
+   "web": 24,
+   "desktop": 24,
+   "mobile": 21,
+   "cli": 24,
+   "vscode": 20,
+   "chrome": 17,
+   "api": 21
+  }
+ },
+ {
+  "sec": "81",
+  "title": "Free / Basic / Pro / Max 5x / Max 20x planning structure",
+  "slug": "081-free-basic-pro-max-5x-max-20x-planning-structure",
+  "items": 28,
+  "built": {
+   "web": 27,
+   "desktop": 27,
+   "mobile": 12,
+   "vscode": 8,
+   "cli": 6,
+   "chrome": 4,
+   "api": 2
+  }
+ },
+ {
+  "sec": "82",
+  "title": "Usage dashboard and limit UI",
+  "slug": "082-usage-dashboard-and-limit-ui",
+  "items": 33,
+  "built": {
+   "web": 31,
+   "desktop": 31,
+   "mobile": 24,
+   "cli": 14,
+   "vscode": 14,
+   "chrome": 11,
+   "api": 22
+  }
+ },
+ {
+  "sec": "83",
+  "title": "Billing and subscription screens",
+  "slug": "083-billing-and-subscription-screens",
+  "items": 33,
+  "built": {
+   "web": 30,
+   "desktop": 30,
+   "mobile": 13,
+   "api": 2,
+   "cli": 1,
+   "vscode": 2,
+   "chrome": 1
+  }
+ },
+ {
+  "sec": "84",
+  "title": "General and appearance settings",
+  "slug": "084-general-and-appearance-settings",
+  "items": 26,
+  "built": {
+   "web": 15,
+   "desktop": 17,
+   "mobile": 8,
+   "cli": 6,
+   "chrome": 7,
+   "vscode": 4
+  }
+ },
+ {
+  "sec": "85",
+  "title": "Personalization and data settings",
+  "slug": "085-personalization-and-data-settings",
+  "items": 26,
+  "built": {
+   "web": 17,
+   "desktop": 18,
+   "mobile": 15,
+   "vscode": 5,
+   "chrome": 6,
+   "cli": 10
+  }
+ },
+ {
+  "sec": "86",
+  "title": "Security and connected-access settings",
+  "slug": "086-security-and-connected-access-settings",
+  "items": 26,
+  "built": {
+   "web": 17,
+   "desktop": 21,
+   "mobile": 14,
+   "vscode": 5,
+   "chrome": 6,
+   "cli": 6
+  }
+ },
+ {
+  "sec": "87",
+  "title": "Enterprise administration screens",
+  "slug": "087-enterprise-administration-screens",
+  "items": 40,
+  "built": {
+   "web": 35,
+   "desktop": 35,
+   "mobile": 5,
+   "api": 8,
+   "cli": 5,
+   "chrome": 1
+  }
+ },
+ {
+  "sec": "88",
+  "title": "Support, trust, and policy product",
+  "slug": "088-support-trust-and-policy-product",
+  "items": 31,
+  "built": {
+   "web": 26,
+   "desktop": 26,
+   "vscode": 6,
+   "chrome": 3,
+   "mobile": 9,
+   "cli": 8,
+   "api": 2
+  }
+ },
+ {
+  "sec": "89",
+  "title": "Account and access components",
+  "slug": "089-account-and-access-components",
+  "items": 24,
+  "built": {
+   "platform": 23
+  }
+ },
+ {
+  "sec": "90",
+  "title": "Conversation and synchronization components",
+  "slug": "090-conversation-and-synchronization-components",
+  "items": 23,
+  "built": {
+   "platform": 23
+  }
+ },
+ {
+  "sec": "91",
+  "title": "Model and inference components",
+  "slug": "091-model-and-inference-components",
+  "items": 32,
+  "built": {
+   "platform": 31
+  }
+ },
+ {
+  "sec": "92",
+  "title": "Tool-calling and agent-loop components",
+  "slug": "092-tool-calling-and-agent-loop-components",
+  "items": 30,
+  "built": {
+   "platform": 28
+  }
+ },
+ {
+  "sec": "93",
+  "title": "Search, retrieval, and context components",
+  "slug": "093-search-retrieval-and-context-components",
+  "items": 31,
+  "built": {
+   "platform": 29
+  }
+ },
+ {
+  "sec": "94",
+  "title": "Memory and personalization components",
+  "slug": "094-memory-and-personalization-components",
+  "items": 22,
+  "built": {
+   "platform": 20
+  }
+ },
+ {
+  "sec": "95",
+  "title": "File and Library components",
+  "slug": "095-file-and-library-components",
+  "items": 28,
+  "built": {
+   "platform": 21
+  }
+ },
+ {
+  "sec": "96",
+  "title": "Artifact and generated-application components",
+  "slug": "096-artifact-and-generated-application-components",
+  "items": 28,
+  "built": {
+   "platform": 14
+  }
+ },
+ {
+  "sec": "97",
+  "title": "Media and realtime components",
+  "slug": "097-media-and-realtime-components",
+  "items": 30,
+  "built": {
+   "platform": 15
+  }
+ },
+ {
+  "sec": "98",
+  "title": "Integration and extensibility components",
+  "slug": "098-integration-and-extensibility-components",
+  "items": 29,
+  "built": {
+   "platform": 26
+  }
+ },
+ {
+  "sec": "99",
+  "title": "Coding and local-runtime components",
+  "slug": "099-coding-and-local-runtime-components",
+  "items": 30,
+  "built": {
+   "platform": 25
+  }
+ },
+ {
+  "sec": "100",
+  "title": "Commercial and administrative components",
+  "slug": "100-commercial-and-administrative-components",
+  "items": 28,
+  "built": {
+   "platform": 28
+  }
+ },
+ {
+  "sec": "101",
+  "title": "Shared package boundaries",
+  "slug": "101-shared-package-boundaries",
+  "items": 38,
+  "built": {
+   "platform": 37
+  }
+ },
+ {
+  "sec": "102",
+  "title": "Runtime inventory",
+  "slug": "102-runtime-inventory",
+  "items": 32,
+  "built": {
+   "platform": 29
+  }
+ },
+ {
+  "sec": "103",
+  "title": "Data and persistence categories",
+  "slug": "103-data-and-persistence-categories",
+  "items": 38,
+  "built": {
+   "platform": 38
+  }
+ },
+ {
+  "sec": "104",
+  "title": "Named technology options-not claims about competitor internals",
+  "slug": "104-named-technology-options-not-claims-about-competitor-interna",
+  "items": 39,
+  "built": {
+   "platform": 35
+  }
+ },
+ {
+  "sec": "105",
+  "title": "Developer platform and console",
+  "slug": "105-developer-platform-and-console",
+  "items": 30,
+  "built": {
+   "web": 18,
+   "desktop": 18,
+   "cli": 5,
+   "api": 5
+  }
+ },
+ {
+  "sec": "106",
+  "title": "Office, collaboration-channel, and email surfaces",
+  "slug": "106-office-collaboration-channel-and-email-surfaces",
+  "items": 25,
+  "built": {
+   "web": 5,
+   "desktop": 5
+  }
+ },
+ {
+  "sec": "107",
+  "title": "Discovery, social, and public-content products",
+  "slug": "107-discovery-social-and-public-content-products",
+  "items": 23,
+  "built": {
+   "web": 7,
+   "desktop": 4,
+   "mobile": 1,
+   "cli": 1
+  }
+ },
+ {
+  "sec": "108",
+  "title": "Specialist workspaces",
+  "slug": "108-specialist-workspaces",
+  "items": 35,
+  "built": {
+   "web": 18,
+   "desktop": 18,
+   "mobile": 9,
+   "chrome": 5
+  }
+ },
+ {
+  "sec": "109",
+  "title": "Optional native and ambient extensions",
+  "slug": "109-optional-native-and-ambient-extensions",
+  "items": 25,
+  "built": {
+   "desktop": 6,
+   "mobile": 11,
+   "vscode": 2,
+   "chrome": 2,
+   "web": 1,
+   "cli": 1
+  }
+ },
+ {
+  "sec": "110",
+  "title": "Cross-product experiences to include in the product map",
+  "slug": "110-cross-product-experiences-to-include-in-the-product-map",
+  "items": 30,
+  "built": {
+   "web": 18,
+   "desktop": 19,
+   "mobile": 8,
+   "chrome": 3,
+   "cli": 8,
+   "vscode": 8,
+   "api": 2
+  }
+ }
+]

@@ -1,0 +1,480 @@
+{
+ "S78.01": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx",
+    "text": "Effort"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account",
+  "note": "The resolver itself is code in apps/mobile/src/lib/capabilities.tsx (useCapability); there is no screen for it.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Tap the model name beside the + button in a chat's composer.",
+   "Pick a model that has reasoning effort levels, then close the picker.",
+   "Pick a model that has none, then reopen the picker and look for the Effort section.",
+   "Compare what appears and disappears with Expected."
+  ],
+  "where": "Inner rule. Its effect shows on the model picker and the chat composer controls (see S78.02)."
+ },
+ "S78.02": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx",
+    "text": "Effort"
+   },
+   {
+    "file": "apps/mobile/src/features/model-picker/components/ModelRow.tsx",
+    "text": "With thinking"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account",
+  "note": "The With thinking switch appears on a model row when that row is expanded; the exact expand gesture was not traced in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat, then tap the model name beside the + button in the composer.",
+   "Pick a model that has reasoning effort levels and check that an Effort slider appears in the picker.",
+   "Close the picker and look at the right end of the composer toolbar for the effort button.",
+   "Pick a model with no effort levels and check that the effort button is gone. Compare with Expected."
+  ],
+  "where": "Chat > model name beside the + button in the composer > model picker > Effort section and With thinking switch."
+ },
+ "S78.03": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "File"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Photos"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/utils/attachmentValidation.ts",
+    "text": "isn\u2019t an accepted file type. Attach a JPEG, PNG, GIF, or WebP image instead."
+   }
+  ],
+  "needs": "a file the app should refuse, such as one with an unusual type",
+  "note": "The code checks file type and size against the send destination (local or cloud), not the selected model; a model-based rule was not found in the attachment code.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat and tap the + button labelled Add to chat in the composer.",
+   "Tap File and choose a file type the app does not accept.",
+   "Look for the message that says the file isn\u2019t an accepted file type and asks for a JPEG, PNG, GIF, or WebP image instead.",
+   "Switch to another model and repeat. Compare with Expected."
+  ],
+  "where": "Chat > + (Add to chat) > File or Photos."
+ },
+ "S78.04": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx",
+    "text": "Effort"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/settings.json",
+    "text": "Default effort"
+   },
+   {
+    "file": "packages/contracts/types/src/design-system/effort.ts",
+    "text": "Balanced"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account",
+  "note": "Removal of unsupported levels from the request happens in the code, not on screen; only the slider options are visible.",
+  "reachable": "yes",
+  "steps": [
+   "Tap the model name beside the + button in the composer.",
+   "Pick a model with effort levels and read the Effort slider labels (for example Direct, Brief, Quick, Balanced, Deep, Extended, Maximum).",
+   "Pick a different model and check that the slider now shows only the levels that model supports.",
+   "Open Settings, then General, and find Default effort. Compare with Expected."
+  ],
+  "where": "Chat > model name beside + > model picker > Effort slider; also Settings > Device > General > Default effort."
+ },
+ "S78.06": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Create video"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Aspect ratio"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Quality"
+   }
+  ],
+  "needs": "an account whose plan includes video generation",
+  "note": "The duration hint text is built from the model data, so its exact wording varies.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat and tap the + button labelled Add to chat.",
+   "Tap Create video. It appears only when the account plan and the video model allow it.",
+   "Look for the Aspect ratio heading and the Quality heading with their options; quality rows may show hints such as a duration in seconds.",
+   "Change the aspect ratio, or pick another media model if one is offered, and compare the options with Expected."
+  ],
+  "where": "Chat > + (Add to chat) > Create video (or Create image) > Aspect ratio and Quality rows."
+ },
+ "S78.07": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/model-picker/service.ts",
+    "text": "Not included in plan"
+   }
+  ],
+  "needs": "a Free account",
+  "note": "The server-side check on the chat route cannot be seen from the app; only the in-app check is visible.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with a Free account, or with an account on a lower plan.",
+   "Tap the model name beside the + button in the composer.",
+   "Look for model rows that show Not included in plan (or Sign in required when signed out).",
+   "Compare with Expected."
+  ],
+  "where": "Chat > model name beside + > model picker, rows marked Not included in plan or Sign in required."
+ },
+ "S78.08": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Usage"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-usage/index.tsx",
+    "text": "Credit balances"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-usage/index.tsx",
+    "text": "This month"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account",
+  "note": "The page reads its numbers from the server; the tester cannot see the server figure directly, only the displayed one.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, open the drawer and tap Settings.",
+   "Find the Cloud group and tap Usage.",
+   "Read the Credit balances and Resets sections and the This month section, including the used or remaining figures.",
+   "Compare the remaining allowance shown with Expected."
+  ],
+  "where": "Drawer > Settings > Cloud > Usage."
+ },
+ "S78.09": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/reason-codes.ts",
+    "text": "Turned off by your organization"
+   }
+  ],
+  "needs": "a member account in a workspace, and an administrator who can switch a feature off",
+  "note": "No mobile screen to set workspace policy was found; the policy is applied by the server.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Sign in as a member of a workspace where an administrator has turned a feature off.",
+   "Try to use that feature from the chat composer or its menu.",
+   "Look for the title Turned off by your organization on the blocked screen and compare with Expected."
+  ],
+  "where": "Set by a workspace administrator on the server. A member sees the copy Turned off by your organization on a blocked feature."
+ },
+ "S78.10": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/settings/workspace.tsx",
+    "text": "Workspace"
+   },
+   {
+    "file": "apps/mobile/app/(app)/settings/workspace.tsx",
+    "text": "Change role"
+   },
+   {
+    "file": "apps/mobile/src/features/team/RolePickerModal.tsx",
+    "text": "Transfer ownership"
+   }
+  ],
+  "needs": "two accounts in the same workspace: one member, and one owner or admin",
+  "note": "The server also refuses role changes from non-admins; that refusal is not visible on screen.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, open the drawer, tap Settings, then tap Workspace under the Account group.",
+   "As a plain member, look at the member list: no Change role button should be shown.",
+   "Sign in as a workspace owner or admin, reopen Workspace, and look for Change role on another member.",
+   "Open the role dialog as an owner and check for Transfer ownership. Compare with Expected."
+  ],
+  "where": "Drawer > Settings > Account > Workspace."
+ },
+ "S78.11": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-privacy/UsOnlyRoutingGroup.tsx",
+    "text": "Only use AI providers based in the US"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Privacy"
+   }
+  ],
+  "needs": "a Cloud-mode account on a plan that includes the US-only setting",
+  "note": "The eligible plans list is set in the shared types; the tester needs an account on one of those plans.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to Cloud mode, open the drawer and tap Settings.",
+   "Under Assistant, tap Privacy.",
+   "Look for the switch Only use AI providers based in the US. It appears only in Cloud mode for eligible plans.",
+   "Turn the switch on, leave the screen, come back and check that it stays on. Compare with Expected."
+  ],
+  "where": "Drawer > Settings > Assistant > Privacy > Only use AI providers based in the US."
+ },
+ "S78.12": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(public)/age-gate.tsx",
+    "text": "Your age"
+   },
+   {
+    "file": "apps/mobile/app/(public)/age-gate.tsx",
+    "text": "Enter your age"
+   },
+   {
+    "file": "apps/mobile/src/features/auth/components/AgeRefused.tsx",
+    "text": "Age requirement"
+   }
+  ],
+  "needs": "a fresh install or cleared app data, so the age check runs again",
+  "note": "The minimum age depends on the device time zone (ageGate.ts); the way to clear a recorded refusal was not traced in the UI.",
+  "reachable": "yes",
+  "steps": [
+   "Use a fresh install or clear the app data so no age was recorded.",
+   "On the Your age screen, type an age below the minimum shown in the subtitle in the Enter your age field.",
+   "Tap Continue.",
+   "Look for the Age requirement screen and its refusal message. Compare with Expected."
+  ],
+  "where": "First launch, on the age screen titled Your age (before sign-in). Refusal shows the Age requirement screen."
+ },
+ "S78.14": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/pairing.ts",
+    "text": "AGI Code"
+   },
+   {
+    "file": "packages/contracts/types/src/pairing.ts",
+    "text": "Add device"
+   },
+   {
+    "file": "apps/mobile/src/features/companion/components/ConnectionStateViews.tsx",
+    "text": "Scan QR Code"
+   }
+  ],
+  "needs": "a desktop app with AGI installed, paired or not, and optionally a second device",
+  "note": "Plan-based removal of Remote is also checked on this screen (planLacksRemoteControl); that is a separate gate.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, open the drawer and tap AGI Code.",
+   "If no computer is paired, tap Add device in the devices section.",
+   "Read the connection status line: Not connected when nothing is paired, or the desktop name with offline when it is not reachable.",
+   "Tap Scan QR Code if shown. Compare the status with Expected while the desktop app is closed and then open."
+  ],
+  "where": "Drawer > AGI Code > Add device (opens the Remote pairing screen)."
+ },
+ "S78.15": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx",
+    "text": "On device"
+   },
+   {
+    "file": "apps/mobile/src/features/model-picker/components/ModelRow.tsx",
+    "text": "Download"
+   },
+   {
+    "file": "apps/mobile/src/features/model-picker/components/ModelRow.tsx",
+    "text": "Device"
+   }
+  ],
+  "needs": "none for viewing; a phone with enough free storage to download",
+  "note": "The runtime check itself is in model-picker/service.ts; the tester sees its result as the badge.",
+  "reachable": "yes",
+  "steps": [
+   "Tap the model name beside the + button in the composer.",
+   "Look for the On device group heading.",
+   "Read the badge on each on-device model: Download (not installed), Ready (installed), Retry (download failed), or Device (this device cannot run it).",
+   "Tap a Download model and compare the result with Expected."
+  ],
+  "where": "Chat > model name beside + > model picker > On device group."
+ },
+ "S78.16": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/lib/capabilities.tsx",
+    "text": "It\u2019s paused while we fix an issue and will come back without an update."
+   }
+  ],
+  "needs": "an operator who can switch a feature off on the server",
+  "note": "The tester cannot switch an operator flag, so the temporary case may not be reproducible from the app alone.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Only an operator can switch a feature off on the server, so this step needs that switch.",
+   "Open the gated feature while the switch is on and read the title and body.",
+   "Look for the body It\u2019s paused while we fix an issue and will come back without an update. That is the temporary case.",
+   "Compare with the plan case, which says Not included in your plan, and with Expected."
+  ],
+  "where": "Shown on a gated screen when an operator switch is on, or when a plan closes the feature. The two cases show different copy."
+ },
+ "S78.17": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/design-system/effort.ts",
+    "text": "Balanced"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account; a second account on a plan without voice to see the voice button hidden",
+  "note": "The voice button hiding rule is in ChatInput.tsx (voiceAllowed) and needs a plan without voice to check.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat with a signed-in Cloud account and look at the right end of the composer toolbar.",
+   "Pick a model with effort levels and check that the effort button (showing a level such as Balanced) appears.",
+   "Pick a model without effort levels and check that the button is gone, not greyed out.",
+   "Compare with Expected."
+  ],
+  "where": "Chat > composer toolbar: the effort button appears only for models that have effort levels; the voice button appears only when voice is allowed."
+ },
+ "S78.18": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/model-picker/service.ts",
+    "text": "Not included in plan"
+   }
+  ],
+  "needs": "a Free account",
+  "note": "The text Opens plan upgrade options is only an accessibility hint and is not visible on screen.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in on a Free account, then tap the model name beside the + button.",
+   "Look for model rows that are greyed out and show Not included in plan under the name.",
+   "Tap a greyed row and compare what happens with Expected."
+  ],
+  "where": "Chat > model name beside + > model picker > rows that are greyed out with the reason Not included in plan."
+ },
+ "S78.19": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx",
+    "text": "Start a new chat for this model"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx",
+    "text": "Not included in your plan"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx",
+    "text": "View upgrade options"
+   }
+  ],
+  "needs": "a Free account and a chat that already uses one provider",
+  "note": "Store purchases are off in this build (storePurchases.json nativePurchases false), so the alert and paywall show no plan name and no upgrade button; the View upgrade options label only appears when purchases are on.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in on a Free account and open a chat that already uses one provider.",
+   "Tap the model name beside the + button and choose a model from a different provider.",
+   "Read the alert Start a new chat for this model and its message.",
+   "Check whether a plan name or an upgrade button is shown. Compare with Expected."
+  ],
+  "where": "Chat > model name beside + > choose a model from another provider mid-chat > alert Start a new chat for this model. Also Not included in your plan on the paywall sheet."
+ },
+ "S78.21": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Permissions"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/permissions/registry.ts",
+    "text": "Microphone"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/permissions/registry.ts",
+    "text": "Used for voice input and audio recording."
+   }
+  ],
+  "needs": "none",
+  "note": "The prompt shown at first use of voice is a separate screen (app/(app)/voice.tsx); it was not traced in full.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings from the drawer and tap Permissions under the Device group.",
+   "Read the rows Microphone, Speech Recognition, Camera and Photos & Files with their one-line descriptions.",
+   "Tap Microphone and read what it is used for before any system prompt.",
+   "Compare with Expected."
+  ],
+  "where": "Settings > Device > Permissions."
+ },
+ "S78.22": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Create image"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Photos"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account with image generation",
+  "note": "The full message is built from the model name and the capable model list in resolveMobileImageGenerationRequest.ts; the search fragment cannot edit an attached image is in that file. Path steps are inferred from the code, not run.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat, tap the + button labelled Add to chat and tap Create image.",
+   "Attach a photo with Photos.",
+   "Switch the image model to one that cannot edit attached images.",
+   "Send a prompt and read the message that says the model cannot edit the attached image and asks you to pick another image model or remove the attachment. Compare with Expected."
+  ],
+  "where": "Chat > + (Add to chat) > Create image > attach a photo as a reference, then choose an image model that cannot edit."
+ },
+ "S78.24": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx",
+    "text": "On device"
+   },
+   {
+    "file": "apps/mobile/src/features/model-picker/components/ModelRow.tsx",
+    "text": "Turned off for your account. You can turn it on when you send."
+   }
+  ],
+  "needs": "a signed-in account; an on-device model installed for the on-device path",
+  "note": "The picker offers on-device and AGI Cloud models only; no own-key (bring your own key) choice was found in the mobile picker.",
+  "reachable": "yes",
+  "steps": [
+   "Tap the model name beside the + button in the composer.",
+   "Look at the On device group and pick a model there; its badge shows its install state.",
+   "Pick a cloud model and read its detail line, which names the provider.",
+   "If a provider is turned off for the account, look for the note Turned off for your account. You can turn it on when you send. Compare with Expected."
+  ],
+  "where": "Chat > model name beside + > model picker > On device group versus AGI Cloud models."
+ },
+ "S78.26": {
+  "labels": [],
+  "needs": "a signed-in AGI Cloud account",
+  "note": "The request filter lives in apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts and cannot be seen from the app.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Pick a model that has no effort levels, then look at the composer toolbar.",
+   "Check that no effort button is shown, which means no effort value is offered for that model.",
+   "Compare with Expected."
+  ],
+  "where": "Inner rule. The removal of unsupported parameters happens in the server request processor, so it is seen only as the model's controls being absent."
+ },
+ "S78.28": {
+  "labels": [],
+  "needs": "a second device or the web to change the plan or setting",
+  "note": "The refresh is in apps/mobile/src/lib/capabilities.tsx (AppState change to active); the change itself must be made outside the app.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Sign in and note which gated controls are on, such as the effort button or the Remote entry.",
+   "Change the plan or a setting for that account on the web, then send the app to the background and bring it back.",
+   "Reopen the model picker and the composer and check whether the controls changed without restarting. Compare with Expected."
+  ],
+  "where": "Inner rule. The app refreshes capability switches when it returns to the foreground and when the signed-in state changes; the effect shows on gated controls."
+ }
+}

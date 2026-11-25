@@ -101,6 +101,7 @@ export default [
       'target/**',
       '**/target/**',
       'examples/**',
+      'knowledge-base/tools/workflows/**',
       'apps/_future_mobile/**',
       '**/next-env.d.ts',
       '**/*.config.js',

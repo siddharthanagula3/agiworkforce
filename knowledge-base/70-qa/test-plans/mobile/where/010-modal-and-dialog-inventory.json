@@ -1,0 +1,816 @@
+{
+ "S10.01": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Projects"
+   },
+   {
+    "file": "apps/mobile/app/(app)/(tabs)/projects.tsx",
+    "text": "New project"
+   },
+   {
+    "file": "apps/mobile/src/features/projects/components/ProjectEditorModal.tsx",
+    "text": "Create project"
+   }
+  ],
+  "needs": "none",
+  "note": "The side drawer's menu button has no visible label in the code I read.",
+  "reachable": "yes",
+  "steps": [
+   "Open Projects (the Projects entry in the side drawer, which opens from the menu button).",
+   "Tap the floating \"New project\" button at the bottom right.",
+   "Type a name in the \"Project name\" field and tap \"Create project\".",
+   "Look for the new project in the Projects list, compared with Expected."
+  ],
+  "where": "Projects > New project"
+ },
+ "S10.02": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/conversation-actions/useConversationActions.ts",
+    "text": "Rename"
+   },
+   {
+    "file": "apps/mobile/src/features/conversation-actions/RenameConversationModal.tsx",
+    "text": "Rename chat"
+   },
+   {
+    "file": "apps/mobile/src/features/conversation-actions/RenameConversationModal.tsx",
+    "text": "Enter a new title"
+   }
+  ],
+  "needs": "a chat",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat.",
+   "Tap the \"Conversation menu\" button in the chat header.",
+   "Tap \"Rename\"; the \"Rename chat\" box opens with the field \"Enter a new title\".",
+   "Change the title and tap \"Rename\".",
+   "Look for the new title in the chat header, compared with Expected."
+  ],
+  "where": "Chat > Conversation menu > Rename"
+ },
+ "S10.05": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/conversation-actions/useConversationActions.ts",
+    "text": "Archive"
+   },
+   {
+    "file": "apps/mobile/src/features/conversation-actions/useConversationActions.ts",
+    "text": "Chat archived. Find it in Settings, Archived chats."
+   },
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Archived Chats"
+   }
+  ],
+  "needs": "a Cloud account and a Cloud chat",
+  "note": "Archiving has no confirm step; it relies on the Undo message, which is different from Expected's first option only in that it does not ask first.",
+  "reachable": "yes",
+  "steps": [
+   "Open a Cloud chat that is not temporary.",
+   "Tap the \"Conversation menu\" button and tap \"Archive\".",
+   "Note that no confirmation appears first; a message appears: \"Chat archived. Find it in Settings, Archived chats.\" with an \"Undo\" button.",
+   "Go to Settings > Archived Chats and check the chat is there, compared with Expected."
+  ],
+  "where": "Chat > Conversation menu > Archive"
+ },
+ "S10.06": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/conversation-actions/useConversationActions.ts",
+    "text": "Delete chat?"
+   },
+   {
+    "file": "apps/mobile/src/features/conversation-actions/useConversationActions.ts",
+    "text": "Delete"
+   }
+  ],
+  "needs": "a chat",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat.",
+   "Tap the \"Conversation menu\" button and tap \"Delete\".",
+   "Read the \"Delete chat?\" dialog, which names the chat in quotes.",
+   "Tap \"Cancel\" to check nothing is removed, then repeat and tap \"Delete\", and compare with Expected."
+  ],
+  "where": "Chat > Conversation menu > Delete"
+ },
+ "S10.07": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/conversation-actions/useConversationActions.ts",
+    "text": "Delete chat?"
+   },
+   {
+    "file": "apps/mobile/src/features/conversation-actions/useConversationActions.ts",
+    "text": "Delete"
+   }
+  ],
+  "needs": "a chat kept only on this device",
+  "note": "There is one Delete button and no second confirmation. Deleting a Cloud chat is not shown as permanent; the dialog says to restore it from Recently deleted on the web.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat that is kept only on this device (not a Cloud chat).",
+   "Tap the \"Conversation menu\" button and tap \"Delete\".",
+   "Read the \"Delete chat?\" dialog: it says the chat is deleted from this device and cannot be restored.",
+   "Tap \"Delete\" and compare with Expected."
+  ],
+  "where": "Chat > Conversation menu > Delete (on a chat that is only on this device)"
+ },
+ "S10.08": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/shared-links/shareConversation.ts",
+    "text": "Share a link to this chat?"
+   },
+   {
+    "file": "apps/mobile/src/features/shared-links/shareConversation.ts",
+    "text": "Create link"
+   },
+   {
+    "file": "apps/mobile/src/features/conversation-actions/useConversationActions.ts",
+    "text": "Share"
+   }
+  ],
+  "needs": "a Cloud account and a saved chat",
+  "note": "For a temporary chat the menu shows \"Share link\" and first asks to save the chat.",
+  "reachable": "yes",
+  "steps": [
+   "Open a saved Cloud chat (not a temporary chat).",
+   "Tap the \"Conversation menu\" button and tap \"Share\".",
+   "Read the dialog \"Share a link to this chat?\", which says anyone with the link can read the chat until it expires or you revoke it.",
+   "Tap \"Create link\"; the system share sheet opens with the link.",
+   "Compare with Expected: the link goes to the system share sheet, not a box in the app."
+  ],
+  "where": "Chat > Conversation menu > Share > Create link"
+ },
+ "S10.09": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Library"
+   },
+   {
+    "file": "apps/mobile/src/features/library/index.tsx",
+    "text": "Share"
+   }
+  ],
+  "needs": "an item in the Library and a device",
+  "note": "I found no link-creation option for files, only the system share sheet.",
+  "reachable": "yes",
+  "steps": [
+   "Open Library from the side drawer.",
+   "Long-press a picture or file and tap \"Share\", or tap Select, pick one item and tap \"Share\" at the bottom.",
+   "Look for the system share sheet with that file.",
+   "Compare with Expected: the file goes to the system share sheet."
+  ],
+  "where": "Library > long-press an item > Share"
+ },
+ "S10.10": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/ChatsListScreen.tsx",
+    "text": "Artifacts"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/PublishedArtifactControls.tsx",
+    "text": "Who can open this"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/PublishedArtifactControls.tsx",
+    "text": "Anyone with the link"
+   }
+  ],
+  "needs": "a Cloud account and an artifact that can be published",
+  "note": "The publish button's label is \"Publish artifact to a public link\" in the code (ArtifactFullScreen.tsx).",
+  "reachable": "yes",
+  "steps": [
+   "On Chats, use the search field and type the artifact's title.",
+   "Under \"Artifacts\" in the results, tap the artifact.",
+   "Tap the globe button labelled \"Publish artifact to a public link\", then tap \"Publish\" in the dialog.",
+   "Under \"Who can open this\" choose \"Anyone with the link\", \"Only people you invite\" or \"Everyone in this workspace\", then compare with Expected.",
+   "Tap \"Unpublish\" and confirm \"Unpublish this artifact?\" to take it down."
+  ],
+  "where": "Chats search > Artifacts > open the artifact > Publish icon > Publish > Who can open this"
+ },
+ "S10.11": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+    "text": "Publish to a public link?"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+    "text": "Copy publication link"
+   }
+  ],
+  "needs": "a Cloud account and a previewable artifact",
+  "note": "In local mode the app says \"Switch to AGI Cloud to publish\" instead.",
+  "reachable": "yes",
+  "steps": [
+   "Open a Cloud artifact that can be published (a page or app).",
+   "Tap the globe button \"Publish artifact to a public link\".",
+   "Read \"Publish to a public link?\" and tap \"Publish\".",
+   "Look for the published link and the \"Copy publication link\" button, and compare with Expected."
+  ],
+  "where": "Chats search > Artifacts > open the artifact > Publish artifact to a public link > Publish"
+ },
+ "S10.12": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Privacy"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-privacy/index.tsx",
+    "text": "Chat privacy"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-privacy/ChatPrivacyScreen.tsx",
+    "text": "Shared links"
+   },
+   {
+    "file": "apps/mobile/app/(app)/settings/shared-links.tsx",
+    "text": "Revoke this link?"
+   }
+  ],
+  "needs": "a Cloud account with at least one shared link",
+  "note": "The screen offers Share and Revoke only; I found no control to change the expiry or the access of a link.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Privacy, then Chat privacy, then Shared links.",
+   "Read each row for its title and \"Expires\" date, or \"This link has expired\".",
+   "Tap \"Revoke\" on a row and read \"Revoke this link?\".",
+   "Tap \"Revoke\" to confirm and compare with Expected."
+  ],
+  "where": "Settings > Privacy > Chat privacy > Shared links"
+ },
+ "S10.13": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/team/WorkspaceAdministration.tsx",
+    "text": "Invite by email"
+   },
+   {
+    "file": "apps/mobile/src/features/team/WorkspaceAdministration.tsx",
+    "text": "Send invitation"
+   },
+   {
+    "file": "apps/mobile/src/features/team/WorkspaceAdministration.tsx",
+    "text": "Revoke invitation"
+   }
+  ],
+  "needs": "a Cloud workspace where the account can manage the team, and a second email address",
+  "note": "The administration section only shows when the account can manage the team.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Workspace.",
+   "Scroll to the administration section and tap \"Invite by email\".",
+   "Type an address in \"Email address\", pick a role (Member, Admin or Viewer), and tap \"Send invitation\".",
+   "Look at the pending invitations list; tap an invitation and choose \"Resend invitation\" or \"Revoke invitation\", and compare with Expected."
+  ],
+  "where": "Settings > Workspace > Invite by email"
+ },
+ "S10.14": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/settings/workspace.tsx",
+    "text": "Change role"
+   },
+   {
+    "file": "apps/mobile/src/features/team/RolePickerModal.tsx",
+    "text": "Save role"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Workspace"
+   }
+  ],
+  "needs": "a Cloud workspace, an admin account, and a second member in the same workspace",
+  "note": "Ordinary role changes save without a separate confirmation; only an ownership transfer asks more.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Workspace, as an admin of the workspace.",
+   "On a member who is not you, tap \"Change role\".",
+   "In the sheet \"Role for <name>\", pick a role and tap \"Save role\".",
+   "Look at the member's role in the list, and compare with Expected."
+  ],
+  "where": "Settings > Workspace > Change role for <member name> > Change role"
+ },
+ "S10.17": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "File"
+   }
+  ],
+  "needs": "a Cloud chat and a file on the device",
+  "note": "The \"File\" card only appears in Cloud mode; \"Photos\" and \"Camera\" are the other upload cards.",
+  "reachable": "yes",
+  "steps": [
+   "Open a Cloud chat and tap \"Add to chat\" next to the message box.",
+   "Tap \"File\"; the device file chooser opens.",
+   "Pick a file.",
+   "Look for the file attached to the message before sending, and compare with Expected."
+  ],
+  "where": "Chat > Add to chat > File"
+ },
+ "S10.18": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorApiKeySheet.tsx",
+    "text": "Connect {connectorName}"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/index.tsx",
+    "text": "Connected"
+   }
+  ],
+  "needs": "a Cloud account and an account on the outside service",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Connectors.",
+   "Tap a connector that is not connected yet.",
+   "Tap \"Connect <name>\"; for an OAuth service the browser opens the service's sign-in page, and for a key service the \"Connect {connectorName}\" sheet asks for the key.",
+   "Finish the authorization and return to the app, then look for the card showing \"Connected\", and compare with Expected."
+  ],
+  "where": "Settings > Connectors > (choose a connector) > Connect"
+ },
+ "S10.19": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx",
+    "text": "Authorization expired"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx",
+    "text": "Reauthorize"
+   }
+  ],
+  "needs": "a connection whose authorization has expired (hard to set up)",
+  "note": "I did not confirm in the code that the connector's settings are kept after reauthorizing; that is not verified.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Connectors, then the connector that shows \"Authorization expired\".",
+   "Tap \"Reauthorize\" and complete the authorization in the browser.",
+   "Return to the app and look for the connector showing as connected again, and compare with Expected."
+  ],
+  "where": "Settings > Connectors > (connector showing \"Authorization expired\") > Reauthorize"
+ },
+ "S10.20": {
+  "labels": [],
+  "needs": "several connected accounts for one service",
+  "note": "I searched apps/mobile for an account picker, a default account or several accounts for one connector (cloud-connectors and services/connectors.ts); the only match was \"Reset ... to default\" for tool permissions, so no picker was found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S10.27": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ContextWarningChip.tsx",
+    "text": "Chat is getting long. Start a fresh chat for faster responses."
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ContextWarningChip.tsx",
+    "text": "New chat"
+   },
+   {
+    "file": "apps/mobile/app/(app)/chat/[id].tsx",
+    "text": "What is in context"
+   }
+  ],
+  "needs": "a long conversation",
+  "note": "I did not check the length at which the warning appears.",
+  "reachable": "yes",
+  "steps": [
+   "Open a long chat with many messages.",
+   "Look for the line \"Chat is getting long. Start a fresh chat for faster responses.\" with a \"New chat\" button.",
+   "Tap \"New chat\" to start a fresh chat, or open the \"Conversation menu\" and tap \"What is in context\" to see the details, then compare with Expected."
+  ],
+  "where": "Chat > (a long conversation) > warning line under the header"
+ },
+ "S10.28": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/UsageLimitBanner.tsx",
+    "text": "Notify me when it resets"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/UsageLimitBanner.tsx",
+    "text": "Dismiss usage warning"
+   }
+  ],
+  "needs": "a usage limit that has been reached",
+  "note": "The wording of the limit and the reset time come from server data; I did not find that text in the app code.",
+  "reachable": "yes",
+  "steps": [
+   "Use a Free or other account until its usage limit is reached, then open a chat.",
+   "Look for the usage banner; if a reset time is known, tap \"Notify me when it resets\".",
+   "Tap the banner's action to open the recovery screen (Subscription), or tap \"Dismiss usage warning\".",
+   "Compare the banner's text (which limit, when it resets, what to do) with Expected."
+  ],
+  "where": "Chat > usage warning banner above the message box"
+ },
+ "S10.29": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-billing/index.tsx",
+    "text": "Usage top-ups"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/screenTitles.ts",
+    "text": "Subscription"
+   }
+  ],
+  "needs": "a Cloud account; the purchase needs store products and in-app purchases switched on by the owner",
+  "note": "Partial: the section shows only when store products load; in-app billing is not finished (owner switch and waitlist), and the Expected purchase dialog from the limit screen was not found.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Subscription.",
+   "Look for the \"Usage top-ups\" section: \"Credits add to your plan and don't expire.\"",
+   "Tap a credit amount to start a purchase, then compare with Expected."
+  ],
+  "where": "Settings > Subscription > Usage top-ups"
+ },
+ "S10.30": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-billing/index.tsx",
+    "text": "Compare plans"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-billing/index.tsx",
+    "text": "Unavailable in the app"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Upgrade"
+   }
+  ],
+  "needs": "a Cloud account",
+  "note": "Partial: plan prices and the pick action depend on the billing flag and store products, which are not finished.",
+  "reachable": "yes",
+  "steps": [
+   "Open Upgrade from the side drawer, or open Settings, then Subscription.",
+   "Tap \"Compare plans\" to see the plan list with prices and features.",
+   "Tap \"Upgrade plan\" or \"Choose plan\" if shown, and compare with Expected.",
+   "If the row shows \"Unavailable in the app\", plan changes are not available in the app."
+  ],
+  "where": "Settings > Subscription > Compare plans (or Upgrade, then Subscription)"
+ },
+ "S10.31": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-billing/index.tsx",
+    "text": "Manage billing"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-billing/index.tsx",
+    "text": "Access ends"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-billing/index.tsx",
+    "text": "Subscription managed elsewhere"
+   }
+  ],
+  "needs": "a paid Cloud account",
+  "note": "Partial: the app has no in-app cancel dialog; cancellation links out to the store or web billing.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Subscription.",
+   "Look at the \"Access ends\" or \"Renews\" row, and check the date shown.",
+   "Tap \"Manage billing\"; the web billing page opens in the browser (for a store subscription, a \"Subscription managed elsewhere\" dialog appears first).",
+   "Compare with Expected: cancellation is done on that page or in the store, not in the app."
+  ],
+  "where": "Settings > Subscription > Manage billing"
+ },
+ "S10.32": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-billing/index.tsx",
+    "text": "Manage billing"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-billing/index.tsx",
+    "text": "Billing"
+   }
+  ],
+  "needs": "a paid Cloud account",
+  "note": "Partial: the card is not changed in the app; the app links to web billing.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Subscription.",
+   "Tap \"Manage billing\".",
+   "Look at the web billing page in the browser for the card on file, and compare with Expected."
+  ],
+  "where": "Settings > Subscription > Manage billing"
+ },
+ "S10.33": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/auth/components/StepUpModal.tsx",
+    "text": "Confirm it is you"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-account/index.tsx",
+    "text": "Delete Account"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Account"
+   }
+  ],
+  "needs": "a Cloud account and the way to confirm it is you",
+  "note": "I did not find a passkey option in the \"Confirm it is you\" dialog; the strategies are password, email code, authenticator code and backup code.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Account, then Email.",
+   "Tap \"Delete Account\" (a sensitive action).",
+   "Read the \"Confirm it is you\" dialog and enter a password, an email code, or an authenticator or backup code.",
+   "Look for the action continuing only after verification, and compare with Expected."
+  ],
+  "where": "Settings > Account > Email > Delete Account"
+ },
+ "S10.34": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Start voice mode"
+   },
+   {
+    "file": "apps/mobile/src/features/voice/components/voicePermissionAlert.ts",
+    "text": "Voice input unavailable"
+   },
+   {
+    "file": "apps/mobile/src/features/voice/services/voiceFailure.ts",
+    "text": "Microphone access is off. Enable microphone permission in Settings to use voice."
+   }
+  ],
+  "needs": "a microphone and a way to deny the permission",
+  "note": "The system prompt text is in apps/mobile/app.config.js.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat and tap \"Start voice mode\" (the accessibility label of the voice button).",
+   "On the system microphone prompt, read the text \"AGI Mobile uses the microphone for voice input and real-time voice conversations with AI.\" then choose Don't Allow.",
+   "Tap voice again and read the \"Voice input unavailable\" alert with \"Open Settings\" or \"Not now\".",
+   "Compare with Expected; the message says microphone access is off and how to turn it on."
+  ],
+  "where": "Chat > Start voice mode (first use asks for the microphone)"
+ },
+ "S10.38": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Allow once"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Deny"
+   }
+  ],
+  "needs": "a Cloud account and a request that triggers a tool approval (set by the server policy)",
+  "note": "I did not identify which tool triggers an approval; the trigger depends on server policy.",
+  "reachable": "yes",
+  "steps": [
+   "Open a Cloud chat and ask for an action that a tool needs approval for.",
+   "Look for the tool row in the chat that shows the action and its decision buttons.",
+   "Tap \"Allow once\" or \"Deny\" for that call only, then compare with Expected.",
+   "For a broader scope such as \"Allow for this chat\" on a destructive tool, read the confirmation dialog first."
+  ],
+  "where": "Chat (Cloud) > a tool call that is awaiting approval > Allow once / Allow for this chat / Always allow / Deny"
+ },
+ "S10.39": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Private data from this chat could be sent outside AGI"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Allow"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Deny"
+   }
+  ],
+  "needs": "a Cloud account with a connected outside tool; a chat that triggers a tool approval",
+  "note": "The notice is rendered by apps/mobile/src/features/chat/components/CloudToolApprovalControls.tsx; which tool actions trigger it is decided by the server, and the code does not show what destination text is listed on the card.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a chat that runs in AGI Cloud.",
+   "Ask the agent for an action that uses a connected outside tool.",
+   "When the approval card appears, read the notice text and the destination it names.",
+   "Compare with Expected: the card should show what is being sent and let you allow or deny that one call."
+  ],
+  "where": "Chat screen > send a message that asks the agent to use a connected outside tool > the tool approval card that shows \"Allow\" and \"Deny\""
+ },
+ "S10.40": {
+  "labels": [],
+  "needs": "a desktop app paired on Managed Cloud (for a real test)",
+  "note": "Pairing exists in code but is hidden in this build: apps/mobile/lib/v1FeatureFlags.ts sets companion to false, and apps/mobile/app/(app)/settings/remote-control.tsx returns a feature-unavailable screen when the flag is off. The QR scanner is apps/mobile/src/features/companion/components/QRScanner.tsx. Searched the settings and companion folders for a reachable entry point and found none while the flag is off.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S10.41": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Memory"
+   },
+   {
+    "file": "apps/mobile/src/shared/hooks/useUnsavedChangesGuard.ts",
+    "text": "Discard changes?"
+   },
+   {
+    "file": "apps/mobile/src/shared/hooks/useUnsavedChangesGuard.ts",
+    "text": "Keep Editing"
+   }
+  ],
+  "needs": "a Free account or a Cloud account",
+  "note": "The schedule create screen (apps/mobile/app/(app)/schedules/create.tsx) uses the same guard, but no visible entry label for it was found; the memory add button label was not found either.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Settings screen and go to the Assistant section, then tap Memory.",
+   "Tap the control that adds or edits a memory (the exact button label was not found in the code).",
+   "Type some text into the memory field without saving.",
+   "Close the sheet without saving, then compare with Expected: a \"Discard changes?\" alert should appear with \"Discard\" and \"Keep Editing\".",
+   "Repeat with a new schedule on the schedule create screen; the same guard is used there, but I could not find the screen's entry label."
+  ],
+  "where": "Settings > Assistant > Memory > add or edit memory sheet, then close it with unsaved text"
+ },
+ "S10.43": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/chat/[id].tsx",
+    "text": "Export"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ConversationExportSheet.tsx",
+    "text": "Export as Markdown"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ConversationExportSheet.tsx",
+    "text": "Export Conversation"
+   }
+  ],
+  "needs": "a chat with at least one message",
+  "note": "The sheet also offers Print and Copy All Messages, and an empty chat shows \"Nothing to Export\" instead.",
+  "reachable": "yes",
+  "steps": [
+   "Open any chat that has messages.",
+   "Tap the control labelled Conversation menu in the chat header.",
+   "Tap Export.",
+   "Tap Export as Markdown (or Export as PDF or Export as Text) and choose where to share the file.",
+   "Compare with Expected: the sheet should offer formats and the exported file should contain the conversation."
+  ],
+  "where": "Open a chat > Conversation menu > Export > sheet \"Export Conversation\" > Export as Markdown"
+ },
+ "S10.44": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/MessageBubble.tsx",
+    "text": "Report\u2026"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ReportFlagButton.tsx",
+    "text": "Report this response"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ReportFlagButton.tsx",
+    "text": "Other"
+   }
+  ],
+  "needs": "a chat with an assistant answer",
+  "note": "The confirmation can also read \"Saved on this device. Nothing was sent.\" when delivery is stored locally; the report sheet also appears on media in the Library viewer.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat that has an answer from the assistant.",
+   "Tap Message actions on that answer (or long-press it) and tap Report\u2026.",
+   "Choose a category (for example Other) and optionally write a note.",
+   "Tap Send and compare the result with Expected: the confirmation should say the report was sent or saved on this device."
+  ],
+  "where": "Open a chat > on an assistant answer, tap Message actions > Report\u2026 > choose a category > Send"
+ },
+ "S10.45": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/feedback/presentation.ts",
+    "text": "Report App Issue"
+   },
+   {
+    "file": "apps/mobile/src/features/feedback/index.tsx",
+    "text": "General Feedback"
+   },
+   {
+    "file": "apps/mobile/src/features/feedback/index.tsx",
+    "text": "Submit Feedback"
+   }
+  ],
+  "needs": "none",
+  "note": "The feedback screen is the route /(app)/feedback; the Settings entry point and its Support section were confirmed in apps/mobile/src/features/settings/index.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and go to the Support section, then tap Report App Issue.",
+   "Choose General Feedback (or the bug option) and type a message.",
+   "Tap Submit Feedback (or Email Feedback when the app sends by email).",
+   "Compare with Expected: the \"Thank You!\" alert should appear with \"Your feedback has been submitted.\"."
+  ],
+  "where": "Settings > Support > Report App Issue"
+ },
+ "S10.46": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Export Diagnostics"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/diagnostics/shareDiagnostics.ts",
+    "text": "Share diagnostics?"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/diagnostics/shareDiagnostics.ts",
+    "text": "Continue"
+   }
+  ],
+  "needs": "none",
+  "note": "The consent is asked on every tap; no saved preference was found in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, go to the Support section, and tap Export Diagnostics.",
+   "Read the alert \"Share diagnostics?\" and its text.",
+   "Tap Continue to share, or Cancel to stop.",
+   "Compare with Expected: the consent text should say what is sent, and nothing should be shared after Cancel."
+  ],
+  "where": "Settings > Support > Export Diagnostics > Share diagnostics? > Continue"
+ },
+ "S10.47": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-account/index.tsx",
+    "text": "Export Cloud Data"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Account"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/screenTitles.ts",
+    "text": "Email"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account",
+  "note": "The export is shared through the system share sheet (shareCloudDataExport), not a download, and there is no request dialog before it runs; failure alerts are \"Export failed\" and \"Export not saved\".",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to an AGI Cloud account, open Settings, and go to the Account section.",
+   "Tap the Email row to open the cloud account screen.",
+   "Tap Export Cloud Data and wait for the share sheet.",
+   "Compare with Expected: the export should be delivered as a file to share or save. The code does not show a confirmation step first."
+  ],
+  "where": "Settings > Account > Email > Export Cloud Data"
+ },
+ "S10.48": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-account/index.tsx",
+    "text": "Delete Account"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-account/deleteAccountConfirmation.ts",
+    "text": "Erasure is processed after the deadline and may take longer. Once erasure begins, it cannot be undone."
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-account/index.tsx",
+    "text": "Cancel Account Deletion"
+   }
+  ],
+  "needs": "a throwaway signed-in AGI Cloud account (not a real one)",
+  "note": "The dialog text is built in apps/mobile/src/features/settings/cloud-account/deleteAccountConfirmation.ts, and the scheduled state can be cancelled from the same screen.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to an AGI Cloud account, open Settings, tap the Email row in the Account section.",
+   "Scroll to Delete Account and tap it.",
+   "Read the \"Delete Account\" dialog text: it schedules deletion, names what is deleted, and says erasure cannot be undone once it begins.",
+   "Tap Delete Account to confirm, or Cancel to stop. Compare with Expected: the dialog should explain what is deleted and require this confirmation.",
+   "Use a throwaway test account only, because the deletion is scheduled for real."
+  ],
+  "where": "Settings > Account > Email > Delete Account > Delete Account"
+ }
+}

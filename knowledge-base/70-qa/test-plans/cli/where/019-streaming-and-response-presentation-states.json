@@ -1,0 +1,440 @@
+{
+ "S19.01": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Thinking"
+   }
+  ],
+  "needs": "none",
+  "note": "No separate 'accepted' word; the first sign of work is the 'Thinking\u2026' line.",
+  "reachable": "yes",
+  "steps": [
+   "Run `agi` in Terminal.",
+   "Type any short message and press Enter.",
+   "Look at the line just under the transcript: it should read 'Thinking\u2026' with a seconds count, before any answer text appears."
+  ],
+  "where": "In Terminal run `agi`, type a message, press Enter. The line under the transcript starts with 'Thinking\u2026' and a seconds count."
+ },
+ "S19.03": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Preparing context"
+   }
+  ],
+  "needs": "a file to attach",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Run `agi` in Terminal.",
+   "Attach a file or mention a file with @ in the message, then press Enter.",
+   "Look for 'Preparing context\u2026' under the transcript before the answer starts."
+  ],
+  "where": "In Terminal run `agi`, attach a file or add context, then send. The line under the transcript reads 'Preparing context\u2026' before the model answers."
+ },
+ "S19.04": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/search"
+   }
+  ],
+  "needs": "a web search key (code says /search needs one)",
+  "note": "The code has no visible word 'Searching'; the state is shown only as a running tool row with the \u2315 icon and its name.",
+  "reachable": "yes",
+  "steps": [
+   "Run `agi` in Terminal.",
+   "Type `/search <a question about a recent topic>` and press Enter.",
+   "Look for a tool row with the \u2315 icon and a spinner while the search runs."
+  ],
+  "where": "In Terminal run `agi`, type /search followed by a question, press Enter. A tool row with the search icon \u2315 appears while the search runs."
+ },
+ "S19.05": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "text": " Yes "
+   }
+  ],
+  "needs": "none (default permission mode asks for approval)",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Run `agi` in Terminal.",
+   "Type `run the command echo hello` and press Enter.",
+   "Press Yes at the approval panel.",
+   "Look for the $ tool row with a spinner while the command runs, then a check mark when done."
+  ],
+  "where": "In Terminal run `agi`, ask it to run a shell command, then approve. The tool row with the $ icon shows a spinner while the command runs."
+ },
+ "S19.06": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/mcp"
+   }
+  ],
+  "needs": "a connected service (MCP server) set up",
+  "note": "The row shows the tool name, not a separate 'calling service' label.",
+  "reachable": "yes",
+  "steps": [
+   "Run `agi` in Terminal.",
+   "Type `/mcp` and press Enter to see connected services.",
+   "Ask the agent to use a tool from one of them and press Enter.",
+   "Look for the tool row with the service tool name and a spinner while it runs."
+  ],
+  "where": "In Terminal run `agi`, type /mcp to see connected services, then ask the agent to use one. Its tool row shows while it runs."
+ },
+ "S19.07": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Waiting for your approval"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "text": "Deny All"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Run `agi` in Terminal (default permission mode).",
+   "Type `create a file called test.txt containing hello` and press Enter.",
+   "Look for 'Waiting for your approval' under the transcript and the approval panel with buttons.",
+   "Press Yes or Deny All and check the turn continues or stops."
+  ],
+  "where": "In Terminal run `agi`, ask for an action that needs approval. The turn shows 'Waiting for your approval' with approval buttons."
+ },
+ "S19.08": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/question_overlay.rs",
+    "text": "Question from the agent"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/question_overlay.rs",
+    "text": "Type your own answer"
+   }
+  ],
+  "needs": "none (the agent decides when to ask)",
+  "note": "Nothing forces the agent to ask; the tester cannot trigger it on demand.",
+  "reachable": "yes",
+  "steps": [
+   "Run `agi` in Terminal.",
+   "Give a task that is ambiguous so the agent may ask you something.",
+   "Look for the 'Question from the agent' panel.",
+   "Choose an option with arrow keys and Enter, or type your own answer, and check the turn continues."
+  ],
+  "where": "In Terminal run `agi`. When the agent asks a question during a task, a panel titled 'Question from the agent' appears with choices and 'Type your own answer'."
+ },
+ "S19.09": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Thinking"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Run `agi` in Terminal.",
+   "Type a short message and press Enter.",
+   "Watch the 'Thinking\u2026' line; when the first text arrives it should be replaced by the answer."
+  ],
+  "where": "In Terminal run `agi`, type a message, press Enter. The 'Thinking\u2026' line is replaced by the answer text."
+ },
+ "S19.10": {
+  "labels": [],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Run `agi` in Terminal.",
+   "Ask for a long answer, for example `explain how a hash map works in detail`, and press Enter.",
+   "Watch the answer text grow line by line before the 'Thinking\u2026' line disappears."
+  ],
+  "where": "In Terminal run `agi`, type a message, press Enter. The answer text grows on screen while the model is still writing."
+ },
+ "S19.11": {
+  "labels": [],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Run `agi` in Terminal.",
+   "Ask `give me a bulleted list, a small table, and a code block`, and press Enter.",
+   "Watch the answer while it streams: the list, table and code block should show formatted, not as raw markup."
+  ],
+  "where": "In Terminal run `agi`, ask for a list, a table and a code block. They appear formatted while the answer is still streaming."
+ },
+ "S19.13": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Generating the image. Esc stops it."
+   }
+  ],
+  "needs": "an AGI account (the image command is for managed accounts)",
+  "note": "The code shows a start line and no progress percentage.",
+  "reachable": "yes",
+  "steps": [
+   "Run `agi` in Terminal.",
+   "Type `/image a red bicycle on a beach` and press Enter.",
+   "Look for the line 'Generating the image. Esc stops it.' and a running state while it draws.",
+   "Press Esc to stop and check the turn ends."
+  ],
+  "where": "In Terminal run `agi`, type /image followed by a prompt and press Enter. The line 'Generating the image. Esc stops it.' appears."
+ },
+ "S19.15": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "{} in \u00b7 {} out"
+   }
+  ],
+  "needs": "none",
+  "note": "The label is the format string in the code; the screen shows real numbers.",
+  "reachable": "yes",
+  "steps": [
+   "Run `agi` in Terminal.",
+   "Type a short message and press Enter.",
+   "Wait until the 'Thinking\u2026' line disappears.",
+   "Look for the detail line under the answer with model, tokens and duration."
+  ],
+  "where": "In Terminal run `agi`, send a prompt and let it finish. The spinner stops and the answer line shows model, tokens in and out, and time."
+ },
+ "S19.16": {
+  "labels": [],
+  "needs": "a run where some steps fail and others succeed",
+  "note": "Searched apps/cli/src for 'partial', 'Partially' and 'with errors'; no partially-completed label exists. The only related view is the header counts 'N completed \u00b7 N failed' (apps/cli/src/tui/tui_app.rs).",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S19.17": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "stopping the turn\u2026"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Esc or Ctrl-C to cancel"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Run `agi` in Terminal.",
+   "Send a prompt that gives a long answer, and press Enter.",
+   "While it works, press Esc.",
+   "Look for 'stopping the turn\u2026' in the footer until the turn ends."
+  ],
+  "where": "In Terminal run `agi`, send a long prompt, press Esc while it works. The footer shows 'stopping the turn\u2026'."
+ },
+ "S19.18": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "\u2298 Stopped"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Run `agi` in Terminal.",
+   "Send a long prompt and press Enter.",
+   "Press Esc once text has started to appear.",
+   "Look for '\u2298 Stopped' under the transcript and check the partial text is still there."
+  ],
+  "where": "In Terminal run `agi`, send a long prompt, press Esc. The transcript shows '\u2298 Stopped' and keeps the text that already arrived."
+ },
+ "S19.20": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Resumed session"
+   }
+  ],
+  "needs": "a session that was still running",
+  "note": "No separate 'resuming' word is shown; the code only shows 'Resumed session'.",
+  "reachable": "yes",
+  "steps": [
+   "Start a long background or long prompt, then close the terminal.",
+   "Open Terminal, run `agi resume` and pick the session, or run `agi resume <session id>`.",
+   "Look for 'Resumed session \u2026 (N messages).' and check the unfinished work is continued, not started from scratch."
+  ],
+  "where": "In Terminal run `agi resume <session id>`, or inside `agi` type /resume. The line 'Resumed session \u2026 (N messages).' appears."
+ },
+ "S19.21": {
+  "labels": [
+   {
+    "file": "apps/cli/src/errors.rs",
+    "text": "is rate-limiting. Wait"
+   },
+   {
+    "file": "apps/cli/src/errors.rs",
+    "text": "Rate limited, retry after"
+   }
+  ],
+  "needs": "a provider that rate-limits (not on demand)",
+  "note": "Only shown when the provider actually rate-limits; the wait time appears only when the provider gives one.",
+  "reachable": "yes",
+  "steps": [
+   "Run `agi` in Terminal.",
+   "Send prompts until the provider rate-limits (cannot be forced on demand).",
+   "Look for the error line in the transcript that gives the wait time or says to wait and retry."
+  ],
+  "where": "In Terminal run `agi`, send a prompt. When a provider rate-limits, the turn ends with a red error line 'is rate-limiting. Wait \u2026s' or 'Rate limited, retry after \u2026s'."
+ },
+ "S19.22": {
+  "labels": [
+   {
+    "file": "apps/cli/src/errors.rs",
+    "text": "It resets in"
+   },
+   {
+    "file": "apps/cli/src/errors.rs",
+    "text": "Run `agi usage` to see when it resets."
+   }
+  ],
+  "needs": "an account that reaches its plan limit",
+  "note": "Upgrade wording comes from a server-side paywall text, not a fixed string.",
+  "reachable": "yes",
+  "steps": [
+   "Run `agi` in Terminal.",
+   "Send prompts until the plan limit is reached (cannot be forced on demand).",
+   "Look for the error line with 'It resets in' or the 'agi usage' hint.",
+   "Type `/usage` and compare the usage shown."
+  ],
+  "where": "In Terminal run `agi`, type /usage to see usage. A turn blocked by a plan limit shows 'It resets in \u2026' or 'Run `agi usage` to see when it resets.'"
+ },
+ "S19.23": {
+  "labels": [
+   {
+    "file": "apps/cli/src/errors.rs",
+    "text": "Run `agi login` to sign in to your AGI account again."
+   }
+  ],
+  "needs": "an expired AGI sign-in",
+  "note": "The code gives a text hint to run `agi login`; no in-panel sign-in button for this error was found, so 'offers to sign in' may not match.",
+  "reachable": "yes",
+  "steps": [
+   "Run `agi` in Terminal with an expired sign-in.",
+   "Send a prompt.",
+   "Look for the error line that says to run `agi login` to sign in again.",
+   "Run `agi login` and check the next prompt works."
+  ],
+  "where": "In Terminal run `agi`, send a prompt after sign-in has expired. The error line says 'Run `agi login` to sign in to your AGI account again.'"
+ },
+ "S19.25": {
+  "labels": [
+   {
+    "file": "apps/cli/src/errors.rs",
+    "text": "Retry the request"
+   },
+   {
+    "file": "apps/cli/src/errors.rs",
+    "text": "Pick another model with `agi models list`, or try again later."
+   }
+  ],
+  "needs": "a provider outage (not on demand)",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Run `agi` in Terminal.",
+   "Send a prompt while the provider is unavailable (cannot be forced on demand).",
+   "Look for the error line with 'Retry the request' or 'Pick another model'.",
+   "Type `/model` and pick another model, then send again."
+  ],
+  "where": "In Terminal run `agi`, send a prompt while the provider is down. The error line says '\u2026returned HTTP \u2026' and suggests a retry or another model."
+ },
+ "S19.26": {
+  "labels": [
+   {
+    "file": "apps/cli/src/errors.rs",
+    "text": "Context exceeded for"
+   },
+   {
+    "file": "apps/cli/src/errors.rs",
+    "text": "Try `/compact` to summarize history"
+   }
+  ],
+  "needs": "a very long input",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Run `agi` in Terminal.",
+   "Paste a very long text as the prompt and press Enter.",
+   "Look for the error line 'Context exceeded for' with the `/compact` tip.",
+   "Type `/compact`, then send the message again."
+  ],
+  "where": "In Terminal run `agi`, send a prompt that is too long. The error line says 'Context exceeded for \u2026' and suggests `/compact`."
+ },
+ "S19.27": {
+  "labels": [
+   {
+    "file": "apps/cli/src/errors.rs",
+    "text": "The connection closed before the answer finished."
+   }
+  ],
+  "needs": "a dropped connection (not on demand)",
+  "note": "The partial text is kept by the code path that commits turn entries before the error line.",
+  "reachable": "yes",
+  "steps": [
+   "Run `agi` in Terminal.",
+   "Send a long prompt and let the connection drop (cannot be forced on demand).",
+   "Look for the partial answer still on screen, then the error line 'The connection closed before the answer finished.'"
+  ],
+  "where": "In Terminal run `agi`. If the stream breaks after text arrived, the kept text stays and the error line says 'The connection closed before the answer finished.'"
+ },
+ "S19.28": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Resumed session"
+   }
+  ],
+  "needs": "none",
+  "note": "Unsure whether the '\u2298 Stopped' marker itself is saved and comes back; the code adds it to the chat only.",
+  "reachable": "yes",
+  "steps": [
+   "Send a prompt, let it finish, then quit `agi`.",
+   "Run `agi resume` in Terminal and pick the session.",
+   "Look for 'Resumed session \u2026 (N messages).' and check the earlier turns are shown as before."
+  ],
+  "where": "Quit `agi`, then in Terminal run `agi resume` and pick the session, or inside `agi` type /resume. The earlier conversation and turns come back."
+ },
+ "S19.29": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Started background run"
+   },
+   {
+    "file": "apps/cli/src/background.rs",
+    "text": "running"
+   },
+   {
+    "file": "apps/cli/src/background.rs",
+    "text": "ended without a result"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Run `agi background start write a short summary of this folder`.",
+   "Close the Terminal window.",
+   "Open a new Terminal and run `agi background list`; check the state label.",
+   "Run `agi background attach <id>` when it says finished, and check the result is there."
+  ],
+  "where": "In Terminal run `agi background start <prompt>` (alias `agi bg start`), then `agi background list`. Use `agi background attach <id>` when it is done."
+ }
+}

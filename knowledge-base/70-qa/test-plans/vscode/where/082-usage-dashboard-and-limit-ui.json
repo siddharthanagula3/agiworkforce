@@ -1,0 +1,299 @@
+{
+ "S82.01": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Open Settings"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Usage & billing"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account",
+  "note": "The plan name is filled from the server; the page shows \"Unknown\" until the account loads. Code could not confirm the wording of the plan name itself.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Command Palette and run \"Code: Open Settings\".",
+   "Click \"Usage & billing\" in the left list.",
+   "Read the plan name in the top card and compare it with the plan on the AGI Cloud account page in the browser."
+  ],
+  "where": "Command Palette > \"Code: Open Settings\" > \"Usage & billing\" (left list); the plan name is in the top card"
+ },
+ "S82.02": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Plan usage"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Usage & billing"
+   }
+  ],
+  "needs": "a paid account (the Plan usage row is hidden on the Free plan)",
+  "note": "The code shows a reset date and, only when cancelling, the period-end date. No separate \"renews on\" line was found, so the renewal date may not appear as Expected says.",
+  "reachable": "yes",
+  "steps": [
+   "Run \"Code: Open Settings\" from the Command Palette.",
+   "Click \"Usage & billing\".",
+   "Look at the \"Plan usage\" row for the \"resets\" date.",
+   "If the subscription is set to cancel, look for the cancellation date under the plan card."
+  ],
+  "where": "Command Palette > \"Code: Open Settings\" > \"Usage & billing\" > \"Plan usage\" row (reset date)"
+ },
+ "S82.03": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Usage: "
+   },
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Plan usage"
+   }
+  ],
+  "needs": "a Managed Cloud account (the bar is hidden for BYOK and unbounded routes)",
+  "note": "The bar is only shown for the Managed Cloud route, and its location in the panel is taken from the markup order, not from a screenshot.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI sidebar in the Activity Bar and sign in to a Managed Cloud account.",
+   "Look for the thin usage bar with the cloud icon and the \"Usage: \" text.",
+   "Click the \"\u00d7\" button to collapse it, then the small pill labelled \"Usage\" to show it again.",
+   "Compare the bar fill with the percentage text in the Plan usage row in Settings."
+  ],
+  "where": "Sidebar chat > usage meter bar at the top of the panel (cloud icon, bar, \"Usage: \" text); the same meter is in Settings > \"Usage & billing\" > \"Plan usage\""
+ },
+ "S82.04": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "By model"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Usage & billing"
+   }
+  ],
+  "needs": "a paid account with some settled usage",
+  "note": "The flagship cap comes from the server window list; the exact visible label for it was not confirmed in the code I read.",
+  "reachable": "yes",
+  "steps": [
+   "Run \"Code: Open Settings\" from the Command Palette.",
+   "Click \"Usage & billing\".",
+   "Scroll to the \"Usage history\" heading and read the \"By model\" list.",
+   "Compare the per-model rows with the flagship weekly window in the plan usage rows."
+  ],
+  "where": "Command Palette > \"Code: Open Settings\" > \"Usage & billing\" > \"Usage history\" > \"By model\" list"
+ },
+ "S82.10": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "By product area"
+   }
+  ],
+  "needs": "a paid account with some settled usage",
+  "note": "The list is by product area and the row names come from a shared function (usageWorkloadLabel) that I did not locate, so the exact coding label is unknown.",
+  "reachable": "yes",
+  "steps": [
+   "Run \"Code: Open Settings\" from the Command Palette.",
+   "Click \"Usage & billing\".",
+   "Scroll to \"Usage history\" and read the \"By product area\" list.",
+   "Look for a coding or agent work row and compare it with Expected."
+  ],
+  "where": "Command Palette > \"Code: Open Settings\" > \"Usage & billing\" > \"Usage history\" > \"By product area\" list"
+ },
+ "S82.13": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Account & Usage"
+   },
+   {
+    "file": "apps/extension-vscode/src/data/usageMeter.ts",
+    "text": "Credits"
+   }
+  ],
+  "needs": "a paid account with a credit balance",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Run \"Code: Account & Usage\" from the Command Palette.",
+   "Read the \"$(credit-card) Credits: ...\" row and the \"plan usage\" rows above it.",
+   "Click \"Usage & billing\" in Settings (Code: Open Settings) and read the \"Credits\" row.",
+   "Compare the balance with the plan windows listed."
+  ],
+  "where": "Command Palette > \"Code: Account & Usage\" > quick pick row \"Credits: ...\"; the same row is in Settings > \"Usage & billing\" > \"Credits\""
+ },
+ "S82.14": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/data/usageMeter.ts",
+    "text": "Credits"
+   },
+   {
+    "file": "apps/extension-vscode/src/data/usageMeter.ts",
+    "text": "Buy credits to work past a limit"
+   }
+  ],
+  "needs": "a paid account",
+  "note": "The code separates included plan windows from the credit balance, but no visible word \"purchased\" was found in the labels I read.",
+  "reachable": "yes",
+  "steps": [
+   "Run \"Code: Open Settings\" from the Command Palette and click \"Usage & billing\".",
+   "Read the \"Plan usage\" rows (included allowance) and the \"Credits\" row (balance).",
+   "Read the spendability line under Credits: \"Buy credits to work past a limit\", \"Spent when a limit stops you\" or \"Off - enable in billing to spend\".",
+   "Compare what is listed as included with what is listed as credits."
+  ],
+  "where": "Settings > \"Usage & billing\" > \"Credits\" row (spendability line); the plan windows are shown in the separate \"Plan usage\" rows"
+ },
+ "S82.17": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Account & Usage"
+   },
+   {
+    "file": "apps/extension-vscode/src/core/commandSetup.ts",
+    "text": "No reset pending"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Usage: "
+   }
+  ],
+  "needs": "a paid account with a usage window that resets",
+  "note": "The countdown wording is made by a shared formatter (formatUsageResetIn) that I did not read, so the exact text is unknown.",
+  "reachable": "yes",
+  "steps": [
+   "Run \"Code: Account & Usage\" from the Command Palette.",
+   "Read the description on each \"plan usage\" row.",
+   "Open the sidebar and read the reset text after the \"Usage: \" bar.",
+   "Compare the time left with Expected. A row with no reset shows \"No reset pending\"."
+  ],
+  "where": "Command Palette > \"Code: Account & Usage\" > plan usage row (description shows the reset); sidebar usage meter shows the reset after the usage text"
+ },
+ "S82.20": {
+  "labels": [],
+  "needs": "a paid account with an agent run",
+  "note": "Searched apps/extension-vscode/src for per-task, by-task, per-task usage and task cost; no per-task usage view was found. The only per-session figures are \"Billed this session\" and the usage history, which group by product area, model and period.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S82.23": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Code: this turn was billed {credits}"
+   },
+   {
+    "file": "apps/extension-vscode/src/core/commandSetup.ts",
+    "text": "Billed this session"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Show Token Breakdown"
+   }
+  ],
+  "needs": "a Managed Cloud account and a finished chat turn",
+  "note": "The turn message is a status bar message, not a popup, so the tester must look straight after the reply ends.",
+  "reachable": "yes",
+  "steps": [
+   "Send one chat message with a Managed Cloud account and wait for the reply to finish.",
+   "Watch the bottom status bar for the message \"Code: this turn was billed ...\" (it stays about 10 seconds).",
+   "If it says \"so far\" with a count of unsettled requests, wait a few seconds and check again.",
+   "Run \"Code: Show Token Breakdown\" and read the \"Billed this session\" row."
+  ],
+  "where": "Status bar (bottom of the window) after a chat turn ends: a message appears for about 10 seconds; or Command Palette > \"Code: Show Token Breakdown\" > \"Billed this session\" row"
+ },
+ "S82.24": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Upgrade"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Usage: "
+   }
+  ],
+  "needs": "a Managed Cloud account close to a limit",
+  "note": "The warning is a colour change and the Upgrade button; no text such as \"running low\" was found in the code I read. Thresholds come from the server.",
+  "reachable": "yes",
+  "steps": [
+   "Use a Managed Cloud account close to its limit (or ask a tester who has one).",
+   "Open the sidebar and look at the usage bar's colour and fill.",
+   "Look for the \"Upgrade\" button on the bar.",
+   "Compare with Expected: the user should be warned before the limit is reached."
+  ],
+  "where": "Sidebar chat > usage meter bar; the bar changes colour as the remaining share drops, and an \"Upgrade\" button appears when the server asks for it"
+ },
+ "S82.25": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Managed Cloud quota exhausted"
+   },
+   {
+    "file": "apps/extension-vscode/src/core/cloudUtilityErrorActions.ts",
+    "text": "View usage"
+   },
+   {
+    "file": "apps/extension-vscode/src/core/cloudUtilityErrorActions.ts",
+    "text": "Add credits"
+   }
+  ],
+  "needs": "a Managed Cloud account at its limit",
+  "note": "The limit message text comes from the server, so the exact words of the reason are not in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Use a Managed Cloud account whose quota is used up.",
+   "Send a chat message.",
+   "Read the warning popup: its title, the limit message and the reset time.",
+   "Read the buttons \"Add credits\", \"Upgrade\" and \"View usage\", and the sidebar bar text \"Managed Cloud quota exhausted\"."
+  ],
+  "where": "Sidebar chat > send a message when the Managed Cloud quota is used up > warning popup at the bottom of VS Code with \"Add credits\", \"Upgrade\" or \"View usage\"; the bar shows \"Managed Cloud quota exhausted\""
+ },
+ "S82.26": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/core/cloudUtilityErrorActions.ts",
+    "text": "Use ${modelDisplayLabel(alternative)}"
+   }
+  ],
+  "needs": "an account blocked on its model with an eligible alternative",
+  "note": "The button is only shown when the server sets suggestStandardModel and an alternative is eligible; it is not always shown.",
+  "reachable": "yes",
+  "steps": [
+   "Use a Managed Cloud account blocked on the chosen model, where a cheaper eligible model exists.",
+   "Send a chat message so the warning popup appears.",
+   "Look for the button that starts with \"Use \" followed by a model name.",
+   "Click it and check that the chat retries with that model."
+  ],
+  "where": "Same warning popup as S82.25 > button \"Use ${modelDisplayLabel(alternative)}\" (shows the model name), offered only when the server suggests a standard model and one is eligible"
+ },
+ "S82.27": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/core/cloudUtilityErrorActions.ts",
+    "text": "View usage"
+   },
+   {
+    "file": "apps/extension-vscode/src/core/cloudUtilityErrorActions.ts",
+    "text": "Add credits"
+   }
+  ],
+  "needs": "a Managed Cloud account at its limit",
+  "note": "The reset time is shown in the message, but no option to wait instead of paying exists in the code (the buttons are Add credits, Upgrade, View usage and the model switch). Expected is not met by the code.",
+  "reachable": "yes",
+  "steps": [
+   "Reach a limit as in S82.25.",
+   "Read the popup message: the reset time is added after the limit text.",
+   "Look at the buttons: \"Add credits\", \"Upgrade\", \"View usage\" (and \"Use ...\" if offered).",
+   "Compare with Expected: the code offers no button to wait until reset."
+  ],
+  "where": "Same warning popup as S82.25 > reset time at the end of the message; no wait button exists"
+ }
+}

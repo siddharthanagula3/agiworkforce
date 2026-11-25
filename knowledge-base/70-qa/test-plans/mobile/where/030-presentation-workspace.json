@@ -1,0 +1,23 @@
+{
+ "S30.28": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+    "text": "Download artifact"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactExportSheet.tsx",
+    "text": "Download as"
+   }
+  ],
+  "needs": "a signed-in account and a chat that has produced a .pptx file (a deck the server created); a phone or simulator to see the share sheet",
+  "note": "A .pptx is only downloadable when the server created one (a remote generated file with an http(s) uri, handled in ArtifactFullScreen.tsx handleDownload, and the pptx mime/UTI is in apps/mobile/services/fileCreation.ts). The in-app export for a deck artifact offers only PDF, Markdown and Plain text (apps/mobile/src/features/chat/utils/artifactExport.ts), so PPTX is not a choice in the export sheet. Download button has no visible text, only an icon.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a chat that has produced a PowerPoint file (a generated .pptx). Open its card so it opens full screen.",
+   "Tap the download icon in the top bar (labelled \"Download artifact\" for screen readers).",
+   "The app downloads the file and opens the share sheet with the file. Check that the file is a .pptx and that it opens as a presentation."
+  ],
+  "where": "Chat > open a generated .pptx file card (the artifact opens full screen) > Download icon in the top bar (accessibility label \"Download artifact\")"
+ }
+}

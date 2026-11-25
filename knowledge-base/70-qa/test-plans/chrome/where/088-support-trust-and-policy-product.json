@@ -1,0 +1,114 @@
+{
+ "S88.01": {
+  "labels": [
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Schedules"
+   },
+   {
+    "file": "_locales/en/messages.json",
+    "text": "How schedules work"
+   }
+  ],
+  "needs": "none",
+  "note": "Other help links exist with the same pattern: \"How temporary chats work\" (temporary chat notice in the chat), \"How sharing works\" (the Share confirmation on a history entry, which reads \"Create link\"), and \"How approvals work\" (Approval history in the options page). The help article pages are on the web side and were not opened or checked.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to the extension if asked, then open the Schedules section in the side panel (the section titled \"Schedules\").",
+   "Look at the row beside the \"Schedules\" title for the link \"How schedules work\".",
+   "Click \"How schedules work\".",
+   "Look at the new browser tab: it should open a help article about schedules, with the address ending in /help/schedules-and-triggers?from=chrome-extension, and compare with Expected."
+  ],
+  "where": "Schedules > How schedules work"
+ },
+ "S88.02": {
+  "labels": [],
+  "needs": "live-web",
+  "note": "The extension has no help search. It only links to the web Help center (options.ts, \"Help center\", opening the /help page), and the search, if any, lives on the web side, which is not in this folder. Searched apps/extension/src for \"help center\", \"helpcenter\", \"help-center\" and \"search help\".",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S88.03": {
+  "labels": [
+   {
+    "file": "_locales/en/messages.json",
+    "text": "More"
+   },
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Help"
+   },
+   {
+    "file": "apps/extension/src/options.ts",
+    "text": "Contact support"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The extension only opens the web support page (/support). The form, the describing of a problem and the follow-up replies are on the web side and were not checked here.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, then click the \"More\" button in the side panel header (its label is \"More\").",
+   "Click \"Help\" in the menu. The options page opens on its Help section.",
+   "In the Help section, find the row \"Contact support\" with the hint \"Reach a person about your account.\"",
+   "Click \"Open\" beside it, and look at the new tab that opens to the support page, then compare with Expected."
+  ],
+  "where": "More > Help > Contact support"
+ },
+ "S88.04": {
+  "labels": [],
+  "needs": "live-web",
+  "note": "No report-a-bug control was found in apps/extension/src. Searched for \"report a bug\", \"report bug\", \"bug report\" and \"feedback\" (non-test files); the only support entry is \"Contact support\" in the Help section, which does not send build or platform details.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S88.07": {
+  "labels": [
+   {
+    "file": "_locales/en/messages.json",
+    "text": "More"
+   },
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Help"
+   },
+   {
+    "file": "apps/extension/src/options.ts",
+    "text": "Export diagnostics"
+   },
+   {
+    "file": "apps/extension/src/options.ts",
+    "text": "Export"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The app does not preview the bundle in the page, and sending it to support is a manual attachment, not a button. If not signed in, the status reads \"Sign in first, the bundle is redacted on the server.\"",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, then click the \"More\" button in the side panel header.",
+   "Click \"Help\". The options page opens on its Help section.",
+   "Find the row \"Export diagnostics\" with the hint \"Saves a redacted bundle to attach to a support request. The server redacts it before you get the file.\" Read the hint.",
+   "Click \"Export\" beside it. A JSON file downloads and the status line under the row shows a summary. Compare with Expected: the file is the only view of the contents, so open it in a text editor to see what it holds, then decide whether to attach it to a support request."
+  ],
+  "where": "More > Help > Export diagnostics"
+ },
+ "S88.08": {
+  "labels": [
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Reference:"
+   }
+  ],
+  "needs": "a signed-in account and a way to make a request fail",
+  "note": "The id is appended only when the gateway logged one (chat-state.ts streamFailureText; side_panel.ts passes errorRequestId as requestId). The chat-state.ts:233 line in the ledger has moved; the current code is chat-state.ts:560. The apps/web/lib/error-handler.ts header is not shown to the user. Triggering a real failure was not done here.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and send a chat message in the side panel.",
+   "Make a request fail (for example, a server error or a quota block); the failed reply is shown in the chat.",
+   "Read the end of the failed reply for the words \"Reference:\" followed by an id.",
+   "Compare with Expected: the id should be quotable to support. Check that the id is shown."
+  ],
+  "where": "Chat > a request that fails > failed reply line ending \"Reference:\""
+ }
+}

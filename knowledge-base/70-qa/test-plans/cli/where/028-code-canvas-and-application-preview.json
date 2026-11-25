@@ -1,0 +1,54 @@
+{
+ "S28.24": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Print an artifact's content, or write it to a file."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Write the content here instead of printing it. A directory takes the artifact's own name; a path with no extension gains one."
+   }
+  ],
+  "needs": "a signed-in account with at least one artifact",
+  "note": "No visible label says Download source. The command writes the artifact's content, and the chat form /artifacts show prints it and has no --out option.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi artifacts list and copy the id of a generated artifact.",
+   "Run agi artifacts show <id> --out ~/Desktop/ (use an existing folder).",
+   "Look at the path printed on screen and open that file. It should hold the artifact's content, which is the generated code.",
+   "Compare with Expected: the user can download the code. Note that the command downloads one artifact's content, not the whole app, and the word Download does not appear anywhere."
+  ],
+  "where": "Type agi artifacts show <id> --out <path> in the terminal (a directory path takes the artifact's own name). Run agi artifacts list first to get the id."
+ },
+ "S28.26": {
+  "labels": [],
+  "needs": "unknown",
+  "note": "Searched apps/cli/src for coding workspace, Open in, canvas, code canvas and workspace. No artifact action opens a coding workspace. The closest is agi artifacts show <id> --out <path> --open, which opens the file in the computer's default app, not a coding workspace. The phrase coding workspace appears only in the desktop folder consent text (apps/cli/src/lib.rs:861 and apps/cli/src/app_server/account_host.rs:69).",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S28.27": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Publish an artifact to a shareable URL."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Who can open the link: public (anyone with it) or workspace."
+   }
+  ],
+  "needs": "a signed-in account with an artifact of a publishable kind; a Free account can be tried first",
+  "note": "The workspace audience is refused unless the account has a workspace that can share artifacts; the Expected word preview does not appear in the CLI.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi artifacts list and copy the id of an artifact of a publishable kind (html, react, svg, mermaid, markdown, text or code).",
+   "Run agi artifacts publish <id>.",
+   "Read the printed line that starts Published and copy the link it shows.",
+   "Open the link in a private browser window and compare with Expected: the app should open at a shareable link. The CLI calls it a shareable URL, not a preview link."
+  ],
+  "where": "Type agi artifacts publish <id> in the terminal. Add --audience workspace to share only with the workspace (default is public). Run agi artifacts list first to get the id."
+ }
+}

@@ -1,0 +1,685 @@
+{
+ "S8.01": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Extension settings"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Account"
+   },
+   {
+    "file": "apps/extension/src/options.ts",
+    "text": "Save profile"
+   }
+  ],
+  "needs": "none",
+  "note": "The composer send button (#sp-send-btn) also uses the primary colour; the settings page is the one I traced for the button label.",
+  "reachable": "yes",
+  "steps": [
+   "Click the More button at the top right of the side panel and choose Extension settings.",
+   "Click Account in the settings navigation.",
+   "Open the Autofill profile (optional) section.",
+   "Look at the Save profile button under the form: it is the filled primary-style button, and compare its label contrast with Expected."
+  ],
+  "where": "Chat tab > More (the icon button labelled More, top right) > Extension settings > Account > open Autofill profile (optional) > Save profile"
+ },
+ "S8.02": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Options"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Keyboard shortcuts"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Configure"
+   }
+  ],
+  "needs": "none",
+  "note": "Configure is shown on its own in its row; I did not confirm a primary button beside it. The same secondary style is used for the Preview button in the Options section.",
+  "reachable": "yes",
+  "steps": [
+   "Click More (top right of the side panel) and choose Extension settings.",
+   "Click Options in the settings navigation.",
+   "Scroll to the Keyboard shortcuts section.",
+   "Look at the Configure button: it has the bordered secondary style with a hover fill, and compare with Expected."
+  ],
+  "where": "Extension settings > Options > Keyboard shortcuts > Configure"
+ },
+ "S8.03": {
+  "labels": [
+   {
+    "file": "apps/extension/src/options.ts",
+    "text": "Delete profile"
+   },
+   {
+    "file": "apps/extension/src/options.ts",
+    "text": "Autofill profile (optional)"
+   }
+  ],
+  "needs": "none",
+  "note": "Log out uses the same danger style (opt-logout-btn in apps/extension/src/options.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Open More (top right) and choose Extension settings.",
+   "Click Account, then open the Autofill profile (optional) section.",
+   "Look at the Delete profile button next to Save profile: it uses the red danger style.",
+   "Do not click it on a real profile; compare the red style and label contrast with Expected."
+  ],
+  "where": "Extension settings > Account > Autofill profile (optional) > Delete profile"
+ },
+ "S8.04": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Recent chats"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "New chat"
+   }
+  ],
+  "needs": "none",
+  "note": "Accessible names are set with aria-label in apps/extension/src/side_panel.ts (sp-history-btn, sp-new-chat-btn, sp-menu-btn).",
+  "reachable": "yes",
+  "steps": [
+   "Look at the top right of the side panel: three icon-only buttons with no visible words.",
+   "Click the clock icon; the Recent chats drawer opens.",
+   "Click Back out and click the pen icon; it starts a new chat.",
+   "Use a screen reader or hover to hear or see the name of each icon, and compare with Expected."
+  ],
+  "where": "Chat tab header (top right): the clock icon (Recent chats), the pen icon (New chat), and the More icon"
+ },
+ "S8.06": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Recent chats"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Archived"
+   }
+  ],
+  "needs": "an account with at least one archived chat",
+  "note": "The code does not show how a chat gets archived; the tester must archive one first from the chat's More actions menu.",
+  "reachable": "yes",
+  "steps": [
+   "Click the clock icon at the top right to open Recent chats.",
+   "Look for the Archived button under the Recent chats title; it appears only when at least one chat is archived.",
+   "Click Archived and look at its pressed state (highlighted border) and the list, which switches to archived chats.",
+   "Click Archived again and compare the pressed state and list with Expected."
+  ],
+  "where": "Chat tab header > clock icon (Recent chats) > Archived"
+ },
+ "S8.07": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Outputs"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Preview"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Code"
+   }
+  ],
+  "needs": "a reply that produced a runnable artifact",
+  "note": "The group has aria-label Artifact view (apps/extension/src/features/side-panel/artifactPanel.ts). Preview and Code are shown only when the artifact runs in a sandbox, so a plain-text output will not show them.",
+  "reachable": "yes",
+  "steps": [
+   "Look for the Outputs button in the top header of the chat view and click it.",
+   "Open an output that runs in a sandbox (for example a small web page the assistant made).",
+   "Look for the two buttons Preview and Code in the artifact panel.",
+   "Compare the grouped pair and its selected state with Expected."
+  ],
+  "where": "Chat tab header > Outputs > open a runnable output > Artifact view buttons Preview and Code"
+ },
+ "S8.08": {
+  "labels": [],
+  "needs": "none",
+  "note": "The link comes from the answer text (rendered in apps/extension/src/features/side-panel/markdown.ts, target _blank). The extension adds no fixed text link of its own that I found.",
+  "reachable": "yes",
+  "steps": [
+   "Ask AGI a question whose answer contains a link (for example, ask it to name a website and give its address).",
+   "Look at the link in the reply: it should look different from the surrounding text.",
+   "Click the link and check that it opens its destination in a new tab."
+  ],
+  "where": "Chat tab > a reply that contains a web link"
+ },
+ "S8.09": {
+  "labels": [
+   {
+    "file": "apps/extension/src/options.ts",
+    "text": "Autofill profile (optional)"
+   },
+   {
+    "file": "apps/extension/src/options.ts",
+    "text": "Email"
+   }
+  ],
+  "needs": "none",
+  "note": "Other single-line fields in the same section are City, Phone and LinkedIn URL (apps/extension/src/options.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Open More (top right) and choose Extension settings.",
+   "Click Account and open the Autofill profile (optional) section.",
+   "Click into the field labelled Email.",
+   "Type some text and look: the field shows the text and the label stays visible above it."
+  ],
+  "where": "Extension settings > Account > Autofill profile (optional) > Email"
+ },
+ "S8.10": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "How can I help you today?"
+   }
+  ],
+  "needs": "none",
+  "note": "Shift+Enter is handled in apps/extension/src/side_panel.ts (the Enter handler skips when shiftKey is set).",
+  "reachable": "yes",
+  "steps": [
+   "Click in the composer box at the bottom of the Chat tab.",
+   "Type one line of text.",
+   "Press Shift+Enter to start a new line. Enter alone sends the message, so do not press it unless you want to send.",
+   "Look at the box: the cursor is on a second line and the box grows, and compare with Expected."
+  ],
+  "where": "Chat tab > the composer box with the placeholder How can I help you today?"
+ },
+ "S8.11": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Search recent chats"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Recent chats"
+   }
+  ],
+  "needs": "more than 10 recent chats (the search field is hidden below that)",
+  "note": "The field appears only when the list has more than 10 chats (RECENTS_SEARCH_THRESHOLD in apps/extension/src/side_panel.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Click the clock icon to open Recent chats.",
+   "Click the field labelled Search recent chats.",
+   "Type part of the title of a chat you have.",
+   "Look at the list: it narrows to matching chats as you type, and compare with Expected."
+  ],
+  "where": "Chat tab header > clock icon (Recent chats) > Search recent chats"
+ },
+ "S8.12": {
+  "labels": [],
+  "needs": "none",
+  "note": "Searched for password input types in the app code. The only masked field found is a password input for a Clerk JWT in apps/extension/src/options.ts, which sits behind import.meta.env.DEV, so it is not in the shipped UI. No masked API-key or token field was found in the shipped side panel or settings.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S8.13": {
+  "labels": [],
+  "needs": "none",
+  "note": "Searched the app for one-time-code, autocomplete one-time-code, OTP and verification code fields. The extension has no code-entry field in its own UI. It only detects one-time-code fields on other websites (apps/extension/src/features/content/elementReader.ts) and leaves them to the person (apps/extension/src/features/computer-use/approvalPolicy.ts).",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S8.14": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Shortcuts"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "New schedule"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Repeat"
+   }
+  ],
+  "needs": "possibly a signed-in account (the Schedules section says No schedules on this account when empty)",
+  "note": "Weekday names come from the browser locale (weekdayLabel in apps/extension/src/features/side-panel/schedulesSection.ts), so they are not in the English messages file. I did not confirm the checkbox row shows only for the chosen-days option.",
+  "reachable": "yes",
+  "steps": [
+   "Open More (top right) and choose Extension settings.",
+   "Click Shortcuts in the settings navigation and find the Schedules section.",
+   "Click New schedule to open the form.",
+   "Set Repeat to On chosen days of the week and look at the row of weekday checkboxes; tick and untick one and compare with Expected."
+  ],
+  "where": "Extension settings > Shortcuts > Schedules > New schedule > choose the repeat option for chosen days of the week, then the weekday checkboxes"
+ },
+ "S8.16": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Options"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Task completion notifications"
+   }
+  ],
+  "needs": "none",
+  "note": "This is a native checkbox styled as a switch (class opt-toggle), not a role=switch control. The Page assistant overlay toggle is created disabled (apps/extension/src/features/options/preference-rows.ts), so it is not a usable switch.",
+  "reachable": "yes",
+  "steps": [
+   "Open More (top right) and choose Extension settings.",
+   "Click Options in the settings navigation.",
+   "Find the row labelled Task completion notifications.",
+   "Click its toggle and look: the toggle slides to on or off and the status line under it changes; compare with Expected."
+  ],
+  "where": "Extension settings > Options > Task completion notifications"
+ },
+ "S8.17": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Outputs"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Preview"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Code"
+   }
+  ],
+  "needs": "a reply that produced a runnable artifact",
+  "note": "This is the same Preview and Code control as S8.07. It is hidden for outputs that do not run in a sandbox (artifactPanel.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Click Outputs in the top header of the chat view.",
+   "Open an output that runs in a sandbox.",
+   "Click Code, then Preview, and look at which one shows the pressed state.",
+   "Compare the two joined segments and their selected state with Expected."
+  ],
+  "where": "Chat tab header > Outputs > open a runnable output > Preview and Code toggle"
+ },
+ "S8.18": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Repeat"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Every day"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "New schedule"
+   }
+  ],
+  "needs": "possibly a signed-in account",
+  "note": "The native select is created in apps/extension/src/features/side-panel/schedulesSection.ts. A second single-select exists in the Computer Use tab (sp-cu-mode-select: Ask first, Auto, Full access, YOLO), but that tab only appears during a browser task.",
+  "reachable": "yes",
+  "steps": [
+   "Open More (top right) and choose Extension settings.",
+   "Click Shortcuts and then New schedule.",
+   "Open the Repeat drop-down and look at its options: Once, Every day, On chosen days of the week, Once a month.",
+   "Choose one option and look at the value the drop-down now shows; compare with Expected."
+  ],
+  "where": "Extension settings > Shortcuts > Schedules > New schedule > Repeat"
+ },
+ "S8.22": {
+  "labels": [
+   {
+    "file": "apps/extension/src/options.ts",
+    "text": "Years of experience"
+   },
+   {
+    "file": "apps/extension/src/options.ts",
+    "text": "Autofill profile (optional)"
+   }
+  ],
+  "needs": "none",
+  "note": "This is a native number input (type number) and the stepper is the browser's own spin button.",
+  "reachable": "yes",
+  "steps": [
+   "Open More (top right) and choose Extension settings.",
+   "Click Account and open the Autofill profile (optional) section.",
+   "Click into the Years of experience field.",
+   "Press the up and down arrow keys or click the spin buttons and look: the number goes up and down by one."
+  ],
+  "where": "Extension settings > Account > Autofill profile (optional) > Years of experience"
+ },
+ "S8.29": {
+  "labels": [
+   {
+    "file": "apps/extension/src/side_panel.ts",
+    "text": "Add attachment"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Upload from device"
+   }
+  ],
+  "needs": "a file to upload",
+  "note": "The file input is a hidden input of type file (sp-attach-file-input) opened by the menu item.",
+  "reachable": "yes",
+  "steps": [
+   "Click the Add attachment button at the bottom of the Chat tab.",
+   "Click Upload from device.",
+   "Choose a file in the system file picker.",
+   "Look above the composer for the attached file, and compare with Expected."
+  ],
+  "where": "Chat tab > Add attachment button in the composer > Upload from device"
+ },
+ "S8.30": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "How can I help you today?"
+   }
+  ],
+  "needs": "a file on the Mac",
+  "note": "The drag-over state is the dragover class on #sp-composer-shell (apps/extension/src/side_panel.ts). It only appears for drags that carry files.",
+  "reachable": "yes",
+  "steps": [
+   "Open Finder and pick a file.",
+   "Drag the file over the composer box at the bottom of the Chat tab.",
+   "Look for the drag-over state: the border turns the accent colour and gets a glow.",
+   "Drop the file and check that it appears as an attachment; compare with Expected."
+  ],
+  "where": "Chat tab > drag a file over the composer box (the box with the placeholder How can I help you today?)"
+ },
+ "S8.31": {
+  "labels": [
+   {
+    "file": "apps/extension/src/side_panel.ts",
+    "text": "Computer Use"
+   },
+   {
+    "file": "apps/extension/src/side_panel.ts",
+    "text": "Chat"
+   }
+  ],
+  "needs": "a browser task that starts a Computer Use run",
+  "note": "The tab bar is hidden on the chat view (CSS comment in apps/extension/src/side_panel.ts). The exact trigger for showing it was traced only to the switchTab calls on a run start, not verified live.",
+  "reachable": "yes",
+  "steps": [
+   "Send a browser task in the Chat tab so the view switches to Computer Use.",
+   "Look for the tab bar at the top with the tabs Chat and Computer Use.",
+   "Click Chat, then Computer Use, and look at which tab is underlined and selected.",
+   "Compare the selected tab with Expected."
+  ],
+  "where": "Top tab bar with Chat and Computer Use, shown after a browser task starts (Chat tab > send a browser task)"
+ },
+ "S8.33": {
+  "labels": [
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Assistant steps"
+   }
+  ],
+  "needs": "a Computer Use run that has steps",
+  "note": "The toggle sets aria-expanded (computerUsePanel.ts); the chevron rotates when expanded.",
+  "reachable": "yes",
+  "steps": [
+   "Send a browser task and wait for it to run, or open the Computer Use tab after a run.",
+   "Click Assistant steps.",
+   "Look at the chevron: it turns and the step list opens.",
+   "Click Assistant steps again and compare the open and closed states with Expected."
+  ],
+  "where": "Computer Use tab > Assistant steps"
+ },
+ "S8.34": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "More"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Extension settings"
+   }
+  ],
+  "needs": "none",
+  "note": "The menu may also show account rows and Open in Web when signed in with a cloud chat (apps/extension/src/side_panel.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Click the More button at the top right.",
+   "Look at the menu: it lists Close tabs, Extension settings, Shortcuts and Help.",
+   "Press the Down arrow key to move through the items.",
+   "Compare the list and keyboard movement with Expected."
+  ],
+  "where": "Chat tab header > More (the icon button labelled More)"
+ },
+ "S8.35": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Explain this"
+   }
+  ],
+  "needs": "a web page with text to select",
+  "note": "The menu items are created in apps/extension/src/background.ts (CONTEXT_MENU_ITEMS). Rewrite selection appears only in editable fields, and Ask AGI about this page appears on a right-click on the page itself.",
+  "reachable": "yes",
+  "steps": [
+   "On a web page, select a few words of text.",
+   "Right-click the selected text.",
+   "Look at the menu: it includes Ask AGI about the selected text, Explain this, Translate this and Send selected text to a local app.",
+   "Click Explain this and check that AGI opens with the selection; compare with Expected."
+  ],
+  "where": "Any web page > select some text > right-click the selection > Explain this"
+ },
+ "S8.37": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "New chat"
+   }
+  ],
+  "needs": "none",
+  "note": "These header buttons use the native title attribute, so the tooltip is the browser's own bubble, not a custom one. The in-page launcher on web pages has its own Ask AGI tooltip (apps/extension/src/features/content/in-page-panel/launcher.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Move the mouse over the pen icon at the top right of the Chat tab and wait about a second.",
+   "Look for the tooltip reading New chat.",
+   "Repeat with the More icon and the clock icon.",
+   "Compare the tooltips with Expected."
+  ],
+  "where": "Chat tab header > hover over the pen icon (New chat)"
+ },
+ "S8.38": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "More"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Help"
+   }
+  ],
+  "needs": "none",
+  "note": "Escape and outside-pointer dismissal are in apps/extension/src/features/side-panel/menu.ts (wirePopupMenu).",
+  "reachable": "yes",
+  "steps": [
+   "Click the More button to open the menu.",
+   "Press Escape and check the menu closes and focus returns to the More button.",
+   "Open the menu again and click an empty area of the page outside it.",
+   "Check the menu closes on the outside click; compare with Expected."
+  ],
+  "where": "Chat tab header > More (popover menu)"
+ },
+ "S8.40": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Shortcuts"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Schedules"
+   }
+  ],
+  "needs": "a signed-in account that has at least one schedule",
+  "note": "The schedules list is built in apps/extension/src/features/side-panel/schedulesSection.ts (badge at line 872) and mounted in apps/extension/src/options.ts (line 2018); the status word is shown as-is from the data, and the Options page entry point was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI extension's Options page (how it is opened was not traced in the code)",
+   "Go to the Shortcuts section and find the Schedules list",
+   "Look at the small status word beside a schedule name, for example active or failed",
+   "Compare with Expected: the status word is a small marker attached to that schedule row"
+  ],
+  "where": "Options page > Shortcuts > Schedules (each schedule row shows its name and a status word beside it)"
+ },
+ "S8.41": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Project \u00b7 $NAME$"
+   }
+  ],
+  "needs": "a chat filed under a project",
+  "note": "A header chip 'Project \u00b7 $NAME$' with a 'Stop using this project' button exists in apps/extension/src/side_panel.ts (around line 11563), but no in-extension control that files a chat into a project was found; searched 'project', 'chip' and 'tag' in apps/extension/src.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S8.42": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Preparing"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "No avatar image was found on finished messages; the author names 'You said:' and 'AGI said:' are screen-reader-only headings (apps/extension/src/features/side-panel/bubbles.ts, buildAuthorLabel).",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the side panel",
+   "Type any message in the composer and press send",
+   "Look at the row that says Preparing; it shows the AGI symbol mark beside the thinking dots",
+   "Compare with Expected: the assistant side is marked by the AGI symbol, and screen readers hear the headings 'You said:' and 'AGI said:' before each message"
+  ],
+  "where": "Side panel > type a message in the composer and press send > the 'Preparing' row before the answer starts"
+ },
+ "S8.43": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Preparing"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Creating your video, $PERCENT$% done."
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "A determinate percent appears only while a video is being made ('Creating your video, $PERCENT$% done.'); the trigger for a video request was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the side panel",
+   "Type a message and press send",
+   "Watch the row that says Preparing; its dots spin while the answer is prepared",
+   "Compare with Expected: an indeterminate spinner with a visible label; the row is a status region, so the label is read aloud"
+  ],
+  "where": "Side panel > type a message in the composer and press send > the 'Preparing' row with spinning dots"
+ },
+ "S8.46": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Retry"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "No response was returned. Try again."
+   }
+  ],
+  "needs": "a way to make a request fail, such as going offline",
+  "note": "The failed-answer block is built in apps/extension/src/features/side-panel/bubbles.ts (buildErrorFooter, role alert, line 316); the exact failure that produces it was not traced beyond the empty-response case.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the side panel",
+   "Send a message that gets no answer or fails (for example while offline)",
+   "Look under the failed answer for the error text in a block with alert semantics",
+   "Compare with Expected: the block shows the message with a Retry button, and Switch model when the model menu applies"
+  ],
+  "where": "Side panel > send a message and let the answer fail > the error text under the failed answer, with Retry"
+ },
+ "S8.47": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Sign in to start chatting in Chrome."
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Sign in"
+   }
+  ],
+  "needs": "a signed-out account",
+  "note": "The strip sits above the composer, not at the top of the view; the quota warning strip (id sp-usage-warning, apps/extension/src/side_panel.ts around line 15655) uses the same placement and shows only when a usage limit is near.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side panel without signing in",
+   "Look at the strip just above the message box",
+   "Read the text and check the Sign in button beside it",
+   "Compare with Expected: a full-width strip with a system message and an action"
+  ],
+  "where": "Side panel while signed out > strip above the composer that reads 'Sign in to start chatting in Chrome.' with a 'Sign in' button"
+ },
+ "S8.48": {
+  "labels": [],
+  "needs": "none",
+  "note": "Searched apps/extension/src for 'pagination', 'loadMore', 'load-more', 'show more', 'hasMore' and 'cursor'; the only hit is apps/extension/src/background.ts (line 6096) returning hasMore for memories, and no side panel or options control reads it.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S8.49": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "How can I help you today?"
+   }
+  ],
+  "needs": "a signed-in account and an empty chat",
+  "note": "When signed out the empty view shows only the AGI icon, the placeholder reads 'Sign in to chat' and the strip says 'Sign in to start chatting in Chrome.' (apps/extension/src/side_panel.ts, renderEmptyGreeting around line 5868).",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the side panel with a new, empty chat",
+   "Look above the message box for a greeting line (it changes with the time of day and your name)",
+   "Look at the message box placeholder",
+   "Compare with Expected: a greeting and a next step (the placeholder invites a request)"
+  ],
+  "where": "Side panel > first screen after signing in, with no messages yet (the empty chat)"
+ },
+ "S8.50": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Page access unavailable"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Retry"
+   }
+  ],
+  "needs": "a Chrome page the extension cannot read, such as chrome://extensions",
+  "note": "The card's description text is hard-coded English in apps/extension/src/side_panel.ts (sp-blocked-desc, around line 13723), not in messages.json; the card shows when the page is restricted (side_panel.ts around line 10829).",
+  "reachable": "yes",
+  "steps": [
+   "Make the active tab a Chrome page such as chrome://extensions or the Chrome Web Store",
+   "Open the AGI side panel",
+   "Look at the card titled 'Page access unavailable' at the top of the messages area",
+   "Press Retry and compare with Expected: the card gives a recovery action"
+  ],
+  "where": "Open a Chrome page the extension cannot read (for example chrome://extensions) > side panel > 'Page access unavailable' card with 'Retry'"
+ }
+}

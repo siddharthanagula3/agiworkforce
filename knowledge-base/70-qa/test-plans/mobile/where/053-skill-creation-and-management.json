@@ -1,0 +1,192 @@
+{
+ "S53.01": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/v3.json",
+    "text": "Settings"
+   },
+   {
+    "file": "apps/mobile/src/features/customize/CustomizeScreen.tsx",
+    "text": "Customize"
+   },
+   {
+    "file": "apps/mobile/src/features/customize/CustomizeScreen.tsx",
+    "text": "Skills"
+   }
+  ],
+  "needs": "A signed-in AGI Cloud account",
+  "note": "The Skills screen is also reachable from search under Go to > Skills (apps/mobile/src/features/search/mobileDestinations.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and switch to AGI Cloud (the Cloud chat mode).",
+   "Open the side menu, tap Settings, then tap Customize in the Cloud group.",
+   "Tap Skills in the Customize list. The Skills screen opens with a Search skills field.",
+   "Scroll the list. Skills that are not installed show the status Not installed and an Install button, so the catalogue includes them.",
+   "Compare with Expected: you can browse skills not yet installed and tap Details on any of them."
+  ],
+  "where": "Settings > Customize > Skills"
+ },
+ "S53.02": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/skills/SkillsScreen.tsx",
+    "text": "Installed"
+   },
+   {
+    "file": "apps/mobile/src/features/skills/SkillsScreen.tsx",
+    "text": "SKILLS INSTALLED"
+   }
+  ],
+  "needs": "A signed-in AGI Cloud account",
+  "note": "The earlier DrawerContent.tsx:115 reference no longer exists and the drawer shows no skills list; the installed list lives only on the Skills screen.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and switch to AGI Cloud.",
+   "Open the side menu, tap Settings, tap Customize, then tap Skills.",
+   "Read the line at the top of the list: it shows a count such as 1 SKILL INSTALLED or N SKILLS INSTALLED.",
+   "Look at the status line on each card: Installed or Not installed.",
+   "Compare with Expected: the list shows which skills are installed for the account."
+  ],
+  "where": "Settings > Customize > Skills"
+ },
+ "S53.03": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/skills/SkillsScreen.tsx",
+    "text": "New skill"
+   },
+   {
+    "file": "apps/mobile/src/features/skills/SkillsScreen.tsx",
+    "text": "Personal"
+   },
+   {
+    "file": "apps/mobile/src/features/skills/NewSkillSheet.tsx",
+    "text": "Create skill"
+   }
+  ],
+  "needs": "A Cloud account that the server allows to author skills (if the buttons are missing the account is not allowed)",
+  "note": "Whether a given account is allowed to author skills is decided by the server flag canAuthorSkills (apps/mobile/src/features/skills/service.ts), so the tester may not see these buttons; the plan's note that New skill is built is consistent with the code.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to AGI Cloud and open Settings > Customize > Skills.",
+   "Look for the New skill and Import buttons above the list. They appear only when the server says this account can author skills.",
+   "Tap New skill, fill in the Skill name, Skill description and Skill instructions fields, then tap Create skill.",
+   "Find the new skill in the list and check its source tag reads Personal.",
+   "Tap Details on it and check the Make your own section shows Edit instructions and Delete skill."
+  ],
+  "where": "Settings > Customize > Skills > New skill"
+ },
+ "S53.07": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/skills/SkillsScreen.tsx",
+    "text": "No description provided."
+   },
+   {
+    "file": "apps/mobile/src/features/skills/SkillsScreen.tsx",
+    "text": "Details"
+   }
+  ],
+  "needs": "A signed-in AGI Cloud account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Customize > Skills.",
+   "Read the bold name on each card, and the grey line under it.",
+   "Find a skill with no description and check it shows No description provided.",
+   "Tap Details on any card and check the name shows at the top of the skill screen.",
+   "Compare with Expected: each skill shows its name and a description of what it does."
+  ],
+  "where": "Settings > Customize > Skills"
+ },
+ "S53.08": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/skills/SkillsScreen.tsx",
+    "text": "Install a Skill to use it in your AGI Cloud messages."
+   },
+   {
+    "file": "apps/mobile/src/features/skills/SkillsScreen.tsx",
+    "text": "Use in chat"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   },
+   {
+    "file": "apps/mobile/src/features/skills/SkillMentionPalette.tsx",
+    "text": "Skills to use"
+   }
+  ],
+  "needs": "A signed-in AGI Cloud account with Cloud mode on; at least one installed skill to see the Use in chat button",
+  "note": "The Turned-on skills line is in apps/mobile/src/features/skills/SkillDetailScreen.tsx and the @ trigger is in apps/mobile/src/features/chat/utils/fileMention.ts; the Skills row in the + sheet appears only in Cloud mode.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Customize > Skills and read the line under the Skills heading: Install a Skill to use it in your AGI Cloud messages.",
+   "Tap Details on an installed skill and read the line Turned-on skills load in your Cloud chats when a task needs them.",
+   "Open a Cloud chat and tap the + button (Add to chat); look for a Skills row showing Choose or the selected skill name.",
+   "In the chat box type @ and look for the Skills to use list.",
+   "Compare with Expected: the product states how a skill is used (a button, an @ mention, or automatic matching)."
+  ],
+  "where": "Settings > Customize > Skills, then the + button (Add to chat) in a Cloud chat"
+ },
+ "S53.14": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/skills/SkillDetailScreen.tsx",
+    "text": "Needs"
+   },
+   {
+    "file": "apps/mobile/src/features/skills/SkillDetailScreen.tsx",
+    "text": "Tools: "
+   }
+  ],
+  "needs": "A signed-in AGI Cloud account and a skill that declares required tools",
+  "note": "The card text is built in apps/mobile/src/features/skills/SkillsScreen.tsx (skillRequirementNote); enforcement when a turn is sent is in apps/mobile/src/features/skills/skillRequirements.ts and is not visible on screen.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Customize > Skills.",
+   "Find a card that has a line starting Needs followed by tool names.",
+   "Tap Details on that card.",
+   "Find the Needs section and check it lists Tools: followed by the same tool names.",
+   "Compare with Expected: the skill declares the tools it needs and the product shows them."
+  ],
+  "where": "Settings > Customize > Skills (card line Needs ...), then Details (section Needs)"
+ },
+ "S53.17": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/skills/SkillsScreen.tsx",
+    "text": "Use in chat"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Clear selected Skill"
+   }
+  ],
+  "needs": "A signed-in AGI Cloud account with at least one installed skill, and Cloud mode",
+  "note": "Whether the model actually used the skill is visible only in the reply content, not as a UI marker; the code only sends the skill name with the turn (apps/mobile/app/(app)/(tabs)/chat.tsx).",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Customize > Skills and tap Use in chat on an installed skill.",
+   "Back in the chat, look for a chip with the skill name above the text box, with an x button labelled Clear selected Skill.",
+   "Type a message and send it in Cloud mode.",
+   "Read the reply and check whether it follows the chosen skill's instructions.",
+   "Compare with Expected: the picked skill is used for that message. The chip disappears after sending."
+  ],
+  "where": "Settings > Customize > Skills > Use in chat (installed skill), then the chat box"
+ },
+ "S53.18": {
+  "labels": [],
+  "needs": "A signed-in AGI Cloud account with an installed skill",
+  "note": "No visible indicator of automatic matching was found in the mobile code; the mobile surface is not excluded from the offer (only vscode, cli and api are excluded).",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Install a skill that has a clear description, such as a skill about writing emails.",
+   "Open a Cloud chat without picking a skill and send a message that matches that description.",
+   "Read the reply and check whether it follows the skill's instructions.",
+   "Compare with Expected: the skill is used without being asked. No visible marker in the mobile app was found to confirm it."
+  ],
+  "where": "Server side: when a Cloud message has no skill picked, the server offers installed skills whose descriptions match the message (apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts)"
+ }
+}

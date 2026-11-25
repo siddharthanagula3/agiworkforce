@@ -1,0 +1,403 @@
+{
+ "S76.01": {
+  "labels": [],
+  "needs": "none",
+  "note": "Text-input admission is routing logic in packages/ai/routing/src/auto.ts and the web request path; no mobile screen shows it. The quoted line at apps/mobile/src/features/model-picker/components/ModelRow.tsx:166 no longer exists.",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": ""
+ },
+ "S76.02": {
+  "labels": [],
+  "needs": "none",
+  "note": "Text-output admission is routing logic (packages/ai/routing/src/auto.ts); no mobile screen shows it. The quoted ModelRow.tsx:166 line is gone.",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": ""
+ },
+ "S76.03": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/chat/[id].tsx",
+    "text": "Choose model"
+   },
+   {
+    "file": "apps/mobile/src/features/model-picker/modelFilters.ts",
+    "text": "Images"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Photos"
+   }
+  ],
+  "needs": "a picture in the photo library; a signed-in account",
+  "note": "The Images chip filters on supportsVision. The refusal copy found in code is for Free models only (apps/mobile/stores/chat/chatExecutionStore.ts:2410); no reroute message for paid models was found.",
+  "reachable": "yes",
+  "steps": [
+   "Open an existing chat and tap Choose model.",
+   "Tap the Images chip and check that only models able to read images stay in the list.",
+   "Tap Add to chat, then Photos, and choose a picture.",
+   "Pick a model that is not in the Images list and send the message.",
+   "Look for a refusal or a switch to an image model, and compare with Expected."
+  ],
+  "where": "Chat > Choose model > Images chip; then Chat > Add to chat > Photos"
+ },
+ "S76.04": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Photos"
+   }
+  ],
+  "needs": "several pictures; a model with a small image limit",
+  "note": "The over-limit message is a template in apps/mobile/src/features/chat/utils/attachmentValidation.ts:197 that names the model and its image limit.",
+  "reachable": "yes",
+  "steps": [
+   "Tap Add to chat, then Photos.",
+   "Select several pictures.",
+   "Pick a model with a low image limit and send.",
+   "Read the message shown if the count is over the limit, and compare with Expected."
+  ],
+  "where": "Chat > Add to chat > Photos"
+ },
+ "S76.06": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/model-picker/modelFilters.ts",
+    "text": "Files"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "File"
+   },
+   {
+    "file": "apps/mobile/app/(app)/chat/[id].tsx",
+    "text": "Choose model"
+   }
+  ],
+  "needs": "a PDF file; a cloud account",
+  "note": "The Files chip matches documentInput or pdf modality. Whether a PDF goes native to the model is in the web request path and is not visible in the app.",
+  "reachable": "yes",
+  "steps": [
+   "Tap Choose model and tap the Files chip; note which models remain.",
+   "Tap Add to chat, then File, and choose a PDF.",
+   "Send the PDF with a model that is not in the Files list.",
+   "Compare the result with Expected."
+  ],
+  "where": "Chat > Choose model > Files chip; then Chat > Add to chat > File"
+ },
+ "S76.09": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Start voice mode"
+   }
+  ],
+  "needs": "a microphone; a native build of the app; a signed-in AGI Cloud account",
+  "note": "Live voice needs a native build and AGI Cloud, otherwise it stays turn-based (apps/mobile/src/features/voice/services/liveVoiceAvailability.ts). The model used is chosen on the server and is not shown on screen.",
+  "reachable": "yes",
+  "steps": [
+   "Tap the Start voice mode button in the chat composer.",
+   "Allow the microphone when asked.",
+   "Say a short question.",
+   "Listen for a spoken reply and watch the live voice bar.",
+   "Compare with Expected."
+  ],
+  "where": "Chat > Start voice mode"
+ },
+ "S76.10": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/MessageBubble.tsx",
+    "text": "Read aloud"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/MessageBubble.tsx",
+    "text": "Stop reading aloud"
+   }
+  ],
+  "needs": "a device with sound on; a speech voice installed on the device",
+  "note": "The model used for speech is chosen in the code (apps/mobile/src/features/voice/services/serverSpeech.ts) and is not shown on screen. The exact control location within the reply was not traced beyond the label.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message and wait for the reply.",
+   "Tap Read aloud under the reply.",
+   "Listen to the spoken reply.",
+   "Tap Stop reading aloud to stop it, then compare with Expected."
+  ],
+  "where": "Chat > (assistant reply) > Read aloud"
+ },
+ "S76.11": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Start voice mode"
+   }
+  ],
+  "needs": "a microphone; a native build; a signed-in AGI Cloud account",
+  "note": "The speech-to-speech model is chosen on the server (apps/web/app/api/voice/live/sessions/route.ts) and is not named on screen.",
+  "reachable": "yes",
+  "steps": [
+   "Tap Start voice mode in the composer.",
+   "Allow the microphone.",
+   "Ask a question out loud.",
+   "Check that the reply is spoken and the live voice bar shows the session.",
+   "Compare with Expected."
+  ],
+  "where": "Chat > Start voice mode"
+ },
+ "S76.14": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Create image"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   }
+  ],
+  "needs": "cloud mode; a plan that includes image generation",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Tap Add to chat.",
+   "Tap Create image (only shown in cloud mode when an image model is granted).",
+   "Type a prompt and send.",
+   "Check that the image is made and compare with Expected."
+  ],
+  "where": "Chat > Add to chat > Create image"
+ },
+ "S76.15": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Create image"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/actions/resolveMobileImageGenerationRequest.ts",
+    "text": "This image model cannot use a reference image"
+   }
+  ],
+  "needs": "cloud mode; a picture to use as the reference",
+  "note": "The reference-picture control is hidden unless the model supports editing (AddToChatSheet.tsx, imageModelSupportsReference). The refusal title is in code; whether it is shown as-is on screen was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Tap Add to chat, then Create image.",
+   "Tap Add to chat again and then Photos to add a reference picture.",
+   "Pick an image model that cannot use a reference image, then send.",
+   "Check for the message in the code and compare with Expected."
+  ],
+  "where": "Chat > Add to chat > Create image > Photos"
+ },
+ "S76.17": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Create video"
+   }
+  ],
+  "needs": "cloud mode; a plan that includes video generation",
+  "note": "Durations come from the model's options via supportedVideoDurationSecs (apps/mobile/src/features/video/services/videogen.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Tap Add to chat, then Create video (only in cloud mode with a video model granted).",
+   "Look at the duration choices offered, then type a prompt.",
+   "Choose a duration and send.",
+   "Check the video length and size against the choices, and compare with Expected."
+  ],
+  "where": "Chat > Add to chat > Create video"
+ },
+ "S76.19": {
+  "labels": [],
+  "needs": "cloud mode; a video-capable plan",
+  "note": "There is no audio toggle. The audio flag is set from the model's supportsAudio in AddToChatSheet.tsx near line 319, so the effect is only seen as sound or silence in the result.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Create a video with Create video (Chat > Add to chat > Create video).",
+   "Play the finished video.",
+   "Listen for sound and compare with Expected."
+  ],
+  "where": ""
+ },
+ "S76.21": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Run code"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Web search"
+   }
+  ],
+  "needs": "a model that supports tools and one that does not",
+  "note": "The tools check is confirmed for the output section (selectedModelMetadata?.capabilities?.tools === true); the exact gating of each row was not fully traced.",
+  "reachable": "yes",
+  "steps": [
+   "Choose a model that supports tools from Choose model.",
+   "Tap Add to chat and look for the Run code and Web search rows.",
+   "Choose a model without tool support, reopen Add to chat, and check the rows again.",
+   "Compare with Expected."
+  ],
+  "where": "Chat > Add to chat (Run code and Web search rows)"
+ },
+ "S76.22": {
+  "labels": [],
+  "needs": "none",
+  "note": "Parallel tool calls run in the server tool loop (apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts); the app has no control and no visible effect was identified.",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": ""
+ },
+ "S76.23": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Deep research"
+   }
+  ],
+  "needs": "a plan that includes Deep research",
+  "note": "Multi-round tool use is server-side; Deep research is the closest visible feature, and the link to the registry flag was not traced.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Turn on Deep research from Chat > Add to chat.",
+   "Send a question that needs research.",
+   "Watch the answer build up over several steps and compare with Expected."
+  ],
+  "where": ""
+ },
+ "S76.26": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx",
+    "text": "Effort"
+   },
+   {
+    "file": "apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx",
+    "text": "Always on"
+   }
+  ],
+  "needs": "a cloud account; a model that supports reasoning effort",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Tap Choose model in a cloud chat.",
+   "Pick a model that shows an Effort section.",
+   "Move the Effort slider across its steps.",
+   "Pick a model without the Effort section and check it disappears.",
+   "Compare with Expected."
+  ],
+  "where": "Chat > Choose model > Effort slider"
+ },
+ "S76.28": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ContextWarningChip.tsx",
+    "text": "Chat is getting long. View what is in context"
+   }
+  ],
+  "needs": "a long chat near the context limit",
+  "note": "The chip appears near 70% of the context window. The Settings > Code > Show context window usage switch exists (apps/mobile/src/features/settings/code/index.tsx). The Plans screen also states the window size per plan, but the path to that screen was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open a long chat that uses most of the model's context window.",
+   "Look for the warning banner.",
+   "Tap View what is in context.",
+   "Read the About X of Y tokens line and compare with Expected."
+  ],
+  "where": "Chat > Chat is getting long. View what is in context"
+ },
+ "S76.29": {
+  "labels": [],
+  "needs": "none",
+  "note": "Searched apps/mobile for maxOutput, Max output and output limit. The field appears only in apps/mobile/src/features/model-picker/service.ts and no visible text was found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S76.31": {
+  "labels": [],
+  "needs": "a signed-in account",
+  "note": "The transport choice is in apps/mobile/services/streaming.ts; the visible effect is the reply filling in gradually.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Send a message in a cloud chat.",
+   "Watch the reply appear while it is being written.",
+   "Compare with Expected."
+  ],
+  "where": ""
+ },
+ "S76.32": {
+  "labels": [],
+  "needs": "none",
+  "note": "Prompt-cache capability and cache class drive routing (packages/ai/routing/src/auto.ts); the mobile app shows no control or visible effect.",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": ""
+ },
+ "S76.34": {
+  "labels": [],
+  "needs": "none",
+  "note": "Route residency is enforced in routing (packages/ai/routing/src/auto.ts); the mobile model picker and privacy screens have no region control or text.",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": ""
+ },
+ "S76.35": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-privacy/index.tsx",
+    "text": "Chat privacy"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-privacy/index.tsx",
+    "text": "Privacy"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The retention text is CLOUD_CHAT_RETENTION in apps/mobile/src/features/settings/cloud-privacy/ChatPrivacyScreen.tsx. How a zero-retention request is routed is not visible in the app. The path from Settings to Privacy was confirmed only by the screen title.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and tap Privacy.",
+   "Tap Chat privacy.",
+   "Read the footnote about cloud chat retention.",
+   "Compare with Expected."
+  ],
+  "where": "Settings > Privacy > Chat privacy"
+ },
+ "S76.37": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/chat/[id].tsx",
+    "text": "Choose model"
+   },
+   {
+    "file": "apps/mobile/src/features/model-picker/retirement.ts",
+    "text": "Retires"
+   }
+  ],
+  "needs": "a chat on a retired model, or a model with a retirement date within 30 days",
+  "note": "The Retires label shows only within 30 days of the retirement date. The retired notice is a template in retirement.ts (retiredModelNotice) and is shown with testID retired-model-notice in chat/[id].tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Tap Choose model and look for a Retires badge next to a model in the list.",
+   "Open a chat that used a retired model, if one exists.",
+   "Read the notice at the top of the chat.",
+   "Compare with Expected."
+  ],
+  "where": "Chat > Choose model > Retires badge; Chat > (retired chat) notice"
+ },
+ "S76.38": {
+  "labels": [],
+  "needs": "none",
+  "note": "Route ranking, cache class, retention and price per route are applied in packages/ai/routing/src/auto.ts and the web request path; no mobile control or visible effect was identified.",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": ""
+ }
+}

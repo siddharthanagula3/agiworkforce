@@ -1,0 +1,89 @@
+{
+ "S110.01": {
+  "labels": [],
+  "needs": "a Free account",
+  "note": "Searched apps/extension/src for editable or contenteditable, textarea, version, publish and save-version controls. The artifact panel (src/features/side-panel/artifactPanel.ts) only offers Preview/Code, Copy, Download and 'Run in this chat on the web'; no in-extension edit or save-as-new-version control was found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S110.02": {
+  "labels": [],
+  "needs": "a Free account",
+  "note": "Searched apps/extension/src and _locales for pptx, slides, presentation and deck. The only file actions are Open and Download (src/features/side-panel/generatedFiles.ts:284-290, and the Outputs popover in artifactPanel.ts); the code at generatedFiles.ts:289 is buildFileActions, not a conversion to a presentation.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S110.12": {
+  "labels": [],
+  "needs": "a Free account",
+  "note": "Searched apps/extension/src and _locales for figma, handoff, implement, coding agent and repository. Only a Figma page prompt exists (src/features/content/platform-prompts.ts:78); no hand-off from a design to a coding agent in the repository was found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S110.24": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Projects"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Start the chat in this project"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Tabs and projects"
+   }
+  ],
+  "needs": "a signed-in account with at least one project",
+  "note": "The cited side_panel.ts lines have moved; the @ project menu is now at side_panel.ts around lines 14357-14511 and chooseChatProject at 13673. Whether project instructions and sources ground the answer is decided server-side and is not visible in extension code.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and make sure the account has at least one project.",
+   "Click the chat box at the bottom of the side panel and type @.",
+   "Look for the menu labelled 'Tabs and projects' with a 'Projects' heading.",
+   "Click your project name (second line 'Start the chat in this project').",
+   "Look for the header chip 'Project \u00b7 <name>' above the chat.",
+   "Ask a question that depends on the project's instructions or sources and compare the answer with Expected."
+  ],
+  "where": "Chat composer > type @ > Projects heading > click the project row (the row says 'Start the chat in this project'); then check the header chip 'Project \u00b7 <name>'"
+ },
+ "S110.26": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Your Managed Cloud usage limit has been reached."
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Add credits"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Switch model"
+   }
+  ],
+  "needs": "an account whose usage is used up",
+  "note": "The gate text comes from the server when it is available and falls back to the default message; the button label depends on the recovery action returned (Add credits, Manage usage, Contact support or an upgrade label). The 'Switch model' button only opens the model picker, so a named eligible model is not offered in one step. Checked side_panel.ts:9751 and bubbles.ts:319.",
+  "reachable": "yes",
+  "steps": [
+   "Use an account whose usage is used up, then send a message in the side panel chat.",
+   "Read the message that says 'Your Managed Cloud usage limit has been reached.' and the button beside it.",
+   "Click the button, for example 'Add credits', and note that a new tab opens to the AGI web page.",
+   "If a reply shows the 'Switch model' button, click it and check whether the model picker opens with a model you can pick.",
+   "Compare with Expected: one step to an eligible alternative, reset wait or purchase."
+  ],
+  "where": "Chat, under the message 'Your Managed Cloud usage limit has been reached.' > click 'Add credits' (or the other recovery label shown), which opens the AGI web app in a new tab. A failed reply can also show 'Switch model', which opens the model picker."
+ },
+ "S110.28": {
+  "labels": [],
+  "needs": "a Free account",
+  "note": "Searched apps/extension/src and _locales for publish, republish, version and link sharing. The only related text is 'The live preview is not available right now...' and an artifact app runtime message; no republish-to-same-link or version-history control was found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ }
+}

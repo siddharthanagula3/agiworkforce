@@ -1,0 +1,25 @@
+{
+ "S24.04": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Outputs"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Open"
+   }
+  ],
+  "needs": "a signed-in account, and a chat that has produced at least one artifact; live-web (the preview needs the artifact sandbox origin)",
+  "note": "The list shows only the outputs of the current chat (conversationOutputs in apps/extension/src/features/side-panel/artifactPanel.ts), not every artifact the user has across all chats; no all-chats artifact list was found in apps/extension after one search for artifact. The plan's Code line was unverified and the plan's Where line was empty, so this location comes from the code search.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, open the side panel, and open a chat that has produced an artifact (the Outputs button is hidden when a chat has no outputs).",
+   "Look at the header: the Outputs button shows a count. Click it.",
+   "In the Outputs list, check that each artifact appears as a row with its title and a short meta line.",
+   "Click Open on an artifact row. The Artifact panel opens for that artifact, showing its title.",
+   "Click Open on another row and check that the panel switches to that artifact. Compare with Expected: a view lists the artifacts and opens each one."
+  ],
+  "where": "Side panel header > Outputs button (shows a count) > Open on a row"
+ }
+}

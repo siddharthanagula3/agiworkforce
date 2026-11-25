@@ -1,0 +1,400 @@
+{
+ "S9.01": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/mention_popup.rs",
+    "text": "Files"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/mention_popup.rs",
+    "text": "Type to filter"
+   }
+  ],
+  "needs": "a folder with files in it",
+  "note": "Only the file mention picker was found; no project, model or skill picker in this list.",
+  "reachable": "yes",
+  "steps": [
+   "In the message box, type @ and wait for the Files list to open.",
+   "Type a few letters of a file name and watch the list narrow.",
+   "Press Enter to insert the chosen file into the message, or Esc to cancel.",
+   "Compare: the list narrows as you type. It lists workspace files only; no projects, models or skills appear in this list."
+  ],
+  "where": "Type @ in the message box (the Files list opens)"
+ },
+ "S9.02": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/model_picker.rs",
+    "text": "Models"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/model_picker.rs",
+    "text": "Model changed to"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "In the message box, type /model and press Enter.",
+   "Use the up and down arrows to choose a model.",
+   "Press Enter to switch to it; a line reading Model changed to appears in the chat.",
+   "Compare: the conversation now uses the chosen model. Tab or the left and right arrows change the effort level."
+  ],
+  "where": "Type /model and press Enter (opens the Models box)"
+ },
+ "S9.04": {
+  "labels": [],
+  "needs": "a connector with more than one linked account",
+  "note": "No account picker found. Searched apps/cli/src for account picker, select account, linked account and account_id; the only hit was an account check in apps/cli/src/app_server/cloud_workspaces.rs.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S9.06": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Browse and create the projects in your AGI account."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Link this directory to an account project by id or name."
+   }
+  ],
+  "needs": "a signed-in AGI account with at least one project",
+  "note": "This is a command, not an in-app picker. Expected says chats or tasks run in the project; I did not confirm that link effect in code.",
+  "reachable": "yes",
+  "steps": [
+   "In a terminal, type agi projects list and press Enter to see your account's projects.",
+   "Change into the folder you want, then type agi projects link <project name or id>.",
+   "Compare: the command reports the link. The project is typed by name or id; no list selection was found."
+  ],
+  "where": "Terminal: agi projects list, then agi projects link <project>"
+ },
+ "S9.07": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Operate on this repository instead of the current directory"
+   }
+  ],
+  "needs": "a code repository folder on this computer",
+  "note": "A path flag, not a picker. The repository is checked to be a directory and no list or URL entry was found.",
+  "reachable": "yes",
+  "steps": [
+   "In a terminal, type agi -C followed by the path of a code repository, then press Enter to start a session.",
+   "Ask the agent which folder it is working in, or check the session header.",
+   "Compare: the session works in the folder you typed. Only a folder path is accepted; no list or URL choice was found."
+  ],
+  "where": "Terminal: agi -C <PATH> (or agi --repo <PATH>)"
+ },
+ "S9.10": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "text": "Tool Approval"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "text": "Allow Session"
+   }
+  ],
+  "needs": "a task that asks for a tool approval",
+  "note": "Only tool-approval scopes were found. No scope choice for API keys or site automation was found.",
+  "reachable": "yes",
+  "steps": [
+   "Start a task that asks to run a command, such as a shell command.",
+   "When the Tool Approval box appears, press the right arrow to move through Yes, No, Allow Session and Always allow.",
+   "Read the description under the selected button.",
+   "Compare: Yes runs it once, Allow Session lasts until the session ends, and Always allow saves a permanent rule."
+  ],
+  "where": "Tool Approval box, shown when the agent asks to run a tool"
+ },
+ "S9.12": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Create a cron schedule that runs in AGI cloud."
+   }
+  ],
+  "needs": "a signed-in AGI account",
+  "note": "No once, daily, weekly or monthly choice was found; the user must write the cron expression.",
+  "reachable": "yes",
+  "steps": [
+   "In a terminal, type agi schedules create --name test --schedule \"0 9 * * *\" --prompt \"say hello\" and press Enter.",
+   "Read the schedule summary the command prints.",
+   "Compare: the schedule runs on the cron cadence you typed. The only recurrence input is a 5-field cron expression."
+  ],
+  "where": "Terminal: agi schedules create --name <name> --schedule \"<cron>\" --prompt <text>"
+ },
+ "S9.15": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/models"
+   }
+  ],
+  "needs": "none",
+  "note": "The table is shown, but no sortable column header was found.",
+  "reachable": "yes",
+  "steps": [
+   "In the message box, type /models and press Enter.",
+   "Read the table of models and its column headers.",
+   "Compare: the table has headers. No sort control was found in the code, so check that sorting is missing."
+  ],
+  "where": "Type /models and press Enter in the message box"
+ },
+ "S9.17": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Browse your Library"
+   }
+  ],
+  "needs": "a signed-in AGI account with images in its Library",
+  "note": "Listing and downloading exist; a browsable gallery with a larger viewer was not found.",
+  "reachable": "yes",
+  "steps": [
+   "In a terminal, type agi library --kind image and press Enter to list your images.",
+   "Type agi library download <id> to save one file, using an id from the list.",
+   "Compare: the list shows your images. No gallery or larger viewer was found; show prints text only."
+  ],
+  "where": "Terminal: agi library --kind image (lists your items)"
+ },
+ "S9.19": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "\u2714"
+   }
+  ],
+  "needs": "none",
+  "note": "Steps are shown in order with state; no per-step duration was found in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message that makes the agent run several tools, such as reading files.",
+   "Watch the tool rows appear in the chat in order.",
+   "Compare: each row shows a state glyph and turns to the check mark when done. Per-step time was not found; only the spinner shows elapsed time for the whole turn."
+  ],
+  "where": "Chat transcript while the agent runs tools"
+ },
+ "S9.23": {
+  "labels": [
+   {
+    "file": "apps/cli/src/onboarding.rs",
+    "text": "Welcome to"
+   },
+   {
+    "file": "apps/cli/src/onboarding.rs",
+    "text": "Trust This Directory"
+   },
+   {
+    "file": "apps/cli/src/onboarding.rs",
+    "text": "Select Model"
+   }
+  ],
+  "needs": "a first launch, or a machine where setup is not complete",
+  "note": "The wizard has no name step; sign-in is one of the auth choices. /setup exists in the non-TUI command path (apps/cli/src/repl/slash_commands.rs).",
+  "reachable": "yes",
+  "steps": [
+   "Run agi in an interactive terminal on a setup that has not been completed.",
+   "Read the Welcome banner, then Trust This Directory, then the auth list (Skip for now is the last choice).",
+   "Choose Select Model and then Select Reasoning Level, and press Enter at the end.",
+   "Compare: setup completes and a Setup completed marker is written. No name step was found."
+  ],
+  "where": "First launch: run agi in a terminal before setup is complete"
+ },
+ "S9.26": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/checkpoint_picker.rs",
+    "text": "Rewind"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/checkpoint_picker.rs",
+    "text": "Restore conversation"
+   }
+  ],
+  "needs": "a chat with at least one prompt sent",
+  "note": "The list shows prompts that made checkpoints; I did not confirm a time for each one in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Send at least one prompt, then type /rewind and press Enter.",
+   "Use the up and down arrows to choose a prompt, then press Enter.",
+   "Choose Restore code and conversation, Restore conversation or Restore code, then compare what came back."
+  ],
+  "where": "Type /rewind and press Enter in the message box (opens the Rewind box)"
+ },
+ "S9.27": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/diff_review.rs",
+    "text": "Diff Review"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/diff_review.rs",
+    "text": "y/n/s decide"
+   }
+  ],
+  "needs": "a repository with uncommitted changes",
+  "note": "/diff panel is a separate read-only view of changes beside the chat.",
+  "reachable": "yes",
+  "steps": [
+   "In a repository with uncommitted changes, type /diff-review and press Enter.",
+   "Use the up and down arrows to move between files, and Page Up or Page Down to scroll the diff.",
+   "Press y, n or s for each file, then Enter to finish.",
+   "Compare: added and removed lines are marked in the Diff Review box before you decide."
+  ],
+  "where": "Type /diff-review and press Enter in the message box (in a repository with changes)"
+ },
+ "S9.29": {
+  "labels": [
+   {
+    "file": "apps/cli/src/usage_summary.rs",
+    "text": "Account usage"
+   },
+   {
+    "file": "apps/cli/src/usage_summary.rs",
+    "text": "5-hour window"
+   }
+  ],
+  "needs": "a signed-in AGI account (other accounts see an Unavailable line)",
+  "note": "Readable as text. Assistive-tech behaviour was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "In the message box, type /usage and press Enter.",
+   "Look under Account usage for the lines 5-hour window, Weekly and Monthly.",
+   "Compare: each line shows the percent used and when it resets. The output is text lines; no graphic bar was found."
+  ],
+  "where": "Type /usage in the message box, or run agi usage in a terminal"
+ },
+ "S9.30": {
+  "labels": [
+   {
+    "file": "apps/cli/src/usage_summary.rs",
+    "text": "Purchased credits"
+   },
+   {
+    "file": "apps/cli/src/usage_summary.rs",
+    "text": "Add credits"
+   }
+  ],
+  "needs": "a signed-in AGI account",
+  "note": "Shown as text lines inside Account usage, not a separate card.",
+  "reachable": "yes",
+  "steps": [
+   "In the message box, type /usage and press Enter.",
+   "Find the Purchased credits line under Account usage.",
+   "Find the Add credits line below it.",
+   "Compare: the balance and an add-credits link are shown together. If the server reports no credits, the line reads Credits: not reported by this server."
+  ],
+  "where": "Type /usage in the message box, or run agi usage in a terminal"
+ },
+ "S9.31": {
+  "labels": [
+   {
+    "file": "apps/cli/src/permissions.rs",
+    "text": "Permissions:"
+   }
+  ],
+  "needs": "none",
+  "note": "Scopes listed are allow, ask, deny, session and workspace. Expected says plain language; not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "In the message box, type /permissions and press Enter.",
+   "Read the Permissions: header and the rules listed under it.",
+   "Type /permissions allow or /permissions ask to view one scope.",
+   "Compare: the rules are shown for allow, ask, deny and session. The output is a rule list; no plain-language summary was found."
+  ],
+  "where": "Type /permissions and press Enter in the message box"
+ },
+ "S9.32": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "text": "Tool Approval"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "text": "Enter confirm"
+   }
+  ],
+  "needs": "a task that needs approval",
+  "note": "Code says No skips the call and the agent continues, not that the run stops.",
+  "reachable": "yes",
+  "steps": [
+   "Start a task that runs a shell command that is not already allowed.",
+   "Read the Tool Approval box to see the action it names.",
+   "Move with the left and right arrows to Yes or No, then press Enter.",
+   "Compare: Yes lets the run continue; No skips that call and the agent carries on, as its description says."
+  ],
+  "where": "Tool Approval box, shown when a task needs consent"
+ },
+ "S9.33": {
+  "labels": [
+   {
+    "file": "apps/cli/src/cloud/connectors.rs",
+    "text": "Your account's connectors"
+   },
+   {
+    "file": "apps/cli/src/cloud/connectors.rs",
+    "text": "needs reconnecting"
+   }
+  ],
+  "needs": "a signed-in AGI account (connectors help: /connectors in chat shows policy text)",
+  "note": "Not a card in chat. The card's list is in the terminal command.",
+  "reachable": "yes",
+  "steps": [
+   "In a terminal, type agi connectors and press Enter.",
+   "Read the line for each connector: connected since a date, or needs reconnecting with a link.",
+   "Type agi connectors disconnect <connector> to remove one (it asks first).",
+   "Compare: the state shown matches connected, needs reconnecting, or Available to connect. No separate expired label was found."
+  ],
+  "where": "Terminal: agi connectors (lists connectors and their state)"
+ },
+ "S9.35": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Waiting for your approval"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "still working"
+   }
+  ],
+  "needs": "none",
+  "note": "A single spinner line, not a card. Steps done is not shown in code.",
+  "reachable": "yes",
+  "steps": [
+   "Send a prompt that takes a while, such as one that runs several tools.",
+   "Watch the spinner line: it shows the verb, the elapsed seconds, and still working after about 10 seconds.",
+   "If an approval is needed, the line reads Waiting for your approval.",
+   "Compare: the line updates while the task runs. No count of steps done was found."
+  ],
+  "where": "Chat, the spinner line while a task runs"
+ },
+ "S9.38": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/command_popup.rs",
+    "text": "Commands"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/command_popup.rs",
+    "text": "Type to filter"
+   }
+  ],
+  "needs": "none",
+  "note": "Ctrl+P can be changed in keybindings. Typing / in an empty box also opens it. Lists commands; destinations were not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "With the message box empty, press Ctrl+P.",
+   "The Commands box opens. Type part of a command name, such as model.",
+   "Use the arrows to pick, then press Enter.",
+   "Compare: the list narrows as you type, and Enter runs the highlighted command."
+  ],
+  "where": "Ctrl+P (default) with the message box empty"
+ }
+}

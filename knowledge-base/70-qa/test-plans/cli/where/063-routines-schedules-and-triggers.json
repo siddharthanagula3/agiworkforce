@@ -1,0 +1,342 @@
+{
+ "S63.02": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Create a cron schedule that runs in AGI cloud."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Manage the account's scheduled agent tasks in AGI cloud."
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "/schedule"
+   }
+  ],
+  "needs": "a signed-in AGI account in the CLI",
+  "note": "The prompt is a single --prompt value; the code does not show how the saved prompt text is checked.",
+  "reachable": "yes",
+  "steps": [
+   "In a terminal, type agi schedules create --name \"Morning summary\" --schedule \"0 9 * * *\" --prompt \"Summarize my open pull requests.\"",
+   "Press Enter and read the printed result.",
+   "Type agi schedules list and find the new schedule.",
+   "Compare: a saved schedule appears with its name, its cron cadence, and the prompt you wrote is the one it runs."
+  ],
+  "where": "Terminal: agi schedules create --name \"<name>\" --schedule \"0 9 * * *\" --prompt \"<prompt>\". Or in an interactive agi session type /schedule and describe the routine."
+ },
+ "S63.03": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "/save-routine"
+   }
+  ],
+  "needs": "a finished task or chat turn in an interactive session, and a signed-in AGI account",
+  "note": "The slash command only asks the agent to create the routine; the saved result is confirmed by a later agi schedules list.",
+  "reachable": "yes",
+  "steps": [
+   "Finish a task in an interactive agi session.",
+   "Type /save-routine 0 9 * * * and press Enter.",
+   "Wait for the reply, which says it will create a routine with cron_create.",
+   "Compare: one command turns the finished task into a saved routine, and the reply tells you the schedule and what each run will do."
+  ],
+  "where": "Interactive agi session: type /save-routine, optionally followed by a schedule such as 0 9 * * *, after the task is finished."
+ },
+ "S63.04": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Change a schedule's name, description, prompt, model, cron expression or time zone."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Optional description stored with the schedule."
+   }
+  ],
+  "needs": "a signed-in AGI account in the CLI",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Type agi schedules create --name \"Weekly report\" --schedule \"0 9 * * 1\" --prompt \"Write the weekly report.\" --description \"Runs every Monday\".",
+   "Note the id printed in the result.",
+   "Type agi schedules edit <id> --name \"Weekly status\" --description \"Monday status note\".",
+   "Compare: the name and description both change, and the cadence and prompt stay the same."
+  ],
+  "where": "Terminal: agi schedules create --name \"<name>\" --description \"<text>\" and agi schedules edit <id> --name \"<name>\" --description \"<text>\"."
+ },
+ "S63.05": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Change a schedule's name, description, prompt, model, cron expression or time zone."
+   }
+  ],
+  "needs": "a signed-in AGI account in the CLI",
+  "note": "The CLI has no multi-line editor (no $EDITOR use found); the prompt is one --prompt value, so a multi-line prompt has to be typed as a quoted string with line breaks.",
+  "reachable": "yes",
+  "steps": [
+   "Type agi schedules edit <id> --prompt \"Check the build and report failures.\"",
+   "Press Enter and read the printed result.",
+   "Type agi schedules list --json and find the prompt field of that schedule.",
+   "Compare: the new prompt is saved in place of the old one."
+  ],
+  "where": "Terminal: agi schedules edit <id> --prompt \"<instructions>\" (also set with --prompt on agi schedules create)."
+ },
+ "S63.12": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "5-field cron expression, for example \"0 9 * * *\"."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Run a schedule once now and wait for its result."
+   }
+  ],
+  "needs": "a signed-in AGI account; waiting for an occurrence to see it fire, or agi schedules run <id> to run now",
+  "note": "The CLI accepts only 5-field cron; daily, weekly or monthly picker presets are built by the web form, not the CLI (apps/cli/src/schedules.rs cron_create_request comment).",
+  "reachable": "yes",
+  "steps": [
+   "Type agi schedules create --name \"Daily\" --schedule \"0 9 * * *\" --prompt \"Say good morning.\"",
+   "Note the id in the result.",
+   "Type agi schedules list and read the cadence shown for it.",
+   "Compare: the schedule shows the cron cadence and a next run time, and it fires on each occurrence."
+  ],
+  "where": "Terminal: agi schedules create --schedule \"<5-field cron>\", for example \"0 9 * * *\" for every day at 09:00."
+ },
+ "S63.13": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "IANA time zone the cron expression is read in. Defaults to this machine's."
+   }
+  ],
+  "needs": "none beyond a signed-in AGI account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Type agi schedules create --name \"Lunch\" --schedule \"0 12 * * *\" --prompt \"Lunch reminder.\" --timezone \"America/New_York\".",
+   "Read the result line; it shows the time zone after the cadence.",
+   "Type agi schedules edit <id> --timezone \"Europe/London\" and read the result.",
+   "Compare: the zone shown changes to the one you set, and the next run time is calculated in that zone."
+  ],
+  "where": "Terminal: agi schedules create --timezone \"<IANA zone>\" or agi schedules edit <id> --timezone \"<IANA zone>\"."
+ },
+ "S63.14": {
+  "labels": [],
+  "needs": "none",
+  "note": "Only 5-field cron is accepted by agi schedules create and edit; I searched apps/cli for interval, iCalendar, RRULE and run-window options and found none. The CLI only displays server-sent interval and once schedule types (schedules.rs schedule_cadence).",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S63.15": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Run a schedule's task whenever an event arrives from GitHub, Slack, Gmail, Google Calendar or a connector."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "`agi --daemon` runs it."
+   }
+  ],
+  "needs": "an outside account (GitHub, Slack, Gmail or Google Calendar) connected to AGI for the chosen source; for the webhook, a running agi --daemon",
+  "note": "The schedule-trigger sources in the CLI do not list webhook; the webhook path is the top-level agi triggers command, which runs only under the daemon. Whether the hosted service fires the trigger was not verified from the CLI code.",
+  "reachable": "yes",
+  "steps": [
+   "Type agi schedules triggers add <schedule> --source github --account owner/name --event pull_request.opened",
+   "Read the printed trigger; it shows the trigger id and its endpoint.",
+   "Open a new pull request on that repository (or send the event).",
+   "Compare: the schedule starts a run when the event arrives, and agi schedules runs <schedule> shows a run with a trigger source."
+  ],
+  "where": "Terminal: agi schedules triggers add <schedule> --source github|slack|gmail|google_calendar|connector. Webhook: agi triggers add <id> --webhook <path> --prompt \"<prompt>\", with agi --daemon running."
+ },
+ "S63.16": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Only fire when this holds, written FIELD OPERATOR VALUE, such as \"data.baseRef equals main\". Repeatable; all must hold."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Ignore repeats for this many seconds after a run starts (0 turns it off)."
+   }
+  ],
+  "needs": "an outside account connected for the chosen source",
+  "note": "The daemon filter quiet period is enforced in apps/cli/src/daemon.rs (quiet_period_secs); the schedule-trigger debounce is sent to the hosted service and not checked in the CLI code.",
+  "reachable": "yes",
+  "steps": [
+   "Type agi schedules triggers add <schedule> --source github --account owner/name --event pull_request.opened --when \"data.baseRef equals main\" --debounce 60",
+   "Read the printed trigger and check the event and condition are shown.",
+   "Open a pull request into a different branch, then one into main.",
+   "Compare: only the matching event starts a run, and repeats inside the debounce window do not start another."
+  ],
+  "where": "Terminal: agi schedules triggers add <schedule> --source github --event <type> --when \"<FIELD OPERATOR VALUE>\" --debounce <seconds>. Daemon triggers: agi triggers filter <id> --event <type> --when \"/json/pointer=value\" --quiet-for <seconds>."
+ },
+ "S63.20": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "List the account's schedules with status, cadence and next run."
+   }
+  ],
+  "needs": "a signed-in AGI account with at least one schedule",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Create a schedule with agi schedules create (see S63.02).",
+   "Type agi schedules list.",
+   "Read the line under each schedule's name.",
+   "Compare: the line shows next: with the next run time, or next: not scheduled when none is set."
+  ],
+  "where": "Terminal: agi schedules list"
+ },
+ "S63.21": {
+  "labels": [
+   {
+    "file": "apps/cli/src/schedules.rs",
+    "text": "last error:"
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "List the account's schedules with status, cadence and next run."
+   }
+  ],
+  "needs": "a signed-in AGI account with a schedule that has run",
+  "note": "The line reads last: never until the schedule has run.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi schedules run <id> to run a schedule now.",
+   "Type agi schedules list.",
+   "Read the last: value and any last error: line under that schedule.",
+   "Compare: the last run time shows, and a failed last run shows its error line."
+  ],
+  "where": "Terminal: agi schedules list (last: field), and agi schedules runs <id> for run results."
+ },
+ "S63.22": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Show a schedule's run history."
+   },
+   {
+    "file": "apps/cli/src/schedules.rs",
+    "text": "This schedule has not run yet."
+   }
+  ],
+  "needs": "a schedule that has run at least once",
+  "note": "The code does not set the order of runs; it prints what the server returns.",
+  "reachable": "yes",
+  "steps": [
+   "Type agi schedules runs <id>.",
+   "Read each run line: its id, status, trigger source, start time and duration.",
+   "Type agi schedules runs <id> --limit 5 to see fewer runs.",
+   "Compare: past runs are listed with status and time, newest first as the server returns them."
+  ],
+  "where": "Terminal: agi schedules runs <id>"
+ },
+ "S63.23": {
+  "labels": [
+   {
+    "file": "apps/cli/src/schedules.rs",
+    "text": "output:"
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Show a schedule's run history."
+   }
+  ],
+  "needs": "a schedule whose run produced output",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Type agi schedules runs <id>.",
+   "Find an output: line under a run.",
+   "Type agi schedules runs <id> --json for the full output.",
+   "Compare: each run shows its output text, not only its status. Long output is cut after a few lines, and --json has the full text."
+  ],
+  "where": "Terminal: agi schedules runs <id> (output: lines under each run); agi schedules run <id> for a run started now."
+ },
+ "S63.24": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Stop a schedule from firing until it is resumed."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Let a paused schedule fire again."
+   }
+  ],
+  "needs": "a signed-in AGI account with a schedule",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Type agi schedules pause <id> and read the result.",
+   "Type agi schedules list and check the status shown for that schedule.",
+   "Type agi schedules resume <id>.",
+   "Compare: the schedule stops firing while paused, is kept in the list, and fires again after resume."
+  ],
+  "where": "Terminal: agi schedules pause <id> and agi schedules resume <id>"
+ },
+ "S63.27": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Delete a schedule by id or name."
+   }
+  ],
+  "needs": "a schedule you can delete; a test schedule is recommended because deletion cannot be undone",
+  "note": "The confirmation text says the run history goes with it and cannot be undone.",
+  "reachable": "yes",
+  "steps": [
+   "Type agi schedules delete <id>.",
+   "At the confirmation, read the warning, then answer no and check the schedule is still in agi schedules list.",
+   "Type agi schedules delete <id> again and answer yes.",
+   "Compare: after the confirmation the schedule is gone from agi schedules list, and it no longer fires."
+  ],
+  "where": "Terminal: agi schedules delete <id>"
+ },
+ "S63.32": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Approve the step a paused run is waiting on, and let the run continue."
+   },
+   {
+    "file": "apps/cli/src/schedules.rs",
+    "text": "paused: a run needed your approval"
+   }
+  ],
+  "needs": "a schedule whose unattended run is waiting for approval, which the tester may not be able to cause from the CLI",
+  "note": "The CLI only shows and resolves the pause; the pause itself is set by the hosted run (apps/web/lib/services/scheduled-agent-executor.ts), which the CLI code does not show.",
+  "reachable": "yes",
+  "steps": [
+   "Type agi schedules list and find a schedule showing paused: a run needed your approval.",
+   "Type agi schedules runs <id> and read the waiting for your approval block with its actions.",
+   "Type agi schedules approve <id> and answer the prompt (or add --yes).",
+   "Compare: the run continues after approval, and its status changes from awaiting_approval."
+  ],
+  "where": "Terminal: agi schedules runs <id> (shows the waiting approval), then agi schedules approve <id> or agi schedules deny <id>"
+ },
+ "S63.33": {
+  "labels": [
+   {
+    "file": "apps/cli/src/schedules.rs",
+    "text": "ran late for the occurrence due"
+   }
+  ],
+  "needs": "a schedule that missed an occurrence, which is hard to cause from the CLI",
+  "note": "The CLI prints a missed-run line only for runs that ran late; it prints no reason for a skipped occurrence, so Expected is only partly met from the code.",
+  "reachable": "yes",
+  "steps": [
+   "Type agi schedules runs <id>.",
+   "Look for a line ran late for the occurrence due <time> under a run.",
+   "Type agi schedules runs <id> --json and look for missedExecution and skipped.",
+   "Compare: a late run says it ran late for its due time. A skipped occurrence shows only its status, with no reason printed by the CLI."
+  ],
+  "where": "Terminal: agi schedules runs <id>"
+ }
+}

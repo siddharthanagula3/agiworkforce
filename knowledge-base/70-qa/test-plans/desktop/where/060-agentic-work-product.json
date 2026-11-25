@@ -1,0 +1,513 @@
+{
+ "S60.01": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Work"
+   },
+   {
+    "file": "apps/web/features/chat/components/work-session/AgiWorkPlanReview.tsx",
+    "text": "Review the plan"
+   }
+  ],
+  "needs": "a paid account with Work access, a project available",
+  "note": "The Work switch is hidden on Free accounts and when no project picker is shown.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in on a paid account and open or start a project chat (the Chat | Work switch only appears when the project picker is shown).",
+   "Click \"Work\" in the Chat | Work switch.",
+   "Type a task in the composer and click Send.",
+   "Look for the \"Review the plan\" panel (a Work run starts, not a plain chat reply). Compare with Expected."
+  ],
+  "where": "Composer > \"Work\" (the Chat | Work switch above the composer) > type the task > Send"
+ },
+ "S60.02": {
+  "labels": [],
+  "needs": "",
+  "note": "Task titles come from the goal summary in TasksPage.tsx and TaskDetailPanel.tsx, but I found no control to set or change a task title in those files.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S60.03": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/tasks/TasksPage.tsx",
+    "text": "Work history"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/v3.json",
+    "text": "Work"
+   }
+  ],
+  "needs": "a paid account with at least one Work task",
+  "note": "The objective appears as the task summary; I did not find a separate label that says Objective.",
+  "reachable": "yes",
+  "steps": [
+   "Open \"Work history\" from the sidebar (desktop \"Work\") or the Home page link.",
+   "Click any task in the list.",
+   "Read the goal text at the top of the task detail.",
+   "Compare the text with the objective you typed in the composer."
+  ],
+  "where": "Work history (desktop: Sidebar > \"Work\"; web: \"Work history\" link on Home) > click a task"
+ },
+ "S60.04": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/v3.json",
+    "text": "Deliverable"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/v3.json",
+    "text": "Add scope (optional)"
+   }
+  ],
+  "needs": "a paid account with Work access",
+  "note": "I inferred that \"Add scope (optional)\" opens the scope fields from the key name; the fields are shown only in Work mode.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Work\" in the Chat | Work switch.",
+   "Click \"Add scope (optional)\".",
+   "Type the expected output (for example a report) in the field under \"Deliverable\".",
+   "Send the task, then open it in Work history and check the deliverable text is recorded (for example via \"Re-run this task\")."
+  ],
+  "where": "Composer > \"Work\" > \"Add scope (optional)\" > \"Deliverable\" field"
+ },
+ "S60.05": {
+  "labels": [],
+  "needs": "",
+  "note": "The composer has a \"Work tools\" palette with \"Connected apps\", \"Folders\" and \"Skills\" headings (packages/ui/i18n/locales/en/v3.json), but I did not find the control that opens it.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S60.06": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/v3.json",
+    "text": "Tools this task may use"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/v3.json",
+    "text": "Web search and browsing"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/v3.json",
+    "text": "Code execution"
+   }
+  ],
+  "needs": "a paid account with Work access",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Work\" in the Chat | Work switch.",
+   "Click \"Add scope (optional)\".",
+   "Look at \"Tools this task may use\" and tick or untick \"Web search and browsing\" or \"Code execution\".",
+   "Send the task and compare which tools it uses with the ticks you set."
+  ],
+  "where": "Composer > \"Work\" > \"Add scope (optional)\" > \"Tools this task may use\""
+ },
+ "S60.07": {
+  "labels": [],
+  "needs": "",
+  "note": "Searched ComposerPlusMenu.tsx and ChatComposerNew.tsx: the only location-like control is the desktop-only \"Device steps\" toggle, not a cloud-versus-computer choice with visible words.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S60.08": {
+  "labels": [],
+  "needs": "a paid account with Work access",
+  "note": "ComposerFooter shows the model selector (showModelSelector in ChatComposerNew.tsx); I did not confirm its exact visible label.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Work\" in the Chat | Work switch.",
+   "Open the model selector in the composer footer and choose a model.",
+   "Send the task.",
+   "Open the task in Work history and compare the model shown with the one you chose."
+  ],
+  "where": "Composer footer > model selector (at the bottom of the composer, next to the Work switch)"
+ },
+ "S60.09": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+    "text": "Reasoning effort"
+   }
+  ],
+  "needs": "a paid account, and a model that supports effort control",
+  "note": "The effort button appears only when the selected model has an effort control.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Work\" in the Chat | Work switch.",
+   "Click the button with the brain icon titled \"Reasoning effort\" in the composer footer.",
+   "Pick an effort level with the slider.",
+   "Send the task and compare the effort shown with your choice."
+  ],
+  "where": "Composer footer > \"Reasoning effort\" button (brain icon)"
+ },
+ "S60.13": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/work-session/AgiWorkPlanReview.tsx",
+    "text": "Review the plan"
+   },
+   {
+    "file": "apps/web/features/chat/components/work-session/AgiWorkPlanReview.tsx",
+    "text": "Start work"
+   }
+  ],
+  "needs": "a paid account with Work access",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Work\" in the Chat | Work switch and send a task.",
+   "Wait for the \"Review the plan\" panel before the agent acts.",
+   "Edit a step, click \"Add a step\" or \"Remove this step\" as needed.",
+   "Click \"Start work\" to approve or \"Cancel\" to reject, then check that the agent did not act before Start work."
+  ],
+  "where": "Composer > \"Work\" > send a task > \"Review the plan\" panel"
+ },
+ "S60.14": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx",
+    "text": "Done"
+   },
+   {
+    "file": "apps/web/features/chat/components/work-session/AgiWorkPlanReview.tsx",
+    "text": "In progress"
+   }
+  ],
+  "needs": "a paid account with a Work task that has steps",
+  "note": "Step status words come from STATUS_LABEL in AgiWorkPlanReview.tsx; I did not confirm the exact step list screen in TaskDetailPanel.",
+  "reachable": "yes",
+  "steps": [
+   "Open \"Work history\" and click a task that has steps.",
+   "Read the numbered step list in the task detail.",
+   "Compare each step's status word with what happened."
+  ],
+  "where": "Work history > click a task > step list"
+ },
+ "S60.16": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/work-session/AgiWorkPlanReview.tsx",
+    "text": "In progress"
+   }
+  ],
+  "needs": "a paid account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Start a Work task and let it run.",
+   "Open \"Work history\" and click the running task.",
+   "Look for the step marked \"In progress\" and check it matches the step being worked on."
+  ],
+  "where": "Work history > click a running task > step marked \"In progress\""
+ },
+ "S60.17": {
+  "labels": [],
+  "needs": "",
+  "note": "Parallel tool calls are grouped by parallelGroup in apps/web/features/chat/components/messages/ToolTimeline.tsx, but I found no visible words for a parallel-work indicator.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S60.18": {
+  "labels": [],
+  "needs": "",
+  "note": "Server code exists in apps/web/lib/services/clarify-tool-service.ts; I found no visible UI text for a clarifying question in the Work history or task components.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S60.19": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/tasks/TasksPage.tsx",
+    "text": "Needs you"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/tasks/TasksBoard.tsx",
+    "text": "Wants to run"
+   }
+  ],
+  "needs": "a paid account and a Work task that asks for a tool permission",
+  "note": "The Approve and Deny button words come from TOOL_APPROVAL_ACTION_LABELS, which I did not read.",
+  "reachable": "yes",
+  "steps": [
+   "Open \"Work history\".",
+   "Click the \"Needs you\" filter.",
+   "On a card that says \"Wants to run\" followed by a tool name, click the approve or deny button.",
+   "Check the task continues after Approve, or stops after Deny."
+  ],
+  "where": "Work history > \"Needs you\" filter > task card showing \"Wants to run ...\" > Approve or Deny"
+ },
+ "S60.20": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/tasks/TaskSteerSection.tsx",
+    "text": "Message the agent"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/tasks/TaskSteerSection.tsx",
+    "text": "Send"
+   }
+  ],
+  "needs": "a paid account and a running Work task",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open \"Work history\" and click a running task.",
+   "Click the box with the placeholder \"Message the agent to add instructions or change course\".",
+   "Type the new guidance and click \"Send\".",
+   "Check the message shows as queued and the task continues without restarting."
+  ],
+  "where": "Work history > click a running task > \"Message the agent\" box > Send"
+ },
+ "S60.21": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/tasks/TasksBoard.tsx",
+    "text": "Pause"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/tasks/TasksBoard.tsx",
+    "text": "Pausing"
+   }
+  ],
+  "needs": "a paid account and a running Work task",
+  "note": "The Pause button appears only on pausable tasks.",
+  "reachable": "yes",
+  "steps": [
+   "Open \"Work history\" and find a running task card.",
+   "Click \"Pause\" on the card.",
+   "Wait for the card to show \"Pausing\" and then the paused state.",
+   "Check the task keeps its finished steps."
+  ],
+  "where": "Work history > running task card > \"Pause\""
+ },
+ "S60.22": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/tasks/TasksBoard.tsx",
+    "text": "Resume"
+   }
+  ],
+  "needs": "a paid account and a paused Work task",
+  "note": "Stopped tasks are not confirmed to show Resume; the code shows it for the paused state.",
+  "reachable": "yes",
+  "steps": [
+   "Open \"Work history\" and find a paused task card.",
+   "Click \"Resume\".",
+   "Check the task continues from where it stopped."
+  ],
+  "where": "Work history > paused task card > \"Resume\""
+ },
+ "S60.23": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/tasks/TasksBoard.tsx",
+    "text": "Stop"
+   }
+  ],
+  "needs": "a paid account and a running Work task",
+  "note": "The visible button may be icon-only; its accessible name is \"Stop: <task title>\".",
+  "reachable": "yes",
+  "steps": [
+   "Open \"Work history\" and find a running task card.",
+   "Click the stop button (labelled \"Stop\" with the task title).",
+   "Wait for the \"Stopping task\" spinner to finish.",
+   "Check the task state changes to stopped and the run no longer progresses."
+  ],
+  "where": "Work history > running task card > \"Stop\""
+ },
+ "S60.24": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/work-session/AgiWorkPlanReview.tsx",
+    "text": "Retry from this step"
+   },
+   {
+    "file": "apps/web/features/chat/components/work-session/AgiWorkPlanReview.tsx",
+    "text": "Failed"
+   }
+  ],
+  "needs": "a paid account and a Work task that fails a step",
+  "note": "I did not confirm the exact screen on which the retry control appears after a failure.",
+  "reachable": "yes",
+  "steps": [
+   "Run a Work task until a step shows \"Failed\".",
+   "Open the step's menu or the plan review.",
+   "Click \"Retry from this step\" (also labelled \"Retry a step\").",
+   "Check that only that step runs again and the task continues."
+  ],
+  "where": "Work session in chat > plan review > step marked \"Failed\" > \"Retry from this step\""
+ },
+ "S60.25": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx",
+    "text": "Re-run this task"
+   }
+  ],
+  "needs": "a paid account and a finished Work task",
+  "note": "The button fills a new draft; it does not start the run by itself.",
+  "reachable": "yes",
+  "steps": [
+   "Open \"Work history\" and click a finished task (not running).",
+   "Click \"Re-run this task\".",
+   "Check a new chat opens in Work mode with the same goal, deliverable and constraints in the composer.",
+   "Send it and check it runs again from the start."
+  ],
+  "where": "Work history > click a finished task > \"Re-run this task\""
+ },
+ "S60.26": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx",
+    "text": "Re-run this task"
+   }
+  ],
+  "needs": "a paid account and a finished Work task",
+  "note": "No control is named Duplicate; \"Re-run this task\" is the nearest and opens an editable draft.",
+  "reachable": "yes",
+  "steps": [
+   "Open \"Work history\" and click a finished task.",
+   "Click \"Re-run this task\".",
+   "Check the goal, deliverable and constraints appear in an editable composer draft in a new chat.",
+   "Edit the text and send, then compare with the original task."
+  ],
+  "where": "Work history > click a finished task > \"Re-run this task\""
+ },
+ "S60.29": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx",
+    "text": "Result"
+   }
+  ],
+  "needs": "a paid account and a finished Work task with a result",
+  "note": "While a task is running the same section is labelled \"Latest output\".",
+  "reachable": "yes",
+  "steps": [
+   "Open \"Work history\" and click a finished task.",
+   "Find the section labelled \"Result\".",
+   "Compare its text with what the task produced."
+  ],
+  "where": "Work history > click a finished task > \"Result\" section"
+ },
+ "S60.30": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx",
+    "text": "Download and open"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx",
+    "text": "Outputs"
+   }
+  ],
+  "needs": "a paid account and a finished Work task that produced a file",
+  "note": "Older outputs show \"Download unavailable for this historical output.\" instead.",
+  "reachable": "yes",
+  "steps": [
+   "Open \"Work history\" and click a finished task that produced a file.",
+   "Find the \"Outputs \u00b7 N\" section.",
+   "Click \"Download and open\" on a file.",
+   "Check the file opens or downloads."
+  ],
+  "where": "Work history > click a finished task > \"Outputs\" section > \"Download and open\""
+ },
+ "S60.31": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx",
+    "text": "Remaining:"
+   }
+  ],
+  "needs": "a paid account and a Work task that stopped short",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open \"Work history\" and click a task that stopped before its last step.",
+   "Find the line \"Done N of M steps before it stopped.\"",
+   "Read the \"Remaining:\" line below it.",
+   "Compare with the steps you expected to finish."
+  ],
+  "where": "Work history > click a task that stopped short > plan section with \"Remaining:\""
+ },
+ "S60.32": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/v3.json",
+    "text": "Work"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/tasks/TasksPage.tsx",
+    "text": "Work history"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/tasks/TasksPage.tsx",
+    "text": "Archived"
+   }
+  ],
+  "needs": "a signed-in account with past work tasks; on desktop, privacy mode must not be Local",
+  "note": "The desktop sidebar label comes from the key sidebar.nav.tasks, which reads \"Work\" in the English file. Load-more text and the exact row-click behaviour were not checked against a running app.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with an account that already has past work tasks, then click \"Work\" in the left sidebar.",
+   "Check that the page heading reads \"Work history\" and the subtitle reads \"Your Cloud work sessions\".",
+   "Click the filter \"Active\", then \"Needs you\", \"All\" and \"Archived\" in turn, and check that the list changes to match each filter.",
+   "Scroll to the bottom of the list and, if a \"Load more\" control appears, click it to load older tasks.",
+   "Click any task row and check that its detail panel opens with that task's title and state."
+  ],
+  "where": "Desktop: Sidebar > Work (opens the \"Work history\" page). Web: Command palette > \"Work history\"."
+ },
+ "S60.33": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx",
+    "text": "Share task"
+   },
+   {
+    "file": "apps/web/features/chat/components/share/ShareConversationDialog.tsx",
+    "text": "Share conversation"
+   }
+  ],
+  "needs": "a signed-in web account with a finished task that has a source conversation",
+  "note": "The Share task button is hidden while the task is live, and the desktop transport does not supply shareConversation, so it is web-only. Whether a share includes the plan, steps and results as Expected says is not confirmed by the code read.",
+  "reachable": "yes",
+  "steps": [
+   "On the web app, open \"Work history\" and click a finished task row (not one that is still running).",
+   "In the task detail panel, find the button \"Share task\" under the source conversation line and click it.",
+   "Check that the dialog title reads \"Share conversation\" and that it offers a share link with an expiry choice.",
+   "Note: the dialog shares the source chat, not a separate plan or step list. Confirm whether the shared link shows the task's steps and results."
+  ],
+  "where": "Web only: Work history > open a finished task > \"Share task\" (opens \"Share conversation\"). On the desktop Work page the button is not passed in, so it does not appear there."
+ },
+ "S60.34": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/tasks/TasksPage.tsx",
+    "text": "Needs you"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/tasks/TasksPage.tsx",
+    "text": "Another device already resumed this task."
+   }
+  ],
+  "needs": "two devices or two browsers signed into the same account, and a running task",
+  "note": "The task list is loaded from the account on the server, so it can show on any device, but the code read does not show whether the second device updates live or only on refresh. Two real devices are needed to confirm this.",
+  "reachable": "yes",
+  "steps": [
+   "On device A, start a work task and leave it running or waiting for approval.",
+   "On device B (or a second browser), sign in to the same account and open \"Work\" in the sidebar.",
+   "Find the task in the \"Active\" filter, or in \"Needs you\" if it waits for input, and click it.",
+   "Use the task's own controls (for example Pause, Resume or approve) and check that device A shows the new state after a refresh.",
+   "If a decision conflicts, check that the message reads \"Another device already answered this approval.\" or \"Another device already resumed this task.\""
+  ],
+  "where": "Sign in to the same account on a second device or browser, then Sidebar > Work (web: Work history) and look for the task under \"Active\" or \"Needs you\"."
+ }
+}

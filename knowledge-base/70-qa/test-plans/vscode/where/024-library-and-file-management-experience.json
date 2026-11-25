@@ -1,0 +1,29 @@
+{
+ "S24.04": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "More actions"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "Artifacts"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/index.ts",
+    "text": "Open an artifact\u2026"
+   }
+  ],
+  "needs": "a Free or paid AGI Cloud account; at least one artifact made by a chat (for the open step)",
+  "note": "The quick pick is the list view; the sidebar tree view for artifacts is not registered in package.json, so there is no separate Explorer panel. Code path for listing and opening: artifactsTree.ts getChildren and the agi-workforce.openArtifact command (commandSetup.ts). \"Code: Show Artifacts\" is the palette entry; \"Code: Open Artifact\" is hidden from the palette (when: false). Note: the Artifacts menu item label comes from surfaceMenu.ts, not a translation file, and the empty/sign-in texts are in artifactsTree.ts. Plan's \"Where to find it\" was blank, so this path is derived from code only.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to AGI Cloud (the Artifacts view needs an AGI Cloud account).",
+   "Open the AGI Workforce chat panel in the editor sidebar and click the \"More\" button (aria-label \"More actions\").",
+   "Click \"Artifacts\" in the menu. A quick pick titled \"Code, Artifacts\" opens, with the placeholder \"Open an artifact\u2026\".",
+   "Look for the artifacts list. Each row is an artifact title; with a signed-out account you see \"Sign in to see your artifacts\" instead, and with none you see \"No artifacts yet\".",
+   "Click (or press Enter on) an artifact row. It opens read-only in an editor tab, which compares with Expected: the artifact opens."
+  ],
+  "where": "Chat panel > More actions (\"More\" button) > Artifacts; or Command Palette > \"Code: Show Artifacts\""
+ }
+}

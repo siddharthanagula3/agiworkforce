@@ -1,0 +1,395 @@
+{
+ "S85.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "Profile"
+   },
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "Save profile"
+   },
+   {
+    "file": "apps/web/features/settings/components/EmailAddressChange.tsx",
+    "text": "Change email address"
+   }
+  ],
+  "needs": "a Free or paid account; an image file to upload; a mailbox that can receive the email change code",
+  "note": "The Expected line asks for name, photo and email on one surface; in the code the email is changed on the Account page, not on General.",
+  "reachable": "yes",
+  "steps": [
+   "Open the account menu at the bottom of the sidebar and click Settings.",
+   "In General, under Profile, click the Full name field and change the name.",
+   "Click Upload photo (or Change photo) and choose a PNG, JPEG, GIF, WebP or HEIC image.",
+   "Click Save profile and wait for Saved.",
+   "Reload the page and check the name and photo are still there.",
+   "For email: open Settings > Account, click the Email row, then Change email address, and follow the code steps. Check the new address shows on the Account page."
+  ],
+  "where": "Account menu (your name at the bottom of the sidebar) > Settings > General > Profile. Email: Settings > Account > Email > Change email address"
+ },
+ "S85.02": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/PersonalizationSection.tsx",
+    "text": "Instructions for AGI"
+   }
+  ],
+  "needs": "a Free or paid account",
+  "note": "The page shows an on/off state (Off. Your instructions are kept and not sent to the model.); the exact on/off control was not traced, and the code does not say per surface (the Expected says per surface).",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings from the account menu and click Personalization.",
+   "Scroll to the Instructions for AGI box and type an instruction, for example a reply language.",
+   "Wait for the save status to show Saved, then reload the page to confirm the text stayed.",
+   "Start a new chat, send a question, and compare the reply with the instruction.",
+   "Go back, switch the instructions off, ask again, and compare the reply."
+  ],
+  "where": "Settings > Personalization > Instructions for AGI"
+ },
+ "S85.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/PersonalizationSection.tsx",
+    "text": "Style and tone"
+   },
+   {
+    "file": "apps/web/features/settings/sections/PersonalizationSection.tsx",
+    "text": "Response style"
+   },
+   {
+    "file": "apps/web/features/settings/sections/PersonalizationSection.tsx",
+    "text": "Response length"
+   }
+  ],
+  "needs": "a Free or paid account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings from the account menu and click Personalization.",
+   "Under Style and tone, change Response style (for example to Concise).",
+   "Change Response length or Preferred formatting if you want.",
+   "Start a new chat and send the same question.",
+   "Compare the reply length, tone and formatting with the choice you made."
+  ],
+  "where": "Settings > Personalization > Style and tone"
+ },
+ "S85.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/StyleSelector.tsx",
+    "text": "Create Custom Style"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/StyleSelector.tsx",
+    "text": "Writing sample"
+   }
+  ],
+  "needs": "none",
+  "note": "The custom style lives in the composer, not in Settings.",
+  "reachable": "yes",
+  "steps": [
+   "Open a new chat and click Style in the composer footer.",
+   "Click Create Custom Style.",
+   "Type a name, and in Writing sample paste a sample of your own writing; the instruction box fills automatically if left empty.",
+   "Click Save.",
+   "Select the new custom style, send a question, and compare the reply with your sample's tone and sentence structure."
+  ],
+  "where": "Chat composer (under the message box) > Style > Create Custom Style"
+ },
+ "S85.05": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/MemorySection.tsx",
+    "text": "Persistent memory"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/MemoryEditor.tsx",
+    "text": "Delete memory"
+   }
+  ],
+  "needs": "a Free or paid account; memory is off by default",
+  "note": "The Cloud memory editor shows Cloud memory is unavailable until your account and workspace are ready when the account is not set up.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings from the account menu and click Personalization.",
+   "Find the Persistent memory switch and turn it on.",
+   "Add a fact in the Add a new fact field (placeholder starts with Example:) and save it.",
+   "Check the fact appears in the memory list; then use Edit memory or Delete memory on it to change or remove it.",
+   "Turn the Persistent memory switch off and check the list and the behaviour in a new chat."
+  ],
+  "where": "Settings > Personalization > Persistent memory"
+ },
+ "S85.06": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/MemorySection.tsx",
+    "text": "Search past chats"
+   },
+   {
+    "file": "apps/web/features/settings/sections/PrivacySection.tsx",
+    "text": "Start new chats as temporary"
+   }
+  ],
+  "needs": "a Free or paid account with at least one earlier chat on a known topic",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings from the account menu and click Personalization.",
+   "Turn on the Search past chats switch.",
+   "Start a new chat (not temporary) and ask about a topic from an earlier chat.",
+   "Check whether the reply refers to the earlier chat.",
+   "Turn Search past chats off, ask again in a new chat, and compare; then start a temporary chat and check it does not refer to other chats."
+  ],
+  "where": "Settings > Personalization > Search past chats"
+ },
+ "S85.07": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Projects"
+   },
+   {
+    "file": "apps/web/features/projects/components/ProjectSettingsDialog.tsx",
+    "text": "Use memories from outside this project"
+   }
+  ],
+  "needs": "a project and some saved memories on the account",
+  "note": "The Project settings menu item is shown conditionally on the project page; the Save button label in the dialog was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Click Projects in the sidebar and open a project.",
+   "Click Project options at the top of the project.",
+   "Click Project settings.",
+   "Under Memory, tick or untick Use memories from outside this project and read the line under it.",
+   "Save the dialog, then ask a question in a chat in that project and compare with the choice."
+  ],
+  "where": "Projects > open a project > Project options (the ... button) > Project settings > Memory"
+ },
+ "S85.11": {
+  "labels": [],
+  "needs": "none",
+  "note": "Searched the settings sections and components for chat history, keep, save and history wording; no control that chooses whether chats are kept in history and synced was found. The nearest controls are Start new chats as temporary (S85.16) and the composer temporary-chat option, which is not the same choice.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S85.12": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/PrivacySection.tsx",
+    "text": "Use my chats"
+   },
+   {
+    "file": "apps/web/features/settings/sections/PrivacySection.tsx",
+    "text": "Use my voice"
+   }
+  ],
+  "needs": "none",
+  "note": "Owner decision is open. The heading text comes from a product-name constant, so the exact visible words were not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings from the account menu and click Privacy.",
+   "Scroll to the heading that starts with Help improve and ends with models, and read the note under it.",
+   "Turn Use my chats on, then off, and read the description under it.",
+   "Turn Use my voice on or off if you want, then reload the page.",
+   "Compare the switch states after reload with what you set; the note says both are off and nothing is used for this today."
+  ],
+  "where": "Settings > Privacy > Help improve models (heading) > Use my chats"
+ },
+ "S85.14": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/PrivacySection.tsx",
+    "text": "Share crash and error reports"
+   }
+  ],
+  "needs": "none",
+  "note": "The code shows a pending opt-out message (Telemetry is off on this browser...); whether reports are actually sent or stopped cannot be seen from the screen.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings from the account menu and click Privacy.",
+   "Find the Share crash and error reports switch and turn it off.",
+   "Reload the page and check the switch stays off.",
+   "Turn it on again and reload; check the switch shows on.",
+   "Compare the switch with its description: error reports, with sensitive fields removed."
+  ],
+  "where": "Settings > Privacy > Share crash and error reports"
+ },
+ "S85.16": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/PrivacySection.tsx",
+    "text": "Start new chats as temporary"
+   }
+  ],
+  "needs": "a Free or paid account",
+  "note": "The switch only changes the default for new chats; existing chats keep their state, and the composer can change it per chat.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings from the account menu and click Privacy.",
+   "Turn on Start new chats as temporary.",
+   "Close Settings, click New chat and send a message.",
+   "Check the chat is not listed in the sidebar history or in search after you leave it.",
+   "Turn the switch off, start a new chat and check it is saved normally."
+  ],
+  "where": "Settings > Privacy > Start new chats as temporary"
+ },
+ "S85.17": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/PrivacySection.tsx",
+    "text": "Archived chats"
+   },
+   {
+    "file": "apps/web/features/settings/sections/ArchivedChatsSection.tsx",
+    "text": "Restore"
+   },
+   {
+    "file": "apps/web/features/settings/sections/ArchivedChatsSection.tsx",
+    "text": "Delete"
+   }
+  ],
+  "needs": "a test account with a disposable archived chat",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Archive one test chat from the sidebar.",
+   "Open Settings > Privacy and click Manage next to Archived chats.",
+   "Find the test chat in the list and click Restore; check it returns to the sidebar.",
+   "Archive it again, click Delete, confirm Delete chat, and check it moves to Recently deleted.",
+   "Compare the list with the copy: restored chats return to the sidebar, deleted ones stay in Recently deleted for 30 days."
+  ],
+  "where": "Settings > Privacy > Archived chats > Manage"
+ },
+ "S85.18": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/components/BulkConversationControls.tsx",
+    "text": "Delete all chats in this workspace"
+   },
+   {
+    "file": "apps/web/features/settings/components/BulkConversationControls.tsx",
+    "text": "Delete all"
+   },
+   {
+    "file": "apps/web/features/settings/components/BulkConversationControls.tsx",
+    "text": "Delete all chats"
+   }
+  ],
+  "needs": "a disposable test account only; this deletes every chat",
+  "note": "The copy says in this workspace, while the Expected says every chat in the user's history; check whether a personal account sees the same scope.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings from the account menu and click Privacy.",
+   "Find Delete all chats in this workspace and click Delete all.",
+   "Read the dialog title and copy, which say whether chats can be restored from Recently deleted within 30 days.",
+   "Click Cancel unless you are on a disposable test account.",
+   "If you confirm on a test account, check the sidebar and the archived list are empty afterwards."
+  ],
+  "where": "Settings > Privacy > Delete all chats in this workspace > Delete all"
+ },
+ "S85.19": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/PrivacySection.tsx",
+    "text": "Shared links"
+   },
+   {
+    "file": "apps/web/features/settings/sections/SharedLinksSection.tsx",
+    "text": "Revoke this public link?"
+   },
+   {
+    "file": "apps/web/features/settings/sections/SharedLinksSection.tsx",
+    "text": "Revoke link"
+   }
+  ],
+  "needs": "a test chat that has a shared link",
+  "note": "Published pages are listed on the same screen (PublishedArtifactsSection is rendered inside SharedLinksSection).",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings from the account menu and click Privacy.",
+   "Click Manage next to Shared links.",
+   "Find a test shared link and click Revoke.",
+   "Read the dialog Revoke this public link? and click Revoke link.",
+   "Check the link is gone from the list and that the shared page no longer opens."
+  ],
+  "where": "Settings > Privacy > Shared links > Manage"
+ },
+ "S85.20": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/components/DataExportRow.tsx",
+    "text": "Export data"
+   },
+   {
+    "file": "apps/web/features/settings/components/DataExportRow.tsx",
+    "text": "Download your export"
+   }
+  ],
+  "needs": "none; the export can take a while",
+  "note": "Memories can also be exported from Settings > Personalization > Memory > Export memories.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings from the account menu and click Privacy.",
+   "Find Export data and click it.",
+   "Wait while the status shows Preparing, then click Download your export.",
+   "Open the downloaded file.",
+   "Check it contains chats, memory, files and settings as described in Expected."
+  ],
+  "where": "Settings > Privacy > Export data"
+ },
+ "S85.22": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/MemorySection.tsx",
+    "text": "Import memory from other AI providers"
+   },
+   {
+    "file": "apps/web/features/settings/sections/MemorySection.tsx",
+    "text": "Start import"
+   },
+   {
+    "file": "apps/web/features/settings/components/ImportMemoryDialog.tsx",
+    "text": "Upload file"
+   }
+  ],
+  "needs": "a memory export file or pasted text from another assistant",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings from the account menu and click Personalization.",
+   "Scroll to Import memory from other AI providers and click Start import.",
+   "Choose a source (ChatGPT, Claude, Gemini, Copilot or Other), then choose Paste memories or Upload file and add the export.",
+   "Click Import to add the selected memories.",
+   "Check the message Imported N memories from the source and find the new entries in the memory list."
+  ],
+  "where": "Settings > Personalization > Memory > Import memory from other AI providers > Start import"
+ },
+ "S85.26": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/AccountSection.tsx",
+    "text": "Delete account"
+   },
+   {
+    "file": "apps/web/features/settings/sections/AccountSection.tsx",
+    "text": "Delete your account?"
+   },
+   {
+    "file": "apps/web/features/settings/sections/AccountSection.tsx",
+    "text": "Schedule deletion"
+   }
+  ],
+  "needs": "a disposable test account only",
+  "note": "The code schedules deletion and offers Cancel deletion; it does not delete at once. Expected says the account is deleted after confirmation.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings from the account menu and click Account.",
+   "Click Delete account and read the dialog Delete your account?.",
+   "Type DELETE in the confirmation box.",
+   "Click Schedule deletion only on a disposable test account.",
+   "Check the Account deletion scheduled row and use Cancel deletion to undo it."
+  ],
+  "where": "Settings > Account > Delete account"
+ }
+}

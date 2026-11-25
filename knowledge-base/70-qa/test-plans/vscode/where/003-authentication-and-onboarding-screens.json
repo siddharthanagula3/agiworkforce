@@ -1,0 +1,160 @@
+{
+ "S3.01": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Sign In to AGI Cloud"
+   }
+  ],
+  "needs": "a browser and an AGI account (or a way to create one)",
+  "note": "The browser handoff lives in apps/extension-vscode/src/features/account-auth/deviceAuth.ts; the quoted line in the plan was not found, but the sign-in command and device flow are present.",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P, type \"Sign In to AGI Cloud\" and press Enter.",
+   "Finish the approval in the browser page that opens, then return to VS Code.",
+   "Look at the AGI panel: the signed-in account state should show, as Expected says."
+  ],
+  "where": "Command Palette > Code: Sign In to AGI Cloud (also the Sign in button in the Settings panel)"
+ },
+ "S3.02": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Sign In to AGI Cloud"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/auth.json",
+    "text": "Create account"
+   }
+  ],
+  "needs": "a browser and an email address or a supported provider account; not signed in to AGI Cloud",
+  "note": "The sign-up link is in apps/web/app/auth/device/page.tsx, linked to /signup; the page's condition for showing the link was not traced, so the tester should confirm it appears while signed out.",
+  "reachable": "yes",
+  "steps": [
+   "Sign out of AGI Cloud in VS Code if signed in, then press Cmd+Shift+P and run \"Code: Sign In to AGI Cloud\".",
+   "In the browser page that opens, look for the \"Create account\" link beside the sign-in link.",
+   "Click \"Create account\" and check that a sign-up page opens, as Expected says."
+  ],
+  "where": "Command Palette > Code: Sign In to AGI Cloud, then the browser page > Create account"
+ },
+ "S3.25": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Memory"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Turn Memory On or Off"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Decide what AGI remembers"
+   }
+  ],
+  "needs": "a signed-in AGI account",
+  "note": "The walkthrough step explains memory; the choice is changed through the Memory commands, not a setup screen that asks at first run. The plan's Code line pointed at package.json:878, which holds that step.",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P, type \"Code: Memory\" and press Enter.",
+   "Read the memory choice shown, then run \"Code: Turn Memory On or Off\" from the palette to choose whether memory is used.",
+   "Run \"Code: Turn Memory On or Off\" again to change the choice and check the memory state changes, as Expected says."
+  ],
+  "where": "Command Palette > Code: Memory (or Get started with AGI Code walkthrough > Decide what AGI remembers > Open Memory)"
+ },
+ "S3.31": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Remote Control"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Pair a phone"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Remote Control"
+   }
+  ],
+  "needs": "a phone with the AGI Mobile app, and an AGI account signed in on both",
+  "note": "The account binding is set in apps/extension-vscode/src/features/remote-control/remoteControlService.ts, which the tester cannot see; the phone-side wording 'Pair with Desktop' comes from vscode.json remote.howToPair, not verified in the mobile app.",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P, type \"Code: Remote Control\" and press Enter.",
+   "In the panel titled \"Remote Control\", click \"Pair a phone\".",
+   "On the phone, open the AGI Mobile app and pair with the desktop by scanning the Pairing QR code shown (or typing the pairing code).",
+   "Check the panel changes to connected for that phone, and that the pairing code expires in a few minutes, as Expected says."
+  ],
+  "where": "Command Palette > Code: Remote Control, then the Pair a phone button"
+ },
+ "S3.35": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Show Getting Started"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Work with your code"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Get started with AGI Code"
+   }
+  ],
+  "needs": "none",
+  "note": "The code that runs after the last step (completeOnboarding in ChatStateManager) was not traced to confirm it opens a chat; the first-run screen shows automatically only when it has not been seen before.",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P, type \"Code: Show Getting Started\" and press Enter.",
+   "Read the first screen \"Work with your code\", then click Next to move through the steps.",
+   "On the last step click the button shown there (\"Open chat\" with no runtime, otherwise \"Done\").",
+   "Check that you land on a first chat, as Expected says."
+  ],
+  "where": "Command Palette > Code: Show Getting Started (first-run setup screen in the AGI sidebar)"
+ },
+ "S3.36": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Get started with AGI Code"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Decide what AGI remembers"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Show Getting Started"
+   }
+  ],
+  "needs": "none",
+  "note": "The walkthrough's saved progress is VS Code's own walkthrough state, not code in the extension, and the first-run screen step index is not saved (only the seen flag is), so resuming there is unverified. Opening the walkthrough from the Welcome page was not traced in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Open the walkthrough \"Get started with AGI Code\" from VS Code's Welcome or Get Started page.",
+   "Complete one step, such as \"Decide what AGI remembers\" by clicking its Open Memory link, then close VS Code.",
+   "Reopen VS Code and the walkthrough, and check the completed step is still ticked, as Expected says.",
+   "Optionally, run \"Code: Show Getting Started\" and click Next once, then close and reopen the window to see whether the screen restarts at its first step."
+  ],
+  "where": "Get started with AGI Code (VS Code walkthrough), and Code: Show Getting Started for the first-run steps"
+ },
+ "S3.37": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Sign in for AGI subscription features. Local and provider BYOK do not require an AGI plan."
+   },
+   {
+    "file": "apps/extension-vscode/src/features/model-picker/modelConstants.ts",
+    "text": "Sign in or add a provider key"
+   }
+  ],
+  "needs": "a Free account or no account",
+  "note": "Searched apps/extension-vscode/src for guest, sign-up, and carry-over wording and found no guest mode or guest-to-account conversion. Only partial evidence: without sign-in, Local and provider BYOK models are shown as usable ('On this device'), and locked cloud models ask for a sign-in or provider key.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ }
+}

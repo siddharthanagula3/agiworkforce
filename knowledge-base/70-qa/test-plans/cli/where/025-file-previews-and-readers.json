@@ -1,0 +1,112 @@
+{
+ "S25.02": {
+  "labels": [
+   {
+    "file": "apps/cli/src/cloud/library.rs",
+    "text": "agi library show <id>"
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Print a text file from your Library (text, Markdown, code or a table)."
+   }
+  ],
+  "needs": "a signed-in account with a plain text file in the Library, and a terminal",
+  "note": "The plan's line references moved, but the show code is present at apps/cli/src/lib.rs (Library Show arm). The reader is the terminal output itself; there is no separate viewer.",
+  "reachable": "yes",
+  "steps": [
+   "Type agi library and note the id of a plain .txt item in the list.",
+   "Type agi library show <id> with that id.",
+   "Compare: the text prints in the terminal in a readable form, matching the Expected line. Plain .txt, .log, .csv and .tsv files print without any code block or styling."
+  ],
+  "where": "Terminal: agi library show <id> (get the id from agi library)"
+ },
+ "S25.03": {
+  "labels": [
+   {
+    "file": "apps/cli/src/cloud/library.rs",
+    "text": "agi library show <id>"
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Print a text file from your Library (text, Markdown, code or a table)."
+   }
+  ],
+  "needs": "a signed-in account with a Markdown file in the Library, and a terminal",
+  "note": "The plan's cited renderer line moved; the Markdown renderer is render_markdown_ansi in apps/cli/src/tui/markdown_renderer.rs and is used for .md, .markdown and .mdx items.",
+  "reachable": "yes",
+  "steps": [
+   "Type agi library and note the id of a .md item in the list.",
+   "Type agi library show <id> with that id in a real terminal window.",
+   "Compare: headings and bold text show styled, not as raw # or ** marks. Styling only appears when output goes to a terminal; if the output is piped to a file, it prints plain text."
+  ],
+  "where": "Terminal: agi library show <id> (get the id from agi library), for a .md item"
+ },
+ "S25.04": {
+  "labels": [
+   {
+    "file": "apps/cli/src/cloud/library.rs",
+    "text": "agi library show <id>"
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Print a text file from your Library (text, Markdown, code or a table)."
+   }
+  ],
+  "needs": "a signed-in account with a source-code file in the Library, and a terminal",
+  "note": "Uncertain: the code wraps the source in a fence named by its extension and renders it with the Markdown renderer; I did not confirm that the renderer colours by language. Extensions that are not plain letters or digits, and txt/log/csv/tsv, print raw.",
+  "reachable": "yes",
+  "steps": [
+   "Type agi library and note the id of a source-code file such as .rs or .py.",
+   "Type agi library show <id> with that id in a real terminal window.",
+   "Compare: the code appears inside a block labelled with its file extension, with its lines intact. Check whether keywords or strings get different colours, as the Expected line asks."
+  ],
+  "where": "Terminal: agi library show <id> (get the id from agi library), for a source-code item such as .rs or .py"
+ },
+ "S25.26": {
+  "labels": [
+   {
+    "file": "apps/cli/src/cloud/library.rs",
+    "text": "agi library download <id>"
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Save the original file from your Library."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Saved {}"
+   }
+  ],
+  "needs": "a signed-in account with an item in the Library, and a writable folder",
+  "note": "Without --out the file goes to the current folder. I did not check whether a missing --out folder is created first, so use an existing folder.",
+  "reachable": "yes",
+  "steps": [
+   "Type agi library and note the id of an item.",
+   "Type agi library download <id> --out <an existing folder on the Desktop>.",
+   "Compare: the terminal prints a line starting with Saved, and the original file is in that folder under its own name (or under the item id if the server gives no name).",
+   "Open the saved file and check it matches the original item."
+  ],
+  "where": "Terminal: agi library download <id> (optional --out <folder>; get the id from agi library)"
+ },
+ "S25.29": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Open the written file in this computer's default app for its type."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "(could not open it automatically)"
+   }
+  ],
+  "needs": "a signed-in account with an artifact, and a Mac",
+  "note": "Library items have no open-in-app action; the only open path found is this artifacts flag (apps/cli/src/lib.rs, around line 3959), which needs --out. Uses /usr/bin/open on macOS.",
+  "reachable": "yes",
+  "steps": [
+   "Type agi artifacts list and note the id of an artifact.",
+   "Type agi artifacts show <id> --out ~/Desktop/qa-out --open, using a folder that exists.",
+   "Compare: the file is written into that folder and opens in the Mac's default app for its type. If it does not open, the terminal prints the file path followed by (could not open it automatically)."
+  ],
+  "where": "Terminal: agi artifacts show <id> --out <folder> --open (get the id from agi artifacts list)"
+ }
+}

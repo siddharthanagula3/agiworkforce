@@ -1,0 +1,292 @@
+{
+ "S45.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Add photos & files"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Create image"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Edit"
+   }
+  ],
+  "needs": "an image file on the Mac and an account that can use image generation",
+  "note": "The + button's own label was not confirmed; the tester should look for the plus icon at the left of the message box.",
+  "reachable": "yes",
+  "steps": [
+   "Click + at the left of the message box and turn on Create image (image mode).",
+   "Click + again and click Add photos & files, then choose a picture from your Mac.",
+   "Check that the picture appears as an attachment above the message box.",
+   "Type a change in the message box and press send.",
+   "Look that the result is an edit of your picture (the uploaded picture is the first attachment, and the composer shows the Edit option in the Attached image action menu)."
+  ],
+  "where": "Composer (message box) > + button > Add photos & files, then pick a picture. Turn on image mode with + > Create image first."
+ },
+ "S45.02": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+    "text": "New version"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Remix"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Library"
+   }
+  ],
+  "needs": "an image generated earlier, in this chat or an older one",
+  "note": "The Library entry in the sidebar was not confirmed; the Library page header text was found.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat with a generated image, or open Library from the sidebar.",
+   "In chat, move the pointer over the image and click New version.",
+   "In Library, click the Actions for the image's file name button and click Remix.",
+   "Check that the Revise this image panel opens with the image and its original prompt (or that the composer is in image mode with the image attached)."
+  ],
+  "where": "A generated image in chat > hover it and click New version. From the Library: Library > Actions for <image name> > Remix."
+ },
+ "S45.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+    "text": "New version"
+   },
+   {
+    "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+    "text": "Describe a change to this image..."
+   },
+   {
+    "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+    "text": "Apply this change to the image"
+   }
+  ],
+  "needs": "a generated image in a chat",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Hover a generated image in chat and click New version.",
+   "Click in the box that says Describe a change to this image...",
+   "Type a change such as make the sky red.",
+   "Click the send button labelled Apply this change to the image (or press Enter).",
+   "Look that the image above is edited to match the change, and that a new version is added."
+  ],
+  "where": "Generated image > New version > type in the box Describe a change to this image... > click Apply this change to the image."
+ },
+ "S45.05": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+    "text": "Select area"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Select an area"
+   },
+   {
+    "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+    "text": "Revise this image"
+   }
+  ],
+  "needs": "a generated image in a chat and a model that supports editing",
+  "note": "The tester should expect the edit to be only as precise as the model allows; the code's own hint says nearby content may change too.",
+  "reachable": "yes",
+  "steps": [
+   "Hover a generated image and click New version.",
+   "Click Select area in the Revise this image panel.",
+   "Drag the mouse over the part of the image to change.",
+   "Click Apply this change to the image after typing a change, or look at the painted area before applying.",
+   "Look that only the painted area is changed (the composer hint says nearby content may change too)."
+  ],
+  "where": "Generated image > New version > Select area, then paint over the part of the image to change."
+ },
+ "S45.10": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+    "text": "Clear selection"
+   },
+   {
+    "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+    "text": "Select area"
+   },
+   {
+    "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+    "text": "Remove mask"
+   }
+  ],
+  "needs": "a generated image in a chat and a model that supports editing",
+  "note": "The Clear selection button only appears after something is painted; a mask file attached with Add mask is removed with the Remove mask button instead.",
+  "reachable": "yes",
+  "steps": [
+   "Open New version on a generated image and click Select area.",
+   "Paint over an area of the image with the mouse.",
+   "Look for the Clear selection button that appears next to Cancel selection.",
+   "Click Clear selection.",
+   "Look that the painted area disappears in one click and the Clear selection button goes away."
+  ],
+  "where": "Revise this image panel > Select area > paint something > Clear selection."
+ },
+ "S45.15": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Transparent"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Create image"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Add photos & files"
+   }
+  ],
+  "needs": "an image file on the Mac and an account that can use image generation",
+  "note": "The Transparent button shows only when the selected image model supports editing, and its hover text is Return the image on a transparent background.",
+  "reachable": "yes",
+  "steps": [
+   "Click + and turn on Create image.",
+   "Attach a picture with + > Add photos & files.",
+   "Click the Transparent button in the row under the message box so it is highlighted.",
+   "Type a prompt such as remove the background and send.",
+   "Look that the result shows the subject on a transparent background (checker pattern or transparent in Preview)."
+  ],
+  "where": "Composer > Create image (image mode) > attach a picture > click Transparent > type a prompt > send."
+ },
+ "S45.16": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+    "text": "Aspect ratio"
+   },
+   {
+    "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+    "text": "New version"
+   },
+   {
+    "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+    "text": "Revise this image"
+   }
+  ],
+  "needs": "a generated image in a chat and a model that supports editing",
+  "note": "Outpainting is reached only through the Aspect ratio menu; the composer's Attached image action menu does not offer it, as its code comment says.",
+  "reachable": "yes",
+  "steps": [
+   "Hover a generated image and click New version.",
+   "Click the Aspect ratio button at the top of the Revise this image panel.",
+   "Choose a wider option such as 16:9.",
+   "Wait for the new version to generate.",
+   "Look that the picture is larger and the new side areas match the original scene."
+  ],
+  "where": "Generated image > New version > Aspect ratio > choose a wider ratio."
+ },
+ "S45.19": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+    "text": "Aspect ratio"
+   },
+   {
+    "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+    "text": "Generate this image with a different aspect ratio"
+   },
+   {
+    "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+    "text": "New version"
+   }
+  ],
+  "needs": "a generated image in a chat and a model that supports editing",
+  "note": "If the chosen ratio equals the current one, nothing is generated.",
+  "reachable": "yes",
+  "steps": [
+   "Hover a generated image and click New version.",
+   "Click the Aspect ratio button (its hover text is Generate this image with a different aspect ratio).",
+   "Choose a different ratio such as 1:1 or 9:16.",
+   "Wait for the new version.",
+   "Look that the same scene is reframed to the new shape rather than a new unrelated picture."
+  ],
+  "where": "Generated image > New version > Aspect ratio > choose a different ratio."
+ },
+ "S45.22": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Add photos & files"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Create image"
+   }
+  ],
+  "needs": "two image files on the Mac and an account that can use image generation",
+  "note": "The composer has no label that says reference image for pictures; the limit notice says the first is edited and the others guide it, and the reference route is shown only through the attachment order.",
+  "reachable": "yes",
+  "steps": [
+   "Turn on Create image from the + menu.",
+   "Attach the source picture with + > Add photos & files.",
+   "Attach a second picture the same way.",
+   "Type a prompt that asks for the subject or layout of the second picture, and send.",
+   "Look that the result uses the subject, layout or style of the reference picture."
+  ],
+  "where": "Composer > + > Create image (image mode) > + > Add photos & files for a second picture (the first picture is edited, the others guide it)."
+ },
+ "S45.31": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+    "text": "New version"
+   },
+   {
+    "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+    "text": "Previous version"
+   },
+   {
+    "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+    "text": "Image versions"
+   }
+  ],
+  "needs": "a generated image that has been edited at least once",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Hover a generated image and click New version, then close the panel.",
+   "Look for the Image versions group under the image with the counter, for example 1 / 2.",
+   "Click Previous version to see the original.",
+   "Check that the original image still exists next to the new version."
+  ],
+  "where": "Generated image > New version > the Image versions arrows (Previous version / Next version) under the image."
+ },
+ "S45.33": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+    "text": "Download"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Transparent"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Add photos & files"
+   }
+  ],
+  "needs": "a transparent PNG file on the Mac and an account that can use image generation",
+  "note": "Whether alpha survives editing and storage is not proven by the code audit; the steps only make it visible.",
+  "reachable": "yes",
+  "steps": [
+   "Turn on Create image and attach a transparent PNG with + > Add photos & files.",
+   "Click Transparent so it is highlighted, type a prompt and send.",
+   "Click the Download button on the result image card.",
+   "Open the downloaded file in Preview and look for a transparent background (checker pattern)."
+  ],
+  "where": "Composer > Create image > Transparent on, attach a transparent PNG, send; then the Download button on the result."
+ }
+}

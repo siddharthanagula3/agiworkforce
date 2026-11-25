@@ -1,0 +1,117 @@
+{
+ "S33.01": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "List what this account has published, with each page's audience and link."
+   }
+  ],
+  "needs": "a signed-in AGI account (not Local mode) with at least one published artifact",
+  "note": "Closest match is a plain list, not a dashboard. It shows id, audience and link; no state or per-item actions. The in-chat /artifacts only lists, shows and opens; it has no publish or audience subcommands.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to an AGI account (not Local mode), then in the terminal type: agi artifacts published",
+   "Look at the list: each line shows an artifact id, its audience in brackets, and its link",
+   "Compare with Expected: a dashboard of published sites with state and actions. The list shows id, audience and link only, with no state column and no per-site actions; the other actions are separate commands (agi artifacts audience, agi artifacts unpublish)"
+  ],
+  "where": "agi artifacts published"
+ },
+ "S33.07": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Publish an artifact to a shareable URL."
+   }
+  ],
+  "needs": "a signed-in AGI account (not Local mode) with a publishable artifact",
+  "note": "The code has no separate preview deployment; publish is the only deploy step and produces the shareable link. Publish refuses artifact kinds the account may not publish.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to an AGI account (not Local mode), then type: agi artifacts list",
+   "Copy an artifact id from the list",
+   "Type: agi artifacts publish <id>",
+   "Look at the printed result: it should show a share link you can open in a browser, to compare with Expected (a shareable preview URL)"
+  ],
+  "where": "agi artifacts publish <id>"
+ },
+ "S33.10": {
+  "labels": [
+   {
+    "file": "apps/cli/src/cloud/artifacts.rs",
+    "text": "anyone with the link"
+   }
+  ],
+  "needs": "a signed-in AGI account (not Local mode) with a publishable artifact; a browser without the AGI sign-in for the last step",
+  "note": "Publish defaults to public (--audience public), so the link is public unless changed.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to an AGI account (not Local mode) and publish an artifact with: agi artifacts publish <id>",
+   "Type: agi artifacts published",
+   "Find your artifact in the list and copy its link",
+   "Open the link in a browser that is not signed in and check the page loads (compare with Expected: reachable at a public URL)"
+  ],
+  "where": "agi artifacts publish <id>, then agi artifacts published"
+ },
+ "S33.12": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Change who can open a published artifact: public or workspace."
+   }
+  ],
+  "needs": "a signed-in AGI account that belongs to a workspace, with a published artifact; a second account in the same workspace and one outside it to test access",
+  "note": "Workspace access is enforced by the server; the CLI only sets the audience. The code also accepts 'organization' and 'org' as aliases.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to an AGI account (not Local mode) and find a published artifact id with: agi artifacts published",
+   "Type: agi artifacts audience <id> workspace",
+   "Read the printed result: the audience should now be workspace",
+   "Type: agi artifacts published and confirm the entry shows [workspace] (compare with Expected: restricted to workspace members)"
+  ],
+  "where": "agi artifacts audience <id> workspace"
+ },
+ "S33.24": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Take a published artifact's URL away again."
+   }
+  ],
+  "needs": "a signed-in AGI account with a published artifact; a browser for the last step",
+  "note": "Unpublish removes the share link only; the artifact itself stays in the account. Answering no leaves it published.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to an AGI account (not Local mode) and find a published artifact id with: agi artifacts published",
+   "Type: agi artifacts unpublish <id>, and answer the confirmation prompt with y (or add --yes)",
+   "Read the result: it should say the artifact was unpublished and its share link no longer resolves",
+   "Open the old share link in a browser and check it no longer loads (compare with Expected: taken offline)"
+  ],
+  "where": "agi artifacts unpublish <id>"
+ },
+ "S33.26": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Print an artifact's content, or write it to a file."
+   }
+  ],
+  "needs": "a signed-in AGI account with an artifact that has content; a folder to write into",
+  "note": "No command is named 'source' or 'download'; the closest is show with --out, which writes the artifact's content. Adding --open opens the file in the default app.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to an AGI account (not Local mode) and find an artifact id with: agi artifacts list",
+   "Type: agi artifacts show <id> --out ~/Desktop/test-download (a directory takes the artifact's name; a path without an extension gains one)",
+   "Check the printed result shows the written file path",
+   "Open the file and check it holds the app's source content (compare with Expected: download the source)"
+  ],
+  "where": "agi artifacts show <id> --out <path>"
+ },
+ "S33.30": {
+  "labels": [],
+  "needs": "a signed-in AGI account with a published artifact, if the tester wants to check unpublish as the nearest step",
+  "note": "No delete command exists for artifacts or apps. The only removal is agi artifacts unpublish <id> (apps/cli/src/lib.rs:1423, apps/cli/src/cloud/artifacts.rs:585), which removes the share link and keeps the artifact. Searched apps/cli/src/lib.rs and apps/cli/src/cloud/artifacts.rs for delete and remove terms, plus the artifacts subcommand enum.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ }
+}

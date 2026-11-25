@@ -1,0 +1,1624 @@
+{
+  "summary": "Rerun the 12 blocked Free checks on first-time accounts, and check five committed fixes in a real browser",
+  "agentCount": 16,
+  "logs": [
+    "slack-link: could_not_check",
+    "schedules: works_with_problems",
+    "W-1 free (fra): partial",
+    "W-13 free (frc): partial",
+    "W-6 free (frb): partial",
+    "shared-project-chat: works_with_problems",
+    "W-14 free (frc): partial",
+    "W-3 free (fra): partial",
+    "W-11 free (frb): blocked",
+    "W-18 free (frc): partial",
+    "W-16 free (frb): partial",
+    "W-4 free (fra): partial",
+    "W-17 free (frb): partial",
+    "W-19 free (frc): partial",
+    "W-12 free (fra): pass",
+    "idle-sign-out: works_with_problems"
+  ],
+  "result": {
+    "free": [
+      {
+        "status": "partial",
+        "basic": "W-1 Sign up, age step, sign in, sign out and back in",
+        "mode": "free",
+        "account_alias": "agi-web-fra-20261124c+clerk_test@example.com (Free, first-time account), session w-1-fra",
+        "evidence_dir": "~/.cache/agi-audit/leader-docs/2026-11-22/results/baseline/runs/W-1/browser/free/20261124T2330Z-fra",
+        "video_path": "~/.cache/agi-audit/leader-docs/2026-11-22/results/baseline/runs/W-1/browser/free/20261124T2330Z-fra/run.webm",
+        "observed_result": "The public sign-up form itself was NOT tested (its human check cannot be completed in this browser); that step is blocked. Everything after account creation worked. Signed in at /login with the email and code 424242, then went through the age step, the terms step and reached a working chat on the Free plan.\n\n- Age step: an empty submit shows \"Enter your age in years to continue.\" Opening /chat while the age step was unfinished sent me back to the age step, so the protected workspace stayed unavailable. I did not try an under-18 age, in case it locks the account. Entering 34 was accepted.\n- Terms step (\"Finish signing in\"): Continue stays disabled until the terms box is ticked.\n- First chat: a 600-word story streamed and finished, and the chat was titled and listed in Recents. Stop pressed halfway through a second answer kept the partial text with \"Response stopped.\" and \"Try again\", and it survived a reload. A plain follow-up asking for a 1500-word history first showed a clarifying-question card (see problem 5).\n- Offline: an \"Offline\" pill and a banner (\"Your draft is saved here and can be sent after you reconnect\") appeared, and the draft sent correctly once back online (\"OK\").\n- Sign out and back in: Log out went to the marketing home page, and /chat while signed out went to /login. Signing in again with the same email went straight to /chat with no age step, showing the same identity, the Free plan and the same chat. Reload kept everything.\n- Why partial: problems 1 to 6 below, mainly the false \"Agent run failed\" notification after Stop and the leftover \"Writing response\" row.\n- Handoff times: each handoff had settled by my first screenshot, within the 3 to 6 second fixed waits I used. These are not precise.",
+        "first_words_ms": "Time to first words, two readings. The server log shows llm_ttft_observed for (model name) at 840 ms and 1765 ms, but I cannot tell which line was mine because other testers were running. My own stopwatch: the answer was already streaming at my first poll, 3 seconds or less after Enter.",
+        "stream_and_finish": "The 600-word story streamed and finished completely. Stop mid-stream worked and kept the partial text. A visible \"Writing response\" row with an empty checkbox stayed above the partial answer after Stop, and a clarifying-question card for a plain follow-up showed above it (see problems).",
+        "recovery_and_sync": "Reload mid-conversation and after Stop kept the chat and the partial answer. Offline kept the draft, and sending after reconnect worked. Sign out and back in returned the same account and chat. The theme choice (Light) also persisted across sign-out. The age and terms steps did not reappear on the second sign-in. Only at the age step was protected-workspace blocking checked, by opening /chat; cancel via \"Sign out\" there was not exercised.",
+        "light_dark_and_size": "Light (default) and Dark checked at 1280 and 390 on the chat screen; nothing overlapped, was cut off or was unreadable. At 390 the composer shows only icons (the model name is hidden) and Share and Upgrade are not in the header, which looked intentional. The login page was checked in light at 1280 only. After Escape from Settings, a thin blue line showed above the account row in dark at 1280 (probably a focus ring).",
+        "leader_comparison": "Compared from my knowledge of ChatGPT and Claude. First-run is cleaner than the leaders' because the age and terms steps are short, the Free upgrade is a plain label, and the offline draft banner is as good as theirs. Where AGI is visibly worse: pressing Stop raises an \"Agent run failed\" notification, which neither ChatGPT nor Claude does, and a plain \"write a 1500 word history\" follow-up got a clarifying question where both leaders would just write it. The greeting uses the raw email-local-part as a name.",
+        "problems": [
+          {
+            "title": "Pressing Stop on an answer later creates a bell notification \"Agent run failed\"",
+            "size": "major",
+            "kind": "product_defect",
+            "repro_steps": [
+              "Sign in as a Free account and open a chat.",
+              "Send a long request such as a 1500-word history of lighthouses.",
+              "While the answer is streaming, press the Stop button (\"Stop the current response\").",
+              "Wait a minute, then open the bell (Notifications) at the top left of the sidebar.",
+              "The first sign-in showed 1 unread; after Stop it showed an extra item that stays unread."
+            ],
+            "screenshot": "30-notifications.png",
+            "visible_text": "Agent run failed - Your agent stopped before it finished."
+          },
+          {
+            "title": "A \"Writing response\" row with an empty checkbox stays above the partial answer after Stop and after reload",
+            "size": "minor",
+            "kind": "product_defect",
+            "repro_steps": [
+              "Send a long request in a chat.",
+              "Press Stop while it streams.",
+              "Look above the partial answer, then reload the page; the row remains."
+            ],
+            "screenshot": "14-reload.png",
+            "visible_text": "Writing response (empty checkbox); Response stopped. / Try again"
+          },
+          {
+            "title": "Greeting and sidebar name use the raw email-local-part for a brand-new account",
+            "size": "cosmetic",
+            "kind": "product_defect",
+            "repro_steps": [
+              "Sign in with a first-time account that has no name set and finish the age and terms steps.",
+              "Look at the chat greeting and the account name at the bottom left."
+            ],
+            "screenshot": "08-after-terms.png",
+            "visible_text": "Good afternoon, Agi-Web-Fra-20261124c+clerk_test"
+          },
+          {
+            "title": "A plain follow-up request triggered a clarifying-question card instead of an answer",
+            "size": "minor",
+            "kind": "unclear",
+            "repro_steps": [
+              "In a chat that already contains a short story, send \"w-1-fra: Now write a very long, detailed 1500 word history of lighthouses, with headings.\"",
+              "The assistant shows a card with options \"Lighthouse history\" and \"Story\" instead of writing the essay; the answer starts only after you pick one and press Send answers."
+            ],
+            "screenshot": "10-streaming.png",
+            "visible_text": "One instruction asks for the story, while the other asks for a long historical essay; I need to know which deliverable you want."
+          },
+          {
+            "title": "Console 401 on /api/consent on the login page before sign-in",
+            "size": "cosmetic",
+            "kind": "unclear",
+            "repro_steps": [
+              "Open /login signed out, press \"Necessary only\" on the cookie banner, enter the email and press Continue.",
+              "Read the browser console with the console error command."
+            ],
+            "visible_text": "Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:3000/api/consent"
+          },
+          {
+            "title": "First-ever sign-in already shows an unread \"A new sign-in to your account\" notification",
+            "size": "cosmetic",
+            "kind": "unclear",
+            "repro_steps": [
+              "Complete first sign-in on a never-used account.",
+              "Look at the bell badge on /chat (it shows 1), then open it."
+            ],
+            "screenshot": "30-notifications.png",
+            "visible_text": "A new sign-in to your account - Someone signed in to your account. If this was not you, secure your account from account..."
+          }
+        ]
+      },
+      {
+        "basic": "W-3",
+        "mode": "free",
+        "status": "partial",
+        "observed_result": "Core flow works. Told VELA-74, asked for the code, got VELA-74. Edited the first message to VELA-75 with Save & Retry. The active branch showed a 2/2 switcher, the later turns dropped from view, and 1/2 stayed viewable. Asked again and got VELA-75. Long essay: Stop halted it with \"Response stopped.\" and Try again. Regenerate (Try again) gave a full new answer, and the stopped version stayed as 1/2. Reload kept the edit branch and both response versions. Defects: the chat title stays \"VELA-74\" after the edit, a reload mid-stream shows a misleading \"No response was received\" banner, and the offline banner does not clear on reconnect. Retry after the mid-stream reload completed the answer.",
+        "problems": [
+          {
+            "title": "Chat title not updated after editing the first message (still says VELA-74 while the active branch is VELA-75)",
+            "size": "cosmetic",
+            "kind": "product_defect",
+            "repro_steps": [
+              "Send 'Our test parcel code is VELA-74.' in a new chat",
+              "Edit that message to VELA-75 and press Save & Retry",
+              "Look at the chat title in the header and in Recents, and reload"
+            ],
+            "screenshot": "06-after-edit.png",
+            "visible_text": "Our test parcel code is VELA-74. (w-3-fra)"
+          },
+          {
+            "title": "Reload mid-stream shows a misleading error banner over a partial answer",
+            "size": "minor",
+            "kind": "product_defect",
+            "repro_steps": [
+              "Ask for a long essay",
+              "Reload the page about 4 seconds into streaming",
+              "Look at the bottom of the chat: partial text is shown, cut off mid-word ('The Ak'), with an error banner above the composer",
+              "Press Retry on the banner; it completes (recovery works)"
+            ],
+            "screenshot": "17-reload-midstream.png",
+            "visible_text": "This turn didn't complete. No response was received."
+          },
+          {
+            "title": "Offline banner stays after the connection is back",
+            "size": "minor",
+            "kind": "product_defect",
+            "repro_steps": [
+              "Open an existing chat and set the browser offline",
+              "Type a message and press Enter: banner appears",
+              "Go back online and wait more than 17 seconds (navigator.onLine is true)",
+              "The offline banner is still shown; pressing Enter does send the draft"
+            ],
+            "screenshot": "22-online-later.png",
+            "visible_text": "You are offline. Your draft is saved here and can be sent after you reconnect."
+          },
+          {
+            "title": "A stopped answer shows two retry controls (toolbar regenerate menu and a 'Try again' row)",
+            "size": "cosmetic",
+            "kind": "unclear",
+            "repro_steps": [
+              "Ask for a long essay and press Stop mid-answer",
+              "Look under the partial answer: the toolbar regenerate icon opens a Try again / Try again with menu, and a separate 'Response stopped. Try again' row sits below"
+            ],
+            "screenshot": "10b-stopped-later.png",
+            "visible_text": "Response stopped. Try again"
+          }
+        ],
+        "evidence_dir": "~/.cache/agi-audit/leader-docs/2026-11-22/results/baseline/runs/W-3/browser/free/20261124T2330Z-fra",
+        "account_alias": "agi-web-fra-20261124c+clerk_test (Free, session w-3-fra)",
+        "first_words_ms": "About 0.5 to 1.1 s. The server log \"llm_ttft_observed\" lines in my window show 693, 517 and 696 ms (the 1115 ms line is probably also mine). I matched them by the user id seen in the log at my send, so attribution is inferred. In the browser, first words were visible within 3 s of Enter.",
+        "stream_and_finish": "Streaming was smooth and fast (many paragraphs within 3 s). Stop took effect at once and the partial text stayed put. The long essay and the regenerate both completed with full text. No stuck spinner.",
+        "recovery_and_sync": "Edit branch and both response versions survive a reload. Cancel in the edit box closes it. Retry after the mid-stream reload completes the answer. Offline: the draft was kept and sent fine after reconnect, but the banner stuck. Sync to other devices not tested.",
+        "light_dark_and_size": "Dark at 1280 and 390, and light at 390 and 1280, show nothing overlapping or cut off. The edit box and Save & Retry fit at 390 in dark. At 390 the model controls collapse to icons, which is acceptable.",
+        "leader_comparison": "Compared from my own knowledge of ChatGPT and Claude: the edit-with-version-switcher, stop, and regenerate-with-model-choice behave like theirs. The stale chat title after an edit and the offline banner that does not clear are visibly worse than both. A reload mid-stream in those products usually resumes or shows the partial answer without a \"no response\" message.",
+        "video_path": "~/.cache/agi-audit/leader-docs/2026-11-22/results/baseline/runs/W-3/browser/free/20261124T2330Z-fra/run.webm"
+      },
+      {
+        "basic": "W-4 Attach a PDF and an image and get answers about them",
+        "mode": "free",
+        "status": "partial",
+        "observed_result": "Both attachments uploaded and the first answer was right (\"The parcel goes to Cedar Bay station. There are 3 shapes in the image.\"). A staged tiles.png removed before a follow-up did not go out with it, and the follow-up answered VELA-74 and five from the PDF. After reload both attachments were still on the first message and the removed one stayed absent. Defects: the staged PDF filename is clipped by the remove button, the staged image shows only a cropped blue square with no filename, the chat was auto-titled \"Cannot determine without the image or audio context\", and a second run at 390 wide with the same files answered \"5 shapes total: 2 red circles and 3 blue squares\" (wrong; regenerate gave the same).",
+        "problems": [
+          {
+            "title": "Staged PDF chip: remove X covers last letter, filename reads route-brief.pd",
+            "size": "minor",
+            "kind": "product_defect",
+            "repro_steps": [
+              "Sign in on a Free account, open /chat at 1280 wide",
+              "Click + then Add photos & files, choose route-brief.pdf",
+              "Look at the chip above the message box: the X button overlaps the end of the filename"
+            ],
+            "screenshot": "05-both-staged.png (also 04-pdf-staged.png, 16-dark-staged.png, 17-dark-390-staged.png)",
+            "visible_text": "route-brief.pd"
+          },
+          {
+            "title": "Staged image preview is a cropped blue square with no filename",
+            "size": "cosmetic",
+            "kind": "product_defect",
+            "repro_steps": [
+              "Open /chat",
+              "Stage tiles.png via + > Add photos & files",
+              "The chip shows only the blue square from the centre of the picture (the red circle and green triangle are cut off) and no filename"
+            ],
+            "screenshot": "05-both-staged.png"
+          },
+          {
+            "title": "Chat auto-title does not reflect the attachments",
+            "size": "minor",
+            "kind": "product_defect",
+            "repro_steps": [
+              "Open /chat, attach route-brief.pdf and tiles.png",
+              "Send: Which station does the parcel go to, and how many shapes are in the image?",
+              "After the answer, read the chat title and the Recents entry"
+            ],
+            "screenshot": "07-answer.png",
+            "visible_text": "Cannot determine without the image or audio context"
+          },
+          {
+            "title": "Wrong shape count with PDF and image together (intermittent)",
+            "size": "major",
+            "kind": "unclear",
+            "repro_steps": [
+              "Open a new chat at 390x844",
+              "Attach route-brief.pdf and tiles.png",
+              "Send: phone width: which station and how many shapes?",
+              "Answer says 5 shapes (2 red circles, 3 blue squares); the image has 3 shapes. Regenerate repeats the error. The same files at 1280 gave the right count; the image alone also gave the right count"
+            ],
+            "screenshot": "18-dark-390-answer.png",
+            "visible_text": "Station: Cedar Bay. There are 5 shapes total: 2 red circles and 3 blue squares."
+          },
+          {
+            "title": "Show more link under a short two-line user message at 390 wide",
+            "size": "cosmetic",
+            "kind": "product_defect",
+            "repro_steps": [
+              "At 390 wide, send a two-line message with attachments",
+              "A faded second line and Show more appear under the message even though it is short"
+            ],
+            "screenshot": "18-dark-390-answer.png",
+            "visible_text": "Show more"
+          },
+          {
+            "title": "Offline pill overlaps the chat title in the header",
+            "size": "cosmetic",
+            "kind": "product_defect",
+            "repro_steps": [
+              "Open a chat at 1280 wide",
+              "Set the network offline",
+              "The Offline pill sits on top of the title text, cutting it"
+            ],
+            "screenshot": "13-offline.png",
+            "visible_text": "Offline"
+          },
+          {
+            "title": "Plus menu lists Create image with a RETRY badge on a fresh Free account",
+            "size": "minor",
+            "kind": "unclear",
+            "repro_steps": [
+              "Open /chat",
+              "Click +",
+              "Create image carries a RETRY badge instead of an Upgrade or normal state"
+            ],
+            "screenshot": "03-plus-menu.png",
+            "visible_text": "RETRY"
+          }
+        ],
+        "evidence_dir": "~/.cache/agi-audit/leader-docs/2026-11-22/results/baseline/runs/W-4/browser/free/20261124T2330Z-fra",
+        "account_alias": "agi-web-fra-20261124c+clerk_test@example.com",
+        "first_words_ms": "Stopwatch estimate: \"Generating response\" shown within about 6 s of Enter, full answer by about 22 s wall time including my fixed waits. Server log ttft lines (850 to 1175 ms) could not be tied to my request with certainty.",
+        "stream_and_finish": "Answers appeared as short complete text with no visible error or stuck spinner; Stop halfway was not tried because answers are one line and finish in seconds.",
+        "recovery_and_sync": "Reload: both attachments still on the first message, removed tiles.png stayed absent. Offline: \"You are offline. Your draft is saved here and can be sent after you reconnect.\"; after going online the message sent and answered \"ok\". A staged but unsent file did not survive a reload (not verified that the upload had finished before reload).",
+        "light_dark_and_size": "Light and dark at 1280 and 390 are readable with no overlap on the main screen, except the filename clip, the cropped image chip, the Show more oddity and the Offline pill overlap listed in problems. The light 390 view of the sent attachments was not captured (scroll failed).",
+        "leader_comparison": "ChatGPT and Claude show an image attachment as a whole-picture thumbnail with the filename and do not clip the filename under the remove button. Their auto titles come from the content, not from a \"cannot determine\" sentence. Their vision answers on a three-shape image would be consistently 3."
+      },
+      {
+        "basic": "W-12 Memory: tell it something, see it used in a new chat, delete it",
+        "mode": "free",
+        "status": "pass",
+        "observed_result": "Memory works end to end for a Free first-time account. Persistent memory starts OFF with 0 saved memories. Asking the chat to remember \"My sample label is hazel kite\" while it is off gives a clear message (\"memory is off. You can manage saved memories in Settings under Memory\"), not an error. After turning Persistent memory on and repeating the request, Settings shows 1 saved memory, \"My sample label is hazel kite\", \"Added by you · Updated Nov 24\". A new chat answered \"Your sample label is hazel kite.\" Reload kept the chat and the memory. Cancel on the delete dialog changed nothing, and Delete memory removed the fact (0 saved memories, empty state). A fresh chat then did not recall it, and Settings still shows 0. Left Persistent memory ON (my change); appearance restored to Light.",
+        "problems": [
+          {
+            "title": "Save confirmation says \"already saved\" on a first save, with a stray space after the opening quote",
+            "size": "cosmetic",
+            "kind": "product_defect",
+            "repro_steps": [
+              "Sign in as a Free account, Settings > Personalization > Memory, turn Persistent memory on (0 saved memories)",
+              "Open a new chat and send: Please remember this: My sample label is hazel kite. (w-12-fra)",
+              "Reply reads: “ My sample label is hazel kite” is already saved in memory. (space after the opening quote, and \"already\" although nothing was saved before)"
+            ],
+            "screenshot": "06-save-turn.png",
+            "visible_text": "“ My sample label is hazel kite” is already saved in memory."
+          }
+        ],
+        "evidence_dir": "~/.cache/agi-audit/leader-docs/2026-11-22/results/baseline/runs/W-12/browser/free/20261124T2330Z-fra",
+        "account_alias": "agi-web-fra-20261124c+clerk_test@example.com",
+        "first_words_ms": "625 ms from the server log \"llm_ttft_observed\" line for the recall request (earlier save requests: 614 and 923 ms); the reply was complete within the 2 to 9 s I waited, too short to watch streaming.",
+        "stream_and_finish": "The replies are one short sentence, so there was no long stream to judge. All finished without error. I did not use Stop. A clarifying card appeared after the deletion (the \"w-12-fra\" tag I added confused the model), and it did not invent the label.",
+        "recovery_and_sync": "Reload kept the chat. Going offline showed an \"Offline\" pill and the notice \"You are offline. Your draft is saved here and can be sent after you reconnect.\" The draft survived and sending worked again once I was back online. Pressing Cancel on the delete dialog left the memory in place, and a second delete worked. Deletion showed 0 saved memories and the fresh chat did not recall it. I did not check a second device or browser.",
+        "leader_comparison": "Compared from my own knowledge of ChatGPT and Claude. Both let you manage saved memories in settings and delete one fact. AGI is on par or better here: the \"memory is off, turn it on in Settings\" message when saving is not possible, the source label \"Added by you\", a delete confirmation that says it cannot be restored, scoping text (\"Where a memory applies\"), and \"Never remember\" and source-suppression controls. The save confirmation wording (\"already saved\") is slightly off compared with the leaders' \"Memory updated\" style.",
+        "light_dark_and_size": "Memory settings in light at 1280, dark at 1280 and dark at 390 (including the manage list and delete dialog): nothing overlapped, cut off or unreadable. On the 390 settings screen the tab strip scrolls sideways (normal). The chat screen was checked in light at 1280 only.",
+        "video_path": "~/.cache/agi-audit/leader-docs/2026-11-22/results/baseline/runs/W-12/browser/free/20261124T2330Z-fra/run.webm"
+      },
+      {
+        "basic": "W-6 Choose a model, or leave it on Auto",
+        "mode": "free",
+        "status": "partial",
+        "observed_result": "A Free first-time account signed in (code, age 34, terms) and reached the chat. The picker lists (model name) as the free default and, under All models (18), lets you pick (model name). I chose Haiku, asked a short question, and got a complete correct answer. The message menu shows \"Sent at ... (model name)\" as attribution. Haiku and the attribution survived a reload and reopening the chat. Clicking a locked model (Sonnet 5.5, Premium) opened an Upgrade dialog with a Basic waitlist, sent nothing and used no credit. Stop halfway worked (\"Response stopped\", partial text kept, Try again). Going offline showed \"You are offline. Your draft is saved here...\" and the draft sent after reconnecting. Gaps: Free has no Auto choice at all (search \"auto\" gives \"No models match\"), so \"switch to Auto\" could not be done; a new chat inherits the last model (Haiku). The Free shortlist omits the currently active Haiku. On a 390 wide screen the \"Upgrade to use - Premium/Max\" pills overlap the star and info icons and are cut off at the right edge, in both light and dark. Time to first words on the first turn was about 38 s (machine load average 77).",
+        "problems": [
+          {
+            "title": "Locked-model pill overlaps star and info icons and is clipped at 390 wide",
+            "size": "minor",
+            "kind": "product_defect",
+            "repro_steps": [
+              "Sign in as a Free account and open the chat at 390x844.",
+              "Tap the model chip at the bottom of the composer, then tap 'All models 18'.",
+              "Open the Anthropic group.",
+              "Look at the (model name), Fable 5.1 and Opus 5.5 rows: the 'Upgrade to use - Premium/Max' pill covers the star icon and the text is cut off at the right edge. Same in light and dark."
+            ],
+            "screenshot": "32-picker-dark-390.png, 36-allmodels-light-390.png",
+            "visible_text": "Upgrade to use - Premium / Upgrade to use - Max"
+          },
+          {
+            "title": "No Auto choice on Free; new chat inherits last chosen model",
+            "size": "major",
+            "kind": "unclear",
+            "repro_steps": [
+              "Sign in as a Free account, open the model picker and press 'All models'.",
+              "Type 'auto' in 'Search models': it shows 'No models match'.",
+              "The shortlist offers only '(model name)'.",
+              "Pick (model name), press New Chat: the composer still shows (model name), not the default."
+            ],
+            "screenshot": "19-search-auto.png, 17-newchat.png",
+            "visible_text": "No models match"
+          },
+          {
+            "title": "Picker shortlist omits the active model and shows no check mark",
+            "size": "minor",
+            "kind": "product_defect",
+            "repro_steps": [
+              "As a Free account pick (model name) in the All models list.",
+              "Press New Chat and open the model chip.",
+              "The 'Free models' list shows only (model name) with no check while the composer shows (model name)."
+            ],
+            "screenshot": "18-picker2.png",
+            "visible_text": "Free models: (model name)"
+          },
+          {
+            "title": "First words about 38 s after send on the first turn",
+            "size": "major",
+            "kind": "unclear",
+            "repro_steps": [
+              "Pick (model name) as a Free account.",
+              "Send 'In two sentences, what is the capital of France and one fact about it?'.",
+              "The screen shows 'Generating response...' for about 38 s before the answer appears. Server log shows provider first token 746 ms but chat.turn 38.6 s, with many http.server spans of 5 to 16 s; machine load average was 77, so this is probably the test machine."
+            ],
+            "screenshot": "13-settled.png",
+            "visible_text": "Generating response..."
+          },
+          {
+            "title": "Message menu items have uneven indentation; composer model chip is icon-only at 390",
+            "size": "cosmetic",
+            "kind": "product_defect",
+            "repro_steps": [
+              "Press the '...' (More message actions) button under an answer: 'Read message aloud' and 'Pin message' are indented further than 'Share answer' and the rest.",
+              "At 390 wide the composer model chip shows only the model icon with no name."
+            ],
+            "screenshot": "15-more.png, 33-chat-dark-390.png",
+            "visible_text": "Read message aloud / Pin message"
+          }
+        ],
+        "evidence_dir": "~/.cache/agi-audit/leader-docs/2026-11-22/results/baseline/runs/W-6/browser/free/20261124T2330Z-frb",
+        "account_alias": "agi-web-frb-20261124c+clerk_test (Free, w-6-frb)",
+        "first_words_ms": "About 38000 ms by stopwatch/log on the first Haiku turn (chat.turn span 38.6 s; machine load 77); server llm_ttft_observed 746 ms (provider side). A later Luna turn finished in under 3 s.",
+        "stream_and_finish": "Short answers complete and correct. Long Haiku essay streamed with headings; Stop halfway showed \"Response stopped\" with Try again and kept the partial text. A Luna 300-word story finished within 3 s.",
+        "recovery_and_sync": "Reload kept the Haiku choice and the per-turn attribution. Reopening the old chat restored Haiku for it. Offline showed a banner and kept the draft; after going online it sent and answered. Locked model click gave an Upgrade/waitlist dialog with no credit used.",
+        "leader_comparison": "ChatGPT and Claude both let a Free user pick a model from a picker and show an Auto or default entry; the locked-model upgrade prompt matches them. This app has no Auto entry on Free and the shortlist hides the active model, which is worse than the leaders. The 390-wide overlap in the picker would not appear in either leader.",
+        "light_dark_and_size": "Chat and picker checked in light and dark at 1280 and 390. Fine at 1280. At 390 the locked-model pills overlap the star and info icons and are clipped at the right edge, in both themes. The composer model chip is icon-only at 390.",
+        "video_path": "~/.cache/agi-audit/leader-docs/2026-11-22/results/baseline/runs/W-6/browser/free/20261124T2330Z-frb/run.webm"
+      },
+      {
+        "basic": "W-11",
+        "mode": "free",
+        "status": "blocked",
+        "observed_result": "Project creation, saved instruction (END-42), in-project chat and chat isolation work for a Free first-time account. Uploading route-brief.pdf as a project knowledge file failed twice with \"Something went wrong on our side. Try again shortly.\" The server log shows a 500 with column \"storage_targets\" of relation \"project_knowledge_files\" does not exist. The column is added by repo migration 0419, so the local test DB looks behind the build. That makes the scripted file step blocked by this machine's setup, and I could not verify it. Workaround, not the scripted path: attaching the PDF inside a project chat gave \"The route brief names Cedar Bay, code VELA-74. END-42\". The first in-project question, asked with no file in the project, got a clarifying card (\"Which route brief should I check?\") with no END-42 on it. A plain follow-up (\"Just name one primary colour.\") gave \"Blue. END-42\". The unrelated chat answered \"Madrid is the capital of Spain. I don't have access to details from your other projects in this chat...\" with no END-42 and no project content.",
+        "first_words_ms": "Server log llm_ttft_observed for my requests ((model name)): 693, 1119, 962 ms.",
+        "stream_and_finish": "Answers were short and appeared promptly. Stop-halfway was not tried because the answers were one-liners. Reload after the in-project answer kept the whole chat, and the chat is listed under the project in the sidebar and the Chats tab. The project chip in the composer was gone after reload (minor, possibly by design).",
+        "recovery_and_sync": "Upload error is shown inline with Dismiss, and retrying hit the same 500. Offline: an \"Offline\" pill and the banner \"You are offline. Your draft is saved here and can be sent after you reconnect.\" appeared. The draft stayed and sent fine after going back online. Reload kept the chat. The project instruction persisted after Save and reopening settings.",
+        "leader_comparison": "Claude Projects and ChatGPT Projects both accept a file into a project and answer from it without a visible error. Here the project file upload fails, which is visibly worse (it may be this machine's DB). Instruction-following (END-42) and the offline draft handling match the leaders.",
+        "light_dark_and_size": "Checked the Projects page, project page and settings dialog in light and dark at 1280, and the project page and settings at 390, in dark and light. Layout is clean apart from three small defects: a stray \"folde\" in the Project name field, a clipped filename on the attachment chip, and the tab \"Scheduled\" clipped at 390.",
+        "evidence_dir": "~/.cache/agi-audit/leader-docs/2026-11-22/results/baseline/runs/W-11/browser/free/20261124T2330Z-frb",
+        "video_path": "~/.cache/agi-audit/leader-docs/2026-11-22/results/baseline/runs/W-11/browser/free/20261124T2330Z-frb/run.webm",
+        "account_alias": "agi-web-frb-20261124c+clerk_test@example.com (Free, first-time)",
+        "problems": [
+          {
+            "title": "Project knowledge file upload fails with a generic server error",
+            "size": "blocker",
+            "kind": "setup_limit",
+            "repro_steps": [
+              "Sign in as the Free account and open Projects > New project, name it and press Create project",
+              "Open the project's ... menu > Project settings",
+              "Press Upload (or the drop area) and choose route-brief.pdf",
+              "Wait about 5 seconds: the file does not appear and a red bar shows an error; retrying gives the same result"
+            ],
+            "screenshot": "08-uploaded2.png, 09-retry.png",
+            "visible_text": "Something went wrong on our side. Try again shortly. (server log: POST /api/projects/{id}/knowledge-files 500, column \"storage_targets\" of relation \"project_knowledge_files\" does not exist; repo migration 0419_project_knowledge_object_lifecycle.sql adds it, so the local DB looks unmigrated)"
+          },
+          {
+            "title": "Stray text \"folde\" before the name in the Project name field",
+            "size": "cosmetic",
+            "kind": "product_defect",
+            "repro_steps": [
+              "Open any project, press the ... menu > Project settings",
+              "Look at the Project name field: \"folde\" is shown in front of the highlighted name \"w-11-frb QA project\"",
+              "It stays after waiting and shows in dark and at 390 wide too"
+            ],
+            "screenshot": "06b-settings.png, 22-dark-settings.png, 23-phone-settings.png",
+            "visible_text": "foldew-11-frb QA project"
+          },
+          {
+            "title": "Filename on the attachment chip is cut off by its remove button",
+            "size": "cosmetic",
+            "kind": "product_defect",
+            "repro_steps": [
+              "Open a chat, press + > Add photos & files and pick route-brief.pdf",
+              "Look at the chip above the message box: the name reads \"route-brief.pd\" with the X over the last letter"
+            ],
+            "screenshot": "13-attached.png",
+            "visible_text": "route-brief.pd"
+          },
+          {
+            "title": "Project page tab row is cut off at phone width",
+            "size": "cosmetic",
+            "kind": "unclear",
+            "repro_steps": [
+              "Open a project at 390 px wide",
+              "Look at the tabs under the message box: the last tab reads \"Sche\" and is cut at the screen edge (it may scroll sideways)"
+            ],
+            "screenshot": "24-phone-project.png",
+            "visible_text": "Sche"
+          },
+          {
+            "title": "Project chip in the composer disappears after reloading a project chat",
+            "size": "cosmetic",
+            "kind": "unclear",
+            "repro_steps": [
+              "Ask a question from the project page so the chat opens with the \"w-11-frb QA project\" chip under the message box",
+              "Reload the page",
+              "The chip is gone, though the chat is still listed under the project in the sidebar (may be by design)"
+            ],
+            "screenshot": "15-reloaded.png"
+          }
+        ]
+      },
+      {
+        "basic": "W-16 Schedule a task and receive its result",
+        "mode": "free",
+        "status": "partial",
+        "observed_result": "Free does not include scheduled tasks, and the app says so clearly. The Scheduled page shows \"Scheduled tasks are available on Basic and higher plans.\", an empty state \"No schedules yet / Upgrade to automate unattended work from this account.\", and an Upgrade plan button with no create control. Upgrade plan leads to Billing, then /upgrade, then /upgrade/basic, which shows \"Join the Basic upgrade waitlist\" plus an access-code field. I did not join the waitlist. There was no error text, and nothing was scheduled or delivered because the plan does not allow it. I also asked chat to schedule it. It replied \"I can't schedule a reminder from this chat because no scheduling tool is available... 3:50 PM Central\", which is honest and not an error, but it has no Upgrade pointer. That reply survived a reload. Two defects found: a usage meter on /upgrade, and no Upgrade pointer in the chat reply. Point 7 of the bar passes on the Scheduled page, so the status is partial for the defects.",
+        "problems": [
+          {
+            "title": "Upgrade page shows a usage meter ('Usage this period 0%' with a bar) to a Free account, against the owner decision that Free usage screens show Upgrade and no meters",
+            "size": "minor",
+            "kind": "product_defect",
+            "repro_steps": [
+              "Sign in as the Free account",
+              "Open Scheduled in the sidebar",
+              "Click Upgrade plan, then Upgrade plan again in the Billing dialog",
+              "On /upgrade, read the 'YOUR PLAN' card, which has 'Usage this period 0%' and a progress bar"
+            ],
+            "screenshot": "04-waitlist.png",
+            "visible_text": "Usage this period 0%"
+          },
+          {
+            "title": "Chat reply to a Free user asking to schedule a task gives no Upgrade or waitlist pointer, only 'no scheduling tool is available'",
+            "size": "minor",
+            "kind": "product_defect",
+            "repro_steps": [
+              "Sign in as the Free account",
+              "Open New chat",
+              "Send: 'Schedule a one-time task for 4 minutes from now to tell me the parcel code VELA-74.'",
+              "Read the reply: it says it cannot schedule and suggests the user set a reminder themselves, with no mention of the Scheduled page or an Upgrade"
+            ],
+            "screenshot": "07-chat-ask.png",
+            "visible_text": "I can't schedule a reminder from this chat because no scheduling tool is available."
+          },
+          {
+            "title": "Basic plan card 'What changes' lists only 'Projects with no set limit' and 'Remote Control', not scheduled tasks, even though the Scheduled page says they need Basic",
+            "size": "cosmetic",
+            "kind": "unclear",
+            "repro_steps": [
+              "Sign in as the Free account",
+              "Open Scheduled and read 'Scheduled tasks are available on Basic and higher plans.'",
+              "Click Upgrade plan, then Upgrade plan again, and read the Basic card on /upgrade",
+              "The card does not list scheduled tasks"
+            ],
+            "screenshot": "04-waitlist.png",
+            "visible_text": "WHAT CHANGES: Projects with no set limit; Remote Control"
+          }
+        ],
+        "evidence_dir": "~/.cache/agi-audit/leader-docs/2026-11-22/results/baseline/runs/W-16/browser/free/20261124T2330Z-frb",
+        "account_alias": "agi-web-frb-20261124c+clerk_test@example.com",
+        "video_path": "~/.cache/agi-audit/leader-docs/2026-11-22/results/baseline/runs/W-16/browser/free/20261124T2330Z-frb/run.webm",
+        "first_words_ms": "Not measured. The chat reply was fully shown within 12 seconds of sending (stopwatch estimate), and no llm_ttft_observed line was matched to my request.",
+        "stream_and_finish": "Chat reply finished with no error. I did not watch the streaming closely and did not press Stop, because the task is about scheduling. No schedule or scheduled run existed to wait for.",
+        "recovery_and_sync": "Reloaded /chat/schedules and the same Upgrade message returned. I went offline and back online, and an \"Offline\" pill appeared, then the page recovered with the same content. The chat reply survived a reload. I pressed Upgrade plan, which led to the waitlist page, and went back with no error. The Free plan stayed unchanged.",
+        "leader_comparison": "ChatGPT Tasks and Claude scheduled tasks are paid-plan features and show an upgrade prompt when the plan lacks them. This Scheduled page behaves similarly, with a plan message and an Upgrade button. Both leaders would more likely say in the chat that scheduling needs a paid plan, which makes the plain \"no scheduling tool is available\" reply slightly worse.",
+        "light_dark_and_size": "Checked the Scheduled page in dark at 1280 and 390, and in light at 390 (light at 1280 shown in the first screenshots). Checked /upgrade/basic in light at 390. No overlap, cut-off or misalignment. Text was readable in both themes. The theme was set back to System at the end."
+      },
+      {
+        "basic": "W-17 Connect one outside app and use it in a chat",
+        "mode": "free",
+        "status": "partial",
+        "observed_result": "A Free account cannot connect an outside app. The composer \"+\" menu > Connectors says \"No connectors connected yet.\" with Manage connectors and Browse connectors. Both open Settings > Connectors, which reads \"Your plan does not include Connectors. Upgrade to Basic, Premium, Max, Ultra, Team, or Enterprise to use it.\" Its Upgrade button opens \"Upgrade your plan\" with \"Join the Basic waitlist\". That is the correct Free result and scores as pass on point 7. The consent-decline and VELA-74 checks could not run: Free has no connect path and no outside account was provided, so this is an unattempted part, not a product failure. In chat I asked \"Look in my connected Google Drive and tell me the parcel code from the route brief.\" The app answered with a question card (\"I need to know which Google Drive connection you want me to use; no Drive search or connector is available in this chat turn\", with Upload the file and Paste the text). It invented no parcel code and leaked no connector content. The reply does not say connectors need a paid plan, and its wording implies a connection exists. Settings, the upgrade modal, the chat and the menu looked right in light and dark at 1280 and 390.",
+        "problems": [
+          {
+            "title": "Chat reply to a Drive request never says Connectors need a paid plan and implies a connection exists",
+            "size": "minor",
+            "kind": "unclear",
+            "repro_steps": [
+              "Sign in on the Free account and open a new chat.",
+              "Send: 'Look in my connected Google Drive and tell me the parcel code from the route brief.'",
+              "Read the reply: 'I need to know which Google Drive connection you want me to use; no Drive search or connector is available in this chat turn.' It offers Upload the file and Paste the text, with no Upgrade hint."
+            ],
+            "screenshot": "07-chat.png",
+            "visible_text": "I need to know which Google Drive connection you want me to use; no Drive search or connector is available in this chat turn."
+          },
+          {
+            "title": "Create image shows a RETRY badge on a fresh Free account, and Create video flips from UPGRADE to RETRY while offline",
+            "size": "minor",
+            "kind": "unclear",
+            "repro_steps": [
+              "Sign in on the Free account.",
+              "On the home screen click the + (Add attachments and tools) in the composer.",
+              "Look at the Create image row: it shows RETRY and no image attempt was made. Create video shows UPGRADE.",
+              "Go offline and reopen the + menu: Create video now also shows RETRY."
+            ],
+            "screenshot": "02-plus-menu.png",
+            "visible_text": "Create image RETRY; Create video UPGRADE (RETRY when offline)"
+          },
+          {
+            "title": "The Settings tab strip at 390 wide clips the last tab at the edge",
+            "size": "cosmetic",
+            "kind": "unclear",
+            "repro_steps": [
+              "Resize to 390x844.",
+              "Open http://localhost:3000/chat#settings/customize-connectors.",
+              "The horizontal tab strip shows 'Plugins BET' cut off at the right edge and 'mize' cut off at the left. It scrolls, so this may be normal for a scroll strip."
+            ],
+            "screenshot": "16-light-connectors-390.png",
+            "visible_text": "Plugins BET"
+          },
+          {
+            "title": "Menu offers 'Browse connectors' and 'Manage connectors' to a Free user with no paid-plan hint in the menu",
+            "size": "cosmetic",
+            "kind": "unclear",
+            "repro_steps": [
+              "On Free, open + > Connectors.",
+              "The menu lists Manage connectors and Browse connectors with no Upgrade badge.",
+              "Clicking either lands on the 'Your plan does not include Connectors' screen. This is clear and not an error, but the menu gives no earlier hint."
+            ],
+            "screenshot": "08-offline-connectors.png",
+            "visible_text": "Manage connectors / Browse connectors"
+          }
+        ],
+        "evidence_dir": "~/.cache/agi-audit/leader-docs/2026-11-22/results/baseline/runs/W-17/browser/free/20261124T2330Z-frb",
+        "account_alias": "agi-web-frb-20261124c+clerk_test@example.com (Free, w-17-frb)",
+        "video_path": "~/.cache/agi-audit/leader-docs/2026-11-22/results/baseline/runs/W-17/browser/free/20261124T2330Z-frb/run.webm",
+        "first_words_ms": "Stopwatch estimate: the full reply card was on screen about 8s after Enter (first words sooner). The server log's llm_ttft_observed lines (for example ttftMs 682 at 1795557033710) could not be tied to my request, because the log is shared with other testers, so I did not use them.",
+        "stream_and_finish": "The answer arrived as a complete question card, with no error and no stuck spinner. I did not observe the streaming itself. Stop-halfway was not tried because the reply finished within ~8s.",
+        "recovery_and_sync": "Reloading on the settings deep link (#settings/customize-connectors) reopened the same Upgrade message. Reloading the chat at 390 wide kept the conversation and question card. Offline showed an \"Offline\" pill, the + menu still worked, and going back online recovered with no errors.",
+        "light_dark_and_size": "Settings > Connectors, the Upgrade modal, the + menu and the chat were checked in light and dark at 1280 and 390 (dark at both widths, light at 1280 and in settings at 390). Nothing overlaps or is unreadable. The only note is the horizontally scrolling Settings tab strip at 390.",
+        "leader_comparison": "Compared from my own knowledge of ChatGPT and Claude. Both either gate connectors by plan with a clear upgrade prompt or show a Connect button. AGI's gate and waitlist modal are comparable. The chat reply to a Drive request is comparable to Claude, which also asks for an upload when no connector is attached. It is slightly worse because it does not point to Upgrade."
+      },
+      {
+        "basic": "W-13 Find, rename, pin, archive and delete past chats",
+        "mode": "free",
+        "status": "partial",
+        "observed_result": "Everything worked and persisted after reload: search found the chat by title and message text, rename, pin (Pinned group), archive (toast with View archived/Undo, Archived (1) view, Restore), delete (confirm dialog, then gone from list and search). Three small defects: a stale \"You appear to be offline\" banner after reconnecting, the archive-then-\"View archived\" toast path I could not confirm, and the account row clipped at the bottom of the 390 sidebar. No recovery after delete (dialog says it cannot be undone).",
+        "problems": [
+          {
+            "title": "Red 'You appear to be offline' banner stays after the connection is back",
+            "size": "minor",
+            "kind": "product_defect",
+            "repro_steps": [
+              "Open a chat, open the Archived view (Archived (1) toggle in the sidebar) with an archived chat in it.",
+              "Go offline, open the archived chat's More options menu and press Restore: toast 'Could not restore this conversation' and a banner 'You appear to be offline. Check your connection.' with Retry appear (correct).",
+              "Go back online and wait 3+ seconds: the small Offline pill disappears but the red offline banner stays, even after a successful Restore, until the page is reloaded."
+            ],
+            "screenshot": "21-online.png, 22-restored.png",
+            "visible_text": "You appear to be offline. Check your connection. [Retry]"
+          },
+          {
+            "title": "Account row at the bottom of the phone-width sidebar is cut off by the screen edge",
+            "size": "cosmetic",
+            "kind": "product_defect",
+            "repro_steps": [
+              "Resize the browser to 390x844 and open a chat.",
+              "Press 'Open navigation' (hamburger, top left).",
+              "Look at the bottom of the drawer: the signed-in account row (avatar, name) sits against the bottom edge and its second line (email) is cut off, with no bottom padding."
+            ],
+            "screenshot": "32-dark-390-sidebar.png",
+            "visible_text": "Agi-Web-Frc-20261124c+c..."
+          },
+          {
+            "title": "Archiving the open chat leaves you looking at it",
+            "size": "cosmetic",
+            "kind": "unclear",
+            "repro_steps": [
+              "Open a chat from the sidebar.",
+              "Sidebar More options > Archive.",
+              "The chat vanishes from Recents but the archived conversation stays open in the main pane with an active composer (ChatGPT and Claude take you back to a new chat). Deleting the open chat does return to /chat."
+            ],
+            "screenshot": "16-archived.png",
+            "visible_text": "Chat archived  View archived  Undo"
+          },
+          {
+            "title": "Search dialog jumps up and down as results change",
+            "size": "cosmetic",
+            "kind": "product_defect",
+            "repro_steps": [
+              "Press the sidebar Search button and type 'zebra': results list shows, dialog top at about y=80.",
+              "Type 'quokka' (no results): the dialog drops lower (top about y=120) and moves again for other result counts, so the input moves under the cursor while typing."
+            ],
+            "screenshot": "08-search.png, 27-search-deleted.png, 28-search-renamed.png",
+            "visible_text": "Found 3 results (1 conversations, 2 messages) in 765ms / Found 0 results"
+          },
+          {
+            "title": "Deleting a chat has no recovery (no Recently deleted)",
+            "size": "minor",
+            "kind": "unclear",
+            "repro_steps": [
+              "Sidebar More options > Delete on a chat.",
+              "Dialog says it 'cannot be undone'; after confirming the chat is gone from the list and from search with no undo toast or Recently deleted area. AGENTS.md says an agent never destroys chats without a Recently-deleted path, but this is an explicit user action naming the loss, so it is a policy question, not a failure."
+            ],
+            "screenshot": "24-delete-confirm.png, 27-search-deleted.png",
+            "visible_text": "\"QUOKKA-BETA\" and every message in it will be removed from your chats. This cannot be undone."
+          },
+          {
+            "title": "Search shows 3 result rows for one conversation",
+            "size": "cosmetic",
+            "kind": "unclear",
+            "repro_steps": [
+              "Search 'zebra' with one matching chat.",
+              "Result header says '3 results (1 conversations, 2 messages)' with three rows (title, assistant message, user message) all titled ZEBRA-ALPHA; slightly noisy next to ChatGPT/Claude which show one row per chat."
+            ],
+            "screenshot": "08-search.png",
+            "visible_text": "Found 3 results (1 conversations, 2 messages)"
+          }
+        ],
+        "evidence_dir": "~/.cache/agi-audit/leader-docs/2026-11-22/results/baseline/runs/W-13/browser/free/20261124T2330Z-frc",
+        "account_alias": "agi-web-frc-20261124c+clerk_test@example.com (Free, first-time, session w-13-frc)",
+        "first_words_ms": "840 ms (llm_ttft_observed in the server log for the first chat); the whole short reply was on screen within 2 s",
+        "stream_and_finish": "Both test chats replied with exactly the requested word and were auto-titled from it. Not a streaming test (one-word replies).",
+        "recovery_and_sync": "Offline Restore showed a clear error plus Retry; after going online Restore worked (stale offline banner remained until reload). Cancel on the delete dialog kept the chat. Reload after each of rename, pin, archive, restore and delete showed the right state. A second tab showed the same chat list and theme. After archive, pin is dropped (Pin offered again on the archived chat). Deleting the open chat returned to /chat.",
+        "light_dark_and_size": "Light and dark at 1280 (sidebar, menus, dialogs) and 390 (header, sidebar drawer, row menu) looked right; the only layout issue seen is the clipped account row in the 390 sidebar. Settings > Appearance has System/Light/Dark and it persisted across tabs.",
+        "leader_comparison": "Matches ChatGPT/Claude on search, rename, pin, archive with Undo and a named-consequence delete. Differences: archiving the open chat keeps it open (ChatGPT returns to new chat), search lists three rows for one chat, and delete has no Recently-deleted recovery (ChatGPT's delete is also final).",
+        "video_path": "~/.cache/agi-audit/leader-docs/2026-11-22/results/baseline/runs/W-13/browser/free/20261124T2330Z-frc/run.webm"
+      },
+      {
+        "basic": "W-14 Share a chat by link and open the link signed out",
+        "mode": "free",
+        "status": "partial",
+        "observed_result": "Sharing works end to end for a Free account. I shared a tagged chat (7-day link). A signed-out second session saw only that chat: title, model, \"2 messages\", expiry and the two messages. It saw no owner controls, no sidebar and no adjacent \"Lisbon\" chat, and the owner's chat URL redirected it to /login. A message the owner added after sharing did not appear for the stranger, as the dialog promised. Reload and offline then online were fine. Cancel on the revoke confirmation kept the link live. Revoking made the link show \"Shared conversation unavailable\". A second link also created and revoked cleanly. Point 6 fails on three small visual issues. The shared page shows markdown as literal \"- \" text, the shared header is cramped at 390 wide, and the revoke confirmation is translucent over the share dialog.",
+        "problems": [
+          {
+            "title": "Shared page shows markdown as literal text (bullets appear as '- ' lines); owner view renders real bullets",
+            "size": "minor",
+            "kind": "product_defect",
+            "repro_steps": [
+              "Signed in, ask a chat for three tips with a bulleted answer",
+              "Open Share, create a public link",
+              "Open the link in a signed-out session",
+              "The assistant message shows lines starting with '- ' instead of bullets, unlike the owner's chat view"
+            ],
+            "screenshot": "05-stranger-1280.png",
+            "visible_text": "- Keep your starter warm and feed it regularly until it reliably doubles after feeding."
+          },
+          {
+            "title": "Shared page at 390 wide: title truncated and 'Open in AGI' button wraps to two lines",
+            "size": "cosmetic",
+            "kind": "product_defect",
+            "repro_steps": [
+              "Open a share link in a signed-out session",
+              "Resize the browser to 390x844",
+              "Header shows 'First-Time Sourdough Ba...' and the 'Open in AGI' button text broken across two lines"
+            ],
+            "screenshot": "06-stranger-390.png",
+            "visible_text": "First-Time Sourdough Ba..."
+          },
+          {
+            "title": "Revoke confirmation is translucent; the Share dialog behind it ghosts through and overlaps its text",
+            "size": "cosmetic",
+            "kind": "product_defect",
+            "repro_steps": [
+              "Open Share on a chat that already has a public link",
+              "Click Revoke share",
+              "The 'Revoke this share?' dialog is see-through and the 'Public link ready' dialog's buttons and text show faintly behind it, still after 2 s"
+            ],
+            "screenshot": "12b-revoke-confirm-settled.png",
+            "visible_text": "Revoke this share? Anyone holding the link loses access immediately."
+          },
+          {
+            "title": "First /chat screenshot after sign-in showed content filling only the top of the viewport (likely screenshot artifact, not reproduced)",
+            "size": "cosmetic",
+            "kind": "unclear",
+            "repro_steps": [
+              "Sign in at /login with a code",
+              "On landing at /chat take a screenshot at 1280x820",
+              "The sidebar and content end about two-thirds down with white below; not seen again"
+            ],
+            "screenshot": "01-after-code.png",
+            "visible_text": ""
+          }
+        ],
+        "evidence_dir": "~/.cache/agi-audit/leader-docs/2026-11-22/results/baseline/runs/W-14/browser/free/20261124T2330Z-frc",
+        "account_alias": "agi-web-frc-20261124c+clerk_test@example.com (Free)",
+        "first_words_ms": "Stopwatch estimate: the full three-line answer was complete within 12 s of pressing Enter (first words not timed separately). Server-log llm_ttft_observed lines in that window show 850 to 2638 ms but I cannot attribute them to my request.",
+        "stream_and_finish": "Answer finished with the correct three one-line tips. The follow-up answer also finished. Streaming was not observed step by step.",
+        "recovery_and_sync": "Owner reload kept the share, and the Share dialog reopened with the same link. Stranger reload and offline then online recovered. Cancel on the revoke confirmation recovered. Revoke took effect immediately for the stranger. A message added after sharing stayed out of the snapshot.",
+        "light_dark_and_size": "Light at 1280: fine. Light at 390 (stranger): header cramped, see problems. Dark at 1280 and 390 (share dialog, link-ready dialog, share page): fine. The signed-out stranger cannot change appearance, so I viewed the dark share page by opening the link in the owner session.",
+        "leader_comparison": "ChatGPT's shared-link page renders markdown formatting and offers owner-side link management, similar to AGI's. The share creation, expiry choices, snapshot semantics and revoke confirmation match or exceed it. AGI is visibly worse only on the shared page's literal markdown rendering.",
+        "video_path": "~/.cache/agi-audit/leader-docs/2026-11-22/results/baseline/runs/W-14/browser/free/20261124T2330Z-frc/run.webm"
+      },
+      {
+        "basic": "W-18 Start a cloud coding task on a repository and get a pull request",
+        "mode": "free",
+        "status": "partial",
+        "observed_result": "Free account (first sign-in, code 424242) went Home > Code tab (/code). The page says \"Code is on paid plans. Give tasks to an agent that works in its own cloud environment. It is included from the Basic plan.\" with an Upgrade button. Upgrade opens /upgrade, then \"Continue with Basic\" opens /upgrade/basic. That page says \"Join the Basic upgrade waitlist ... Paid upgrades are opening in stages\" and has a \"Join upgrade waitlist\" button plus an Access code field. After I joined, it showed \"You're on the Basic waitlist. We'll let you know in Notifications when you can upgrade to Basic.\" The waitlist state persisted after a reload. No cloud task or PR could be started, which is expected for Free, and the user sees a clear Upgrade/waitlist path with no error text. The \"partial\" status comes from the small defects listed below, mainly the usage meter on the Free Upgrade page, which goes against the owner decision.",
+        "stream_and_finish": "Not applicable. Free has no cloud coding, so there was no task to stream or finish.",
+        "first_words_ms": "Not applicable. No answer was generated.",
+        "recovery_and_sync": "Reloading /upgrade/basic kept \"You're on the Basic waitlist\". Going offline and clicking Upgrade showed the browser's own error page (ERR_INTERNET_DISCONNECTED, no in-app message); going back online loaded /upgrade normally. I did not test stopping a running task because none can run on Free. The notification on the waitlist was not checked for sync on another device.",
+        "leader_comparison": "Claude (Claude Code on the web) and ChatGPT (Codex) show a plan-gate page with an upgrade action in the same situation. This is on par for the gate message. The leaders do not show a usage meter to Free users on a gate or upgrade page, so the 0% meter here is worse.",
+        "light_dark_and_size": "/code and /upgrade checked in light at 1280 and 390, and /code in dark at 1280 and 390. Nothing overlapped, was cut off or was unreadable. The \"Code\" title in the Code sidebar uses a serif face, unlike the rest of the app. The Code sidebar collapses to a header with a hamburger at 390.",
+        "evidence_dir": "~/.cache/agi-audit/leader-docs/2026-11-22/results/baseline/runs/W-18/browser/free/20261124T2330Z-frc",
+        "account_alias": "agi-web-frc-20261124c+clerk_test@example.com",
+        "video_path": "~/.cache/agi-audit/leader-docs/2026-11-22/results/baseline/runs/W-18/browser/free/20261124T2330Z-frc/run.webm",
+        "problems": [
+          {
+            "title": "Free Upgrade page shows a usage meter (Usage this period 0% with a bar)",
+            "size": "minor",
+            "kind": "product_defect",
+            "repro_steps": [
+              "Sign in as the Free account.",
+              "Open the Code tab (/code).",
+              "Press Upgrade.",
+              "On /upgrade, look at the card under 'YOUR PLAN: Free'."
+            ],
+            "screenshot": "04-upgrade.png (also 11-upgrade-390.png)",
+            "visible_text": "Usage this period 0%"
+          },
+          {
+            "title": "'New' button in the Code sidebar does nothing visible for a Free user",
+            "size": "cosmetic",
+            "kind": "product_defect",
+            "repro_steps": [
+              "Sign in as Free and open /code.",
+              "Press 'New' at the top of the left list.",
+              "Nothing opens and there is no message or Upgrade prompt. Only the existing 'Code is on paid plans' page stays."
+            ],
+            "screenshot": "03-new.png",
+            "visible_text": "Code is on paid plans (unchanged)"
+          },
+          {
+            "title": "Offline navigation shows the browser's own error page with no in-app message",
+            "size": "cosmetic",
+            "kind": "unclear",
+            "repro_steps": [
+              "Open /code as Free.",
+              "Set the browser offline.",
+              "Press Upgrade.",
+              "The browser dino page appears; setting online and reloading recovers."
+            ],
+            "screenshot": "07-offline.png",
+            "visible_text": "Press space to play / ERR_INTERNET_DISCONNECTED"
+          },
+          {
+            "title": "Basic card 'What changes' omits Code, while /code says Code is included from Basic",
+            "size": "minor",
+            "kind": "product_defect",
+            "repro_steps": [
+              "Open /code as Free and read 'It is included from the Basic plan'.",
+              "Press Upgrade.",
+              "The Basic card lists only 'Projects with no set limit' and 'Remote Control'."
+            ],
+            "screenshot": "04-upgrade.png",
+            "visible_text": "Projects with no set limit; Remote Control"
+          },
+          {
+            "title": "Opening /code as Free triggers a 503 on /api/github/repositories (console error, not visible on screen)",
+            "size": "cosmetic",
+            "kind": "product_defect",
+            "repro_steps": [
+              "Sign in as Free.",
+              "Open /code.",
+              "Read the browser console: 'Failed to load resource: 503 (Service Unavailable) @ /api/github/repositories'. The server log shows the same request with status error (AppError)."
+            ],
+            "screenshot": "02-code.png",
+            "visible_text": "No visible text; console only"
+          }
+        ]
+      },
+      {
+        "basic": "W-19 See usage and limits; hitting a limit explains what happens next",
+        "mode": "free",
+        "status": "partial",
+        "observed_result": "Usage screen on Free shows only \"Upgrade for higher capacity\" and an Upgrade button, no meters (matches the owner decision), and it did not change after a normal request. Upgrade leads to a clear dialog with the Basic waitlist (\"You're on the waitlist\") and an access-code screen. A wrong code gives \"Enter a valid access code.\" Chat, reload, offline, light/dark and 390 width were fine. I could not see a real denied send: the account was not exhausted. Stopping an answer halfway showed \"You've reached the Free limit for now. Resets in 4 hr 34 min\" although the limit had not been reached, and later sends still worked. The banner is misleading, so point 3 fails and the denial path was not verified. Notes: the model asked an unneeded clarifying question first, and a stopped answer shows more text after a reload.",
+        "problems": [
+          {
+            "title": "Stopping an answer halfway shows a false 'You've reached the Free limit for now' banner",
+            "size": "major",
+            "kind": "product_defect",
+            "repro_steps": [
+              "Sign in as the Free account and open a chat",
+              "Send 'Write a very long 1500-word essay about the history of the printing press. Do not ask questions.'",
+              "About 1 second later press the Stop control",
+              "See 'Response stopped.' and a banner above the composer: 'You've reached the Free limit for now / Resets in 4 hr 32 min / Upgrade'",
+              "Send 'reply with the single word ok'; it is answered normally and the banner is gone (reproduced twice, also with a lighthouse essay)"
+            ],
+            " screenshot": "18-stop3.png",
+            "visible_text": "You've reached the Free limit for now. Resets in 4 hr 32 min. Upgrade",
+            "screenshot": "18-stop3.png"
+          },
+          {
+            "title": "Limit banner is partly hidden behind the message box",
+            "size": "cosmetic",
+            "kind": "product_defect",
+            "repro_steps": [
+              "Trigger the banner as in the previous problem at 1280 wide",
+              "Look at the bottom: the banner's lower edge and rounded corners are covered by the composer"
+            ],
+            "screenshot": "15b-stopped-later.png",
+            "visible_text": "You've reached the Free limit for now"
+          },
+          {
+            "title": "Model asks an unneeded clarifying question when the prompt already states the format",
+            "size": "minor",
+            "kind": "product_defect",
+            "repro_steps": [
+              "New chat on Free ((model name))",
+              "Send 'In three short sentences, explain why the sky is blue.'",
+              "A card 'Which format should the explanation use?' with 'Three short sentences' / 'Detailed explanation' appears and no answer streams until Send answers is pressed; ChatGPT and Claude would just answer"
+            ],
+            "screenshot": "06-stream-1.png",
+            "visible_text": "Which format should the explanation use?"
+          },
+          {
+            "title": "After a reload a stopped answer shows more text than was on screen (server keeps generating)",
+            "size": "minor",
+            "kind": "product_defect",
+            "repro_steps": [
+              "Send a long essay request and press Stop; note the text ends mid-sentence ('...they represent' / 'printing was already being used')",
+              "Reload the page",
+              "The same answer now shows more text, in the lighthouse case the full essay to 'guidance in darkness'"
+            ],
+            "screenshot": "15b-stopped-later.png",
+            "visible_text": "Response stopped."
+          },
+          {
+            "title": "Notifications say 'Agent run finished. Your agent finished its run.' after plain chat turns",
+            "size": "cosmetic",
+            "kind": "unclear",
+            "repro_steps": [
+              "Send chat turns (some stopped) on the Free account",
+              "Open the bell: 'Agent run finished' entries appear 1 and 4 minutes old; this account ran no agent task"
+            ],
+            "screenshot": "20-notifs.png",
+            "visible_text": "Agent run finished - Your agent finished its run."
+          }
+        ],
+        "evidence_dir": "~/.cache/agi-audit/leader-docs/2026-11-22/results/baseline/runs/W-19/browser/free/20261124T2330Z-frc",
+        "account_alias": "agi-web-frc-20261124c+clerk_test (Free, session w-19-frc)",
+        "video_path": "~/.cache/agi-audit/leader-docs/2026-11-22/results/baseline/runs/W-19/browser/free/20261124T2330Z-frc/run.webm",
+        "first_words_ms": "Server log llm_ttft_observed 687 ms for the answer after the clarifying question. The first turn showed the question card within about 2 s by my screenshots, and the log recorded llm_ttft_missing for it.",
+        "stream_and_finish": "Answers streamed smoothly and finished in about 2 to 5 s with the right content (\"4.\", \"ok\", the essays). Stop worked and showed \"Response stopped.\" with Try again.",
+        "recovery_and_sync": "Reload kept the chat. Offline showed \"You are offline. Your draft is saved here and can be sent after you reconnect.\" and the draft sent fine once online. Reload showed stopped answers longer than what was on screen.",
+        "light_dark_and_size": "Usage and the Upgrade dialog are readable in light and dark at 1280 and 390 (dark at 1280 and 390 for Upgrade, light at 390 for Usage, both at 1280). The only visual flaw is the limit banner tucked behind the composer.",
+        "leader_comparison": "ChatGPT and Claude on Free show a limit notice only when a send is actually refused, and stopping a reply never triggers one. ChatGPT and Claude also answer a clear prompt without a clarifying form. Here the Usage page is simpler by owner decision, and the waitlist path is clear."
+      }
+    ],
+    "fixes": [
+      {
+        "fix": "A workspace member a project is shared with can chat inside it (member chat in shared project)",
+        "verdict": "works_with_problems",
+        "what_was_seen": "The fix works in a browser. The member opened the shared project and asked \"What is 12 plus 30?\". The answer was \"42 PELICAN\" with no error, and the chat was still in the project after a reload. The same worked at \"Can view\" and at \"Can edit\". The owner did not see the member's chats. Stopping the share closed the project to the member. A personal workspace could not reach it. The rough edges are the move action working only on the second try, the wording of the error shown to a revoked member, and some cosmetic glitches.",
+        "cases": [
+          {
+            "case": "1. Owner creates the project, sets the instruction, shares it with the workspace",
+            "result": "as_expected",
+            "seen": "Created \"vsp shared 20261124T2330Z\" in the team workspace \"Test workspace (team)\". Instruction saved in Project settings (toast \"Project updated\"). Project options > Share offers \"Who can open it\": \"Everyone in the workspace can view\" or \"Only people you invite\". After sharing, the member gets a row with a per-person dropdown: \"Can view\" (the default), \"Can edit\" or \"No access\". The dialog also has \"Add people\" and \"Stop sharing\".",
+            "screenshot": "~/.cache/agi-audit/web-lane/runs/verify/shared-project-chat/15-shared.png"
+          },
+          {
+            "case": "2. Member chats in the shared project, then reloads",
+            "result": "as_expected",
+            "seen": "The project showed in the member's sidebar and on the Projects page. Its page showed a \"Shared with you\" badge and the text \"This project's instructions and files are shared with you. Your chats and memories here stay private to you.\" Sent \"What is 12 plus 30?\" from the project page. The answer was \"42 PELICAN\" with no error. The chat opened as a \"Work session\" titled \"Adding 12 and 30\", and the owner's chat opened the same way. After a reload the chat was still there, and it was listed in the project's Chats tab. This ran at the default \"Can view\".",
+            "screenshot": "~/.cache/agi-audit/web-lane/runs/verify/shared-project-chat/21-member-reload.png"
+          },
+          {
+            "case": "3. Member starts a chat outside the project, then moves it into the project",
+            "result": "as_expected",
+            "seen": "A plain chat answered \"2 + 2 = 4.\" The product offers \"Move to project\" in the sidebar chat menu and in the header \"Conversation options\" menu. The first attempt (opening the submenu with ArrowRight, then a mouse click on the project name) did nothing: the chat stayed in Recents and was not in the project. The second attempt (header menu, ArrowRight, Enter) worked. The chat left Recents and appeared in the project's Chats tab as \"2 Plus 2 Outside Chat\". There was no toast.",
+            "screenshot": "~/.cache/agi-audit/web-lane/runs/verify/shared-project-chat/34-project-with-2.png"
+          },
+          {
+            "case": "4. Owner does not see the member's chats and can still chat in the project",
+            "result": "as_expected",
+            "seen": "While the member had 2 chats in the project, the owner's project page showed \"No chats yet\". The owner's search for \"Outside Chat\" gave \"Found 0 results (0 conversations, 0 messages)\". The owner sent \"What is 20 plus 22?\" in the project and got \"42 PELICAN\". Afterwards the owner's list showed only \"Adding 20 and 22\".",
+            "screenshot": "~/.cache/agi-audit/web-lane/runs/verify/shared-project-chat/37-owner-project-after.png"
+          },
+          {
+            "case": "5. View-only versus edit access, repeat of case 2",
+            "result": "as_expected",
+            "seen": "The product offers \"Can view\", \"Can edit\" and \"No access\". Member set to \"Can edit\" (toast \"Access updated\"): \"What is 12 plus 30? (can edit)\" gave \"42 PELICAN\". Member set explicitly back to \"Can view\": \"What is 12 plus 30? (view only)\" gave \"42 PELICAN\". Both levels allow chatting, with no error.",
+            "screenshot": "~/.cache/agi-audit/web-lane/runs/verify/shared-project-chat/42-member-view-chat.png"
+          },
+          {
+            "case": "6. Owner stops sharing; member reloads and tries to send in the old project chat",
+            "result": "not_as_expected",
+            "seen": "Owner's \"Stop sharing\" showed a confirmation: \"Stop sharing vsp shared 20261124T2330Z? Everyone you shared it with loses access to its instructions and files. You keep the project and can share it again.\" Then the toast \"Project is no longer shared\". The member reloaded the project URL and saw \"Project not found\" / \"This cloud project does not exist, is unavailable to this account, or was deleted.\" The Projects page showed \"No projects yet.\" The access closure works. In the old chat, sending \"And what is 5 plus 5?\" gave \"Response failed\" and \"Error: This project is archived, deleted, or unavailable. Remove the conversation from the project or restore the project before retrying.\" That text appeared three times (message, side panel, red banner with Retry). It is a readable message but misleading for a member, who cannot restore the project, and it carries an \"Error:\" prefix. The member's chats also vanished from the sidebar (\"No conversations yet\") though they still opened by URL. After the owner re-shared, all 4 chats were back in the project list.",
+            "screenshot": "~/.cache/agi-audit/web-lane/runs/verify/shared-project-chat/48-send-click-11s.png"
+          },
+          {
+            "case": "7. Member switches to the personal workspace",
+            "result": "as_expected",
+            "seen": "The workspace menu lists \"Personal (Only you)\" and \"Test workspace (team) member\". In Personal (\"Workspace: Personal\") the Projects page showed \"No projects yet.\" The direct project URL showed \"Project not found\" / \"This cloud project does not exist, is unavailable to this account, or was deleted.\" The project was shared with the workspace at the time.",
+            "screenshot": "~/.cache/agi-audit/web-lane/runs/verify/shared-project-chat/55-personal-direct-url.png"
+          }
+        ],
+        "problems": [
+          {
+            "title": "Move to project by mouse did not apply on the first try",
+            "size": "minor",
+            "repro_steps": [
+              "As the member, send a plain chat outside any project",
+              "Open the sidebar menu for that chat, then Move to project",
+              "Open the submenu with ArrowRight and click the project name",
+              "The chat stays in Recents and is not in the project; no message appears",
+              "The same move via the header Conversation options menu with the Enter key worked. Cause unknown: it may be the headless click, not the product."
+            ],
+            "visible_text": "Chat stays under Recents; no toast"
+          },
+          {
+            "title": "Revoked member's error says to restore the project",
+            "size": "minor",
+            "repro_steps": [
+              "Member has a chat open in a shared project",
+              "Owner presses Stop sharing and confirms",
+              "Member sends a message in that chat"
+            ],
+            "visible_text": "Error: This project is archived, deleted, or unavailable. Remove the conversation from the project or restore the project before retrying."
+          },
+          {
+            "title": "Member's project chats vanish from the sidebar after the share is stopped",
+            "size": "minor",
+            "repro_steps": [
+              "Member chats in a shared project",
+              "Owner stops sharing",
+              "Member reloads: sidebar shows \"No conversations yet\", but the chat still opens by its URL"
+            ],
+            "visible_text": "No conversations yet"
+          },
+          {
+            "title": "Stray text overlaps the Project name field in Project settings",
+            "size": "cosmetic",
+            "repro_steps": [
+              "As the owner open a project, then Project options > Project settings",
+              "The faint text \"folde\" sits on top of the start of the name (reproduced twice)"
+            ],
+            "visible_text": "foldevsp shared 20261124T2330Z"
+          },
+          {
+            "title": "Console 404 on branches request after the member's first project chat",
+            "size": "cosmetic",
+            "repro_steps": [
+              "As the member send the first message from a project page",
+              "Console shows: GET /api/chat/conversations/12207288-0425-42a8-b1ed-57d49538b0a6/branches 404 (an id different from the chat's own id)"
+            ],
+            "visible_text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+          },
+          {
+            "title": "One Enter keypress did not send after the share was stopped",
+            "size": "minor",
+            "repro_steps": [
+              "Member opens an old project chat after the share was stopped, types a message, presses Enter",
+              "Text stays in the box; the Send button then sent it. Seen once, cause unknown."
+            ],
+            "visible_text": "And what is 5 plus 5? (left in the composer)"
+          },
+          {
+            "title": "A plain \"2 plus 2\" chat ran a web search",
+            "size": "cosmetic",
+            "repro_steps": [
+              "As the member send \"vsp-b outside chat: what is 2 plus 2?\" outside a project",
+              "The answer showed \"Searched the web · 5 sources\" before \"2 + 2 = 4.\""
+            ],
+            "visible_text": "Searched the web · 5 sources"
+          }
+        ],
+        "not_checked": [
+          "Dark mode and the 390 px phone width were not looked at, so the 'looks right' point was only checked at 1280 px light.",
+          "The \"Add people\" and \"Only people you invite\" routes were not exercised; only the workspace-wide share and the per-person access dropdown were used.",
+          "Per-message check of whether the project's instructions reach a chat that was moved into the project: not done. Only chats started in the project were checked for PELICAN.",
+          "Some early evidence screenshots (05-ws, 06-teamws, 07-projects, 10-opts, 11-settings, 17-member-projects, 19-20 member sends, 30-33, 45-48) were deleted by a cleanup glob at the end of the run; the later numbered screenshots and the two videos remain."
+        ],
+        "evidence_dir": "~/.cache/agi-audit/web-lane/runs/verify/shared-project-chat"
+      },
+      {
+        "fix": "Two scheduled-task fixes. Fix A: a scheduled run gets four minutes instead of 40 seconds. Fix B: deleting a shared schedule, or stopping sharing, kills its public link.",
+        "verdict": "works_with_problems",
+        "what_was_seen": "Fix A could not be checked: every run, manual or scheduled, failed in about 334 ms with the usage-limit message, so none got far enough to hit the time limit. Fix B works. The shared link opened read-only when signed out. After the schedule was deleted, and again after \"Stop sharing\", reloading the link showed \"Shared schedule unavailable\". The stop-sharing schedule stayed in the list.",
+        "cases": [
+          {
+            "case": "A1 long-running run finishes with a real result",
+            "result": "not_checked",
+            "seen": "Created \"vsc long 20261124T2330Z\" (One Time, Auto). Run now at 3:24 PM gave the banner \"Schedule finished with status failed.\" The card showed \"Last run: Your rolling 5-hour usage limit is reached. Wait for earlier usage to leave the window or upgrade for a higher limit.\" History showed failed, 334 ms, manual. Changing the model to (model name) and running again at 3:26 PM failed the same way. The account had used its 50 credits, and /chat showed \"You have used your 50 credits for this 5-hour window. Resets in 3 hr 20 min\". This is a machine/account limit, so the 4-minute budget was never exercised.",
+            "screenshot": "08-runnow.png"
+          },
+          {
+            "case": "A2 same task run a second time by its schedule",
+            "result": "not_checked",
+            "seen": "The timer did start the one-time schedule set for 3:30 PM: history gained a row \"failed, Nov 24, 2026, 3:30 PM\" with the same usage-limit text. The sweep fires, but no finished run came out of it because the credits were gone. The task card then showed \"Completed\" and Paused.",
+            "screenshot": "22-final-list.png"
+          },
+          {
+            "case": "A3 running state during a run, and after reload",
+            "result": "not_checked",
+            "seen": "Runs failed in about 334 ms, so no running state was ever on screen. After reload the history rows showed failed and nothing was stuck."
+          },
+          {
+            "case": "B1 share by link, open signed out",
+            "result": "as_expected",
+            "seen": "More actions > Share opened a dialog: \"Anyone with the link can see this schedule's name, instructions and timing as they are now, and add a copy to their own schedules. Run history, results and connectors stay private, and later edits stay private until you share again.\" After \"Create link\" it showed http://localhost:3000/share/schedules/elEuiQ3-Yq-RHvsOQmLfFdtH. A signed-out window showed \"Shared schedule\", \"vsc share 20261124T2330Z\", \"Runs: Not yet\", \"Instructions: Write a two-sentence note about the benefits of daily walking.\", \"Adding it makes your own copy to review first. It runs on your account.\" and an \"Add to my schedules\" button.",
+            "screenshot": "13-b1-shared-signedout.png"
+          },
+          {
+            "case": "B2 delete dialog wording, then the link signed out",
+            "result": "as_expected",
+            "seen": "Delete dialog: heading \"Delete Schedule?\", body \"Delete “vsc share 20261124T2330Z”, its run history and event triggers. This action cannot be undone.\", buttons Cancel and \"Delete Schedule\". It does not say the public link stops working. Status \"Schedule deleted.\" Reloading the signed-out link showed \"Shared schedule unavailable. This link may have been revoked or entered incorrectly. Ask the sender for a new link.\" with an \"Open chat\" button, and none of the old content.",
+            "screenshot": "16-b2-link-after-delete.png"
+          },
+          {
+            "case": "B3 stop sharing keeps the schedule and kills the link",
+            "result": "as_expected",
+            "seen": "Shared \"vsc share2 20261124T2330Z\" (link .../share/schedules/pdCGWB-QMiFzJK_okgOkVZe6) and it opened signed out. \"Stop sharing\" opened a confirm: \"Stop sharing this schedule?\" with \"The link stops working for everyone who has it. Copies people already made stay theirs. Sharing again creates a new link.\" I reloaded once before confirming and the link still worked, as it should. After confirming and reloading, the signed-out page showed \"Shared schedule unavailable. This link may have been revoked or entered incorrectly. Ask the sender for a new link.\" The schedule stayed in the list as Active, next run Wed 9:00 AM.",
+            "screenshot": "21-b3-link-after-stop.png"
+          }
+        ],
+        "problems": [
+          {
+            "title": "Delete-schedule dialog does not say the public share link will stop working",
+            "size": "minor",
+            "repro_steps": [
+              "Sign in as the Premium account, open Scheduled",
+              "Create a schedule and share it by link (More actions > Share > Create link)",
+              "More actions > Delete"
+            ],
+            "visible_text": "Delete “vsc share 20261124T2330Z”, its run history and event triggers. This action cannot be undone.",
+            "screenshot": "14-b2-delete-dialog.png"
+          },
+          {
+            "title": "Shared schedule page shows no timing, and \"Runs: Not yet\" is an odd label",
+            "size": "minor",
+            "repro_steps": [
+              "Share a one-time schedule by link",
+              "Open the link signed out"
+            ],
+            "visible_text": "Runs / Not yet / Instructions. The share dialog says viewers see the schedule's \"name, instructions and timing\", but no run time or time zone is shown.",
+            "screenshot": "13-b1-shared-signedout.png"
+          },
+          {
+            "title": "Premium account was out of credits, which blocked every run (setup limit, not a product defect)",
+            "size": "major",
+            "repro_steps": [
+              "Sign in as agi-dev-premium+clerk_test@example.com",
+              "Scheduled > More actions > Run now"
+            ],
+            "visible_text": "Your rolling 5-hour usage limit is reached. Wait for earlier usage to leave the window or upgrade for a higher limit.",
+            "screenshot": "08-runnow.png"
+          }
+        ],
+        "evidence_dir": "~/.cache/agi-audit/web-lane/runs/verify/schedules",
+        "not_checked": [
+          "A1: long run finishing with a real result and its timing, because the account's 50 credits for the 5-hour window were used up and runs failed in about 334 ms. Retry after the window resets (about 3 hr 20 min after 3:20 PM CST) or with a fresh Premium account.",
+          "A2: a second finished run from the schedule. The 3:30 PM scheduled run fired from the sweep, but it failed on the same usage limit.",
+          "A3: running state during a run and after reload, because no run lasted long enough to show one.",
+          "Dark/light and phone-width checks of the schedule screens were not done."
+        ]
+      },
+      {
+        "fix": "Slack link page now names the Slack account, requires a ticked box before Connect, and notifies the account owner afterwards.",
+        "verdict": "could_not_check",
+        "what_was_seen": "The new content of the page could not be reached on this machine. The running web server has no Slack app configured: there are no SLACK settings in apps/web/.env.local, and the server's check isSlackAppConfigured() therefore fails. The page's preview request (GET /api/slack/link) returns 503, and the server log says \"AGI in Slack is not available right now\". Settings > Slack app also says \"AGI in Slack is not set up on this service yet.\" So after sign-in the page shows only the intro text, a red \"Service temporarily unavailable\", a disabled \"Connect Slack account\" button and \"Cancel\". The Slack workspace name, the Slack account, the AGI email, the checkbox and the hint never appeared. The same happened for link 2. Only the sign-in return (case 1) and the light/dark and width views (case 7, of this error state only) could be checked. I did not change any configuration. This is a setup limit, not a product failure; the fix itself is unverified.",
+        "cases": [
+          {
+            "case": "1. Signed out, open link 1: sign in, then return to the link page",
+            "result": "as_expected",
+            "seen": "The page does not redirect on its own. It shows the intro, then the red text 'Sign in to the AGI account Slack should answer as. Sign in or create an account.', a disabled 'Connect Slack account' button and 'Cancel'. 'Sign in' leads to /login?redirectTo=/slack/link?token=.... After email plus code 424242 I was returned to /slack/link?token=... (not the home page). The signed-out view does not name the workspace or the Slack account.",
+            "screenshot": "01-signedout.small.png, 04-after-code.small.png"
+          },
+          {
+            "case": "2. Signed in: names the workspace, the Slack account, the AGI email; Connect unusable until the box is ticked, with a hint",
+            "result": "not_checked",
+            "seen": "Not reachable. The page shows only 'Service temporarily unavailable' under the intro text, with a disabled 'Connect Slack account'. There is no workspace name, no Slack account wording, no AGI email, no checkbox and no hint. Cause: the server has no Slack app config, so the preview returns 503.",
+            "screenshot": "04-after-code.small.png"
+          },
+          {
+            "case": "3. Press Connect without ticking (click, and Tab then Enter): nothing is connected",
+            "result": "not_checked",
+            "seen": "There is no checkbox to leave unticked, so this does not test the new rule. Mouse click: Playwright reports the button 'is not enabled'. Keyboard: Connect is reachable by Tab (aria-disabled=true, not disabled), and Enter caused no request and no page change. Nothing was connected, but only because the page is in its unavailable state. No POST to the Slack link API occurred.",
+            "screenshot": "08-enter-on-connect.png"
+          },
+          {
+            "case": "4. Tick the box and press Connect: clear success state; notice to the account owner",
+            "result": "not_checked",
+            "seen": "No checkbox exists and Connect stays disabled, so nothing could be connected. The owner notice could not be tested. Settings > Slack app (opened at /chat#settings/slack) has three sections: 'Waiting for your approval' ('Nothing is waiting for you.'), 'Your Slack accounts' ('No Slack accounts are linked yet.') and 'Slack workspaces you added' ('You have not added the app to a Slack workspace.'). It shows no notice, since nothing was linked.",
+            "screenshot": "10-settings-slack.small.png"
+          },
+          {
+            "case": "5. Open link 1 again: says used or expired",
+            "result": "not_checked",
+            "seen": "Link 1 was never consumed, so there was nothing to reopen. Reopening it gives the same 'Service temporarily unavailable'. The expected 'used or expired' wording (in the code: 'This link has expired or was already used. Send AGI a message in Slack to get a new one.') was never shown."
+          },
+          {
+            "case": "6. Open link 2 and Cancel; connected accounts list in Settings; removal of the case 4 account",
+            "result": "not_checked",
+            "seen": "Link 2 shows the same 503 state ('Service temporarily unavailable', disabled Connect). Pressing Cancel on link 1's page leads to http://localhost:3000/ and nothing is connected. Connected accounts are listed in Settings > Slack app under 'Your Slack accounts', currently empty. Removal could not be checked because case 4 never connected anything."
+          },
+          {
+            "case": "7. Light and dark at widths 1280 and 390",
+            "result": "as_expected",
+            "seen": "Only the unavailable state was seen, not the real consent page. At 1280 and 390, in both light and dark, there is no overlap, cut-off or horizontal scroll. The grey disabled button has a dark label on grey in dark mode, which is low contrast but disabled. The theme toggle works.",
+            "screenshot": "05-dark-1280.small.png, 06-dark-390.small.png, 07-light-390.small.png"
+          }
+        ],
+        "problems": [
+          {
+            "title": "Unavailable state is vague and Connect is still focusable",
+            "size": "minor",
+            "repro_steps": [
+              "Sign in as agi-dev-basic+clerk_test@example.com",
+              "Open a /slack/link?token=... address on a server without Slack configured",
+              "The red text reads 'Service temporarily unavailable', and the server's own message ('AGI in Slack is not available right now') is not shown",
+              "Press Tab until 'Connect Slack account' is focused: it is reachable although aria-disabled=true"
+            ],
+            "visible_text": "Service temporarily unavailable",
+            "screenshot": "04-after-code.small.png"
+          },
+          {
+            "title": "Signed-out view shows a disabled Connect button and Cancel with no workspace or account context",
+            "size": "cosmetic",
+            "repro_steps": [
+              "Signed out, open /slack/link?token=...",
+              "The page shows the intro, 'Sign in to the AGI account Slack should answer as. Sign in or create an account.', a disabled Connect button and Cancel, but no workspace or Slack account name"
+            ],
+            "visible_text": "Sign in to the AGI account Slack should answer as. Sign in or create an account.",
+            "screenshot": "01-signedout.small.png"
+          }
+        ],
+        "not_checked": [
+          "Real Slack display-name wording (no real Slack token; expected)",
+          "Fallback wording 'A Slack account in Acme Dev': the page never reached the consent view because the server has no Slack app config (SLACK_* settings absent; /api/slack/link returns 503)",
+          "The workspace name, Slack account and AGI email on the consent view",
+          "The tick-box rule and the hint",
+          "Connect without ticking (a real test needs the consent view)",
+          "A successful connect and its success state",
+          "The notice to the account owner",
+          "Reuse of a consumed link (link 1 was never consumed, so it was never shown as used or expired)",
+          "Cancel on link 2 with a consent view",
+          "Removal of a connected Slack account (none was connected)"
+        ],
+        "evidence_dir": "~/.cache/agi-audit/web-lane/runs/verify/slack-link"
+      },
+      {
+        "fix": "Idle sign-out now runs only when a person picks a limit; default is \"Never\". Checked in a browser over about 65 minutes with two accounts.",
+        "verdict": "works_with_problems",
+        "what_was_seen": "The core fix works. The default is \"Never\". With 15 minutes chosen, A was signed out at about 15 minutes of idleness, twice. With the default, B stayed signed in at 30 and 62 minutes with no sign-out and no warning. Three expected pieces are missing or unverified. No \"you will be signed out soon\" warning appeared at any point in either 15-minute cycle. The sign-out landed on the marketing home page \"/\", not a sign-in page, and neither page says why. B's message at 62 minutes was not answered because the account had hit its usage limit, so the answer part of Case 5 is unchecked.",
+        "cases": [
+          {
+            "case": "Case 1 (vid-a): default shown and list of choices",
+            "result": "as_expected",
+            "seen": "Settings > Security > Security Settings > label \"Sign out after inactivity\" shows \"Never\". Choices: Never, 15 minutes, 30 minutes, 1 hour, 2 hours, 4 hours, 8 hours, 24 hours. Helper text: \"Signs you out of this browser after this long without use. Never keeps you signed in until you sign out.\"",
+            "screenshot": "~/.cache/agi-audit/web-lane/runs/verify/idle-sign-out/05-a-options.small.png"
+          },
+          {
+            "case": "Case 2 (vid-a): choose 15 minutes, save, reload",
+            "result": "as_expected",
+            "seen": "Chose \"15 minutes\" and pressed \"Save Security Settings\". After a reload the control still says \"15 minutes\". It also still said 15 minutes after signing in again. Minor: no confirmation text or toast was seen about 1 second after Save; the button only greyed out.",
+            "screenshot": "~/.cache/agi-audit/web-lane/runs/verify/idle-sign-out/07-a-after-reload.small.png"
+          },
+          {
+            "case": "Case 3 (vid-a): warning at about 13.5 minutes",
+            "result": "not_as_expected",
+            "seen": "Last touch 15:25:25. Screenshots at 13m31s, 14m00s and 14m35s show the plain chat page (\"Good afternoon, Test\") with no warning and no stay-signed-in control. Page text also contained no warning. I repeated the cycle (last touch 15:43:19) and polled every 18s from 7 to 15 minutes. No warning appeared at any poll.",
+            "screenshot": "~/.cache/agi-audit/web-lane/runs/verify/idle-sign-out/09-a-1355min.small.png"
+          },
+          {
+            "case": "Case 3 (vid-a): signed out at about 16 minutes, on a sign-in page that says why",
+            "result": "not_as_expected",
+            "seen": "The sign-out happened at about 15 minutes. Cycle 1: between 14m35s and 15m10s. Cycle 2: between 14m50s and 15m07s. The page changed to the marketing home \"/\" (nav with \"Sign in\" and \"Try chat\"), not a sign-in page. Nothing on it says the person was signed out for inactivity. Pressing \"Sign in\" gave /login (\"Log in or sign up\") with no reason either. Signing in again with the email code worked and landed on /chat.",
+            "screenshot": "~/.cache/agi-audit/web-lane/runs/verify/idle-sign-out/11-a-signin-page.small.png"
+          },
+          {
+            "case": "Case 4 (vid-a): set back to Never and confirm it saves",
+            "result": "as_expected",
+            "seen": "Chose \"Never\" and saved. After a reload the control says \"Never\". Done twice, once after each cycle.",
+            "screenshot": "~/.cache/agi-audit/web-lane/runs/verify/idle-sign-out/13-a-never-saved.small.png"
+          },
+          {
+            "case": "Case 5 (vid-b): still signed in at 30 and 62 minutes, no warning, message answered",
+            "result": "not_as_expected",
+            "seen": "Signed in at 30 minutes (15:57:15) and 62 minutes (16:28:58): still on /chat as Test Premium with no warning or sign-out. I sent \"vid-b: what is 7 plus 8? Reply with the number only.\" and it was not answered. The banner read \"Your rolling 5-hour usage limit is reached. Wait for earlier usage to leave the window or upgrade for a higher limit. Resets in 2 hr 14 min.\" After a reload it read \"You have used your 50 credits for this 5-hour window\". The usage bar had shown 100% since sign-in at about 15:27. The session was still valid after the reload. The no-sign-out and no-warning part passed; the answered-message part could not be checked because of the usage limit.",
+            "screenshot": "~/.cache/agi-audit/web-lane/runs/verify/idle-sign-out/21-b-62min.small.png"
+          }
+        ],
+        "problems": [
+          {
+            "title": "No warning before an idle sign-out",
+            "size": "major",
+            "repro_steps": [
+              "Sign in as agi-dev-ultra+clerk_test@example.com.",
+              "Settings > Security > Sign out after inactivity: choose 15 minutes and press Save Security Settings; reload to confirm.",
+              "Close Settings with Escape and do not touch the tab.",
+              "Look at the screen at 13 to 15 minutes: no warning and no stay-signed-in control appears.",
+              "At about 15 minutes the person is signed out with no earlier notice."
+            ],
+            "screenshot": "~/.cache/agi-audit/web-lane/runs/verify/idle-sign-out/10-a-poll2.small.png",
+            "visible_text": "None. The screen shows only the normal chat home (\"Good afternoon, Test\") until the sign-out."
+          },
+          {
+            "title": "Idle sign-out lands on the marketing home and never says why",
+            "size": "major",
+            "repro_steps": [
+              "Same setup as above: 15 minutes selected, tab left untouched.",
+              "After about 15 minutes the tab shows the marketing home \"/\" with a \"Sign in\" link.",
+              "Press \"Sign in\": /login shows \"Log in or sign up\" with no message about inactivity."
+            ],
+            "screenshot": "~/.cache/agi-audit/web-lane/runs/verify/idle-sign-out/11-a-signin-page.small.png",
+            "visible_text": "Home page nav: Products, Solutions, Resources, Pricing, Contact sales, Sign in, Try chat. Sign-in page: \"Log in or sign up\". Neither mentions inactivity."
+          },
+          {
+            "title": "No visible confirmation after saving Security Settings",
+            "size": "cosmetic",
+            "repro_steps": [
+              "Settings > Security > Security Settings: change \"Sign out after inactivity\" to 15 minutes.",
+              "Press \"Save Security Settings\".",
+              "About 1 second later no toast or text confirms the save. The button only turns grey. The value did persist after a reload."
+            ],
+            "screenshot": "~/.cache/agi-audit/web-lane/runs/verify/idle-sign-out/06-a-saved.small.png",
+            "visible_text": "No confirmation text. The button label stays \"Save Security Settings\" and is greyed."
+          }
+        ],
+        "not_checked": [
+          "Case 5 answered message: vid-b (Premium) was at 100% of its 5-hour usage and the send was blocked by the limit banner, so whether a message is answered after 62 idle minutes was not checked. This is a setup limit (shared test account usage), not a sign-out.",
+          "A warning that may be shown only to a visible or foreground tab: the headless browser has no real focus, so I cannot rule this out. No warning appeared in the screenshots or page text at about 7 to 15 minutes in two cycles.",
+          "Other idle choices (30 minutes and longer) were not exercised; only 15 minutes and Never."
+        ],
+        "evidence_dir": "~/.cache/agi-audit/web-lane/runs/verify/idle-sign-out"
+      }
+    ]
+  },
+  "workflowProgress": [
+    {
+      "type": "workflow_phase",
+      "index": 1,
+      "title": "Free"
+    },
+    {
+      "type": "workflow_phase",
+      "index": 2,
+      "title": "Fixes"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 1,
+      "label": "W-1:free:fra",
+      "phaseIndex": 1,
+      "phaseTitle": "Free",
+      "agentId": "af05ccf1f81cb5e62",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795555313347,
+      "queuedAt": 1795555313321,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "partial",
+      "promptPreview": "You are one tester in a person-style check of the AGI web app. The owner will not release the product until each basic capability visibly works for a real person, so your job is to find out the truth, not to make it pass.\n\nFirst read the run kit and follow it exactly: ~/.cache/agi-audit/web-lane/RUNKIT.md\n\nYour task: basic W-1, mode \"free\". The script is the row for W-1 in /Users/s…",
+      "promptFramed": true,
+      "lastProgressAt": 1795555963064,
+      "tokens": 98206,
+      "toolCalls": 64,
+      "durationMs": 649716,
+      "resultPreview": "{\"status\":\"partial\",\"basic\":\"W-1 Sign up, age step, sign in, sign out and back in\",\"mode\":\"free\",\"account_alias\":\"agi-web-fra-20261124c+clerk_test@example.com (Free, first-time account), session w-1-fra\",\"evidence_dir\":\"~/.cache/agi-audit/leader-docs/2026-11-22/results/baseline/runs/W-1/browser/free/20261124T2330Z-fra\",\"video_path\":\"~/.cache/agi-audit/leader-docs/20…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 2,
+      "label": "W-6:free:frb",
+      "phaseIndex": 1,
+      "phaseTitle": "Free",
+      "agentId": "aee0cdd147a05e93f",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795555313347,
+      "queuedAt": 1795555313321,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "W-6 Choose a model, or leave it on Auto",
+      "promptPreview": "You are one tester in a person-style check of the AGI web app. The owner will not release the product until each basic capability visibly works for a real person, so your job is to find out the truth, not to make it pass.\n\nFirst read the run kit and follow it exactly: ~/.cache/agi-audit/web-lane/RUNKIT.md\n\nYour task: basic W-6, mode \"free\". The script is the row for W-6 in /Users/s…",
+      "promptFramed": true,
+      "lastProgressAt": 1795556170985,
+      "tokens": 113793,
+      "toolCalls": 104,
+      "durationMs": 854255,
+      "resultPreview": "{\"basic\":\"W-6 Choose a model, or leave it on Auto\",\"mode\":\"free\",\"status\":\"partial\",\"observed_result\":\"A Free first-time account signed in (code, age 34, terms) and reached the chat. The picker lists (model name) as the free default and, under All models (18), lets you pick (model name). I chose Haiku, asked a short question, and got a complete correct answer. The message menu shows \\\"Sent at ..…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 3,
+      "label": "W-13:free:frc",
+      "phaseIndex": 1,
+      "phaseTitle": "Free",
+      "agentId": "aab36e182fd3af0da",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795555313347,
+      "queuedAt": 1795555313321,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "W-13 Find, rename, pin, archive and delete past chats",
+      "promptPreview": "You are one tester in a person-style check of the AGI web app. The owner will not release the product until each basic capability visibly works for a real person, so your job is to find out the truth, not to make it pass.\n\nFirst read the run kit and follow it exactly: ~/.cache/agi-audit/web-lane/RUNKIT.md\n\nYour task: basic W-13, mode \"free\". The script is the row for W-13 in /Users…",
+      "promptFramed": true,
+      "lastProgressAt": 1795556119745,
+      "tokens": 114143,
+      "toolCalls": 97,
+      "durationMs": 803014,
+      "resultPreview": "{\"basic\":\"W-13 Find, rename, pin, archive and delete past chats\",\"mode\":\"free\",\"status\":\"partial\",\"observed_result\":\"Everything worked and persisted after reload: search found the chat by title and message text, rename, pin (Pinned group), archive (toast with View archived/Undo, Archived (1) view, Restore), delete (confirm dialog, then gone from list and search). Three small defects: a stale \\\"You…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 4,
+      "label": "check:shared-project-chat",
+      "phaseIndex": 2,
+      "phaseTitle": "Fixes",
+      "agentId": "a7361c15af833c567",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795555313384,
+      "queuedAt": 1795555313366,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "A workspace member a project is shared with can chat inside…",
+      "promptPreview": "You are checking, like a real person in a browser, whether one fix to the AGI web app actually works. The owner counts something as fixed only when a person-style run shows it; tests do not count. Find out the truth; do not make it pass.\n\nFirst read the run kit and follow it exactly: ~/.cache/agi-audit/web-lane/RUNKIT.md\nBrowser session name prefix: vsp (use vsp-a, vsp-b for separa…",
+      "promptFramed": true,
+      "lastProgressAt": 1795556392562,
+      "tokens": 147594,
+      "toolCalls": 124,
+      "durationMs": 1079177,
+      "resultPreview": "{\"fix\":\"A workspace member a project is shared with can chat inside it (member chat in shared project)\",\"verdict\":\"works_with_problems\",\"what_was_seen\":\"The fix works in a browser. The member opened the shared project and asked \\\"What is 12 plus 30?\\\". The answer was \\\"42 PELICAN\\\" with no error, and the chat was still in the project after a reload. The same worked at \\\"Can view\\\" and at \\\"Can edi…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 5,
+      "label": "check:schedules",
+      "phaseIndex": 2,
+      "phaseTitle": "Fixes",
+      "agentId": "a6c9b79b2e4f7cf58",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795555313384,
+      "queuedAt": 1795555313366,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Two scheduled-task fixes. Fix A: a scheduled run gets four …",
+      "promptPreview": "You are checking, like a real person in a browser, whether one fix to the AGI web app actually works. The owner counts something as fixed only when a person-style run shows it; tests do not count. Find out the truth; do not make it pass.\n\nFirst read the run kit and follow it exactly: ~/.cache/agi-audit/web-lane/RUNKIT.md\nBrowser session name prefix: vsc (use vsc-a, vsc-b for separa…",
+      "promptFramed": true,
+      "lastProgressAt": 1795555932828,
+      "tokens": 94250,
+      "toolCalls": 62,
+      "durationMs": 617989,
+      "resultPreview": "{\"fix\":\"Two scheduled-task fixes. Fix A: a scheduled run gets four minutes instead of 40 seconds. Fix B: deleting a shared schedule, or stopping sharing, kills its public link.\",\"verdict\":\"works_with_problems\",\"what_was_seen\":\"Fix A could not be checked: every run, manual or scheduled, failed in about 334 ms with the usage-limit message, so none got far enough to hit the time limit. Fix B works. T…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 6,
+      "label": "check:slack-link",
+      "phaseIndex": 2,
+      "phaseTitle": "Fixes",
+      "agentId": "ace392b261c3c2273",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795555313384,
+      "queuedAt": 1795555313366,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Slack link page now names the Slack account, requires a tic…",
+      "promptPreview": "You are checking, like a real person in a browser, whether one fix to the AGI web app actually works. The owner counts something as fixed only when a person-style run shows it; tests do not count. Find out the truth; do not make it pass.\n\nFirst read the run kit and follow it exactly: ~/.cache/agi-audit/web-lane/RUNKIT.md\nBrowser session name prefix: vsl (use vsl-a, vsl-b for separa…",
+      "promptFramed": true,
+      "lastProgressAt": 1795555747897,
+      "tokens": 79034,
+      "toolCalls": 36,
+      "durationMs": 433057,
+      "resultPreview": "{\"fix\":\"Slack link page now names the Slack account, requires a ticked box before Connect, and notifies the account owner afterwards.\",\"verdict\":\"could_not_check\",\"what_was_seen\":\"The new content of the page could not be reached on this machine. The running web server has no Slack app configured: there are no SLACK settings in apps/web/.env.local, and the server's check isSlackAppConfigured() ther…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 7,
+      "label": "check:idle-sign-out",
+      "phaseIndex": 2,
+      "phaseTitle": "Fixes",
+      "agentId": "a77aa69f46a2dd398",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795555313384,
+      "queuedAt": 1795555313366,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Idle sign-out now runs only when a person picks a limit; de…",
+      "promptPreview": "You are checking, like a real person in a browser, whether one fix to the AGI web app actually works. The owner counts something as fixed only when a person-style run shows it; tests do not count. Find out the truth; do not make it pass.\n\nFirst read the run kit and follow it exactly: ~/.cache/agi-audit/web-lane/RUNKIT.md\nBrowser session name prefix: vid (use vid-a, vid-b for separa…",
+      "promptFramed": true,
+      "lastProgressAt": 1795559403208,
+      "tokens": 108462,
+      "toolCalls": 89,
+      "durationMs": 4088367,
+      "resultPreview": "{\"fix\":\"Idle sign-out now runs only when a person picks a limit; default is \\\"Never\\\". Checked in a browser over about 65 minutes with two accounts.\",\"verdict\":\"works_with_problems\",\"what_was_seen\":\"The core fix works. The default is \\\"Never\\\". With 15 minutes chosen, A was signed out at about 15 minutes of idleness, twice. With the default, B stayed signed in at 30 and 62 minutes with no sign-out…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 8,
+      "label": "W-3:free:fra",
+      "phaseIndex": 1,
+      "phaseTitle": "Free",
+      "agentId": "aaf91bc57d8418999",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795555963086,
+      "queuedAt": 1795555963070,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "W-3",
+      "promptPreview": "You are one tester in a person-style check of the AGI web app. The owner will not release the product until each basic capability visibly works for a real person, so your job is to find out the truth, not to make it pass.\n\nFirst read the run kit and follow it exactly: ~/.cache/agi-audit/web-lane/RUNKIT.md\n\nYour task: basic W-3, mode \"free\". The script is the row for W-3 in /Users/s…",
+      "promptFramed": true,
+      "lastProgressAt": 1795556579536,
+      "tokens": 106007,
+      "toolCalls": 80,
+      "durationMs": 616446,
+      "resultPreview": "{\"basic\":\"W-3\",\"mode\":\"free\",\"status\":\"partial\",\"observed_result\":\"Core flow works. Told VELA-74, asked for the code, got VELA-74. Edited the first message to VELA-75 with Save & Retry. The active branch showed a 2/2 switcher, the later turns dropped from view, and 1/2 stayed viewable. Asked again and got VELA-75. Long essay: Stop halted it with \\\"Response stopped.\\\" and Try again. Regenerate (Try…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 9,
+      "label": "W-14:free:frc",
+      "phaseIndex": 1,
+      "phaseTitle": "Free",
+      "agentId": "a49998c1a454a17f9",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795556119764,
+      "queuedAt": 1795556119749,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "W-14 Share a chat by link and open the link signed out",
+      "promptPreview": "You are one tester in a person-style check of the AGI web app. The owner will not release the product until each basic capability visibly works for a real person, so your job is to find out the truth, not to make it pass.\n\nFirst read the run kit and follow it exactly: ~/.cache/agi-audit/web-lane/RUNKIT.md\n\nYour task: basic W-14, mode \"free\". The script is the row for W-14 in /Users…",
+      "promptFramed": true,
+      "lastProgressAt": 1795556546168,
+      "tokens": 85078,
+      "toolCalls": 59,
+      "durationMs": 426402,
+      "resultPreview": "{\"basic\":\"W-14 Share a chat by link and open the link signed out\",\"mode\":\"free\",\"status\":\"partial\",\"observed_result\":\"Sharing works end to end for a Free account. I shared a tagged chat (7-day link). A signed-out second session saw only that chat: title, model, \\\"2 messages\\\", expiry and the two messages. It saw no owner controls, no sidebar and no adjacent \\\"Lisbon\\\" chat, and the owner's chat UR…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 10,
+      "label": "W-11:free:frb",
+      "phaseIndex": 1,
+      "phaseTitle": "Free",
+      "agentId": "a79ab8c18d037061a",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795556171006,
+      "queuedAt": 1795556170995,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "W-11",
+      "promptPreview": "You are one tester in a person-style check of the AGI web app. The owner will not release the product until each basic capability visibly works for a real person, so your job is to find out the truth, not to make it pass.\n\nFirst read the run kit and follow it exactly: ~/.cache/agi-audit/web-lane/RUNKIT.md\n\nYour task: basic W-11, mode \"free\". The script is the row for W-11 in /Users…",
+      "promptFramed": true,
+      "lastProgressAt": 1795556657034,
+      "tokens": 112056,
+      "toolCalls": 84,
+      "durationMs": 486027,
+      "resultPreview": "{\"basic\":\"W-11\",\"mode\":\"free\",\"status\":\"blocked\",\"observed_result\":\"Project creation, saved instruction (END-42), in-project chat and chat isolation work for a Free first-time account. Uploading route-brief.pdf as a project knowledge file failed twice with \\\"Something went wrong on our side. Try again shortly.\\\" The server log shows a 500 with column \\\"storage_targets\\\" of relation \\\"project_knowl…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 11,
+      "label": "W-18:free:frc",
+      "phaseIndex": 1,
+      "phaseTitle": "Free",
+      "agentId": "a202289e8639a9880",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795556546193,
+      "queuedAt": 1795556546175,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "W-18 Start a cloud coding task on a repository and get a pu…",
+      "promptPreview": "You are one tester in a person-style check of the AGI web app. The owner will not release the product until each basic capability visibly works for a real person, so your job is to find out the truth, not to make it pass.\n\nFirst read the run kit and follow it exactly: ~/.cache/agi-audit/web-lane/RUNKIT.md\n\nYour task: basic W-18, mode \"free\". The script is the row for W-18 in /Users…",
+      "promptFramed": true,
+      "lastProgressAt": 1795556746702,
+      "tokens": 75723,
+      "toolCalls": 35,
+      "durationMs": 200506,
+      "resultPreview": "{\"basic\":\"W-18 Start a cloud coding task on a repository and get a pull request\",\"mode\":\"free\",\"status\":\"partial\",\"observed_result\":\"Free account (first sign-in, code 424242) went Home > Code tab (/code). The page says \\\"Code is on paid plans. Give tasks to an agent that works in its own cloud environment. It is included from the Basic plan.\\\" with an Upgrade button. Upgrade opens /upgrade, then \\…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 12,
+      "label": "W-4:free:fra",
+      "phaseIndex": 1,
+      "phaseTitle": "Free",
+      "agentId": "af8ebe45169669c12",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795556579627,
+      "queuedAt": 1795556579581,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "W-4 Attach a PDF and an image and get answers about them",
+      "promptPreview": "You are one tester in a person-style check of the AGI web app. The owner will not release the product until each basic capability visibly works for a real person, so your job is to find out the truth, not to make it pass.\n\nFirst read the run kit and follow it exactly: ~/.cache/agi-audit/web-lane/RUNKIT.md\n\nYour task: basic W-4, mode \"free\". The script is the row for W-4 in /Users/s…",
+      "promptFramed": true,
+      "lastProgressAt": 1795557059619,
+      "tokens": 88981,
+      "toolCalls": 72,
+      "durationMs": 479988,
+      "resultPreview": "{\"basic\":\"W-4 Attach a PDF and an image and get answers about them\",\"mode\":\"free\",\"status\":\"partial\",\"observed_result\":\"Both attachments uploaded and the first answer was right (\\\"The parcel goes to Cedar Bay station. There are 3 shapes in the image.\\\"). A staged tiles.png removed before a follow-up did not go out with it, and the follow-up answered VELA-74 and five from the PDF. After reload both…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 13,
+      "label": "W-16:free:frb",
+      "phaseIndex": 1,
+      "phaseTitle": "Free",
+      "agentId": "a3c50912a86594b98",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795556657038,
+      "queuedAt": 1795556657036,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "W-16 Schedule a task and receive its result",
+      "promptPreview": "You are one tester in a person-style check of the AGI web app. The owner will not release the product until each basic capability visibly works for a real person, so your job is to find out the truth, not to make it pass.\n\nFirst read the run kit and follow it exactly: ~/.cache/agi-audit/web-lane/RUNKIT.md\n\nYour task: basic W-16, mode \"free\". The script is the row for W-16 in /Users…",
+      "promptFramed": true,
+      "lastProgressAt": 1795556882418,
+      "tokens": 74082,
+      "toolCalls": 37,
+      "durationMs": 225379,
+      "resultPreview": "{\"basic\":\"W-16 Schedule a task and receive its result\",\"mode\":\"free\",\"status\":\"partial\",\"observed_result\":\"Free does not include scheduled tasks, and the app says so clearly. The Scheduled page shows \\\"Scheduled tasks are available on Basic and higher plans.\\\", an empty state \\\"No schedules yet / Upgrade to automate unattended work from this account.\\\", and an Upgrade plan button with no create co…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 14,
+      "label": "W-19:free:frc",
+      "phaseIndex": 1,
+      "phaseTitle": "Free",
+      "agentId": "aa79ff240b3b4e897",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795556746718,
+      "queuedAt": 1795556746707,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "W-19 See usage and limits; hitting a limit explains what ha…",
+      "promptPreview": "You are one tester in a person-style check of the AGI web app. The owner will not release the product until each basic capability visibly works for a real person, so your job is to find out the truth, not to make it pass.\n\nFirst read the run kit and follow it exactly: ~/.cache/agi-audit/web-lane/RUNKIT.md\n\nYour task: basic W-19, mode \"free\". The script is the row for W-19 in /Users…",
+      "promptFramed": true,
+      "lastProgressAt": 1795557343210,
+      "tokens": 126172,
+      "toolCalls": 96,
+      "durationMs": 596490,
+      "resultPreview": "{\"basic\":\"W-19 See usage and limits; hitting a limit explains what happens next\",\"mode\":\"free\",\"status\":\"partial\",\"observed_result\":\"Usage screen on Free shows only \\\"Upgrade for higher capacity\\\" and an Upgrade button, no meters (matches the owner decision), and it did not change after a normal request. Upgrade leads to a clear dialog with the Basic waitlist (\\\"You're on the waitlist\\\") and an ac…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 15,
+      "label": "W-17:free:frb",
+      "phaseIndex": 1,
+      "phaseTitle": "Free",
+      "agentId": "a7785d1055d8c1941",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795556882437,
+      "queuedAt": 1795556882424,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "W-17 Connect one outside app and use it in a chat",
+      "promptPreview": "You are one tester in a person-style check of the AGI web app. The owner will not release the product until each basic capability visibly works for a real person, so your job is to find out the truth, not to make it pass.\n\nFirst read the run kit and follow it exactly: ~/.cache/agi-audit/web-lane/RUNKIT.md\n\nYour task: basic W-17, mode \"free\". The script is the row for W-17 in /Users…",
+      "promptFramed": true,
+      "lastProgressAt": 1795557175345,
+      "tokens": 83061,
+      "toolCalls": 56,
+      "durationMs": 292905,
+      "resultPreview": "{\"basic\":\"W-17 Connect one outside app and use it in a chat\",\"mode\":\"free\",\"status\":\"partial\",\"observed_result\":\"A Free account cannot connect an outside app. The composer \\\"+\\\" menu > Connectors says \\\"No connectors connected yet.\\\" with Manage connectors and Browse connectors. Both open Settings > Connectors, which reads \\\"Your plan does not include Connectors. Upgrade to Basic, Premium, Max, Ul…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 16,
+      "label": "W-12:free:fra",
+      "phaseIndex": 1,
+      "phaseTitle": "Free",
+      "agentId": "a3fcb062cc3e95e34",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795557059637,
+      "queuedAt": 1795557059626,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "W-12 Memory: tell it something, see it used in a new chat, …",
+      "promptPreview": "You are one tester in a person-style check of the AGI web app. The owner will not release the product until each basic capability visibly works for a real person, so your job is to find out the truth, not to make it pass.\n\nFirst read the run kit and follow it exactly: ~/.cache/agi-audit/web-lane/RUNKIT.md\n\nYour task: basic W-12, mode \"free\". The script is the row for W-12 in /Users…",
+      "promptFramed": true,
+      "lastProgressAt": 1795557506133,
+      "tokens": 97558,
+      "toolCalls": 67,
+      "durationMs": 446494,
+      "resultPreview": "{\"basic\":\"W-12 Memory: tell it something, see it used in a new chat, delete it\",\"mode\":\"free\",\"status\":\"pass\",\"observed_result\":\"Memory works end to end for a Free first-time account. Persistent memory starts OFF with 0 saved memories. Asking the chat to remember \\\"My sample label is hazel kite\\\" while it is off gives a clear message (\\\"memory is off. You can manage saved memories in Settings unde…"
+    }
+  ],
+  "totalTokens": 1604200,
+  "totalToolCalls": 1162
+}

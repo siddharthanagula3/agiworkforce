@@ -1,0 +1,696 @@
+{
+ "S5.01": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Share"
+   }
+  ],
+  "needs": "a chat that already has messages",
+  "note": "The chat title is written in a screen-reader-only heading in apps/web/features/chat/pages/WebChatPage.tsx; I did not confirm a visible title text in the top bar.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and click Chat in the left sidebar, then open a chat from Recents (or send a first message).",
+   "Look at the top bar of the chat page.",
+   "Click the Share button, then the chevron menu next to it, and check that the menu offers rename, move, share, print, export, branch and delete.",
+   "Compare with Expected: the top bar should show where you are and the main actions for this view."
+  ],
+  "where": "Open any chat that has messages, then look at the top bar (Share button and chevron menu at the top right)"
+ },
+ "S5.02": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Projects"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Library"
+   },
+   {
+    "file": "packages/ui/ui/src/sidebar/Sidebar.tsx",
+    "text": "Home"
+   }
+  ],
+  "needs": "none (Health appears only when a health space is available; Home | Code only when Code is enabled)",
+  "note": "The nav list is defined in apps/web/shared/components/layout/app-nav-items.ts; Health is hidden unless requiresHealthSpace is met.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in; the left sidebar shows the nav rows.",
+   "Click Projects, then Library, then Sites, and watch the main area change.",
+   "Find the two-part switch with Home and Code (shown only when the Code option is enabled for the account) and click Code.",
+   "Compare with Expected: each click should move to that product area or mode."
+  ],
+  "where": "Sidebar > Chat, Projects, Library, Sites, Health, Study (nav rows); and the Home | Code switch above the chat list"
+ },
+ "S5.04": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Workspace"
+   },
+   {
+    "file": "apps/web/features/workspaces/components/WorkspaceMenuItems.tsx",
+    "text": "Personal"
+   }
+  ],
+  "needs": "a second workspace (a team/enterprise membership) for switching; a Free account shows only Personal",
+  "note": "The active workspace is not shown on the sidebar itself in the code I read; it appears only inside the Workspace submenu.",
+  "reachable": "yes",
+  "steps": [
+   "Click the account button at the bottom of the sidebar.",
+   "Hover or click Workspace.",
+   "Look at the list: Personal (detail Only you) and any Enterprise workspaces; the active one is marked with a check icon.",
+   "Click a different workspace, read the switch warning, and check that the app reloads in that workspace (Expected)."
+  ],
+  "where": "Sidebar bottom > account button (Account menu for your name) > Workspace > Personal / Enterprise"
+ },
+ "S5.05": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Toggle sidebar"
+   }
+  ],
+  "needs": "a wide window (desktop width); on a phone the sidebar is a drawer instead",
+  "reachable": "yes",
+  "steps": [
+   "Sign in on a wide window so the sidebar is open.",
+   "Click the Toggle sidebar button in the sidebar header (or press Cmd+B).",
+   "Check that the sidebar collapses to a narrow icon rail.",
+   "Click the same button again (or press Cmd+B) and check that the sidebar expands."
+  ],
+  "where": "Sidebar header > Toggle sidebar button (keyboard: Cmd+B on Mac, Ctrl+B on Windows)"
+ },
+ "S5.07": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Search"
+   }
+  ],
+  "needs": "at least one saved chat with a known title",
+  "note": "The sidebar search entry opens a search dialog (GlobalSearchDialog); it does not filter the sidebar list in place.",
+  "reachable": "yes",
+  "steps": [
+   "Click Search in the sidebar, or press Cmd+Shift+F.",
+   "A search panel opens over the app.",
+   "Type part of a chat title that you know exists.",
+   "Compare with Expected: matching conversations should appear as results and open when clicked."
+  ],
+  "where": "Sidebar > Search (row with a Search icon, shortcut shown as Cmd+Shift+F, or Ctrl+Shift+F on Windows)"
+ },
+ "S5.08": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/sidebar/Sidebar.tsx",
+    "text": "New Chat"
+   }
+  ],
+  "needs": "none",
+  "reachable": "yes",
+  "steps": [
+   "From any page in the app, click New Chat at the top of the sidebar, or press Shift+Cmd+O.",
+   "Check that a blank chat opens with an empty message box.",
+   "Send a message, then click New Chat again and check that a second, fresh chat opens."
+  ],
+  "where": "Sidebar > New Chat button at the top of the sidebar (shortcut Shift+Cmd+O, or Shift+Ctrl+O on Windows)"
+ },
+ "S5.09": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Pinned"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Pin"
+   }
+  ],
+  "needs": "at least one saved chat",
+  "reachable": "yes",
+  "steps": [
+   "Hover a chat row in Recents and click its More options (three dots) button.",
+   "Click Pin.",
+   "Check that the chat moves into a section headed Pinned at the top of the list.",
+   "Click Unpin in the same menu and check that it returns to its date group."
+  ],
+  "where": "Sidebar > Pinned (section at the top of the chat list)"
+ },
+ "S5.10": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Recents"
+   }
+  ],
+  "needs": "at least two saved chats",
+  "reachable": "yes",
+  "steps": [
+   "Create two or more chats by sending a message in each.",
+   "Look at the list under the Recents heading.",
+   "Click an older chat and check that it opens with its messages.",
+   "Compare with Expected: recent conversations are listed and open on selection."
+  ],
+  "where": "Sidebar > Recents (heading above the chat list)"
+ },
+ "S5.11": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Organize chats"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "By project"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "In one list"
+   }
+  ],
+  "needs": "a project with at least one chat moved into it",
+  "reachable": "yes",
+  "steps": [
+   "Move a chat into a project: hover the chat, click More options, then Move to project, and pick a project.",
+   "Hover the Recents heading and click the sliders icon named Organize chats.",
+   "With By project selected (the default), check that the moved chat appears under its project row and not in Recents.",
+   "Choose In one list and check that all chats appear in Recents again."
+  ],
+  "where": "Sidebar > Recents heading > Organize chats (sliders icon) > By project or In one list"
+ },
+ "S5.12": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/sidebar/temporal.ts",
+    "text": "Today"
+   },
+   {
+    "file": "packages/ui/ui/src/sidebar/temporal.ts",
+    "text": "This Week"
+   },
+   {
+    "file": "packages/ui/ui/src/sidebar/temporal.ts",
+    "text": "Older"
+   }
+  ],
+  "needs": "chats from several different dates",
+  "note": "Expected says This week, but the code labels are Today, Yesterday, This Week, Last 7 Days, Last 30 Days and Older; groups with no chats are not shown.",
+  "reachable": "yes",
+  "steps": [
+   "Have chats from different days (or use an account with older chats).",
+   "Look at the group headings above the chat rows.",
+   "Click a heading to collapse or expand its group.",
+   "Compare with Expected: the headings should be Today, Yesterday, This week, Older."
+  ],
+  "where": "Sidebar > Recents > date group headings"
+ },
+ "S5.13": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Recents"
+   }
+  ],
+  "needs": "at least two saved chats",
+  "reachable": "yes",
+  "steps": [
+   "Click a chat row in Recents.",
+   "Check that the chat opens in the main area with its title and messages.",
+   "Check that the row you clicked now has a highlighted background (it is marked as the current page).",
+   "Click a different row and check that the highlight moves."
+  ],
+  "where": "Sidebar > Recents > a chat row (click the title)"
+ },
+ "S5.14": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Projects"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "New project"
+   }
+  ],
+  "needs": "a project (create one first)",
+  "note": "The Projects section in the sidebar appears only once the account has at least one project.",
+  "reachable": "yes",
+  "steps": [
+   "Click Projects in the sidebar nav, then New project and create one.",
+   "Go back to the sidebar and find the project under the Projects section.",
+   "Click the project name and check that the project page opens (address /chat/projects/ with the project id).",
+   "Hover the project row and check the New chat in project and More options buttons."
+  ],
+  "where": "Sidebar > Projects > a project name"
+ },
+ "S5.15": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Work"
+   }
+  ],
+  "needs": "a Work task that already exists (how to start one was not confirmed in the code I read)",
+  "note": "The Work marker is a small dot (session.agiWork), not a separate label; how a Work task is started was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Find a row in Recents that carries the Work marker (a small dot, no chat-style row).",
+   "Click the row and check that it opens the task.",
+   "Compare with Expected: the row should be visibly different from a plain chat and show its state.",
+   "For the full task list, open the command palette (Cmd+K) and choose Work history."
+  ],
+  "where": "Sidebar > Recents > a row marked Work (a small dot with the word Work for screen readers)"
+ },
+ "S5.16": {
+  "labels": [
+   {
+    "file": "apps/web/shared/components/CommandPalette/CommandPalette.tsx",
+    "text": "Search chats and actions"
+   },
+   {
+    "file": "apps/web/shared/components/CommandPalette/CommandPalette.tsx",
+    "text": "Project"
+   }
+  ],
+  "needs": "a chat and a project whose names match a word you type",
+  "note": "The icons are in the command palette; sidebar rows use a dot and a screen-reader word instead.",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+K (Ctrl+K on Windows).",
+   "Type a word from a chat title and from a project name.",
+   "Look at each result row: it has an icon and a hidden type label (Chat, Project, File, Artifact and so on).",
+   "Compare with Expected: the type should be recognisable from the icon and announced for screen readers."
+  ],
+  "where": "Press Cmd+K > type a word > results show an icon and a type label for each row"
+ },
+ "S5.17": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Running"
+   }
+  ],
+  "needs": "an account that can send a message and get a reply",
+  "reachable": "yes",
+  "steps": [
+   "Send a question that takes a while to answer in a chat.",
+   "While the reply is still coming in, look at the chat row in Recents.",
+   "Check that a pulsing dot appears beside the title.",
+   "When the reply finishes, check that the dot disappears."
+  ],
+  "where": "Sidebar > Recents > the chat row whose reply is still running"
+ },
+ "S5.18": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Needs you"
+   }
+  ],
+  "needs": "a run that is waiting for your approval or input",
+  "note": "The flag comes from server state (apps/web/lib/server/neon-chat.ts); there is no button that creates it, so the tester must trigger a run that waits.",
+  "reachable": "yes",
+  "steps": [
+   "Start a run that asks you for approval or input (for example, a task that waits for you).",
+   "Leave the chat open or move to another chat.",
+   "Look at the chat row in Recents for an amber dot, and hover or inspect it for the word Needs you for screen readers.",
+   "Answer the question and check that the amber dot clears."
+  ],
+  "where": "Sidebar > Recents > a chat row with an amber dot"
+ },
+ "S5.19": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Unread"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Mark as unread"
+   }
+  ],
+  "needs": "at least one saved chat",
+  "note": "I did not trace the code that clears the unread flag on open; the tester can confirm it by clicking.",
+  "reachable": "yes",
+  "steps": [
+   "Hover a chat row in Recents, click More options, then Mark as unread.",
+   "Check that the row shows a blue dot and a bold title, and that the screen-reader text says Unread.",
+   "Click the row and check that the dot and bold title clear.",
+   "Compare with Expected: unread items are marked and clear when opened."
+  ],
+  "where": "Sidebar > Recents > chat row with a blue dot and bold title (set Mark as unread from More options)"
+ },
+ "S5.20": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "More options"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Share"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Rename"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Archive"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Move to project"
+   }
+  ],
+  "needs": "at least one saved chat; a project for Move to project",
+  "note": "Share and Move to project appear only when the matching action is provided; the list in Expected matches the code.",
+  "reachable": "yes",
+  "steps": [
+   "Hover a chat row in Recents and click More options.",
+   "Check the menu order: Share, Rename, Pin, Mark as unread, Archive, Delete, Move to project.",
+   "Use Move to project (when projects exist) and check that the chat moves.",
+   "Use Delete and check that a confirmation dialog appears before anything is removed."
+  ],
+  "where": "Sidebar > hover a chat row > More options (three dots)"
+ },
+ "S5.21": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Rename"
+   }
+  ],
+  "needs": "at least one saved chat",
+  "note": "Clicking away from the field also saves the new title (blur calls submitRename), which Expected does not mention.",
+  "reachable": "yes",
+  "steps": [
+   "Hover a chat row, click More options, then Rename.",
+   "The title turns into a text field: type a new name and press Enter.",
+   "Check that the new title shows in the row, then reload the page and check it is still there.",
+   "Start a rename again, press Escape, and check that the old title comes back."
+  ],
+  "where": "Sidebar > chat row > More options > Rename"
+ },
+ "S5.25": {
+  "labels": [
+   {
+    "file": "apps/desktop/electron/appMenu.ts",
+    "text": "History"
+   },
+   {
+    "file": "apps/desktop/electron/appMenu.ts",
+    "text": "Back"
+   },
+   {
+    "file": "apps/desktop/electron/appMenu.ts",
+    "text": "Forward"
+   }
+  ],
+  "needs": "the Electron desktop app for the menu; a browser for the browser's own back button",
+  "reachable": "yes",
+  "steps": [
+   "Open two different chats, one after the other.",
+   "In the Electron desktop app, click History in the menu bar, then Back (shortcut Cmd+[).",
+   "Check that the earlier chat opens again.",
+   "Click History > Forward (Cmd+]) and check that the later chat returns."
+  ],
+  "where": "Menu bar > History > Back and Forward (desktop app only; in the browser use the browser's back and forward buttons)"
+ },
+ "S5.26": {
+  "labels": [
+   {
+    "file": "apps/web/shared/components/CommandPalette/CommandPalette.tsx",
+    "text": "Search chats and actions"
+   },
+   {
+    "file": "apps/web/shared/components/CommandPalette/CommandPalette.tsx",
+    "text": "Go to Settings"
+   }
+  ],
+  "needs": "none",
+  "note": "The palette is opened by the capture-phase listener in apps/web/shared/components/CommandPalette/CommandPaletteProvider.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+K from any page.",
+   "Check that a dialog opens with the placeholder Search chats and actions.",
+   "Type settings and press Enter on Go to Settings.",
+   "Compare with Expected: the palette runs the command and opens that destination."
+  ],
+  "where": "Press Cmd+K anywhere (Ctrl+K on Windows) > command palette"
+ },
+ "S5.27": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Keyboard shortcuts"
+   },
+   {
+    "file": "apps/web/features/chat/components/dialogs/KeyboardShortcutsDialog.tsx",
+    "text": "Keyboard Shortcuts"
+   }
+  ],
+  "needs": "none",
+  "reachable": "yes",
+  "steps": [
+   "Click the account button at the bottom of the sidebar, then Get help, then Keyboard shortcuts.",
+   "Or press Cmd+/ (Ctrl+/ on Windows) from a chat page.",
+   "Check that a dialog titled Keyboard Shortcuts opens and lists the shortcuts with their keys.",
+   "Press Escape and check that the dialog closes."
+  ],
+  "where": "Account menu (bottom of sidebar) > Get help > Keyboard shortcuts (or press Cmd+/)"
+ },
+ "S5.28": {
+  "labels": [
+   {
+    "file": "apps/web/features/notifications/components/NotificationBell.tsx",
+    "text": "Notifications"
+   },
+   {
+    "file": "apps/web/features/notifications/components/NotificationBell.tsx",
+    "text": "Mark all as read"
+   }
+  ],
+  "needs": "a notification (for example a finished run); an empty account shows the empty message",
+  "note": "The empty-state text is: When a run finishes, a report is ready or something needs you, it shows up here.",
+  "reachable": "yes",
+  "steps": [
+   "Click the bell at the top of the sidebar.",
+   "Check the panel titled Notifications, with an unread count on the bell when there are unread items.",
+   "Click a notification row and check that it opens its target.",
+   "Click Mark all as read and check the unread dots clear and the count goes away."
+  ],
+  "where": "Sidebar top, next to the AGI wordmark > bell button (Notifications)"
+ },
+ "S5.29": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Log out"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Settings"
+   }
+  ],
+  "needs": "none",
+  "note": "The account menu is defined in apps/web/shared/components/layout/AccountMenuItems.tsx; the plan is shown as a badge on the footer, and Free accounts see a Free plan line with Upgrade.",
+  "reachable": "yes",
+  "steps": [
+   "Click the account button at the bottom of the sidebar.",
+   "Check that your email shows at the top of the menu.",
+   "Check the items: Workspace, Settings, Get help, Upgrade (only when offered), Log out.",
+   "Click Settings and check that the Settings page opens; then sign out with Log out and check you return to sign-in."
+  ],
+  "where": "Sidebar bottom > account button (Account menu for your name)"
+ },
+ "S5.30": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Get help"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Email support"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Send feedback"
+   }
+  ],
+  "needs": "none",
+  "note": "Learn more, Data use, Data rights and Terms and policies are in a separate Learn more submenu of the same account menu.",
+  "reachable": "yes",
+  "steps": [
+   "Click the account button at the bottom of the sidebar, then Get help.",
+   "Check the options: Get help, Email support, Send feedback, Keyboard shortcuts.",
+   "Click Send feedback and check that the feedback dialog opens.",
+   "Click Keyboard shortcuts and check that the shortcuts dialog opens."
+  ],
+  "where": "Account menu (bottom of sidebar) > Get help"
+ },
+ "S5.31": {
+  "labels": [
+   {
+    "file": "apps/web/shared/components/layout/SidebarPlanNudge.tsx",
+    "text": "Free plan"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Upgrade"
+   }
+  ],
+  "needs": "a Free account",
+  "note": "Code is partial: the owner-held billing waitlist (AGI_BILLING_WAITLIST_OPEN, billing-waitlist-access.ts) decides whether Upgrade reaches checkout or the waitlist dialog, so the tester may see the waitlist instead of a plan flow.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with a Free account and look at the bottom of the sidebar for the \"Free plan\" row.",
+   "Click the \"Upgrade\" button on that row.",
+   "Open the account menu from the sidebar and look for the \"Upgrade\" item (it is hidden when the plan has no self-serve upgrade path).",
+   "Click \"Upgrade\" and compare with Expected: an eligible user should reach the plan upgrade flow. Note that paid checkout is gated: while billing upgrades are closed, the flow shows the waitlist dialog instead of checkout."
+  ],
+  "where": "Sidebar account footer > \"Free plan\" row > Upgrade button; or the account menu (\"Account menu for ...\" in the sidebar) > Upgrade"
+ },
+ "S5.32": {
+  "labels": [
+   {
+    "file": "packages/client/client-runtime/src/offline-sync/index.ts",
+    "text": "Offline"
+   },
+   {
+    "file": "apps/web/shared/components/OfflineIndicator.tsx",
+    "text": "Retry"
+   }
+  ],
+  "needs": "a Mac with Wi-Fi that can be switched off, and a signed-in account",
+  "note": "The Retry button appears only in the error state (after a sync error), not while offline, so there is no reconnect control when the network is down; the code does not show a separate backend-connection indicator.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and stay on any screen.",
+   "Turn off Wi-Fi on the Mac (or disconnect the network) and wait a few seconds.",
+   "Look for the status strip under the header: it should show a connection state such as \"Offline\".",
+   "Check whether a reconnect control is offered; compare with Expected (it should offer reconnect when not connected)."
+  ],
+  "where": "Any screen > the status strip that drops in below the header (labelled \"Network status indicator\"); it appears on connection loss or a sync error, with no menu"
+ },
+ "S5.33": {
+  "labels": [
+   {
+    "file": "packages/client/client-runtime/src/offline-sync/index.ts",
+    "text": "Offline"
+   },
+   {
+    "file": "apps/web/shared/components/OfflineIndicator.tsx",
+    "text": "pending"
+   }
+  ],
+  "needs": "a Mac with Wi-Fi that can be switched off, and a signed-in account; queued items show \"pending\" only if some work is waiting",
+  "note": "When back online the strip hides unless items are queued or syncing, so it clears rather than showing an \"Online\" message.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and stay on any screen.",
+   "Turn off Wi-Fi on the Mac.",
+   "Look for the strip under the header showing \"Offline\" (with \"pending\" if changes are queued).",
+   "Turn Wi-Fi back on and wait; compare with Expected: the strip should clear once the app is back online."
+  ],
+  "where": "Any screen > turn off Wi-Fi; the status strip under the header appears; turn Wi-Fi back on"
+ },
+ "S5.34": {
+  "labels": [
+   {
+    "file": "apps/desktop/electron/appMenu.ts",
+    "text": "Check for Updates\u2026"
+   },
+   {
+    "file": "apps/desktop/electron/desktopCloudUpdate.ts",
+    "text": "Download Installer"
+   },
+   {
+    "file": "apps/desktop/electron/desktopCloudUpdate.ts",
+    "text": "Relaunch to update"
+   }
+  ],
+  "needs": "a Mac desktop build; to see the update-available or update-ready dialog a newer published version must exist (otherwise only the up-to-date dialog appears)",
+  "note": "The in-app check also exists as \"Check for updates\" in the Settings update row (apps/web/features/desktop-host/components/DesktopUpdateRow.tsx) and a \"Relaunch to update\" banner (DesktopUpdateNotice.tsx); the Settings tab that holds that row was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Click the app's own menu in the Mac menu bar.",
+   "Click \"Check for Updates\u2026\".",
+   "Read the dialog: if you have the latest version it says the app is up to date; if a newer one exists it offers \"Download Installer\" (or \"Relaunch to update\" once downloaded).",
+   "Compare with Expected: the dialog should say whether a new release is available and how to get it."
+  ],
+  "where": "Menu bar > the app's own menu (the menu named after the app, far left, next to the Apple menu) > Check for Updates\u2026"
+ },
+ "S5.35": {
+  "labels": [
+   {
+    "file": "apps/web/shared/components/layout/WebAppShell.tsx",
+    "text": "Open navigation"
+   }
+  ],
+  "needs": "a window narrower than 768 px",
+  "note": "The header button is an icon with an aria-label, so no visible word is shown on it; the code path is the compact tier (app-shell-layout.ts, SHELL_TABLET_MIN_WIDTH = 768).",
+  "reachable": "yes",
+  "steps": [
+   "Drag the window edge until the window is narrower than about 768 px wide.",
+   "Click the menu icon at the top-left of the header (accessible name \"Open navigation\").",
+   "Look for the navigation drawer sliding in from the left, with the sidebar items inside.",
+   "Press Escape or click outside the drawer, then check it closes and keyboard focus returns to the menu button; compare with Expected."
+  ],
+  "where": "Resize the app window narrower than 768 px > header button at top-left labelled \"Open navigation\" > navigation drawer slides in from the left"
+ },
+ "S5.37": {
+  "labels": [],
+  "needs": "a window that can be resized to tablet widths",
+  "note": "Code (app-shell-layout.ts) keeps the sidebar persistent in landscape but uses a rail that expands over the content in portrait, which is not the side-by-side layout Expected describes.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Resize the window to between 768 and 1023 px wide with the window wider than tall (landscape).",
+   "Look: the navigation sidebar should stay beside the content (persistent).",
+   "Resize to a taller-than-wide (portrait) window at the same width.",
+   "Look: in portrait the sidebar shows only icons and expands over the content instead of sitting beside it; compare with Expected."
+  ],
+  "where": "Resize the window to a width from 768 px to 1023 px; the sidebar layout is chosen by width and orientation (no control)"
+ },
+ "S5.38": {
+  "labels": [],
+  "needs": "a signed-in account with a notification that links to a chat or task",
+  "note": "Stable links use the path /open/<type>/<id> (packages/contracts/types/src/product-links.ts), and the desktop deep-link scheme is agiworkforce-cloud (packages/contracts/local-runtime/src/host-bridge.ts); the bell's visible label was not confirmed, so the tester should locate it by icon.",
+  "reachable": "yes",
+  "steps": [
+   "Make sure an account has a notification that points at a chat or a task.",
+   "Open the notifications bell from the sidebar header.",
+   "Click that notification.",
+   "Look: the app should open that chat or task directly, and the address should point at the item; compare with Expected."
+  ],
+  "where": "Sidebar > the bell icon next to the wordmark (notifications) > click a notification about a chat, project or task"
+ },
+ "S5.39": {
+  "labels": [
+   {
+    "file": "apps/web/app/chat/not-found.tsx",
+    "text": "Conversation not found"
+   },
+   {
+    "file": "apps/web/features/notifications/components/ProductLinkUnavailable.tsx",
+    "text": "Back to chats"
+   },
+   {
+    "file": "apps/web/app/chat/loading.tsx",
+    "text": "Loading chat"
+   }
+  ],
+  "needs": "a Free or paid account and a chat you can delete",
+  "note": "The loading screen is brief, so capture it on a slow connection; the unavailable copy also varies by reason (deleted, no access, not found).",
+  "reachable": "yes",
+  "steps": [
+   "Delete a chat you own, or pick a link to a chat that no longer exists.",
+   "Open that link from the app (for example from a notification).",
+   "Look for the \"Loading chat\" screen while it resolves.",
+   "Look for the unavailable screen: a title such as \"This chat isn\u2019t available\" with a \"Back to chats\" button; compare with Expected."
+  ],
+  "where": "Open a chat link whose chat was deleted (for example from a notification about it): the screen shows \"Conversation not found\"; the \"Loading chat\" screen appears while the chat resolves"
+ }
+}

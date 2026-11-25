@@ -1,0 +1,576 @@
+{
+ "S6.01": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Appearance"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/appearance/index.tsx",
+    "text": "Light"
+   }
+  ],
+  "needs": "none",
+  "note": "Token names are in apps/mobile/src/ui/theme/tokens.ts; the cited ThemeVars.tsx path was not checked for a UI effect.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Sign in and open the side menu, then tap Settings.",
+   "Open Device > Appearance.",
+   "Tap Light, then Dark.",
+   "Compare page background with the panel and card backgrounds in each theme with Expected."
+  ],
+  "where": "Settings > Device > Appearance: switch between Light and Dark; page and panel backgrounds change"
+ },
+ "S6.02": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/conversation-actions/useConversationActions.ts",
+    "text": "Rename"
+   }
+  ],
+  "needs": "a chat in the side menu",
+  "note": "Only the visible result is checkable; the elevated token name is not shown in the UI.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Sign in and open the side menu.",
+   "Long-press a chat row.",
+   "Compare the action sheet panel with the page behind it in Light and Dark.",
+   "Open the Rename dialog from the sheet and compare its panel background."
+  ],
+  "where": "Raised panels: long-press a chat in the side menu to open its action sheet, and open Create Schedule"
+ },
+ "S6.03": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Appearance"
+   }
+  ],
+  "needs": "none",
+  "note": "The 4.5:1 contrast claim needs a contrast meter; the tester can only judge visibly.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open Settings > Device > Appearance.",
+   "Tap Dark.",
+   "Read the bold option names and the grey description lines.",
+   "Compare how readable the grey text is with Expected."
+  ],
+  "where": "Any screen text: Settings > Device > Appearance, then Dark, then compare primary and muted text"
+ },
+ "S6.04": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/appearance/index.tsx",
+    "text": "System"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open Settings > Device > Appearance.",
+   "Look at the thin lines between the System, Light and Dark rows.",
+   "Switch Light and Dark and compare the line strength.",
+   "Compare the lines with Expected (subtle, not heavy)."
+  ],
+  "where": "Divider lines between rows: Settings > Device > Appearance"
+ },
+ "S6.05": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Accent Color"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/accent-color/index.tsx",
+    "text": "Neutral"
+   }
+  ],
+  "needs": "none",
+  "note": "Accent is turned off when the system high-contrast setting is on (apps/mobile/src/ui/theme/useTheme.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the side menu, then tap Settings.",
+   "Open Device > Accent Color.",
+   "Tap a colour such as Blue or Rose.",
+   "Check that the selected accent shows on the selected mark and on buttons, and that its text is readable."
+  ],
+  "where": "Settings > Device > Accent Color, then pick a colour swatch"
+ },
+ "S6.06": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/MessageBubble.tsx",
+    "text": "Message queued offline"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/MessageBubble.tsx",
+    "text": "Message failed to send"
+   }
+  ],
+  "needs": "a phone you can turn offline",
+  "note": "The labels are accessibility labels; the visible text was not confirmed.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Turn off Wi-Fi and mobile data on the phone.",
+   "Send a chat message.",
+   "Look for the status text under the message (Message queued offline or Message failed to send).",
+   "Compare the success, warning and error colours with Expected in Light and Dark."
+  ],
+  "where": "Message status text: a message that is queued offline or fails to send in the chat"
+ },
+ "S6.07": {
+  "labels": [],
+  "needs": "none",
+  "note": "The font declarations are in apps/mobile/tailwind.config.js and apps/mobile/app/_layout.tsx; the editorial face was not confirmed in any screen.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open Settings > Device > Appearance and read the Theme heading and option names.",
+   "Open a chat and read the reply text.",
+   "Compare the font look with Expected (one sans, one editorial, one monospace)."
+  ],
+  "where": "Font families: visible in any heading and body text across the app"
+ },
+ "S6.08": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/appearance/index.tsx",
+    "text": "Theme"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open Settings > Device > Appearance.",
+   "Compare the size and weight of the screen title with the Theme heading.",
+   "Open another settings screen, such as Accent Color, and compare the title style.",
+   "Check the headings match across screens."
+  ],
+  "where": "Heading sizes: the Appearance screen title and the Theme heading"
+ },
+ "S6.09": {
+  "labels": [],
+  "needs": "a phone where you can change text size",
+  "note": "No in-app text-size setting was found; the code reads the device font scale (apps/mobile/src/shared/components/TextScaleBoundary.tsx).",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open Settings > Device > Appearance and read the description lines.",
+   "Change the phone's text size in the phone's own settings.",
+   "Reopen the app and compare the body text size."
+  ],
+  "where": "Body text size: no in-app text-size control was found; device text size changes app text"
+ },
+ "S6.10": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/appearance/index.tsx",
+    "text": "Bright neutral interface."
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open Settings > Device > Appearance.",
+   "Read the grey line under Light: Bright neutral interface.",
+   "Compare its size with the bold option name above it.",
+   "Check it is at least as large as 12 px and easy to read."
+  ],
+  "where": "Small caption text: the grey description line under each Appearance option"
+ },
+ "S6.11": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/MessageBubble.tsx",
+    "text": "Copy Message"
+   }
+  ],
+  "needs": "a Free or paid account",
+  "note": "The monospace family is declared in apps/mobile/tailwind.config.js; the code block copy control was not matched to a visible label.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Ask the chat for a short code sample.",
+   "Wait for the reply to finish.",
+   "Compare the code text with the body text around it.",
+   "Check the code uses a monospace face and a different size."
+  ],
+  "where": "Code text in a chat reply: any reply that contains a code block"
+ },
+ "S6.12": {
+  "labels": [],
+  "needs": "a Free or paid account",
+  "note": "",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Ask the chat a question that gets a multi-line answer.",
+   "Wait for the reply to finish.",
+   "Look at the gap between lines in one paragraph.",
+   "Compare the line spacing with Expected."
+  ],
+  "where": "Line spacing in a chat reply that has several lines"
+ },
+ "S6.13": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/MessageBubble.tsx",
+    "text": "Copy Message"
+   }
+  ],
+  "needs": "a Free or paid account",
+  "note": "",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Ask the chat for a reply with three or more paragraphs.",
+   "Wait for the reply to finish.",
+   "Measure the gap between two paragraphs by eye.",
+   "Check the gap is the same between every pair."
+  ],
+  "where": "Paragraph gaps in a chat reply with several paragraphs"
+ },
+ "S6.14": {
+  "labels": [],
+  "needs": "a Free or paid account",
+  "note": "",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Ask the chat for a nested bullet list.",
+   "Wait for the reply to finish.",
+   "Look at the indent of the first and second levels.",
+   "Check each level indents by the same step."
+  ],
+  "where": "Bullet-list indentation in a chat reply"
+ },
+ "S6.15": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/MessageBubble.tsx",
+    "text": "Copy Message"
+   }
+  ],
+  "needs": "a Free or paid account",
+  "note": "The copy control label for code blocks was not confirmed.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Ask the chat for a short code sample.",
+   "Wait for the reply to finish.",
+   "Look at the space between the code text and the edge of its box.",
+   "Compare the padding on the top, bottom and sides."
+  ],
+  "where": "Padding inside a code block in a chat reply"
+ },
+ "S6.16": {
+  "labels": [],
+  "needs": "a Free or paid account",
+  "note": "Cell padding is in apps/mobile/src/features/chat/components/MessageContentRenderer.tsx.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Ask the chat for a small table, such as three columns and three rows.",
+   "Wait for the reply to finish.",
+   "Look at the space inside each cell.",
+   "Compare the padding across cells."
+  ],
+  "where": "Table cell padding in a chat reply that contains a table"
+ },
+ "S6.17": {
+  "labels": [],
+  "needs": "a Free or paid account",
+  "note": "",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Send a first message in a chat and wait for the reply.",
+   "Send a second message.",
+   "Measure the gap between the turns.",
+   "Check it matches the gap used between other turns."
+  ],
+  "where": "Space between two chat turns (one question and one reply, then the next question)"
+ },
+ "S6.18": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/MessageBubble.tsx",
+    "text": "Good response"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/MessageBubble.tsx",
+    "text": "Bad response"
+   }
+  ],
+  "needs": "a Free or paid account",
+  "note": "How the action row is opened was not confirmed in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message and wait for the reply.",
+   "Look at the action row below the reply.",
+   "Compare the gap between the reply text and the action row with Expected.",
+   "Check the row sits the same distance below each reply."
+  ],
+  "where": "Chat: under an AI reply, its action row (Good response, Bad response, Copy Message)"
+ },
+ "S6.19": {
+  "labels": [],
+  "needs": "none",
+  "note": "No fixed visible words for the composer were found outside the placeholder cases.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the chat screen.",
+   "Tap into the message box.",
+   "Look at the space between the box edge and the typed text and buttons.",
+   "Compare the padding with Expected."
+  ],
+  "where": "Chat screen: the message box at the bottom of the screen"
+ },
+ "S6.20": {
+  "labels": [],
+  "needs": "a phone, optionally a wider device",
+  "note": "The rule is in apps/mobile/src/shared/layout/contentColumn.ts.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open the chat screen on a phone.",
+   "Look at the left and right margins of the messages.",
+   "Repeat on a wider screen (rotate or use a larger device) if available.",
+   "Compare the margins with Expected (margins grow with width)."
+  ],
+  "where": "Left and right page margins on any screen; compare a phone and a wider device"
+ },
+ "S6.21": {
+  "labels": [],
+  "needs": "a few chats in the side menu",
+  "note": "Row labels come from a translation key that was not found as text.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the side menu.",
+   "Look at the chat rows.",
+   "Compare the height of each row with the others.",
+   "Check all rows have the same height."
+  ],
+  "where": "Side menu: the chat list rows"
+ },
+ "S6.22": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Accent Color"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Appearance"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the side menu, then tap Settings.",
+   "Look at the rows under Device (Appearance, Accent Color, General).",
+   "Open Device > Appearance and look at its option rows.",
+   "Compare the row heights with Expected (one row height across menus)."
+  ],
+  "where": "Settings > Device: each menu row, and the Appearance options"
+ },
+ "S6.23": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/conversation-actions/RenameConversationModal.tsx",
+    "text": "Rename chat"
+   },
+   {
+    "file": "apps/mobile/src/features/conversation-actions/RenameConversationModal.tsx",
+    "text": "Cancel"
+   }
+  ],
+  "needs": "a chat in the side menu",
+  "note": "Compare with another dialog, such as Settings > Account > Delete if present, for matching padding.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the side menu.",
+   "Long-press a chat row.",
+   "Tap Rename.",
+   "Look at the inner space around the Rename chat title, the field and the Cancel button."
+  ],
+  "where": "Side menu: long-press a chat > Rename, then the Rename chat dialog"
+ },
+ "S6.24": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/schedules/index.tsx",
+    "text": "Create Schedule"
+   }
+  ],
+  "needs": "a plan that allows schedules",
+  "note": "The Schedules row label comes from a translation key that was not found as text; Create Schedule may show View Plans on plans without schedules.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the side menu.",
+   "Tap the Schedules row and then Create Schedule.",
+   "Look at the space between each field label and its input.",
+   "Compare the gap between fields with Expected."
+  ],
+  "where": "Schedules > Create Schedule: the form fields and their labels"
+ },
+ "S6.25": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Appearance"
+   }
+  ],
+  "needs": "none",
+  "note": "Icons are from lucide-react-native (apps/mobile/src/features/settings/appearance/index.tsx).",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the side menu, then tap Settings.",
+   "Open Device > Appearance.",
+   "Look at the icons on the left of the System, Light and Dark rows.",
+   "Check the icons look like one family with the same stroke weight and size."
+  ],
+  "where": "Settings > Device > Appearance: the icons beside System, Light and Dark"
+ },
+ "S6.26": {
+  "labels": [],
+  "needs": "none",
+  "note": "Plan file button.tsx is now apps/mobile/components/ui/Button.tsx (sizes sm 36px, md 44px, lg 52px min height). Large buttons appear on screens such as apps/mobile/app/(auth)/reset-password.tsx, which a tester reaches only by a password-reset link, so the effect is hard to see from the UI.",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": "No control picks a button size. Sizes are sm, md and lg in one component."
+ },
+ "S6.27": {
+  "labels": [],
+  "needs": "none",
+  "note": "No label; the radius ladder itself is only visible through the shapes on screen.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Sign in and open a chat.",
+   "Look at the corners of the message box at the bottom and the round send control.",
+   "Compare with the radius values in apps/mobile/src/ui/theme/tokens.ts (radii scale) and the use of radii.full in apps/mobile/src/features/chat/components/ChatInput.tsx."
+  ],
+  "where": "Corner shape of the chat composer and send controls (inner rule, no setting)."
+ },
+ "S6.28": {
+  "labels": [],
+  "needs": "none",
+  "note": "The toast trigger is not verified in the code; the shadow scale is defined in tokens.ts and used by Toast.tsx line 93.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Sign in, then trigger a short message such as copying text from a message.",
+   "Look for the soft shadow under the toast that appears near the bottom.",
+   "Compare with the shadow values in apps/mobile/src/ui/theme/tokens.ts (elevation e1 to e4) and the toast use at apps/mobile/src/shared/components/Toast.tsx."
+  ],
+  "where": "Soft shadow under floating surfaces such as toast messages (inner rule, no setting)."
+ },
+ "S6.29": {
+  "labels": [],
+  "needs": "none",
+  "note": "The plan's CloudSyncErrorBanner.tsx file no longer exists; toasts (zIndex.notification) and the app lock overlay (zIndex.fullscreen in apps/mobile/src/features/auth/components/AppLockOverlay.tsx) are the current users.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Sign in and open a chat with text on screen.",
+   "Trigger a toast message and check it sits above the chat content.",
+   "Compare with the named layers in apps/mobile/src/ui/theme/tokens.ts (zIndex: control, overlay, modal, notification, fullscreen)."
+  ],
+  "where": "Stacking order of toasts, overlays and full-screen lock (inner rule, no setting)."
+ },
+ "S6.30": {
+  "labels": [],
+  "needs": "none",
+  "note": "Named easing curves are in tokens.ts (motionCurves) and are not visible as a control.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Sign in and trigger a toast message.",
+   "Watch the toast slide in and out and note it is quick, not slow.",
+   "Compare with the named durations in apps/mobile/src/ui/theme/tokens.ts (motion: instant 90, quick 160, moved 260, reveal 700, ambient 2000, orbit 3000 ms) and the use of motion.quick in apps/mobile/src/shared/components/Toast.tsx."
+  ],
+  "where": "Timing of animations such as toast slide-in (inner rule, no setting)."
+ },
+ "S6.31": {
+  "labels": [],
+  "needs": "a phone or simulator where the Reduce Motion setting can be changed",
+  "note": "No in-app control exists for reduced motion; only the OS setting is read (useReduceMotion.ts). The OfflineBanner cited in the plan does not loop, so it was not used as an example.",
+  "reachable": "yes",
+  "steps": [
+   "On the phone or simulator, turn on the system Reduce Motion setting (iOS path: Settings > Accessibility > Motion > Reduce Motion; this path is the phone's own and is not in the repo).",
+   "Open AGI Mobile and go to a chat where the loading spinner shows (apps/mobile/components/ui/LoadingIndicator.tsx uses a spinning AgiMark).",
+   "Look at the spinner and any looping mark: it should stop or be replaced by a gentle change.",
+   "Compare with the rule in apps/mobile/src/ui/theme/useReduceMotion.ts and the check in apps/mobile/src/ui/theme/__tests__/accessibilityPreferenceCoverage.test.ts."
+  ],
+  "where": "Reduce Motion is a phone setting outside the app, read by the app at startup and live. There is no in-app switch in apps/mobile."
+ },
+ "S6.32": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Appearance"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/appearance/index.tsx",
+    "text": "System"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/appearance/index.tsx",
+    "text": "Dark"
+   }
+  ],
+  "needs": "a Mac or phone where the system light or dark setting can be changed",
+  "note": "Cloud and Local modes store their theme choice separately (appearance/index.tsx), so check the choice in the mode you are using. Whether code blocks follow the theme was not verified in code.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and tap Open menu to open the side drawer, then tap Settings.",
+   "Under the Device group, tap Appearance.",
+   "Tap Dark and look at the whole app, including code blocks in a chat, for a dark background.",
+   "Tap Light, then System, and check the app follows the device's light or dark setting."
+  ],
+  "where": "Drawer > Settings > Device > Appearance, then choose System, Light or Dark."
+ },
+ "S6.33": {
+  "labels": [],
+  "needs": "a phone or simulator where the system contrast setting can be changed",
+  "note": "The code is in apps/mobile/src/ui/theme/useSystemHighContrast.ts; the high-contrast palette is in apps/mobile/src/ui/theme/tokens.ts (highContrastColors). The device menu path is the phone's own, so confirm it on the device.",
+  "reachable": "yes",
+  "steps": [
+   "On the phone, turn on the high-contrast setting (iOS: the Darker Colors setting, which the code reads as isDarkerSystemColorsEnabled; Android: the high text contrast setting, read as isHighTextContrastEnabled). These device paths are not in the repo.",
+   "Open AGI Mobile and check text and borders look stronger.",
+   "Check the accent colour is replaced by neutral colours, as in apps/mobile/src/ui/theme/useTheme.ts (accent is null when high contrast is on)."
+  ],
+  "where": "Phone setting outside the app: high contrast is read from the system. There is no in-app switch."
+ },
+ "S6.34": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Appearance"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/appearance/index.tsx",
+    "text": "System"
+   }
+  ],
+  "needs": "none",
+  "note": "Focus and hover states are not verified in the code on this screen; the disabled example was not located. The plan's pressable-box.tsx path is now PressableBox.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, tap Open menu, then Settings, then Appearance.",
+   "Press and hold the System row and check it shows a pressed state.",
+   "Release and check the row you picked now shows a check mark and is marked selected.",
+   "Look for a disabled state on a greyed-out control elsewhere, and compare with the pressed and selected states in apps/mobile/components/ui/PressableBox.tsx."
+  ],
+  "where": "Drawer > Settings > Device > Appearance (selected row shows a check mark; pressing a row shows a pressed state)."
+ },
+ "S6.35": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "About"
+   }
+  ],
+  "needs": "a phone or simulator with the app installed",
+  "note": "Icon sizes per platform are set in app.config.js and cannot be checked from inside the app; the brand mark also appears on the sign-in screen (apps/mobile/app/(auth)/login.tsx).",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, tap Open menu, then Settings, then About.",
+   "Look at the brand symbol at the top of the About screen (apps/mobile/app/(app)/about.tsx).",
+   "Close AGI Mobile and look at its icon on the home screen.",
+   "Compare with the icon files named in apps/mobile/app.config.js (icon ./assets/icon.png and the Android adaptive icon)."
+  ],
+  "where": "Drawer > Settings > About for the brand mark. The app icon is on the phone's home screen."
+ }
+}

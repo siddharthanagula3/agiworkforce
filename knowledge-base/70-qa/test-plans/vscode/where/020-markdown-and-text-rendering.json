@@ -1,0 +1,511 @@
+{
+ "S20.01": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "AGI Code"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a signed-in account or a key set with Code: Set API Key",
+  "note": "Rendering is done by the reply; the model's wording decides the exact text.",
+  "reachable": "yes",
+  "steps": [
+   "Click the AGI Code icon in the activity bar and sign in if asked.",
+   "Click the \"Describe a task\u2026\" box, type \"Write two short paragraphs about rain, separated by a blank line\", press Enter.",
+   "Wait for the reply to finish and look at the reply: the two paragraphs should be separate, with space between them."
+  ],
+  "where": "AGI Code (activity bar) > \"Describe a task\u2026\" box"
+ },
+ "S20.02": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "AGI Code"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a signed-in account or a key set with Code: Set API Key",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click the AGI Code icon in the activity bar.",
+   "Click the \"Describe a task\u2026\" box, type \"Answer with a # title, a ## section and a ### subsection\", press Enter.",
+   "Wait for the reply to finish and look: the title and sections should show as larger headings, with no # symbols visible."
+  ],
+  "where": "AGI Code (activity bar) > \"Describe a task\u2026\" box"
+ },
+ "S20.03": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "AGI Code"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a signed-in account or a key set with Code: Set API Key",
+  "note": "The styles come from markdown-it in apps/extension-vscode/src/webview/render.ts; the model may not echo the markup exactly.",
+  "reachable": "yes",
+  "steps": [
+   "Click the AGI Code icon in the activity bar.",
+   "Click the \"Describe a task\u2026\" box, type \"Write one sentence with **bold**, *italic* and ~~strikethrough~~ words\", press Enter.",
+   "Wait for the reply, then look: bold, italic and struck-through words should show their styles, with no asterisks or tildes."
+  ],
+  "where": "AGI Code (activity bar) > \"Describe a task\u2026\" box"
+ },
+ "S20.04": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "AGI Code"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a signed-in account or a key set with Code: Set API Key",
+  "note": "The list indent style is in apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts; the start value depends on the model writing it.",
+  "reachable": "yes",
+  "steps": [
+   "Click the AGI Code icon in the activity bar.",
+   "Click the \"Describe a task\u2026\" box, type \"Give a numbered list of 3 steps, starting at number 3\", press Enter.",
+   "Wait for the reply, then look: the list should show numbers starting at 3 with indented items."
+  ],
+  "where": "AGI Code (activity bar) > \"Describe a task\u2026\" box"
+ },
+ "S20.05": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "AGI Code"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a signed-in account or a key set with Code: Set API Key",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click the AGI Code icon in the activity bar.",
+   "Click the \"Describe a task\u2026\" box, type \"List three fruits as a bulleted list\", press Enter.",
+   "Wait for the reply, then look: the items should show bullet markers and indent."
+  ],
+  "where": "AGI Code (activity bar) > \"Describe a task\u2026\" box"
+ },
+ "S20.06": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "AGI Code"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a signed-in account or a key set with Code: Set API Key",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click the AGI Code icon in the activity bar.",
+   "Click the \"Describe a task\u2026\" box, type \"Give a bulleted list of two fruits, each with two indented sub-items\", press Enter.",
+   "Wait for the reply, then look: the sub-items should sit under their parent with a deeper indent."
+  ],
+  "where": "AGI Code (activity bar) > \"Describe a task\u2026\" box"
+ },
+ "S20.07": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "AGI Code"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a signed-in account or a key set with Code: Set API Key",
+  "note": "Task-list support is in packages/ui/unified-chat/src/components/markdown/markdownItTaskLists.ts, used by apps/extension-vscode/src/webview/render.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Click the AGI Code icon in the activity bar.",
+   "Click the \"Describe a task\u2026\" box, type \"Make a checklist: one unchecked item, one checked item, written as - [ ] and - [x]\", press Enter.",
+   "Wait for the reply, then look: the items should show checkboxes, one ticked and one empty."
+  ],
+  "where": "AGI Code (activity bar) > \"Describe a task\u2026\" box"
+ },
+ "S20.08": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "AGI Code"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a signed-in account or a key set with Code: Set API Key",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click the AGI Code icon in the activity bar.",
+   "Click the \"Describe a task\u2026\" box, type \"Quote a short line from a famous book, starting with >\", press Enter.",
+   "Wait for the reply, then look: the quote should show as an indented block set apart from the text."
+  ],
+  "where": "AGI Code (activity bar) > \"Describe a task\u2026\" box"
+ },
+ "S20.09": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "AGI Code"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a signed-in account or a key set with Code: Set API Key",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click the AGI Code icon in the activity bar.",
+   "Click the \"Describe a task\u2026\" box, type \"Write a paragraph, then a line with three dashes (---), then another paragraph\", press Enter.",
+   "Wait for the reply, then look: a thin divider line should appear between the paragraphs, and no dashes should show as text."
+  ],
+  "where": "AGI Code (activity bar) > \"Describe a task\u2026\" box"
+ },
+ "S20.10": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "AGI Code"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a signed-in account or a key set with Code: Set API Key",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click the AGI Code icon in the activity bar.",
+   "Click the \"Describe a task\u2026\" box, type \"Name the function `print` in one sentence\", press Enter.",
+   "Wait for the reply, then look: the word in backticks should show in a monospace font different from the text around it."
+  ],
+  "where": "AGI Code (activity bar) > \"Describe a task\u2026\" box"
+ },
+ "S20.11": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "AGI Code"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   },
+   {
+    "file": "apps/extension-vscode/src/webview/render.ts",
+    "text": "Copy"
+   }
+  ],
+  "needs": "a signed-in account or a key set with Code: Set API Key",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click the AGI Code icon in the activity bar.",
+   "Click the \"Describe a task\u2026\" box, type \"Show a short Python function in a code block with indentation\", press Enter.",
+   "Wait for the reply, then look: the code should sit in a monospace block with its spaces and indentation kept, and a Copy button should show at the top of the block."
+  ],
+  "where": "AGI Code (activity bar) > \"Describe a task\u2026\" box"
+ },
+ "S20.12": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "AGI Code"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a signed-in account or a key set with Code: Set API Key",
+  "note": "Links get target _blank and rel noopener noreferrer in apps/extension-vscode/src/webview/render.ts; the code does not show where a click ends up (outside VS Code or not), so that part is unverified.",
+  "reachable": "yes",
+  "steps": [
+   "Click the AGI Code icon in the activity bar.",
+   "Click the \"Describe a task\u2026\" box, type \"Give one link to the Markdown guide written as [Guide](https://example.com)\", press Enter.",
+   "Wait for the reply, then look: the text Guide should show as a link you can see and click."
+  ],
+  "where": "AGI Code (activity bar) > \"Describe a task\u2026\" box"
+ },
+ "S20.13": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "AGI Code"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a signed-in account or a key set with Code: Set API Key",
+  "note": "Autolinking is on (linkify) in apps/extension-vscode/src/webview/render.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Click the AGI Code icon in the activity bar.",
+   "Click the \"Describe a task\u2026\" box, type \"Give the address of the Python website as a bare URL, no brackets\", press Enter.",
+   "Wait for the reply, then look: the bare web address should show as a clickable link."
+  ],
+  "where": "AGI Code (activity bar) > \"Describe a task\u2026\" box"
+ },
+ "S20.15": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "AGI Code"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a signed-in account or a key set with Code: Set API Key",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click the AGI Code icon in the activity bar.",
+   "Click the \"Describe a task\u2026\" box, type \"Make a table with columns Name, Price and Stock, and 3 rows\", press Enter.",
+   "Wait for the reply, then look: the table should show a bold header row and aligned cells in a grid."
+  ],
+  "where": "AGI Code (activity bar) > \"Describe a task\u2026\" box"
+ },
+ "S20.16": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "AGI Code"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a signed-in account or a key set with Code: Set API Key",
+  "note": "The scroll wrapper is in apps/extension-vscode/src/webview/render.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Click the AGI Code icon in the activity bar.",
+   "Click the \"Describe a task\u2026\" box, type \"Make a table with six columns and 3 rows\", press Enter.",
+   "Wait for the reply, then scroll sideways over the table with a trackpad or Shift plus the mouse wheel.",
+   "Look: the wide table should scroll sideways inside the answer, with every column still readable."
+  ],
+  "where": "AGI Code (activity bar) > \"Describe a task\u2026\" box"
+ },
+ "S20.19": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "AGI Code"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a signed-in account or a key set with Code: Set API Key",
+  "note": "Math is in packages/ui/unified-chat/src/components/markdown/markdownItMath.ts and apps/extension-vscode/src/webview/render.ts; the \\( \\) delimiter was not checked in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Click the AGI Code icon in the activity bar.",
+   "Click the \"Describe a task\u2026\" box, type \"Write a sentence that includes the inline formula $x^2 + 1$\", press Enter.",
+   "Wait for the reply, then look: the formula should show as typeset math inside the sentence, not as raw $ signs."
+  ],
+  "where": "AGI Code (activity bar) > \"Describe a task\u2026\" box"
+ },
+ "S20.20": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "AGI Code"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a signed-in account or a key set with Code: Set API Key",
+  "note": "Display math is in packages/ui/unified-chat/src/components/markdown/markdownItMath.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Click the AGI Code icon in the activity bar.",
+   "Click the \"Describe a task\u2026\" box, type \"Show the integral of x squared as a display formula on its own line, using $$ delimiters\", press Enter.",
+   "Wait for the reply, then look: the formula should show centred on its own line as typeset math."
+  ],
+  "where": "AGI Code (activity bar) > \"Describe a task\u2026\" box"
+ },
+ "S20.21": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "AGI Code"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a signed-in account or a key set with Code: Set API Key",
+  "note": "Escapes are handled by markdown-it in apps/extension-vscode/src/webview/render.ts; the model may not write the escapes as typed.",
+  "reachable": "yes",
+  "steps": [
+   "Click the AGI Code icon in the activity bar.",
+   "Click the \"Describe a task\u2026\" box, type \"Write the text 2 \\* 3 and the price \\$5 and the name my\\_file\", press Enter.",
+   "Wait for the reply, then look: the *, $ and _ should appear as plain characters, with no backslash in front of them."
+  ],
+  "where": "AGI Code (activity bar) > \"Describe a task\u2026\" box"
+ },
+ "S20.22": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "AGI Code"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a signed-in account or a key set with Code: Set API Key",
+  "note": "Incremental rendering is in apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts (renderAssistantInto).",
+  "reachable": "yes",
+  "steps": [
+   "Click the AGI Code icon in the activity bar.",
+   "Click the \"Describe a task\u2026\" box, type \"Write a long answer with headings, a list and a code block\", press Enter.",
+   "Watch while the reply is still arriving: headings and lists should already be formatted, not show # or - symbols as raw text.",
+   "Look again after the reply finishes: the final text should look the same, with no change in formatting."
+  ],
+  "where": "AGI Code (activity bar) > \"Describe a task\u2026\" box"
+ },
+ "S20.23": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "AGI Code"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a signed-in account or a key set with Code: Set API Key",
+  "note": "Hard to time: it depends on catching the reply mid-stream. Code fence rendering is in apps/extension-vscode/src/webview/render.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Click the AGI Code icon in the activity bar.",
+   "Click the \"Describe a task\u2026\" box, type \"Show a Python code block\", press Enter.",
+   "While the reply is still streaming and the code block is not finished, look: the code should already show in a code block, not as normal text.",
+   "Wait for the reply to finish and look: the block should stay a code block."
+  ],
+  "where": "AGI Code (activity bar) > \"Describe a task\u2026\" box"
+ },
+ "S20.24": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "AGI Code"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a signed-in account or a key set with Code: Set API Key",
+  "note": "Raw HTML is switched off (html: false) and DOMPurify runs in apps/extension-vscode/src/webview/render.ts. The model may not repeat the text exactly.",
+  "reachable": "yes",
+  "steps": [
+   "Click the AGI Code icon in the activity bar.",
+   "Click the \"Describe a task\u2026\" box, type \"Reply with this exact text: <b>bold</b> and <script>alert('test')</script>\", press Enter.",
+   "Wait for the reply, then look: the tags should show as plain text, the word bold should not be bold, and no alert box should appear."
+  ],
+  "where": "AGI Code (activity bar) > \"Describe a task\u2026\" box"
+ },
+ "S20.25": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "AGI Code"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a signed-in account or a key set with Code: Set API Key",
+  "note": "Only http and mailto links pass the sanitizer (apps/extension-vscode/src/webview/render.ts). Where the click opens is decided by VS Code, not shown in this code, so that part is unverified.",
+  "reachable": "yes",
+  "steps": [
+   "Click the AGI Code icon in the activity bar.",
+   "Click the \"Describe a task\u2026\" box, type \"Give two links: [Safe](https://example.com) and [Bad](javascript:alert(1))\", press Enter.",
+   "Wait for the reply, then look: the Safe link should be clickable and the Bad link should not be a working link.",
+   "Click the Safe link and see where it opens: it should open outside the app, not run anything inside it."
+  ],
+  "where": "AGI Code (activity bar) > \"Describe a task\u2026\" box"
+ },
+ "S20.26": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "AGI Code"
+   }
+  ],
+  "needs": "a signed-in account or a key set with Code: Set API Key",
+  "note": "Selection is only turned off for the tool-call bar (apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts), not for answer text. The render.ts reference cited in the plan no longer contains the quoted code.",
+  "reachable": "yes",
+  "steps": [
+   "Click the AGI Code icon in the activity bar and get a reply with a paragraph, a list and a code block.",
+   "Press the mouse at the start of the first paragraph and drag down past the list and into the code block.",
+   "Press Cmd+C, then paste into a text editor.",
+   "Look: the pasted text should include all the selected parts, in order, with no gaps."
+  ],
+  "where": "AGI Code (activity bar) > an answer with paragraphs, a list and a code block"
+ },
+ "S20.30": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "AGI Code"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a signed-in account or a key set with Code: Set API Key",
+  "note": "A failed diagram could not be found in the code; the unknown-language fallback is in apps/extension-vscode/src/webview/render.ts and packages/ui/unified-chat/src/components/markdown/ (assistant-fence). The ID's failed-diagram case is unverified.",
+  "reachable": "yes",
+  "steps": [
+   "Click the AGI Code icon in the activity bar.",
+   "Click the \"Describe a task\u2026\" box, type \"Show a code block with the language name xyzlang containing the text hello\", press Enter.",
+   "Wait for the reply, then look: the block should show its text readably, even though the language is not known."
+  ],
+  "where": "AGI Code (activity bar) > \"Describe a task\u2026\" box"
+ }
+}

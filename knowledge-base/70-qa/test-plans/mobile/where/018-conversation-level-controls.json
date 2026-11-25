@@ -1,0 +1,354 @@
+{
+ "S18.01": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "See all chats"
+   },
+   {
+    "file": "apps/mobile/app/(app)/(tabs)/chat.tsx",
+    "text": "New chat"
+   }
+  ],
+  "needs": "none",
+  "note": "The code sets the title to the first 40 characters of the first message (chat.tsx around line 762), with 'New chat' as fallback. No AI-generated summary title was found in apps/mobile; a server-side title step is unknown.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Sign in and start a new chat by typing a first message and sending it.",
+   "Tap the Open menu button at the top of the chat, then tap See all chats.",
+   "Find the new chat's row in the list and read its title.",
+   "Compare the title with Expected: it should be a meaningful title without you naming the chat."
+  ],
+  "where": "Chat list row title of a new chat (Open menu > See all chats)"
+ },
+ "S18.02": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/conversation-actions/useConversationActions.ts",
+    "text": "Rename"
+   },
+   {
+    "file": "apps/mobile/src/features/conversation-actions/RenameConversationModal.tsx",
+    "text": "Rename chat"
+   }
+  ],
+  "needs": "none",
+  "note": "The Conversation menu button is an icon with no visible text. Rename is also in the long-press menu on a chat row in See all chats.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat that already has a title.",
+   "Tap the Conversation menu button (icon only, accessibility label 'Conversation menu') at the top of the chat.",
+   "Tap Rename.",
+   "Type a new name in the Rename chat box and tap Rename.",
+   "Leave the chat, open See all chats, and check the new name is still shown."
+  ],
+  "where": "Open a chat > Conversation menu > Rename"
+ },
+ "S18.03": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/conversation-actions/useConversationActions.ts",
+    "text": "Pin"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/ChatsListScreen.tsx",
+    "text": "Pinned"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "See all chats"
+   }
+  ],
+  "needs": "none",
+  "note": "The same Pin and Unpin items also appear in the Conversation menu inside a chat.",
+  "reachable": "yes",
+  "steps": [
+   "Open Open menu > See all chats.",
+   "Long-press a chat row (or tap its More actions icon).",
+   "Tap Pin.",
+   "Check that the chat moves to the Pinned group at the top, and that the Pinned filter shows it.",
+   "Long-press the same row again and tap Unpin; check it returns to its date group."
+  ],
+  "where": "See all chats > long-press a chat row > Pin (or Unpin)"
+ },
+ "S18.04": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/conversation-actions/useConversationActions.ts",
+    "text": "Archive"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-privacy/ChatPrivacyScreen.tsx",
+    "text": "Archived chats"
+   },
+   {
+    "file": "apps/mobile/app/(app)/settings/archived-chats.tsx",
+    "text": "Restore"
+   }
+  ],
+  "needs": "a signed-in account with a Cloud chat",
+  "note": "Archive is not offered for Local chats, per the code comment in useConversationActions.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Open a Cloud chat (archive is offered only for Cloud chats, not Local ones).",
+   "Tap Conversation menu and tap Archive.",
+   "Read the message 'Chat archived. Find it in Settings, Archived chats.' and check the chat is gone from See all chats.",
+   "Open Open menu > Settings > Privacy > Archived chats.",
+   "Tap Restore on the chat and check it comes back to See all chats."
+  ],
+  "where": "Open a chat > Conversation menu > Archive; restore at Settings > Privacy > Archived chats"
+ },
+ "S18.05": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/conversation-actions/useConversationActions.ts",
+    "text": "Delete"
+   },
+   {
+    "file": "apps/mobile/src/features/conversation-actions/useConversationActions.ts",
+    "text": "Delete chat?"
+   }
+  ],
+  "needs": "a chat you can delete",
+  "note": "The Cloud text says the chat is removed from every device and can be restored from Recently deleted on the web; the Local text says it cannot be restored.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat you are willing to delete.",
+   "Tap Conversation menu and tap Delete.",
+   "Read the Delete chat? box, which states what is lost, then tap Delete.",
+   "Check the chat is gone from See all chats and you are returned from the chat screen."
+  ],
+  "where": "Open a chat > Conversation menu > Delete"
+ },
+ "S18.07": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/conversation-actions/useConversationActions.ts",
+    "text": "Move to project"
+   }
+  ],
+  "needs": "at least one Project",
+  "note": "Move to project is only offered when another project exists or the chat is already in one (canMove in the code).",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat that is not in a project.",
+   "Tap Conversation menu and tap Move to project.",
+   "In the Move to project list, tap a project name.",
+   "Check the toast 'Moved to <project name>' appears.",
+   "Open the project from the Projects tab and check the chat is listed there."
+  ],
+  "where": "Open a chat > Conversation menu > Move to project"
+ },
+ "S18.09": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/WorkModeSwitch.tsx",
+    "text": "Chat or Work"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/WorkModeSwitch.tsx",
+    "text": "Work"
+   }
+  ],
+  "needs": "a signed-in account whose plan includes AGI Work and Cloud mode; the switch is hidden on a chat that already started",
+  "note": "The switch only offers Chat and Work (not agent or plan), and it is hidden once the conversation has started, so changing the mode later in a chat is not shown in this control.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in on an account whose plan includes AGI Work, and start a new chat in Cloud mode.",
+   "Before sending anything, tap Work in the Chat or Work switch.",
+   "Send a message and check it is answered as planned, multi-step work with tools.",
+   "Send a second message and compare how it runs with Expected: later turns should follow the chosen mode."
+  ],
+  "where": "Chat tab > new chat > Chat or Work switch (Chat / Work)"
+ },
+ "S18.10": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/TemporaryChatToggle.tsx",
+    "text": "Turn on temporary chat?"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/TemporaryChatToggle.tsx",
+    "text": "Temporary"
+   }
+  ],
+  "needs": "none",
+  "note": "The same switch is also listed at Open menu > Settings > Privacy > Temporary Chat. The code stores it as a setting (isTemporaryChat), not per conversation.",
+  "reachable": "yes",
+  "steps": [
+   "On the Chat tab, tap the eye-off button at the top right.",
+   "Read the Turn on temporary chat? box, which states the consequence.",
+   "Tap Cancel and check nothing changes; tap the button again and tap Turn on.",
+   "Check the button now shows the word Temporary.",
+   "Tap Temporary again to turn it off."
+  ],
+  "where": "Chat tab > top-right eye-off button (Enable temporary chat) > Turn on temporary chat?"
+ },
+ "S18.15": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/MessageList.tsx",
+    "text": "Scroll to bottom"
+   }
+  ],
+  "needs": "a conversation long enough to scroll",
+  "note": "The button has no visible words; 'Scroll to bottom' is its accessibility label only.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat with enough messages to scroll.",
+   "Scroll up several screens.",
+   "Look for the round button with a down chevron that appears over the thread.",
+   "Tap it and check the view jumps to the latest message and the button hides."
+  ],
+  "where": "Open a long chat > scroll up > round down-arrow button (Scroll to bottom)"
+ },
+ "S18.17": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/MessageBubble.tsx",
+    "text": "Branch Conversation from Here"
+   },
+   {
+    "file": "apps/mobile/app/(app)/chat/[id].tsx",
+    "text": "Conversation branch created"
+   }
+  ],
+  "needs": "a chat with messages; not available in temporary chats",
+  "note": "No tree view was found: each branch is a separate chat, and switching uses the Previous and Next arrows on alternate answers.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat with at least one reply.",
+   "Long-press a message (about half a second).",
+   "Tap Branch Conversation from Here.",
+   "Check the toast 'Conversation branch created' and the new chat titled '<chat title> (branch)'.",
+   "For alternate answers, look for the Previous and Next arrows under a reply that has more than one version and tap them."
+  ],
+  "where": "Open a chat > long-press a message > Branch Conversation from Here"
+ },
+ "S18.18": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/chat/[id].tsx",
+    "text": "Export"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ConversationExportSheet.tsx",
+    "text": "Export Conversation"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ConversationExportSheet.tsx",
+    "text": "Export as Markdown"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat that has messages.",
+   "Tap Conversation menu and tap Export.",
+   "Read the Export Conversation list: Export as PDF, Print, Export as Text, Export as Markdown, Copy All Messages.",
+   "Tap Export as Markdown and choose where to save or share the file.",
+   "Open the file and check every message is in it, in order."
+  ],
+  "where": "Open a chat > Conversation menu > Export > Export as Markdown"
+ },
+ "S18.19": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/conversation-actions/useConversationActions.ts",
+    "text": "Share"
+   },
+   {
+    "file": "apps/mobile/src/features/shared-links/shareConversation.ts",
+    "text": "Share a link to this chat?"
+   },
+   {
+    "file": "apps/mobile/src/features/shared-links/shareConversation.ts",
+    "text": "Create link"
+   }
+  ],
+  "needs": "a signed-in account and a Cloud chat",
+  "note": "For a temporary chat the menu item is Share link and first asks Save this chat to share it?. The read-only check is not visible in the code, so it is only a tester check.",
+  "reachable": "yes",
+  "steps": [
+   "Open a signed-in Cloud chat that is not temporary.",
+   "Tap Conversation menu and tap Share.",
+   "Read Share a link to this chat? and tap Create link.",
+   "Choose a app from the share sheet to send the link.",
+   "Open the link in a browser that is not signed in and check the chat can be read."
+  ],
+  "where": "Open a chat > Conversation menu > Share"
+ },
+ "S18.20": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-privacy/ChatPrivacyScreen.tsx",
+    "text": "Shared links"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/screenTitles.ts",
+    "text": "Shared Links"
+   },
+   {
+    "file": "apps/mobile/app/(app)/settings/shared-links.tsx",
+    "text": "Revoke this link?"
+   }
+  ],
+  "needs": "a Cloud account with at least one shared link",
+  "note": "Settings also has a separate Shared Links row (apps/mobile/src/features/settings/index.tsx) that opens the same screen.",
+  "reachable": "yes",
+  "steps": [
+   "Tap Open menu, then Settings, then Privacy.",
+   "Tap Shared links.",
+   "Find a link you created (S18.19), tap Revoke, and read Revoke this link?.",
+   "Tap Revoke again to confirm and check the link leaves the list.",
+   "Open the old link in a browser and check it no longer opens."
+  ],
+  "where": "Open menu > Settings > Privacy > Shared links"
+ },
+ "S18.22": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ContextDetailsSheet.tsx",
+    "text": "What is in context"
+   },
+   {
+    "file": "apps/mobile/app/(app)/chat/[id].tsx",
+    "text": "What is in context"
+   }
+  ],
+  "needs": "none",
+  "note": "The rows come from summarizeContext; the exact row names were not checked against Expected.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat that has messages and some context.",
+   "Tap Conversation menu and tap What is in context.",
+   "Read the sheet: the model, the percent of context used, and the list of context rows.",
+   "Check the rows cover files, instructions, memory and the token budget as Expected asks.",
+   "Tap Close context details to close."
+  ],
+  "where": "Open a chat > Conversation menu > What is in context"
+ },
+ "S18.28": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "See all chats"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/ChatsListScreen.tsx",
+    "text": "Recent chats"
+   }
+  ],
+  "needs": "two devices signed in to the same account",
+  "note": "The Code line pointed to code that moved; sync is in apps/mobile/services/cloudSyncEngine.ts and apps/mobile/stores/chat/chatExecutionStore.ts. Cross-device behaviour needs a second device to test.",
+  "reachable": "yes",
+  "steps": [
+   "On device A (signed in), start or open a Cloud chat and send a message.",
+   "On device B, signed in to the same account, tap Open menu and then See all chats.",
+   "Find the same chat under Recent chats and open it; check the messages from device A are there.",
+   "Send a reply on device B and check it appears on device A after sync."
+  ],
+  "where": "Second device: Open menu > See all chats > open the same chat"
+ }
+}

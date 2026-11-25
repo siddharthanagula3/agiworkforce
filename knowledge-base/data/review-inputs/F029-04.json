@@ -1,0 +1,414 @@
+{
+ "feature": {
+  "id": "F029-04",
+  "aliases": [
+   "Tables",
+   "Sort",
+   "Filter",
+   "Make table",
+   "Banding",
+   "S29.09",
+   "S29.10"
+  ],
+  "summary": "Sorting exists: on web, desktop-hosted web and mobile, clicking a column header sorts the shown rows, ascending, descending, then back. Filtering and Excel-style tables with header, banding and a name are not built. The workbook writer writes no table or filter parts.",
+  "purpose": {
+   "what_it_does": "Lets a person order the rows of a table or workbook sheet in the chat preview by one column. Filtering and table objects are not available.",
+   "why_it_exists": "People scan results by value, for example largest first. The brief also lists tables and filters (S29.09, S29.10) (doc: knowledge-base/data/area-briefs/029-spreadsheet-and-data-analysis-workspace.md).",
+   "who_uses_it": "Anyone reading a table or workbook in chat.",
+   "problems_solved": [
+    "Find the biggest or smallest values quickly.",
+    "Numbers sort by value, not as text (tabular.ts:88-105).",
+    "Blank cells always go last (tabular.ts:95-97)."
+   ],
+   "use_cases": [
+    "Sort a sales table by revenue descending.",
+    "Click the same header again to return to the original order.",
+    "On the phone, tap a header to sort a sheet."
+   ]
+  },
+  "user_experience": {
+   "where_to_find_it": [
+    "Web and desktop-hosted web: column header buttons titled 'Sort by <column>' in the spreadsheet preview (SpreadsheetArtifact.tsx:251-256).",
+    "Mobile: header buttons with sort arrows in the grid (TabularGridView.tsx:323-330).",
+    "Filter and Make table: nowhere.",
+    "CLI, VS Code, Chrome: not found."
+   ],
+   "prerequisites": [
+    "A table, CSV or readable workbook open in the preview."
+   ],
+   "screens_and_controls": [
+    "Header buttons with an up or down arrow showing direction.",
+    "Web header cells carry aria-sort ascending, descending or none (SpreadsheetArtifact.tsx:242-244)."
+   ],
+   "journey": [
+    "Open a table.",
+    "Click a header: sorted ascending.",
+    "Click again: descending.",
+    "Click a third time: original order (tabular.ts:82-86).",
+    "Switching sheets clears the sort (SpreadsheetArtifact.tsx:84-88)."
+   ],
+   "feedback_and_outputs": [
+    "Arrow icon on the sorted column.",
+    "Rows re-ordered; the file itself is not changed."
+   ],
+   "settings": [
+    "None."
+   ]
+  },
+  "current_implementation": {
+   "working": [
+    "Three-step sort cycle (tabular.ts:82-86).",
+    "Numeric columns sort by value, text by locale-aware natural order, blanks last (tabular.ts:88-105).",
+    "Web header shows sort state to screen readers (SpreadsheetArtifact.tsx:242).",
+    "Mobile sort test covers numbers by value, then descending, then original order (TabularGridView.test.tsx:133)."
+   ],
+   "incomplete": [
+    "Sort applies only to the displayed first 500 rows after parsing; sorting is done on all parsed rows and then cut to 500 (SpreadsheetArtifact.tsx:90-93)."
+   ],
+   "disconnected_or_disabled": [
+    "None found."
+   ],
+   "not_available": [
+    "Filter by column: no code found.",
+    "Make table with header, banding and a name: managed-workbook-builder.ts writes no table part (lines 172-253).",
+    "Existing tables in an attached workbook are not shown as tables; the reader returns sheets as CSV (workbook-sheets.ts:682). Whether an edit keeps them is covered by the package-preserving edit path [inferred from managed-office-preservation.ts:1364].",
+    "CLI, VS Code, Chrome: no sort or table found."
+   ]
+  },
+  "required_behaviour": {
+   "established": [
+    {
+     "statement": "A range can be turned into a structured table (header, banding, table name) in the workbook.",
+     "source": "S29.09 in the area brief"
+    },
+    {
+     "statement": "The user can sort and filter rows in a sheet by column.",
+     "source": "S29.10 in the area brief"
+    },
+    {
+     "statement": "S29.10 is listed among features the leaders do not offer and that are not built.",
+     "source": "doc: docs/decisions/2026-09-27-founder-decisions.md:119-123"
+    }
+   ],
+   "acceptance_criteria": [
+    "Clicking a header sorts ascending; a second click sorts descending; a third restores the original order.",
+    "A column of 2, 10, 1 sorts as 1, 2, 10, not 1, 10, 2.",
+    "Empty cells stay at the bottom in both directions.",
+    "Switching sheet resets the sort.",
+    "The header button has an accessible name that includes the column.",
+    "No filter control is present [current behaviour]."
+   ],
+   "inferred": [
+    "The brief's S29.10 'sort' half is met on web and mobile; 'filter' is not [inferred]."
+   ],
+   "proposed": [
+    "[proposed] Update the brief so S29.10 shows sort done and filter not built.",
+    "[proposed] Write an Excel table or autofilter part only if the owner reverses the decision."
+   ]
+  },
+  "implementation_map": [
+   {
+    "kind": "service",
+    "name": "sortTabularRows and nextTabularSort",
+    "path": "packages/ui/unified-chat/src/lib/tabular.ts",
+    "role": "Sort rules and cycle (lines 80-106)."
+   },
+   {
+    "kind": "component",
+    "name": "SpreadsheetArtifact",
+    "path": "packages/ui/unified-chat/src/components/artifact-components/SpreadsheetArtifact.tsx",
+    "role": "Web header sort buttons (lines 95-97,236-264)."
+   },
+   {
+    "kind": "component",
+    "name": "TabularGridView",
+    "path": "apps/mobile/src/features/chat/components/artifact-viewers/TabularGridView.tsx",
+    "role": "Mobile sort buttons (lines 69-72,323-330)."
+   },
+   {
+    "kind": "service",
+    "name": "parseTabular and numeric detection",
+    "path": "packages/ui/unified-chat/src/lib/tabular.ts",
+    "role": "Finds numeric columns (lines 27-34,196)."
+   },
+   {
+    "kind": "service",
+    "name": "readWorkbookSheets",
+    "path": "packages/ui/unified-chat/src/lib/workbook-sheets.ts",
+    "role": "Gives each sheet as CSV for the grid."
+   },
+   {
+    "kind": "component",
+    "name": "ArtifactPreview",
+    "path": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "role": "Selects the spreadsheet component (line 1810)."
+   },
+   {
+    "kind": "service",
+    "name": "managed-workbook-builder",
+    "path": "apps/web/lib/services/managed-workbook-builder.ts",
+    "role": "Writes no table or filter parts (lines 172-253)."
+   },
+   {
+    "kind": "service",
+    "name": "tableCsv",
+    "path": "apps/mobile/src/features/chat/utils/tableCsv.ts",
+    "role": "Table-to-CSV on mobile."
+   },
+   {
+    "kind": "test",
+    "name": "SpreadsheetArtifact sheets test",
+    "path": "packages/ui/unified-chat/src/components/artifact-components/__tests__/SpreadsheetArtifact.sheets.test.tsx",
+    "role": "Sort reset on sheet switch (line 37)."
+   },
+   {
+    "kind": "test",
+    "name": "TabularGridView test",
+    "path": "apps/mobile/src/features/chat/components/artifact-viewers/__tests__/TabularGridView.test.tsx",
+    "role": "Sort cycle (line 133)."
+   }
+  ],
+  "execution_and_data_flow": {
+   "steps": [
+    {
+     "what_happens": "The sheet is parsed into rows and numeric column flags.",
+     "runs_on": "device",
+     "evidence": "tabular.ts:196; SpreadsheetArtifact.tsx:78-80"
+    },
+    {
+     "what_happens": "A header click updates the sort state.",
+     "runs_on": "device",
+     "evidence": "SpreadsheetArtifact.tsx:95-97"
+    },
+    {
+     "what_happens": "Rows are sorted in memory and the first 500 drawn.",
+     "runs_on": "device",
+     "evidence": "SpreadsheetArtifact.tsx:90-93; tabular.ts:88-105"
+    }
+   ],
+   "data": [
+    {
+     "what": "Sort state",
+     "where_stored": "Component state",
+     "synced": "No",
+     "retained_or_deleted": "Lost on close or sheet switch"
+    }
+   ],
+   "models_and_providers": "No model is involved."
+  },
+  "access_and_usage": {
+   "account": "None found in the code for sorting.",
+   "permissions": "None found.",
+   "subscription": "None found.",
+   "limits_and_metering": "500 rows shown (tabular.ts:78).",
+   "flags": "None found.",
+   "model_compatibility": "Not relevant.",
+   "provider_restrictions": "None.",
+   "local_mode": "Sorting runs on the device with no server, so it works in Local mode."
+  },
+  "states_and_edge_cases": [
+   {
+    "state": "Empty column cells",
+    "behaviour": "Placed last.",
+    "evidence": "tabular.ts:95-97"
+   },
+   {
+    "state": "Mixed numbers and text",
+    "behaviour": "If a number fails to parse, falls back to text compare.",
+    "evidence": "tabular.ts:99-103"
+   },
+   {
+    "state": "Header-only table",
+    "behaviour": "Mobile shows the header and 'No rows'.",
+    "evidence": "TabularGridView.test.tsx:67"
+   },
+   {
+    "state": "Sheet switch",
+    "behaviour": "Sort cleared.",
+    "evidence": "SpreadsheetArtifact.tsx:84-88"
+   },
+   {
+    "state": "Loading, error, offline, retry",
+    "behaviour": "Not handled in the code for sorting itself.",
+    "evidence": "not handled in the code"
+   }
+  ],
+  "verification": {
+   "existing_tests": [
+    {
+     "path": "apps/mobile/src/features/chat/components/artifact-viewers/__tests__/TabularGridView.test.tsx",
+     "covers": "Sort by a tapped header: numbers by value, descending, back to original (line 133)."
+    },
+    {
+     "path": "packages/ui/unified-chat/src/components/artifact-components/__tests__/SpreadsheetArtifact.sheets.test.tsx",
+     "covers": "Selection and sort dropped on sheet switch (line 37)."
+    },
+    {
+     "path": "packages/ui/unified-chat/src/components/__tests__/ArtifactComponents.test.tsx",
+     "covers": "Shared components; sort cases not confirmed."
+    }
+   ],
+   "scenarios": [
+    {
+     "name": "Numeric sort",
+     "steps": [
+      "Open a table with values 2, 10, 1.",
+      "Click the header once."
+     ],
+     "expected": "1, 2, 10."
+    },
+    {
+     "name": "Cycle",
+     "steps": [
+      "Click the same header three times."
+     ],
+     "expected": "Ascending, descending, original order."
+    },
+    {
+     "name": "Blanks",
+     "steps": [
+      "Sort a column with empty cells both ways."
+     ],
+     "expected": "Blanks last each time."
+    },
+    {
+     "name": "No filter",
+     "steps": [
+      "Look for a filter control on a header."
+     ],
+     "expected": "None present (current)."
+    },
+    {
+     "name": "Phone",
+     "steps": [
+      "Tap a header on the phone grid."
+     ],
+     "expected": "Rows sort and an arrow appears."
+    }
+   ],
+   "diagnostics": [
+    "Web test id spreadsheet-table.",
+    "No logs involved."
+   ]
+  },
+  "gaps": [
+   {
+    "gap": "No filter and no table object.",
+    "affects": "All apps",
+    "evidence": "No code; managed-workbook-builder.ts:172-253",
+    "work_needed": "Follow the founder decision; otherwise build both."
+   },
+   {
+    "gap": "Brief marks sort missing only on CLI, VS Code, Chrome but marks S29.09 missing on all six; no mention that sort exists on web and mobile.",
+    "affects": "Readers of the brief",
+    "evidence": "tabular.ts:80-106",
+    "work_needed": "Clarify brief."
+   },
+   {
+    "gap": "Sort is not saved or written to the file.",
+    "affects": "All apps",
+    "evidence": "Component state only",
+    "work_needed": "None unless required."
+   }
+  ],
+  "depends_on": [
+   "surface:web",
+   "surface:desktop",
+   "surface:mobile",
+   "SYS-shared-ui-and-design",
+   "F029-02",
+   "file:packages/ui/unified-chat/src/lib/tabular.ts"
+  ],
+  "relationships": [
+   {
+    "rel": "implemented_by",
+    "to": "file:packages/ui/unified-chat/src/lib/tabular.ts",
+    "evidence": "Lines 80-106"
+   },
+   {
+    "rel": "implemented_by",
+    "to": "file:packages/ui/unified-chat/src/components/artifact-components/SpreadsheetArtifact.tsx",
+    "evidence": "Lines 95-97,236-264"
+   },
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/mobile/src/features/chat/components/artifact-viewers/TabularGridView.tsx",
+    "evidence": "Lines 69-72"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:web",
+    "evidence": "ArtifactPreview.tsx:1947"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:mobile",
+    "evidence": "WorkbookFileView.tsx:168-173"
+   },
+   {
+    "rel": "depends_on",
+    "to": "F029-02",
+    "evidence": "Sort lives inside the grid component"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/mobile/src/features/chat/components/artifact-viewers/__tests__/TabularGridView.test.tsx",
+    "evidence": "Line 133"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:packages/ui/unified-chat/src/components/artifact-components/__tests__/SpreadsheetArtifact.sheets.test.tsx",
+    "evidence": "Line 37"
+   },
+   {
+    "rel": "depends_on",
+    "to": "SYS-shared-ui-and-design",
+    "evidence": "Shared package"
+   }
+  ],
+  "unknowns": [
+   "Whether web has a sort test beyond the sheets test (full SpreadsheetArtifact tests not all read).",
+   "Whether the Chrome side panel renders any sortable table.",
+   "Whether editing an attached workbook with tables keeps the table part (edit path preserves untouched parts, not tested by me)."
+  ]
+ },
+ "corrections": [
+  {
+   "section": "Header, Status",
+   "claim": "implementation: missing / 'not built' on web, desktop, mobile; Status table 'In the code: not built'",
+   "verdict": "wrong",
+   "what_the_code_shows": "Sorting is built on web and mobile (shared SpreadsheetArtifact and mobile TabularGridView). The page's own prose and section 3 say so, so the frontmatter and Status table contradict the body.",
+   "evidence": "packages/ui/unified-chat/src/lib/tabular.ts:80-106; SpreadsheetArtifact.tsx:95-97; TabularGridView.tsx:69-72",
+   "correction": "Web, desktop-hosted web and mobile: sort built (filter and table object not built). CLI, VS Code and Chrome: not built."
+  },
+  {
+   "section": "3 Incomplete",
+   "claim": "Sort applies only to the displayed first 500 rows after parsing; sorting is done on all parsed rows and then cut to 500",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The sentence contradicts itself. The code sorts all rows, then slices to SPREADSHEET_ROW_CAP, so the sort is global. Rows past 500 are hidden but ordered. The same applies on mobile.",
+   "evidence": "SpreadsheetArtifact.tsx:90-93; TabularGridView.tsx:62-64; tabular.ts:78",
+   "correction": "Sort runs over all parsed rows, then only the first 500 sorted rows are shown, with a truncation notice. This is not a sort defect."
+  },
+  {
+   "section": "3",
+   "claim": "Whether an edit keeps tables is covered by the package-preserving edit path [inferred from managed-office-preservation.ts:1364]",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "Line 1364 is just the start of editManagedWorkbook. A test in the repo already shows an autoFilter element being preserved, so this can be stated as tested rather than unknown.",
+   "evidence": "apps/web/lib/services/managed-office-preservation.ts:1364; managed-office-preservation-markup.test.ts:1658,1800",
+   "correction": "The edit path keeps an existing autoFilter, per managed-office-preservation-markup.test.ts:1658,1800. Cite that, not line 1364. Table parts are unconfirmed."
+  },
+  {
+   "section": "4/9",
+   "claim": "Acceptance 5: the header button has an accessible name that includes the column",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "On web the name comes from the visible column text and a title. On mobile an explicit accessibilityLabel is set. The 'Sort by' wording is a title only.",
+   "evidence": "SpreadsheetArtifact.tsx:251-256; TabularGridView.tsx:327-330",
+   "correction": "Say web exposes the column as the visible button text with a title tooltip; mobile sets an accessibilityLabel."
+  }
+ ],
+ "missing_facts": [
+  "The frontmatter (implementation: missing, verification n/a, available_on empty) and the Status table say sorting is not built, but it ships on web and mobile through the shared SpreadsheetArtifact and TabularGridView (tabular.ts:80-106; ArtifactPreview.tsx:1946). Metadata consumers will read the wrong status.",
+  "The page says sort is shown on 'desktop-hosted web' but never checks the desktop app (apps/desktop/src) or the Chrome extension side panel. artifactPanel.ts:20 imports spreadsheetSafeExport from tabular, with no sort found there.",
+  "Existing autoFilter in an edited workbook is preserved by the managed edit path and has a test (apps/web/lib/services/managed-office-preservation-markup.test.ts:1658,1800). The page lists this as unknown and says 'not tested by me'."
+ ]
+}

@@ -1,0 +1,496 @@
+{
+ "S15.01": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "model:"
+   }
+  ],
+  "needs": "none",
+  "note": "The composer itself has no model label in code; the name appears in the header and, when enabled, the status bar. The range S15.01 to S15.30 holds 22 items in the plan file (S15.05 to 07, 13 and 21 are absent), not 25; all 22 are covered.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi and sign in if asked.",
+   "Read the top header line: the model name is shown next to the product name and version.",
+   "Type /statusline, keep the model item on (Space toggles, Enter saves), and read the model: label in the status bar.",
+   "Type /model and pick another row; check the header and status bar now show the new model name."
+  ],
+  "where": "agi (start, then read the top header line); or /statusline, then turn on the model item to see model: in the status bar"
+ },
+ "S15.02": {
+  "labels": [
+   {
+    "file": "apps/cli/src/design_system.rs",
+    "text": "Bring your own key"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/model_picker.rs",
+    "text": " Models "
+   }
+  ],
+  "needs": "none",
+  "note": "Model rows do not repeat the provider name; the provider appears only as a section heading.",
+  "reachable": "yes",
+  "steps": [
+   "Type /model and press Enter.",
+   "Read the section heading, for example Bring your own key, and under it the provider name row (bold, not indented as much as models).",
+   "Read the model rows under that provider heading and check they belong to that provider.",
+   "Compare with Expected: each model is listed under its provider name."
+  ],
+  "where": "/model (opens the Models picker); provider name is the heading above each group under a section such as Bring your own key"
+ },
+ "S15.03": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/model_picker.rs",
+    "text": " Models "
+   }
+  ],
+  "needs": "none",
+  "note": "Grouping only sets the order of rows; no family heading is drawn.",
+  "reachable": "yes",
+  "steps": [
+   "Type /model and press Enter.",
+   "Move the cursor with Up and Down through one provider section.",
+   "Check that versions of the same model family sit next to each other."
+  ],
+  "where": "/model, then scroll inside one provider section"
+ },
+ "S15.04": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/model_picker.rs",
+    "text": "type to filter by name or provider..."
+   }
+  ],
+  "needs": "none",
+  "note": "Typing a slash re-focuses the search line when the list has focus.",
+  "reachable": "yes",
+  "steps": [
+   "Type /model and press Enter.",
+   "Type part of a model name, for example a few letters.",
+   "Check that the list shows only matching rows and their provider headings.",
+   "Clear the search text and check the full list returns."
+  ],
+  "where": "/model, then type in the search line"
+ },
+ "S15.08": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Auto: AGI picks the model for each message; starting with {}."
+   }
+  ],
+  "needs": "a signed-in AGI account (managed cloud)",
+  "note": "Auto is a launch flag, not a row in /model. The flag conflicts with --model and --provider. Code says Auto is for managed-cloud sessions only.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to an AGI account, then run agi --auto in a terminal.",
+   "Read the line printed before the session starts.",
+   "Send a message and check the answer details name a model."
+  ],
+  "where": "Start a terminal command: agi --auto (not in the /model picker)"
+ },
+ "S15.09": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Default model set to {} ({})"
+   }
+  ],
+  "needs": "none",
+  "note": "The /model picker does not change this saved default; only agi models set writes it.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi models set <model-id> (add --provider <name> if needed).",
+   "Read the line Default model set to <model-id> (<provider>).",
+   "Quit and run agi with no -m flag.",
+   "Check the header shows the model you set."
+  ],
+  "where": "Terminal command: agi models set <model-id>, then start agi"
+ },
+ "S15.10": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/model_picker.rs",
+    "text": "Model changed to"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Type /model and press Enter.",
+   "Move to a model row with Up and Down and press Enter.",
+   "Read the banner Model changed to <model-id>.",
+   "Send a message and check the header or answer details name that model."
+  ],
+  "where": "/model, pick a row, press Enter"
+ },
+ "S15.11": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/model_picker.rs",
+    "text": "Best for {}"
+   }
+  ],
+  "needs": "none",
+  "note": "Only the highlighted model shows its text, and the line is blank for models with no best_for entry.",
+  "reachable": "yes",
+  "steps": [
+   "Type /model and press Enter.",
+   "Move the cursor up and down over several model rows.",
+   "Read the single line under the list for the highlighted model, which starts with Best for."
+  ],
+  "where": "/model, then move the cursor over a model row"
+ },
+ "S15.12": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Flags: T=tools, V=vision, R=reasoning, P=reads PDFs, A=audio input."
+   }
+  ],
+  "needs": "none",
+  "note": "Input types are shown as letters (V for vision, A for audio input). The /model picker has no modality badges.",
+  "reachable": "yes",
+  "steps": [
+   "Type /models and press Enter.",
+   "Find the line Flags: T=tools, V=vision, R=reasoning, P=reads PDFs, A=audio input.",
+   "Read the letters in brackets after each model id, for example [T V].",
+   "Compare with Expected: input types appear as letters, not badges."
+  ],
+  "where": "/models (type it and press Enter); flags are in the text list, not in the /model picker"
+ },
+ "S15.14": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Flags: T=tools, V=vision, R=reasoning, P=reads PDFs, A=audio input."
+   }
+  ],
+  "needs": "none",
+  "note": "Tool support is a letter T in brackets, not a badge, and it is not shown in the /model picker.",
+  "reachable": "yes",
+  "steps": [
+   "Type /models and press Enter.",
+   "Read the flags line at the end of the list for T=tools.",
+   "Read the T letter in brackets for each model."
+  ],
+  "where": "/models (type it and press Enter)"
+ },
+ "S15.15": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/model_picker.rs",
+    "text": "K ctx"
+   }
+  ],
+  "needs": "none",
+  "note": "The context column is hidden when the terminal is narrower than 38 columns.",
+  "reachable": "yes",
+  "steps": [
+   "Type /model and press Enter.",
+   "Read the right side of each model row, for example 200K ctx.",
+   "Compare the numbers between two models."
+  ],
+  "where": "/model, read the right side of each model row"
+ },
+ "S15.16": {
+  "labels": [
+   {
+    "file": "apps/cli/src/design_system.rs",
+    "text": "Fastest"
+   }
+  ],
+  "needs": "none",
+  "note": "The word is a capability tier, not a measured speed. No separate speed figure was found in the picker.",
+  "reachable": "yes",
+  "steps": [
+   "Type /model and press Enter.",
+   "Read the word after each model name: Fastest, Balanced or Most capable.",
+   "Compare Fastest rows with Most capable rows."
+  ],
+  "where": "/model, read the tier word in the middle of each model row"
+ },
+ "S15.17": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Prices are per 1M input/output tokens"
+   }
+  ],
+  "needs": "none",
+  "note": "Shows prices per model, not a relative usage or allowance comparison. No relative usage field was found.",
+  "reachable": "yes",
+  "steps": [
+   "Type /models and press Enter.",
+   "Read the price note: Prices are per 1M input/output tokens.",
+   "Type /models <model-id> with a model id and read the Pricing line."
+  ],
+  "where": "/models (prices); or /models <model-id> for one model's Pricing line"
+ },
+ "S15.18": {
+  "labels": [
+   {
+    "file": "apps/cli/src/design_system.rs",
+    "text": "managed by AGI subscription"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/model_picker.rs",
+    "text": "unavailable"
+   }
+  ],
+  "needs": "a Free account",
+  "note": "Locked rows are listed and can still be highlighted; the unlock text comes from the tier ladder.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to a Free account, then type /model and press Enter.",
+   "Find the section with the tagline managed by AGI subscription.",
+   "Read the dimmed rows; the word at the right reads needs <plan>, or unavailable.",
+   "Compare with Expected: each locked model names the plan that unlocks it."
+  ],
+  "where": "/model, under the Managed section (tagline managed by AGI subscription), on a dimmed row"
+ },
+ "S15.19": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/model_picker.rs",
+    "text": "preview"
+   }
+  ],
+  "needs": "none",
+  "note": "The badge is text on the detail line for the highlighted row only, not a badge on the list row. No preview model was confirmed in the current catalog.",
+  "reachable": "yes",
+  "steps": [
+   "Type /model and press Enter.",
+   "Move the cursor onto each model and read the detail line under the list.",
+   "Check a preview, beta or experimental model shows that word on the detail line."
+  ],
+  "where": "/model, highlight a model, read the single detail line under the list"
+ },
+ "S15.20": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/model_picker.rs",
+    "text": "deprecated, leaves"
+   }
+  ],
+  "needs": "none",
+  "note": "The notice shows only on the highlighted row. No model with a retirement date was confirmed in the current catalog.",
+  "reachable": "yes",
+  "steps": [
+   "Type /model and press Enter.",
+   "Move the cursor onto each model and read the detail line under the list.",
+   "Check a scheduled model shows deprecated, leaves <date>.",
+   "Compare with /models <model-id>, which shows deprecated, leaves the catalog <date>."
+  ],
+  "where": "/model, highlight a model; or /models <model-id>"
+ },
+ "S15.22": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/model_picker.rs",
+    "text": "Thinking: on"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Effort set to"
+   }
+  ],
+  "needs": "none",
+  "note": "The bar says Tab/\u2190\u2192, but in code only Left and Right change effort; Tab jumps between provider sections. The bar shows only for reasoning models on providers that support effort.",
+  "reachable": "yes",
+  "steps": [
+   "Type /model and press Enter, then highlight a reasoning model.",
+   "Read the bar Thinking: on with Effort: followed by a level, for example Medium.",
+   "Press Right or Left and watch the level change.",
+   "Press Enter to select, then type /effort and read the line Effort set to."
+  ],
+  "where": "/model, highlight a reasoning model, then Left or Right arrow; or /effort"
+ },
+ "S15.23": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Fast mode"
+   }
+  ],
+  "needs": "none",
+  "note": "Partial, per the plan. In code /fast switches to a separate fast completion model of the provider, not the same model at a faster tier.",
+  "reachable": "yes",
+  "steps": [
+   "Type /fast and press Enter.",
+   "Read the line Fast mode ON, using <model>, with a credit-rate note if priced.",
+   "Type /fast again and read Fast mode OFF, back to <model>.",
+   "Compare with Expected: a faster tier of the same model."
+  ],
+  "where": "Type /fast in the chat and press Enter"
+ },
+ "S15.24": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Available styles:"
+   }
+  ],
+  "needs": "none",
+  "note": "Response length is set through output styles; no separate length setting was found. Only concise is a shorter-answer style, and no longer-answer style was found.",
+  "reachable": "yes",
+  "steps": [
+   "Type /output-style and press Enter.",
+   "Read the list under Available styles:, which includes concise.",
+   "Type /output-style concise and press Enter.",
+   "Ask a short question and compare the answer length with the default style."
+  ],
+  "where": "Type /output-style in the chat and press Enter"
+ },
+ "S15.25": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Temperature (0.0 - 1.0)"
+   }
+  ],
+  "needs": "none",
+  "note": "Only temperature is exposed. No top-p control was found in code.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi --help and find the line Temperature (0.0 - 1.0).",
+   "Start a session with agi -t 0.2 and send the same message twice with agi -t 1.0.",
+   "Compare how varied the two answers are."
+  ],
+  "where": "Terminal command: agi --help, then agi -t <value> (temperature flag)"
+ },
+ "S15.26": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Provider override"
+   }
+  ],
+  "needs": "a key or local server for the chosen provider",
+  "note": "The help text lists four provider names as examples. Whether a model offered by several providers appears under each provider in /model was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi --help and find the line Provider override (anthropic, openai, google, ollama).",
+   "Run agi --provider <name> -m <model> and send a message.",
+   "Check the header or answer details name the model served by that provider."
+  ],
+  "where": "Terminal command: agi --provider <name> -m <model>, or agi --help for the flag text"
+ },
+ "S15.27": {
+  "labels": [
+   {
+    "file": "apps/cli/src/design_system.rs",
+    "text": "on-device \u00b7 private \u00b7 free"
+   }
+  ],
+  "needs": "a local model server (Ollama or LM Studio) with a model installed",
+  "note": "The Local section appears only when a local model is found. Run agi models scan to see installed models.",
+  "reachable": "yes",
+  "steps": [
+   "Type /model and press Enter.",
+   "Find the section Local with the tagline on-device \u00b7 private \u00b7 free.",
+   "Highlight a local model row and press Enter.",
+   "Read the banner Model changed to <model-id>, then send a message."
+  ],
+  "where": "/model, top section Local (tagline on-device \u00b7 private \u00b7 free)"
+ },
+ "S15.28": {
+  "labels": [
+   {
+    "file": "apps/cli/src/design_system.rs",
+    "text": "Bring your own key"
+   },
+   {
+    "file": "apps/cli/src/design_system.rs",
+    "text": "your own provider keys"
+   }
+  ],
+  "needs": "a provider key saved in the product",
+  "note": "The code for saving a provider key was not traced, so the step to add one is unsure.",
+  "reachable": "yes",
+  "steps": [
+   "Type /model and press Enter.",
+   "Find the section Bring your own key with the tagline your own provider keys.",
+   "Highlight a row under it and press Enter.",
+   "Read the banner Model changed to <model-id> and check the status chip says Your key."
+  ],
+  "where": "/model, section Bring your own key (tagline your own provider keys)"
+ },
+ "S15.29": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Default model set to {} ({})"
+   }
+  ],
+  "needs": "none",
+  "note": "A choice made in the /model picker was not found to persist across sessions; the saved value comes from agi models set.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi models set <model-id>.",
+   "Quit and start agi again with no -m flag.",
+   "Check the header shows the saved model."
+  ],
+  "where": "Terminal command: agi models set <model-id> (persists), then a new agi session"
+ },
+ "S15.30": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/model_picker.rs",
+    "text": " Models "
+   }
+  ],
+  "needs": "a signed-in AGI account to store conversations",
+  "note": "Code in apps/cli/src/lib.rs (around line 2838) uses the stored conversation model when it is still in the catalog; the command that resumes it was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Type /model, choose a model, and send a message in one conversation.",
+   "Start a second conversation with a different model as default.",
+   "Resume the first conversation and check the header shows its model, not the default."
+  ],
+  "where": "/model in one session, then resume a conversation with its stored model (entry point not traced)"
+ },
+ "S15.32": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "in \u00b7 out"
+   }
+  ],
+  "needs": "none",
+  "note": "The line is built from the model name plus token counts, cost and time (answer_details in apps/cli/src/tui/tui_app.rs). The served-model swap happens only under managed Auto routing (adopt_served_model in apps/cli/src/agent/chat.rs); otherwise the line shows the model the session was set to, not a separate served model. I did not confirm the exact bare-`agi` path into the chat screen (apps/cli/src/lib.rs around line 8321 calls tui::run).",
+  "reachable": "yes",
+  "steps": [
+   "Run `agi` in a terminal to open the chat screen.",
+   "Type a short message such as \"hi\" and press Enter.",
+   "When the answer finishes, look at the grey line under the answer.",
+   "Check that the model name on that line is the model you chose or the one the product routed to, and that it matches the model shown in the composer."
+  ],
+  "where": "Type `agi` to open the chat screen, send any message, then look at the line under the answer (the line starts with \"\u21b3\")."
+ },
+ "S15.33": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Falling back"
+   },
+   {
+    "file": "apps/cli/src/agent/chat.rs",
+    "text": "Falling back"
+   }
+  ],
+  "needs": "a setup where the chosen model fails (for example a fallback chain set with --fallback-model or -m a,b,c, or a rate-limited account)",
+  "note": "Banner text is in render_fallback_banner (apps/cli/src/tui/tui_app.rs) and is shown for 5 seconds (FALLBACK_BANNER_TTL). Reason words come from FallbackChain::reason_phrase in apps/cli/src/routing/fallback.rs: rate limited, the stream failed, the provider failed, no network, the request was refused, the model was unavailable, or a failure. The banner shows only in the TUI, and the same message is printed as a plain line in the non-TUI path (apps/cli/src/agent/chat.rs). Whether the answer line also shows the fallback reason was not confirmed in the code. I did not confirm the exact bare-`agi` path into the chat screen.",
+  "reachable": "yes",
+  "steps": [
+   "Run `agi` in a terminal and start a chat with a model set that can fail or be unavailable (for example, a model that is rate limited or unreachable).",
+   "Send a message and wait for the answer.",
+   "Watch the chat area for the banner \" \u2198 Falling back: <from> \u2192 <to> (<reason>)\"; it stays for about 5 seconds.",
+   "Check that the banner names the model that failed, the model that answered, and the reason, and that the answer line shows the model that answered."
+  ],
+  "where": "Type `agi` to open the chat screen, send a message while a fallback model is in use, then look at the banner above the composer and the \"\u21b3\" line under the answer."
+ }
+}

@@ -1,0 +1,134 @@
+{
+ "S64.01": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Web page"
+   },
+   {
+    "file": "apps/extension-vscode/src/data/composerContext.ts",
+    "text": "Attach a web page"
+   }
+  ],
+  "needs": "none",
+  "note": "VS Code only reads a pasted link, not the live browser page; the live-page reading in the Chrome side panel (apps/extension) was not traced to a label. The plus button's own label was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI chat panel in VS Code and click the plus button in the composer to open the plus menu.",
+   "Click \"Web page\" and paste a full https:// link into the box that opens.",
+   "Click OK in the box. The page is read once from that link and its text is attached to the next message.",
+   "Type a question about the page and send it. Compare: the answer uses the text of the pasted link, not the page open in your browser tab."
+  ],
+  "where": "Chat composer > plus menu > Web page (the link box says \"Attach a web page\")"
+ },
+ "S64.02": {
+  "labels": [
+   {
+    "file": "apps/extension/src/features/context-handoff/index.ts",
+    "text": "VS Code"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/context-handoff/index.ts",
+    "text": "Selected in the browser, from"
+   }
+  ],
+  "needs": "a Chrome browser with the AGI extension, and VS Code open with the AGI extension",
+  "note": "The exact button label in the Chrome dialog that starts the send was not found in the code; the destination name \"VS Code\" was found.",
+  "reachable": "yes",
+  "steps": [
+   "In Chrome with the AGI extension, highlight some text on a web page.",
+   "Send the selection from the AGI extension to the \"VS Code\" destination; the dialog says it opens the AGI composer in VS Code via a vscode:// link.",
+   "In VS Code, the AGI chat composer opens with a draft that starts \"Selected in the browser, from\" followed by the page address and the highlighted text.",
+   "Type a question after it and send. Compare: the answer uses the highlighted text as context."
+  ],
+  "where": "Chrome extension side panel > select text on a web page > send it to \"VS Code\" (the VS Code chat composer then gets the text)"
+ },
+ "S64.06": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Web page"
+   }
+  ],
+  "needs": "none",
+  "note": "Same path as S64.01: the page is the pasted link, read once, not the open browser tab. The plus button's own label was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI chat panel in VS Code and click the plus button in the composer.",
+   "Click \"Web page\" and paste a link to a page with known text.",
+   "Type a free-form question about that text (for example a fact that appears only on the page) and send.",
+   "Compare: the answer uses the content of the pasted page."
+  ],
+  "where": "Chat composer > plus menu > Web page, then type a free-form question"
+ },
+ "S64.10": {
+  "labels": [],
+  "needs": "none",
+  "note": "No control in the VS Code chat lets the assistant open a web address. Searched apps/extension-vscode/src for openExternal (only used for app links such as upgrade, help and artifact pages) and found browser_navigate only in apps/cli/src/platform/runtime/tool_catalog.rs, which is not part of the VS Code panel.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S64.14": {
+  "labels": [],
+  "needs": "none",
+  "note": "No website search control was found in the VS Code app. The nearest control is the plus menu item \"Browse the web\" (apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts), which is a general web search through the CLI and not a search on a site. Website search tools (browser_find in apps/cli/src/platform/runtime/tool_catalog.rs) are not in the VS Code panel.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S64.15": {
+  "labels": [],
+  "needs": "none",
+  "note": "No form-filling control found in apps/extension-vscode/src. browser_fill_form exists only in the CLI tool list (apps/cli/src/platform/runtime/tool_catalog.rs) and the Chrome extension, not the VS Code panel.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S64.16": {
+  "labels": [],
+  "needs": "none",
+  "note": "No multi-step website task control found in apps/extension-vscode/src. The browser tool list (browser_navigate, browser_click, browser_type and others) is in apps/cli/src/platform/runtime/tool_catalog.rs, not the VS Code panel. Searched apps/extension-vscode/src for browser and web terms.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S64.18": {
+  "labels": [],
+  "needs": "a working local runtime, and a request that uses a browser tool, which depends on the runtime and route",
+  "note": "The VS Code panel shows tool rows generically (toolCallStart and toolCallEnd in apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts). No browser-specific timeline was found. Whether browser tools run from the VS Code panel was not verified.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI chat panel in VS Code and send a request that needs a tool.",
+   "Watch the reply while it runs: each tool call appears as its own row in the chat as it starts and ends.",
+   "Compare: each row shows the tool's name and a summary; a web action appears with a globe icon (the icon map lists browser and web fetch tools as globe)."
+  ],
+  "where": "Chat panel > send a message that makes the assistant use a tool > tool rows in the reply"
+ },
+ "S64.25": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Stop response"
+   }
+  ],
+  "needs": "none",
+  "note": "No pause control was found; only stop. The stop is for the whole reply, not a browser task specifically. The Escape setting is agiWorkforce.composer.escapeStops (default off) in apps/extension-vscode/package.json.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI chat panel in VS Code and send a request that takes a while.",
+   "While the reply is still being written, click the square \"Stop response\" button beside the composer.",
+   "Compare: the reply stops and the button changes to \"Stopping\" until the stop finishes.",
+   "Optional: turn on the setting \"Stop the active response when Escape is pressed in the composer\" and press Escape in the composer while a reply runs."
+  ],
+  "where": "Chat panel > send a message > Stop response button shown at the composer while the reply is running"
+ },
+ "S64.32": {
+  "labels": [],
+  "needs": "none",
+  "note": "No browser-task summary screen found in apps/extension-vscode/src. The turn ends with the normal reply in the chat. The closest summary code is the session receipt (apps/extension-vscode/src/features/sidebar-webview/sessionReceipt.ts), which lists file changes and approvals, not browser actions.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ }
+}

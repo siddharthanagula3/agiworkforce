@@ -1,0 +1,244 @@
+{
+ "S48.01": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/voice"
+   }
+  ],
+  "needs": "a microphone and a build with voice support",
+  "note": "There is no separate voice button. /voice runs in whichever session is open (app.session), so it is bound to that chat by design.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi in the terminal and open an existing chat from the chat list.",
+   "Type /voice in the composer and press Enter.",
+   "Look for the voice prompt \"[SPACE to record, ESC to exit]\" in the same chat session, compare with Expected: voice should run bound to the chat that was open."
+  ],
+  "where": "agi, then /voice typed in the composer of an open chat"
+ },
+ "S48.02": {
+  "labels": [],
+  "needs": "a microphone and a build with voice support",
+  "note": "No voice-specific control creates a new chat. /new (\"Started new conversation.\") clears the chat, and /voice can then be typed, but the code does not create a new chat for voice. Searched apps/cli/src/voice.rs and apps/cli/src/tui/tui_app.rs for new-conversation and voice handling.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S48.03": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "(spoken)"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Voice session ended."
+   }
+  ],
+  "needs": "a microphone and a build with voice support",
+  "note": "During voice the terminal shows only the voice prompts. The chat view (where spoken turns are merged) is shown again only after voice ends, so the transcript is not live inside the chat view.",
+  "reachable": "yes",
+  "steps": [
+   "Open an existing chat in agi and type /voice, then Enter.",
+   "Press SPACE, say a sentence, press ENTER to stop, then ENTER to send.",
+   "Press ESC to exit voice mode.",
+   "Look in the chat list for the spoken message marked \"(spoken)\" and the line \"Voice session ended.\", and compare with Expected."
+  ],
+  "where": "agi, then /voice in an open chat, then ESC; the spoken turns appear in the chat after voice ends"
+ },
+ "S48.05": {
+  "labels": [
+   {
+    "file": "apps/cli/src/voice.rs",
+    "text": "REC"
+   },
+   {
+    "file": "apps/cli/src/voice.rs",
+    "text": "(release SPACE or press ENTER to stop)"
+   }
+  ],
+  "needs": "a microphone and a build with voice support",
+  "note": "The REC label is the only listening state found. No spoken or screen-reader announcement was found in voice.rs.",
+  "reachable": "yes",
+  "steps": [
+   "Type /voice and press Enter in an open chat.",
+   "Press SPACE and watch the line that starts with \"REC\".",
+   "Compare with Expected: a listening state should be visible while recording. Only the REC label and the elapsed seconds are shown."
+  ],
+  "where": "/voice, then press SPACE to start recording"
+ },
+ "S48.07": {
+  "labels": [
+   {
+    "file": "apps/cli/src/voice.rs",
+    "text": "Thinking..."
+   }
+  ],
+  "needs": "a microphone and a build with voice support",
+  "note": "The spinner also shows \"Transcribing...\" before the reply. No indicator specific to tool runs was found in voice.rs.",
+  "reachable": "yes",
+  "steps": [
+   "Type /voice and press Enter in an open chat.",
+   "Press SPACE, say a short sentence, then press ENTER to stop.",
+   "Read the transcript line \"You said:\" and press ENTER to send.",
+   "Watch for the spinner text \"Thinking...\" while the reply is produced, and compare with Expected."
+  ],
+  "where": "/voice, then SPACE to record, then ENTER to stop and ENTER to send"
+ },
+ "S48.08": {
+  "labels": [
+   {
+    "file": "apps/cli/src/voice.rs",
+    "text": "REC"
+   }
+  ],
+  "needs": "a microphone and a build with voice support",
+  "note": "The bar is a text meter of microphone level during recording only. No visual that follows reply audio was found in voice.rs.",
+  "reachable": "yes",
+  "steps": [
+   "Type /voice and press Enter in an open chat.",
+   "Press SPACE and speak; watch the bar in brackets next to \"REC\".",
+   "Stop with ENTER and compare the bar with Expected: it should move with your voice level."
+  ],
+  "where": "/voice, then SPACE to record; the level bar appears next to REC"
+ },
+ "S48.10": {
+  "labels": [
+   {
+    "file": "apps/cli/src/voice.rs",
+    "text": "Exited voice mode."
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Voice session ended."
+   }
+  ],
+  "needs": "a microphone and a build with voice support",
+  "note": "Usage is printed after each reply by the turn code. No separate usage settlement message on exit was found.",
+  "reachable": "yes",
+  "steps": [
+   "Type /voice and press Enter in an open chat.",
+   "Press ESC at the prompt \"[SPACE to record, ESC to exit]\".",
+   "Look for \"Exited voice mode.\" and, back in the chat, \"Voice session ended.\", and compare with Expected."
+  ],
+  "where": "/voice, then ESC at the \"[SPACE to record, ESC to exit]\" prompt"
+ },
+ "S48.12": {
+  "labels": [
+   {
+    "file": "apps/cli/src/voice.rs",
+    "text": "(release SPACE or press ENTER to stop)"
+   }
+  ],
+  "needs": "a microphone and a build with voice support",
+  "note": "Release is detected only when the terminal reports key releases. Otherwise ENTER is the stop key. After stopping, the text waits for ENTER before it is sent, so it does not send on release by itself.",
+  "reachable": "yes",
+  "steps": [
+   "Type /voice and press Enter in an open chat.",
+   "Hold SPACE, speak, and release SPACE.",
+   "Check that recording stops and the transcript \"You said:\" appears, compare with Expected: it sends on release.",
+   "Press ENTER to send the transcript."
+  ],
+  "where": "/voice, then hold SPACE to record and release it to stop"
+ },
+ "S48.17": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/voice"
+   },
+   {
+    "file": "apps/cli/src/voice.rs",
+    "text": "Language:"
+   }
+  ],
+  "needs": "a microphone and a build with voice support",
+  "note": "The supported codes are in apps/cli/src/voice_languages.rs. Language is fixed per voice session; to change it, exit and type /voice with a new code. Whether recognition uses it was not traced beyond the transcribe call.",
+  "reachable": "yes",
+  "steps": [
+   "Type /voice es and press Enter in an open chat (use another supported code such as fr).",
+   "Read the line \"Language:\" that shows the code and its name.",
+   "Speak and compare the transcript with Expected: the chosen language should be used for recognition."
+  ],
+  "where": "/voice es (or /voice fr, etc.) in the composer, or agi --voice-lang es at launch"
+ },
+ "S48.21": {
+  "labels": [],
+  "needs": "a microphone and a build with voice support",
+  "note": "No live captions were found. Searched apps/cli/src/voice.rs and apps/cli/src/tui/tui_app.rs for caption; the closest things are the \"You said:\" line and the streamed reply text.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S48.22": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "(spoken)"
+   }
+  ],
+  "needs": "a microphone and a build with voice support",
+  "note": "The transcript is added to the chat only after voice ends. During voice it appears only as \"You said:\" lines in the terminal.",
+  "reachable": "yes",
+  "steps": [
+   "Type /voice and press Enter in an open chat, then send one spoken turn.",
+   "Press ESC to exit voice mode.",
+   "Read the chat: the spoken message should be marked \"(spoken)\" and kept in the chat, compare with Expected."
+  ],
+  "where": "/voice, speak, send, ESC to exit, then read the chat list"
+ },
+ "S48.26": {
+  "labels": [],
+  "needs": "a microphone and a build with voice support",
+  "note": "The voice loop prints only streamed reply text, with no tool activity line found in apps/cli/src/voice.rs. Tool results may appear in the chat after ESC, but this was not traced. Searched voice.rs and tui_app.rs for tool output handling during voice.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S48.27": {
+  "labels": [],
+  "needs": "a microphone and a build with voice support",
+  "note": "No approval prompt handling exists in apps/cli/src/voice.rs (search for approv returned nothing). Whether the shared session shows approval prompts during a voice turn was not traced.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S48.28": {
+  "labels": [],
+  "needs": "a microphone and a build with voice support",
+  "note": "No document-open action is linked to voice in apps/cli/src/voice.rs or tui_app.rs. A general documents module exists (apps/cli/src/documents.rs) but was not tied to voice.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S48.38": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Voice session ended."
+   },
+   {
+    "file": "apps/cli/src/voice.rs",
+    "text": "Exited voice mode."
+   }
+  ],
+  "needs": "a microphone and a build with voice support",
+  "note": "The same session object is passed into voice and back, so typed turns continue it.",
+  "reachable": "yes",
+  "steps": [
+   "Type /voice and press Enter in an open chat, speak one turn, then press ESC.",
+   "Look for \"Voice session ended.\" in the chat.",
+   "Type a message in the composer and press Enter.",
+   "Check that the reply continues the same chat with the earlier spoken turns, compare with Expected."
+  ],
+  "where": "/voice, ESC to exit, then type in the composer and press Enter"
+ },
+ "S48.39": {
+  "labels": [],
+  "needs": "a microphone and a build with voice support",
+  "note": "No voice-specific resume was found. /resume exists in apps/cli/src/tui/tui_app.rs for general chats, but nothing marks a voice conversation or reopens voice mode. Searched voice.rs and tui_app.rs for resume.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ }
+}

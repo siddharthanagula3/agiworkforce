@@ -1,0 +1,129 @@
+{
+ "S62.09": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/components/EmbeddedAccountPage.tsx",
+    "text": "Settings"
+   },
+   {
+    "file": "apps/web/features/settings/sections/NotificationsSection.tsx",
+    "text": "Manage tasks"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/tasks/TasksPage.tsx",
+    "text": "Work history"
+   }
+  ],
+  "needs": "An account with two or more Cloud work sessions running or active at the same time.",
+  "note": "The Settings entry point from the account menu was not traced. Work history is not in the left rail (apps/web/shared/components/layout/app-nav-items.test.ts says no Tasks entry). Live refresh of the other sessions was not traced; only the selected session auto-refreshes.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open Settings, then open the Notifications section.",
+   "Find the row titled Scheduled task finished and click Manage tasks.",
+   "On the Work history page, keep the filter on Active and the layout on List.",
+   "Look at the list: each running session should appear as its own row with its state label, and several rows can show running states at the same time.",
+   "Click Board in the Task layout control and compare the same sessions in the board view."
+  ],
+  "where": "Settings > Notifications > Manage tasks (opens Work history, the /tasks page). The page title is Work history; the default filter is Active and the default layout is List. Home > Work history appears only when there are more than 5 active runs."
+ },
+ "S62.10": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/tasks/TasksPage.tsx",
+    "text": "Needs you"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/tasks/TasksPage.tsx",
+    "text": "Work history"
+   }
+  ],
+  "needs": "At least one session that is waiting for input or approval, and one that is running, if possible.",
+  "note": "The ordering is applied in code (orderedRuns in TasksPage.tsx) to the loaded list only; no label says it is a priority sort.",
+  "reachable": "yes",
+  "steps": [
+   "Open Work history as in S62.09.",
+   "Keep the filter on Active and look at the top rows of the list.",
+   "Sessions that are waiting for you (awaiting input, awaiting approval or paused) should be listed above the others.",
+   "Click Needs you in the filter control and check that only those waiting sessions are shown.",
+   "Compare with Expected: waiting sessions come first and can be filtered alone."
+  ],
+  "where": "Work history > filter Needs you (also: the Active list puts sessions that need input first)."
+ },
+ "S62.11": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Approve"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/tasks/TasksPage.tsx",
+    "text": "Waiting for your approval"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/tasks/TasksPage.tsx",
+    "text": "Resume"
+   }
+  ],
+  "needs": "A Cloud work session that is waiting for a tool approval, or is paused.",
+  "note": "The Approve and Deny buttons also appear on board cards as icon buttons with aria-labels; the Resume button is shown for paused sessions. Whether a session that is only waiting for input (not approval) can be answered inline was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open Work history and click a session that is waiting for approval.",
+   "In the details panel, read the Waiting for your approval card and the listed tool calls.",
+   "Optionally type in the box Tell the agent what to change when it resumes (optional) or Add guidance to steer this run (optional).",
+   "Click Approve (or Deny) and watch the card show a spinner, then leave the card.",
+   "Check that the page stayed on Work history and the session state changed. For a paused session, click Resume."
+  ],
+  "where": "Work history > click a session row (View details for <title>) > Approve or Deny in the Waiting for your approval card. A paused session shows a Resume button in the same panel."
+ },
+ "S62.12": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx",
+    "text": "Open source chat"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/tasks/TasksPage.tsx",
+    "text": "View details for"
+   }
+  ],
+  "needs": "A Cloud work session that was started from a chat (so it has a source chat).",
+  "note": "The details panel itself shows a summary (goal, plan, output or result), not a message-by-message transcript; the full transcript is reached through the source chat. Without a source chat the panel shows no button.",
+  "reachable": "yes",
+  "steps": [
+   "Open Work history and click a session row to open its details panel.",
+   "Read the panel sections: Task goal, Task plan and Latest output or Result.",
+   "Find the button Open source chat (it shows only when the session has a source chat).",
+   "Click Open source chat.",
+   "Compare with Expected: the chat opens on its full conversation at /chat/<id>, showing the messages of that task."
+  ],
+  "where": "Work history > click a session row > Open source chat, in the details panel."
+ },
+ "S62.17": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Branch conversation from here"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Branch conversation: this chat stays unchanged"
+   },
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Chat"
+   }
+  ],
+  "needs": "A Free or paid account with a chat that has at least one reply.",
+  "note": "The toast text Conversation branch created is in apps/web/features/chat/hooks/use-conversation-branches.ts. Hover visibility of the assistant action bar was read from class names, not confirmed in a browser. The branch badge in the message row (BranchNavigator) appears only after a branch exists.",
+  "reachable": "yes",
+  "steps": [
+   "Open an existing chat with at least one reply from the assistant.",
+   "Move the pointer over the reply (on touch, tap it) to show its action buttons.",
+   "Click the branch icon, with the tooltip Branch conversation: this chat stays unchanged.",
+   "Wait for the toast Conversation branch created and the new chat page to open.",
+   "Type a new message in the new chat and compare with Expected: the original chat stays unchanged and the new chat continues from that point."
+  ],
+  "where": "Chat > open an existing chat > move the pointer over an assistant reply and click the Branch conversation from here icon (tooltip Branch conversation: this chat stays unchanged). User messages have the same action in More message actions."
+ }
+}

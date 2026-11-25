@@ -1,0 +1,29 @@
+{
+ "S42.15": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Show Schedules"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/index.ts",
+    "text": "Pause this schedule"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/index.ts",
+    "text": "Resume this schedule"
+   }
+  ],
+  "needs": "A schedule already created on the account (none is created by the app itself). Sign-in is needed first. Account tier unknown.",
+  "note": "The item is titled Pause briefings, but the code only pauses and resumes schedules (routines). I searched apps/extension-vscode (src and package.json) for briefing and found no match. The pause and resume controls are icon buttons with tooltips only, not visible text. Pause and resume are refused with the message 'this schedule cannot be paused or resumed in its current state' when the schedule is not in a state that allows toggling. The Command Palette entries Code: Pause Schedule and Code: Resume Schedule are hidden (when: false) and reachable only from the row buttons.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the Command Palette, or type /schedule in the chat input.",
+   "Run Code: Show Schedules. A quick pick titled Code, Schedules opens.",
+   "Find a schedule row that is active and hover it. Click the button whose tooltip is Pause this schedule.",
+   "Look at the row: it should now show Paused, as the Expected line says it can be paused.",
+   "On the same row, click the button whose tooltip is Resume this schedule, then check the row shows active again."
+  ],
+  "where": "Command Palette > Code: Show Schedules (or type /schedule in the chat input) > Schedules list > on an active schedule row, click the pause button (tooltip: Pause this schedule). On a paused row the button is Resume this schedule."
+ }
+}

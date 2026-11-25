@@ -1,0 +1,572 @@
+{
+ "S13.01": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "What's on your mind?"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/SendButton.tsx",
+    "text": "Send message"
+   }
+  ],
+  "needs": "none",
+  "note": "The placeholder changes with state (for example \"Type or hold to talk\", \"Reply to AGI\" or \"Offline, message will send on reconnect\"). \"Send message\" is an accessibility label on an icon, not visible text.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and wait for the New chat screen.",
+   "Tap the message box that shows \"What's on your mind?\".",
+   "Type a short sentence, for example \"Hello, this is a test\".",
+   "Tap the send button on the right of the box (accessibility label \"Send message\").",
+   "Compare: your text appears as a sent message and the box is cleared."
+  ],
+  "where": "First screen after sign-in (New chat) > message box that shows \"What's on your mind?\" > type > Send message button on the right of the box"
+ },
+ "S13.02": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "What's on your mind?"
+   }
+  ],
+  "needs": "none",
+  "note": "The field is multiline and nothing binds Return to send. Whether the line break survives in the sent message was not checked in code.",
+  "reachable": "yes",
+  "steps": [
+   "Tap the message box.",
+   "Type \"First line\".",
+   "Press Return on the keyboard (this does not send).",
+   "Type \"Second line\".",
+   "Compare: the box shows two lines. Send, then check that the sent message keeps the line break."
+  ],
+  "where": "First screen after sign-in (New chat) > message box \"What's on your mind?\""
+ },
+ "S13.03": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "What's on your mind?"
+   }
+  ],
+  "needs": "none",
+  "note": "The code caps the field at a maximum height of 160 with a scroll, so the exact cap is not confirmed on screen.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Tap the message box.",
+   "Press Return and type until the text is more than about eight lines long.",
+   "Compare: the box grows taller as lines are added, stops growing at a cap, then scrolls inside the box."
+  ],
+  "where": "Message box \"What's on your mind?\" on the New chat screen; the box grows as you type"
+ },
+ "S13.04": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Expand message"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ComposerFullScreenEditor.tsx",
+    "text": "Message"
+   }
+  ],
+  "needs": "none",
+  "note": "The expand control opens a full-screen editor. No drag handle or resize control was found, so the box itself does not get taller on demand.",
+  "reachable": "yes",
+  "steps": [
+   "Type several lines so the box is multiline.",
+   "Tap the small expand icon at the top right of the box (accessibility label \"Expand message\").",
+   "Compare: a full-screen \"Message\" editor opens.",
+   "Tap \"Collapse editor\" (top left) to return to the box."
+  ],
+  "where": "New chat > message box > \"Expand message\" control (small icon at the top right of the box; appears once the text is multiline)"
+ },
+ "S13.05": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Expand message"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ComposerFullScreenEditor.tsx",
+    "text": "Collapse editor"
+   }
+  ],
+  "needs": "none",
+  "note": "The code opens an in-app full-screen editor only. No external editor option was found.",
+  "reachable": "yes",
+  "steps": [
+   "Type some text and tap the \"Expand message\" icon at the top right of the box.",
+   "In the full-screen \"Message\" editor, add or change text.",
+   "Tap the top-left icon with the accessibility label \"Collapse editor\".",
+   "Compare: you are back in the message box and the edited text is kept.",
+   "Optionally tap the send button at the top right of the full-screen editor."
+  ],
+  "where": "New chat > message box > \"Expand message\" > full-screen \"Message\" editor > \"Collapse editor\""
+ },
+ "S13.06": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/SendButton.tsx",
+    "text": "Send message"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Offline, message will send on reconnect"
+   }
+  ],
+  "needs": "none",
+  "note": "The disabled state is shown by the dimmed button. The only visible reason text found is the offline placeholder. The \"Sending when the upload finishes\" accessibility label covers uploads.",
+  "reachable": "yes",
+  "steps": [
+   "With the box empty, look at the send button and note it is dimmed.",
+   "Type a sentence.",
+   "Tap the send button.",
+   "Compare: the message is sent and the box is cleared. While offline, the box says \"Offline, message will send on reconnect\" instead."
+  ],
+  "where": "New chat > message box > send button on the right of the box (accessibility label \"Send message\")"
+ },
+ "S13.07": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/SendButton.tsx",
+    "text": "Stop generating"
+   }
+  ],
+  "needs": "none",
+  "note": "\"Stop generating\" is an accessibility label; the visible control is an icon. Whether produced text is kept was not checked in code.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message that gets a long reply.",
+   "While the reply is streaming, look at the right of the box where the send button was.",
+   "Tap that button (accessibility label \"Stop generating\").",
+   "Compare: the reply stops and the text produced so far stays on screen."
+  ],
+  "where": "New chat > send any message > while the reply streams, the send button becomes the stop control (accessibility label \"Stop generating\")"
+ },
+ "S13.09": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "What's on your mind?"
+   }
+  ],
+  "needs": "a hardware keyboard (for example the Mac keyboard connected to the simulator)",
+  "note": "No Shift+Enter handler exists in the composer code. The newline comes from the multiline field, and Return is not bound to send, so test Shift+Return and plain Return the same way.",
+  "reachable": "yes",
+  "steps": [
+   "Tap the message box and type \"one\".",
+   "Press Shift+Return on a connected keyboard.",
+   "Compare: a new line appears in the box and the message is not sent."
+  ],
+  "where": "New chat > message box > Shift+Return on a hardware keyboard"
+ },
+ "S13.10": {
+  "labels": [],
+  "needs": "a hardware keyboard",
+  "note": "Searched apps/mobile for undo and redo in the chat composer. No composer undo or redo handler was found. The only \"Undo last change\" label is in apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx, which is the artifact editor, not the composer.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S13.11": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Paste image"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AttachmentPreview.tsx",
+    "text": "Pasted text"
+   }
+  ],
+  "needs": "a sentence and an image on the clipboard",
+  "note": "The long-press Paste menu comes from iOS, not app code. Large pasted text becomes a \"Pasted text\" chip (see S13.14).",
+  "reachable": "yes",
+  "steps": [
+   "Copy a sentence in another app.",
+   "Long-press the message box and choose Paste.",
+   "Compare: the text appears in the box.",
+   "Copy an image, tap \"Add to chat\" (+), then tap \"Paste image\".",
+   "Compare: the image appears as an attachment in the strip above the box."
+  ],
+  "where": "New chat > message box > long press > Paste (text, from the system menu); New chat > \"Add to chat\" (+) > \"Paste image\" (image)"
+ },
+ "S13.12": {
+  "labels": [],
+  "needs": "formatted text copied from a web page",
+  "note": "Searched ChatInput.tsx and src/features/chat for HTML or rich-text normalization on paste. None was found; the message box is a plain multiline text field. Whether iOS pastes plain text was not verified in code.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S13.14": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AttachmentPreview.tsx",
+    "text": "Pasted text"
+   }
+  ],
+  "needs": "a long text on the clipboard",
+  "note": "The chip's accessibility hint reads \"Expands the pasted text back into the message input\". The size threshold is in ChatInput.tsx and was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Copy a long text (several pages) from another app.",
+   "Paste it into the message box.",
+   "Compare: a \"Pasted text\" chip appears above the box with its size, instead of filling the box.",
+   "Tap the chip to expand the text back into the message box."
+  ],
+  "where": "New chat > message box > paste a very long block of text; it appears as a \"Pasted text\" chip above the box"
+ },
+ "S13.15": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ContextWarningChip.tsx",
+    "text": "Chat is getting long. Start a fresh chat for faster responses."
+   }
+  ],
+  "needs": "a long conversation",
+  "note": "No character or token counter was found in the composer. The only length indicator is this warning, which appears when the context budget is not ok.",
+  "reachable": "yes",
+  "steps": [
+   "Open a conversation with many long messages.",
+   "Look at the line above the message box.",
+   "Tap the warning line to open the context details.",
+   "Compare: the warning shows only for a long chat, and no character or token count appears while you type."
+  ],
+  "where": "Open a long conversation > warning line above the message box: \"Chat is getting long. Start a fresh chat for faster responses.\""
+ },
+ "S13.16": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "What's on your mind?"
+   }
+  ],
+  "needs": "none",
+  "note": "Drafts are saved on the device by apps/mobile/src/features/chat/draftStore.ts, keyed per conversation. Not checked on a device.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Type a sentence in the message box but do not send it.",
+   "Force quit the app (or reload the page on web).",
+   "Reopen the app and sign in again if asked.",
+   "Compare: the typed sentence is back in the message box."
+  ],
+  "where": "Message box on the New chat screen (draft is saved on the device)"
+ },
+ "S13.17": {
+  "labels": [],
+  "needs": "a way to make the send fail; offline does not fail, it queues",
+  "note": "The restore is in code (restoreSentText in ChatInput.tsx), but no visible notice for a restored draft was found. The only failed-send alert found is \"Pasted text not sent\", which applies to large pasted text.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Type a sentence and tap the send button.",
+   "Wait for the send to fail (offline sends are queued, so use a failing server response if you can).",
+   "Compare: the sent text is put back at the top of the message box."
+  ],
+  "where": "Message box after a send fails"
+ },
+ "S13.18": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "What's on your mind?"
+   }
+  ],
+  "needs": "two conversations",
+  "note": "Drafts are keyed by conversation in apps/mobile/app/(app)/chat/[id].tsx and ChatInput.tsx (draftKey).",
+  "reachable": "not_from_ui",
+  "steps": [
+   "In one chat, type \"draft A\" and do not send.",
+   "Open a different chat from the chat list.",
+   "Compare: that chat's message box is empty.",
+   "Type \"draft B\" there, then go back to the first chat.",
+   "Compare: \"draft A\" is still there and \"draft B\" is not."
+  ],
+  "where": "Message box on each chat; the draft is kept per conversation"
+ },
+ "S13.22": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/CommandPalette.tsx",
+    "text": "Command suggestions"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/CommandPalette.tsx",
+    "text": "Generate an image"
+   }
+  ],
+  "needs": "none",
+  "note": "Some commands depend on account or boundary (the code shows a cloud boundary tag). Keyboard selection was not confirmed in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Tap the message box.",
+   "Type \"/\".",
+   "Compare: a \"Command suggestions\" list shows /image (Generate an image), /voice (Start voice conversation), /compare (Compare model responses) and /export (Export conversation).",
+   "Type \"/im\" and compare: the list filters to /image.",
+   "Tap a command to choose it."
+  ],
+  "where": "New chat > message box > type \"/\""
+ },
+ "S13.23": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Skills"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   }
+  ],
+  "needs": "a signed-in Cloud account (the chip says \"selected for the next Cloud message\"); plan requirement not confirmed",
+  "note": "\"Clear selected Skill\" is an accessibility label on the X icon.",
+  "reachable": "yes",
+  "steps": [
+   "Tap the + button (accessibility label \"Add to chat\") at the left of the message box.",
+   "Tap \"Skills\" in the sheet.",
+   "Pick a skill.",
+   "Compare: the skill name shows as a chip above the box, and the next message runs with it.",
+   "Optionally tap the X on the chip (accessibility label \"Clear selected Skill\") and compare that the chip is gone."
+  ],
+  "where": "New chat > \"Add to chat\" (+) > \"Skills\" > pick a skill"
+ },
+ "S13.31": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Skills"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Project"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AttachmentPreview.tsx",
+    "text": "Attached files"
+   }
+  ],
+  "needs": "a Cloud account, a file to upload, and at least one project and skill",
+  "note": "No page-context chip was found in the composer. The project bar is ProjectSelectorBar (accessibility label \"Clear project\").",
+  "reachable": "yes",
+  "steps": [
+   "Tap + > \"Skills\" and pick a skill; compare the skill chip above the box, then tap its X and compare it is removed.",
+   "Tap + > \"Project\" and pick a project; compare the project bar appears; its \"Clear project\" control removes it.",
+   "Tap + > \"File\" and pick a file; compare it appears in the \"Attached files\" strip with a Remove control.",
+   "Compare each chip is removable and shows its name."
+  ],
+  "where": "New chat > \"Add to chat\" (+) > \"Skills\", \"Project\" or \"File\"; chips and the attachment strip appear above the message box"
+ },
+ "S13.32": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Web search"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Connectors"
+   }
+  ],
+  "needs": "a Cloud account; a connected connector for the Connectors row",
+  "note": "No chip for web search or connector sources was found in ChatInput.tsx. Only the Research and Run code chips appear above the box, so the Expected chip row does not match the code.",
+  "reachable": "yes",
+  "steps": [
+   "Tap the + button and tap \"Web search\".",
+   "Look at the row in the sheet: it shows a \"selected\" state when on.",
+   "Close the sheet and look above the message box.",
+   "Compare: sources should show as chips before sending."
+  ],
+  "where": "New chat > \"Add to chat\" (+) > \"Web search\" or \"Connectors\""
+ },
+ "S13.33": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Deep research"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Run code"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Research"
+   }
+  ],
+  "needs": "a signed-in Cloud account; a model that supports research or code",
+  "note": "The chip appears only when the model and account support the tool; the row has the accessibility label \"Active chat tools\".",
+  "reachable": "yes",
+  "steps": [
+   "Tap the + button.",
+   "Tap \"Deep research\" or \"Run code\" to switch it on.",
+   "Close the sheet.",
+   "Compare: a chip labelled \"Research\" or \"Run code\" appears above the message box."
+  ],
+  "where": "New chat > \"Add to chat\" (+) > \"Deep research\" or \"Run code\"; chips appear in a row above the message box"
+ },
+ "S13.34": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Create file"
+   },
+   {
+    "file": "packages/contracts/cloud-contracts/src/skills.ts",
+    "text": "Document"
+   },
+   {
+    "file": "packages/contracts/cloud-contracts/src/skills.ts",
+    "text": "Presentation"
+   }
+  ],
+  "needs": "a Cloud account with the code feature on (the row only shows in Cloud text mode)",
+  "note": "Expected lists table, code and slides, but the code offers only docx, pptx and xlsx (labelled Document, Presentation and Spreadsheet). The cited chatExecutionStore.ts line no longer holds the format choice; it is stored in apps/mobile/src/features/chat/store/outputFormatStore.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Tap the + button and tap \"Create file\".",
+   "Choose an output: Document, Presentation or Spreadsheet.",
+   "Compare: the \"Create file\" row shows the chosen format.",
+   "Send a message and check that the reply is that kind of file."
+  ],
+  "where": "New chat > \"Add to chat\" (+) > \"Create file\" > \"Document\", \"Presentation\" or \"Spreadsheet\""
+ },
+ "S13.35": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Camera"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Photos"
+   }
+  ],
+  "needs": "phone width; a Cloud account to see the Cloud rows",
+  "note": "Which rows appear depends on account, plan and mode, so not every row shows for every account.",
+  "reachable": "yes",
+  "steps": [
+   "Tap the + button.",
+   "Compare the sheet lists Camera, Photos, Paste image and File.",
+   "Scroll the sheet: compare Create image, Create video, Create file, Web search, Deep research, Run code, Study and learn, Project, Connectors, Skills and Choose style are there.",
+   "Close the sheet and compare it closes without adding anything."
+  ],
+  "where": "New chat > \"Add to chat\" (+) button at the left of the message box"
+ },
+ "S13.36": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Stop recording"
+   },
+   {
+    "file": "apps/mobile/src/features/voice/components/VoiceInputButton.tsx",
+    "text": "Tap to record, hold for push-to-talk"
+   }
+  ],
+  "needs": "a microphone and microphone permission",
+  "note": "Stop recording drops the transcript into the box. The separate \"Send recording\" control sends it in one tap, so do not use it for this check.",
+  "reachable": "yes",
+  "steps": [
+   "Tap the microphone icon.",
+   "Speak a sentence.",
+   "Tap the square \"Stop recording\" control.",
+   "Compare: the spoken words appear in the message box and nothing is sent.",
+   "Tap \"Send message\" yourself to send it."
+  ],
+  "where": "New chat > microphone icon in the message box controls (accessibility label \"Tap to record, hold for push-to-talk\")"
+ },
+ "S13.37": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Start voice mode"
+   },
+   {
+    "file": "apps/mobile/src/features/voice/components/VoiceInputButton.tsx",
+    "text": "Tap to record, hold for push-to-talk"
+   }
+  ],
+  "needs": "a microphone and microphone permission; voice mode available on the account (not confirmed)",
+  "note": "The \"Start voice mode\" button shows only when the box is empty and voice mode is available. The microphone hint says long press opens voice conversation mode.",
+  "reachable": "yes",
+  "steps": [
+   "Make sure the message box is empty.",
+   "Tap the round button with the accessibility label \"Start voice mode\".",
+   "Compare: a hands-free voice conversation opens.",
+   "Speak and check that a reply is spoken back."
+  ],
+  "where": "New chat > empty message box > round \"Start voice mode\" button on the right; or long-press the microphone icon"
+ },
+ "S13.38": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Queue message"
+   }
+  ],
+  "needs": "an account that can send a chat message and get a streaming reply",
+  "note": "The \"Queue message\" button has an icon only (clock) with this accessibility label, so no visible text is shown; the queued chip shows the message text, not a visible label.",
+  "reachable": "yes",
+  "steps": [
+   "Start a chat and send any message so that a reply begins to stream.",
+   "While the reply is still streaming, tap the composer and type a second message.",
+   "Look for the \"Queue message\" button next to the stop control (it appears only while a reply streams and the composer has text).",
+   "Tap \"Queue message\". Check that the composer clears and a queued-message chip appears above it, and that the reply keeps streaming.",
+   "When the first reply finishes, check that the queued message is sent automatically."
+  ],
+  "where": "Chat screen > type a message while a reply is still streaming > tap the \"Queue message\" button beside the stop button"
+ },
+ "S13.39": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Edit queued message"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Cancel queued message"
+   }
+  ],
+  "needs": "an account that can send a chat message and get a streaming reply",
+  "note": "Both controls are icon buttons (pencil and X); their words are accessibility labels, not visible text. Edit returns the text to the composer, and cancel removes it without sending.",
+  "reachable": "yes",
+  "steps": [
+   "Queue a message as in S13.38 while a reply is streaming.",
+   "Look above the composer for the queued chip that shows the queued message text.",
+   "Tap the pencil (Edit queued message) icon: the text goes back into the composer and the chip disappears; check that it is not sent yet.",
+   "Queue a new message again, then tap the X (Cancel queued message) icon: check that the chip disappears and the message is not sent when the reply finishes."
+  ],
+  "where": "Chat screen > after queuing a message, the queued chip above the composer > pencil icon \"Edit queued message\" or X icon \"Cancel queued message\""
+ },
+ "S13.40": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/RunSteerInput.tsx",
+    "text": "Message the agent"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/RunSteerInput.tsx",
+    "text": "Add instructions or change course"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/RunSteerInput.tsx",
+    "text": "Send to the agent"
+   }
+  ],
+  "needs": "an account with managed cloud agent access and a cloud agent run that is currently running",
+  "note": "The entry point is shown only when a chat message carries a managed cloud agent run reference and that run is running (AgentActivityTimeline.tsx:1176, MessageBubble.tsx:1026); how a tester reaches such a run from the first screen was not confirmed, and the tab name Chat was not checked against the tab layout.",
+  "reachable": "yes",
+  "steps": [
+   "Start a managed cloud agent task from chat and wait until its run is in the running state.",
+   "Under the agent activity shown for that running run, tap \"Message the agent\".",
+   "Type guidance into the box that shows \"Add instructions or change course\".",
+   "Tap \"Send to the agent\" and check that the note \"Sent. The agent reads your message at its next step.\" appears and the run keeps going without stopping.",
+   "Note: a second entry point \"Message the agent\" exists in the Tasks run detail (apps/mobile/src/features/tasks/components/CloudRunSteerSection.tsx:75), and the tester may use either."
+  ],
+  "where": "Chat screen > a managed cloud agent reply that is still running > \"Message the agent\" under the agent activity, then \"Send to the agent\""
+ }
+}

@@ -1,0 +1,232 @@
+{
+ "S10.01": {
+  "labels": [],
+  "needs": "live-web",
+  "note": "Searched apps/extension/src for \"Create project\", \"New project\" and \"Project name\" and found no create-project dialog; src/features/side-panel/activeProject.ts exists but I did not examine it.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S10.06": {
+  "labels": [
+   {
+    "file": "apps/extension/src/side_panel.ts",
+    "text": "More actions"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Delete chat"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Delete this chat from this device? It cannot be recovered."
+   }
+  ],
+  "needs": "a chat to delete (a Free account is enough)",
+  "note": "The confirmation text says \"this chat\" and does not repeat the chat's title, which Expected asks for; the confirm call in side_panel.ts passes no name. The \"chat list\" navigation words are my description, not a quoted label.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side panel and find a chat in the chat list.",
+   "Click the \"More actions\" button on that chat's row.",
+   "Click \"Delete chat\".",
+   "Look for the confirmation \"Delete this chat from this device? It cannot be recovered.\" (or the account wording if the chat is saved to your AGI account) and check that nothing is removed until you confirm."
+  ],
+  "where": "Side panel > chat list > More actions > Delete chat"
+ },
+ "S10.07": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Delete $NAME$ and its run history? This cannot be undone."
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Delete"
+   }
+  ],
+  "needs": "a scheduled task to delete",
+  "note": "I did not trace the route to the scheduled-task list, so the path before \"Scheduled task\" is unverified. Commands and shortcuts use a second-click confirmation (\"Select delete again to remove $NAME$...\", messages.json lines 1645 and 1659).",
+  "reachable": "yes",
+  "steps": [
+   "Open the scheduled task you want to remove.",
+   "Click \"Delete\".",
+   "Read the confirmation: \"Delete $NAME$ and its run history? This cannot be undone.\" with the task's name in place of $NAME$.",
+   "Check that the task is still there until you confirm the deletion."
+  ],
+  "where": "Scheduled task > Delete"
+ },
+ "S10.10": {
+  "labels": [],
+  "needs": "live-web",
+  "note": "No artifact share dialog found. Only chat sharing exists (\"More actions\" > \"Share\" > \"Create link\", src/side_panel.ts), which has no take-down control in the strings I read.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S10.11": {
+  "labels": [],
+  "needs": "live-web",
+  "note": "Searched apps/extension/src for \"publish\"; hits were background publish helpers only, and no publish dialog or live-URL hand-back was found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S10.17": {
+  "labels": [
+   {
+    "file": "apps/extension/src/side_panel.ts",
+    "text": "Add attachment"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Upload from device"
+   }
+  ],
+  "needs": "a file to upload and a signed-in AGI account (without sign-in the app says \"Sign in to AGI Cloud to upload files.\")",
+  "note": "The upload option is hidden or disabled when the account's canUploadFiles capability is off.",
+  "reachable": "yes",
+  "steps": [
+   "Click the \"Add attachment\" button beside the message box.",
+   "Click \"Upload from device\".",
+   "Pick a file in the device file chooser.",
+   "Look for the picked file to appear as an attachment on the message before you send it."
+  ],
+  "where": "Add attachment > Upload from device"
+ },
+ "S10.28": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Your Managed Cloud usage limit has been reached."
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Manage usage"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Add credits"
+   }
+  ],
+  "needs": "an account that has reached its usage limit",
+  "note": "The usage code carries reset times (usageWindows.ts resetAt), but I did not confirm that the notice displays which limit or when it resets.",
+  "reachable": "yes",
+  "steps": [
+   "Use an account that has used up its Managed Cloud usage.",
+   "Type a message and try to send it.",
+   "Read the notice \"Your Managed Cloud usage limit has been reached.\"",
+   "Check for the buttons \"Manage usage\", \"Add credits\" or \"Contact support\", and check whether the notice shows which limit and when it resets."
+  ],
+  "where": "Message box > send a message after the usage limit is reached"
+ },
+ "S10.34": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Before you dictate"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Continue"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Microphone access is blocked. Allow the microphone for AGI in Chrome site settings, then try again."
+   }
+  ],
+  "needs": "a microphone, and the first-time dictation notice not yet acknowledged",
+  "note": "The microphone button's own label was not confirmed; the notice is shown once and then stored as acknowledged.",
+  "reachable": "yes",
+  "steps": [
+   "Click the microphone button in the message box.",
+   "Read the notice \"Before you dictate\" and its explanation of the microphone and Chrome's speech service.",
+   "Click \"Continue\" (or the decline button) and watch for Chrome's microphone prompt.",
+   "If you block access, click the microphone again and look for \"Microphone access is blocked. Allow the microphone for AGI in Chrome site settings, then try again.\""
+  ],
+  "where": "Microphone button > Before you dictate > Continue"
+ },
+ "S10.36": {
+  "labels": [
+   {
+    "file": "apps/extension/src/options.ts",
+    "text": "Grant full browser control"
+   },
+   {
+    "file": "apps/extension/src/options.ts",
+    "text": "Approved sites"
+   }
+  ],
+  "needs": "a website to approve (http or https)",
+  "note": "The control that starts consent and the exact visible heading \"Approved sites\" were not confirmed; the side panel's computer-use setup also reuses the same body text (computerUsePanel.ts:1590).",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI extension options page.",
+   "Add a site under \"Approved sites\" and click the site's option to turn on browser control.",
+   "Read the explanation text, then click \"Grant full browser control\".",
+   "Accept Chrome's site-access prompt and check that the site now shows \"browser control granted\"."
+  ],
+  "where": "Options > Approved sites > add a site > Grant full browser control"
+ },
+ "S10.38": {
+  "labels": [
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Approve action:"
+   },
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Allow for this task"
+   },
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Skip"
+   }
+  ],
+  "needs": "an approved site with browser control granted and a task that performs a browser action",
+  "note": "Chat-level approvals use \"Approve\" and \"Decline\" (messages.json lines 1155 and 1169) and the card's \"Allow\" button text is in computerUsePanel.ts; I did not check which surface shows which.",
+  "reachable": "yes",
+  "steps": [
+   "Start a computer-use task on a site you have approved and granted browser control.",
+   "Wait for the card titled \"Approve action:\" followed by the tool name.",
+   "Read the description shown on the card.",
+   "Click \"Allow\", \"Allow for this task\" or \"Skip\" and check that only that one call is decided."
+  ],
+  "where": "Side panel > computer-use task on an approved site > card \"Approve action:\""
+ },
+ "S10.39": {
+  "labels": [
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Approve file upload"
+   }
+  ],
+  "needs": "an approved site and a file to upload",
+  "note": "The policy has reasons for sensitive input, sensitive sites and purchases (approvalPolicy.ts), but I did not find visible text that says which outside destination the data goes to.",
+  "reachable": "yes",
+  "steps": [
+   "Start a computer-use task on an approved site that needs to upload a file.",
+   "Wait for the card titled \"Approve file upload\" with a preview of the file.",
+   "Read the description and the file preview on the card.",
+   "Click \"Allow\" or \"Skip\" and check that the file is sent only after you allow it."
+  ],
+  "where": "Side panel > computer-use task that uploads a file > card \"Approve file upload\""
+ },
+ "S10.46": {
+  "labels": [
+   {
+    "file": "apps/extension/src/features/observability/errorReportingCopy.ts",
+    "text": "Share crash reports"
+   }
+  ],
+  "needs": "none",
+  "note": "The section heading for the data-handling area was not found; the toggle defaults to off (data-handling-section.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI extension options page.",
+   "Find the data-handling section that holds the \"Share crash reports\" toggle.",
+   "Read the description: \"Crash reports stay off. Nothing is sent when an unhandled error occurs.\" (off) or the text about what is sent (on).",
+   "Switch the toggle on and off and check the description changes to match."
+  ],
+  "where": "Options > Share crash reports"
+ }
+}

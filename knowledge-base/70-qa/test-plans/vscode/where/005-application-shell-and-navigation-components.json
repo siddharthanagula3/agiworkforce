@@ -1,0 +1,354 @@
+{
+ "S5.01": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Chat"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "New chat"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "More"
+   }
+  ],
+  "needs": "none",
+  "note": "The header title is always the word \"Chat\"; the conversation name is not shown there, only a small session identity line when a session is active.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI Code icon in the VS Code activity bar and sign in if asked.",
+   "Look at the top bar of the panel: the \"Chat\" title is on the left.",
+   "Look at the buttons on the right: Sessions (clock icon), Settings (gear), New chat (+) and More (...).",
+   "Hover each button to see its tooltip, then compare with Expected: the header shows where you are and the main actions for this view."
+  ],
+  "where": "Sidebar header at the top of the AGI Code panel: \"Chat\" title, then the Sessions, Settings, New chat and More buttons"
+ },
+ "S5.07": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Sessions"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Search sessions"
+   }
+  ],
+  "needs": "a few saved sessions in this workspace",
+  "note": "The search box is hidden when the Sessions list is empty, so it only appears once there are sessions.",
+  "reachable": "yes",
+  "steps": [
+   "Click the Sessions button (clock icon) in the top-right of the panel.",
+   "Click the \"Search sessions\" box at the top of the Sessions list.",
+   "Type part of a conversation title you can see in the list.",
+   "Compare with Expected: only matching sessions stay in the list."
+  ],
+  "where": "Sessions (clock icon in the header) > Search sessions"
+ },
+ "S5.08": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "New chat"
+   }
+  ],
+  "needs": "none",
+  "note": "The shortcut comes from the keybindings in package.json (command \"Code: New Conversation\").",
+  "reachable": "yes",
+  "steps": [
+   "Send a message in a chat so the conversation has content.",
+   "Click the New chat (+) button in the top-right of the panel.",
+   "Compare with Expected: the transcript clears and the composer is empty for a fresh conversation.",
+   "Optional: press cmd+shift+alt+n (Mac) and check the same result."
+  ],
+  "where": "Header \"+\" button, title \"New chat\""
+ },
+ "S5.10": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Recent chats"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "View all"
+   }
+  ],
+  "needs": "at least one saved conversation",
+  "note": "When there are more sessions than shown, a \"View all\" button under the list opens the Sessions list.",
+  "reachable": "yes",
+  "steps": [
+   "Make sure you have at least one saved conversation.",
+   "Open a new chat with no messages so the start screen shows.",
+   "Look for the \"Recent chats\" heading and its list of rows with titles and ages.",
+   "Click a row and compare with Expected: that conversation opens."
+  ],
+  "where": "Start screen of an empty chat > \"Recent chats\" section"
+ },
+ "S5.13": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Sessions"
+   }
+  ],
+  "needs": "at least two saved sessions",
+  "note": "Rows open on click and show title, age, unread state and metadata, but the session list data has no active flag and the markup shows no active-row marker. I found no active marker, so the active-row part of Expected may not be met.",
+  "reachable": "yes",
+  "steps": [
+   "Click the Sessions button (clock icon) in the header.",
+   "Look at a row: it shows the title and an age on the right.",
+   "Click the row and compare with Expected: the conversation opens.",
+   "Look at the list for a marker showing which conversation is the active one."
+  ],
+  "where": "Sessions (clock icon in the header) > any session row"
+ },
+ "S5.14": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "More"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "Projects"
+   }
+  ],
+  "needs": "a project in the workspace",
+  "note": "The project list is a VS Code quick pick, not a panel in the sidebar; it also has a command \"Code: Show Projects\" in the Command Palette.",
+  "reachable": "yes",
+  "steps": [
+   "Click the More (...) button in the header.",
+   "Click \"Projects\" in the menu.",
+   "A list titled \"Code, Projects\" opens; pick a project row.",
+   "Compare with Expected: the project opens, and the row's rocket button (\"Use this project in the chat\") is available as a project action."
+  ],
+  "where": "More (...) > Projects, then pick a project row"
+ },
+ "S5.15": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "Work"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/index.ts",
+    "text": "Cloud tasks"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account with at least one cloud task",
+  "note": "Cloud tasks show up in a VS Code quick pick, not in the Sessions list. Signed-out users get no cloud rows.",
+  "reachable": "yes",
+  "steps": [
+   "Click the More (...) button in the header.",
+   "Click \"Work\" in the menu.",
+   "A list titled \"Code, Work\" opens with the \"Cloud tasks\" section and the \"Schedules\" section.",
+   "Look at a cloud task row: it shows its title and a description, and it opens when picked. Compare with Expected: tasks look different from chats."
+  ],
+  "where": "More (...) > Work, then the \"Cloud tasks\" section"
+ },
+ "S5.17": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/cloud-tasks/cloudTasksTree.ts",
+    "text": "Working"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Running"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account with a running cloud task",
+  "note": "The screen reader label is built from the task title and its state description (accessibilityInformation); I did not confirm the spoken output.",
+  "reachable": "yes",
+  "steps": [
+   "Start a cloud task that is still running.",
+   "Click the More (...) button, then \"Work\".",
+   "Look under the \"Working\" group for the task row; it shows a spinning icon and its state text.",
+   "Compare with Expected: a running item is marked. For a chat message, the word \"Running\" appears on the message while it is sent."
+  ],
+  "where": "More (...) > Work, then the \"Working\" group under \"Cloud tasks\""
+ },
+ "S5.18": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/cloud-tasks/cloudTasksTree.ts",
+    "text": "Needs you"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/index.ts",
+    "text": "Approve this run"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account with a cloud task that is waiting for approval or input",
+  "note": "The \"Approve this run\" button only appears for runs with a pending approval; runs waiting for input show a question icon instead.",
+  "reachable": "yes",
+  "steps": [
+   "Start a cloud task that will wait for approval or input.",
+   "Click the More (...) button, then \"Work\".",
+   "Look for the \"Needs you\" group and the task row in it.",
+   "Click the row's \"Approve this run\" button if it is shown and compare with Expected: the item is clearly marked as waiting for you."
+  ],
+  "where": "More (...) > Work, then the \"Needs you\" group"
+ },
+ "S5.26": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Show Cloud Tasks"
+   }
+  ],
+  "needs": "none",
+  "note": "The app has no palette of its own; it uses VS Code's Command Palette. The line numbers in the plan (package.json:627, commandSetup.ts:2309) no longer match; the \"Code:\" titles are in package.json.",
+  "reachable": "yes",
+  "steps": [
+   "Press the Command Palette shortcut (VS Code default, cmd+shift+p on Mac; this extension does not set it).",
+   "Type \"Code:\".",
+   "Look at the list of AGI Code commands and pick one, for example \"Code: Show Cloud Tasks\".",
+   "Compare with Expected: the command runs and the matching panel opens."
+  ],
+  "where": "VS Code Command Palette, type \"Code:\" (for example \"Code: Show Cloud Tasks\")"
+ },
+ "S5.27": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "Help"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/help/helpMenu.ts",
+    "text": "Keyboard shortcuts"
+   }
+  ],
+  "needs": "none",
+  "note": "The shortcut list is VS Code's own editor, filtered by the word \"Code\"; it is not a page inside the panel.",
+  "reachable": "yes",
+  "steps": [
+   "Click the More (...) button in the header.",
+   "Click \"Help\" in the menu.",
+   "Click \"Keyboard shortcuts\" in the list titled \"Code, Help\".",
+   "Compare with Expected: VS Code opens its Keyboard Shortcuts tab filtered to this app. Check that shortcuts such as \"Code: Open Chat\" are listed."
+  ],
+  "where": "More (...) > Help > Keyboard shortcuts"
+ },
+ "S5.29": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Not signed in"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Sign out"
+   },
+   {
+    "file": "apps/extension-vscode/src/core/commandSetup.ts",
+    "text": "Account & usage"
+   }
+  ],
+  "needs": "none (a signed-in account to see the name and plan)",
+  "note": "This menu does not hold Settings; Settings is the gear button in the header (title \"Settings\"). The menu is a dropdown, not a separate profile page.",
+  "reachable": "yes",
+  "steps": [
+   "Click the More (...) button in the header.",
+   "Read the account block at the top of the menu: the name and a plan line such as \"<plan> plan\" (or \"AGI Cloud account\").",
+   "Click \"Account & usage\" and check the plan and usage shown.",
+   "Click the More (...) button again and look at the last account action: \"Sign out\" when signed in, \"Sign in\" when not. Compare with Expected: settings, plan and sign out are all reachable."
+  ],
+  "where": "More (...) menu, top account block (\"Not signed in\" or the account name) with \"Sign in\" or \"Sign out\" and \"Account & usage\"; Settings is the gear in the header"
+ },
+ "S5.30": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "Help"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/help/helpMenu.ts",
+    "text": "Help center"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/help/helpMenu.ts",
+    "text": "Contact support"
+   }
+  ],
+  "needs": "none; a browser for the web pages",
+  "note": "Most items open a web page in the browser; \"Keyboard shortcuts\" and \"Send feedback\" run inside VS Code.",
+  "reachable": "yes",
+  "steps": [
+   "Click the More (...) button in the header.",
+   "Click \"Help\" in the menu.",
+   "Look at the list: Documentation, Help center, Keyboard shortcuts, Service status, What's new, Send feedback, Export diagnostics, Contact support.",
+   "Pick \"Help center\" or \"Send feedback\" and compare with Expected: the help centre, support, feedback and shortcuts are all in this one place."
+  ],
+  "where": "More (...) > Help, a list titled \"Code, Help\""
+ },
+ "S5.31": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Upgrade"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Upgrade Your Plan"
+   }
+  ],
+  "needs": "an account whose usage meter shows the Upgrade button (I did not check which plan or state)",
+  "note": "Partial, as the plan file says: the button opens the web pricing page, and checkout sits behind the beta_redemptions waitlist gate. In other states the same button shows \"Sign in again\" or \"Manage billing\".",
+  "reachable": "yes",
+  "steps": [
+   "Find the usage meter banner in the panel (it shows the Usage label when collapsed).",
+   "Look for an \"Upgrade\" button; it appears only in some usage states, for example when a plan limit applies.",
+   "Click \"Upgrade\" and compare with Expected: the plan upgrade flow opens (this code opens the web pricing page).",
+   "Alternative: Command Palette, type \"Code: Upgrade Your Plan\" and compare the result."
+  ],
+  "where": "Usage meter banner in the sidebar > \"Upgrade\" button (shown only in some usage states)"
+ },
+ "S5.32": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Developer runtime needs setup"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Try again"
+   }
+  ],
+  "needs": "a state where the developer runtime is not ready (for example, no workspace folder)",
+  "note": "The box is hidden when the runtime is ready, so there is no separate \"connected\" indicator. The app-level \"Reconnect\" action only exists for MCP servers.",
+  "reachable": "yes",
+  "steps": [
+   "Open AGI Code in a state where the developer runtime is not ready (for example, no folder open or the CLI missing).",
+   "Look for the status box with the title \"Developer runtime needs setup\".",
+   "Click \"Try again\" and watch the button read \"Checking\" and then the result.",
+   "Compare with Expected: the box disappears once the runtime is ready, and \"Try again\" is the reconnect path."
+  ],
+  "where": "Status box under the panel header, shown when the developer runtime is not ready: \"Try again\" (also \"Open setup\" and \"Get help\")"
+ },
+ "S5.38": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/sessionReceipt.ts",
+    "text": "Copy a link to this session"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Show Session Activity"
+   }
+  ],
+  "needs": "an open or started session",
+  "note": "Only sessions get a copy link in the code I read; I found no copy-link action for projects or cloud tasks. Without an open session the command shows a message instead.",
+  "reachable": "yes",
+  "steps": [
+   "Open or start a session in the AGI Code panel and send a message.",
+   "Press the Command Palette shortcut (VS Code default, cmd+shift+p) and type \"Show Session Activity\".",
+   "Pick \"Code: Show Session Activity\", then pick \"Copy a link to this session\".",
+   "Paste the link in a text editor and compare with Expected: the link points back to this session in VS Code on this machine."
+  ],
+  "where": "VS Code Command Palette > \"Code: Show Session Activity\" > \"Copy a link to this session\""
+ }
+}

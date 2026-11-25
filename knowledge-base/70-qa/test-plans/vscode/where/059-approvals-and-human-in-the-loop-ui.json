@@ -1,0 +1,606 @@
+{
+ "S59.01": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "AGI Code"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Approval needed"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Approve"
+   }
+  ],
+  "needs": "An AGI account signed in, and a request that triggers a tool approval (Ask mode).",
+  "note": "The button reads \"Approve once\", built from the word \"Approve\"; Expected says \"approve or deny\" for one call.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI Code panel from the activity bar.",
+   "Click the \"Mode and reasoning effort\" button and pick Mode > Ask.",
+   "Send a request that edits a file, for example \"add a comment to README\".",
+   "On the \"Approval needed\" card, click the \"Approve once\" button, or \"Deny\" to refuse.",
+   "Look at the card: it shows the decision and the run continues or stops, as Expected says."
+  ],
+  "where": "AGI Code panel (activity bar) > chat > \"Approval needed\" card > \"Approve\" once or \"Deny\""
+ },
+ "S59.02": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Show Cloud Tasks"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/index.ts",
+    "text": "Approve this run"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/cloud-tasks/cloudRunApproval.ts",
+    "text": "Approve and continue"
+   }
+  ],
+  "needs": "Signed in to AGI Cloud, and a cloud task waiting on several pending tool calls.",
+  "note": "Batch approval exists only for cloud tasks. The local approval card decides one call at a time.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with \"Code: Sign In to AGI Cloud\".",
+   "Start a cloud task that is waiting for approval with several tool calls.",
+   "Run \"Code: Show Cloud Tasks\" from the Command Palette and pick the waiting task.",
+   "Hover the row action with the check icon, tooltip \"Approve this run\", and click it.",
+   "In the dialog read \"Let this task run\" with all tool names, then click \"Approve and continue\". Look for the info message that says the task continues."
+  ],
+  "where": "Command Palette > \"Code: Show Cloud Tasks\" > click a task row with the check icon (tooltip \"Approve this run\")"
+ },
+ "S59.03": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Approval needed"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/capabilityManagement.ts",
+    "text": "This session"
+   }
+  ],
+  "needs": "An AGI account signed in, and a request that triggers a tool approval.",
+  "note": "The session button only appears when the host offers session scope (sessionScopeOffered).",
+  "reachable": "yes",
+  "steps": [
+   "Open AGI Code and set Mode to Ask (\"Mode and reasoning effort\" > Mode > Ask).",
+   "Send a request that makes the same tool ask for approval.",
+   "On the card, click the \"Approve ... for session\" button (it names the tool).",
+   "Send a second request that uses the same tool.",
+   "Look: no new \"Approval needed\" card should appear for that tool until the session ends."
+  ],
+  "where": "AGI Code panel > \"Approval needed\" card > \"Approve <tool name> for session\" button"
+ },
+ "S59.04": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Permissions"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/capabilityManagement.ts",
+    "text": "Add a rule"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/capabilityManagement.ts",
+    "text": "MCP server or tool"
+   }
+  ],
+  "needs": "An MCP server connected to the agent.",
+  "note": "No list of connected apps is shown. The tester types the name. Enforcement at runtime was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Run \"Code: Permissions\" from the Command Palette.",
+   "Click \"Add a rule\".",
+   "Pick \"MCP server or tool\" and type the server name, or server/tool, for example github or github/create_issue.",
+   "Pick \"Always allowed\", \"Asks first\" or \"Blocked\".",
+   "Look: the rule appears under \"Rules for every session\" with its decision. Then ask the agent to use that app and check it follows the rule."
+  ],
+  "where": "Command Palette > \"Code: Permissions\" > \"Add a rule\" > \"MCP server or tool\""
+ },
+ "S59.05": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/capabilityManagement.ts",
+    "text": "Trusted folders"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/capabilityManagement.ts",
+    "text": "Stop trusting"
+   }
+  ],
+  "needs": "At least one trusted folder already granted.",
+  "note": "Revoking is shown. No control to grant a new folder from this list was found, so the granting step is unverified.",
+  "reachable": "yes",
+  "steps": [
+   "Run \"Code: Permissions\" from the Command Palette.",
+   "Look under \"Trusted folders\" for folder rows with the text \"The agent may read, edit and run commands here\".",
+   "Hover a folder row and click the trash icon, tooltip \"Stop trusting\".",
+   "In the modal dialog, click \"Stop Trusting\".",
+   "Look: the folder disappears from the list, and the next action in that folder asks again."
+  ],
+  "where": "Command Palette > \"Code: Permissions\" > \"Trusted folders\" section"
+ },
+ "S59.06": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/capabilityManagement.ts",
+    "text": "Website"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/capabilityManagement.ts",
+    "text": "Blocked"
+   }
+  ],
+  "needs": "A request that makes the agent reach a website.",
+  "note": "Enforcement at runtime was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Run \"Code: Permissions\" from the Command Palette.",
+   "Click \"Add a rule\" and pick \"Website\".",
+   "Type a host, for example example.com or *.example.com.",
+   "Pick \"Always allowed\", \"Asks first\" or \"Blocked\".",
+   "Look: the rule appears in the list. Then ask the agent to fetch that site and check it follows the rule."
+  ],
+  "where": "Command Palette > \"Code: Permissions\" > \"Add a rule\" > \"Website\""
+ },
+ "S59.07": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Permissions"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/capabilityManagement.ts",
+    "text": "Always allowed"
+   }
+  ],
+  "needs": "Nothing beyond an AGI account; a second device to check the cross-device part.",
+  "note": "Storage is kept by the CLI. Cross-device sync of these rules was not verified in this code.",
+  "reachable": "yes",
+  "steps": [
+   "Add a rule with \"Code: Permissions\" > \"Add a rule\" (see S59.06).",
+   "Close the list and run \"Code: Permissions\" again.",
+   "Look: the rule is still listed with its decision.",
+   "Start a new chat or session and check the rule still shows.",
+   "Check whether it also shows on another signed-in device, as Expected says."
+  ],
+  "where": "Command Palette > \"Code: Permissions\" (rules list)"
+ },
+ "S59.08": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Mode and reasoning effort"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Choose Agent Mode"
+   },
+   {
+    "file": "packages/contracts/local-runtime/src/developer-session.ts",
+    "text": "Bypass permissions"
+   }
+  ],
+  "needs": "An AGI account signed in.",
+  "note": "The VS Code modes are Plan, Ask, Auto and Bypass permissions, not the three Expected names. Bypass is the nearest to skip approvals.",
+  "reachable": "yes",
+  "steps": [
+   "Open AGI Code and click the \"Mode and reasoning effort\" button.",
+   "In the Mode group, pick Plan, Ask, Auto or Bypass permissions.",
+   "Or run \"Code: Choose Agent Mode\" from the Command Palette and pick a mode.",
+   "Look: the button label changes to the chosen mode, and the next tool action follows that mode."
+  ],
+  "where": "AGI Code panel > \"Mode and reasoning effort\" button > Mode group, or Command Palette > \"Code: Choose Agent Mode\""
+ },
+ "S59.09": {
+  "labels": [
+   {
+    "file": "packages/contracts/local-runtime/src/developer-session.ts",
+    "text": "Plan"
+   }
+  ],
+  "needs": "none",
+  "note": "No read-only mode that refuses write, send and execute tools was found. The closest is Plan, described as \"Generate a plan; no edits until approved\" (apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts), which does not say sends or commands are refused.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S59.10": {
+  "labels": [
+   {
+    "file": "packages/contracts/local-runtime/src/developer-session.ts",
+    "text": "Ask"
+   },
+   {
+    "file": "packages/contracts/local-runtime/src/developer-session.ts",
+    "text": "Asks before file edits and commands that need approval."
+   }
+  ],
+  "needs": "An AGI account signed in.",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open AGI Code and click the \"Mode and reasoning effort\" button.",
+   "Pick Mode > Ask.",
+   "Send a request that reads a file and then edits it.",
+   "Look: the read runs without a card, and the edit stops at an \"Approval needed\" card."
+  ],
+  "where": "AGI Code panel > \"Mode and reasoning effort\" button > Mode > Ask"
+ },
+ "S59.11": {
+  "labels": [
+   {
+    "file": "packages/contracts/local-runtime/src/developer-session.ts",
+    "text": "Auto"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Edit automatically"
+   }
+  ],
+  "needs": "An AGI account signed in.",
+  "note": "Auto covers edits and safe commands. It does not split reads from risky actions as Expected describes.",
+  "reachable": "yes",
+  "steps": [
+   "Open AGI Code and click the \"Mode and reasoning effort\" button.",
+   "Pick Mode > Auto.",
+   "Send a request that reads files and makes an ordinary edit.",
+   "Look: ordinary edits and safe commands run without a card, while other commands show an \"Approval needed\" card."
+  ],
+  "where": "AGI Code panel > \"Mode and reasoning effort\" button > Mode > Auto"
+ },
+ "S59.12": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Approval needed"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Low risk"
+   }
+  ],
+  "needs": "An AGI account signed in, and a request that triggers a tool approval.",
+  "note": "The card shows the summary and risk only. An explicit \"why\" line was not found.",
+  "reachable": "yes",
+  "steps": [
+   "Trigger an approval in Ask mode (see S59.01).",
+   "Read the card title \"Approval needed\" and the summary line under it.",
+   "Read the risk word, such as \"Low risk\", \"Medium risk\" or \"High risk\", and whether it says \"Can be undone\" or \"Cannot be undone\".",
+   "Look: the summary says what the tool will do; check whether it also says why approval is needed."
+  ],
+  "where": "AGI Code panel > \"Approval needed\" card (summary line and risk words)"
+ },
+ "S59.13": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Sends to"
+   }
+  ],
+  "needs": "A send-type connector tool and a request that uses it.",
+  "note": "The row shows only when the tool arguments contain a recipient field (to, cc, channel and similar).",
+  "reachable": "yes",
+  "steps": [
+   "Ask AGI to send a message in a tool that has a recipient, such as an email or chat connector, in Ask mode.",
+   "Wait for the \"Approval needed\" card.",
+   "Look for the row \"Sends to:\" and check it names the exact recipients."
+  ],
+  "where": "AGI Code panel > \"Approval needed\" card for a send action > \"Sends to:\" row"
+ },
+ "S59.14": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Approval needed"
+   }
+  ],
+  "needs": "A request that makes an outbound call.",
+  "note": "The card has no separate destination row. The host or URL appears only if the summary or detail text includes it.",
+  "reachable": "yes",
+  "steps": [
+   "Trigger an outbound action in Ask mode, such as a fetch to a web address.",
+   "Wait for the \"Approval needed\" card.",
+   "Look for the exact URL or host in the summary or the detail block.",
+   "Check it matches the destination the agent will use."
+  ],
+  "where": "AGI Code panel > \"Approval needed\" card (summary and detail text)"
+ },
+ "S59.15": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Amount"
+   }
+  ],
+  "needs": "A purchase-type connector tool and a request that uses it.",
+  "note": "The rows appear only when the tool arguments contain amount and item fields.",
+  "reachable": "yes",
+  "steps": [
+   "Ask AGI to make a purchase or payment through a connector, in Ask mode.",
+   "Wait for the \"Approval needed\" card.",
+   "Look for the \"Amount:\" row with the value and currency, and the \"For:\" row with the item.",
+   "Check they match what the purchase will buy."
+  ],
+  "where": "AGI Code panel > \"Approval needed\" card for a purchase > \"Amount:\" and \"For:\" rows"
+ },
+ "S59.16": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Approval needed"
+   }
+  ],
+  "needs": "A request that runs a shell command.",
+  "note": "No separate working-folder line was found on the card.",
+  "reachable": "yes",
+  "steps": [
+   "Ask AGI to run a shell command in Ask mode, such as npm test.",
+   "Wait for the \"Approval needed\" card.",
+   "Read the detail box under the summary.",
+   "Look: it shows the exact command line. Check whether it also shows where it runs."
+  ],
+  "where": "AGI Code panel > \"Approval needed\" card for a command > detail box under the summary"
+ },
+ "S59.17": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Review change"
+   }
+  ],
+  "needs": "A request that edits files.",
+  "note": "No separate file-list row was found. The file names come only from the summary or detail text.",
+  "reachable": "yes",
+  "steps": [
+   "Ask AGI to edit a file in Ask mode.",
+   "Wait for the \"Approval needed\" card.",
+   "Read the summary and the detail box for the files named.",
+   "Look: check the exact files that will change match the request."
+  ],
+  "where": "AGI Code panel > \"Approval needed\" card for a file write > summary and detail, plus \"Review change\""
+ },
+ "S59.18": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Review change"
+   }
+  ],
+  "needs": "A file-edit request that produces a proposed change.",
+  "note": "The button shows only when the request has a proposed change (reviewable).",
+  "reachable": "yes",
+  "steps": [
+   "Ask AGI to edit a file in Ask mode.",
+   "On the \"Approval needed\" card, click \"Review change\".",
+   "Look: the proposed file opens in a VS Code diff editor.",
+   "Edit or revert part of it, then approve, and check the file is written with your version."
+  ],
+  "where": "AGI Code panel > \"Approval needed\" card for a file edit > \"Review change\" button"
+ },
+ "S59.19": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Approve"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Approval needed"
+   }
+  ],
+  "needs": "An AGI account signed in, and a request that triggers a tool approval.",
+  "note": "The visible word is \"Approve once\", not \"Allow\".",
+  "reachable": "yes",
+  "steps": [
+   "Trigger an approval in Ask mode.",
+   "Click \"Approve once\" on the card.",
+   "Look: the card shows the outcome as allowed, and the action runs and its result appears in the transcript."
+  ],
+  "where": "AGI Code panel > \"Approval needed\" card > \"Approve once\""
+ },
+ "S59.20": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Deny"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Denied"
+   }
+  ],
+  "needs": "An AGI account signed in, and a request that triggers a tool approval.",
+  "note": "That the model is told about the denial was not checked from the UI.",
+  "reachable": "yes",
+  "steps": [
+   "Trigger an approval in Ask mode.",
+   "Click \"Deny\" on the card.",
+   "Look: the card shows \"Denied.\", the action does not run, and the transcript continues.",
+   "Check the agent's next message reflects the refusal."
+  ],
+  "where": "AGI Code panel > \"Approval needed\" card > \"Deny\""
+ },
+ "S59.22": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Or deny and tell AGI what to do instead, then press Enter"
+   }
+  ],
+  "needs": "An AGI account signed in, and a request that triggers a tool approval.",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Trigger an approval in Ask mode.",
+   "Click the text box at the bottom of the card, labelled \"Or deny and tell AGI what to do instead, then press Enter\".",
+   "Type guidance, for example \"use a different file\", and press Enter.",
+   "Look: the card shows Denied, and the agent continues with your guidance in the next message."
+  ],
+  "where": "AGI Code panel > \"Approval needed\" card > text box at the bottom"
+ },
+ "S59.23": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "The turn ended before this was answered."
+   }
+  ],
+  "needs": "A card left unanswered for the full wait.",
+  "note": "The 10-minute timer is set in apps/cli/src/app_server/developer_host.rs (APPROVAL_TIMEOUT_SECONDS = 600). Whether a timeout reaches this card as the expired text was not confirmed.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Trigger an approval in Ask mode and leave the card unanswered.",
+   "Wait about 10 minutes.",
+   "Look: the card should show that the turn ended before it was answered, and the action should not run."
+  ],
+  "where": "On the \"Approval needed\" card in the AGI Code panel"
+ },
+ "S59.24": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Show Approval History"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/permissions/approvalHistory.ts",
+    "text": "Approval history"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/permissions/approvalHistory.ts",
+    "text": "No approvals decided yet"
+   }
+  ],
+  "needs": "Signed in to AGI Cloud, with some past approvals.",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with \"Code: Sign In to AGI Cloud\".",
+   "Run \"Code: Show Approval History\" from the Command Palette.",
+   "Look: a list titled \"Code, Approval history\" shows past approvals with \"Approved\" or \"Denied\" and a time.",
+   "Pick a row with a conversation to open it in the browser."
+  ],
+  "where": "Command Palette > \"Code: Show Approval History\""
+ },
+ "S59.26": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Show Cloud Tasks"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/index.ts",
+    "text": "Approve this run"
+   }
+  ],
+  "needs": "Two devices signed in to AGI Cloud on the same account, and a cloud task waiting for approval.",
+  "note": "The first device is shown the result on its next refresh of the list, not live.",
+  "reachable": "yes",
+  "steps": [
+   "On device A, start a cloud task that waits for approval.",
+   "On device B, signed in to the same account, run \"Code: Show Cloud Tasks\" and pick the waiting task.",
+   "Click the row icon with tooltip \"Approve this run\" or \"Reject this run\".",
+   "On device A, run \"Code: Show Cloud Tasks\" again and look: the task shows its new state.",
+   "If device B already answered, the message reads that another device already answered this one."
+  ],
+  "where": "Command Palette > \"Code: Show Cloud Tasks\" > task row with the check icon (tooltip \"Approve this run\")"
+ },
+ "S59.27": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/sessionActivityAlert.ts",
+    "text": "Allow once"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/sessionActivityAlert.ts",
+    "text": "Open chat"
+   }
+  ],
+  "needs": "Two apps open (VS Code and another), and an AGI account signed in.",
+  "note": "The alert fires only when the VS Code window is not focused. It is a VS Code message, not a macOS notification; questions show only \"Open chat\".",
+  "reachable": "yes",
+  "steps": [
+   "Set Mode to Ask in AGI Code.",
+   "Switch to another app so the VS Code window is not focused.",
+   "Send a request that needs approval.",
+   "Look for the VS Code notification \"Code: ...\" with the summary and the buttons \"Allow once\" and \"Deny\". Click \"Allow once\" and check the action runs."
+  ],
+  "where": "VS Code notification when an approval is needed (buttons \"Allow once\", \"Deny\", \"Open chat\")"
+ },
+ "S59.28": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Cannot be undone"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Approve"
+   }
+  ],
+  "needs": "a signed-in account and a workspace folder open in VS Code",
+  "note": "Which actions lose the session button depends on the action kind and the host's requiresExplicitDecision flag; a second stronger warning, \"Turn on Bypass Permissions?\" (modal), appears at Mode and reasoning effort > Bypass permissions.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, open a workspace folder, and open the AGI chat panel.",
+   "Send a request that asks the agent to delete a file or send a message, which cannot be undone.",
+   "When the approval card appears, look for the line \"Cannot be undone\" on the card.",
+   "Check the card's buttons: \"Approve once\" and \"Deny\" should be there, and \"Approve for session\" should be missing.",
+   "Compare with Expected: the warning is shown and no permanent allow is offered."
+  ],
+  "where": "Chat panel > a request that makes the agent do something irreversible (for example delete a file or send a message) > the approval card shows \"Cannot be undone\" and has no \"Approve for session\" button"
+ },
+ "S59.30": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Approve"
+   }
+  ],
+  "needs": "a signed-in account and a workspace folder open in VS Code",
+  "note": "The resume is driven by the 'turnResumed' message in the webview; the exact tool that triggers an approval depends on the mode chosen.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, open a workspace folder, and open the AGI chat panel.",
+   "Send a request that makes the agent run a command or edit a file, so an approval card appears.",
+   "Click the \"Approve once\" button on the approval card.",
+   "Watch the same reply: the tool runs and the agent carries on in that turn without you sending a new message.",
+   "Compare with Expected: the same run resumes where it stopped."
+  ],
+  "where": "Chat panel > a request that needs approval > click \"Approve once\" on the approval card > the same reply continues"
+ },
+ "S59.31": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Turn aborted."
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Allowed"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Open diff"
+   }
+  ],
+  "needs": "a signed-in account and a workspace folder open in VS Code",
+  "note": "The outcome lines are built from constants (\"Allowed\" + \" once.\", \"Denied\" + \".\"), so the full sentences are not written out in one file.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, open a workspace folder, and open the AGI chat panel.",
+   "Send a request that makes the agent edit a file, so an approval card appears with a diff.",
+   "Click \"Approve once\" and look at the card: it should show \"Allowed once.\" under the decision.",
+   "Look at the tool entry below it for the result of the action, or for \"Open diff\" for a file edit.",
+   "Repeat with \"Deny\" and check the card shows \"Denied.\" and the tool does not run.",
+   "Compare with Expected: the transcript shows what was decided and what happened."
+  ],
+  "where": "Chat panel > approval card > click \"Approve once\" or \"Deny\" or \"Abort turn\" > the card shows the decision (\"Allowed once.\", \"Denied.\", or \"Turn aborted.\") and the tool result follows"
+ }
+}

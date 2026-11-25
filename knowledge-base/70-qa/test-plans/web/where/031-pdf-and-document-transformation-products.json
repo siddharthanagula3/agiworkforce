@@ -1,0 +1,216 @@
+{
+ "S31.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Download as PDF"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Download artifact"
+   }
+  ],
+  "needs": "a chat that already has a text document artifact",
+  "note": "The PDF item is shown only when the artifact is a text document; the file was not run.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat that has a text document (Word-style or markdown) shown as an artifact.",
+   "Click the Download button on the artifact card (its title is Download).",
+   "Click Download as PDF in the menu.",
+   "Open the downloaded PDF and compare its text with the Expected line: a PDF of the document."
+  ],
+  "where": "Open a text document artifact in a chat reply > Download artifact (the Download button) > Download as PDF"
+ },
+ "S31.02": {
+  "labels": [],
+  "needs": "a spreadsheet artifact in a chat",
+  "note": "Searched ArtifactPreview.tsx for PDF export; the spreadsheet/table download menu offers Download as CSV only, and PDF export is limited to text documents and presentations. The Code line pointed to apps/web/lib/server/container-files.ts:197, which is server code with no visible control.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S31.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Download as PDF"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Download artifact"
+   }
+  ],
+  "needs": "a chat that already has a presentation artifact",
+  "note": "This menu item uses the in-browser deck export, not the E2B office template named as unfinished in the plan, so the owner step is not tested by this path.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat that has a presentation (slide deck) artifact.",
+   "Click the Download button on the artifact card.",
+   "Click Download as PDF in the menu.",
+   "Open the downloaded PDF and check that it has one page per slide, compared with Expected."
+  ],
+  "where": "Open a presentation artifact in a chat reply > Download artifact (the Download button) > Download as PDF"
+ },
+ "S31.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFilesMenu.tsx",
+    "text": "Files"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFilesMenu.tsx",
+    "text": "Upload from device"
+   }
+  ],
+  "needs": "a PDF file to upload",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click the Files button in the message box.",
+   "Click Upload from device and choose a PDF file.",
+   "Wait until the PDF shows in the message box, type Summarize this PDF and send.",
+   "Compare the reply with the PDF content, compared with Expected."
+  ],
+  "where": "Composer > Files > Upload from device, choose a PDF, then ask for a summary"
+ },
+ "S31.05": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFilesMenu.tsx",
+    "text": "Files"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFilesMenu.tsx",
+    "text": "Upload from device"
+   }
+  ],
+  "needs": "a PDF file to upload",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click the Files button in the message box.",
+   "Click Upload from device and choose a PDF file.",
+   "Type a question about a fact in the PDF and send.",
+   "Check that the answer matches the PDF, compared with Expected."
+  ],
+  "where": "Composer > Files > Upload from device, choose a PDF, then ask a question about it"
+ },
+ "S31.06": {
+  "labels": [],
+  "needs": "a multi-page PDF file",
+  "note": "No control of its own; the page selection is done by the server, and the Code line's quoted code was not found in the file.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Attach a multi-page PDF using Files > Upload from device.",
+   "Ask a question that names one page, for example what is on page 3.",
+   "Check that the answer uses the content of that page, compared with Expected."
+  ],
+  "where": "Effect is seen in the answer to a chat question that names a page of an attached PDF"
+ },
+ "S31.07": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFilesMenu.tsx",
+    "text": "Files"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFilesMenu.tsx",
+    "text": "Upload from device"
+   }
+  ],
+  "needs": "a PDF file to upload",
+  "note": "There is no separate text-extraction button; it is reached by asking in chat.",
+  "reachable": "yes",
+  "steps": [
+   "Click the Files button in the message box.",
+   "Click Upload from device and choose a PDF file.",
+   "Type Give me the plain text of this PDF and send.",
+   "Compare the reply with the text in the PDF, compared with Expected."
+  ],
+  "where": "Composer > Files > Upload from device, choose a PDF, then ask for its plain text"
+ },
+ "S31.08": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFilesMenu.tsx",
+    "text": "Files"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFilesMenu.tsx",
+    "text": "Upload from device"
+   }
+  ],
+  "needs": "a scanned PDF with no text layer",
+  "note": "No OCR control exists; OCR runs on the server for image-only PDFs.",
+  "reachable": "yes",
+  "steps": [
+   "Click the Files button in the message box.",
+   "Click Upload from device and choose a scanned PDF with no text layer.",
+   "Type Read the text in this scanned PDF and send.",
+   "Check whether the reply contains the readable text of the scan, compared with Expected."
+  ],
+  "where": "Composer > Files > Upload from device, choose a scanned PDF (image only), then ask for its text"
+ },
+ "S31.09": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFilesMenu.tsx",
+    "text": "Files"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFilesMenu.tsx",
+    "text": "Upload from device"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Download as CSV"
+   }
+  ],
+  "needs": "a PDF file that contains a table",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Attach a PDF with a table using Files > Upload from device.",
+   "Type Extract the table from this PDF as rows and columns and send.",
+   "If a table artifact appears, click the Download button on its card.",
+   "Click Download as CSV and open the file; compare the rows and columns with Expected."
+  ],
+  "where": "Composer > Files > Upload from device, choose a PDF with a table, ask for the table, then the spreadsheet artifact > Download as CSV"
+ },
+ "S31.23": {
+  "labels": [
+   {
+    "file": "apps/web/app/connectors/page.tsx",
+    "text": "Connectors"
+   }
+  ],
+  "needs": "a DocuSign developer app (the owner step is unfinished) and an outside account (DocuSign)",
+  "note": "The connect button label and the card's display name were not verified in the code; sending for signature was not traced past the catalog entry.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Connectors page from the web app.",
+   "Find the DocuSign card.",
+   "Click it and follow the connect steps.",
+   "Check that a DocuSign connection appears as connected, compared with Expected."
+  ],
+  "where": "Connectors (web address /connectors) > DocuSign card"
+ },
+ "S31.24": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Preview"
+   }
+  ],
+  "needs": "a chat that produced an office file",
+  "note": "Matching the preview to the exported file is not judged here; the Preview button's exact placement was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat that produced an office file (docx, xlsx or pptx) as an artifact.",
+   "Click the Preview button on the artifact card.",
+   "Look at the preview next to the file's download option.",
+   "Compare the preview with the Expected line: a preview that matches the exported file."
+  ],
+  "where": "Generated Word, Excel or PowerPoint file in a chat reply > Preview (the Preview button on the artifact card)"
+ }
+}

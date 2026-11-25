@@ -1,0 +1,807 @@
+[
+ {
+  "found_by": "SYS-model-catalog-and-routing",
+  "document": "docs/architecture/provider-routing.md",
+  "what_is_outdated": "Says the chat picker shows the model, its developer and the routes that can serve it now.",
+  "what_the_code_says": "The shared picker short list carries guidance, capability icons, price band, plan lock and family slot; no route list per model appears in its row model.",
+  "evidence": "packages/ai/routing/src/model-picker.ts:82-90 (ModelPickerRowModel); the web picker UI itself was not fully read, so treat this as a partial mismatch"
+ },
+ {
+  "found_by": "SYS-model-catalog-and-routing",
+  "document": "docs/architecture/provider-routing.md",
+  "what_is_outdated": "Its capability matrix (Responses, Chat Completions, native tools and so on) is described as the product contract, while the generated docs/generated/provider-capability-matrix.md now owns harness wiring.",
+  "what_the_code_says": "Harness features come from packages/ai/model-registry/catalog/harnesses.json; the prose table is not derived from it and was not cross-checked.",
+  "evidence": "docs/architecture/provider-routing.md:21-24; packages/ai/model-registry/catalog/harnesses.json"
+ },
+ {
+  "found_by": "SYS-model-catalog-and-routing",
+  "document": "packages/contracts/types/src/model-catalog.ts (header comment)",
+  "what_is_outdated": "Lists consumers apps/desktop/src/constants/llm.ts, apps/web/constants/llm.ts and apps/mobile 'via API responses' as the consumers.",
+  "what_the_code_says": "Mobile imports the shared packages directly (routing, types) and runs resolveAutoRoute on the device; the CLI and Rust crates also consume the generated registry.",
+  "evidence": "apps/mobile/src/features/chat/utils/cloudDispatchRouting.ts:1-16; apps/cli/src/model_catalog.rs:16"
+ },
+ {
+  "found_by": "SYS-model-catalog-and-routing",
+  "document": "packages/ai/routing/src/index.ts (header comment)",
+  "what_is_outdated": "Describes the package as 'pure-TypeScript, zero side effects, zero shared module state'.",
+  "what_the_code_says": "The package also holds stateful stores (route-health-store.ts, capability-health.ts store factory) and env-var readers for stage switches.",
+  "evidence": "packages/ai/routing/src/route-health-store.ts; packages/ai/routing/src/capability-health.ts:249; packages/ai/routing/src/auto.ts:766-780"
+ },
+ {
+  "found_by": "SYS-model-catalog-and-routing",
+  "document": "AGENTS.md section 4 (promotion keeps gate evidence)",
+  "what_is_outdated": "States that promotion keeps the prior model, a bounded fallback chain and gate evidence.",
+  "what_the_code_says": "Eight active family records say the eval gate was not run, 13 slots are seeded without a gate, and 27 of 28 fallback chains are empty.",
+  "evidence": "packages/ai/model-registry/catalog/model-families.json (script count 2026-11-24)"
+ },
+ {
+  "found_by": "SYS-inference-providers",
+  "document": "apps/web/app/api/llm/v1/chat/completions/lib/managed-failover.ts (header comment) ",
+  "what_is_outdated": "Says it mirrors the gateway's failover in services/api-gateway/src/routes/llm.ts.",
+  "what_the_code_says": "The services directory contains only signaling-server and upload-scanner; no api-gateway exists, so the referenced file is gone.",
+  "evidence": "ls services shows signaling-server and upload-scanner; managed-failover.ts:4-5"
+ },
+ {
+  "found_by": "SYS-inference-providers",
+  "document": "packages/ai/provider-runtime/src/index.ts (header comment)",
+  "what_is_outdated": "Lists apps/mobile and apps/extension as consumers of the error taxonomy.",
+  "what_the_code_says": "Both apps list @agiworkforce/provider-runtime in package.json, but no source file in either imports it. The Chrome extension imports only provider-protocol (ThinkingTagSplitter, three files).",
+  "evidence": "apps/mobile/package.json:67; apps/extension/package.json:49-50; grep of apps/mobile/src and apps/extension/src; provider-runtime/src/index.ts:12-16"
+ },
+ {
+  "found_by": "SYS-inference-providers",
+  "document": "packages/ai/model-registry/catalog/harnesses.json, harness 'mistral/chat-completions'",
+  "what_is_outdated": "Adapter field names @agiworkforce/providers-mistral.",
+  "what_the_code_says": "No such package exists in packages/ai/providers, and the web dispatch table has no mistral entry.",
+  "evidence": "packages/ai/providers directory listing; adapter-providers.ts:126-258"
+ },
+ {
+  "found_by": "SYS-inference-providers",
+  "document": "docs/architecture/byok-provider-strategy.md",
+  "what_is_outdated": "Says the released CLI and VS Code (when published) must support BYOK and open-model providers including Mistral, Hugging Face, Replicate and Bedrock, and lists them as P0 or P1 work.",
+  "what_the_code_says": "There is no TS provider package for Mistral, Hugging Face, Replicate or Bedrock. The CLI pre-registers OpenAI-compatible endpoints for OpenAI, xAI, DeepSeek, Perplexity, Qwen, Moonshot, Zhipu, LM Studio, MiniMax, OpenRouter and NVIDIA. The vscode BYOK profile is marked unwired.",
+  "evidence": "apps/cli/src/models/mod.rs:102-192; harnesses.json runtimeProfiles vscode/byok-chat; packages/ai/providers listing"
+ },
+ {
+  "found_by": "SYS-inference-providers",
+  "document": "docs/architecture/byok-provider-strategy.md ('Core Decision') versus harnesses.json",
+  "what_is_outdated": "States public Electron Desktop chat is managed-cloud-only and must not expose BYOK routes.",
+  "what_the_code_says": "harnesses.json defines desktop/byok-chat (implemented) and desktop/local-chat (partial) runtime profiles. Whether the Electron window uses them is not established.",
+  "evidence": "packages/ai/model-registry/catalog/harnesses.json runtimeProfiles"
+ },
+ {
+  "found_by": "SYS-local-inference",
+  "document": "ollama-manifest.json",
+  "what_is_outdated": "It launches `agiworkforce ollama-setup` for configuration, sets OLLAMA_HOST from {{host}}, and states minContextLength 65536 and '24 providers, 150+ skills'.",
+  "what_the_code_says": "No `ollama-setup` subcommand, no OLLAMA_HOST read and no 65536 context check were found in the CLI. Local base URLs come from CLI config and default to loopback ports. The `--provider`, `--model` and `--yes` flags do exist.",
+  "evidence": "grep over apps/cli/src and crates found no match for ollama-setup, OLLAMA_HOST or a 65536 context check; apps/cli/src/local_models.rs:54-67; apps/cli/src/lib.rs:195-196"
+ },
+ {
+  "found_by": "SYS-local-inference",
+  "document": "docs/product/suite.md (Mobile row, line 33)",
+  "what_is_outdated": "Describes Mobile as an 'Unpublished client with small on-device Local LLM work in the codebase' and Cloud as 'public-alpha'.",
+  "what_the_code_says": "The code has a full Local chat path with four runtimes, a downloader and a model picker. I cannot confirm release status from the code. The document's tone understates the implementation.",
+  "evidence": "apps/mobile/stores/chat/chatExecutionStore.ts:3036-3232; packages/platform/local-llm/src/selector.ts:105-146"
+ },
+ {
+  "found_by": "SYS-local-inference",
+  "document": "packages/platform/local-llm/package.json (peerDependencies)",
+  "what_is_outdated": "Peer range for llama.rn is ^0.10.0.",
+  "what_the_code_says": "apps/mobile/package.json depends on llama.rn ^0.12.9.",
+  "evidence": "packages/platform/local-llm/package.json peerDependencies; apps/mobile/package.json:132"
+ },
+ {
+  "found_by": "SYS-local-inference",
+  "document": "packages/platform/local-llm/src/selector.ts error text ('join AGI Cloud when it is available')",
+  "what_is_outdated": "The no-model error tells the user to join AGI Cloud when it is available, which depends on waitlist state.",
+  "what_the_code_says": "Cloud chat on Mobile is gated by a waitlist flag (cloudUnlocked), so the advice is only correct for some users.",
+  "evidence": "packages/platform/local-llm/src/selector.ts:59, :145; apps/mobile/stores/chat/chatExecutionStore.ts:2236-2237"
+ },
+ {
+  "found_by": "SYS-local-inference",
+  "document": "apps/mobile/lib/egressGuard.ts (comment at line 326 and error message at line 31)",
+  "what_is_outdated": "Calls the pass-through of provider or other hosts 'BYOK direct-to-provider' and says Local Mode is 'on-device + BYOK only'.",
+  "what_the_code_says": "Mobile has no own-key mode, and the guard passes any non-AGI host to secureFetch, so the BYOK wording is a stale comment and message and the pass-through is a boundary gap.",
+  "evidence": "apps/mobile/lib/egressGuard.ts:31 and :326"
+ },
+ {
+  "found_by": "SYS-execution-boundaries",
+  "document": "docs/architecture/trust-boundaries.md",
+  "what_is_outdated": "The policy table (lines 36-45) presents Local, own key and Cloud as uniform capabilities per app.",
+  "what_the_code_says": "Mobile and desktop Local and CLI Local are partial. The Electron shell refuses local inference outright, and CLI and VS Code Cloud chat need PRO_TIERS while other apps need only managed_chat. The policy's VS Code Local and own-key entries match the code.",
+  "evidence": "apps/desktop/electron/runtime/dispatcher.ts:3235-3244; apps/web/lib/free-chat-surface-policy.ts:96-113; apps/extension-vscode/README.md:~35-38"
+ },
+ {
+  "found_by": "SYS-execution-boundaries",
+  "document": "packages/ai/model-registry/catalog/harnesses.json (vscode/local-chat and vscode/byok-chat, lines 703-725)",
+  "what_is_outdated": "Both profiles have status 'unwired'.",
+  "what_the_code_says": "The VS Code extension supports Local through the CLI app-server (Ollama, LM Studio) and own key through the CLI login, with no AGI subscription needed. The catalog flag lags the implementation.",
+  "evidence": "apps/extension-vscode/src/integrations/localRuntimeClient.ts:~720-745; apps/extension-vscode/src/providers/terminalProvider.ts:~383-404; apps/extension-vscode/README.md:~35-38"
+ },
+ {
+  "found_by": "SYS-execution-boundaries",
+  "document": "audit/registers/known-flaws.md (Ask from Siri row, line 342)",
+  "what_is_outdated": "Says the Ask from Siri deviation is recorded in docs/architecture/trust-boundaries.md.",
+  "what_the_code_says": "That file has no such section (found in the earlier pass; not re-checked here).",
+  "evidence": "audit/registers/known-flaws.md:342"
+ },
+ {
+  "found_by": "SYS-subscriptions-entitlements-and-usage",
+  "document": "apps/cli/src/tier_cache.rs (module header comment)",
+  "what_is_outdated": "Lists canonical tiers without team_premium and says the CLI no longer reads credits because there are no per-use credits.",
+  "what_the_code_says": "The UserTier enum includes TeamPremium, and usage_summary.rs reads /api/usage credit windows (monthly, weekly, five_hour).",
+  "evidence": "apps/cli/src/tier_cache.rs:6-9 versus 184-200; apps/cli/src/usage_summary.rs:1-8, 40-62"
+ },
+ {
+  "found_by": "SYS-subscriptions-entitlements-and-usage",
+  "document": "packages/contracts/licensing/src/index.ts and crates/agiworkforce-licensing/src/lib.rs (header comments)",
+  "what_is_outdated": "Not outdated as such, but they are the only statement that the verifier is unwired. No project guide says whether Team and Enterprise editions will use it.",
+  "what_the_code_says": "No app imports the package or crate; editions are only team and enterprise in the claims schema.",
+  "evidence": "packages/contracts/licensing/src/claims.ts:3-4; searches found no app-level importer"
+ },
+ {
+  "found_by": "SYS-subscriptions-entitlements-and-usage",
+  "document": "docs/architecture/credits.md",
+  "what_is_outdated": "Calls the windows a '5-hour' and 'weekly' allowance without saying they are rolling sums rather than fixed periods; and says top-ups are 'sold on the web only' while the top-up route also serves Apple- and Google-billed accounts (the purchase is still made through Stripe).",
+  "what_the_code_says": "5-hour and weekly windows are rolling sums over trailing hours; the top-up route accepts billing sources stripe, apple and google.",
+  "evidence": "apps/web/lib/server/rolling-usage.ts; apps/web/app/api/billing/top-up/route.ts:157-162"
+ },
+ {
+  "found_by": "SYS-subscriptions-entitlements-and-usage",
+  "document": "packages/contracts/types/src/billing-catalog.ts (PLAN_SURFACE_VISIBILITY, lines 235-247)",
+  "what_is_outdated": "Marks local-only and byok selectable on web, desktop and mobile, which reads as if those modes run there.",
+  "what_the_code_says": "The trust-boundary document says web and Chrome are Cloud only, public Desktop chat is Cloud only, and BYOK is not offered on mobile. This is a catalog-versus-document mismatch; the catalog is code and wins as plan visibility, but it is not mode support.",
+  "evidence": "packages/contracts/types/src/billing-catalog.ts:235-247; docs/architecture/trust-boundaries.md:45-60"
+ },
+ {
+  "found_by": "SYS-authorization-and-workspaces",
+  "document": "apps/web/db/neon/0037_rls_user_isolation.sql (header, PRODUCTION ENFORCEMENT CAVEAT)",
+  "what_is_outdated": "Says the live web query path uses getNeonDb() without withUser(), so RLS is correct-but-dormant for the live path.",
+  "what_the_code_says": "getUserScopedDb binds withUser(token).withOrg(organizationId), or a claimed scope for API keys, and the data layer sets SET LOCAL ROLE app_rls per transaction.",
+  "evidence": "apps/web/lib/server/rls-db.ts:81-105,116-165; apps/web/lib/server/claimed-user-scope-db.ts:20-28"
+ },
+ {
+  "found_by": "SYS-authorization-and-workspaces",
+  "document": "apps/web/db/neon/0073_tenancy_foundation.sql (header and app_row_is_visible body)",
+  "what_is_outdated": "The owner sees all their rows regardless of workspace, and org owner/admin see the active org's rows.",
+  "what_the_code_says": "Superseded twice: 0110 makes Personal and each organization mutually exclusive; 0272 makes visibility depend on active membership and the content.govern permission rather than the owner/admin role pair.",
+  "evidence": "apps/web/db/neon/0110_active_workspace_content_scope.sql:18-32; apps/web/db/neon/0272_active_membership_authorization.sql:76-90"
+ },
+ {
+  "found_by": "SYS-authorization-and-workspaces",
+  "document": "apps/web/db/neon/0100_admin_role_helper.sql (rewired app_row_is_visible)",
+  "what_is_outdated": "Its app_row_is_visible body (owner/admin role helper) is no longer the live definition.",
+  "what_the_code_says": "The latest definition found is in 0272 and uses app_has_org_permission(..., 'content.govern').",
+  "evidence": "apps/web/db/neon/0272_active_membership_authorization.sql:76-90"
+ },
+ {
+  "found_by": "SYS-authorization-and-workspaces",
+  "document": "apps/web/db/neon/0200, 0217, 0234, 0236, 0248 headers ('NOT YET APPLIED : draft only')",
+  "what_is_outdated": "The label says the migration is a draft not yet applied.",
+  "what_the_code_says": "Applied-state is not recorded in these files. Later migrations (0272 depends on 0234 and 0248; 0315 depends on 0200 and 0217; 0358 restates 0217) and live code that reads organization_members.status and calls app_has_org_permission rely on them, so the label is stale. Whether each is applied to a given database is not established here.",
+  "evidence": "apps/web/db/neon/0272_active_membership_authorization.sql:1-3; apps/web/db/neon/0315_private_shared_projects.sql:17-18; apps/web/lib/services/active-workspace-service.ts:95-105"
+ },
+ {
+  "found_by": "SYS-data-model-and-migrations",
+  "document": "apps/web/db/neon/0037_rls_user_isolation.sql (header)",
+  "what_is_outdated": "Says the live web query path uses getNeonDb() without withUser(), so RLS is correct but dormant and the app-layer user_id filter is the only active control.",
+  "what_the_code_says": "Request handlers obtain a scoped handle from getUserScopedDb, which binds the verified user and workspace and runs under app_rls. About 810 files import rls-db; getNeonDb() remains for crons, webhooks and erasure.",
+  "evidence": "apps/web/lib/server/rls-db.ts:116-182; apps/web/lib/server/neon-db.ts:20-31; scripts/check-rls-boundary.mjs:11-20"
+ },
+ {
+  "found_by": "SYS-data-model-and-migrations",
+  "document": "apps/web/db/neon/0182_managed_usage_microusd_ledger.sql (header)",
+  "what_is_outdated": "Says one credit is 20,000 microUSD and one cent is 10,000.",
+  "what_the_code_says": "One credit is 5,000 microUSD, and docs/architecture/credits.md agrees.",
+  "evidence": "packages/contracts/types/src/credits.ts:3; docs/architecture/credits.md:14"
+ },
+ {
+  "found_by": "SYS-data-model-and-migrations",
+  "document": "143 migration headers, for example 0203_user_memories_lifecycle.sql, 0239_resource_deletion_semantics.sql, 0425_adult_eligibility.sql",
+  "what_is_outdated": "Header text 'NOT YET APPLIED : draft only, pending explicit approval'.",
+  "what_the_code_says": "The recorded production watermark is 425, so these files are applied. Applied files cannot be edited.",
+  "evidence": "scripts/config/production-migrations-applied.json; scripts/check-migration-dependencies.mjs (comment above loadAppliedThrough)"
+ },
+ {
+  "found_by": "SYS-data-model-and-migrations",
+  "document": "apps/cli/src/sessions.rs (module comment, Sync-rule isolation)",
+  "what_is_outdated": "Says the CLI must not sync consumer chat history and that no CLI code touches the synced chat tables.",
+  "what_the_code_says": "In managed (cloud) privacy mode the CLI pushes sessions to /api/chat/sync, which writes web_conversations and web_messages. Local and BYOK sessions are refused.",
+  "evidence": "apps/cli/src/cloud/chat.rs:1-13; apps/cli/src/cloud/mod.rs:326-335; apps/cli/src/cloud/client.rs:361-373"
+ },
+ {
+  "found_by": "SYS-data-model-and-migrations",
+  "document": "docs/architecture/overview.md (large chat files paragraph, line 158)",
+  "what_is_outdated": "Says that on 2026-11-15 migration 0422 is unapplied (appliedThrough 421).",
+  "what_the_code_says": "The recorded watermark is 425 as of 2026-11-21, so 0422 is applied. Whether large files are offered is a separate flag question.",
+  "evidence": "scripts/config/production-migrations-applied.json; docs/architecture/overview.md:158"
+ },
+ {
+  "found_by": "SYS-data-model-and-migrations",
+  "document": "apps/web/db/neon/0036_media_assets.sql (header)",
+  "what_is_outdated": "Not outdated on storage (it already says R2), but it names lib/server/object-storage.ts; the owner of bytes is now the shared platform object-storage package plus app helpers.",
+  "what_the_code_says": "Object storage is configured through AGI_STORAGE_* settings in packages/platform/object-storage.",
+  "evidence": "packages/platform/object-storage/src/config.ts:7-17"
+ },
+ {
+  "found_by": "SYS-data-model-and-migrations",
+  "document": "scripts/neon-migrate.mjs --help text",
+  "what_is_outdated": "Lists targets local, ci, branch and production only.",
+  "what_the_code_says": "MIGRATION_TARGETS also includes staging, and the staging deploy workflow uses it.",
+  "evidence": "scripts/lib/neon-migrations.mjs:16; .github/workflows/deploy-staging.yml:145"
+ },
+ {
+  "found_by": "SYS-api-and-contracts",
+  "document": "packages/contracts/cloud-contracts/src/index.ts header comment",
+  "what_is_outdated": "Says the typed clients are shared by Web, Desktop, Mobile, and the Services compatibility facade, and omits VS Code and Chrome, which also use them.",
+  "what_the_code_says": "VS Code and Chrome extension files call createManagedCloud* factories, and no packages/services/src directory exists.",
+  "evidence": "packages/contracts/cloud-contracts/src/index.ts:1-8; apps/extension-vscode/src/utils/managedCloudChat.ts; apps/extension/src/features/cloud-bridge/projectsClient.ts; ls packages/services/src failed"
+ },
+ {
+  "found_by": "SYS-api-and-contracts",
+  "document": "docs/standards/http-api-surface.md",
+  "what_is_outdated": "Describes run control as `runs/{runId}` carrying pause, resume, steer and archive, and does not name the extra `chat/completions/guest` route or the `resume/stream` and `steer/{steerId}` routes in the tree. The OpenAPI file lists only runs/{runId}/resume for run control.",
+  "what_the_code_says": "Route files exist for runs/[runId]/{pause,archive,resume,resume/stream,steer,steer/[steerId]} and chat/completions/guest.",
+  "evidence": "find apps/web/app/api/llm; apps/web/public/openapi.json paths; docs/standards/http-api-surface.md:76-79"
+ },
+ {
+  "found_by": "SYS-api-and-contracts",
+  "document": "docs/standards/api-rate-limits.md",
+  "what_is_outdated": "No contradiction found in the limits table; the table matches rateLimitConfigs and is pinned by a test. Its Last updated date (2026-09-27) predates later rate-limit changes I could not date, so freshness is unverified.",
+  "what_the_code_says": "Limits and fail modes match rate-limit.ts at the cited lines.",
+  "evidence": "apps/web/lib/rate-limit.ts:282-286, :354-363, :399-403, :836-840; developer-api-contract.test.ts:233-262"
+ },
+ {
+  "found_by": "SYS-chat-turn-pipeline",
+  "document": "apps/web/app/api/llm/v1/chat/completions/route.ts (header comment, lines 162-196; a code comment, not a doc)",
+  "what_is_outdated": "States that a turn holding a free-tier or managed reservation starts on the Workflow transport so it outlives the request, and 'Routes to 10+ LLM providers'.",
+  "what_the_code_says": "The durable attempt is made only in the tool-loop branch (and in the approved-research branch). The plain adapter stream and the non-streaming branch run request-scoped. Providers are whatever ADAPTER_PROVIDERS lists.",
+  "evidence": "route.ts:898-1024 and 1239-1345 versus the comment at route.ts:162-196"
+ },
+ {
+  "found_by": "SYS-chat-turn-pipeline",
+  "document": "docs/generated/trust-mode-surface-matrix.md and the trust-mode matrix policy table (Web: Local no)",
+  "what_is_outdated": "Policy says Web has no Local; the web chat hook still contains a full Local turn path (runLocalTurn, local: model ids, desktop-host bridge).",
+  "what_the_code_says": "The Local branch exists in useChatStream and runs only where a host bridge answers local_chat_start; the Electron shell refuses it. This is a policy-versus-code tension, not proof the doc is wrong, because the doc says 'allowed, not shipped'.",
+  "evidence": "apps/web/lib/hooks/useChatStream.ts:4155-4170, 4259-4290; apps/web/features/desktop-host/lib/runtime-client.ts:621; apps/desktop/electron/runtime/dispatcher.ts:3235-3244"
+ },
+ {
+  "found_by": "SYS-agents-tools-and-automation",
+  "document": "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts (file header comment)",
+  "what_is_outdated": "Says the safety model is default fail-closed with every tool call queued awaiting approval and manual as the default approval mode.",
+  "what_the_code_says": "The approval mode follows the account policy: auto when every offered tool is auto-approved by the policy, manual otherwise. A signed-in cloud account with no stored setting gets autonomous. Only MCP, connector and irreversible tools force manual.",
+  "evidence": "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop-routing.ts:56-65,144-151; packages/contracts/types/src/tool-approval-policy.ts:11-13; apps/web/shared/types/toolApprovalPolicy.ts:40-48"
+ },
+ {
+  "found_by": "SYS-agents-tools-and-automation",
+  "document": "docs/product/surface-feature-matrix.md (last updated 2026-09-20)",
+  "what_is_outdated": "Lists CLI image generation as Present and Chrome event triggers as Absent without the later Chrome run journal; its dated cells predate recent commits such as unattended browser tasks.",
+  "what_the_code_says": "The chat image tool is offered only on web, desktop, mobile and chrome; the Chrome extension keeps a scheduled-task run journal (scheduled-task-runs.ts).",
+  "evidence": "apps/web/app/api/media/image/lib/image-chat-tools.ts:50-55; apps/extension/src/features/background/scheduled-task-runs.ts:1-30"
+ },
+ {
+  "found_by": "SYS-connectors-plugins-and-skills",
+  "document": "docs/product/surface-feature-matrix.md (last updated 2026-09-20)",
+  "what_is_outdated": "Says plugins are absent on mobile ('canUsePlugins false for mobile'). Says MCP is absent on desktop.",
+  "what_the_code_says": "canUsePlugins is true in the mobile capability row. Mobile has plugin screens and installs through the marketplace-installations route. Desktop has a Tauri MCP module with its own OAuth store, and an MCP config editor.",
+  "evidence": "packages/contracts/types/src/capabilities.ts:54,87,120; apps/mobile/src/features/plugins/sourcesService.ts:80-91; apps/mobile/app/(app)/plugins/index.tsx; apps/desktop/src-tauri/src/core/mcp/oauth.rs; apps/desktop/src/features/mcp/MCPConfigEditor.tsx"
+ },
+ {
+  "found_by": "SYS-connectors-plugins-and-skills",
+  "document": "docs/product/surface-feature-matrix.md",
+  "what_is_outdated": "Lists Connectors as general_availability.",
+  "what_the_code_says": "Connector release is coming_soon, with 13 ids selectively released.",
+  "evidence": "packages/contracts/types/src/connector-release.ts:14-30"
+ },
+ {
+  "found_by": "SYS-files-artifacts-and-storage",
+  "document": "docs/security/upload-scanning.md",
+  "what_is_outdated": "Says no web code calls the scanner's POST /v2/scans yet, and that the two paths storing files are chat-attachment complete and project knowledge extraction.",
+  "what_the_code_says": "The web has a protocol 2 client and the large-file intake step runner submits source scans; the coverage guard lists a third finishing path, chat-file-intake/steps.ts, which must call inspectUploadHead and submitSourceScan.",
+  "evidence": "apps/web/lib/security/source-scan-client.ts:196-295; apps/web/lib/server/chat-file-intake/steps.ts:181,689; scripts/check-upload-inspection-coverage.mjs (DEFERRED list)"
+ },
+ {
+  "found_by": "SYS-files-artifacts-and-storage",
+  "document": "docs/architecture/render-layer.md",
+  "what_is_outdated": "A Draft spec (2026-08-26) for typed response parts. It lists response-parts.ts files as new and does not describe the artifact sandbox origin, publishing or the Library. It cites artifact-store.ts line numbers that were not re-checked.",
+  "what_the_code_says": "packages/contracts/types/src/response-parts.ts and packages/contracts/cloud-contracts/src/response-parts.ts do not exist, so the described contract is not implemented. Artifact versioning is documented in the artifact store header (a different id with different content appends a version).",
+  "evidence": "ls of both response-parts.ts paths returned no file; packages/platform/artifacts/src/artifact-store.ts:15-17"
+ },
+ {
+  "found_by": "SYS-memory-projects-and-context",
+  "document": "apps/web/lib/support/doc-metadata.ts (help topic 'memory' availability)",
+  "what_is_outdated": "Lists the memory help topic for surfaces web and desktop only",
+  "what_the_code_says": "Memory clients exist and are wired on mobile, CLI, VS Code and Chrome, and docs/product/surface-feature-matrix.md lists memory present on all six apps",
+  "evidence": "apps/web/lib/support/doc-metadata.ts:219; docs/product/surface-feature-matrix.md:202-210; apps/mobile/app/(app)/settings/memory.tsx; apps/cli/src/cloud/memory.rs; apps/extension-vscode/src/memory/accountMemoryStore.ts; apps/extension/src/background/memory-bridge.ts"
+ },
+ {
+  "found_by": "SYS-memory-projects-and-context",
+  "document": "apps/web/lib/temporary-chat-policy.ts (TEMPORARY_CHAT_RETENTION_NOTE and the comment above it)",
+  "what_is_outdated": "Says memory is skipped by 'resolveInteractiveTurnContext leaving it out of a temporary turn' and that history is refused by `persistConversationMessage`; the user text says messages are never saved",
+  "what_the_code_says": "Memory is withheld by resolveInteractiveTurnContext (matches), but a web_conversations row with is_temporary=true is created and purged by a 30-day cron, so the row exists until purge; the end-chat copy says 'never written to your history'. Whether message rows are written at all was not confirmed in this pass",
+  "evidence": "apps/web/app/api/chat/conversations/route.ts:273; apps/web/app/api/cron/purge-temporary-chats/route.ts:20-45; apps/web/lib/temporary-chat-policy.ts:20-45"
+ },
+ {
+  "found_by": "SYS-memory-projects-and-context",
+  "document": "apps/web/db/neon/0050_temporary_chat_retention.sql header comment",
+  "what_is_outdated": "Points to docs/products/agi-mobile/volume-23-settings.md, a path that is not in the current docs tree (docs/product has no such file)",
+  "what_the_code_says": "The current documentation homes are docs/product/ and docs/compliance/; I did not find the cited file",
+  "evidence": "apps/web/db/neon/0050_temporary_chat_retention.sql:1-5; ls docs/product"
+ },
+ {
+  "found_by": "SYS-voice-and-media",
+  "document": "docs/product/surface-feature-matrix.md",
+  "what_is_outdated": "Marks Image generation on mobile as Unverified ('Nothing under apps/mobile was found naming the image work mode') and Video generation on Chrome as Absent ('Nothing under apps/extension/src requests a video'). Last updated 2026-09-20.",
+  "what_the_code_says": "Mobile has image generation (async job with polling) and the imageGen flag is true. The Chrome side panel imports and calls startChromeVideo against /api/media/video/generate and polls /api/media/video/status.",
+  "evidence": "apps/mobile/src/features/image/services/imagegen.ts:70-100; apps/mobile/lib/v1FeatureFlags.ts:27; apps/extension/src/side_panel.ts:395-401 and :6253; apps/extension/src/features/cloud-bridge/videoGenerationClient.ts:9-12"
+ },
+ {
+  "found_by": "SYS-voice-and-media",
+  "document": "docs/runbooks/free-quota-models.md",
+  "what_is_outdated": "The sentence 'Mobile restores the eligible no-attachment image fallback; its video UI remains paid-only despite media-capable transport' implies a paid-only video UI exists on mobile.",
+  "what_the_code_says": "Mobile video is switched off by the v1 flag videoGen: false, and video messages are hidden from the message list when the flag is off, so there is no paid-only video UI. Also the runbook says 'Plans with the capability are not counted or capped per day', while video seconds are capped monthly by tier policy on the Max product tier.",
+  "evidence": "apps/mobile/lib/v1FeatureFlags.ts:28; apps/mobile/src/features/chat/components/MessageList.tsx:113-114; apps/web/lib/services/tier-unit-quota-service.ts:57-58"
+ },
+ {
+  "found_by": "SYS-sync-and-continuity",
+  "document": "docs/architecture/remote-control.md",
+  "what_is_outdated": "Lists only the Electron desktop and VS Code extension as hosts, and says the pairing route applies an MFA policy gate and an IP allow-list gate. It also lists the relay allow-list without the dispatch-task verbs.",
+  "what_the_code_says": "The CLI is a third host (agi remote-control). The pairing route calls remoteControlStandingRefusal, which checks the workspace remote_control policy, the plan capability and the screen_share kill switch. The relay also allows dispatch.task.create, cancel, reply and status.",
+  "evidence": "apps/cli/src/lib.rs:6659-6678; apps/web/app/api/pair/initiate/route.ts:66; apps/web/lib/feature-flags/remote-control-gate.ts:97-130; services/signaling-server/src/control-payload.ts:46-51"
+ },
+ {
+  "found_by": "SYS-sync-and-continuity",
+  "document": "docs/product/surface-feature-matrix.md",
+  "what_is_outdated": "States that Remote control is absent on the CLI (nothing under apps/cli/src is a host) and present on mobile.",
+  "what_the_code_says": "apps/cli/src/remote_control holds a full host. Mobile has the files, but they are switched off in v1 by FEATURES.companion and FEATURES.dispatch being false.",
+  "evidence": "docs/product/surface-feature-matrix.md:562-569; apps/cli/src/remote_control/mod.rs:759; apps/mobile/lib/v1FeatureFlags.ts:1-43"
+ },
+ {
+  "found_by": "SYS-sync-and-continuity",
+  "document": "apps/mobile/services/notificationEventTypes.ts (code comment, read as a source note)",
+  "what_is_outdated": "Comment says the only server-side push producer is schedule-notification-service.",
+  "what_the_code_says": "Agent run, research, cloud code, local code, chat-reply and product-update producers also send push.",
+  "evidence": "apps/mobile/services/notificationEventTypes.ts:8-14; apps/web/lib/services/agent-notification-service.ts:140-416; apps/web/lib/services/chat-reply-notification-service.ts:30-50"
+ },
+ {
+  "found_by": "SYS-sync-and-continuity",
+  "document": "services/signaling-server/README.md",
+  "what_is_outdated": "Says the initiator defaults to desktop.",
+  "what_the_code_says": "The web pairing route defaults initiator to mobile when the request names none; the relay's own default was not re-read.",
+  "evidence": "apps/web/app/api/pair/initiate/route.ts:62-65"
+ },
+ {
+  "found_by": "SYS-observability-and-operations",
+  "document": "docs/runbooks/incident-response.md",
+  "what_is_outdated": "The 'Where the alert lands' section lists three channels (email, pager, incident channel) and says an undeliverable alert is when none reached anyone. It does not mention the fourth, out-of-band webhook and status mirror fallback, and the detector table does not say evaluate-slo-burn also evaluates cost and latency anomalies.",
+  "what_the_code_says": "dispatch.ts tries the out-of-band webhook and writes a status mirror when no channel delivered, and counts a paged out-of-band alert as delivered; evaluate-slo-burn also runs evaluateAnomalies.",
+  "evidence": "apps/web/lib/server/incident/dispatch.ts:140-175; apps/web/app/api/cron/evaluate-slo-burn/route.ts:16-21,116"
+ },
+ {
+  "found_by": "SYS-observability-and-operations",
+  "document": "docs/runbooks/capacity-and-load-testing.md",
+  "what_is_outdated": "Says admission is per conversation (plus video) with nothing else, and lists streaming admission only as conversation-turn-admission.ts.",
+  "what_the_code_says": "There is also a per-user managed concurrent turn ceiling by plan (acquireManagedTurnSlot, with denials plan-excluded, ceiling-reached, limiter-unavailable) and tier-scaled rate limits. Still no process-wide backpressure, so the main conclusion holds.",
+  "evidence": "apps/web/lib/rate-limit.ts:925-960,1330-1440"
+ },
+ {
+  "found_by": "SYS-observability-and-operations",
+  "document": "docs/standards/api-rate-limits.md",
+  "what_is_outdated": "Shows POST /chat/completions as a flat 30 requests per minute per user and /embeddings as 60.",
+  "what_the_code_says": "llm-completion and chat-conversation (used by embeddings) are in TIER_SCALED_KEYS, so the effective limit is the base multiplied by the plan's concurrent turns when a plan tier is passed. The base values (30, 60, 1500, default 100) match.",
+  "evidence": "apps/web/lib/rate-limit.ts:354-362,925-960; apps/web/app/api/llm/v1/embeddings/route.ts:126"
+ },
+ {
+  "found_by": "SYS-observability-and-operations",
+  "document": "docs/agent-context/llm-failure-taxonomy.json",
+  "what_is_outdated": "Not outdated, but easy to misread: the brief for this subject names it as an error-category source.",
+  "what_the_code_says": "It is a development guardrail vocabulary (purpose field). Runtime error categories are in packages/contracts/types/src/error-taxonomy.json.",
+  "evidence": "docs/agent-context/llm-failure-taxonomy.json (purpose); packages/contracts/types/src/error-taxonomy.ts:17-41"
+ },
+ {
+  "found_by": "SYS-security-and-privacy",
+  "document": "docs/security/security.md section 3 (Accepted risk paragraph)",
+  "what_is_outdated": "Says 'All four keys live only as deployment environment variables', but the rotation cadence table and the first paragraph name three keys on the cadence (CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY, GITHUB_TOKEN_ENCRYPTION_KEY, TOTP_ENCRYPTION_KEY) and DEVICE_TOKEN_ENCRYPTION_KEY is stated to seal nothing.",
+  "what_the_code_says": "The same document states DEVICE_TOKEN_ENCRYPTION_KEY is read by no module, so only three live keys remain; the count of four is inconsistent within the file.",
+  "evidence": "docs/security/security.md:689-691,750-754,767"
+ },
+ {
+  "found_by": "SYS-security-and-privacy",
+  "document": "docs/security/security.md section 1.1 first sentence and 'Website account default'",
+  "what_is_outdated": "Describes the Free-plan and website default in terms of 'Skip approvals' wording; the code constant is the policy value 'autonomous'. Wording in the doc is a product label, not the code name.",
+  "what_the_code_says": "CLOUD_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY = 'autonomous' and WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY aliases it. The document matches in behaviour; only the label differs.",
+  "evidence": "packages/contracts/types/src/tool-approval-policy.ts:13; apps/web/shared/types/toolApprovalPolicy.ts:29"
+ },
+ {
+  "found_by": "SYS-security-and-privacy",
+  "document": "docs/security/upload-scanning.md",
+  "what_is_outdated": "States the external scanner call timeout implicitly via the service's 14-second deadline; the web caller uses a 15-second abort, so the two numbers differ slightly. No functional contradiction found.",
+  "what_the_code_says": "runExternalScanner uses AbortSignal.timeout(15_000).",
+  "evidence": "apps/web/lib/security/upload-scan.ts:452; docs/security/upload-scanning.md:73-77"
+ },
+ {
+  "found_by": "SYS-shared-ui-and-design",
+  "document": "docs/agent-context/repo-map.json (packages/ui/unified-chat entry, line 1138-1150)",
+  "what_is_outdated": "Lists consumers of packages/ui/unified-chat as apps/desktop and apps/web only, with trust boundary 'cloud consumer chat presentation and state'.",
+  "what_the_code_says": "Chrome, VS Code and mobile also declare and import it (headless subpaths). The tierStore and BYOK or local handoff pieces show it also carries non-cloud modes.",
+  "evidence": "apps/extension/package.json:54; apps/extension-vscode/package.json:1599; apps/mobile/package.json:73"
+ },
+ {
+  "found_by": "SYS-shared-ui-and-design",
+  "document": "packages/ui/ui/src/index.ts header comment",
+  "what_is_outdated": "Says the package is shared by web and desktop only.",
+  "what_the_code_says": "Still true for package.json dependencies (web and desktop, plus unified-chat), but the ui package also exports auth-scene, sidebar and directory areas that are not 'plain config'. The header understates the scope.",
+  "evidence": "packages/ui/ui/package.json exports; directory listing of packages/ui/ui/src"
+ },
+ {
+  "found_by": "SYS-shared-ui-and-design",
+  "document": "AGENTS.md section 5 and packages/ui/unified-chat/package.json description",
+  "what_is_outdated": "Say unified-chat is shared by desktop, web, Chrome and VS Code. This is incomplete: it omits mobile, and Chrome and VS Code use only helper modules, not the chat UI.",
+  "what_the_code_says": "Full chat UI mount found only in desktop. Web uses selected pieces, mobile uses about 60 helper subpaths, Chrome and VS Code use a few.",
+  "evidence": "apps/desktop/src/features/v3/DesktopShellV3.tsx:710; apps/mobile/package.json:73; apps/extension/src and apps/extension-vscode/src/webview/render.ts imports"
+ },
+ {
+  "found_by": "SYS-shared-ui-and-design",
+  "document": ".agents/skills/agiworkforce-design/SKILL.md step 3 (logo motion: no shine overlay)",
+  "what_is_outdated": "Possible mismatch: states no shine overlay on the landing logo.",
+  "what_the_code_says": "foundation.css still defines .agi-mark-shine with an offset-path animation. Whether the landing uses it was not checked.",
+  "evidence": "packages/ui/design-tokens/src/foundation.css (agi-mark-shine rules near the end of file)"
+ },
+ {
+  "found_by": "SYS-repository-and-guards",
+  "document": "AGENTS.md section 5",
+  "what_is_outdated": "Cargo workspace listed as apps/desktop/src-tauri, apps/cli, crates/*",
+  "what_the_code_says": "Cargo.toml also has apps/desktop/gpui as a member",
+  "evidence": "Cargo.toml:2-7 versus AGENTS.md:88"
+ },
+ {
+  "found_by": "SYS-repository-and-guards",
+  "document": "AGENTS.md section 4",
+  "what_is_outdated": "Says the Rust model-literal check is scripts/check-no-hardcoded-models.sh",
+  "what_the_code_says": "That file only forwards to the Node guard scripts/check-no-hardcoded-model-ids.mjs, which scans Rust and TypeScript",
+  "evidence": "scripts/check-no-hardcoded-models.sh"
+ },
+ {
+  "found_by": "SYS-repository-and-guards",
+  "document": "docs/development/agent-operability.md (Hook Rules)",
+  "what_is_outdated": "Says pre-push runs check:llm-operability and whitespace checks",
+  "what_the_code_says": "pre-push runs the chain inside a clean detached worktree, then turbo lint and typecheck for affected packages, then git diff --check; it has an on-tree mode",
+  "evidence": ".husky/pre-push; scripts/prepush-clean-worktree.sh"
+ },
+ {
+  "found_by": "SYS-repository-and-guards",
+  "document": "docs/agent-context/risk-map.json",
+  "what_is_outdated": "lastUpdated 2026-08-13, older than lanes.json (2026-11-08) and commands.json (2026-11-09); may not reflect later changes",
+  "what_the_code_says": "Not re-verified path by path",
+  "evidence": "docs/agent-context/risk-map.json lastUpdated"
+ },
+ {
+  "found_by": "SYS-repository-and-guards",
+  "document": "docs/agent-context/README.md",
+  "what_is_outdated": "Says to run check:llm-operability after editing agent-context rules without noting that some enforced guards run only in CI",
+  "what_the_code_says": "check:trust-boundaries, check:rust-egress-boundary, check:hardcoded-arrays and the skills-lock check are outside the chain",
+  "evidence": "package.json:397; ci.yml:130,149,932; repo-operability.yml:163"
+ },
+ {
+  "found_by": "SURF-web",
+  "document": "docs/architecture/overview.md (Chat File Uploads)",
+  "what_is_outdated": "States that on 2026-11-15 migration 0422 is unapplied (appliedThrough 421).",
+  "what_the_code_says": "The committed ledger records appliedThrough 425 recorded 2026-11-21.",
+  "evidence": "scripts/config/production-migrations-applied.json:3-5"
+ },
+ {
+  "found_by": "SURF-web",
+  "document": "docs/product/surface-feature-matrix.md",
+  "what_is_outdated": "Marks web Chat as Unverified because no import of WebChatPage was found.",
+  "what_the_code_says": "The chat route imports WebChatRoot, which mounts WebChatPage (generated file dated 2026-09-20).",
+  "evidence": "apps/web/app/chat/[sessionId]/page.tsx:2; apps/web/features/chat/components/WebChatRoot.tsx; docs/product/surface-feature-matrix.md:154"
+ },
+ {
+  "found_by": "SURF-web",
+  "document": "docs/product/suite.md",
+  "what_is_outdated": "Describes Mobile as 'Unpublished client' and the Web role without the guest chat route.",
+  "what_the_code_says": "Code includes a guest chat route behind a flag and the website labels all non-web surfaces 'Coming soon' consistently with unpublished state; guest chat is not mentioned in suite.md.",
+  "evidence": "apps/web/app/api/llm/v1/chat/completions/guest/route.ts; apps/web/lib/surface-status.ts:6-13; docs/product/suite.md:33"
+ },
+ {
+  "found_by": "SURF-desktop",
+  "document": "apps/desktop/electron/config.ts header comment and electron-builder.yml comments",
+  "what_is_outdated": "They cite apps/desktop/AGENTS.md as the source for 'one Desktop surface, two shells'.",
+  "what_the_code_says": "apps/desktop/AGENTS.md does not exist; the owning documents are apps/desktop/README.md and ARCHITECTURE.md.",
+  "evidence": "ls apps/desktop/AGENTS.md returned no such file"
+ },
+ {
+  "found_by": "SURF-desktop",
+  "document": "docs/decisions/2026-09-15-founder-decisions.md D-2026-09-15-04 (Tauri not a public product, Electron sole public Desktop)",
+  "what_is_outdated": "The same entry says it was superseded on 2026-10-24 to ship Tauri as a second public app loading the hosted web app, while README, ARCHITECTURE.md and AGENTS.md section 5 still say Tauri is internal only.",
+  "what_the_code_says": "The Tauri window shows the Vite renderer in src, not the hosted web app (apps/desktop/README.md; hostHasLocalMode is true only for the tauri shell). Release workflows and download routes cover only the Electron 'cloud' channel in the Desktop path read; Tauri public status is unproven and is an owner question.",
+  "evidence": "docs/decisions/2026-09-15-founder-decisions.md:78-99 versus apps/desktop/README.md:1-12"
+ },
+ {
+  "found_by": "SURF-desktop",
+  "document": "audit/registers/known-flaws.md WEB-DESKTOP-DEVICES-NEVER-WRITTEN-01",
+  "what_is_outdated": "Says the Electron Desktop sends no device heartbeat.",
+  "what_the_code_says": "dispatcher.ts defines describeDeviceForRegistry with capabilities; whether it is sent was not traced, so the row may be stale.",
+  "evidence": "apps/desktop/electron/runtime/dispatcher.ts ~2290; audit/registers/known-flaws.md:50"
+ },
+ {
+  "found_by": "SURF-mobile",
+  "document": "apps/mobile/README.md",
+  "what_is_outdated": "Header says Last updated 2026-10-18 and describes only the base folders; it omits the many features added since (accounts, companion, voice, siri, release-state, rollout) and does not mention the feature flags or purchase switch",
+  "what_the_code_says": "src/features holds about 50 folders; lib/v1FeatureFlags.ts and storePurchases.json control what ships",
+  "evidence": "apps/mobile/README.md vs apps/mobile/src/features listing"
+ },
+ {
+  "found_by": "SURF-mobile",
+  "document": "docs/product/surface-feature-matrix.md",
+  "what_is_outdated": "Last updated 2026-09-20; marks mobile companion/agent routes as present although the dispatch and companion flags are false in v1 builds, and several cells are 'unverified'",
+  "what_the_code_says": "FEATURES.dispatch and FEATURES.companion are false, so pairing links and background tasks are compiled out",
+  "evidence": "apps/mobile/lib/v1FeatureFlags.ts:12,16; apps/mobile/app.config.js"
+ },
+ {
+  "found_by": "SURF-mobile",
+  "document": "apps/mobile/lib/egressGuard.ts comment (and docs repeating it)",
+  "what_is_outdated": "States Local Mode is on-device plus BYOK only and describes BYOK direct-to-provider as allowed",
+  "what_the_code_says": "No mobile code path stores or uses a provider key; byokKeys is never consulted and suite.md forbids BYOK in v1",
+  "evidence": "apps/mobile/lib/egressGuard.ts:31,326; apps/mobile/services/remoteChatGate.ts:8-11"
+ },
+ {
+  "found_by": "SURF-cli",
+  "document": "docs/product/surface-feature-matrix.md (cli remote-control cell, line ~567)",
+  "what_is_outdated": "Says 'Nothing under apps/cli/src is a remote-control host or client.'",
+  "what_the_code_says": "apps/cli declares `pub mod remote_control`, has a `Command::RemoteControl` that calls `remote_control::run`, and a src/remote_control folder with host.rs and envelope.rs.",
+  "evidence": "apps/cli/src/lib.rs:60,894,6659-6678"
+ },
+ {
+  "found_by": "SURF-cli",
+  "document": "docs/product/surface-feature-matrix.md (cli MCP, approval, cloud tasks, repo cells)",
+  "what_is_outdated": "Marks mcp/mod.rs, safety/approval.rs, cloud and repo as 'unverified' because no import was found.",
+  "what_the_code_says": "lib.rs declares `pub mod cloud`, `pub mod mcp`, `pub mod repo` and `pub mod safety`, so they are mounted.",
+  "evidence": "apps/cli/src/lib.rs:22,44,62,63"
+ },
+ {
+  "found_by": "SURF-cli",
+  "document": "apps/cli/Cargo.toml description",
+  "what_is_outdated": "Says '10+ providers' and lists a fixed set, which differs from the lists in README and the auth error text (mistral, openrouter, nvidia, minimax are also named elsewhere).",
+  "what_the_code_says": "Login accepts anthropic, openai, google, xai, deepseek, minimax, perplexity, qwen, moonshot, zhipu, ollama-cloud, openrouter, nvidia; README lists pre-registered providers including mistral and lmstudio.",
+  "evidence": "apps/cli/Cargo.toml:4; apps/cli/src/auth.rs:1281"
+ },
+ {
+  "found_by": "SURF-cli",
+  "document": "apps/cli/README.md (Purpose banner example)",
+  "what_is_outdated": "Not wrong, but states 'Last updated: 2026-11-11' while the file was modified 2026-11-24, so dated claims such as the release state may lag.",
+  "what_the_code_says": "File mtime is Nov 24; the surface status and install.sh still say no release.",
+  "evidence": "apps/cli/README.md:5; directory listing"
+ },
+ {
+  "found_by": "SURF-vscode",
+  "document": "docs/product/surface-feature-matrix.md",
+  "what_is_outdated": "Several vscode cells are marked unverified because features/settings, onboarding, context-handoff, editor-utilities, account-auth and config are 'directories, not entry points'.",
+  "what_the_code_says": "Those folders hold files that are imported and wired: features/account-auth/deviceAuth.ts is used by commandSetup.ts, features/context-handoff/index.ts is imported by extension.ts, features/editor-utilities is imported by extension.ts, features/settings/SettingsPanel.ts exists.",
+  "evidence": "apps/extension-vscode/src/extension.ts:2-14,50-54; apps/extension-vscode/src/core/commandSetup.ts:1221; docs/product/surface-feature-matrix.md:238,258,428,528,588"
+ },
+ {
+  "found_by": "SURF-vscode",
+  "document": "audit/overview.md",
+  "what_is_outdated": "Dated 2026-09-27; lists VS Code defects and says its sessions are shared with the CLI; later code has added many features and the doc is a point-in-time audit.",
+  "what_the_code_says": "The extension has 149 commands and 193 test files; the defect list was not re-verified here.",
+  "evidence": "audit/overview.md:398-403; apps/extension-vscode/package.json"
+ },
+ {
+  "found_by": "SURF-vscode",
+  "document": "apps/extension-vscode/README.md",
+  "what_is_outdated": "Not clearly outdated, but says extension files lack a CLI path for provider-free use without stating that the CLI is unpublished; also says Marketplace Q&A and docs links as if live.",
+  "what_the_code_says": "The web status map shows VS Code as Coming soon, and the CLI has no signed release.",
+  "evidence": "apps/web/lib/surface-status.ts:11; audit/blockers/14-desktop-and-vscode-need-unpublished-cli.md"
+ },
+ {
+  "found_by": "SURF-chrome",
+  "document": "docs/product/surface-feature-matrix.md (chrome, settings row, line 239)",
+  "what_is_outdated": "Says nothing under apps/extension/src imports or declares options.ts, so the settings page is unverified.",
+  "what_the_code_says": "options.ts is a Vite build entry and manifest options_page points to src/options.html.",
+  "evidence": "apps/extension/vite.config.ts:75; apps/extension/manifest.json options_page"
+ },
+ {
+  "found_by": "SURF-chrome",
+  "document": "docs/product/surface-feature-matrix.md (chrome, plan or quota row, line 249)",
+  "what_is_outdated": "Says nothing renders the plan.",
+  "what_the_code_says": "features/side-panel/freePlanNotices.ts branches on the free billing tier and freeTrialClient.ts handles plan tier and quota recovery; a plan label itself was not found, so the row is only partly stale.",
+  "evidence": "apps/extension/src/features/side-panel/freePlanNotices.ts:193; freeTrialClient.ts:122-160"
+ },
+ {
+  "found_by": "SURF-chrome",
+  "document": "apps/extension/docs/threat-model.md (capability table)",
+  "what_is_outdated": "Links `src/features/cloud-bridge/clerkAuth.ts` relative to docs/, which resolves to a wrong path (docs/src/...), a broken link rather than a wrong claim.",
+  "what_the_code_says": "The file is at apps/extension/src/features/cloud-bridge/clerkAuth.ts.",
+  "evidence": "apps/extension/docs/threat-model.md cookies row; apps/extension/src/features/cloud-bridge/clerkAuth.ts"
+ },
+ {
+  "found_by": "SURF-chrome",
+  "document": "apps/extension/README.md",
+  "what_is_outdated": "Title is the bare string 'agiworkforce' and does not use the product name.",
+  "what_the_code_says": "Manifest name is 'AGI Extension'; product names are owned by the registry.",
+  "evidence": "apps/extension/README.md:1; apps/extension/manifest.json:3"
+ },
+ {
+  "found_by": "ENG-development-setup",
+  "document": "CONTRIBUTING.md",
+  "what_is_outdated": "Setup section says Rust 1.94.0.",
+  "what_the_code_says": "rust-toolchain.toml pins channel 1.99.1, and apps/desktop/README.md also says 1.99.1.",
+  "evidence": "CONTRIBUTING.md:12 versus rust-toolchain.toml"
+ },
+ {
+  "found_by": "ENG-development-setup",
+  "document": "docs/development/README.md",
+  "what_is_outdated": "Index and how-to list omit the heavy-job rule and the scripts/dev wrappers, and give no setup steps.",
+  "what_the_code_says": "CLAUDE.md and .claude/hooks/heavy-job-gate.py make the wrappers mandatory on machines of 24 GB or less; the root dev:desktop script runs tauri dev while the public Desktop is Electron.",
+  "evidence": "docs/development/README.md (no mention); .claude/hooks/heavy-job-gate.py:9"
+ },
+ {
+  "found_by": "ENG-configuration",
+  "document": "README.md (environment table, lines 246-250)",
+  "what_is_outdated": "The table of tracked example files lists Desktop, Web, Mobile, Chrome extension and Signaling only.",
+  "what_the_code_says": "apps/cli/.env.example and services/upload-scanner/.env.example are also tracked, and scripts/env-doctor.mjs defines cli and scanner scopes.",
+  "evidence": "scripts/env-doctor.mjs contracts keys: desktop, web, mobile, extension, cli, signaling, scanner"
+ },
+ {
+  "found_by": "ENG-configuration",
+  "document": "apps/web/.env.example (comment near NEXT_PUBLIC_FREE_LANE_UI, line 889)",
+  "what_is_outdated": "It refers to the server's AGI_FREE_LANE_MODE but never lists that name as an entry, although its header says every name the source reads appears there.",
+  "what_the_code_says": "AGI_FREE_LANE_MODE is read through FREE_LANE_MODE_ENV in apps/web/lib/services/free-lane/mode.ts and is not in documentedKeys in scripts/env-doctor.mjs.",
+  "evidence": "apps/web/lib/services/free-lane/mode.ts:3,32; apps/web/.env.example:889; scripts/env-doctor.mjs web documentedKeys"
+ },
+ {
+  "found_by": "ENG-configuration",
+  "document": "apps/web/config/free-model-promotion.json",
+  "what_is_outdated": "It describes a promotion window ending 2026-10-24, now past.",
+  "what_the_code_says": "The file is still the config the example points at (ANTHROPIC_PROMO_API_KEY comment). Whether code still loads an expired window is not established.",
+  "evidence": "apps/web/config/free-model-promotion.json endsAt; apps/web/.env.example:313-315"
+ },
+ {
+  "found_by": "ENG-build-and-test",
+  "document": "AGENTS.md section 12 (Vitest bullet)",
+  "what_is_outdated": "Describes the separate Vitest major as specific to apps/web.",
+  "what_the_code_says": "apps/desktop also declares vitest ^5.1.0, while the root, apps/extension and apps/extension-vscode use ^4.1.12.",
+  "evidence": "apps/web/package.json:207; apps/desktop/package.json:182; package.json:469; apps/extension/package.json:72"
+ },
+ {
+  "found_by": "ENG-build-and-test",
+  "document": "docs/agent-context/commands.json",
+  "what_is_outdated": "Inventory (lastUpdated 2026-11-09) omits scripts that exist, such as check:script-tests, check:readme-facts, mobile test:local and test:handles, desktop test:smoke and test:gpui:search, and VS Code test:integration:vsix.",
+  "what_the_code_says": "These scripts are defined in package.json and the app manifests.",
+  "evidence": "package.json:363, 436; apps/mobile/package.json:46-47; apps/desktop/package.json:37, 57; apps/extension-vscode/package.json:1577"
+ },
+ {
+  "found_by": "ENG-build-and-test",
+  "document": "docs/development/agent-workflow.md",
+  "what_is_outdated": "Last updated 2026-09-19; the verification ladder does not mention the clean-worktree pre-push, the heavy-job wrappers or the guard chain's run-alone and re-run rules.",
+  "what_the_code_says": "Pre-push uses scripts/prepush-clean-worktree.sh, and the guard chain re-runs failed guards alone.",
+  "evidence": ".husky/pre-push; scripts/run-guard-chain.mjs:150-190"
+ },
+ {
+  "found_by": "ENG-deployment",
+  "document": "docs/architecture/release-architecture.md",
+  "what_is_outdated": "Section 1 lists the signaling server artifact as 'A Fly.io deployment' triggered by its own workflow.",
+  "what_the_code_says": "The automatic path after green CI deploys to Railway; Fly deploys only on manual workflow_dispatch with deploy_target fly or both.",
+  "evidence": ".github/workflows/deploy-signaling-server.yml:14-17,224-243,292-309"
+ },
+ {
+  "found_by": "ENG-deployment",
+  "document": "scripts/neon-migrate.mjs (help and error text)",
+  "what_is_outdated": "Messages list targets local|ci|branch|production.",
+  "what_the_code_says": "Allowed targets also include staging, and the staging workflow uses it.",
+  "evidence": "scripts/lib/neon-migrations.mjs:16; scripts/neon-migrate.mjs:111,126; .github/workflows/deploy-staging.yml:145"
+ },
+ {
+  "found_by": "ENG-deployment",
+  "document": "docs/architecture/release-architecture.md (section 2 and 3 wording on staging and approvals)",
+  "what_is_outdated": "Describes staging and the staging-web status as live ordering without the caveat in its own Current state that the workflows are disabled; also says 'the identical artifact served staging' while ci-and-deploys says staging and production build separately from the same commit.",
+  "what_the_code_says": "deploy-staging builds with the Vercel preview environment and production builds its own artifact; they share a commit, not an artifact.",
+  "evidence": "docs/development/ci-and-deploys.md staging tier section; .github/workflows/deploy-production.yml:391-401"
+ },
+ {
+  "found_by": "ENG-migrations",
+  "document": "docs/architecture/overview.md",
+  "what_is_outdated": "Line 158 says migration 0422 is unapplied (appliedThrough 421) as of 2026-11-15.",
+  "what_the_code_says": "The recorded production watermark is 425, recorded 2026-11-21.",
+  "evidence": "scripts/config/production-migrations-applied.json:3-4"
+ },
+ {
+  "found_by": "ENG-migrations",
+  "document": "scripts/neon-migrate.mjs help text (printHelp)",
+  "what_is_outdated": "Lists targets local|ci|branch|production.",
+  "what_the_code_says": "MIGRATION_TARGETS also includes staging, used by the staging workflow.",
+  "evidence": "scripts/lib/neon-migrations.mjs:16; .github/workflows/deploy-staging.yml:145"
+ },
+ {
+  "found_by": "ENG-migrations",
+  "document": "docs/development/ci-and-deploys.md",
+  "what_is_outdated": "Lines 61-62 present migration 0394 as pending work for the release operator.",
+  "what_the_code_says": "0394 is below the recorded applied watermark of 425, so it is historical.",
+  "evidence": "scripts/config/production-migrations-applied.json:3"
+ },
+ {
+  "found_by": "ENG-troubleshooting",
+  "document": "docs/development/troubleshooting.md",
+  "what_is_outdated": "Not found stale in most entries. Two claims are not backed by code I could open: the Clerk development key handshake redirect, and 'every completion fails' when the key-value provider is down. The file also lacks any section on sign-in, plan limits, provider errors, uploads, sync or local models.",
+  "what_the_code_says": "The key-value provider list (upstash, redis, memory, none) matches the factory. CLERK_AUTHORIZED_PARTIES is in validate-env.ts as an 'important' variable, but whether it is required is a warning level in that list, not a hard error.",
+  "evidence": "packages/platform/key-value/src/factory.ts:22; apps/web/lib/validate-env.ts:68. The doc says 'is required', while the code lists it under importantVars [inferred: the severity is not shown in the lines I read]"
+ },
+ {
+  "found_by": "ENG-troubleshooting",
+  "document": "docs/agent-context/llm-failure-taxonomy.json",
+  "what_is_outdated": "Header says lastUpdated 2026-06-02, earlier than the guard and register work recorded in later documents.",
+  "what_the_code_says": "The bug-finding guide (updated 2026-11-11) names the staged and strict guards, so the taxonomy has probably not changed with them. I did not diff them.",
+  "evidence": "docs/agent-context/llm-failure-taxonomy.json:3-4; docs/agent-context/bug-finding-guide.md:20-22"
+ },
+ {
+  "found_by": "ENG-recovery",
+  "document": "docs/runbooks/release-rollback.md",
+  "what_is_outdated": "Nothing found contradicting code; however the statement that the rollback workflow is disabled cannot be confirmed, and the intro says the only rollback was an in-job step until 2026-09-18, while that in-job step still exists.",
+  "what_the_code_says": "deploy-production.yml still contains a failure() rollback step using vercel rollback, alongside the dispatch inputs and a rollback-web job.",
+  "evidence": ".github/workflows/deploy-production.yml:515-525,15-25,819"
+ },
+ {
+  "found_by": "ENG-recovery",
+  "document": "docs/runbooks/personal-data-breach.md",
+  "what_is_outdated": "Last updated 2026-10-03; its claims that no admin route or script calls sendBulkTransactionalEmail and that no in-product or public notice route exists were not re-verified against current code.",
+  "what_the_code_says": "Not re-checked in code in this pass; treat as unverified rather than wrong.",
+  "evidence": "docs/runbooks/personal-data-breach.md section 5 (header date 2026-10-03)"
+ },
+ {
+  "found_by": "REF-glossary",
+  "document": "docs/standards/naming-conventions.md",
+  "what_is_outdated": "Lines 22 and 34-35 say the public brand is AGI, that surfaces are AGI Desktop, AGI Web, AGI Mobile, AGI CLI, AGI in Chrome and AGI for VS Code, and that managed cloud is AGI Cloud.",
+  "what_the_code_says": "The brand string is AGIWORKFORCE, the product names are plain (Chat, Mobile, Desktop, CLI, Extension, Code, Work), and the managed mode label is Cloud. The apps themselves disagree: Mobile shows AGI Mobile, the VS Code manifest says AGI Code and the Chrome manifest says AGI Extension.",
+  "evidence": "packages/contracts/types/src/product-names.ts:1-15; apps/web/lib/surface-status.ts:29-36; packages/contracts/types/src/suite-contracts.ts:79; apps/mobile/app.config.js:81; apps/extension-vscode/package.json:3; apps/extension/manifest.json:3"
+ },
+ {
+  "found_by": "REF-glossary",
+  "document": "docs/product/suite.md",
+  "what_is_outdated": "The Trust Modes table (lines 53-57) names the third mode Managed.",
+  "what_the_code_says": "Managed is the internal id; the label shown to users is Cloud. The doc also says surface UI must source labels from the types package, which defines Local, BYOK and Cloud.",
+  "evidence": "docs/product/suite.md:55-57; packages/contracts/types/src/suite-contracts.ts:67-83"
+ },
+ {
+  "found_by": "REF-product-requirements-sources",
+  "document": "docs/product/requirements.md section 12 (Desktop Requirements)",
+  "what_is_outdated": "Says Desktop exposes Local, BYOK and Cloud modes and is the local-private compute host with BYOK setup.",
+  "what_the_code_says": "definition.md, experience-contract.md 12.2 and D-2026-09-15-04 say the public Electron Desktop shows hosted Cloud chat with inference in Managed Cloud; Local and BYOK live in the retained Tauri host.",
+  "evidence": "docs/product/requirements.md lines 1108-1147 versus docs/product/definition.md Surface Roles and docs/decisions/2026-09-15-founder-decisions.md D-2026-09-15-04"
+ },
+ {
+  "found_by": "REF-product-requirements-sources",
+  "document": "docs/product/requirements.md section 11 (Website Requirements)",
+  "what_is_outdated": "Describes Website v1 as a pricing placeholder that must not launch a full Cloud chat product.",
+  "what_the_code_says": "definition.md and commercial.md say Managed Free chat is open to signed-in users since 2026-06-27 and Web chat is subscription-backed.",
+  "evidence": "docs/product/requirements.md lines 1080-1107 versus docs/product/definition.md Launch Lock"
+ },
+ {
+  "found_by": "REF-product-requirements-sources",
+  "document": "docs/decisions/README.md",
+  "what_is_outdated": "Dated record list omits 2026-11-12 and 2026-11-13 founder decisions; last updated 2026-11-11.",
+  "what_the_code_says": "Both files exist in docs/decisions.",
+  "evidence": "ls docs/decisions; README Decision Sources list"
+ },
+ {
+  "found_by": "REF-product-requirements-sources",
+  "document": "audit/decisions/open-questions.md (matrix paragraph)",
+  "what_is_outdated": "Reports matrix totals of 184 present, 95 absent, 63 unverified, 1 partial as of 2026-09-20.",
+  "what_the_code_says": "The JSON now computes to 190 present, 106 absent, 60 unverified, 1 partial.",
+  "evidence": "computed from docs/product/surface-feature-matrix.json"
+ },
+ {
+  "found_by": "REF-product-requirements-sources",
+  "document": "docs/decisions/2026-09-27-founder-decisions.md D-2026-09-27-01 and docs/product/commercial.md",
+  "what_is_outdated": "Name plans Pro, Max 5x, Max 20x and max_15x.",
+  "what_the_code_says": "Public labels are Premium (`pro`), Max (`max`) and Ultra (`max_15x`).",
+  "evidence": "packages/contracts/types/src/billing-catalog.ts:192-207"
+ },
+ {
+  "found_by": "REF-product-requirements-sources",
+  "document": "docs/product/competitive-guidance.md (surface inventory)",
+  "what_is_outdated": "States Tauri is not a second public Desktop 'under the current founder decision'.",
+  "what_the_code_says": "D-2026-09-15-04 records a 2026-10-24 owner choice to ship Tauri as a second public app, yet AGENTS.md and README.md still treat Tauri as internal; the public status is unresolved.",
+  "evidence": "docs/product/competitive-guidance.md inventory table row Retained Tauri Desktop versus docs/decisions/2026-09-15-founder-decisions.md lines 78-99"
+ }
+]

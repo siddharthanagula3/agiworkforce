@@ -1,0 +1,106 @@
+{
+ "S38.01": {
+  "labels": [
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Study"
+   },
+   {
+    "file": "apps/web/features/study/components/StudyPage.tsx",
+    "text": "Start studying"
+   },
+   {
+    "file": "packages/contracts/types/src/study.ts",
+    "text": "Learn it"
+   }
+  ],
+  "needs": "a Free account or a paid account (none special)",
+  "note": "The sidebar container was not opened; 'Study' is the nav item label in app-nav-items.ts (the navStudy translation key was not found in any translation file). The same Study row also appears in the chat composer '+' menu (apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx, label 'Study'), but the exact text of that '+' button was not found. Session creation itself was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and click Study in the sidebar.",
+   "On the Study page, type a subject in the field 'What are you studying?' (for example: eigenvalues).",
+   "Leave How set to 'Learn it' and click 'Start studying'.",
+   "Look at whether a new chat opens at /chat/<id> with the study tutoring started, and compare with Expected."
+  ],
+  "where": "Sidebar > Study > Start studying"
+ },
+ "S38.02": {
+  "labels": [
+   {
+    "file": "apps/web/features/study/components/StudyPage.tsx",
+    "text": "What are you studying?"
+   },
+   {
+    "file": "apps/web/features/study/components/StudyPage.tsx",
+    "text": "Start studying"
+   },
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Study"
+   }
+  ],
+  "needs": "none",
+  "note": "The field is a single text input for the topic; the Study page has no separate 'goal' field, so the goal is entered as the topic.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and click Study in the sidebar.",
+   "Click the field 'What are you studying?' and type a learning goal or topic (for example: photosynthesis).",
+   "Check that 'Start studying' stays disabled while the field is empty and becomes enabled once text is typed.",
+   "Compare the form with Expected: the user has stated the topic before the session starts."
+  ],
+  "where": "Sidebar > Study > What are you studying?"
+ },
+ "S38.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/study/components/StudyPage.tsx",
+    "text": "What are you studying?"
+   },
+   {
+    "file": "apps/web/features/study/components/StudyPage.tsx",
+    "text": "Course material"
+   },
+   {
+    "file": "apps/web/features/study/components/StudyPage.tsx",
+    "text": "None"
+   }
+  ],
+  "needs": "none (a project is needed to see the 'Course material' drop-down)",
+  "note": "Subject is entered as free text in 'What are you studying?'; there is no list of subjects. 'Course material' picks a project, not a subject, and only appears when projects exist.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and click Study in the sidebar.",
+   "Click the field 'What are you studying?' and type the subject (for example: German dative case).",
+   "Optionally open the 'Course material' drop-down (shown only when the account has projects) and choose 'From project: <name>' or 'None'.",
+   "Compare with Expected: the user has picked the subject to study and it appears in the session title after starting."
+  ],
+  "where": "Sidebar > Study > What are you studying?"
+ },
+ "S38.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/study/components/StudyPage.tsx",
+    "text": "Where you are with it"
+   },
+   {
+    "file": "packages/contracts/types/src/study.ts",
+    "text": "Some background"
+   },
+   {
+    "file": "packages/contracts/types/src/study.ts",
+    "text": "New to it"
+   }
+  ],
+  "needs": "none",
+  "note": "The level choice is sent to the server as part of the session, and its effect on the tutor is inside the server instruction (apps/web/features/study/lib/study-session.ts), so the adaptation is only visible in the chat answers, not on the Study page.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and click Study in the sidebar.",
+   "Open the drop-down 'Where you are with it' and choose 'Some background' (other choices: 'New to it', 'Know it well').",
+   "Type a topic, leave How as 'Learn it', and click 'Start studying'.",
+   "In the new chat, ask a basic question and compare the tutor's explanation depth with Expected: it should adapt to the chosen level."
+  ],
+  "where": "Sidebar > Study > Where you are with it"
+ }
+}

@@ -1,0 +1,524 @@
+{
+ "feature": {
+  "id": "F044-06",
+  "aliases": [
+   "Generation-cost indication",
+   "Remaining-generation allowance",
+   "Image cost",
+   "Image allowance",
+   "Image quota",
+   "Usage",
+   "spend cap"
+  ],
+  "summary": "Not shown to users. The server reserves an estimated cost before each image, settles it after, and a workspace spend cap can refuse the request. The monthly image quota is empty on every plan. No app shows an image price or a count of images left; only refusal messages point to Usage.",
+  "purpose": {
+   "what_it_does": "Would show what an image costs and how many generations remain. Today the server meters usage and enforces limits, and the apps show only the refusal text when a limit is hit. (apps/web/app/api/media/image/lib/managed-image-generation.ts:703-756; apps/mobile/src/features/chat/actions/mediaGenerationError.ts:7-8)",
+   "why_it_exists": "Inference cost is a first-class design constraint and image generation is expensive (rate limit comment: expensive operation) (doc: AGENTS.md section 7; apps/web/lib/rate-limit.ts:384-388). Users would expect to know what a generation uses. The brief marks both items not applicable on every app. (brief S44.14, S44.15)",
+   "who_uses_it": "Would be: paying users watching spend; workspace admins using spend caps.",
+   "problems_solved": [
+    "Surprise charges or blocked requests.",
+    "Knowing when a limit will reset."
+   ],
+   "use_cases": [
+    "See 'about 1 credit' before sending (not built).",
+    "See '8 images left today' for a free offer (not built).",
+    "Hit a spend cap and be told to see Usage (built as an error)."
+   ]
+  },
+  "user_experience": {
+   "where_to_find_it": [
+    "No cost or remaining count in image mode on Web, Desktop, Mobile or CLI (ChatComposerNew.tsx:6254-6460; AddToChatSheet.tsx:1003-1046; apps/cli/src/cloud/image.rs:236-258).",
+    "When a limit is hit: Mobile shows \"You've reached your plan's usage limit for now. See Usage in Settings for when it resets.\" (apps/mobile/src/features/chat/actions/mediaGenerationError.ts:7-8). Web maps quota error codes to a 'view_usage' recovery action (apps/web/lib/hooks/useMediaGeneration.ts:208) and lists upgrade, subscribe, manage billing, top up actions (useMediaGeneration.ts:124-131)."
+   ],
+   "prerequisites": [
+    "Not applicable: no control exists."
+   ],
+   "screens_and_controls": [
+    "None for cost or allowance. The free image offer is decided internally from a catalogue that carries remainingToday, but no display of it was found (apps/mobile/src/features/model-picker/freeQuotaCatalogue.ts:186-196)."
+   ],
+   "journey": [
+    "1. Person sends an image request.",
+    "2. If the plan, spend cap or provider quota refuses, a message appears.",
+    "3. Otherwise the image is made and nothing about cost or remaining count is shown."
+   ],
+   "feedback_and_outputs": [
+    "Refusal errors: 403 plan_upgrade_required, 403 subscription_required, 402 or 429 insufficient_quota, spend-limit refusal from the compute gate (managed-image-generation.ts:118-132,159-170,196-211; route.ts:86-89).",
+    "CLI prints a summary of model, provider and settings but no cost (apps/cli/src/cloud/image.rs:236-258)."
+   ],
+   "settings": [
+    "Workspace spend cap is set elsewhere (managed-compute-gate); not part of image mode."
+   ]
+  },
+  "current_implementation": {
+   "working": [
+    "Spend cap is checked before any reservation (apps/web/app/api/media/image/generate/route.ts:86-89).",
+    "Cost is estimated per provider, quality and count, converted to a charge, and reserved with a lease that outlives all job attempts (image-generation-provider.ts:344-375; managed-image-generation.ts:703-756).",
+    "Failure, refusal, cancel and unsaved images release or settle at zero charge (image-job-executor.ts:137-160,192-232; media-image-generate.test.ts:1048,2014-2084).",
+    "Web and Mobile map quota refusals to messages and recovery actions (useMediaGeneration.ts:124-131,208; runImageGenerationTurn.ts:362-366).",
+    "Rate limit 10 requests per minute, fail closed (apps/web/lib/rate-limit.ts:384-388)."
+   ],
+   "incomplete": [
+    "Monthly image quota field imageQuotaPerMonth is null on the three plan entries inspected, so no per-plan image count is applied from it (packages/contracts/types/src/model-catalog.ts:1292,1338,1389). An imageSyntheticTokenCost of 50,000 is also defined (model-catalog.ts:1293); how it is used was not traced.",
+    "The mobile response type has a cost_estimate field that the route never sets (apps/mobile/src/features/image/services/imagegen.ts:25; apps/web/app/api/media/image/lib/managed-image-generation.ts:949-969)."
+   ],
+   "disconnected_or_disabled": [
+    "Limited free media offers carry a daily count (up to 10 images per UTC day, per docs) that decides whether an offer is shown, but the count itself is not shown (doc: docs/product/definition.md:342-347; freeQuotaCatalogue.ts:186-196)."
+   ],
+   "not_available": [
+    "Cost indication before or after generating: Web, Desktop, Mobile, CLI, Chrome.",
+    "Remaining-allowance display: Web, Desktop, Mobile, CLI, Chrome."
+   ]
+  },
+  "required_behaviour": {
+   "established": [
+    {
+     "statement": "Before or after generating, the user sees what the image costs (credits or money).",
+     "source": "S44.14 (brief; status not applicable on every app)"
+    },
+    {
+     "statement": "User sees how many image generations remain in their allowance before hitting a limit.",
+     "source": "S44.15 (brief; status not applicable on every app)"
+    },
+    {
+     "statement": "Unknown availability preserves the draft and asks for retry, not Upgrade; free limited media is capped at 10 images per user per UTC day when inventory permits.",
+     "source": "doc: docs/product/definition.md:342-347"
+    },
+    {
+     "statement": "Every subscription capability connects to one AGI Subscription system covering entitlements, usage accounting, quotas and limits.",
+     "source": "task context (established requirement)"
+    }
+   ],
+   "acceptance_criteria": [
+    "A request refused for plan returns 403 plan_upgrade_required with current_plan and required_plans.",
+    "A request refused by the workspace spend cap is refused before any usage is reserved.",
+    "A refused or failed image leaves usage settled at zero charge for the account.",
+    "Today: no cost or remaining count is shown in image mode on any app.",
+    "If a display is added: it must come from the same subscription and usage source as the Usage screen, never a copy of plan numbers in the client (AGENTS.md section 4)."
+   ],
+   "inferred": [
+    "The brief's 'not applicable' likely records that no allowance exists to display (imageQuotaPerMonth is null) [inferred from model-catalog.ts:1292]; it may not mean the feature is out of scope.",
+    "Cost display must obey any product policy for Free users; none was found in the project docs I read [inferred]."
+   ],
+   "proposed": [
+    "[proposed] Return the settled charge in the generate and status responses and show it on the image card and in the CLI summary.",
+    "[proposed] Show remaining free offers only if the product decision allows meters on the Free plan.",
+    "[proposed] Link the refusal message directly to the Usage screen on Web and Mobile."
+   ]
+  },
+  "implementation_map": [
+   {
+    "kind": "service",
+    "name": "buildSpendLimitGateResponse",
+    "path": "apps/web/lib/managed-compute-gate.ts",
+    "role": "Workspace spend cap checked at route.ts:88-89."
+   },
+   {
+    "kind": "endpoint",
+    "name": "POST /api/media/image/generate (cost gates)",
+    "path": "apps/web/app/api/media/image/generate/route.ts",
+    "role": "Rate limit, managed gate, org policy, spend gate (lines 39-89)."
+   },
+   {
+    "kind": "service",
+    "name": "estimateImageCostMicrousd",
+    "path": "apps/web/app/api/media/image/lib/image-generation-provider.ts",
+    "role": "Per-provider cost estimate by count and quality (lines 344-375)."
+   },
+   {
+    "kind": "service",
+    "name": "reserveManagedUsageRequest",
+    "path": "apps/web/lib/services/managed-usage-request-service.ts",
+    "role": "Atomic reservation against plan limits (line 738); called at managed-image-generation.ts:745."
+   },
+   {
+    "kind": "table",
+    "name": "managed_usage_requests",
+    "path": "apps/web/lib/services/managed-usage-request-service.ts",
+    "role": "Reservation and settlement rows."
+   },
+   {
+    "kind": "job",
+    "name": "settleFailure and completion settlement",
+    "path": "apps/web/app/api/media/image/lib/image-job-executor.ts",
+    "role": "Release or finalize the reservation (lines 137-232,812-830)."
+   },
+   {
+    "kind": "service",
+    "name": "evaluateManagedComputeSubscriptionAccess",
+    "path": "apps/web/lib/services/managed-compute-access.ts",
+    "role": "Subscription state check (called at managed-image-generation.ts:174)."
+   },
+   {
+    "kind": "config",
+    "name": "BILLING_PLAN_CAPABILITY_TIERS",
+    "path": "packages/contracts/types/src/billing-catalog.ts",
+    "role": "Which plans include image_generation (line 356)."
+   },
+   {
+    "kind": "config",
+    "name": "Plan entries imageQuotaPerMonth",
+    "path": "packages/contracts/types/src/model-catalog.ts",
+    "role": "Null monthly quota on plans (lines 1292,1338,1389)."
+   },
+   {
+    "kind": "config",
+    "name": "image-generation rate limit",
+    "path": "apps/web/lib/rate-limit.ts",
+    "role": "10 per minute, fail closed (lines 384-388)."
+   },
+   {
+    "kind": "hook",
+    "name": "media paywall mapping",
+    "path": "apps/web/lib/hooks/useMediaGeneration.ts",
+    "role": "Quota error to recovery action, retry-after cap (lines 124-131,135,208)."
+   },
+   {
+    "kind": "service",
+    "name": "mediaGenerationError (Mobile)",
+    "path": "apps/mobile/src/features/chat/actions/mediaGenerationError.ts",
+    "role": "Usage-limit message (lines 7-8)."
+   },
+   {
+    "kind": "service",
+    "name": "freeQuotaCatalogue (Mobile)",
+    "path": "apps/mobile/src/features/model-picker/freeQuotaCatalogue.ts",
+    "role": "Free media offer with remainingToday, not displayed (lines 160-196)."
+   },
+   {
+    "kind": "endpoint",
+    "name": "GET /api/models/free-quota",
+    "path": "apps/web/app/api/models/free-quota/route.ts",
+    "role": "Publishes limited free media admission (line 67)."
+   },
+   {
+    "kind": "service",
+    "name": "CLI image summary",
+    "path": "apps/cli/src/cloud/image.rs",
+    "role": "Prints model and settings, no cost (lines 236-258)."
+   },
+   {
+    "kind": "service",
+    "name": "imagegen.ts ImageGenResponse",
+    "path": "apps/mobile/src/features/image/services/imagegen.ts",
+    "role": "Has an unused cost_estimate field (line 25)."
+   }
+  ],
+  "execution_and_data_flow": {
+   "steps": [
+    {
+     "what_happens": "The request passes the rate limit and the workspace spend cap check.",
+     "runs_on": "our servers",
+     "evidence": "route.ts:39-89"
+    },
+    {
+     "what_happens": "The server estimates cost and reserves it atomically against the plan; a refusal returns 402 or 429 insufficient_quota, or 503 billing_unavailable.",
+     "runs_on": "our servers",
+     "evidence": "managed-image-generation.ts:118-132,703-767"
+    },
+    {
+     "what_happens": "After the attempt, the reservation is finalized at the settled cost, or released at zero for failure, refusal or cancel.",
+     "runs_on": "our servers",
+     "evidence": "image-job-executor.ts:137-160,812-830"
+    },
+    {
+     "what_happens": "The client shows a refusal message only; no figure is returned to display.",
+     "runs_on": "device",
+     "evidence": "runImageGenerationTurn.ts:362-366; managed-image-generation.ts:949-969"
+    }
+   ],
+   "data": [
+    {
+     "what": "Reservation and settlement rows (cost, plan tier, status, lease)",
+     "where_stored": "table managed_usage_requests (Neon Postgres)",
+     "synced": "Server held; the Usage screens read from the subscription system",
+     "retained_or_deleted": "Unknown"
+    },
+    {
+     "what": "Undelivered-cost record for refused or unsaved output",
+     "where_stored": "Recorded by recordUndeliveredImageCost (image-job-executor.ts:734)",
+     "synced": "Server held",
+     "retained_or_deleted": "Unknown"
+    }
+   ],
+   "models_and_providers": "Estimate depends on the provider: openai uses a quality-based estimate per image; google uses the catalog per-image cost when present, else a fallback table (image-generation-provider.ts:344-375). Cost is therefore model-dependent."
+  },
+  "access_and_usage": {
+   "account": "Signed-in account; usage is accounted per user and workspace.",
+   "permissions": "Workspace spend cap and organization policy can refuse (route.ts:70-89).",
+   "subscription": "Image generation is a plan capability (Premium and above) (billing-catalog.ts:356). Limited free media is a separate offer (doc: docs/product/definition.md:342-347).",
+   "limits_and_metering": "Reservation before the job and settlement after; 10 requests per minute; monthly image quota null on every plan entry inspected (model-catalog.ts:1292,1338,1389); free offers up to 10 images per UTC day (doc: docs/product/definition.md:344).",
+   "flags": "none found in the code for cost display.",
+   "model_compatibility": "Cost varies by model and provider; no model is excluded for cost reasons in the code opened.",
+   "provider_restrictions": "Providers google and openai only (F044-01).",
+   "local_mode": "Not applicable: image generation is not available in Local mode, so no metering applies on device."
+  },
+  "states_and_edge_cases": [
+   {
+    "state": "Spend cap reached",
+    "behaviour": "Refused before reservation by the compute gate.",
+    "evidence": "route.ts:86-89"
+   },
+   {
+    "state": "Quota declined",
+    "behaviour": "402 or 429 insufficient_quota; Mobile shows the usage-limit message; Web recovery action view_usage.",
+    "evidence": "managed-image-generation.ts:118-132; runImageGenerationTurn.ts:362-366; useMediaGeneration.ts:208"
+   },
+   {
+    "state": "Billing store unavailable",
+    "behaviour": "503 billing_unavailable.",
+    "evidence": "managed-image-generation.ts:757-766"
+   },
+   {
+    "state": "Failed, refused, cancelled or unsaved image",
+    "behaviour": "Not charged to the account.",
+    "evidence": "media-image-generate.test.ts:1048,2014,2050; image-job-executor.ts:783-799"
+   },
+   {
+    "state": "Retry after failure",
+    "behaviour": "Reuses the same reservation, so no double charge.",
+    "evidence": "managed-image-generation.ts:742-744; apps/mobile/__tests__/imagegen-idempotency.test.ts:53"
+   },
+   {
+    "state": "Loading, offline, accessibility",
+    "behaviour": "not handled in the code (no cost or allowance display exists).",
+    "evidence": "No cost or allowance UI found in ChatComposerNew.tsx, AddToChatSheet.tsx or apps/cli/src/cloud/image.rs"
+   }
+  ],
+  "verification": {
+   "existing_tests": [
+    {
+     "path": "apps/web/__tests__/api/media-image-generate.test.ts",
+     "covers": "Reservation lifecycle and settlement at provider cost, safe quota error on declined reservation, failure at zero cost, refused and unsaved images charged nothing (lines 988-1061,2014-2084)."
+    },
+    {
+     "path": "apps/web/__tests__/api/media-image-cancel.test.ts",
+     "covers": "Cancel settlement (names only)."
+    },
+    {
+     "path": "apps/web/__tests__/api/media-image-retry.test.ts",
+     "covers": "Retry on same reservation (names only)."
+    },
+    {
+     "path": "apps/web/lib/free-quota-media-units.test.ts",
+     "covers": "Free quota media units (name only)."
+    },
+    {
+     "path": "packages/contracts/cloud-contracts/src/__tests__/free-media-availability.test.ts",
+     "covers": "Free media availability logic (name only)."
+    },
+    {
+     "path": "apps/mobile/__tests__/free-image-offer.test.ts",
+     "covers": "Free image offer keeps the original prompt and does not reroute edits (lines 30,49)."
+    }
+   ],
+   "scenarios": [
+    {
+     "name": "Quota refusal",
+     "steps": [
+      "Use an account whose reservation will be declined.",
+      "Send an image request."
+     ],
+     "expected": "402 or 429 insufficient_quota; Mobile shows the usage-limit message; no image."
+    },
+    {
+     "name": "Spend cap",
+     "steps": [
+      "Set a workspace spend cap already reached.",
+      "Send an image request."
+     ],
+     "expected": "Refused before any reservation row is created."
+    },
+    {
+     "name": "Failure settles zero",
+     "steps": [
+      "Force the provider to fail."
+     ],
+     "expected": "managed_usage_requests row released with no charge."
+    },
+    {
+     "name": "No cost shown today",
+     "steps": [
+      "Generate an image on each app."
+     ],
+     "expected": "No cost or remaining count is displayed anywhere (current behaviour)."
+    },
+    {
+     "name": "Rate limit",
+     "steps": [
+      "Send 11 image requests in a minute."
+     ],
+     "expected": "The 11th gets 429 from the rate limiter."
+    }
+   ],
+   "diagnostics": [
+    "Table managed_usage_requests; event image_refund_settlement_unrecorded and image_completion_settlement_unrecorded (image-job-executor.ts:158,827).",
+    "Error codes insufficient_quota, plan_upgrade_required, subscription_required, billing_unavailable.",
+    "Header named by MEDIA_DIAGNOSTIC_HEADER for tracing."
+   ]
+  },
+  "gaps": [
+   {
+    "gap": "No cost indication on any app.",
+    "affects": "Web, Desktop, Mobile, CLI, Chrome",
+    "evidence": "brief S44.14; managed-image-generation.ts:949-969 returns no cost",
+    "work_needed": "Decide policy, return settled cost, display it, test it."
+   },
+   {
+    "gap": "No remaining-allowance display; image monthly quota is null on every plan.",
+    "affects": "All apps",
+    "evidence": "model-catalog.ts:1292,1338,1389; brief S44.15",
+    "work_needed": "Define whether an image allowance exists in the subscription system, then display it."
+   },
+   {
+    "gap": "Mobile type declares cost_estimate that the server never returns.",
+    "affects": "Mobile",
+    "evidence": "imagegen.ts:25 vs managed-image-generation.ts:949-969",
+    "work_needed": "Remove the field or populate it."
+   },
+   {
+    "gap": "Brief marks S44.14 and S44.15 'not applicable' while the Should lines describe user-facing needs.",
+    "affects": "Planning",
+    "evidence": "brief S44.14, S44.15",
+    "work_needed": "Owner to confirm the intended status."
+   }
+  ],
+  "depends_on": [
+   "F044-01",
+   "SYS-subscriptions-entitlements-and-usage",
+   "SYS-observability-and-operations",
+   "SYS-model-catalog-and-routing",
+   "surface:web",
+   "surface:mobile",
+   "surface:cli",
+   "mode:cloud",
+   "plan:premium"
+  ],
+  "relationships": [
+   {
+    "rel": "governed_by_subscription",
+    "to": "plan:premium",
+    "evidence": "billing-catalog.ts:356"
+   },
+   {
+    "rel": "governed_by_subscription",
+    "to": "plan:free",
+    "evidence": "Free is refused with plan_upgrade_required (media-image-generate.test.ts:786); limited free offer in docs/product/definition.md:342-347"
+   },
+   {
+    "rel": "stores_data_in",
+    "to": "table:managed_usage_requests",
+    "evidence": "managed-usage-request-service.ts reserve and finalize functions"
+   },
+   {
+    "rel": "stores_data_in",
+    "to": "table:image_generation_jobs",
+    "evidence": "estimated_cost carried by createImageGenerationJob (managed-image-generation.ts:824)"
+   },
+   {
+    "rel": "exposes_api",
+    "to": "api:POST /api/media/image/generate",
+    "evidence": "Cost gates route.ts:86-89 and managed-image-generation.ts:745"
+   },
+   {
+    "rel": "exposes_api",
+    "to": "api:GET /api/models/free-quota",
+    "evidence": "apps/web/app/api/models/free-quota/route.ts:67"
+   },
+   {
+    "rel": "depends_on",
+    "to": "SYS-subscriptions-entitlements-and-usage",
+    "evidence": "Reservation and plan checks"
+   },
+   {
+    "rel": "uses_provider",
+    "to": "provider:openai",
+    "evidence": "Quality-based estimate image-generation-provider.ts:344-352"
+   },
+   {
+    "rel": "uses_provider",
+    "to": "provider:google",
+    "evidence": "Catalog per-image cost image-generation-provider.ts:353-360"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/web/__tests__/api/media-image-generate.test.ts",
+    "evidence": "Settlement tests lines 988-1061,2014-2084"
+   },
+   {
+    "rel": "blocked_by",
+    "to": "surface:chrome",
+    "evidence": "No image mode there (brief S44.01)"
+   }
+  ],
+  "unknowns": [
+   "How imageSyntheticTokenCost is used.",
+   "Whether a Usage screen lists image generations, and how.",
+   "Whether the product allows meters for Free users; not established from project docs I read.",
+   "Exact retention of usage rows.",
+   "Which price the account is actually charged for an image: only the estimate path was read."
+  ]
+ },
+ "corrections": [
+  {
+   "section": "3",
+   "claim": "Failure, refusal, cancel and unsaved images release or settle at zero charge",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The account is released. Failure and cancel go through settleFailure with actualCostMicrousd 0 (image-job-executor.ts:137-160). An unsaved image calls recordUndeliveredImageCost, which records the real provider cost as actualCostCents in the cost ledger with taskOutcome 'undelivered' (image-job-executor.ts:111-135, 783-799). The user is not charged, but the platform books a provider cost.",
+   "evidence": "apps/web/app/api/media/image/lib/image-job-executor.ts:111-135,137-160,783-799",
+   "correction": "Failed, cancelled and unsaved images release the reservation at zero charge to the account. For unsaved output the provider cost is still recorded as an undelivered cost in the ledger."
+  },
+  {
+   "section": "3",
+   "claim": "imageQuotaPerMonth is null on the three plan entries inspected",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The null values are at model-catalog.ts:1292, 1338 and 1389 (the pro, max and enterprise entries). The free entry (line 1234) has no image fields at all, so the field is unset there rather than null. The field is optional (line 1103). imageSyntheticTokenCost is referenced only in the type, these three entries and tier-policies.test.ts:123, so it is not used in any runtime path.",
+   "evidence": "packages/contracts/types/src/model-catalog.ts:1103-1104,1234,1292-1293,1338,1389; packages/contracts/types/src/__tests__/tier-policies.test.ts:123",
+   "correction": "Pro, Max and Enterprise set imageQuotaPerMonth to null, and Free does not set it. imageSyntheticTokenCost (50,000) has no consumer outside a test. Section 7 should not say 'null on every plan'."
+  },
+  {
+   "section": "6",
+   "claim": "A refusal returns 402 or 429 insufficient_quota, or 503 billing_unavailable (managed-image-generation.ts:118-132,703-767). The Runs-on column says the client refusal message is shown on 'device'.",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The citation 118-132 is not the quota refusal. Lines 118-132 hold managedUsageErrorResponse, which maps status 402 or 429 to type 'insufficient_quota' and anything else to 'invalid_request_error'. The 503 billing_unavailable fallback is at 757-766. The 402/429 status comes from ManagedUsageRequestError thrown by reserveManagedUsageRequest, and the page does not trace that. The 403 subscription_required, subscription gate and plan_upgrade_required checks sit at about lines 159-211. Also the 'device' row covers Web, which is a browser client.",
+   "evidence": "apps/web/app/api/media/image/lib/managed-image-generation.ts:118-132,159-211,757-766",
+   "correction": "The 402 or 429 is raised by reserveManagedUsageRequest and mapped by managedUsageErrorResponse (118-132). Only a failure that is not a ManagedUsageRequestError becomes 503 billing_unavailable (757-766). Repoint the line citations."
+  },
+  {
+   "section": "7",
+   "claim": "Image generation is a plan capability (Premium and above) (billing-catalog.ts:356)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "billing-catalog.ts:356 sets image_generation: PRO_TIERS. PRO_TIERS (line 341) is pro, max, max_15x, team, team_premium and enterprise, so it includes the team tiers. The route also needs an active subscription (403 subscription_required) and passes evaluateManagedComputeSubscriptionAccess (managed-image-generation.ts:159-211). The page does not mention that Free users are refused by the managed route.",
+   "evidence": "packages/contracts/types/src/billing-catalog.ts:341,356; managed-image-generation.ts:159-211",
+   "correction": "Image generation needs an active subscription on pro, max, max_15x, team, team_premium or enterprise. Other plans get 403 plan_upgrade_required with required_plans."
+  },
+  {
+   "section": "7",
+   "claim": "Account: signed-in account; usage accounted per user and workspace",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The route needs a Clerk user (getClerkAuthUser), CSRF validation and an adult-eligibility age gate (buildAdultEligibilityGateResponse, gate 'media-image') before any cost gate. Reservation is keyed on userId, and the scoped organizationId and tenant check are also used. The page lists none of the CSRF or age-gate rules.",
+   "evidence": "apps/web/app/api/media/image/generate/route.ts:34-52; managed-image-generation.ts:719-731",
+   "correction": "Add that CSRF validation and an 18-and-over eligibility gate run before the rate limit result is used. The rate limit is applied first, then the age gate, then the managed compute gate, then org policy, then the spend cap."
+  },
+  {
+   "section": "8",
+   "claim": "Retry after failure reuses the same reservation, so no double charge (managed-image-generation.ts:742-744)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "Lines 742-744 are only a comment: the durable job holds one reservation across every attempt, so the lease must outlive the schedule. That supports reuse within one job (the job-level retry in image-job-executor). It does not show that a client-initiated retry reuses the reservation. recordUndeliveredImageCost says 'a retry pays the provider again' (image-job-executor.ts:109-110), so the provider is charged per attempt even though the account is not.",
+   "evidence": "managed-image-generation.ts:742-745; image-job-executor.ts:109-110",
+   "correction": "One durable job holds one reservation across its automatic attempts, so the account is not charged twice. The provider cost is incurred again per attempt, and undelivered attempts are recorded as undelivered cost."
+  },
+  {
+   "section": "2/8",
+   "claim": "Web maps quota error codes to a 'view_usage' recovery action (useMediaGeneration.ts:208) and lists upgrade, subscribe, manage billing, top up (124-131)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "Lines 124-131 hold the type MediaPaywallRecoveryAction and the PAYWALL_ERROR_RECOVERY map: insufficient_credits to upgrade, plan_upgrade_required to upgrade, subscription_required to subscribe, subscription_inactive to manage_billing. top_up appears only in the type, in no map entry. view_usage is returned at line 208 via classifyManagedQuotaErrorCode. A bare status 402 also maps to 'upgrade' (about line 210).",
+   "evidence": "apps/web/lib/hooks/useMediaGeneration.ts:121-131,205-210",
+   "correction": "top_up is a declared action but nothing in this mapping returns it. A 402 with no recognised code falls back to 'upgrade'."
+  }
+ ],
+ "missing_facts": [
+  "The image route runs an adult-eligibility (age) gate and CSRF validation before the cost gates, and the page's rules table omits both (apps/web/app/api/media/image/generate/route.ts:34-52).",
+  "Provider cost is recorded for undelivered images and charged again per attempt, even though the account is released (apps/web/app/api/media/image/lib/image-job-executor.ts:109-135,783-799).",
+  "The managed route needs an active subscription (403 subscription_required) and passes evaluateManagedComputeSubscriptionAccess before any plan check, so a Free account is refused here. The page does not say how the limited free image offer reaches this route (apps/web/app/api/media/image/lib/managed-image-generation.ts:159-211)."
+ ]
+}

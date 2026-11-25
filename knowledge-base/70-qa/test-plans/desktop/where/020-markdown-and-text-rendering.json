@@ -1,0 +1,428 @@
+{
+ "S20.01": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/ChatInput.tsx",
+    "text": "How can I help you today?"
+   }
+  ],
+  "needs": "none",
+  "note": "The shape of the answer is chosen by the model, so the test depends on what it writes.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open Chat.",
+   "Click the box that shows \"How can I help you today?\", type \"Write two short paragraphs about the sea\", and send.",
+   "Wait for the reply to finish.",
+   "Compare: the two paragraphs are separate blocks with a gap between them."
+  ],
+  "where": "Chat > type \"Write two short paragraphs about the sea\" in the box that shows \"How can I help you today?\" > send"
+ },
+ "S20.02": {
+  "labels": [],
+  "needs": "none",
+  "note": "Heading styles are in packages/ui/unified-chat/src/components/markdown/MarkdownContent.tsx; the model chooses whether to write headings.",
+  "reachable": "yes",
+  "steps": [
+   "Open Chat.",
+   "Type \"Answer with a title using # and a sub-heading using ##\" and send.",
+   "Wait for the reply to finish.",
+   "Compare: the title and sub-heading appear larger and bolder, with no # marks shown."
+  ],
+  "where": "Chat > type \"Answer with a heading and a smaller sub-heading\" in the chat box > send"
+ },
+ "S20.03": {
+  "labels": [],
+  "needs": "none",
+  "note": "Depends on the model writing the markers in its reply.",
+  "reachable": "yes",
+  "steps": [
+   "Open Chat.",
+   "Type the sentence with **bold**, *italic* and ~~strikethrough~~ and send.",
+   "Wait for the reply to finish.",
+   "Compare: bold text is heavier, italic is slanted, and the struck text has a line through it."
+  ],
+  "where": "Chat > type \"Write one sentence with **bold**, *italic* and ~~strikethrough~~ words\" in the chat box > send"
+ },
+ "S20.04": {
+  "labels": [],
+  "needs": "none",
+  "note": "Start-number behaviour depends on the model writing the list with that start.",
+  "reachable": "yes",
+  "steps": [
+   "Open Chat.",
+   "Type \"List 3 tips as a numbered list starting at 3\" and send.",
+   "Wait for the reply to finish.",
+   "Compare: the list shows numbers 3, 4, 5 with indentation."
+  ],
+  "where": "Chat > type \"List 3 tips as a numbered list starting at 3\" in the chat box > send"
+ },
+ "S20.05": {
+  "labels": [],
+  "needs": "none",
+  "note": "none",
+  "reachable": "yes",
+  "steps": [
+   "Open Chat.",
+   "Type \"List 3 fruits using dash bullets\" and send.",
+   "Wait for the reply to finish.",
+   "Compare: each item has a bullet marker and is indented."
+  ],
+  "where": "Chat > type \"List 3 fruits using dash bullets\" in the chat box > send"
+ },
+ "S20.06": {
+  "labels": [],
+  "needs": "none",
+  "note": "The code audit could not find the quoted line any more, but the list renderers in MarkdownContent.tsx still exist.",
+  "reachable": "yes",
+  "steps": [
+   "Open Chat.",
+   "Type \"Give a list with one sub-list nested under an item\" and send.",
+   "Wait for the reply to finish.",
+   "Compare: the sub-list sits under its parent item with deeper indentation."
+  ],
+  "where": "Chat > type \"Give a list with one sub-list nested under an item\" in the chat box > send"
+ },
+ "S20.07": {
+  "labels": [],
+  "needs": "none",
+  "note": "Not checked whether a checkbox can be clicked to change it; Expected does not require that.",
+  "reachable": "yes",
+  "steps": [
+   "Open Chat.",
+   "Type \"Make a checklist with one unchecked and one checked item\" and send.",
+   "Wait for the reply to finish.",
+   "Compare: the items show empty and ticked checkboxes that match their state."
+  ],
+  "where": "Chat > type \"Make a checklist with - [ ] and - [x] items\" in the chat box > send"
+ },
+ "S20.08": {
+  "labels": [],
+  "needs": "none",
+  "note": "none",
+  "reachable": "yes",
+  "steps": [
+   "Open Chat.",
+   "Type \"Quote a short line of a poem using > at the start\" and send.",
+   "Wait for the reply to finish.",
+   "Compare: the quoted line sits in an indented block that looks different from normal text."
+  ],
+  "where": "Chat > type \"Quote a short line of a poem using >\" in the chat box > send"
+ },
+ "S20.09": {
+  "labels": [],
+  "needs": "none",
+  "note": "Rendering is in packages/ui/unified-chat/src/components/markdown/MarkdownContent.tsx; the model decides whether to write one.",
+  "reachable": "yes",
+  "steps": [
+   "Open Chat.",
+   "Type \"Write one line, then a line of three dashes, then one more line\" and send.",
+   "Wait for the reply to finish.",
+   "Compare: a thin horizontal divider appears between the two lines."
+  ],
+  "where": "Chat > type \"Write one line, then a line of three dashes, then one more line\" in the chat box > send"
+ },
+ "S20.10": {
+  "labels": [],
+  "needs": "none",
+  "note": "The quoted code line moved; the inline code renderer is still in MarkdownContent.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Open Chat.",
+   "Type \"Use the word `inline code` in one sentence\" and send.",
+   "Wait for the reply to finish.",
+   "Compare: the code words appear in a monospace style that differs from the sentence text."
+  ],
+  "where": "Chat > type \"Use the word `inline code` in one sentence\" in the chat box > send"
+ },
+ "S20.11": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/markdown/CodeBlock.tsx",
+    "text": "Copy"
+   }
+  ],
+  "needs": "none",
+  "note": "The quoted code line moved; the block renderer is in MarkdownContent.tsx and CodeBlock.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Open Chat.",
+   "Type \"Show a short Python function in a fenced code block with indentation\" and send.",
+   "Wait for the reply to finish.",
+   "Compare: the code is in a monospace block with its indentation kept and a \"Copy\" button at the top right."
+  ],
+  "where": "Chat > type \"Show a short Python function in a code block\" in the chat box > send"
+ },
+ "S20.12": {
+  "labels": [],
+  "needs": "none",
+  "note": "Click opens an external link through shell.openExternal in apps/desktop/electron/windowPolicy.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Open Chat.",
+   "Type the request for a link and send.",
+   "Wait for the reply to finish.",
+   "Compare: \"Sea\" appears as blue underlined text with a small arrow icon.",
+   "Click it and see that it opens outside the chat, in a new window or tab."
+  ],
+  "where": "Chat > type \"Give me a link to the Wikipedia page on the sea, with the link text 'Sea'\" in the chat box > send"
+ },
+ "S20.13": {
+  "labels": [],
+  "needs": "none",
+  "note": "Link handling is in packages/ui/unified-chat/src/components/markdown/MarkdownContent.tsx and remarkPlugins.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Open Chat.",
+   "Type \"Include the full web address https://example.com in your reply\" and send.",
+   "Wait for the reply to finish.",
+   "Compare: the bare web address appears as a link that can be clicked."
+  ],
+  "where": "Chat > type \"Include the full web address https://example.com in your reply\" in the chat box > send"
+ },
+ "S20.14": {
+  "labels": [],
+  "needs": "none",
+  "note": "Footnote handling is in MarkdownContent.tsx (footnote link code); whether the marker is styled as superscript was not confirmed. Depends on the model writing a footnote.",
+  "reachable": "yes",
+  "steps": [
+   "Open Chat.",
+   "Type the footnote request and send.",
+   "Wait for the reply to finish.",
+   "Compare: the reference shows as a small raised marker.",
+   "Click the marker and check that it jumps to the matching footnote at the bottom."
+  ],
+  "where": "Chat > type \"Answer with one footnote reference and its footnote at the end\" in the chat box > send"
+ },
+ "S20.15": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/markdown/MarkdownTable.tsx",
+    "text": "Copy table"
+   }
+  ],
+  "needs": "none",
+  "note": "none",
+  "reachable": "yes",
+  "steps": [
+   "Open Chat.",
+   "Type the table request and send.",
+   "Wait for the reply to finish.",
+   "Compare: the table has a header row, a grid of cells and aligned columns.",
+   "Hover over the table to see its buttons."
+  ],
+  "where": "Chat > type \"Make a table comparing 3 fruits by price and colour\" in the chat box > send"
+ },
+ "S20.16": {
+  "labels": [],
+  "needs": "a wide table in an answer",
+  "note": "Rule is in packages/ui/unified-chat/src/components/markdown/MarkdownContent.tsx (markdownTableWrapClass comment). Code audit did not confirm the exact scroll behaviour.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Ask in Chat for a table with 10 or more columns and send.",
+   "Make the app window narrow by dragging its edge.",
+   "Compare: the table scrolls sideways inside its own area and the rest of the page does not scroll sideways or get cut off."
+  ],
+  "where": "Inside a table in an answer, when the window is narrow. Table code uses a scroll region inside the table."
+ },
+ "S20.18": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/markdown/MarkdownTable.tsx",
+    "text": "Download as CSV"
+   }
+  ],
+  "needs": "none",
+  "note": "Only CSV was found in code; no XLSX download control was found. Buttons are hidden until hover or focus, except on touch screens.",
+  "reachable": "yes",
+  "steps": [
+   "Ask in Chat for a table and send.",
+   "Move the mouse over the table so its buttons show.",
+   "Click \"Download as CSV\".",
+   "Compare: a CSV file with the table contents is saved to the computer."
+  ],
+  "where": "Chat > answer with a table > hover over the table > Download as CSV"
+ },
+ "S20.19": {
+  "labels": [],
+  "needs": "none",
+  "note": "Math handling is in packages/ui/unified-chat/src/components/markdown/preprocessMath.ts and MarkdownContent.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Open Chat.",
+   "Type the request with the inline formula in $...$ and send.",
+   "Wait for the reply to finish.",
+   "Compare: the formula appears typeset as maths inside the sentence, not as raw $ signs."
+  ],
+  "where": "Chat > type \"Write the formula $E=mc^2$ inside a sentence\" in the chat box > send"
+ },
+ "S20.20": {
+  "labels": [],
+  "needs": "none",
+  "note": "Also accepts \\[...\\] per the code; not tested here.",
+  "reachable": "yes",
+  "steps": [
+   "Open Chat.",
+   "Type the request with the display formula in $$...$$ and send.",
+   "Wait for the reply to finish.",
+   "Compare: the formula appears centred on its own line as typeset maths."
+  ],
+  "where": "Chat > type \"Show the formula $$E=mc^2$$ on its own line\" in the chat box > send"
+ },
+ "S20.21": {
+  "labels": [],
+  "needs": "none",
+  "note": "Code is in packages/platform/utils/src/markdownSource.ts and preprocessMath.ts; whether the model keeps the backslashes is not controlled by the app.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Send in Chat: \"Repeat this exactly: 5 \\$ 3 and \\*not italic\\*\".",
+   "Wait for the reply.",
+   "Compare: the characters show without the backslashes and the text is not turned into italic."
+  ],
+  "where": "In an answer that contains backslash-escaped characters such as \\* or \\$."
+ },
+ "S20.22": {
+  "labels": [],
+  "needs": "none",
+  "note": "Streaming renderer is in packages/ui/unified-chat/src/components/markdown/StreamingMarkdownContent.tsx; the reply is only partial for a short time.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Send in Chat a request for a long answer with a heading and a list, such as \"Write a 300-word guide with headings and bullet points\".",
+   "Watch the answer while it is still arriving.",
+   "Compare: headings and bullets appear as formatted text as they come in, not as # or - symbols."
+  ],
+  "where": "Shown while a reply is still arriving in the chat, in the answer bubble."
+ },
+ "S20.23": {
+  "labels": [],
+  "needs": "none",
+  "note": "Hard to time by hand; the completion code is in packages/ui/unified-chat/src/components/markdown/completeInlineTokens.ts.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Send in Chat \"Write a long Python script in one code block\".",
+   "Watch the answer while it is still arriving, before the code block is closed.",
+   "Compare: the unfinished code shows inside a code block box, not as plain text, until the block closes."
+  ],
+  "where": "Shown in an answer bubble while a reply with a code block is still arriving."
+ },
+ "S20.24": {
+  "labels": [],
+  "needs": "none",
+  "note": "Sanitizing is in packages/ui/unified-chat/src/components/markdown/MarkdownContent.tsx and the message code in MessageBubble.tsx.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Send in Chat: \"Write this exact text: <script>alert('x')</script> and <b>bold html</b>\".",
+   "Wait for the reply.",
+   "Compare: no pop-up or script runs; the tags show as inert text or are removed, and nothing executes."
+  ],
+  "where": "In an answer, where model-written HTML or script tags appear as text."
+ },
+ "S20.25": {
+  "labels": [],
+  "needs": "none",
+  "note": "Unsafe schemes such as javascript: are stripped to plain text by the code; testing them needs a prompt that writes them. External opening is handled in apps/desktop/electron/windowPolicy.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Get an answer with a web link in Chat.",
+   "Hover the link and read its address in the status bar at the bottom of the window.",
+   "Click the link.",
+   "Compare: it opens outside the app in the browser, and the app stays on the chat."
+  ],
+  "where": "Chat > click a link in an answer, such as the one from \"Give me a link to the Wikipedia page on the sea\""
+ },
+ "S20.26": {
+  "labels": [],
+  "needs": "none",
+  "note": "The quoted code moved; no blocker on selection was found in MarkdownContent.tsx or CodeBlock.tsx. Not checked whether the code block box stops a drag.",
+  "reachable": "yes",
+  "steps": [
+   "Get an answer with a paragraph, a list and a code block in Chat.",
+   "Press the mouse button at the start of the first paragraph.",
+   "Drag down through the list and the code block.",
+   "Compare: the whole run of text across all blocks is highlighted in one selection.",
+   "Press Command+C and paste into a text field to check the copied text."
+  ],
+  "where": "Chat > in one answer, drag the mouse from the first paragraph down through a list and a code block"
+ },
+ "S20.27": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageSearch.tsx",
+    "text": "Search messages..."
+   },
+   {
+    "file": "apps/web/features/chat/hooks/use-keyboard-shortcuts.ts",
+    "text": "Find in conversation"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/PageFindBar.tsx",
+    "text": "Find in page"
+   }
+  ],
+  "needs": "a conversation with answers that contain the searched word",
+  "note": "Both Cmd+F handlers exist; in the Electron desktop the menu accelerator (apps/desktop/electron/appMenu.ts) likely wins, so the \"Find in page\" bar is probably what opens, not the in-conversation bar. Not verified by running the app.",
+  "reachable": "yes",
+  "steps": [
+   "Open a conversation that has several assistant answers containing a common word.",
+   "Press Cmd+F (or choose Edit > Find > Find\u2026 in the desktop app).",
+   "Type the word in the \"Search messages...\" box (or the \"Find in page\" box).",
+   "Look for the matching words highlighted in the answers and the count such as \"1 of 3 matches\"; press Return to jump to the next match and Shift+Return for the previous one."
+  ],
+  "where": "Open a conversation with answers > press Cmd+F > the \"Search messages...\" bar opens at the top of the messages. On the desktop app, Edit > Find > Find\u2026 opens the \"Find in page\" bar instead (the desktop find bar also highlights text in answers)."
+ },
+ "S20.28": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/ConversationTitleMenu.tsx",
+    "text": "Conversation options"
+   },
+   {
+    "file": "apps/web/features/chat/components/ConversationTitleMenu.tsx",
+    "text": "Print"
+   },
+   {
+    "file": "apps/web/features/chat/components/dialogs/EnhancedExportDialog.tsx",
+    "text": "Export Chat History"
+   }
+  ],
+  "needs": "a conversation with formatted answers (headings, lists, a table, code, math)",
+  "note": "The Export dialog's PDF path goes through apps/web/features/chat/services/document-export-service.ts; Print uses the browser print dialog (apps/web/features/chat/lib/print-conversation.ts). Artifact downloads (Download as PDF / Word) are a separate menu and were not used here. Not verified by running the app.",
+  "reachable": "yes",
+  "steps": [
+   "Open a conversation that has headings, a list, a table and a code block in an answer.",
+   "Click the \"Conversation options\" button and choose Print; in the print dialog check the preview keeps headings, lists, tables and code.",
+   "Or click \"Conversation options\" and choose Export\u2026, then pick PDF or Word Document under \"Export Format\" and download the file.",
+   "Open the saved file and compare headings, lists, tables, code and math with the on-screen answer."
+  ],
+  "where": "Open a conversation > click the \"Conversation options\" button > Print (prints the whole transcript, expanded). Or \"Conversation options\" > Export\u2026 > Export Chat History > choose PDF or Word Document > Export."
+ },
+ "S20.29": {
+  "labels": [],
+  "needs": "none (a keyboard that can type Arabic or Hebrew helps)",
+  "note": "Direction comes from the browser's dir=\"auto\" on the message text, not from a visible setting. Per-paragraph direction was not found in MarkdownContent.tsx; a mixed-language answer may take its direction from the whole message. Not verified by running the app.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Type a sentence in Arabic or Hebrew in the message box and send it.",
+   "Look at the sent bubble: the text should start on the right and read right to left.",
+   "Ask for a reply in Arabic or Hebrew and check the assistant bubble is also right-aligned, with punctuation at the correct end of the line."
+  ],
+  "where": "No control of its own; the direction is set per message by the browser (dir=\"auto\" on the message text). Effect is seen in the chat bubble after sending right-to-left text."
+ },
+ "S20.30": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/markdown/MermaidDiagram.tsx",
+    "text": "This diagram could not be drawn"
+   }
+  ],
+  "needs": "none; a failed diagram depends on the assistant's output and cannot be forced from the UI",
+  "note": "Unknown card kinds fall back to a headline and text box in apps/web/features/chat/components/messages/InteractiveCardBlock.tsx (no visible control; happens only when the server sends an unrecognised card). The unknown-language code block fallback was not located. Not verified by running the app.",
+  "reachable": "yes",
+  "steps": [
+   "Start a new chat and ask the assistant for a flowchart as a Mermaid diagram.",
+   "If the drawing fails, look for the message \"This diagram could not be drawn\" with a reason line.",
+   "Check that the source text is still shown below the message with a copy control, and that the rest of the answer is still visible.",
+   "Optionally ask for an unknown code language block and check it still shows as readable text."
+  ],
+  "where": "New chat > ask the assistant for a Mermaid diagram (a ```mermaid block). If the diagram fails to draw, the message shows \"This diagram could not be drawn\" with the source kept below."
+ }
+}

@@ -1,0 +1,285 @@
+{
+ "S21.03": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/webview/render.ts",
+    "text": "Copy"
+   }
+  ],
+  "needs": "a reply that contains a code block",
+  "note": "The Copy button shows Copied! for a moment after a successful copy.",
+  "reachable": "yes",
+  "steps": [
+   "Open AGI Chat from the activity bar and ask a question that gets a reply with code, such as \"write a Python function that adds two numbers\".",
+   "Move the mouse over the code block until the buttons Copy, Explain and Apply appear at its top right.",
+   "Click Copy.",
+   "Paste into a text editor or the composer and compare with the code block: the paste should match the code exactly, with no line numbers or button text."
+  ],
+  "where": "Chat > a reply that contains a code block > hover the code block > Copy"
+ },
+ "S21.09": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/webview/render.ts",
+    "text": "Apply"
+   },
+   {
+    "file": "apps/extension-vscode/src/providers/diffDecorationProvider.ts",
+    "text": "Accept"
+   }
+  ],
+  "needs": "a file open in the editor, and a reply with a suggested code change",
+  "note": "The colour of the changed lines is set in the editor decoration code, which I did not read in full.",
+  "reachable": "yes",
+  "steps": [
+   "Open a file in the editor and click at the place where the change goes.",
+   "In AGI Chat, hover a code block in a reply that suggests a change and click Apply.",
+   "In the editor, look at the highlighted changed lines of the file.",
+   "Compare with Expected: added and removed lines should be visibly marked. Click Accept above the change to keep it."
+  ],
+  "where": "Chat > a reply with a code block > Apply > Accept in the editor"
+ },
+ "S21.10": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/webview/render.ts",
+    "text": "diff"
+   }
+  ],
+  "needs": "a reply that returns a diff or patch code block",
+  "note": "Diff colouring applies only to code blocks whose language is diff or patch; the diff colour styles are in apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Ask in AGI Chat for a change to a file and ask for the answer as a diff, for example \"show the change as a diff\".",
+   "Look at the code block the reply shows.",
+   "Compare with Expected: lines starting with + should be coloured as added, lines starting with - as removed, and @@ hunk lines and --- +++ file lines set apart."
+  ],
+  "where": "Chat > a reply with a code block marked diff or patch"
+ },
+ "S21.12": {
+  "labels": [],
+  "needs": "none",
+  "note": "I found no Run control on code blocks. Code blocks offer only Copy, Explain and Apply. Commands run only when the agent calls a shell tool, shown as activity rows (see S21.15). I searched for run-btn, Run, runCode, executeCode and sandbox in apps/extension-vscode/src.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S21.15": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Output"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Command"
+   }
+  ],
+  "needs": "a workspace the agent can run commands in, and approval to run the command",
+  "note": "The output panel is an expandable section in the activity row, not a separate panel. Only agent-run commands show it.",
+  "reachable": "yes",
+  "steps": [
+   "In AGI Chat, ask the agent to run a simple shell command, for example \"run the command ls in this folder\".",
+   "When the activity row for the command appears, wait until it finishes.",
+   "Click the row's bar to open it.",
+   "Look at the Command section (the command with a $ in front) and the Output section below it: the printed text should match what the command printed."
+  ],
+  "where": "Chat > activity row for a command the agent ran > click the row"
+ },
+ "S21.17": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "ms"
+   }
+  ],
+  "needs": "a workspace the agent can run commands in, and approval to run the command",
+  "note": "The time is added to the summary text when the row ends.",
+  "reachable": "yes",
+  "steps": [
+   "Ask the agent to run a command that takes a few seconds, such as \"wait 3 seconds then print done\".",
+   "Watch the activity row until it finishes.",
+   "Look at the end of the row's summary line: it should add a time such as \"\u00b7 3.0 s\" or \"\u00b7 120 ms\"."
+  ],
+  "where": "Chat > activity row for a command the agent ran > after it finishes, the time shows on the row's summary line"
+ },
+ "S21.18": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Exit status"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Command finished"
+   }
+  ],
+  "needs": "a workspace the agent can run commands in, and approval to run the command",
+  "note": "If the output has no exit code, the line reads Command finished or Command failed instead.",
+  "reachable": "yes",
+  "steps": [
+   "Ask the agent to run a command that fails, such as \"run the command exit 3\".",
+   "When the row finishes, click the row's bar to open it.",
+   "Look at the line under the Output section.",
+   "Compare with Expected: it should read \"Exit status 3\" in the error colour. A successful command shows \"Exit status 0\"."
+  ],
+  "where": "Chat > activity row for a command the agent ran > click the row > Exit status line"
+ },
+ "S21.19": {
+  "labels": [],
+  "needs": "none",
+  "note": "I found no list of files produced by a command run. Write tool rows only show an Open diff button for the file they changed, and apps/extension-vscode/src/features/sidebar-webview/turnChanges.ts handles changed files for a turn, but I did not find a chat control that lists them as generated output. I searched for Generated, downloads and new files in the webview and sidebar folders.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S21.21": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Retry"
+   }
+  ],
+  "needs": "none",
+  "note": "The only Retry is on an error block for a failed reply. It re-sends the last message and is not attached to a single command row, so no in-place re-run of one execution was found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S21.22": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Stop response"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Background commands"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts",
+    "text": "Stop command"
+   }
+  ],
+  "needs": "a workspace the agent can run commands in, and approval to run the command",
+  "note": "The Stop response button has no visible text; its tooltip and label are Stop response.",
+  "reachable": "yes",
+  "steps": [
+   "Ask the agent to run a long command, such as \"run sleep 60\", and approve it if asked.",
+   "While the activity row shows the command running, click the Stop response button beside the Send button in the composer.",
+   "Look at the row: it should stop running and the reply should end.",
+   "For a command run in the background, click More (the ... button at the top right of the chat), choose Background commands, pick the command, then choose Stop command and confirm. Compare with Expected: the command is no longer running."
+  ],
+  "where": "Composer > Stop response (the square button beside Send while a reply is running)"
+ },
+ "S21.23": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Restart Local Runtime"
+   }
+  ],
+  "needs": "none",
+  "note": "This restarts the local runtime; it does not clear the chat. The restart also stops running local turns and applies the current permission choices, which may be more than the Expected wording asks for.",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P in VS Code and type Restart Local Runtime.",
+   "Choose Code: Restart Local Runtime.",
+   "If a dialog asks to restart, choose Restart Local Runtime.",
+   "Look at AGI Chat: the runtime should restart and new turns should start on a clean runtime. Running local turns are stopped by the restart."
+  ],
+  "where": "Command Palette (Cmd+Shift+P) > Code: Restart Local Runtime"
+ },
+ "S21.24": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/webview/render.ts",
+    "text": "Explain"
+   }
+  ],
+  "needs": "a reply that contains a code block, and a signed-in account that can send chat messages",
+  "note": "The message is sent as a normal chat turn, so it follows the usual model and plan limits.",
+  "reachable": "yes",
+  "steps": [
+   "In AGI Chat, get a reply that contains a code block.",
+   "Move the mouse over the code block and click Explain.",
+   "Look at the chat: a new message starting \"Explain this code:\" should be sent, with the code block inside it.",
+   "Compare with Expected: the agent's reply should explain that code."
+  ],
+  "where": "Chat > a reply with a code block > hover the code block > Explain"
+ },
+ "S21.26": {
+  "labels": [],
+  "needs": "none",
+  "note": "I found no Open in coding workspace control on code blocks. The code blocks offer only Copy, Explain and Apply, and Apply opens a diff in the editor. I searched for coding workspace and Open in in the webview and chat folders.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S21.27": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/webview/render.ts",
+    "text": "Apply"
+   },
+   {
+    "file": "apps/extension-vscode/src/providers/diffDecorationProvider.ts",
+    "text": "Accept"
+   }
+  ],
+  "needs": "a file open in the editor, and a reply with a suggested code change",
+  "note": "If no file is open, the chat shows a warning instead and nothing is proposed.",
+  "reachable": "yes",
+  "steps": [
+   "Open the file to change in the editor. Select the code to replace, or leave the cursor at the place to insert.",
+   "In AGI Chat, hover the code block in the reply and click Apply.",
+   "In the editor, review the proposed change shown with the file.",
+   "Click Accept above the change to apply it to the file, or Reject to dismiss it. Compare with Expected: the file changes only after Accept."
+  ],
+  "where": "Chat > a reply with a code block > Apply > Accept in the editor"
+ },
+ "S21.29": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Approve"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Abort turn"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Low risk"
+   }
+  ],
+  "needs": "a workspace where approval is asked for, and a prompt that makes the agent run a command",
+  "note": "The card only appears when the permission is not already allowed; the risk rating comes from the host. Whether the card shows what the command touches depends on the host sending a summary and detail.",
+  "reachable": "yes",
+  "steps": [
+   "Ask the agent to run a shell command, such as \"run the command ls\", in a chat where approval is needed.",
+   "When the approval card appears in the chat, read its title, its summary and its details.",
+   "Look for the risk word (Low risk, Medium risk or High risk) and for Can be undone or Cannot be undone.",
+   "Compare with Expected: the card should say what the command is and what it can touch, before it runs. Choose Approve or Abort turn."
+  ],
+  "where": "Chat > approval card shown when the agent wants to run a command"
+ },
+ "S21.30": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Runtime unavailable"
+   }
+  ],
+  "needs": "a workspace where the AGI CLI is not connected",
+  "note": "I did not confirm the exact screen position of the session line, only its element id sessionIdentity. The untrusted-workspace case shows different text.",
+  "reachable": "yes",
+  "steps": [
+   "Open AGI Chat in a workspace where the AGI CLI is not connected, such as a new folder without the CLI set up.",
+   "Look at the session line near the composer for the label Runtime unavailable.",
+   "Try to send a message and read any error text in the chat.",
+   "Compare with Expected: the screen should say the runtime is unavailable, not stay silent. The title tooltip says to connect the AGI CLI to the workspace."
+  ],
+  "where": "Chat > session line (shows the label Runtime unavailable) when the AGI CLI is not connected to the workspace"
+ }
+}

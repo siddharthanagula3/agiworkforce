@@ -1,0 +1,714 @@
+{
+ "S82.01": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Billing"
+   },
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Free plan"
+   }
+  ],
+  "needs": "none (works on a Free account)",
+  "note": "The settings entry point was not traced beyond the command palette item Settings.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and click the Settings command: open the command palette and choose Settings, or use the Settings entry in the app menu.",
+   "In the settings list, click Billing.",
+   "Look at the plan card at the top: it shows Free plan, or the plan name followed by the word plan.",
+   "Compare the name with the plan on the Usage page and the account you expect."
+  ],
+  "where": "Settings > Billing (top plan card)"
+ },
+ "S82.02": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Renews on"
+   },
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Ends on"
+   },
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Current period ends"
+   }
+  ],
+  "needs": "a paid account (the row shows only when a subscription has a period end)",
+  "note": "On a Free account no period row is expected; this was read from the code, not run.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Billing.",
+   "Look for a row labelled Renews on, Ends on, Current period ends or Trial ends on.",
+   "Read the date shown beside that row.",
+   "Compare the date with the renewal or end date you expect."
+  ],
+  "where": "Settings > Billing (plan card and rows below it)"
+ },
+ "S82.03": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Usage"
+   },
+   {
+    "file": "apps/web/features/settings/sections/UsageSection.tsx",
+    "text": "Plan usage limits"
+   },
+   {
+    "file": "packages/contracts/types/src/usage-vocabulary.ts",
+    "text": "This billing period"
+   }
+  ],
+  "needs": "a paid account (a Free account sees only Upgrade for higher capacity)",
+  "note": "The overall meter is the This billing period bar; the Free account shows a waitlist/upgrade card instead.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Usage.",
+   "Find the card titled Plan usage limits.",
+   "Look at the bars: Current session, This week, Most capable models (when shown) and This billing period.",
+   "Compare the bar fill and the percent with what you expect from the plan allowance."
+  ],
+  "where": "Settings > Usage > Plan usage limits (bars)"
+ },
+ "S82.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/UsageSection.tsx",
+    "text": "Where your usage went"
+   },
+   {
+    "file": "apps/web/features/settings/sections/UsageSection.tsx",
+    "text": "By model"
+   },
+   {
+    "file": "packages/contracts/types/src/usage-vocabulary.ts",
+    "text": "Most capable models"
+   }
+  ],
+  "needs": "a paid account (the history card is hidden on Free)",
+  "note": "The flagship cap is the Most capable models bar in Plan usage limits; per-model spend is the By model table.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Usage.",
+   "Scroll to the card titled Where your usage went.",
+   "Look at the table captioned By model.",
+   "Compare the per-model rows with the usage you made in each model."
+  ],
+  "where": "Settings > Usage > Where your usage went > By model"
+ },
+ "S82.05": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/UsageSection.tsx",
+    "text": "By product area"
+   },
+   {
+    "file": "packages/contracts/types/src/billing-catalog.ts",
+    "text": "Deep Research"
+   },
+   {
+    "file": "packages/contracts/types/src/billing-catalog.ts",
+    "text": "AGI Code"
+   }
+  ],
+  "needs": "a paid account with some settled usage",
+  "note": "The history shows settled usage only; recent requests appear after they settle.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Usage.",
+   "Scroll to Where your usage went and find the table captioned By product area.",
+   "Read the rows labelled Chat, AGI Work, Deep Research, AGI Code and Browser.",
+   "Compare the amounts with the activity you did in each area."
+  ],
+  "where": "Settings > Usage > Where your usage went > By product area"
+ },
+ "S82.06": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/UsageSection.tsx",
+    "text": "This month"
+   },
+   {
+    "file": "packages/contracts/types/src/account-usage-client.ts",
+    "text": "Voice"
+   }
+  ],
+  "needs": "a paid account with voice use",
+  "note": "The Voice row appears only when the plan has a voice allowance.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Usage.",
+   "Find the card titled This month and look for the row labelled Voice.",
+   "Read the minutes used and any monthly cap text beside it.",
+   "Also find the Voice line in Plan usage limits and compare the estimate of minutes left."
+  ],
+  "where": "Settings > Usage > This month (row Voice) and Plan usage limits (row Voice)"
+ },
+ "S82.07": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/UsageSection.tsx",
+    "text": "This month"
+   },
+   {
+    "file": "apps/web/features/settings/sections/UsageSection.tsx",
+    "text": "Images"
+   }
+  ],
+  "needs": "a paid account that has made at least one image request",
+  "note": "The Images row appears only after the account has an image request.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Usage.",
+   "Find the card titled This month.",
+   "Look for the row labelled Images, which shows the image count and credits.",
+   "Compare the count with the images you generated."
+  ],
+  "where": "Settings > Usage > This month (row Images)"
+ },
+ "S82.08": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/UsageSection.tsx",
+    "text": "This month"
+   },
+   {
+    "file": "packages/contracts/types/src/account-usage-client.ts",
+    "text": "Video"
+   }
+  ],
+  "needs": "a paid account with a video allowance and some video use",
+  "note": "Whether the Video row always appears was not confirmed from the code path.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Usage.",
+   "Find the card titled This month.",
+   "Look for the row labelled Video, which shows seconds used.",
+   "Compare the seconds with the video you generated."
+  ],
+  "where": "Settings > Usage > This month (row Video)"
+ },
+ "S82.09": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/UsageSection.tsx",
+    "text": "By product area"
+   },
+   {
+    "file": "packages/contracts/types/src/billing-catalog.ts",
+    "text": "Deep Research"
+   }
+  ],
+  "needs": "a paid account that has run Deep Research",
+  "note": "Research is a product-area row, not a separate chart.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Usage.",
+   "Scroll to Where your usage went and open the By product area table.",
+   "Find the row labelled Deep Research.",
+   "Compare its credits and requests with the Deep Research runs you made."
+  ],
+  "where": "Settings > Usage > Where your usage went > By product area (row Deep Research)"
+ },
+ "S82.10": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/UsageSection.tsx",
+    "text": "By product area"
+   },
+   {
+    "file": "packages/contracts/types/src/billing-catalog.ts",
+    "text": "AGI Code"
+   },
+   {
+    "file": "packages/contracts/types/src/billing-catalog.ts",
+    "text": "AGI Work"
+   }
+  ],
+  "needs": "a paid account that has used AGI Code or AGI Work",
+  "note": "Coding and agentic work are split into two product-area rows; the task cost view is a separate item.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Usage.",
+   "Scroll to Where your usage went and open the By product area table.",
+   "Find the rows labelled AGI Code and AGI Work.",
+   "Compare them with the coding and agent work you did."
+  ],
+  "where": "Settings > Usage > Where your usage went > By product area (rows AGI Code and AGI Work)"
+ },
+ "S82.11": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Library"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "file storage used"
+   }
+  ],
+  "needs": "a file to upload (to see storage move)",
+  "note": "The storage line appears only after the storage numbers load.",
+  "reachable": "yes",
+  "steps": [
+   "Click Library in the sidebar.",
+   "Read the line under the Library heading.",
+   "It shows the file storage used against the storage limit, or the used amount alone when no limit is known.",
+   "Compare the numbers with the files you uploaded."
+  ],
+  "where": "Sidebar > Library (heading line)"
+ },
+ "S82.12": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/UsageSection.tsx",
+    "text": "Plan usage limits"
+   },
+   {
+    "file": "apps/web/features/settings/sections/UsageSection.tsx",
+    "text": "Responses running now"
+   }
+  ],
+  "needs": "a paid account; a running response helps show a non-zero count",
+  "note": "The row reads active of limit at a time; the counter is only refreshed on reload.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Usage.",
+   "Find the card titled Plan usage limits.",
+   "Look for the row labelled Responses running now.",
+   "Start a long response in chat and refresh the Usage page to see the count change."
+  ],
+  "where": "Settings > Usage > Plan usage limits (row Responses running now)"
+ },
+ "S82.13": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/UsageSection.tsx",
+    "text": "Credit balances"
+   },
+   {
+    "file": "apps/web/features/settings/sections/UsageSection.tsx",
+    "text": "Purchased credits"
+   },
+   {
+    "file": "apps/web/features/settings/sections/UsageSection.tsx",
+    "text": "Bonus credits"
+   }
+  ],
+  "needs": "a paid account",
+  "note": "The Credit balances card is hidden for Free and contract-priced accounts.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Usage.",
+   "Find the card titled Credit balances and read the rows Bonus credits and Purchased credits.",
+   "Find the card titled Plan usage limits and read the bars.",
+   "Compare the remaining amounts with the balance you expect."
+  ],
+  "where": "Settings > Usage > Credit balances and Plan usage limits"
+ },
+ "S82.14": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/UsageSection.tsx",
+    "text": "Purchased credits"
+   },
+   {
+    "file": "apps/web/features/settings/sections/UsageSection.tsx",
+    "text": "Bonus credits"
+   }
+  ],
+  "needs": "a paid account",
+  "note": "The plan allowance is shown as a plan line and bars, not as its own row.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Usage.",
+   "Find the card titled Credit balances.",
+   "Read the row Purchased credits (bought credits) and the row Bonus credits (promotional or referral credits).",
+   "Compare the included monthly allowance in Plan usage limits with these two rows."
+  ],
+  "where": "Settings > Usage > Credit balances (rows Purchased credits and Bonus credits)"
+ },
+ "S82.15": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/UsageSection.tsx",
+    "text": "Bonus credits"
+   },
+   {
+    "file": "apps/web/features/settings/sections/UsageSection.tsx",
+    "text": "Next expiry"
+   }
+  ],
+  "needs": "an account that has a promotional or referral credit",
+  "note": "When there is no bonus balance the row shows None with a note about referrals and promotions.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Usage.",
+   "Find the card titled Credit balances.",
+   "Read the row Bonus credits: the amount remaining and the line Next expiry with the date.",
+   "Compare the amount and date with the promotional or referral credit you were given."
+  ],
+  "where": "Settings > Usage > Credit balances (row Bonus credits)"
+ },
+ "S82.16": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/UsageSection.tsx",
+    "text": "Next expiry"
+   },
+   {
+    "file": "apps/web/features/settings/sections/UsageSection.tsx",
+    "text": "Purchased credits don't expire."
+   },
+   {
+    "file": "packages/contracts/types/src/usage-vocabulary.ts",
+    "text": "Resets in"
+   }
+  ],
+  "needs": "a paid account, and a bonus credit to see an expiry date",
+  "note": "Plan allowance reset and bonus lapse dates appear on their own rows; the purchased balance note is fixed text.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Usage.",
+   "In Credit balances, read Next expiry under Bonus credits.",
+   "Read the note under Purchased credits.",
+   "In Plan usage limits, read the Resets in and reset date text on each bar."
+  ],
+  "where": "Settings > Usage > Credit balances (Next expiry and Purchased credits don't expire) and the reset lines"
+ },
+ "S82.17": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/UsageSection.tsx",
+    "text": "Plan usage limits"
+   },
+   {
+    "file": "packages/contracts/types/src/usage-vocabulary.ts",
+    "text": "Resets in"
+   }
+  ],
+  "needs": "a paid account with a bar that is not full",
+  "note": "The countdown is refreshed about every minute by the page.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Usage.",
+   "Find the card titled Plan usage limits.",
+   "Read the reset text on a bar, such as Resets in followed by minutes or hours and a date.",
+   "Wait a minute and check that the countdown moved."
+  ],
+  "where": "Settings > Usage > Plan usage limits (reset text on each bar)"
+ },
+ "S82.18": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/UsageSection.tsx",
+    "text": "Where your usage went"
+   },
+   {
+    "file": "apps/web/features/settings/sections/UsageSection.tsx",
+    "text": "Days"
+   },
+   {
+    "file": "apps/web/features/settings/sections/UsageSection.tsx",
+    "text": "Months"
+   }
+  ],
+  "needs": "a paid account with settled usage",
+  "note": "History is grouped in UTC, as the note under the heading says.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Usage.",
+   "Scroll to Where your usage went.",
+   "Open the period choice and pick Days, Weeks or Months.",
+   "Compare the rows with the period you picked and the UTC note under the heading."
+  ],
+  "where": "Settings > Usage > Where your usage went (Days, Weeks, Months)"
+ },
+ "S82.19": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/UsageSection.tsx",
+    "text": "By project"
+   }
+  ],
+  "needs": "a paid account with settled usage in a project",
+  "note": "A row with no project name reads Project not in this workspace.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Usage.",
+   "Scroll to Where your usage went.",
+   "Find the table captioned By project.",
+   "Compare each project row with the work you did in that project."
+  ],
+  "where": "Settings > Usage > Where your usage went > By project"
+ },
+ "S82.20": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/tasks/TasksPage.tsx",
+    "text": "Work history"
+   },
+   {
+    "file": "apps/web/features/chat/lib/agi-work.ts",
+    "text": "Work history"
+   }
+  ],
+  "needs": "an account that has run at least one agent task",
+  "note": "The command palette entry is Work history in apps/web/shared/components/CommandPalette/CommandPalette.tsx; the palette shortcut and any other link to the page were not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open the command palette and choose Work history.",
+   "Pick an agent task from the list.",
+   "Look at each row: a cost appears after the time when the run has a cost.",
+   "Compare the cost with the Cost and usage section of the task."
+  ],
+  "where": "Work history (page title Work history, from the command palette)"
+ },
+ "S82.22": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Deep Research"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchActivity.tsx",
+    "text": "up to ~"
+   }
+  ],
+  "needs": "a paid account (estimate shown for Deep Research); for video, switch to video mode to see the video cost estimate",
+  "note": "Whether the estimate shows before the first step was not verified in the code path; the video estimate is a separate component.",
+  "reachable": "yes",
+  "steps": [
+   "Open a new chat and click the + button in the composer.",
+   "Choose Deep Research.",
+   "Send a research question and look at the research activity for the text up to ~ with a credit amount.",
+   "Compare that estimate with the actual cost in Work history."
+  ],
+  "where": "Chat composer > + menu > Deep Research (estimate appears in the research activity)"
+ },
+ "S82.23": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx",
+    "text": "Cost and usage"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/tasks/TasksPage.tsx",
+    "text": "Work history"
+   }
+  ],
+  "needs": "an account with a finished agent task",
+  "note": "On a free trial run the section says the run was metered against the free trial allowance instead of charged.",
+  "reachable": "yes",
+  "steps": [
+   "Open the command palette and choose Work history.",
+   "Click a finished task.",
+   "Find the section titled Cost and usage.",
+   "Read the cost and the token and model call line, and compare with what you expect."
+  ],
+  "where": "Work history > open a task > Cost and usage"
+ },
+ "S82.24": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/sidebar/Sidebar.tsx",
+    "text": "{{percent}}% of token budget used"
+   }
+  ],
+  "needs": "a paid account near a limit (the widget is hidden on Free)",
+  "note": "The composer banner for warnings was not traced to its visible wording; only the sidebar text was confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Look at the bottom of the sidebar for the thin usage bar.",
+   "Hover it to see the title text, for example 80% of token budget used.",
+   "Check the bar colour: it changes at 80% and 95%.",
+   "Compare the percent with the Usage page bars."
+  ],
+  "where": "Sidebar footer usage bar (above the mode pill)"
+ },
+ "S82.25": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Notify me when it resets"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Free usage limit reached. Upgrade to continue."
+   }
+  ],
+  "needs": "an account at a usage or free limit",
+  "note": "The composer banner for plan limits is data-driven; the exact limit text comes from the account response.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat and send messages until a limit is reached, or use an account already at its limit.",
+   "Try to send a new message.",
+   "Look at the warning banner above the composer: it names the limit and the reset time.",
+   "Check that Notify me when it resets and the Upgrade or Use action are shown."
+  ],
+  "where": "Chat composer, the banner above the text box after a limit is reached"
+ },
+ "S82.26": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/InlinePaywallCard.tsx",
+    "text": "Switch to"
+   }
+  ],
+  "needs": "an account at a limit where another eligible model exists",
+  "note": "The composer action uses the Use name wording from apps/web/features/chat/pages/WebChatPage.tsx; only Switch to was confirmed as visible text.",
+  "reachable": "yes",
+  "steps": [
+   "Reach the blocked state described in the item above.",
+   "Look for a button in the banner or the inline paywall card that names another model, such as Switch to.",
+   "Click it and confirm the model in the chat header or composer changes.",
+   "Send a message and check that it is answered."
+  ],
+  "where": "Chat composer banner at a limit > Switch to (or Use) an eligible model"
+ },
+ "S82.27": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/InlinePaywallCard.tsx",
+    "text": "Try again"
+   },
+   {
+    "file": "apps/web/features/chat/components/InlinePaywallCard.tsx",
+    "text": "Try later"
+   }
+  ],
+  "needs": "a Free account that can reach a limit, or a limit-state test account",
+  "note": "The countdown button applies to free-capacity cards only; the rolling-window and billing-period limit cards show a reset-time line and \"Try later\" or \"Not now\" instead. The plan's old code line 345 is now line 345 for the countdown and 362 for \"Try later\".",
+  "reachable": "yes",
+  "steps": [
+   "Reach a free-plan capacity limit in chat (or wait for a \"No free capacity right now\" card).",
+   "Look at the card's main button: it reads \"Try again\" and is disabled with a countdown.",
+   "Read the reset sentence under the card text, if one is shown.",
+   "Look at the second button \"Try later\" and the \"Upgrade to ...\" button, and compare with the Expected: waiting for the reset is offered as an alternative to paying."
+  ],
+  "where": "In chat, send a message after a free-plan capacity limit is hit, so the limit card appears. The card's \"Try again\" button stays disabled with a countdown (\"Try again in ...\") until the retry time passes. The reset line under the card's text shows when the limit resets."
+ },
+ "S82.29": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/InlinePaywallCard.tsx",
+    "text": "Buy credits"
+   },
+   {
+    "file": "apps/web/features/billing/components/TopUpPanel.tsx",
+    "text": "Buy credits"
+   }
+  ],
+  "needs": "a paid account billed through Stripe, Apple or Google; a Free account sees only the upgrade paths",
+  "note": "The \"Buy credits\" button on the limit card appears only when the server recovery action is top_up; otherwise the card shows \"Upgrade to ...\" instead.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to a paid self-serve account and reach a usage limit in chat (or open Settings > Billing).",
+   "In the limit card, look for the \"Buy credits\" button.",
+   "Or open Settings > Billing and find the \"Buy credits\" section, pick an amount, and read the \"Buy $...\" button.",
+   "Compare with Expected: the user can buy extra usage from where they hit the limit. Stop before paying."
+  ],
+  "where": "Chat: at a limit, the limit card shows a \"Buy credits\" button when the account is a paid self-serve plan billed through Stripe, Apple or Google. Also Settings > Billing > \"Buy credits\" panel (the \"Buy $...\" button starts checkout)."
+ },
+ "S82.30": {
+  "labels": [
+   {
+    "file": "apps/web/features/billing/components/AutoReloadPanel.tsx",
+    "text": "Auto-reload"
+   },
+   {
+    "file": "apps/web/features/billing/components/AutoReloadPanel.tsx",
+    "text": "Save auto-reload"
+   },
+   {
+    "file": "apps/web/features/billing/components/AutoReloadPanel.tsx",
+    "text": "Add a payment method"
+   }
+  ],
+  "needs": "a paid account billed through Stripe with a saved card (the panel shows \"Add a payment method\" if no card is on file)",
+  "note": "The panel is shown only when the account can buy top-ups and the billing source is Stripe; the \"Billing\" tab label comes from packages/ui/i18n/locales/en/settings.json (nav.billing).",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then the \"Billing\" tab.",
+   "Scroll to the \"Auto-reload\" heading.",
+   "Turn on the switch next to it (a confirm dialog asks \"Turn on auto-reload?\").",
+   "Set \"When my balance falls below\" and \"Reload with\", then press \"Save auto-reload\" and compare with Expected: you can turn on and configure automatic credit reload."
+  ],
+  "where": "Settings > Billing, then scroll to the \"Auto-reload\" section below the \"Buy credits\" panel."
+ },
+ "S82.31": {
+  "labels": [
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceSpendLimit.tsx",
+    "text": "Monthly spend limit"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceSpendLimit.tsx",
+    "text": "Set limit"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceConsoleNav.tsx",
+    "text": "Usage"
+   }
+  ],
+  "needs": "a workspace owner account",
+  "note": "The console group heading above \"Usage\" was not checked; the sidebar label \"Usage\" is at WorkspaceConsoleNav.tsx line 132. The workspace owner-only access rule was not verified in the page code.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in as a workspace owner and open the workspace console.",
+   "Click \"Usage\" in the console sidebar.",
+   "Find the \"Monthly spend limit\" block.",
+   "Set \"Alert at\" and the action (\"Notify\" or \"Block\"), then press \"Set limit\" (or \"Update limit\" if one exists).",
+   "Compare with Expected: managed usage stops at the cap for \"Block\"; \"Remove limit\" removes the cap after a confirm dialog."
+  ],
+  "where": "Workspace console > \"Usage\" (sidebar item under the workspace console, page title \"Usage\"), then the \"Monthly spend limit\" block at the top of the analytics."
+ },
+ "S82.32": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/UsageSection.tsx",
+    "text": "Download CSV"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/settings.json",
+    "text": "Usage"
+   }
+  ],
+  "needs": "a paid account with usage history (the Free account QA run showed only paid-plan waitlist text on Usage)",
+  "note": "The \"Download CSV\" link only renders once the history is shown (the shown && guard); the link points to /api/usage/export with a granularity parameter.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then the \"Usage\" tab.",
+   "Wait until the usage history has loaded.",
+   "Click \"Download CSV\" below the history.",
+   "Open the downloaded file and compare with Expected: a usage report file is saved."
+  ],
+  "where": "Settings > Usage, then the \"Download CSV\" link under the usage history."
+ },
+ "S82.33": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/UsageSection.tsx",
+    "text": "Report a billing problem"
+   },
+   {
+    "file": "apps/web/features/settings/sections/UsageSection.tsx",
+    "text": "File report"
+   }
+  ],
+  "needs": "a paid account with usage history (the Free account QA run showed only paid-plan waitlist text on Usage)",
+  "note": "The form uses the period dropdown option \"Everything shown\" by default; no alternative period label was checked beyond the code.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then the \"Usage\" tab.",
+   "Wait until the usage history has loaded.",
+   "Click \"Report a billing problem\".",
+   "Choose the period in the form, optionally add a note, and press \"File report\".",
+   "Compare with Expected: a confirmation reads \"Report filed as ...\" with the usage record attached."
+  ],
+  "where": "Settings > Usage, then the \"Report a billing problem\" button under the usage history."
+ }
+}

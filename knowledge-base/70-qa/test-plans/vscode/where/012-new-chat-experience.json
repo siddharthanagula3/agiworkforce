@@ -1,0 +1,266 @@
+{
+ "S12.01": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "New chat"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Start a conversation"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "I did not check the name of the activity-bar icon that opens the AGI sidebar, so the first step names only the view.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI sidebar view.",
+   "Click the \"New chat\" button (icon button at the top of the sidebar).",
+   "Look for an empty conversation area with no earlier messages and the composer ready at the bottom, with the headline \"Start a conversation\" and the line \"Ask about your code or describe a change.\""
+  ],
+  "where": "Open the AGI sidebar view, then click the button titled \"New chat\" in the sidebar header. The empty screen shows \"Start a conversation\"."
+ },
+ "S12.03": {
+  "labels": [],
+  "needs": "none",
+  "note": "I searched webviewContent.ts for a greeting, a personal name and personalization and found none; the new-chat headline is fixed text (\"Start a conversation\"), so there is no personal greeting to compare with the Expected rule.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S12.06": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Projects"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Use in this chat"
+   }
+  ],
+  "needs": "a signed-in account with at least one project",
+  "note": "The list is limited to three projects and is empty when signed out (apps/extension-vscode/src/features/sidebar-webview/startSuggestions.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and make sure you have at least one project.",
+   "Open the AGI sidebar and click \"New chat\".",
+   "Look for the \"Projects\" heading with up to three project rows, each with the detail \"Use in this chat\".",
+   "Click a project row and compare: the chat should open for that project, and the project should show in the \"Active project\" strip above the composer."
+  ],
+  "where": "Sidebar > New chat > Projects group > a project name row (button \"Use in this chat\")."
+ },
+ "S12.07": {
+  "labels": [],
+  "needs": "none",
+  "note": "I found no recently-used-files group in startSuggestions.ts or the new-chat markup. The only file attach options are in the \"+\" menu (\"Attach workspace files\", \"Open editors\"), which is not a recent-file suggestion.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S12.08": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Skills"
+   }
+  ],
+  "needs": "at least one enabled and consented Skill",
+  "note": "The group is hidden when no Skill is enabled and consented (apps/extension-vscode/src/features/sidebar-webview/startSuggestions.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Make sure at least one skill is enabled and consented.",
+   "Open the AGI sidebar and click \"New chat\".",
+   "Look for the \"Skills\" heading with up to three skill rows, each showing the skill's description.",
+   "Click a skill row and compare: the composer should fill with \"Use the <skill name> skill to \" ready for your request."
+  ],
+  "where": "Sidebar > New chat > Skills group > a skill name row."
+ },
+ "S12.09": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Connected apps"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Ask with it"
+   }
+  ],
+  "needs": "a signed-in account with at least one connected app",
+  "note": "The group is shown only when connectors are allowed for the account and the app reports as connected (apps/extension-vscode/src/features/sidebar-webview/startSuggestions.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Connect at least one app or connector and sign in.",
+   "Open the AGI sidebar and click \"New chat\".",
+   "Look for the \"Connected apps\" heading with rows whose detail reads \"Ask with it\".",
+   "Click an app row and compare: the composer should fill with \"Using <app name>, \" ready for your request."
+  ],
+  "where": "Sidebar > New chat > Connected apps group > an app name row (detail \"Ask with it\")."
+ },
+ "S12.10": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Browse the web"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Attach or use tools"
+   }
+  ],
+  "needs": "a signed-in account; a search key for Local or BYOK (see \"Set up web search\" in the same menu)",
+  "note": "The menu description says \"Local privacy mode refuses network\"; I did not verify the final send-time behaviour.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI sidebar and click \"New chat\".",
+   "Click the \"+\" button at the bottom left of the composer, then click \"Browse the web\".",
+   "Look for the chip \"Browse the web for current sources\" above the composer and the check state on \"Browse the web\".",
+   "Type a question that needs current information, send it, and compare: the web search should be used for that message only."
+  ],
+  "where": "Sidebar > composer \"+\" button (title \"Attach or use tools\") > \"Browse the web\"."
+ },
+ "S12.15": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Mode and reasoning effort"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Plan mode"
+   },
+   {
+    "file": "packages/contracts/local-runtime/src/developer-session.ts",
+    "text": "Auto"
+   }
+  ],
+  "needs": "none",
+  "note": "There is no separate \"agentic\" button on the new-chat screen; the agentic choice is made through the mode picker.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI sidebar and click \"New chat\".",
+   "Click the button titled \"Mode and reasoning effort\" in the composer bottom row.",
+   "Choose \"Auto\" (or \"Plan\", or \"Plan mode\" from the \"+\" menu) and close the menu.",
+   "Send a task that needs several steps, such as \"find and fix a failing test\", and compare: it should run tool steps rather than a single plain answer."
+  ],
+  "where": "Sidebar > composer \"Mode and reasoning effort\" button > choose \"Auto\" (or \"Plan\" from the \"+\" menu as \"Plan mode\")."
+ },
+ "S12.16": {
+  "labels": [],
+  "needs": "none",
+  "note": "I found no labelled coding-session entry on the new-chat screen or in commandSetup.ts; the nearest text is \"Choose a folder to establish the developer-session scope\" (webviewContent.ts), which is not a coding-session start control.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S12.18": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Auto"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Model"
+   }
+  ],
+  "needs": "none",
+  "note": "The pill changes to the model name only after the CLI reports the session route (webviewContent.ts comment near line 3880), so a new chat may show \"Auto\" until then.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI sidebar and click \"New chat\".",
+   "Look at the composer bottom row for the pill with the text \"Auto\" (its title is \"Model\").",
+   "Click the pill and compare: the list should show the model the next message will use."
+  ],
+  "where": "Sidebar > New chat > composer bottom row > model pill (default text \"Auto\")."
+ },
+ "S12.20": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Use in this chat"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Active project"
+   }
+  ],
+  "needs": "a signed-in account with at least one project",
+  "note": "I found no separate project dropdown before sending; the only pick is the Projects rows, and the ChatStateManager.ts line cited in the plan is a web-search check, not project selection.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the AGI sidebar, then click \"New chat\".",
+   "Under \"Projects\", click the row for the project you want.",
+   "Look at the strip above the composer labelled \"Active project\" and confirm it shows that project's name.",
+   "Send a message and compare: the new chat should be created in that project."
+  ],
+  "where": "Sidebar > New chat > Projects group > \"Use in this chat\" on a project; the chosen project shows in the \"Active project\" strip."
+ },
+ "S12.21": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Mode and reasoning effort"
+   },
+   {
+    "file": "apps/extension-vscode/src/core/commandSetup.ts",
+    "text": "Modes"
+   },
+   {
+    "file": "packages/contracts/local-runtime/src/developer-session.ts",
+    "text": "Bypass permissions"
+   }
+  ],
+  "needs": "none",
+  "note": "The example text is in the Command Palette mode picker (commandSetup.ts); I did not confirm that the sidebar popover shows examples.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI sidebar and click \"New chat\".",
+   "Click the button titled \"Mode and reasoning effort\".",
+   "Read the description under each mode: \"Ask\", \"Auto\", \"Plan\", \"Bypass permissions\".",
+   "Open the mode picker from the Command Palette and compare: the \"Ask\" entry should show the example \"Example: AGI can read parseDate while preparing a test, then asks before writing the file.\""
+  ],
+  "where": "Sidebar > New chat > \"Mode and reasoning effort\" button (mode list shows \"Ask\", \"Auto\", \"Plan\", \"Bypass permissions\"). Command palette: the \"Modes\" picker."
+ },
+ "S12.22": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Work with your code"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Skip intro"
+   }
+  ],
+  "needs": "a fresh VS Code profile (first use)",
+  "note": "The intro shows only while the onboarding-seen flag (ONBOARDING_SEEN_KEY in apps/extension-vscode/src/features/onboarding/onboardingState.ts) is unset; I did not check that the sidebar shows it before the first chat.",
+  "reachable": "yes",
+  "steps": [
+   "Use a fresh VS Code profile, or clear the stored onboarding flag, so the intro has not been seen.",
+   "Open the AGI sidebar view.",
+   "Read the step titled \"Work with your code\" and move through the steps; the progress reads \"Setup \u00b7 1 of 4\".",
+   "Compare: the steps should introduce the key features, and \"Skip intro\" should close the intro."
+  ],
+  "where": "First open of the AGI sidebar on a fresh profile: onboarding steps \"Work with your code\", \"Follow cloud tasks\", \"Review changes in your editor\", \"Choose how actions are approved\" (button \"Skip intro\")."
+ },
+ "S12.23": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Send (Enter)"
+   }
+  ],
+  "needs": "none",
+  "note": "The draft is saved in the webview state for the new-chat thread (saveComposerDraft and restoreComposerDraft in webviewContent.ts); I did not check the exact step for the window reload command name.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI sidebar and click \"New chat\".",
+   "Type a sentence in the composer but do not send it.",
+   "Run a reload (for example, \"Developer: Reload Window\") or switch to another view and come back to the AGI sidebar.",
+   "Look at the composer and compare: the typed sentence should still be there."
+  ],
+  "where": "Sidebar > New chat > type text in the composer without sending, then reload the window or move away and back."
+ }
+}

@@ -1,0 +1,357 @@
+{
+ "S68.01": {
+  "labels": [
+   {
+    "file": "apps/cli/src/agent/mod.rs",
+    "text": "Session:"
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Continue previous session, from this device or from your account."
+   }
+  ],
+  "needs": "a second terminal on this machine; for the cloud part, a signed-in AGI account",
+  "note": "Cloud ids are shown by agi code list; the code gives no other client view of the same id, so only the CLI path was traced.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi in a folder, send one message so the session is saved.",
+   "Type /status and note the id on the \"Session:\" line.",
+   "Open a second terminal in the same folder and run agi resume <that id>.",
+   "Compare: the second terminal opens the same session id you noted."
+  ],
+  "where": "Type /status in the full-screen agi (the same session id is named there); in a second terminal type agi resume <id>"
+ },
+ "S68.02": {
+  "labels": [
+   {
+    "file": "apps/cli/src/cloud/code_sessions.rs",
+    "text": "Showing the latest turns; earlier turns are not shown."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Continue previous session, from this device or from your account."
+   }
+  ],
+  "needs": "a second terminal; for the cloud part, a cloud Code session from agi code start",
+  "note": "The cited code line for history moved; the current behaviour is in the cloud show output and resume path.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi, send a message or two, then type /export and note the last exchange.",
+   "Open a second terminal and run agi resume <id> for the same session.",
+   "Compare the conversation shown there with the one from /export.",
+   "For a cloud session run agi code show <id> and compare its turns."
+  ],
+  "where": "agi resume <id> in a second terminal; for cloud sessions, agi code show <id>"
+ },
+ "S68.03": {
+  "labels": [
+   {
+    "file": "apps/cli/src/agent/mod.rs",
+    "text": "Branch:"
+   },
+   {
+    "file": "apps/cli/src/cloud/code_sessions.rs",
+    "text": "Works on:"
+   }
+  ],
+  "needs": "a git checkout; a cloud Code session for the cloud part",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Start agi in a git checkout on a branch and type /status.",
+   "Note the \"Branch:\" line.",
+   "For a cloud session run agi code list, then agi code show <id>.",
+   "Compare the branch shown with the branch the session works on (the \"Works on:\" line)."
+  ],
+  "where": "Type /status in agi; for cloud sessions, agi code show <id>"
+ },
+ "S68.04": {
+  "labels": [
+   {
+    "file": "apps/cli/src/cloud/code_sessions.rs",
+    "text": "Works on:"
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "List cloud Code sessions."
+   }
+  ],
+  "needs": "a signed-in AGI account with at least one cloud Code session",
+  "note": "This checks the cloud side only; a local terminal session is not shown with a repository line.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi code list in a terminal and note the repository shown for each session.",
+   "Run agi code show <id> for one session.",
+   "Compare the \"Works on:\" line with the repository you expect."
+  ],
+  "where": "agi code list (then agi code show <id>)"
+ },
+ "S68.05": {
+  "labels": [
+   {
+    "file": "apps/cli/src/agent/mod.rs",
+    "text": "Worktree:"
+   }
+  ],
+  "needs": "a git worktree and a second terminal",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Start agi from a git worktree folder and type /status.",
+   "Note the \"Worktree:\" line.",
+   "Open another terminal in a different folder and resume the same session with agi resume <id>.",
+   "Type /status there and compare its \"Worktree:\" line; a warning shows if the terminal is in another folder."
+  ],
+  "where": "Type /status in agi; /worktree or /wt to change worktree"
+ },
+ "S68.06": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/model"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/memory"
+   }
+  ],
+  "needs": "a second terminal resuming the same session",
+  "note": "No single screen compares the two clients; the check needs both terminals.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi and type /model; note the model shown.",
+   "Type /memory and note the instruction files it lists.",
+   "Repeat in a second terminal with agi resume <id>.",
+   "Compare the model and instruction files from both terminals."
+  ],
+  "where": "Type /model in agi and /memory in agi"
+ },
+ "S68.07": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/plan"
+   },
+   {
+    "file": "apps/cli/src/repl/slash_commands.rs",
+    "text": "/rewind"
+   }
+  ],
+  "needs": "a second terminal resuming the same session",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Start agi and ask for a multi-step task so a plan appears.",
+   "Type /plan show and note the plan steps.",
+   "Type /rewind and note the checkpoint list.",
+   "Repeat in a second terminal with agi resume <id> and compare the plan and checkpoints."
+  ],
+  "where": "Type /plan show in agi, and /rewind for checkpoints"
+ },
+ "S68.08": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Waiting for your approval"
+   },
+   {
+    "file": "apps/cli/src/cloud/code_sessions.rs",
+    "text": "Answer with `agi code approve <handle>` or `agi code reject <handle>`."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "List the approvals cloud Code sessions are waiting on."
+   }
+  ],
+  "needs": "a session that asks for an approval; for the cloud part, a cloud Code session waiting on one",
+  "note": "The code shows the approval to a second local terminal is not confirmed; the cross-client view is traced through Remote Control and the cloud approvals.",
+  "reachable": "yes",
+  "steps": [
+   "Start a task in agi that needs a tool approval, and wait for \"Waiting for your approval\".",
+   "Open a second terminal with agi resume <id> and check whether the same approval shows there.",
+   "For a cloud session, run agi code approvals and note the handle.",
+   "Answer with agi code approve <handle> and check the session shows it answered."
+  ],
+  "where": "Local: the \"Waiting for your approval\" prompt in agi. Cloud: agi code approvals, then agi code approve <handle> or agi code reject <handle>"
+ },
+ "S68.09": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "Remote Control hands this session to AGI Mobile"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Remote Control: reconnecting"
+   }
+  ],
+  "needs": "AGI Mobile signed in to the same account",
+  "note": "The connected status line says the phone sees tool activity; whether /remote-control is offered in a release build was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi in full-screen mode and type /remote-control.",
+   "Connect AGI Mobile to the same account and open the same session.",
+   "Start a task that runs tools and watch the tool activity in agi.",
+   "Compare with the tool activity shown in AGI Mobile."
+  ],
+  "where": "Type /remote-control in agi (the full-screen interface), with AGI Mobile connected"
+ },
+ "S68.12": {
+  "labels": [
+   {
+    "file": "apps/cli/src/agent/mod.rs",
+    "text": "Writing:"
+   },
+   {
+    "file": "apps/cli/src/agent/mod.rs",
+    "text": "/control release hands it to another client; /control take takes it from whoever is writing it."
+   }
+  ],
+  "needs": "a second terminal resuming the same session",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Start agi on a saved session and type /status.",
+   "Note the \"Writing:\" line that names the client that owns execution.",
+   "Type /control and read its status text.",
+   "Run agi resume <id> in a second terminal and compare the \"Writing:\" line in both."
+  ],
+  "where": "Type /status in agi; or /control in agi"
+ },
+ "S68.13": {
+  "labels": [
+   {
+    "file": "apps/cli/src/agent/mod.rs",
+    "text": "/control release hands it to another client; /control take takes it from whoever is writing it."
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "/control"
+   }
+  ],
+  "needs": "a second terminal writing the same session",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Start agi on a session that another terminal is writing.",
+   "Type /control and read who is writing it.",
+   "Type /control take in this terminal.",
+   "Check the reply \"This terminal now writes session\" and check the other terminal's status says it stopped writing."
+  ],
+  "where": "Type /control release or /control take in agi"
+ },
+ "S68.16": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Hand this session to the cloud?"
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Continue a local session in a new cloud Code session: its objective,"
+   }
+  ],
+  "needs": "a GitHub checkout with a pushed branch, a signed-in account and a local session",
+  "note": "There is no /handoff slash command in the code; the handoff is a CLI command.",
+  "reachable": "yes",
+  "steps": [
+   "In a GitHub checkout with a pushed branch, run agi code handoff.",
+   "Read the review text shown before the prompt.",
+   "At \"Hand this session to the cloud?\" answer n to cancel, or y to hand it over.",
+   "Check the output: the session appears in agi code list."
+  ],
+  "where": "agi code handoff (in a git checkout); or agi code start \"<task>\""
+ },
+ "S68.18": {
+  "labels": [
+   {
+    "file": "apps/cli/src/cloud/code_handoff.rs",
+    "text": "What moves to the cloud"
+   },
+   {
+    "file": "apps/cli/src/cloud/code_handoff.rs",
+    "text": "What stays on this machine"
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Hand this session to the cloud?"
+   }
+  ],
+  "needs": "a GitHub checkout with a pushed branch and a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Run agi code handoff without --yes in a GitHub checkout.",
+   "Read the section \"What moves to the cloud\".",
+   "Read the section \"What stays on this machine\" and the \"Access:\" line.",
+   "At \"Hand this session to the cloud?\" answer n to stop without a transfer."
+  ],
+  "where": "agi code handoff (read the review before answering the prompt)"
+ },
+ "S68.21": {
+  "labels": [
+   {
+    "file": "apps/cli/src/cloud/devices.rs",
+    "text": "Your devices"
+   },
+   {
+    "file": "apps/cli/src/cloud/devices.rs",
+    "text": "can host"
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "List the devices signed in to your AGI account, whether each"
+   }
+  ],
+  "needs": "a signed-in AGI account with at least one device",
+  "note": "The host list in the code covers local models, local MCP servers, a browser, computer use and remote control; code sessions are not in it.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi devices in a terminal.",
+   "Read the \"Your devices\" list and each line's \"can host\" part.",
+   "Compare with the devices you signed in on (local models, browser, MCP, computer use, remote control).",
+   "Check that a device which reports nothing shows \"reports nothing it can host\"."
+  ],
+  "where": "agi devices (add --json for JSON)"
+ },
+ "S68.26": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Remote Control: reconnecting"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/remote-control"
+   }
+  ],
+  "needs": "a way to drop the network connection, and AGI Mobile connected",
+  "note": "The code shows the reconnecting status, not the resume of state itself; whether the state resumes was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi in full-screen mode, connect Remote Control with /remote-control.",
+   "Turn off the network for a short time, then turn it back on.",
+   "Watch the status line for \"Remote Control: reconnecting\".",
+   "Check the session continues with the same conversation after reconnecting."
+  ],
+  "where": "Type /remote-control in agi, then watch the status line for \"Remote Control: reconnecting\""
+ },
+ "S68.27": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/export"
+   }
+  ],
+  "needs": "none",
+  "note": "Context is written only as the transcript format chosen; the export formats are json, answer and markdown (md).",
+  "reachable": "yes",
+  "steps": [
+   "Start agi, send a message, and type /export to see the transcript shown on screen.",
+   "Type /export json followed by a file path ending in .json, for example ~/Desktop/session.json.",
+   "Open the file and check it holds the transcript.",
+   "Note that a relative path is saved under the workspace folder."
+  ],
+  "where": "Type /export in agi (add a path such as /export json ~/Desktop/session.json to write a file)"
+ }
+}

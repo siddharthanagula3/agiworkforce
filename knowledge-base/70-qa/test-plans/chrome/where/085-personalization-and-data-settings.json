@@ -1,0 +1,152 @@
+{
+ "S85.01": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "More"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Settings"
+   }
+  ],
+  "needs": "a signed-in AGI account",
+  "note": "No code in apps/extension lets the user edit name, photo or email. The extension reads displayName (capabilityDocument.ts) and shows it read-only; the listed side_panel.ts lines no longer contain the quoted code. Editing is presumed to be on the web, not verified.",
+  "reachable": "unsure",
+  "steps": [
+   "Sign in to the extension and click the More button in the side panel header.",
+   "Read the account name row at the top of the More menu, which shows the display name or email.",
+   "Click Settings, which opens the AGI web app in a new tab.",
+   "Look for name, photo and email fields on that web page and compare with Expected. Editing was not found in the extension code, so check the web page directly."
+  ],
+  "where": "More > Settings (opens the AGI web settings page; the extension itself only shows the name and email)"
+ },
+ "S85.02": {
+  "labels": [],
+  "needs": "live-web",
+  "note": "Searched apps/extension for 'custom instruction', 'personalization', 'personalisation' and 'communication style' and found no matches. The control is probably on the web app, which was not searched.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S85.03": {
+  "labels": [],
+  "needs": "live-web",
+  "note": "Searched apps/extension for 'communication style', 'tone', 'response style' and 'personality' and found no matching control. The control is probably on the web app, which was not searched.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S85.05": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Memory"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Memory settings on the web"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "More"
+   }
+  ],
+  "needs": "a signed-in AGI account",
+  "note": "The sheet supports add, edit and delete. No on/off switch for memory was found in the extension, so that part is only on the web (Settings > Account > Memory link also opens the web page). Whether saved memories are used in chats was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to the extension and click the More button in the side panel header.",
+   "Click the Memory item in the account part of the More menu.",
+   "In the sheet titled Memory, type a memory in the add field and click Add, then click Edit or Delete on an item.",
+   "Check the list updates to match Expected. Use Memory settings on the web to reach the web memory page."
+  ],
+  "where": "More > Memory"
+ },
+ "S85.06": {
+  "labels": [],
+  "needs": "a signed-in AGI account",
+  "note": "Searched apps/extension for past-chat reference terms and found no on/off control. The only related control found is Temporary chat, whose text says it stays out of history, search and memory. Temporary chat is a chat mode, not the past-chat reference setting.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S85.10": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Extension settings"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Permissions"
+   },
+   {
+    "file": "apps/extension/src/options.ts",
+    "text": "Browser access"
+   }
+  ],
+  "needs": "none",
+  "note": "The Grant full browser control button is in src/options.ts. The remove control label for an approved site was not confirmed in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Click Extension settings in the side panel More menu.",
+   "Click Permissions in the left navigation of the settings page.",
+   "Find the Browser access section and read its text and the Browser control default.",
+   "Grant or remove an approved site and check the site list (it shows No sites allowlisted yet. when empty) against Expected."
+  ],
+  "where": "Extension settings > Permissions > Browser access"
+ },
+ "S85.11": {
+  "labels": [
+   {
+    "file": "apps/extension/src/features/privacy/dataHandling.ts",
+    "text": "Save Managed Cloud chats to my account"
+   },
+   {
+    "file": "apps/extension/src/features/options/data-handling-section.ts",
+    "text": "Privacy and data handling"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Account"
+   }
+  ],
+  "needs": "a signed-in AGI account and a Managed Cloud chat",
+  "note": "The toggle only covers Managed Cloud chats. There is no separate option for keeping local chats out of history; Temporary chat is per chat. The listed side_panel.ts lines no longer contain the quoted code.",
+  "reachable": "yes",
+  "steps": [
+   "Click Extension settings in the side panel More menu.",
+   "Click Account in the left navigation.",
+   "Scroll to the Privacy and data handling section and find the toggle Save Managed Cloud chats to my account.",
+   "Turn the toggle off, then check the text beside it (Managed Cloud chats stay in this browser only.) against Expected."
+  ],
+  "where": "Extension settings > Account > Privacy and data handling > Save Managed Cloud chats to my account"
+ },
+ "S85.14": {
+  "labels": [
+   {
+    "file": "apps/extension/src/features/observability/errorReportingCopy.ts",
+    "text": "Share crash reports"
+   },
+   {
+    "file": "apps/extension/src/features/options/data-handling-section.ts",
+    "text": "Privacy and data handling"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Extension settings"
+   }
+  ],
+  "needs": "none",
+  "note": "Whether crash reports are actually sent after the toggle is switched on was not checked in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Click Extension settings in the side panel More menu.",
+   "Click Account in the left navigation.",
+   "Scroll to Privacy and data handling and find the toggle Share crash reports, which starts off.",
+   "Switch it on or off and read the text beside it, then compare with Expected."
+  ],
+  "where": "Extension settings > Account > Privacy and data handling > Share crash reports"
+ }
+}

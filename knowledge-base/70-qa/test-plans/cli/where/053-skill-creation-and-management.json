@@ -1,0 +1,225 @@
+{
+ "S53.02": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/skills"
+   },
+   {
+    "file": "apps/cli/src/repl/slash_commands.rs",
+    "text": "/skills"
+   }
+  ],
+  "needs": "none; a skill installed in .agiworkforce/skills/ or ~/.agiworkforce/skills/ helps",
+  "note": "The list comes back empty if the account's plan lacks the Skills capability (tier_cache check in apps/cli/src/skills.rs discover_skills); I did not verify which plans have it.",
+  "reachable": "yes",
+  "steps": [
+   "Start the CLI and open the chat.",
+   "Type /skills and press Enter.",
+   "Compare the list with Expected: each skill shows its name, a description and a [project] or [global] tag, or a 'No skills found.' message when none are installed."
+  ],
+  "where": "/skills (type it in the chat and press Enter)"
+ },
+ "S53.03": {
+  "labels": [
+   {
+    "file": "apps/cli/src/repl/slash_commands.rs",
+    "text": "Usage: /skills import <path to SKILL.md or its folder>"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/skills"
+   }
+  ],
+  "needs": "a skill folder with SKILL.md on disk",
+  "note": "Personal skills live in the user's config folder (~/.agiworkforce/skills, or AGIWORKFORCE_HOME). I found no owner or sharing field in the code, so 'only they have' is not visible in the UI. /create-skill writes to the project folder, not the personal folder.",
+  "reachable": "yes",
+  "steps": [
+   "Make a folder with a SKILL.md file on your computer, and note its path.",
+   "Type /skills import followed by that path, then press Enter.",
+   "Read the 'Imported the skill to' message, then type /skills and check the skill is listed with the [global] tag."
+  ],
+  "where": "/skills import <path to SKILL.md or its folder> (type it in the chat), then /skills"
+ },
+ "S53.04": {
+  "labels": [
+   {
+    "file": "apps/cli/src/skills.rs",
+    "text": "Load them?"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/skills"
+   }
+  ],
+  "needs": "a project folder with its own .agiworkforce/skills skill",
+  "note": "Project skills load only after consent, and the prompt appears again when a project skill changes. The earlier quoted line at skills.rs:190 was not found, but project scoping and the consent prompt are present (skills.rs around lines 169 and 426-475).",
+  "reachable": "yes",
+  "steps": [
+   "Open a terminal in a project folder that has a .agiworkforce/skills folder with a skill in it.",
+   "Start the CLI there. When asked whether to load the project's skills, read the prompt and answer yes.",
+   "Type /skills and press Enter.",
+   "Check the project skill is listed with the [project] tag. Start the CLI in another folder and check it is not listed."
+  ],
+  "where": "Start the CLI in a project folder that contains .agiworkforce/skills/<name>/SKILL.md, answer the prompt, then type /skills"
+ },
+ "S53.07": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/skills"
+   }
+  ],
+  "needs": "at least one installed skill",
+  "note": "none",
+  "reachable": "yes",
+  "steps": [
+   "Install or add at least one skill with a name and a description.",
+   "Type /skills and press Enter.",
+   "Check each row shows the skill name, then its description (or '(no description)' if empty)."
+  ],
+  "where": "/skills (type it in the chat and press Enter)"
+ },
+ "S53.08": {
+  "labels": [],
+  "needs": "none",
+  "note": "I searched apps/cli for invocation hint text (help, hints, 'Use /', 'type /' near skill) in tui_app.rs, widgets and repl and found no user-visible text that explains how a skill is invoked. The only skill-invocation strings are model-facing (skills.rs 'Skill bodies are lazy-loaded') and the /skills empty-state text, which names folders only. Invocation works by /<skill name> (skills.rs skill_command_prompt).",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S53.10": {
+  "labels": [
+   {
+    "file": "apps/cli/src/skills.rs",
+    "text": "Files this skill bundles (scripts/, references/, assets/) are under"
+   }
+  ],
+  "needs": "a skill folder with SKILL.md and references/ on disk, in the <id>/SKILL.md layout",
+  "note": "The bundle path note is added only for the <id>/SKILL.md package layout (tree_hash present). Whether the model actually reads the file is decided by the model, so the check is the answer.",
+  "reachable": "yes",
+  "steps": [
+   "Make a skill folder with SKILL.md and a references/ subfolder holding a note file with a made-up fact, for example a code word.",
+   "Start the CLI, make sure the skill is listed by /skills.",
+   "Type /<skill name> and a request that needs the note, then press Enter.",
+   "Check the answer uses the fact from the reference file. The skill result text tells the model where the bundled files are."
+  ],
+  "where": "/<skill name> <request> (type the skill's name with a slash in the chat and press Enter)"
+ },
+ "S53.11": {
+  "labels": [
+   {
+    "file": "apps/cli/src/skills.rs",
+    "text": "Files this skill bundles (scripts/, references/, assets/) are under"
+   }
+  ],
+  "needs": "a skill folder with a script, and the tool that runs commands allowed in the session",
+  "note": "No code in apps/cli/src/skills.rs runs scripts. The skill result only names the folder and the model decides whether to run a script through its own tools, so the run is not guaranteed.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Make a skill folder with SKILL.md and a scripts/ subfolder holding a script that writes a made-up word to a file, and have SKILL.md tell the model to run it.",
+   "Invoke the skill with /<skill name> and a request, then watch the chat for a shell command run.",
+   "Check the file the script writes exists afterwards."
+  ],
+  "where": "Effect is inside the skill run after /<skill name> <request>; no control of its own"
+ },
+ "S53.14": {
+  "labels": [
+   {
+    "file": "apps/cli/src/skills.rs",
+    "text": "Skill {} cannot be loaded because {}."
+   },
+   {
+    "file": "apps/cli/src/skills.rs",
+    "text": "missing tools: {}"
+   }
+  ],
+  "needs": "a skill file with a tools: line naming a missing tool",
+  "note": "The check uses the built-in tool list only (skills.rs skill_command_prompt). /skills does not show required tools.",
+  "reachable": "yes",
+  "steps": [
+   "Make a skill whose SKILL.md frontmatter lists a tool name the CLI does not have, for example tools: [no-such-tool].",
+   "Start the CLI and type /<skill name> with any request, then press Enter.",
+   "Check the message says the skill cannot be loaded and names the missing tool, instead of running the skill."
+  ],
+  "where": "/<skill name> <request> (type it in the chat and press Enter)"
+ },
+ "S53.17": {
+  "labels": [
+   {
+    "file": "apps/cli/src/skills.rs",
+    "text": "The user invoked the /{name} skill."
+   },
+   {
+    "file": "apps/cli/src/skills.rs",
+    "text": "Apply this skill to the current work."
+   }
+  ],
+  "needs": "at least one installed skill",
+  "note": "Typing /<skill name> works in both the chat screen and the line REPL (command_registry.rs expand_dynamic_slash_invocation).",
+  "reachable": "yes",
+  "steps": [
+   "In the chat, type / and look for the skill's name in the list that opens.",
+   "Pick the skill and type a request after it, then press Enter.",
+   "Check the answer follows the skill's steps; the model is told 'The user invoked the /<name> skill.'"
+  ],
+  "where": "/ then pick the skill's name, then type a request (in the chat)"
+ },
+ "S53.18": {
+  "labels": [
+   {
+    "file": "apps/cli/src/agent/prompt.rs",
+    "text": "Skill metadata loaded from consented locations."
+   }
+  ],
+  "needs": "an installed skill with a clear description",
+  "note": "No code outside tests calls match_skills_scored or extract_skill_mentions, so there is no code-scored automatic match; the model chooses from the catalog in the system prompt. $name and @name mentions are parsed only by tests.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Install a skill whose description states a clear use, for example 'Use when the user asks for a haiku'.",
+   "Start the CLI and type a request that matches that description, without naming the skill or using a slash.",
+   "Check whether the answer follows the skill, or the transcript shows a call to the skill tool."
+  ],
+  "where": "Effect is in the chat: an ordinary request with no slash command"
+ },
+ "S53.20": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Enable or disable individual skills"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/skills_toggle.rs",
+    "text": "\u2191\u2193 navigate   Space toggle   Enter save   Esc cancel"
+   }
+  ],
+  "needs": "at least one installed skill",
+  "note": "/skills-toggle exists only in the full-screen chat; the line REPL has no such command.",
+  "reachable": "yes",
+  "steps": [
+   "Type /skills-toggle and press Enter.",
+   "Move with the arrow keys to a skill, press Space to turn it off, then press Enter to save.",
+   "Type /skills and check the skill is no longer listed; the skill folder is still on disk.",
+   "Type /skills-toggle again, press Space on the same skill to turn it on, press Enter, and check /skills lists it again."
+  ],
+  "where": "/skills-toggle (type it in the full-screen chat, which opens an overlay)"
+ },
+ "S53.21": {
+  "labels": [
+   {
+    "file": "apps/cli/src/repl/slash_commands.rs",
+    "text": "Usage: /skills import <path to SKILL.md or its folder>"
+   }
+  ],
+  "needs": "a skill folder or SKILL.md file on disk",
+  "note": "There is no file picker. The import takes a typed path and copies the skill into the user's skills folder (skills.rs import_skill).",
+  "reachable": "yes",
+  "steps": [
+   "Make a skill folder with a SKILL.md file on your computer, and note its path.",
+   "Type /skills import and that path, then press Enter.",
+   "Read the 'Imported the skill to' message, then type /skills and check the skill is listed.",
+   "Invoke it with /<skill name> and a request, and check the answer uses the skill."
+  ],
+  "where": "/skills import <path to SKILL.md or its folder> (type it in the chat and press Enter)"
+ }
+}

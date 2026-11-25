@@ -1,0 +1,418 @@
+{
+ "S78.01": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tier_cache.rs",
+    "text": "is not available"
+   }
+  ],
+  "needs": "an account where voice input is switched off or not on its plan",
+  "note": "The resolver is the capability_refusal function used by /voice and /skills. It is not a single screen.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Sign in to an account where voice input is switched off or not on its plan.",
+   "Type /voice and press Enter.",
+   "Read the reply. Expected: a line saying Voice input is not available, which names the reason."
+  ],
+  "where": "No control of its own. Effect shows as a refusal line such as \"Voice input is not available ...\" from /voice, or an empty /skills list, when the account's switch is off."
+ },
+ "S78.02": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/model"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/model_picker.rs",
+    "text": "Effort:"
+   }
+  ],
+  "needs": "a signed-in account with a model list that includes reasoning and non-reasoning models",
+  "note": "Only the effort row was traced. Attachment and thinking controls in the composer by model were not found.",
+  "reachable": "yes",
+  "steps": [
+   "Type /model and press Enter.",
+   "Highlight a model that supports reasoning (marked R in agi models list). Look for the Effort: row under the list.",
+   "Highlight a model that does not support reasoning.",
+   "Compare with Expected: the Effort: row should appear or disappear with the model. The status bar effort: label also disappears for non-reasoning models."
+  ],
+  "where": "/model, then move the highlight between models that do and do not support reasoning."
+ },
+ "S78.03": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/attach"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "switch to a vision model with /model first"
+   }
+  ],
+  "needs": "an image file, and a non-vision model in the model list",
+  "note": "The image-check message is in the attach path function; the default branch of /attach that routes a file path there was not traced line by line. The message does not name which model to use.",
+  "reachable": "yes",
+  "steps": [
+   "Type /model, pick a model with no vision support (no V in agi models list).",
+   "Type /attach followed by the path to a PNG or JPG file, and press Enter.",
+   "Read the reply. Expected: a message that the model does not accept images and asks you to switch to a vision model with /model first.",
+   "Switch to a vision model and attach the same file. Expected: the file is accepted."
+  ],
+  "where": "/model to pick a model that cannot read images, then /attach with an image file path."
+ },
+ "S78.04": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "This model takes no effort setting on this route"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/effort"
+   }
+  ],
+  "needs": "a signed-in account with reasoning and non-reasoning models",
+  "note": "The notice that the level is not sent to the model is text from claude_parity.rs. The code that strips unsupported levels from the outgoing request (streaming.rs) moved and was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Type /model and pick a model that supports reasoning.",
+   "Type /effort and press Enter. The effort picker opens.",
+   "Choose a level with the arrow keys and Enter. Expected: Effort set to <level>.",
+   "Switch to a model that takes no effort setting and type /effort. Expected: the effort row and the /effort command are no longer offered."
+  ],
+  "where": "/model to pick a reasoning model, then /effort."
+ },
+ "S78.05": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "does not accept a temperature, so your configured"
+   }
+  ],
+  "needs": "a model that rejects temperature; none was listed in the code for this check",
+  "note": "The --temperature flag was read from the lib.rs struct and its doc comment, not from the flag definition.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi --temperature 0.5 (or set temperature under [default] in the config file).",
+   "Choose a model that rejects temperature (see the catalog). Start the chat.",
+   "Read the first system line in the chat. Expected: it says the model does not accept a temperature, so the configured value is not sent to it."
+  ],
+  "where": "agi --temperature <number>, then start a chat with a model that rejects sampling settings."
+ },
+ "S78.06": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/image"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "--aspect 16:9"
+   },
+   {
+    "file": "apps/cli/src/cloud/image.rs",
+    "text": "does not make"
+   }
+  ],
+  "needs": "a signed-in account in Managed Cloud mode",
+  "note": "Which models offer which ratios was not checked. The quoted check in cloud/image.rs moved to unsupported_for_model.",
+  "reachable": "yes",
+  "steps": [
+   "Make sure the session is in Managed mode (/privacy-mode managed). /image is only listed in Managed mode.",
+   "Type /image --aspect 16:9 a red bicycle and press Enter.",
+   "Choose a model that does not offer that ratio, if you know one. Read the reply. Expected: a message that the model does not make that ratio and lists the ratios it supports.",
+   "Type /image with no text to see the help line that lists the settings."
+  ],
+  "where": "/image with a flag, such as /image --aspect 16:9 <prompt>, in Managed Cloud mode."
+ },
+ "S78.07": {
+  "labels": [
+   {
+    "file": "apps/cli/src/provider.rs",
+    "text": "Locked on your"
+   },
+   {
+    "file": "apps/cli/src/errors.rs",
+    "text": "is unavailable on your plan right now."
+   }
+  ],
+  "needs": "a Free account (or a lower plan than a locked model)",
+  "note": "The second check, on the server, cannot be seen from the CLI. Only the visible refusal and the locked list were confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with a plan that does not include some models.",
+   "Run agi models list in a terminal. Look for the Locked on your ... plan section.",
+   "Type /model, pick a locked model, and send a message. Expected: a reply that the model is unavailable on your plan right now.",
+   "Compare the server's refusal with the locked list. The check on the server was not run from the UI."
+  ],
+  "where": "agi models list (CLI command), and /model to pick a locked model."
+ },
+ "S78.08": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/usage"
+   },
+   {
+    "file": "apps/cli/src/errors.rs",
+    "text": "Run `agi usage` to see when the limit resets"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The account lines come from usage_summary.rs; the exact lines shown for remaining allowance were not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and send a message or two.",
+   "Type /usage and press Enter.",
+   "Read the account lines at the bottom of the reply. Expected: the plan allowance that remains, from the server."
+  ],
+  "where": "/usage (or agi usage in a terminal)."
+ },
+ "S78.09": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "Connectors"
+   }
+  ],
+  "needs": "a member account in a workspace with a policy",
+  "note": "Model and retention restrictions by workspace policy live in apps/web routes, not in a CLI screen. Only the connector policy was confirmed in the CLI.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to a workspace account whose admin has set a connector policy.",
+   "Type /connectors and press Enter.",
+   "Read the reply. Expected: the policy is shown and restricted items are blocked."
+  ],
+  "where": "/connectors, which shows the workspace connector policy."
+ },
+ "S78.12": {
+  "labels": [],
+  "needs": "a Free account and an account outside the age rule",
+  "note": "Searched apps/cli/src for age, adult, eligibility and policy wording. No age check or eligibility text was found in the CLI sign-in code (oauth.rs). The web device page cited in the plan no longer has the matching text.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S78.15": {
+  "labels": [
+   {
+    "file": "apps/cli/src/provider.rs",
+    "text": "INSTALLED LOCAL MODELS:"
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "/doctor"
+   }
+  ],
+  "needs": "a machine with and without a local model runtime",
+  "note": "Checks for sandbox and CLI presence were not traced individually.",
+  "reachable": "yes",
+  "steps": [
+   "Make sure no local model runtime is installed.",
+   "Run agi models list in a terminal. Expected: no INSTALLED LOCAL MODELS section appears.",
+   "Type /doctor and press Enter. Read the checks listed.",
+   "Install or start a local runtime, run agi models list again, and compare. Expected: the local models section appears."
+  ],
+  "where": "agi models list (CLI command), and /doctor."
+ },
+ "S78.16": {
+  "labels": [
+   {
+    "file": "apps/cli/src/provider.rs",
+    "text": "Temporarily unavailable, on your plan but not answering right now; try again later:"
+   },
+   {
+    "file": "apps/cli/src/provider.rs",
+    "text": "On your plan but not offered by this deployment right now:"
+   }
+  ],
+  "needs": "a signed-in account; a model the server reports as temporarily unavailable is needed to see that group",
+  "note": "The server decides which group a model falls into; the tester cannot force each state.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and run agi models list.",
+   "Look for the three groups: Temporarily unavailable, Locked on your ... plan, and On your plan but not offered by this deployment right now.",
+   "Compare the wording. Expected: each group has its own line that says why the model is not available."
+  ],
+  "where": "agi models list (CLI command)."
+ },
+ "S78.17": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/image"
+   }
+  ],
+  "needs": "a signed-in account that can switch between Managed and Local modes",
+  "note": "The /effort hiding rule is in command_applies_here in tui_app.rs.",
+  "reachable": "yes",
+  "steps": [
+   "Type /privacy-mode managed, then type / to open the command popup. Note /image is listed.",
+   "Type /privacy-mode local, then type / again. Expected: /image is no longer listed.",
+   "Pick a model without reasoning and type / again. Expected: /effort is not listed."
+  ],
+  "where": "Type / in the composer to open the command list, after /privacy-mode managed and /privacy-mode local."
+ },
+ "S78.18": {
+  "labels": [
+   {
+    "file": "apps/cli/src/provider.rs",
+    "text": "Locked on your"
+   },
+   {
+    "file": "apps/cli/src/provider.rs",
+    "text": "(`agi plans` shows what each plan includes)"
+   }
+  ],
+  "needs": "a Free account",
+  "note": "Whether the model picker in /model shows locked rows as disabled was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with a plan that does not include some models.",
+   "Run agi models list.",
+   "Look for the Locked on your ... plan section, which lists each model with the plan it needs.",
+   "Compare with Expected: restricted models stay listed and show the reason and the plan to upgrade to."
+  ],
+  "where": "agi models list (CLI command): models your plan does not include are listed with the plan they need."
+ },
+ "S78.19": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "Plans and upgrades:"
+   },
+   {
+    "file": "apps/cli/src/errors.rs",
+    "text": "Run `agi plans` to see what each plan includes."
+   }
+  ],
+  "needs": "a Free account, to see a plan-locked feature",
+  "note": "The message for a plan-blocked request is in errors.rs; the server route that produces it was not run.",
+  "reachable": "yes",
+  "steps": [
+   "Type /upgrade and press Enter.",
+   "Read the reply. Expected: Plans and upgrades: with the plans link.",
+   "Run agi plans in a terminal. Expected: the plans and what each includes are listed.",
+   "Try to use a plan-locked feature to see the Cloud chat requires message and its link."
+  ],
+  "where": "/upgrade (opens the plans page), and agi plans in a terminal."
+ },
+ "S78.21": {
+  "labels": [
+   {
+    "file": "apps/cli/src/features/exec/tools/mod.rs",
+    "text": "The agent wants to read the page open in your signed-in Chrome."
+   }
+  ],
+  "needs": "Chrome with the AGI browser bridge connected",
+  "note": "The connection steps for the browser bridge were not found in the code read.",
+  "reachable": "yes",
+  "steps": [
+   "Connect the AGI browser bridge to your signed-in Chrome (the way to connect it was not traced).",
+   "Ask the agent to read the page open in Chrome.",
+   "Read the approval prompt. Expected: it says the agent wants to read the page open in your signed-in Chrome, and gives the target.",
+   "Deny or allow, and check that nothing happens without approval."
+  ],
+  "where": "Ask the agent to read or click in the active Chrome tab. The approval prompt appears before the action."
+ },
+ "S78.22": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "switch to a vision model with /model first"
+   },
+   {
+    "file": "apps/cli/src/errors.rs",
+    "text": "Pick another model with `agi models list`, or try again later."
+   }
+  ],
+  "needs": "an image file, and a non-vision model",
+  "note": "The attach message does not name a model. The model-unavailable message names one only when a plan alternative exists.",
+  "reachable": "yes",
+  "steps": [
+   "Type /model and pick a model with no V in agi models list.",
+   "Type /attach with an image path and press Enter.",
+   "Read the reply. Expected: it tells you to switch to a vision model with /model first.",
+   "Read the reply for a model-unavailable case: it names the alternative to use with /model."
+  ],
+  "where": "/model, then /attach with an image while a non-vision model is selected."
+ },
+ "S78.23": {
+  "labels": [
+   {
+    "file": "apps/cli/src/cloud/mod.rs",
+    "text": "Continue it on the web"
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "/continue-elsewhere"
+   }
+  ],
+  "needs": "a signed-in account with a saved conversation",
+  "note": "The offer appears only when you type the command, not on its own when a task fits another device.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and have a saved conversation in your account.",
+   "Type /continue-elsewhere and press Enter.",
+   "Read the reply. Expected: it says the conversation is in your account and gives a web link to continue it on the web, or in the desktop or mobile app.",
+   "Type /continue-elsewhere open to open the link in your browser."
+  ],
+  "where": "/continue-elsewhere (add open to open the browser)."
+ },
+ "S78.24": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "Privacy settings"
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "Usage: /privacy-mode local | byok | managed"
+   }
+  ],
+  "needs": "a signed-in account; a BYOK provider key for the BYOK step",
+  "note": "The local model route is set with /model and a local model, not checked here.",
+  "reachable": "yes",
+  "steps": [
+   "Type /privacy-mode and press Enter. Read the Privacy settings screen and its Active mode line.",
+   "Type /privacy-mode byok while in Local mode. Expected: Local -> BYOK requires an explicit reviewable handoff.",
+   "Use /byok to create a reviewed draft and send it. Expected: the handoff is shown before the send.",
+   "Type /privacy-mode with a wrong word to see the usage line."
+  ],
+  "where": "/privacy-mode (no argument shows the settings), then /privacy-mode byok or /privacy-mode managed."
+ },
+ "S78.26": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "does not accept a temperature, so your configured"
+   }
+  ],
+  "needs": "a model that rejects temperature",
+  "note": "Same effect as S78.05. The request-side removal is in streaming.rs effective_temperature and was not run.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Set a temperature with agi --temperature 0.5 or in the config file.",
+   "Start a chat with a model that rejects temperature.",
+   "Read the first system line. Expected: it says the configured temperature is not sent to the model."
+  ],
+  "where": "No control of its own. Effect shows as a system line at the start of a chat when a temperature is set for a model that rejects it."
+ },
+ "S78.28": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Account:"
+   }
+  ],
+  "needs": "a plan change you can make on another device",
+  "note": "The 5-minute TTL is in tier_cache.rs. Whether /status forces a refresh was not confirmed.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Note the plan shown in /status (Account: signed in, <plan> plan).",
+   "Change the plan on the web or another device.",
+   "Wait up to 5 minutes, then type /status again and compare the plan name."
+  ],
+  "where": "No control of its own. Plan changes show in /status after the 5-minute tier cache refreshes, without restarting the CLI."
+ }
+}

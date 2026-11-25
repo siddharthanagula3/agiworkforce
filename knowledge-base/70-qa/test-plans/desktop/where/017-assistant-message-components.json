@@ -1,0 +1,601 @@
+{
+ "S17.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "More message actions"
+   }
+  ],
+  "needs": "none",
+  "note": "The model name comes from answeredByLabel in MessageBubble.tsx; the sr-only headings \"You said:\" and \"Assistant said:\" are for assistive tech only.",
+  "reachable": "yes",
+  "steps": [
+   "Send any question in a new chat and wait for the answer.",
+   "Click the \"More message actions\" button under the answer.",
+   "Look at the label at the top of the menu: it should name the model that answered, and the answer should look different from your own message."
+  ],
+  "where": "Any answer > the \"More message actions\" button (the three dots under the answer). The top of that menu shows which model answered."
+ },
+ "S17.02": {
+  "labels": [],
+  "needs": "none",
+  "note": "No single control; the streaming render is in MessageBubble.tsx and useChatStream.ts. Not verified in a browser.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Send a question that needs a longer answer.",
+   "Watch the answer area while it is being written.",
+   "Check that text appears in pieces as it arrives and that markdown (bold, lists, code) is formatted once it shows."
+  ],
+  "where": "Shown automatically while an answer is being written; there is no control for it."
+ },
+ "S17.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/TypingIndicator.tsx",
+    "text": "Preparing"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Generating response\u2026"
+   }
+  ],
+  "needs": "none",
+  "note": "The announced status is set in ChatMessageList.tsx; I did not confirm the screen-reader announcement itself.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Send a question and look at the answer area right away.",
+   "Check for the \"Preparing\" or \"Generating response\u2026\" text before text appears."
+  ],
+  "where": "Shown automatically between sending and the first text: the wait shows \"Preparing\", then \"Generating response\u2026\"."
+ },
+ "S17.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/ThinkingBlock.tsx",
+    "text": "Thought process"
+   }
+  ],
+  "needs": "a model that returns reasoning (which models do this depends on the plan)",
+  "note": "The row only appears when the model returns reasoning. The expand control has the aria-label \"Expand reasoning\" in the same file.",
+  "reachable": "yes",
+  "steps": [
+   "Use a model that shows reasoning and send a hard question.",
+   "Find the \"Thought process\" row under or above the answer.",
+   "Click the row and check that the reasoning text and step summary open, and that clicking again closes it."
+  ],
+  "where": "An answer that has thinking > \"Thought process\" row (or \"Thought for <time>\") > click to expand."
+ },
+ "S17.05": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Used tools"
+   }
+  ],
+  "needs": "a prompt that makes the assistant call a tool",
+  "note": "The tool timeline component is apps/web/features/chat/components/messages/ToolTimeline.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Send a question that needs a tool, for example a question that needs a web search.",
+   "Find the \"Used tools\" section on the answer.",
+   "Open the section and check each tool's name, its status and its result."
+  ],
+  "where": "An answer that used a tool > \"Used tools\" section above the answer text (\"Used N tools\" when there are several)."
+ },
+ "S17.06": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "View {{count}} sources"
+   }
+  ],
+  "needs": "a prompt that triggers a web search",
+  "note": "Marker behaviour is in MessageBubble.tsx and the citation helpers; I did not confirm the exact hover text.",
+  "reachable": "yes",
+  "steps": [
+   "Send a question that needs current web information.",
+   "Find the small numbered markers inside the answer text.",
+   "Click or hover a marker and check that it names the source and opens its link."
+  ],
+  "where": "An answer that used web sources > numbered citation markers in the text > click a marker."
+ },
+ "S17.07": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "View {{count}} sources"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Sources"
+   }
+  ],
+  "needs": "a prompt that uses web sources",
+  "note": "While the answer is still streaming the control reads \"View N sources so far\". The control component is SourcesControl in apps/web/features/chat/components/research/ResearchPanel.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Send a question that uses web sources and wait until the answer finishes.",
+   "Find the \"View N sources\" control at the bottom of the answer.",
+   "Click it and check that the source list opens and each source link can be opened."
+  ],
+  "where": "A finished answer that used sources > \"View N sources\" control at the end of the answer."
+ },
+ "S17.08": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/DeliverableCard.tsx",
+    "text": "Download"
+   },
+   {
+    "file": "apps/web/features/chat/lib/agi-work.ts",
+    "text": "Files this session produced"
+   }
+  ],
+  "needs": "a prompt that makes the assistant produce a file",
+  "note": "Downloads are labelled by DELIVERABLE_DOWNLOAD_ACTION in DeliverableCard.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Ask the assistant for a file, for example a spreadsheet or a text document.",
+   "Find the file card under the answer, with the file name and type.",
+   "Click \"Download\" and check that the file saves with the name shown on the card."
+  ],
+  "where": "An answer that produced a file > file card under the answer > \"Download\"."
+ },
+ "S17.09": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactCard.tsx",
+    "text": "Open artifact"
+   }
+  ],
+  "needs": "a prompt that makes the assistant create an artifact",
+  "note": "The card's aria-label is \"Open artifact: <title>\" and the button turns into \"Hide artifact\" when the panel is shown.",
+  "reachable": "yes",
+  "steps": [
+   "Ask for a document, a code file or a web page.",
+   "Find the artifact card under the answer.",
+   "Click the card and check that the artifact panel opens with the artifact shown."
+  ],
+  "where": "An answer that created an artifact > \"Open artifact: <title>\" card under the answer > click it."
+ },
+ "S17.10": {
+  "labels": [],
+  "needs": "a prompt that makes the assistant create an image",
+  "note": "The image card is apps/web/features/chat/components/messages/cards/ImageToolCard.tsx, but my search found no visible button text in it, so the exact control words are unknown.",
+  "reachable": "yes",
+  "steps": [
+   "Ask the assistant to create an image.",
+   "Look for the image inline in the answer.",
+   "Open or download the image from its card and check that it matches the picture shown."
+  ],
+  "where": "An answer that generated an image > the image shows inline in the answer > open or download it from the image card."
+ },
+ "S17.12": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Download video"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Generated video"
+   }
+  ],
+  "needs": "a plan and deployment that allow video generation",
+  "note": "I found the composer's exit control (aria \"Exit video generation mode\" in apps/web/features/chat/components/Composer/ChatComposerNew.tsx) but not the exact words of the control that turns video mode on.",
+  "reachable": "yes",
+  "steps": [
+   "Turn on video generation in the composer and type a short prompt.",
+   "Send it and wait for the video to appear in the answer.",
+   "Press the play control on the video, then click \"Download video\" and check that the video plays with controls and downloads."
+  ],
+  "where": "Composer > switch to video generation (the video mode) > send a prompt > the video plays in the answer > \"Download video\"."
+ },
+ "S17.13": {
+  "labels": [],
+  "needs": "a prompt that makes the assistant build interactive answer blocks",
+  "note": "The block types come from apps/web/lib/services/answer-ui-tool-service.ts; I did not find fixed visible words for the blocks.",
+  "reachable": "yes",
+  "steps": [
+   "Ask for options laid out as cards or a choice list, for example \"show my options as cards with buttons\".",
+   "Find the cards in the answer.",
+   "Click a choice or button and check that the answer responds in place."
+  ],
+  "where": "An answer that shows interactive blocks (cards with choices, tables, buttons) > operate them inside the answer."
+ },
+ "S17.14": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "Show follow-up suggestions in chats"
+   }
+  ],
+  "needs": "a Free or paid account",
+  "note": "The setting is off by default in ChatMessageList.tsx (the default constant is false), so the suggestions do not show until the switch is turned on. The deploy-level switch-on noted in the plan was not re-checked.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and go to General.",
+   "Turn on \"Show follow-up suggestions in chats\".",
+   "Send a question, wait for the answer, and check that suggested follow-up prompts appear below it and can be clicked."
+  ],
+  "where": "Settings > General > \"Show follow-up suggestions in chats\" (switch on)."
+ },
+ "S17.15": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Copy"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Copy message"
+   }
+  ],
+  "needs": "none",
+  "note": "The aria-label changes between \"Copy message\" and \"Message copied\".",
+  "reachable": "yes",
+  "steps": [
+   "Send a question and wait for the answer to finish.",
+   "Click the copy icon under the answer.",
+   "Paste into a text app and check that the full answer text is pasted, and that the icon briefly changes to \"Message copied\"."
+  ],
+  "where": "Under any answer > the copy icon (tooltip \"Copy\")."
+ },
+ "S17.17": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Read message aloud"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "More message actions"
+   }
+  ],
+  "needs": "none (a speaker is needed to hear it)",
+  "note": "The menu item is replaced by a reason text when read-aloud is unavailable; playback is in apps/web/lib/hooks/useTTS.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Send a question and wait for the answer to finish.",
+   "Click \"More message actions\" under the answer.",
+   "Click \"Read message aloud\" and check that the answer is spoken."
+  ],
+  "where": "Under an answer > \"More message actions\" (three dots) > \"Read message aloud\"."
+ },
+ "S17.18": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Stop reading message"
+   }
+  ],
+  "needs": "none (a speaker is needed to hear it)",
+  "note": "The unified-chat ActionBar in packages/ui/unified-chat/src/components/ActionBar.tsx uses the same words for other surfaces.",
+  "reachable": "yes",
+  "steps": [
+   "Start read-aloud as in S17.17.",
+   "While it speaks, click \"More message actions\" under the answer again.",
+   "Click \"Stop reading message\" and check that the speech stops."
+  ],
+  "where": "Under an answer > \"More message actions\" > \"Stop reading message\" (shown while the answer is being read aloud)."
+ },
+ "S17.19": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Regenerate"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Try again"
+   }
+  ],
+  "needs": "none",
+  "note": "The aria-label is \"Regenerate response\" in MessageBubble.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Send a question and wait for the answer to finish.",
+   "Click the regenerate icon under the answer (aria \"Regenerate response\").",
+   "Check that a new attempt replaces the answer and that the variant pager (see S17.28) now shows two attempts."
+  ],
+  "where": "Under a finished answer > the regenerate icon (tooltip \"Regenerate\"); with several models available it opens a menu with \"Try again\"."
+ },
+ "S17.20": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/ChatMessageList.tsx",
+    "text": "Retry"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/ChatMessageList.tsx",
+    "text": "Retry this response"
+   }
+  ],
+  "needs": "a way to make a turn fail, such as a dropped connection",
+  "note": "Retry is wired in useChatStream.ts; I did not run a failure to see the notice.",
+  "reachable": "yes",
+  "steps": [
+   "Make an answer fail, for example by losing the connection during a send or by a refusal notice.",
+   "Find the \"Retry\" button on the failure notice.",
+   "Click \"Retry\" and check that the failure is replaced by a new answer for the same question."
+  ],
+  "where": "A failed answer > \"Retry\" button on the notice under it (aria \"Retry this response\")."
+ },
+ "S17.21": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/ChatMessageList.tsx",
+    "text": "Continue generating"
+   }
+  ],
+  "needs": "a prompt long enough to reach the output limit",
+  "note": "The button's aria-label is \"Continue generating this response\".",
+  "reachable": "yes",
+  "steps": [
+   "Ask for a very long answer, for example a long report.",
+   "Wait for the answer to stop part way.",
+   "Click \"Continue generating\" and check that the same answer carries on from where it stopped."
+  ],
+  "where": "An answer cut off by the length limit > \"Continue generating\" button under the answer."
+ },
+ "S17.22": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Try again with"
+   }
+  ],
+  "needs": "an account with more than one model available",
+  "note": "The model list only appears when regenerateModelOptions has entries; the plan tier that allows it was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Send a question and wait for the answer to finish.",
+   "Open the regenerate menu under the answer.",
+   "Choose a model under \"Try again with\" and check that a new attempt from that model replaces or joins the answer."
+  ],
+  "where": "Under a finished answer > regenerate icon (\"Regenerate\") > \"Try again with\" > choose a model."
+ },
+ "S17.27": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Branch conversation from here"
+   }
+  ],
+  "needs": "a conversation with several messages",
+  "note": "The aria-label is \"Branch conversation from here\" and changes to \"Creating branch\u2026\" while it runs.",
+  "reachable": "yes",
+  "steps": [
+   "Have a conversation with at least two exchanges.",
+   "Click the branch icon under an earlier answer.",
+   "Check that a new conversation opens with history up to that answer, and that the original conversation is unchanged."
+  ],
+  "where": "Under an answer > the branch icon (tooltip \"Branch conversation: this chat stays unchanged\"); also in \"More message actions\" on your own messages."
+ },
+ "S17.28": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/VariantPager.tsx",
+    "text": "Previous response"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/VariantPager.tsx",
+    "text": "Next response"
+   }
+  ],
+  "needs": "an answer with at least two attempts",
+  "note": "The position text is built in VariantPager.tsx as \"Response {position} of {total}\".",
+  "reachable": "yes",
+  "steps": [
+   "Regenerate an answer (see S17.19) so it has two attempts.",
+   "Find the pager under the answer, which shows the position.",
+   "Click the next and previous buttons and check the answer changes and the text reads \"Response N of M\"."
+  ],
+  "where": "Under an answer that has several attempts > the pager \"Previous response\" / \"Next response\" with the position text \"Response 2 of 3\"."
+ },
+ "S17.29": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Good response"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Remove rating"
+   }
+  ],
+  "needs": "none",
+  "note": "The rating is saved to the message through the feedback path; I did not confirm where it is stored.",
+  "reachable": "yes",
+  "steps": [
+   "Send a question and wait for the answer to finish.",
+   "Click the thumbs-up icon under the answer.",
+   "Check that the icon shows as selected with tooltip \"Remove rating\", and that clicking again removes the rating."
+  ],
+  "where": "Under a finished answer > thumbs-up icon (aria \"Good response\"; tooltip \"Good response\", or \"Remove rating\" once rated)."
+ },
+ "S17.30": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Bad response"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Remove rating"
+   }
+  ],
+  "needs": "none",
+  "note": "The details panel is ResponseRatingDetails.tsx; I did not confirm when it opens.",
+  "reachable": "yes",
+  "steps": [
+   "Send a question and wait for the answer to finish.",
+   "Click the thumbs-down icon under the answer.",
+   "Check the rating is recorded on that answer (selected icon, tooltip \"Remove rating\") and, if the details panel opens, that it can be filled in."
+  ],
+  "where": "Under a finished answer > thumbs-down icon (aria \"Bad response\"; tooltip \"Bad response\", or \"Remove rating\" once rated)."
+ },
+ "S17.31": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Report this response"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "More message actions"
+   }
+  ],
+  "needs": "none",
+  "note": "The toast text is set in MessageBubble.tsx; the report is sent to the feedback intake, which I did not trace further.",
+  "reachable": "yes",
+  "steps": [
+   "Send a question and wait for the answer to finish.",
+   "Click \"More message actions\" under the answer.",
+   "Click \"Report this response\" and check the menu item changes to \"Reporting\u2026\" then \"Reported\", with the toast \"Reported. Thank you: our trust and safety team will review it.\""
+  ],
+  "where": "Under an answer > \"More message actions\" (three dots) > \"Report this response\"."
+ },
+ "S17.32": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Share conversation"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Share answer"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "More message actions"
+   }
+  ],
+  "needs": "a signed-in account with a chat that has messages",
+  "note": "The dialog's link-creation control text was not found in the code, and the answer share fallback when the system share sheet is missing was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a chat that already has at least one question and answer.",
+   "Click the \"Share\" button in the top bar (on narrow windows only the icon shows; hover it to read \"Share conversation\").",
+   "In the \"Share conversation\" dialog, read the text and look for a link or workspace option that can be copied or shared.",
+   "To share one answer: hover the answer, click \"More message actions\", then click \"Share answer\".",
+   "Compare: the conversation dialog opens with its own title and a shareable link; the answer action opens the system share sheet, or shows \"This answer could not be shared\" if it fails."
+  ],
+  "where": "Open a chat that has messages > top bar \"Share\" button (its label is \"Share conversation\") > dialog titled \"Share conversation\". For one answer: hover the answer > \"More message actions\" > \"Share answer\"."
+ },
+ "S17.36": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "More message actions"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Sent at"
+   }
+  ],
+  "needs": "a signed-in account and a finished answer",
+  "note": "The usage block appears only when the answer carries token data, so it may be missing on some answers; the cost figure and its exact wording were not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, send a message and wait until the answer has finished.",
+   "Hover the answer and click \"More message actions\".",
+   "Scroll to the bottom of the menu and read the token usage block and the duration line.",
+   "Look at the answer header: find the \"Sent at\" time and read the model name shown just below it.",
+   "Compare: the menu shows usage for that answer and the header names the model that answered."
+  ],
+  "where": "Hover an answer > \"More message actions\" > the usage block at the bottom of the menu (tokens and time). The model name shows under \"Sent at\" in the answer header."
+ },
+ "S17.37": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Response failed"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/ChatMessageList.tsx",
+    "text": "the response stopped part way through; the part that arrived is kept above."
+   }
+  ],
+  "needs": "a signed-in account and a way to drop the connection during an answer",
+  "note": "The network-drop step is an untested guess at a trigger; the code shows the reason text but not which failure produces it.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Start a long answer.",
+   "While text is still arriving, interrupt the connection (for example turn off Wi-Fi briefly).",
+   "Look under the partly written answer for a row starting \"Response failed:\" followed by the reason.",
+   "Compare: the text that arrived stays visible above the row and the row gives the reason it stopped."
+  ],
+  "where": "In the chat transcript, under the partial answer that stayed on screen, as a row starting \"Response failed:\"."
+ },
+ "S17.38": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/ChatMessageList.tsx",
+    "text": "The model declined to finish this response for safety reasons."
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/ChatMessageList.tsx",
+    "text": "Retry"
+   }
+  ],
+  "needs": "a signed-in account; a refusal cannot be forced on demand",
+  "note": "A refusal depends on the model's decision, so the tester may not be able to reproduce it on demand.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and send a prompt that the safety layer is likely to refuse.",
+   "When the answer ends, look under it for the notice \"The model declined to finish this response for safety reasons.\"",
+   "Read the \"Retry\" action and the report/appeal control next to it (its text was not found in the code).",
+   "Compare: the refusal is shown as its own notice, not as a normal answer or a generic error."
+  ],
+  "where": "Send a prompt the model refuses; the notice \"The model declined to finish this response for safety reasons.\" appears under the last answer, with a \"Retry\" action."
+ },
+ "S17.39": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/ChatMessageList.tsx",
+    "text": "Response stopped."
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Try again"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The stop control's visible label was not found in the code, so the tester must find it by its position in the message box.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, send a message that gives a long answer.",
+   "While the answer is still being written, press the stop control in the message box.",
+   "Look for the notice \"Response stopped.\" under the partial answer and keep the text that arrived.",
+   "Click \"Try again\" and compare: a new attempt for the same question replaces the stopped one."
+  ],
+  "where": "Send a message, then press the stop control while the answer is still being written. The notice \"Response stopped.\" appears with a \"Try again\" button."
+ },
+ "S17.40": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/ChatMessageList.tsx",
+    "text": "no response was returned."
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Response failed"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/ChatMessageList.tsx",
+    "text": "Retry"
+   }
+  ],
+  "needs": "a signed-in account; an empty reply cannot be forced on demand",
+  "note": "The empty-reply case depends on the service returning nothing, so the tester may not be able to reproduce it on demand.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and send a message.",
+   "If the reply comes back empty, look for a row starting \"Response failed:\" under the question.",
+   "Read the reason \"no response was returned.\" and the \"Retry\" action beside it.",
+   "Compare: there is no empty answer bubble, and Retry sends the turn again."
+  ],
+  "where": "Only when a reply comes back empty: a row starting \"Response failed:\" with the reason \"no response was returned.\" and a \"Retry\" action, shown in place of an empty bubble."
+ }
+}

@@ -1,0 +1,26 @@
+{
+ "S36.04": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Browse the web for current sources"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "{count} sources"
+   }
+  ],
+  "needs": "a signed-in account with web search available on the current route",
+  "note": "The URL is shown as the link tooltip (title attribute) and the link label falls back to the raw URL when no title is sent. Only http and https links are rendered as links; other URLs appear as plain text. I did not confirm that a click opens the link in the browser, since the click handler was not traced, and the code for the source list is only in the webview script. The exact wording of the expanded list needs a live check.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the AGI chat panel in the editor sidebar.",
+   "Turn on the attachment option \"Browse the web for current sources\" in the composer.",
+   "Type a question that needs current facts, for example a recent news question, and send it.",
+   "When the answer finishes, click the \"{count} sources\" line under the answer to expand the list.",
+   "Hover over each source link to see its full URL in the tooltip, then check that each source shows a title, a hostname and an opening link.",
+   "Compare with Expected: each source shows its URL or resource identifier and can be opened."
+  ],
+  "where": "Chat panel > turn on Browse the web for current sources > send a question that needs current facts > under the answer, click the \"{count} sources\" line to expand it (shows as \"1 source\" or \"2 sources\")"
+ }
+}

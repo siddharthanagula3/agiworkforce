@@ -1,0 +1,187 @@
+{
+ "S49.01": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/dictate"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Dictate into the composer without sending"
+   }
+  ],
+  "needs": "a microphone, and a transcription route (a signed-in account, OPENAI_API_KEY, or the whisper program on PATH)",
+  "note": "There is no microphone button; the control is the /dictate command. The Expected line's 'microphone control' is a typed command. Managed transcription may also be refused by a plan capability check, which I did not trace.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi and wait for the message box.",
+   "Type /dictate and press Enter.",
+   "Press SPACE, say a short sentence, then press ENTER to stop.",
+   "Look at the message box: the spoken words should appear there as text."
+  ],
+  "where": "agi, then type /dictate in the message box"
+ },
+ "S49.02": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "dictation added to the composer, Enter to send"
+   }
+  ],
+  "needs": "a microphone, and a transcription route (a signed-in account, OPENAI_API_KEY, or the whisper program on PATH)",
+  "note": "In /dictate the transcript goes straight into the message box with no separate confirm step; the confirm-and-edit step exists only in /voice (apps/cli/src/voice.rs).",
+  "reachable": "yes",
+  "steps": [
+   "Type /dictate, press Enter, then SPACE, say a sentence, and press ENTER.",
+   "Read the notice that appears after the text is added.",
+   "Move the cursor with the left arrow key and change a word in the message box.",
+   "Press Enter to send and check the sent message contains your edit, not the raw transcript."
+  ],
+  "where": "agi, then type /dictate in the message box"
+ },
+ "S49.03": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "--voice-lang"
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Voice mode language hint (ISO 639-1 code, default: en)."
+   }
+  ],
+  "needs": "a microphone, and a transcription route (a signed-in account, OPENAI_API_KEY, or the whisper program on PATH)",
+  "note": "The chosen language is not shown on the /dictate screen; /voice does show 'Language:'. The 20 codes are in apps/cli/src/voice_languages.rs.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi with agi --voice-lang fr (or another code such as es or de).",
+   "Type /dictate and press Enter, then SPACE, speak in that language, and press ENTER.",
+   "Check the transcript comes back in that language in the message box.",
+   "Type /dictate xx with an unsupported code and check the error 'Dictation failed:' appears before any recording."
+  ],
+  "where": "agi --voice-lang <code> at startup, or type /dictate <code> in the message box"
+ },
+ "S49.05": {
+  "labels": [
+   {
+    "file": "apps/cli/src/voice.rs",
+    "text": "Transcribing..."
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "dictation added to the composer, Enter to send"
+   }
+  ],
+  "needs": "a microphone, and a transcription route (a signed-in account, OPENAI_API_KEY, or the whisper program on PATH)",
+  "note": "If transcription fails the screen shows 'Transcription failed:' instead of the text.",
+  "reachable": "yes",
+  "steps": [
+   "Type /dictate and press Enter.",
+   "Press SPACE, say a sentence, then press ENTER.",
+   "Wait for the spinner 'Transcribing...' to finish.",
+   "Check the final text is in the message box and the notice 'dictation added to the composer, Enter to send' appears."
+  ],
+  "where": "agi, then type /dictate in the message box"
+ },
+ "S49.06": {
+  "labels": [
+   {
+    "file": "apps/cli/src/voice.rs",
+    "text": "[R to retry this recording, any other key to drop it]"
+   },
+   {
+    "file": "apps/cli/src/voice.rs",
+    "text": "Transcription failed:"
+   }
+  ],
+  "needs": "a microphone, and a way to make transcription fail such as no network",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Type /dictate, press Enter, then SPACE, say something, and press ENTER.",
+   "Make transcription fail, for example by turning off the network.",
+   "When 'Transcription failed:' appears, press R.",
+   "Check the same recording is transcribed again and the text appears without recording again."
+  ],
+  "where": "agi, then type /dictate in the message box"
+ },
+ "S49.07": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "dictation cancelled"
+   },
+   {
+    "file": "apps/cli/src/voice.rs",
+    "text": "(recording cancelled)"
+   }
+  ],
+  "needs": "a microphone, and a transcription route (a signed-in account, OPENAI_API_KEY, or the whisper program on PATH)",
+  "note": "After a recording is transcribed, /dictate has no discard step; the 'ESC to discard' choice exists only in /voice (apps/cli/src/voice.rs).",
+  "reachable": "yes",
+  "steps": [
+   "Type /dictate and press Enter, then press SPACE, say a few words, and press ESC before pressing ENTER.",
+   "Check the notice 'dictation cancelled' appears.",
+   "Check the message box is still empty, so nothing was inserted.",
+   "Optionally, press ESC right after /dictate before SPACE to see the same notice."
+  ],
+  "where": "agi, then type /dictate in the message box"
+ },
+ "S49.09": {
+  "labels": [
+   {
+    "file": "apps/cli/src/voice.rs",
+    "text": "Transcribing..."
+   }
+  ],
+  "needs": "a microphone, and a transcription route (a signed-in account, OPENAI_API_KEY, or the whisper program on PATH)",
+  "note": "The code sends each whole recording as one upload (transcribe_managed and transcribe_openai_api in apps/cli/src/voice.rs), and recording stops at 120 seconds. No batch control is shown to the user.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Type /dictate, press Enter, then SPACE, speak for 10 to 20 seconds, and press ENTER.",
+   "Watch the spinner 'Transcribing...' while it waits.",
+   "Check the full text appears in one piece, with no partial words during the wait."
+  ],
+  "where": "after /dictate, SPACE and ENTER: the whole text appears at once after 'Transcribing...'"
+ },
+ "S49.17": {
+  "labels": [
+   {
+    "file": "apps/cli/src/voice.rs",
+    "text": "[ENTER to agree, ESC to cancel]"
+   }
+  ],
+  "needs": "a microphone, and a transcription route (a signed-in account, OPENAI_API_KEY, or the whisper program on PATH)",
+  "note": "The notice is remembered per destination in a marker file, so it shows only once unless the config folder is fresh.",
+  "reachable": "yes",
+  "steps": [
+   "Type /dictate and press Enter.",
+   "Read the notice that says the microphone records only after SPACE and that each recording is sent to a named destination.",
+   "Press ESC instead of ENTER and check 'dictation cancelled' appears with nothing recorded.",
+   "Run /dictate again and press ENTER to agree, then check that SPACE starts recording."
+  ],
+  "where": "agi, then type /dictate in the message box (first use only)"
+ },
+ "S49.19": {
+  "labels": [
+   {
+    "file": "apps/cli/src/voice.rs",
+    "text": "REC"
+   },
+   {
+    "file": "apps/cli/src/voice.rs",
+    "text": "(release SPACE or press ENTER to stop)"
+   }
+  ],
+  "needs": "a microphone, and a transcription route (a signed-in account, OPENAI_API_KEY, or the whisper program on PATH)",
+  "note": "The prompt says release SPACE, but many terminals do not report key release, so ENTER is the stop. Recording also stops by itself at 120 seconds.",
+  "reachable": "yes",
+  "steps": [
+   "Type /dictate, press Enter, then press SPACE.",
+   "Watch the line that starts with REC: the seconds count up.",
+   "Speak for about 5 seconds, then press ENTER to stop.",
+   "Check the count stopped near the time you spoke and the line is gone or replaced."
+  ],
+  "where": "agi, then type /dictate in the message box"
+ }
+}

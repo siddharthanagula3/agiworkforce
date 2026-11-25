@@ -1,0 +1,96 @@
+{
+ "S45.01": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Create image"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Photos"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account on a plan that includes image generation, and a photo in the phone library or simulator; the image-generation rows only appear in AGI Cloud mode",
+  "note": "The code reads the attached photo as the source to edit only when the chat is in image mode; I did not confirm the composer preview or send button wording on a device. The send button has no visible text label in the code (testID chat.composer.send).",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a chat in AGI Cloud mode.",
+   "Tap the + button labelled Add to chat next to the message box.",
+   "Tap Create image in the sheet so the chat is in image mode.",
+   "Tap Photos in the top row of the sheet and choose a photo from your library.",
+   "Type a short prompt and tap send.",
+   "Check the sent message shows your photo and that the reply is an image made from it, as Expected says."
+  ],
+  "where": "Add to chat (+ button at the left of the chat composer) > Photos > pick a photo; the photo then shows as an attachment in the composer, with Create image on in the same sheet"
+ },
+ "S45.03": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Create image"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Photos"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account on a plan that includes image generation, and a photo to edit",
+  "note": "The app refuses to edit when the selected image model cannot use a reference (message: This model uses text only. Pick an editing model to edit a photo.); the tester should check the model choice in the Image model list first. Whether the sheet closes after Create image is not confirmed in code.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat in AGI Cloud mode and tap the + button labelled Add to chat.",
+   "Tap Create image, then tap Photos and choose a photo.",
+   "Close the sheet and type a change in the message box, for example a colour or object change.",
+   "Tap send.",
+   "Compare the returned image with the photo: the requested change should appear while the rest stays similar, as Expected says."
+  ],
+  "where": "Add to chat (+) > Create image, then type the change in the message box and send, with a photo attached through Photos"
+ },
+ "S45.22": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Create image"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Attach up to 4 photos. The first is edited; the rest guide it."
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Photos"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account on a plan that includes image generation, and two photos in the phone library or simulator",
+  "note": "Code allows the first photo plus up to 3 more (MANAGED_MEDIA_MAX_IMAGE_REFERENCES = 3 in packages/contracts/cloud-contracts/src/managed-media.ts); the guide photos are sent only with an editing model. Whether the reference is carried over visibly depends on the model, not checked here.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat in AGI Cloud mode and tap the + button labelled Add to chat.",
+   "Tap Create image, then tap Photos and choose a first photo; tap Photos again to add a second photo for reference.",
+   "Read the hint Attach up to 4 photos. The first is edited; the rest guide it.",
+   "Type a prompt that says what to keep from the second photo, such as its subject, layout or style, and tap send.",
+   "Compare the result with the reference photo: subject, layout or style from the reference should carry over, as Expected says."
+  ],
+  "where": "Add to chat (+) > Create image > Photos (add up to 4 photos; the hint reads Attach up to 4 photos. The first is edited; the rest guide it.), then type a prompt and send"
+ },
+ "S45.31": {
+  "labels": [],
+  "needs": "a signed-in AGI Cloud account on a plan that includes image generation, and a photo to edit",
+  "note": "The code attaches the source photo to the request message before generation (runImageGenerationTurn.ts lines 253-267) and returns a new reply; no visible label for this was found, and whether the bubble shows the original next to the result on screen was not checked.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Do the steps for S45.01 and send the edit request.",
+   "Look at your request message in the chat: the photo you attached should still be shown there.",
+   "Look at the reply: it should be a new image, and your original photo should not be replaced, as Expected says."
+  ],
+  "where": "No control of its own: the photo you sent for an edit is attached to your request message in the chat, and the new image is a separate reply"
+ }
+}

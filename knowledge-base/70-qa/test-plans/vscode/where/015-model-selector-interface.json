@@ -1,0 +1,344 @@
+{
+ "S15.01": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Auto"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Model"
+   }
+  ],
+  "needs": "none",
+  "note": "The bottom status bar item (tooltip \"Code, click to change model\", apps/extension-vscode/src/extension.ts) also shows the model name.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the chat panel.",
+   "Look at the button at the right of the composer bottom bar. It shows \"Auto\" by default.",
+   "Pick a specific model (see S15.10) and look at the button again.",
+   "Compare the name on the button with the model the next message will use, as Expected says."
+  ],
+  "where": "Chat panel > bottom of the message box, the button that shows the model name (its tooltip is \"Model\"; it reads \"Auto\" by default)"
+ },
+ "S15.02": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/design-system/provider-display.ts",
+    "text": "Anthropic"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts",
+    "text": "Your providers"
+   }
+  ],
+  "needs": "a signed-in account or a provider key",
+  "note": "Headings in the chat list are built as \"Your providers \u00b7 <provider>\" or \"Managed Cloud \u00b7 <provider>\" and only appear for groups that have models.",
+  "reachable": "yes",
+  "steps": [
+   "Click the model button at the bottom of the chat.",
+   "Read the group headings. Provider headings show a provider name such as \"Anthropic\" or \"OpenAI\".",
+   "Open Command Palette and run \"Code: Select Model\" and compare the provider headings there.",
+   "Check each model row sits under the provider that makes it, as Expected says."
+  ],
+  "where": "Chat panel > the model button at the bottom of the message box > group headings in the list (for example \"Anthropic\"); also Command Palette > Code: Select Model > the provider headings in the list"
+ },
+ "S15.04": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Select Model"
+   }
+  ],
+  "needs": "none",
+  "note": "The model button popover in the chat has no search box. Only the Command Palette list filters by typing.",
+  "reachable": "yes",
+  "steps": [
+   "Open Command Palette and type \"Code: Select Model\", then press Enter.",
+   "Type part of a model name into the box at the top of the list.",
+   "Look at the list: it should narrow to matching rows by name.",
+   "Clear the box and check the full list comes back."
+  ],
+  "where": "Command Palette > Code: Select Model (the list opens with a text box; type to filter)"
+ },
+ "S15.08": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/routing-profile-choice.ts",
+    "text": "Auto"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/model-picker/modelConstants.ts",
+    "text": "Recommended"
+   },
+   {
+    "file": "packages/contracts/types/src/routing-profile-choice.ts",
+    "text": "Picks the model for each message from the task, your plan and cost."
+   }
+  ],
+  "needs": "a signed-in account whose plan includes Auto",
+  "note": "The Auto list also has \"Instant\", \"Best\" and \"Economy\" variants shown as \"Auto \u00b7 <name>\" rows.",
+  "reachable": "yes",
+  "steps": [
+   "Click the model button at the bottom of the chat.",
+   "Choose the row \"Auto\" in the Recommended group.",
+   "Send a short message and check the model button still reads \"Auto\".",
+   "Compare with Expected: the product picks a model per message."
+  ],
+  "where": "Chat panel > model button at the bottom of the message box > row \"Auto\" under Recommended; also Command Palette > Code: Select Model > row \"Auto\""
+ },
+ "S15.09": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Select Model"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Default LLM model"
+   }
+  ],
+  "needs": "none",
+  "note": "The default is saved only when no conversation exists (apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts selectModel). How a tester reaches the no-conversation state in the UI was not confirmed from code.",
+  "reachable": "yes",
+  "steps": [
+   "Close any open chat conversation, or use a fresh panel with no conversation.",
+   "Open Command Palette, run \"Code: Select Model\" and pick a model.",
+   "Read the message: it should say new chats now use that model.",
+   "Open Settings, search for agiWorkforce.model, and check the value is the chosen model."
+  ],
+  "where": "Command Palette > Code: Select Model, with no chat conversation open (the picker then saves a default); the saved value is the setting Default LLM model"
+ },
+ "S15.10": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Select Model"
+   }
+  ],
+  "needs": "a signed-in account or a provider key with at least one reachable model",
+  "note": "The Select Model list only offers models the plan can use; locked rows open an upgrade or key prompt instead.",
+  "reachable": "yes",
+  "steps": [
+   "Open Command Palette and run \"Code: Select Model\".",
+   "Pick a specific model row, for example one from a provider group.",
+   "Check the model button at the bottom of the chat now shows that model's name.",
+   "Send a message and check it runs on the chosen model, as Expected says."
+  ],
+  "where": "Command Palette > Code: Select Model > pick a model row (not Auto); or the model button at the bottom of the chat"
+ },
+ "S15.11": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/model-picker/modelConstants.ts",
+    "text": "Thinking"
+   }
+  ],
+  "needs": "none",
+  "note": "The row text is built from catalog best-for phrases, so it is a short tag list, not a written description. The chat model button popover uses the same description text.",
+  "reachable": "yes",
+  "steps": [
+   "Open Command Palette and run \"Code: Select Model\".",
+   "Read the description on each model row: it shows a plan line, best-use phrases, \"Thinking\" for thinking models and a speed word.",
+   "Read the detail line under a row for the model id and context limits.",
+   "Compare with Expected: each model has a short note of what it is good for."
+  ],
+  "where": "Command Palette > Code: Select Model > the grey description text on each model row (the detail line shows the model id and limits)"
+ },
+ "S15.16": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/model-picker/modelConstants.ts",
+    "text": "Fastest"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/model-picker/modelConstants.ts",
+    "text": "Medium speed"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/model-picker/modelConstants.ts",
+    "text": "Slower"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Command Palette and run \"Code: Select Model\".",
+   "Read the speed word on several rows, for example \"Fastest\", \"Fast\", \"Medium speed\" or \"Slower\".",
+   "Compare the words between models.",
+   "Check the faster and slower models show different words, as Expected says."
+  ],
+  "where": "Command Palette > Code: Select Model > the speed word in the description of each model row"
+ },
+ "S15.17": {
+  "labels": [],
+  "needs": "none",
+  "note": "Searched apps/extension-vscode for cost and usage text in the model list. The picker rows show plan, speed and capability only, not cost or usage. MODEL_COST_RATES in apps/extension-vscode/src/features/model-picker/modelConstants.ts feeds only the token counter in apps/extension-vscode/src/data/tokenCounter.ts. Turn cost appears only as a status bar message after a turn (apps/extension-vscode/src/data/turnUsage.ts), and the Model Dashboard (Code: Model Dashboard) shows requests and latency, not cost.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S15.18": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/model-picker/modelConstants.ts",
+    "text": "Upgrade your AGI plan"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts",
+    "text": "Your plan uses Auto; upgrade your AGI plan to choose these models"
+   }
+  ],
+  "needs": "a Free account or any account whose plan lacks some models",
+  "note": "The plan names come from billing plan labels in code, so the exact words depend on the plan catalog.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with an account whose plan does not include every model (for example a Free account).",
+   "Open Command Palette and run \"Code: Select Model\".",
+   "Find the heading \"Upgrade your AGI plan\" and read the rows under it; each shows a lock icon and a line such as \"<plan> plan and up\".",
+   "Compare the plan named on each locked row with Expected: the plan that unlocks the model is shown."
+  ],
+  "where": "Command Palette > Code: Select Model > the group heading \"Upgrade your AGI plan\" (locked rows sit under it); in the chat model button popover, a group with the text \"Your plan uses Auto; upgrade your AGI plan to choose these models\""
+ },
+ "S15.22": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Reasoning effort"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Next message effort"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Set Reasoning Effort"
+   }
+  ],
+  "needs": "a reasoning-capable model (for example a thinking model on the plan)",
+  "note": "For a model without effort levels the group says \"This model does not take a reasoning effort.\"",
+  "reachable": "yes",
+  "steps": [
+   "Choose a reasoning-capable model (see S15.10).",
+   "Click the button with tooltip \"Mode and reasoning effort\".",
+   "Read the group \"Reasoning effort\" and its options (None, Minimal, Low, Medium, High, xHigh, Max).",
+   "Pick one level, send a message and check the choice applied, as Expected says."
+  ],
+  "where": "Chat panel > the button with tooltip \"Mode and reasoning effort\" at the bottom of the message box > group \"Reasoning effort\"; also Command Palette > Code: Set Reasoning Effort, and the \"...\" More actions menu > \"Next message effort\""
+ },
+ "S15.27": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts",
+    "text": "On this device"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts",
+    "text": "No local models found"
+   }
+  ],
+  "needs": "Ollama or LM Studio installed and running with a model loaded",
+  "note": "The local group is built only in the chat model popover (openModelPopover in ChatStateManager.ts). The Command Palette list was not confirmed to show local models.",
+  "reachable": "yes",
+  "steps": [
+   "Start Ollama or LM Studio on this computer and load a model.",
+   "Click the model button at the bottom of the chat.",
+   "Look for the group \"On this device\" and the local model names in it.",
+   "Pick a local model, send a message and check the model button shows it, as Expected says."
+  ],
+  "where": "Chat panel > model button at the bottom of the message box > group \"On this device\""
+ },
+ "S15.28": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Provider API Keys"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts",
+    "text": "Your providers"
+   }
+  ],
+  "needs": "your own provider API key (from that provider's console)",
+  "note": "The key is saved through the AGI CLI, and the list and its title are in apps/extension-vscode/src/features/surfaces/capabilityManagement.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Open Command Palette and run \"Code: Provider API Keys\".",
+   "Pick a provider from the list and enter your own API key.",
+   "Read the confirmation: it says that provider's models are now under Your providers in the model picker.",
+   "Open the model button at the bottom of the chat and look for the \"Your providers\" group, as Expected says."
+  ],
+  "where": "Command Palette > Code: Provider API Keys > pick a provider > enter the key; then the model button at the bottom of the chat shows models under \"Your providers\""
+ },
+ "S15.29": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Select Model"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Default LLM model"
+   }
+  ],
+  "needs": "none",
+  "note": "The value is saved to the global setting agiWorkforce.model. The package.json description mentions a shortcut cmd+shift+m, but no keybinding for agi-workforce.selectModel exists in package.json.",
+  "reachable": "yes",
+  "steps": [
+   "Close any open conversation and run \"Code: Select Model\" from Command Palette.",
+   "Pick a model and confirm the message that new chats now use it.",
+   "Run Developer: Reload Window from Command Palette, or quit and reopen VS Code.",
+   "Open a new chat and check the model button shows the same model, as Expected says."
+  ],
+  "where": "Command Palette > Code: Select Model (with no conversation open) > pick a model; then reload VS Code and open a new chat to see the model button"
+ },
+ "S15.30": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Sessions"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "New chat"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Select Model"
+   }
+  ],
+  "needs": "an existing chat with messages",
+  "note": "The conversation scope is chosen when a conversation exists (ChatStateManager.ts selectModel). Confirm the exact way a conversation gets created before a tester starts.",
+  "reachable": "yes",
+  "steps": [
+   "Open an existing chat that has at least one message (Sessions in the chat header opens the list).",
+   "Pick a different model from the model button or from Code: Select Model.",
+   "Read the message: it says this chat now uses that model and new chats still start with the default.",
+   "Click New chat and check the model button still shows the default, as Expected says."
+  ],
+  "where": "Open a chat that already has messages (Sessions button in the chat header) > model button or Command Palette > Code: Select Model > pick a different model"
+ },
+ "S15.34": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/core/commandSetup.ts",
+    "text": "Switch anyway"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Select Model"
+   }
+  ],
+  "needs": "a chat on a model that can use tools or images, and a target model that cannot",
+  "note": "The check runs only from the Command Palette path (commandSetup.ts). Choosing a model from the chat model button does not show this dialog. The check also needs catalog metadata for both models.",
+  "reachable": "yes",
+  "steps": [
+   "Use a chat on a model that can use tools or read images.",
+   "Open Command Palette and run \"Code: Select Model\".",
+   "Pick a model that lacks tools or image input, or has a smaller context window.",
+   "Read the modal dialog: it says Switch to <model>? and explains what is lost (for example it cannot read or edit files or run commands). Choose Switch anyway to confirm or cancel to stop, as Expected says."
+  ],
+  "where": "Command Palette > Code: Select Model > pick a model that cannot use tools, cannot read images, or has a smaller context than the current model; a modal dialog appears with the button \"Switch anyway\""
+ }
+}

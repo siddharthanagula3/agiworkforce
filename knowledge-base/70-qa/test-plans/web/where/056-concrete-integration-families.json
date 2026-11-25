@@ -1,0 +1,911 @@
+{
+ "S56.01": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Gmail"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Browse connectors"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Connectors"
+   }
+  ],
+  "needs": "an outside account (Google) with Gmail; the Gmail OAuth client must be set up by the owner first",
+  "note": "Gmail OAuth client is not yet created per the plan, so connecting may fail; the Gmail card was not traced in the UI.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and choose Connectors.",
+   "Click Browse connectors and find Gmail.",
+   "Connect Gmail with a test Google account and approve access.",
+   "In a new chat type: search my email for a message from a named sender.",
+   "Look for matching messages in the reply, and compare with Expected."
+  ],
+  "where": "Settings > Connectors > Browse connectors > Gmail, then ask in chat to search mail"
+ },
+ "S56.02": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Gmail"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Browse connectors"
+   }
+  ],
+  "needs": "an outside account (Google) with Gmail; owner must set up the Gmail OAuth client first",
+  "note": "Gmail OAuth client is not yet created per the plan; the read tool exists in code but the UI card was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, choose Connectors, click Browse connectors and find Gmail.",
+   "Connect Gmail with a test Google account.",
+   "In a new chat type: open the latest email from a named sender and show the full text.",
+   "Check the reply shows the full message body and the thread, and compare with Expected."
+  ],
+  "where": "Settings > Connectors > Browse connectors > Gmail, then ask in chat to open a specific email"
+ },
+ "S56.03": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Gmail"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Browse connectors"
+   }
+  ],
+  "needs": "an outside account (Google) with Gmail; owner must set up the Gmail OAuth client first",
+  "note": "Gmail OAuth client is not yet created per the plan, so this cannot be done until then.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, choose Connectors, click Browse connectors and find Gmail.",
+   "Connect Gmail with a test Google account.",
+   "In a new chat type: draft a reply to the latest email from a named sender.",
+   "Open the Gmail account and check a draft exists, and compare with Expected."
+  ],
+  "where": "Settings > Connectors > Browse connectors > Gmail, then ask in chat to draft an email"
+ },
+ "S56.04": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Gmail"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Browse connectors"
+   }
+  ],
+  "needs": "an outside account (Google) with Gmail; owner must set up the Gmail OAuth client and Google sensitive-scope verification for gmail.send",
+  "note": "Plan says Google sensitive-scope verification for gmail.send is still needed; send is in code at apps/web/lib/connectors/gmail-actions.ts:30.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, choose Connectors, click Browse connectors and find Gmail.",
+   "Connect Gmail with a test Google account.",
+   "In a new chat type: send a short test email to a test address.",
+   "When asked, approve the send, then check the Sent folder and compare with Expected."
+  ],
+  "where": "Settings > Connectors > Browse connectors > Gmail, then ask in chat to send an email and approve it"
+ },
+ "S56.05": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Gmail"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Browse connectors"
+   }
+  ],
+  "needs": "an outside account (Google) with Gmail and an email that has an attachment; owner must set up the Gmail OAuth client first",
+  "note": "Gmail OAuth client is not yet created per the plan; attaching files while composing was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, choose Connectors, click Browse connectors and find Gmail.",
+   "Connect Gmail with a test Google account.",
+   "In a new chat type: list the attachments on the latest email from a named sender.",
+   "Check the reply names the attachment, and compare with Expected."
+  ],
+  "where": "Settings > Connectors > Browse connectors > Gmail, then ask in chat about an attachment"
+ },
+ "S56.07": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Google Calendar"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Browse connectors"
+   }
+  ],
+  "needs": "an outside account (Google) with Google Calendar; owner must add the google-calendar OAuth client first",
+  "note": "Google Calendar OAuth client is not yet created per the plan.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, choose Connectors, click Browse connectors and find Google Calendar.",
+   "Connect Google Calendar with a test Google account.",
+   "In a new chat type: find my events next week that mention a named topic.",
+   "Check the reply lists matching events with dates, and compare with Expected."
+  ],
+  "where": "Settings > Connectors > Browse connectors > Google Calendar, then ask in chat to search events"
+ },
+ "S56.08": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Google Calendar"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Browse connectors"
+   }
+  ],
+  "needs": "an outside account (Google) with Google Calendar; owner must add the google-calendar OAuth client first",
+  "note": "Google Calendar OAuth client is not yet created per the plan; free/busy was not traced to its own control.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, choose Connectors, click Browse connectors and find Google Calendar.",
+   "Connect Google Calendar with a test account.",
+   "In a new chat type: find a free one-hour slot tomorrow afternoon.",
+   "Check the reply names open times from the calendar, and compare with Expected."
+  ],
+  "where": "Settings > Connectors > Browse connectors > Google Calendar, then ask in chat for free time"
+ },
+ "S56.09": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Google Calendar"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Browse connectors"
+   }
+  ],
+  "needs": "an outside account (Google) with Google Calendar; owner must add the google-calendar OAuth client first",
+  "note": "Google Calendar OAuth client is not yet created per the plan.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, choose Connectors, click Browse connectors and find Google Calendar.",
+   "Connect Google Calendar with a test account.",
+   "In a new chat type: create a 30 minute event tomorrow at 10 am called Test sync.",
+   "Approve when asked, then open Google Calendar and compare with Expected."
+  ],
+  "where": "Settings > Connectors > Browse connectors > Google Calendar, then ask in chat to create an event"
+ },
+ "S56.10": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Google Calendar"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Browse connectors"
+   }
+  ],
+  "needs": "an outside account (Google) with Google Calendar and an existing test event; owner must add the google-calendar OAuth client first",
+  "note": "Google Calendar OAuth client is not yet created per the plan.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, choose Connectors, click Browse connectors and find Google Calendar.",
+   "Connect Google Calendar with a test account.",
+   "In a new chat type: move the Test sync event to 11 am, or cancel it.",
+   "Approve when asked, then check the event in Google Calendar, and compare with Expected."
+  ],
+  "where": "Settings > Connectors > Browse connectors > Google Calendar, then ask in chat to edit or cancel an event"
+ },
+ "S56.11": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Google Calendar"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Browse connectors"
+   }
+  ],
+  "needs": "an outside account (Google) with Google Calendar and a second test address; owner must add the google-calendar OAuth client first",
+  "note": "Responding to invitations was not traced to its own control.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, choose Connectors, click Browse connectors and find Google Calendar.",
+   "Connect Google Calendar with a test account.",
+   "In a new chat type: invite a test address to the Test sync event.",
+   "Approve when asked, then check the invitation in the test address inbox, and compare with Expected."
+  ],
+  "where": "Settings > Connectors > Browse connectors > Google Calendar, then ask in chat to invite someone"
+ },
+ "S56.12": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Google Contacts"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Browse connectors"
+   }
+  ],
+  "needs": "an outside account (Google) with saved contacts; owner must enable the People API and add the google-contacts client pair first",
+  "note": "Plan says the People API and client pair are still needed.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, choose Connectors, click Browse connectors and find Google Contacts.",
+   "Connect Google Contacts with a test account.",
+   "In a new chat type: what is the email address of a named contact in my address book?",
+   "Check the reply gives the address stored in Contacts, and compare with Expected."
+  ],
+  "where": "Settings > Connectors > Browse connectors > Google Contacts, then ask in chat for a person's email"
+ },
+ "S56.13": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Google Drive"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Browse connectors"
+   }
+  ],
+  "needs": "an outside account (Google) with Google Drive files",
+  "note": "Plan marks this done; the Google Drive client pair is listed as owner work for file creation, not search.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, choose Connectors, click Browse connectors and find Google Drive.",
+   "Connect Google Drive with a test account.",
+   "In a new chat type: find files in my Drive with a name that contains a test word.",
+   "Check the reply lists matching files, and compare with Expected."
+  ],
+  "where": "Settings > Connectors > Browse connectors > Google Drive, then ask in chat to search files"
+ },
+ "S56.14": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Google Drive"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Browse connectors"
+   }
+  ],
+  "needs": "an outside account (Google) with a test file in Drive",
+  "note": "Plan marks this done.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, choose Connectors, click Browse connectors and find Google Drive.",
+   "Connect Google Drive with a test account.",
+   "In a new chat type: read the text of the file named Test notes in my Drive.",
+   "Check the reply shows the file content, and compare with Expected."
+  ],
+  "where": "Settings > Connectors > Browse connectors > Google Drive, then ask in chat to read a file"
+ },
+ "S56.15": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Google Drive"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Browse connectors"
+   }
+  ],
+  "needs": "an outside account (Google) with Google Drive; owner must add the google-drive entry and client pair first",
+  "note": "Plan says the google-drive client pair is still owner work.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, choose Connectors, click Browse connectors and find Google Drive.",
+   "Connect Google Drive with a test account.",
+   "In a new chat type: create a new document called Test file in my Drive.",
+   "Approve when asked, then check Google Drive and compare with Expected."
+  ],
+  "where": "Settings > Connectors > Browse connectors > Google Drive, then ask in chat to create a file"
+ },
+ "S56.16": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Google Drive"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Browse connectors"
+   }
+  ],
+  "needs": "an outside account (Google) with an editable test file",
+  "note": "Plan marks this done.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, choose Connectors, click Browse connectors and find Google Drive.",
+   "Connect Google Drive with a test account.",
+   "In a new chat type: add a line Reviewed to the file Test file in my Drive.",
+   "Approve when asked, then open the file in Drive and compare with Expected."
+  ],
+  "where": "Settings > Connectors > Browse connectors > Google Drive, then ask in chat to change a file"
+ },
+ "S56.17": {
+  "labels": [],
+  "needs": "a connected cloud drive account",
+  "note": "Ledger gives no code location. Searched apps/web lib, features and app for create_folder and sharing terms; the only hit is create_folder in apps/web/lib/connectors/directory/sources/first-party.json:448, which sits inside the Box entry, but no sharing-management control was found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S56.18": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Notion"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Browse connectors"
+   }
+  ],
+  "needs": "an outside account (Notion) with a test page",
+  "note": "Expected names Google Docs or Word, but the editing tools in the code are on Notion (first-party.json:104) and Confluence (first-party.json:154); Google Docs and Word editing were not found under that name.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, choose Connectors, click Browse connectors and find Notion.",
+   "Connect Notion with a test account.",
+   "In a new chat type: add a line Reviewed today to my Notion page named Test page.",
+   "Open the page in Notion and compare with Expected."
+  ],
+  "where": "Settings > Connectors > Browse connectors > Notion, then ask in chat to edit a page"
+ },
+ "S56.19": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Browse connectors"
+   }
+  ],
+  "needs": "an outside account (Google) with a test spreadsheet",
+  "note": "Google Sheets is in apps/web/lib/connectors/catalog.ts as google-sheets, but its visible name was not found in first-party.json, so the card name is unverified.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, choose Connectors, click Browse connectors.",
+   "Find the Google Sheets connector and connect a test account.",
+   "In a new chat type: set cell A1 of my test sheet to Reviewed.",
+   "Open the sheet and compare with Expected."
+  ],
+  "where": "Settings > Connectors > Browse connectors, then ask in chat to edit a spreadsheet"
+ },
+ "S56.20": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Canva"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Browse connectors"
+   }
+  ],
+  "needs": "an outside account (Canva) with a test design",
+  "note": "Expected names Slides or PowerPoint; the matching first-party tool entry at first-party.json:216 sits under Canva, so PowerPoint or Slides editing is not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, choose Connectors, click Browse connectors and find Canva.",
+   "Connect Canva with a test account.",
+   "In a new chat type: change the title on my test design to Reviewed.",
+   "Open the design and compare with Expected."
+  ],
+  "where": "Settings > Connectors > Browse connectors > Canva, then ask in chat to edit a presentation"
+ },
+ "S56.21": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Slack"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Browse connectors"
+   }
+  ],
+  "needs": "an outside account (Slack) in a test workspace; owner must register the Slack app with search:read scopes first",
+  "note": "Plan says the Slack connector app is not yet registered; Teams is out of scope.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, choose Connectors, click Browse connectors and find Slack.",
+   "Connect Slack with a test workspace account.",
+   "In a new chat type: find Slack messages that mention a test word.",
+   "Check the reply lists matching messages with channels, and compare with Expected."
+  ],
+  "where": "Settings > Connectors > Browse connectors > Slack, then ask in chat to search messages"
+ },
+ "S56.22": {
+  "labels": [],
+  "needs": "a connected team chat workspace",
+  "note": "Ledger gives no code location. Searched apps/web lib, features and app for post_message, send_message and posting terms, with no match outside tests.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S56.23": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Notion"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Browse connectors"
+   }
+  ],
+  "needs": "an outside account (Notion) with a test page",
+  "note": "Confluence (first-party.json:149) is also a knowledge base; not traced separately.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, choose Connectors, click Browse connectors and find Notion.",
+   "Connect Notion with a test account.",
+   "In a new chat type: find my Notion pages about a test topic.",
+   "Check the reply lists matching pages with titles, and compare with Expected."
+  ],
+  "where": "Settings > Connectors > Browse connectors > Notion, then ask in chat to search pages"
+ },
+ "S56.24": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Notion"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Browse connectors"
+   }
+  ],
+  "needs": "an outside account (Notion) with a test workspace",
+  "note": "Confluence (first-party.json:149) is also a wiki connector; not traced separately.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, choose Connectors, click Browse connectors and find Notion.",
+   "Connect Notion with a test account.",
+   "In a new chat type: create a Notion page called Test wiki under my test workspace.",
+   "Approve when asked, then open Notion and compare with Expected."
+  ],
+  "where": "Settings > Connectors > Browse connectors > Notion, then ask in chat to create a page"
+ },
+ "S56.25": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Jira"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Browse connectors"
+   }
+  ],
+  "needs": "an outside account (Jira or Atlassian) with a test project; approval is required",
+  "note": "The create-issue tool at first-party.json:142 falls inside the Jira entry, but the first-party.json:187 line falls inside Asana, so the tracker mapping is not fully confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, choose Connectors, click Browse connectors and find Jira.",
+   "Connect Jira with a test account.",
+   "In a new chat type: create a Jira issue called Test issue in my test project.",
+   "Approve when asked, then open Jira and compare with Expected."
+  ],
+  "where": "Settings > Connectors > Browse connectors > Jira, then ask in chat to create an issue"
+ },
+ "S56.26": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Asana"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Browse connectors"
+   }
+  ],
+  "needs": "an outside account (Asana) with a test task; approval is required",
+  "note": "The update tool at first-party.json:188 falls inside Asana; the plan's tracker could be any of several, so the test should name the tracker.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, choose Connectors, click Browse connectors and find Asana.",
+   "Connect Asana with a test account.",
+   "In a new chat type: mark the Test task in my test project as complete.",
+   "Approve when asked, then open Asana and compare with Expected."
+  ],
+  "where": "Settings > Connectors > Browse connectors > Asana, then ask in chat to change an issue status"
+ },
+ "S56.27": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Linear"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connect"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connectors"
+   }
+  ],
+  "needs": "a Linear account (an outside account); a signed-in Free or paid account (not checked)",
+  "note": "Connector release is set to coming soon (packages/contracts/types/src/connector-release.ts:14); Linear is on the selectively released list, but Asana, Jira-style boards outside that list may show Coming soon instead of Connect.",
+  "reachable": "yes",
+  "steps": [
+   "Open your account menu, choose Settings, then click Connectors.",
+   "Click Linear, then click Connect and finish the Linear sign-in.",
+   "Start a new chat and type: Show the open issues on my Linear board.",
+   "Check that the reply lists issues from your Linear board, as Expected says."
+  ],
+  "where": "Settings > Connectors > Linear > Connect"
+ },
+ "S56.28": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "HubSpot"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connect"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connectors"
+   }
+  ],
+  "needs": "a HubSpot account (an outside account)",
+  "note": "HubSpot is not on the selectively released connector list (packages/contracts/types/src/connector-release.ts) and the release state is coming soon, so Connect may not be offered.",
+  "reachable": "yes",
+  "steps": [
+   "Open your account menu, choose Settings, then click Connectors.",
+   "Click HubSpot, then click Connect and finish the HubSpot sign-in.",
+   "Start a new chat and type: Find the HubSpot contact for a named person and their company.",
+   "Check that the reply shows the contact and account details from HubSpot, as Expected says."
+  ],
+  "where": "Settings > Connectors > HubSpot > Connect"
+ },
+ "S56.29": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "HubSpot"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connect"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connectors"
+   }
+  ],
+  "needs": "a HubSpot account with a deal you can change (an outside account)",
+  "note": "HubSpot is not on the selectively released connector list, so Connect may not be offered.",
+  "reachable": "yes",
+  "steps": [
+   "Open your account menu, choose Settings, then click Connectors.",
+   "Click HubSpot, then click Connect and finish the HubSpot sign-in.",
+   "Start a new chat and type: Move the deal for a named account to the next stage, and show me the change.",
+   "Check that the reply asks you to approve the change first and then shows the updated deal, as Expected says."
+  ],
+  "where": "Settings > Connectors > HubSpot > Connect"
+ },
+ "S56.30": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Intercom"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connect"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connectors"
+   }
+  ],
+  "needs": "an Intercom account (an outside account)",
+  "note": "Intercom is not on the selectively released connector list, so Connect may not be offered.",
+  "reachable": "yes",
+  "steps": [
+   "Open your account menu, choose Settings, then click Connectors.",
+   "Click Intercom, then click Connect and finish the Intercom sign-in.",
+   "Start a new chat and type: Find open support conversations about billing.",
+   "Check that the reply lists matching support conversations from Intercom, as Expected says."
+  ],
+  "where": "Settings > Connectors > Intercom > Connect"
+ },
+ "S56.31": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "GitHub MCP"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connect"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connectors"
+   }
+  ],
+  "needs": "a GitHub account with access to a repository; the owner's GitHub App setup",
+  "note": "The web app reaches only hosted repositories; the local checkout part applies to coding surfaces. The plan says the owner must still create the GitHub App, so Connect may fail until then.",
+  "reachable": "yes",
+  "steps": [
+   "Open your account menu, choose Settings, then click Connectors.",
+   "Click GitHub MCP, then click Connect and finish the GitHub sign-in.",
+   "Start a new chat and type: Search my repository for the function named loadSettings.",
+   "Check that the reply lists matching files and lines from the hosted repository, as Expected says."
+  ],
+  "where": "Settings > Connectors > GitHub MCP > Connect"
+ },
+ "S56.32": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "GitHub MCP"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connect"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connectors"
+   }
+  ],
+  "needs": "a GitHub account with a pull request you can open; the owner's GitHub App setup",
+  "note": "The plan says the GitHub App is not created yet, so Connect may fail until the owner sets it up.",
+  "reachable": "yes",
+  "steps": [
+   "Open your account menu, choose Settings, then click Connectors.",
+   "Click GitHub MCP, then click Connect and finish the GitHub sign-in.",
+   "Start a new chat and type: Read pull request 1 in a repository you can access and summarise it.",
+   "Check that the reply summarises that pull request, and that it asks you before it posts any review comment, as Expected says."
+  ],
+  "where": "Settings > Connectors > GitHub MCP > Connect"
+ },
+ "S56.33": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "GitHub MCP"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connect"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connectors"
+   }
+  ],
+  "needs": "a GitHub account with a repository that runs Actions",
+  "note": "The plan says the GitHub App with Actions read is not created yet, so CI logs may not load.",
+  "reachable": "yes",
+  "steps": [
+   "Open your account menu, choose Settings, then click Connectors.",
+   "Click GitHub MCP, then click Connect and finish the GitHub sign-in.",
+   "Start a new chat and type: What is the CI status of the latest run on my main branch? Show me the log for any failed step.",
+   "Check that the reply gives the run status and the failed step's log, as Expected says."
+  ],
+  "where": "Settings > Connectors > GitHub MCP > Connect"
+ },
+ "S56.34": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Figma"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connect"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connectors"
+   }
+  ],
+  "needs": "a Figma account with a design file (an outside account)",
+  "note": "Figma is not on the selectively released connector list, so Connect may not be offered.",
+  "reachable": "yes",
+  "steps": [
+   "Open your account menu, choose Settings, then click Connectors.",
+   "Click Figma, then click Connect and finish the Figma sign-in.",
+   "Start a new chat and type: List the frames and components in my Figma file named Landing page.",
+   "Check that the reply lists the frames and components from that Figma file, as Expected says."
+  ],
+  "where": "Settings > Connectors > Figma > Connect"
+ },
+ "S56.35": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Figma"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connect"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connectors"
+   }
+  ],
+  "needs": "a Figma account with a design file (an outside account)",
+  "note": "Figma is not on the selectively released connector list, so Connect may not be offered.",
+  "reachable": "yes",
+  "steps": [
+   "Open your account menu, choose Settings, then click Connectors.",
+   "Click Figma, then click Connect and finish the Figma sign-in.",
+   "Start a new chat and type: Give me the code references for the button in my Figma file named Landing page.",
+   "Check that the reply gives code context or dev resources taken from that design file, as Expected says."
+  ],
+  "where": "Settings > Connectors > Figma > Connect"
+ },
+ "S56.36": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Neon"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connect"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connectors"
+   }
+  ],
+  "needs": "a Neon or Supabase account with a database",
+  "note": "Neon and Supabase are not on the selectively released connector list, so Connect may not be offered.",
+  "reachable": "yes",
+  "steps": [
+   "Open your account menu, choose Settings, then click Connectors.",
+   "Click Neon (or Supabase), then click Connect and finish the sign-in.",
+   "Start a new chat and type: Run a query that counts the rows in the users table of my database.",
+   "Check that the reply shows the count returned by the database, as Expected says."
+  ],
+  "where": "Settings > Connectors > Neon > Connect"
+ },
+ "S56.37": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Add custom connector"
+   },
+   {
+    "file": "apps/web/lib/connectors/account-url-connectors.ts",
+    "text": "Snowflake"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connectors"
+   }
+  ],
+  "needs": "a Snowflake or Databricks account and its MCP server address",
+  "note": "The plan says the live check with the owner's warehouse accounts is not done. SettingsModal.tsx also has an error for custom connectors not supported in this environment.",
+  "reachable": "yes",
+  "steps": [
+   "Open your account menu, choose Settings, then click Connectors.",
+   "Click Add custom connector.",
+   "Enter your Snowflake or Databricks MCP server address in the form shown (the placeholder shows the format), then finish the sign-in.",
+   "Start a new chat and type: Run a query on my warehouse for last month's totals. Check that the reply returns results from the warehouse, as Expected says."
+  ],
+  "where": "Settings > Connectors > Add custom connector"
+ },
+ "S56.38": {
+  "labels": [],
+  "needs": "an analytics or BI account (external service)",
+  "note": "Searched the connector directory and catalog (apps/web/lib/connectors) for dashboard, Looker, Metabase, Tableau and Power BI. No BI connector was found. Amplitude (vendor-directory.json) mentions charts and dashboards but is not confirmed as the intended connector.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S56.39": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Vercel"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connect"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connectors"
+   }
+  ],
+  "needs": "a Vercel account (an outside account)",
+  "note": "Vercel is not on the selectively released connector list, so Connect may not be offered.",
+  "reachable": "yes",
+  "steps": [
+   "Open your account menu, choose Settings, then click Connectors.",
+   "Click Vercel, then click Connect and finish the Vercel sign-in.",
+   "Start a new chat and type: List my latest Vercel deployments and their status.",
+   "Check that the reply lists the deployments with their status, as Expected says."
+  ],
+  "where": "Settings > Connectors > Vercel > Connect"
+ },
+ "S56.40": {
+  "labels": [],
+  "needs": "a licensed research account (external service)",
+  "note": "Searched the vendor directory names for research, licensed, journal and similar terms. Candidates were FactSet Research Systems (vendor-directory.json) and Midpage Legal Research, but neither was confirmed as licensed research retrieval. No code was found for this item.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S56.41": {
+  "labels": [],
+  "needs": "a shopping account (external service)",
+  "note": "Searched the vendor directory and catalog for shopping and product terms. Shopify is listed (apps/web/lib/connectors/catalog.ts and vendor-directory.json), but it is a store platform, not confirmed as a shopping or price lookup service.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S56.42": {
+  "labels": [],
+  "needs": "a booking account (external service)",
+  "note": "Booking.com is listed in apps/web/lib/connectors/directory/sources/vendor-directory.json, but I did not confirm that the assistant can search or make bookings through it, or that it can be connected from the UI.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S56.43": {
+  "labels": [],
+  "needs": "a media service account (external service)",
+  "note": "Searched the connector directory and catalog for Spotify, Apple Music and playback terms. Nothing matched.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S56.46": {
+  "labels": [],
+  "needs": "an outside health provider account and identity checks (owner decision pending)",
+  "note": "HealthEx (beta) is listed in apps/web/lib/connectors/directory/sources/vendor-directory.json and apps/web/lib/connectors/catalog.ts, with a US-only rule in sensitive-data-connectors.ts. I did not confirm whether it appears in the UI. The plan says the owner keeps Health off.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S56.47": {
+  "labels": [
+   {
+    "file": "apps/web/features/finance/components/LinkedBanks.tsx",
+    "text": "Linked banks"
+   },
+   {
+    "file": "apps/web/features/finance/components/FinanceDashboard.tsx",
+    "text": "Connect a bank account"
+   },
+   {
+    "file": "apps/web/features/finance/components/LinkedBanks.tsx",
+    "text": "Remove bank"
+   }
+  ],
+  "needs": "a bank login that the bank provider accepts; the plan says owner Plaid steps are still pending",
+  "note": "The removal confirmation text in LinkedBanks.tsx reads 'removed at n.' in the file, so check that wording when testing. The plan lists Plaid production steps as pending.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Finance page at /chat/finance (the sidebar entry was not located in the code).",
+   "Click Connect a bank account and finish the bank sign-in.",
+   "Look at the Linked banks list: the bank appears by name, and Remove bank is available for each one.",
+   "Check that the balances and transactions for that bank appear on the Finance page, as Expected says."
+  ],
+  "where": "Finance page (web address /chat/finance) > Connect a bank account > Linked banks"
+ }
+}

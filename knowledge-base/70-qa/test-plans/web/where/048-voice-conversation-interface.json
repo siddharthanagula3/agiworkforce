@@ -1,0 +1,572 @@
+{
+ "S48.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/VoiceEntryButton.tsx",
+    "text": "Start voice mode"
+   }
+  ],
+  "needs": "a signed-in account with voice access; a microphone; a cloud model selected",
+  "note": "The button shows only when the message box is empty, voice access is granted and the model is a managed cloud model (apps/web/features/chat/pages/WebChatPage.tsx, voiceManaged).",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open an existing chat that already has messages.",
+   "Leave the message box empty and make sure the selected model is a cloud model.",
+   "Click the round waveform button named 'Start voice mode' at the right end of the message box.",
+   "Look: the message box is replaced by the voice bar, and the chat you opened is still on screen. Compare with Expected: voice starts bound to that chat."
+  ],
+  "where": "Open an existing chat from the sidebar > empty message box > round button 'Start voice mode' (waveform icon, right end of the box)"
+ },
+ "S48.02": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/sidebar/Sidebar.tsx",
+    "text": "New chat"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/VoiceEntryButton.tsx",
+    "text": "Start voice mode"
+   }
+  ],
+  "needs": "a signed-in account with voice access; a microphone; a cloud model selected",
+  "note": "No separate control for a new voice chat was found; it uses the same button as S48.01. Whether the new chat is created at call start was not traced in the UI.",
+  "reachable": "yes",
+  "steps": [
+   "Click 'New chat' in the sidebar.",
+   "Leave the message box empty.",
+   "Click 'Start voice mode'.",
+   "Look: a voice call starts on the new chat. Compare with Expected: a brand-new chat is created for the call."
+  ],
+  "where": "Sidebar > 'New chat' > empty message box > round button 'Start voice mode' (right end of the box)"
+ },
+ "S48.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Voice/VoiceHeaderLabel.tsx",
+    "text": "Voice"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/VoiceEntryButton.tsx",
+    "text": "Start voice mode"
+   }
+  ],
+  "needs": "a microphone; a signed-in account with voice access",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat with several earlier messages.",
+   "Click 'Start voice mode'.",
+   "Look at the header: the word 'Voice' appears next to the logo.",
+   "Speak one sentence and wait for the reply.",
+   "Look: your words and the reply appear in the same list as the typed messages, above the voice bar. Compare with Expected."
+  ],
+  "where": "Open a chat that already has messages > round button 'Start voice mode' (right end of the message box)"
+ },
+ "S48.04": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/VoiceOrb.tsx",
+    "text": "Hide the transcript and focus the orb"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/VoiceOrb.tsx",
+    "text": "Show the transcript again"
+   }
+  ],
+  "needs": "a microphone; a signed-in account with voice access",
+  "note": "No separate full-screen page was found. The closest is this focus mode, which fades the transcript inside the same voice view.",
+  "reachable": "yes",
+  "steps": [
+   "Start a voice call (see S48.01).",
+   "Click the orb in the middle of the screen.",
+   "Look: the transcript fades and the orb is the focus of the view.",
+   "Click the orb again and look for the name 'Show the transcript again' on it.",
+   "Compare with Expected: a separate full-screen voice layout."
+  ],
+  "where": "Voice view > round orb in the middle of the screen (its name is 'Hide the transcript and focus the orb')"
+ },
+ "S48.05": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Voice/voice-announcements.ts",
+    "text": "Listening"
+   }
+  ],
+  "needs": "a microphone; a signed-in account with voice access",
+  "note": "The word 'Listening' is not drawn on screen (the orb label is hidden in the voice view). The visible cue is the orb; the word is only in the screen-reader announcement.",
+  "reachable": "yes",
+  "steps": [
+   "Start a voice call (see S48.01) and wait until the call is idle and waiting for you.",
+   "Look at the orb: it shows its listening state.",
+   "Optional: with VoiceOver on, listen for the announcement 'Listening'.",
+   "Compare with Expected: a visible and announced listening state."
+  ],
+  "where": "Voice view > round orb in the middle of the screen"
+ },
+ "S48.06": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/voice/voice-session-machine.ts",
+    "text": "Speaking"
+   },
+   {
+    "file": "apps/web/features/chat/components/Voice/voice-announcements.ts",
+    "text": "Assistant is speaking"
+   }
+  ],
+  "needs": "a microphone; a speaker or headphones; a signed-in account with voice access",
+  "note": "The word 'Speaking' is not drawn on screen; the visible cue is the orb.",
+  "reachable": "yes",
+  "steps": [
+   "Start a voice call and ask a short question.",
+   "Wait for the assistant's reply to start playing.",
+   "Look at the orb: it changes while the reply plays.",
+   "Optional: with VoiceOver on, listen for 'Assistant is speaking'.",
+   "Compare with Expected: a visible speaking state."
+  ],
+  "where": "Voice view > round orb in the middle of the screen"
+ },
+ "S48.07": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Voice/VoiceModeSurface.tsx",
+    "text": "Working on your request"
+   },
+   {
+    "file": "apps/web/features/chat/components/Voice/VoiceModeSurface.tsx",
+    "text": "Stop the task"
+   }
+  ],
+  "needs": "a microphone; a signed-in account with voice access",
+  "note": "The line shows when a tool runs or the backend is busy. Which requests trigger it depends on the model and the task.",
+  "reachable": "yes",
+  "steps": [
+   "Start a voice call.",
+   "Ask for something that needs a tool or a lookup.",
+   "Look under the orb for a spinner and the text 'Working on your request', with a 'Stop the task' button beside it.",
+   "Compare with Expected: a visible thinking or working state while the assistant works."
+  ],
+  "where": "Voice view > line with a spinner under the orb reading 'Working on your request' (with a 'Stop the task' button)"
+ },
+ "S48.08": {
+  "labels": [],
+  "needs": "a microphone; a speaker or headphones; a signed-in account with voice access",
+  "note": "No separate waveform bar was found; the orb itself follows the audio level (packages/ui/unified-chat/src/components/VoiceOrb.tsx).",
+  "reachable": "yes",
+  "steps": [
+   "Start a voice call.",
+   "Speak a long sentence at normal volume.",
+   "Look at the orb: it grows and shrinks with your voice.",
+   "Wait for a reply and look at the orb again.",
+   "Compare with Expected: a visual follows the live audio level."
+  ],
+  "where": "Voice view > round orb in the middle of the screen"
+ },
+ "S48.09": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Voice/VoiceComposer.tsx",
+    "text": "Turn off microphone"
+   },
+   {
+    "file": "apps/web/features/chat/components/Voice/VoiceComposer.tsx",
+    "text": "Turn on microphone"
+   }
+  ],
+  "needs": "a microphone; a signed-in account with voice access",
+  "note": "Pressing Space while the voice bar's text field is empty also toggles mute (VoiceComposer.tsx).",
+  "reachable": "yes",
+  "steps": [
+   "Start a voice call.",
+   "Click the round microphone button in the bottom bar.",
+   "Look: the icon changes to a crossed-out microphone, the button turns red, and its name becomes 'Turn on microphone'.",
+   "Look at the call timer: it keeps running.",
+   "Click the button again and check the microphone is back on. Compare with Expected: mute without ending the call."
+  ],
+  "where": "Voice view > bottom voice bar > round microphone button (named 'Turn off microphone')"
+ },
+ "S48.10": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Voice/VoiceComposer.tsx",
+    "text": "End voice session"
+   }
+  ],
+  "needs": "a microphone; a signed-in account with voice access",
+  "note": "Escape also ends the call. Settling of usage is not visible on screen.",
+  "reachable": "yes",
+  "steps": [
+   "Start a voice call and talk for a moment.",
+   "Click the X button 'End voice session'.",
+   "Look: the voice bar closes, the normal message box comes back, and the call timer stops.",
+   "Compare with Expected: the call is closed."
+  ],
+  "where": "Voice view > bottom voice bar > round X button named 'End voice session' (right end)"
+ },
+ "S48.11": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Voice/VoiceChatDock.tsx",
+    "text": "Pause call"
+   },
+   {
+    "file": "apps/web/features/chat/components/Voice/VoiceModeSurface.tsx",
+    "text": "Resume"
+   }
+  ],
+  "needs": "a microphone; a signed-in account with voice access",
+  "note": "The paused notice says the call is closed while paused, so check whether resume keeps the same conversation against Expected.",
+  "reachable": "yes",
+  "steps": [
+   "Start a voice call.",
+   "Click the round '+' button at the left of the bottom bar.",
+   "Click 'Pause call' under the menu heading 'In this chat'. Hmm: the item sits under the heading 'This call'.",
+   "Look: a notice says the call is paused and a 'Resume' button appears.",
+   "Click 'Resume' and check the call comes back without starting over. Compare with Expected."
+  ],
+  "where": "Voice view > round '+' button at the left of the bottom bar > menu 'In this chat' > 'Pause call'"
+ },
+ "S48.13": {
+  "labels": [],
+  "needs": "a microphone; a speaker or headphones; a signed-in account with voice access",
+  "note": "No hands-free switch was found in the code. The check is only whether a second turn needs no tap.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Start a voice call.",
+   "Say one thing and wait for the reply to finish.",
+   "Say a second thing without touching any button.",
+   "Look: the orb returns to listening and takes the second turn without a tap."
+  ],
+  "where": "No on or off switch found; the effect shows across turns in the voice view"
+ },
+ "S48.14": {
+  "labels": [],
+  "needs": "a microphone; a speaker or headphones; a signed-in account with voice access; a live voice service",
+  "note": "Unverified in the code. It depends on the external voice service, so the result may vary by session.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Start a voice call and ask for a long answer.",
+   "While the orb shows the speaking state and the reply is playing, start talking over it.",
+   "Look: the spoken reply stops and the orb moves to listening. Compare with Expected."
+  ],
+  "where": "Seen in the voice view while the orb shows the speaking state"
+ },
+ "S48.15": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Voice/VoiceHeaderLabel.tsx",
+    "text": "Voice settings"
+   },
+   {
+    "file": "apps/web/features/chat/components/Voice/VoiceSettingsModal.tsx",
+    "text": "Previous voice"
+   },
+   {
+    "file": "apps/web/features/chat/components/Voice/VoiceSettingsModal.tsx",
+    "text": "Next voice"
+   }
+  ],
+  "needs": "a microphone; a speaker or headphones; a signed-in account with voice access",
+  "note": "The dots appear only when there are 2 to 16 voices.",
+  "reachable": "yes",
+  "steps": [
+   "Start a voice call.",
+   "Click the gear button 'Voice settings'.",
+   "Click 'Next voice' and look at the name in the middle change.",
+   "Click the voice name dots below, if shown, to pick another voice.",
+   "Close the dialog, let the assistant speak, and check the voice matches the name you chose. Compare with Expected."
+  ],
+  "where": "Voice view > gear button 'Voice settings' (next to 'Voice' in the header) > voice name between the arrows 'Previous voice' and 'Next voice'"
+ },
+ "S48.16": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Voice/VoiceSampleButton.tsx",
+    "text": "Play sample"
+   },
+   {
+    "file": "apps/web/features/chat/components/Voice/VoiceSettingsModal.tsx",
+    "text": "Voice settings"
+   }
+  ],
+  "needs": "a signed-in account with voice access; a speaker or headphones",
+  "note": "Unfinished. apps/web/public/voice-samples/manifest.json is empty, so 'Play sample' does not appear until the sample files are generated (plan owner step: OPENAI_API_KEY=<server key> node scripts/generate-voice-samples.mjs, then commit apps/web/public/voice-samples).",
+  "reachable": "yes",
+  "steps": [
+   "Start a voice call and open 'Voice settings'.",
+   "Look under the voice name and arrows for the button 'Play sample'.",
+   "Click 'Play sample' and listen.",
+   "Compare with Expected: a sample of the voice plays before you choose it."
+  ],
+  "where": "Voice view > gear button 'Voice settings' > under the voice name, button 'Play sample'"
+ },
+ "S48.17": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Voice/VoiceSettingsModal.tsx",
+    "text": "Language"
+   },
+   {
+    "file": "apps/web/features/chat/components/Voice/VoiceSettingsModal.tsx",
+    "text": "Auto-detect"
+   }
+  ],
+  "needs": "a microphone; a speaker or headphones; a signed-in account with voice access",
+  "note": "Whether recognition follows the choice is confirmed only by a live call.",
+  "reachable": "yes",
+  "steps": [
+   "Start a voice call and open 'Voice settings'.",
+   "Click the 'Language' picker and choose a language other than 'Auto-detect'.",
+   "Close the dialog and speak in that language.",
+   "Compare with Expected: the spoken language is used for recognition. Check the transcript and reply."
+  ],
+  "where": "Voice view > gear button 'Voice settings' > 'Language' picker (first option 'Auto-detect')"
+ },
+ "S48.19": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Voice/AudioRoutePicker.tsx",
+    "text": "Audio output"
+   },
+   {
+    "file": "apps/web/features/chat/components/Voice/AudioRoutePicker.tsx",
+    "text": "System default"
+   }
+  ],
+  "needs": "a browser that can switch speaker output (the code checks for this); a second audio output device",
+  "note": "The picker checks browser support before switching output. What it shows in an unsupported browser was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Start a voice call and open 'Voice settings'.",
+   "Click the 'Audio output' button and open its list.",
+   "Choose a different speaker from the list.",
+   "Let the assistant speak and check the sound comes from the chosen speaker. Compare with Expected."
+  ],
+  "where": "Voice view > gear button 'Voice settings' > 'Audio output' button (shows 'System default' or a device name)"
+ },
+ "S48.21": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Voice/VoiceChatDock.tsx",
+    "text": "Captions"
+   },
+   {
+    "file": "apps/web/features/chat/components/Voice/VoiceCaptions.tsx",
+    "text": "Assistant"
+   },
+   {
+    "file": "apps/web/features/chat/components/Voice/VoiceCaptions.tsx",
+    "text": "You"
+   }
+  ],
+  "needs": "a microphone; a speaker or headphones; a signed-in account with voice access",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Start a voice call.",
+   "Click the round '+' button at the left of the bottom bar.",
+   "Click 'Captions' under the heading 'This call'.",
+   "Speak, and let the assistant reply.",
+   "Look for lines labelled 'You' and 'Assistant' appearing as text. Compare with Expected: captions of both speakers."
+  ],
+  "where": "Voice view > round '+' button at the left of the bottom bar > 'This call' > 'Captions'"
+ },
+ "S48.22": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Voice/VoiceComposer.tsx",
+    "text": "End voice session"
+   }
+  ],
+  "needs": "a microphone; a speaker or headphones; a signed-in account with voice access",
+  "note": "If a voice turn cannot be saved, a warning toast appears (apps/web/features/chat/pages/WebChatPage.tsx).",
+  "reachable": "yes",
+  "steps": [
+   "Make a short voice call with two spoken turns.",
+   "Click the X button 'End voice session' to finish the call.",
+   "Look at the chat: your spoken turns and the replies appear as messages in order.",
+   "Reload the page and check the same messages are still there. Compare with Expected."
+  ],
+  "where": "Open the chat after the voice call (the voice turns are saved as messages in that chat)"
+ },
+ "S48.26": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Voice/VoiceActivityPanel.tsx",
+    "text": "Activity"
+   },
+   {
+    "file": "apps/web/features/chat/components/Voice/VoiceActivityAffordance.tsx",
+    "text": "Stopped thinking"
+   }
+  ],
+  "needs": "a microphone; a signed-in account with voice access; a task that uses a tool",
+  "note": "The link under the reply shows only while voice mode is on (apps/web/features/chat/components/messages/MessageBubble.tsx). The text 'Thought for' is built from a number in VoiceActivityAffordance.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Start a voice call and ask for a task that uses a tool.",
+   "Look above the orb for the tool row with the tool name and result.",
+   "Scroll up in the chat while the call stays open and click the link under an assistant reply.",
+   "Look: the 'Activity' panel opens and lists the steps. Press Escape to close it. Compare with Expected."
+  ],
+  "where": "Voice view > tool row above the orb after a tool runs; then, in the chat above, the 'Stopped thinking' or 'Thought for' link under an assistant reply opens 'Activity'"
+ },
+ "S48.27": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Allow once"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Deny"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Allow for this chat"
+   }
+  ],
+  "needs": "a microphone; a signed-in account with voice access; a task that asks for approval",
+  "note": "Which buttons appear depends on the action's scopes (apps/web/features/chat/components/approvals/ToolApprovalCard.tsx).",
+  "reachable": "yes",
+  "steps": [
+   "Start a voice call.",
+   "Ask for an action that needs approval, such as one that changes something.",
+   "Look for the approval card in the voice view.",
+   "Click 'Allow once' or 'Deny'.",
+   "Look: the card closes and the call continues without leaving voice. Compare with Expected."
+  ],
+  "where": "Voice view > card above the orb for an action that needs approval, with buttons such as 'Allow once', 'Allow for this chat' and 'Deny'"
+ },
+ "S48.28": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Voice/VoiceModeSurface.tsx",
+    "text": "Open"
+   }
+  ],
+  "needs": "a microphone; a signed-in account with voice access; a task that creates a file",
+  "note": "Only files with paths under /api/files/ are shown as links (VoiceModeSurface.tsx).",
+  "reachable": "yes",
+  "steps": [
+   "Start a voice call and ask for a task that creates a document.",
+   "Look under the tool row for 'Open' with a file name.",
+   "Click the link.",
+   "Look: the file opens in a new browser tab. Compare with Expected."
+  ],
+  "where": "Voice view > under the tool row, a link 'Open' followed by the file name (images show as a picture link)"
+ },
+ "S48.36": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Voice/VoiceModeSurface.tsx",
+    "text": "Reconnecting, attempt"
+   },
+   {
+    "file": "apps/web/features/chat/components/Voice/VoiceModeSurface.tsx",
+    "text": "Try again"
+   }
+  ],
+  "needs": "a microphone; a signed-in account with voice access; a way to drop the connection (for example Wi-Fi off)",
+  "note": "There is no button; the state appears only when the connection drops.",
+  "reachable": "yes",
+  "steps": [
+   "Start a voice call.",
+   "Turn off Wi-Fi for a few seconds.",
+   "Look above the orb for 'Reconnecting, attempt' with a spinner and a count.",
+   "Turn Wi-Fi back on and look again: the line goes away and the call continues, or an error with 'Try again' appears. Compare with Expected."
+  ],
+  "where": "Voice view > a line 'Reconnecting, attempt N of M' above the orb when the connection drops"
+ },
+ "S48.37": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Voice/VoiceModeSurface.tsx",
+    "text": "Upgrade"
+   },
+   {
+    "file": "apps/web/features/chat/components/Voice/VoiceModeSurface.tsx",
+    "text": "Continue in text"
+   }
+  ],
+  "needs": "an account whose voice usage is used up",
+  "note": "The notice text comes from the server error, so its wording is not fixed in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Use voice until the voice allowance is used up.",
+   "Look in the voice view for the usage notice with the buttons 'Upgrade' and 'Continue in text'.",
+   "Click 'Continue in text' and check you return to the text message box in the same chat. Compare with Expected."
+  ],
+  "where": "Voice view > notice with 'Upgrade' and 'Continue in text' when voice usage runs out"
+ },
+ "S48.38": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Voice/VoiceComposer.tsx",
+    "text": "End voice session"
+   },
+   {
+    "file": "apps/web/features/chat/components/Voice/VoiceModeSurface.tsx",
+    "text": "Continue in text"
+   }
+  ],
+  "needs": "a signed-in account with voice access; a microphone",
+  "note": "The bottom voice bar also has a text field that sends a normal turn without leaving voice (VoiceComposer.tsx).",
+  "reachable": "yes",
+  "steps": [
+   "In a call on a chat that has messages, click the X button 'End voice session'.",
+   "Look: the normal message box returns in the same chat, with the earlier voice turns above it.",
+   "Type a message and send it.",
+   "Compare with Expected: the send goes into the same unfinished conversation."
+  ],
+  "where": "Voice view > X button 'End voice session' at the right end of the bottom bar (or Escape), then the normal message box"
+ },
+ "S48.39": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/VoiceEntryButton.tsx",
+    "text": "Start voice mode"
+   }
+  ],
+  "needs": "a paid account",
+  "note": "The code starts voice on the open chat's conversation ID and loads earlier context for that conversation; I did not find a sidebar label for the earlier chat, and the needs value of a paid account is a guess.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a chat that already has a voice conversation or earlier turns.",
+   "Leave the message field empty so the round button on the right shows its voice icon.",
+   "Click the button labelled Start voice mode.",
+   "Check that the voice view opens for that same chat and that the assistant answers with the earlier turns in mind (ask it what you talked about before)."
+  ],
+  "where": "Open an earlier chat from the sidebar, then with the message field empty click Start voice mode"
+ },
+ "S48.40": {
+  "labels": [],
+  "needs": "a computer paired with the Desktop app",
+  "note": "The remote coding page is at the route apps/web/app/code/computer/page.tsx, with a Task box that has a Start voice input button (dictation) and a Send to computer button, but RemoteComputerLink, which should link to it, has no caller in apps or features, so I could not confirm a menu path; the page offers dictated task text, not a voice conversation.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S48.41": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Voice/VoiceModeSurface.tsx",
+    "text": "Stop the task"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/VoiceEntryButton.tsx",
+    "text": "Start voice mode"
+   }
+  ],
+  "needs": "a paid account",
+  "note": "Stop the task appears only when the agent status is shown and calls cancelBackendWork; I found no separate control that stops only the spoken reply (the only other stop-like labels are Do not send that and Stop sharing your camera), so the spoken-reply half of Expected is not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat, leave the message field empty and click Start voice mode.",
+   "Ask for an action that takes a while, such as a web search.",
+   "While the status line with a spinner is showing, click Stop the task.",
+   "Check that the status line goes away, the call stays open and the voice conversation still works. The task should stop without ending the call."
+  ],
+  "where": "Start voice mode, then while a task is running click Stop the task"
+ }
+}

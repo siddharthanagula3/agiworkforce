@@ -1,0 +1,30 @@
+{
+ "S83.14": {
+  "labels": [
+   {
+    "file": "apps/cli/src/repl/slash_commands.rs",
+    "text": "/usage"
+   },
+   {
+    "file": "apps/cli/src/usage_summary.rs",
+    "text": "Your last payment did not go through"
+   },
+   {
+    "file": "apps/cli/src/usage_summary.rs",
+    "text": "Settings > Billing"
+   }
+  ],
+  "needs": "A signed-in managed account whose subscription status is past_due, unpaid or incomplete. Getting that status is not described in the code; a Free or local/BYOK session never shows this text.",
+  "note": "The warning covers renewal or past-due states shown on /usage only. The code has no checkout-failure message in the CLI, so the 'checkout' part of Expected was not found. The 402 error path (usage_summary.rs:321) shows a similar message when usage fetch fails, which is a second place the text appears.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to a managed (cloud) account with agi login, then start the agi session.",
+   "Type /usage and press Enter.",
+   "Look under the 'Account usage' heading for a line 'Subscription: past due' (or unpaid or incomplete).",
+   "Check that the line 'Your last payment did not go through, so this subscription is past due...' appears.",
+   "Check that 'Update your payment method in Settings > Billing:' is followed by a link to the billing page.",
+   "Compare with Expected: the user is told clearly and shown how to fix it."
+  ],
+  "where": "Type /usage in the agi session (REPL or TUI). The 'Account usage' block lists 'Subscription: <status>' and, when the status is past_due, unpaid or incomplete, a payment-failed warning with a Settings > Billing link."
+ }
+}

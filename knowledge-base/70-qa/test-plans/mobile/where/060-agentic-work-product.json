@@ -1,0 +1,367 @@
+{
+ "S60.01": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/chat/[id].tsx",
+    "text": "Open menu"
+   },
+   {
+    "file": "apps/mobile/src/features/drawer/components/DrawerContent.tsx",
+    "text": "AGI Work"
+   },
+   {
+    "file": "apps/mobile/src/features/tasks/components/StartWorkSheet.tsx",
+    "text": "Start task"
+   }
+  ],
+  "needs": "A signed-in account that has AGI Work (the capability canUseAgiWork); the plan that grants it was not verified from the code.",
+  "note": "The \"New task\" button and the start sheet only appear when the account has canUseAgiWork.",
+  "reachable": "yes",
+  "steps": [
+   "On the chat screen, tap the \"Open menu\" button.",
+   "Tap \"AGI Work\" in the menu.",
+   "Tap the \"New task\" button (bottom right). On an empty list, the \"Hand off a task\" card also has a \"New task\" button.",
+   "In the sheet, type what the task should do in \"What should it accomplish?\", then tap \"Start task\".",
+   "Look for a new task card in the AGI Work list that shows it is running, and compare with Expected."
+  ],
+  "where": "Open menu > AGI Work > New task"
+ },
+ "S60.02": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/tasks/runPresentation.ts",
+    "text": "AGI work task"
+   },
+   {
+    "file": "apps/mobile/src/features/drawer/components/DrawerContent.tsx",
+    "text": "AGI Work"
+   }
+  ],
+  "needs": "A signed-in account with at least one AGI Work task.",
+  "note": "The title is the chat's conversation title, or the fallback \"AGI work task\". The code has no control on the task screen to set or change it, and I did not find the conversation rename menu label, so changing the title is unconfirmed.",
+  "reachable": "yes",
+  "steps": [
+   "On the chat screen, tap \"Open menu\", then tap \"AGI Work\".",
+   "Read the title in bold on each task card.",
+   "Compare the title with Expected."
+  ],
+  "where": "Open menu > AGI Work"
+ },
+ "S60.03": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/tasks/components/StartWorkSheet.tsx",
+    "text": "What should it accomplish?"
+   },
+   {
+    "file": "apps/mobile/src/features/tasks/components/StartWorkSheet.tsx",
+    "text": "Start task"
+   }
+  ],
+  "needs": "A signed-in account that has AGI Work.",
+  "note": "The objective is shown back as the card preview and the title; the task detail view has no separate objective section.",
+  "reachable": "yes",
+  "steps": [
+   "Open \"AGI Work\" from the menu, then tap \"New task\".",
+   "Type the objective in \"What should it accomplish?\" and tap \"Start task\".",
+   "Open the new task card and read the preview line under its title.",
+   "Compare the objective you typed with what the card or task shows."
+  ],
+  "where": "Open menu > AGI Work > New task"
+ },
+ "S60.04": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/tasks/components/StartWorkSheet.tsx",
+    "text": "Deliverable (optional)"
+   }
+  ],
+  "needs": "A signed-in account that has AGI Work.",
+  "note": "The deliverable is sent with the goal in startWork.ts; whether the run produces it is not confirmed by reading the code.",
+  "reachable": "yes",
+  "steps": [
+   "Open \"AGI Work\" from the menu, then tap \"New task\".",
+   "Type a goal in \"What should it accomplish?\".",
+   "Type a deliverable in \"Deliverable (optional)\", for example \"A one-page summary\".",
+   "Tap \"Start task\", open the task, and compare the result with the deliverable you asked for."
+  ],
+  "where": "Open menu > AGI Work > New task"
+ },
+ "S60.13": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/WorkModeSwitch.tsx",
+    "text": "Work"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AgiWorkPlanReview.tsx",
+    "text": "Plan"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AgiWorkPlanReview.tsx",
+    "text": "Start work"
+   }
+  ],
+  "needs": "A signed-in account with AGI Work, on Cloud mode (the plan card is shown only when the app mode is cloud).",
+  "note": "The plan card is rendered from MessageBubble.tsx only when appMode is cloud; whether the agent always produces a plan first was not verified.",
+  "reachable": "yes",
+  "steps": [
+   "On a chat, tap \"Work\" in the mode switch above the input (it is the Work tab).",
+   "Type a multi-step request and send it.",
+   "When the \"Plan\" card appears, read the steps. Tap a step to edit it, or use \"Add a step\" or \"Remove this step\".",
+   "Tap \"Start work\" to approve, or \"Cancel\" to reject. Compare with Expected."
+  ],
+  "where": "Chat screen > \"Work\" mode switch > send a message > \"Plan\" card"
+ },
+ "S60.14": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/tasks/runPresentation.ts",
+    "text": "Not started"
+   },
+   {
+    "file": "apps/mobile/src/features/tasks/runPresentation.ts",
+    "text": "In progress"
+   },
+   {
+    "file": "apps/mobile/src/features/tasks/runPresentation.ts",
+    "text": "Done"
+   }
+  ],
+  "needs": "A signed-in account with an AGI Work task that has a plan.",
+  "note": "The heading \"Plan \u00b7 N\" is built in CloudRunDetailSheet.tsx as a template string.",
+  "reachable": "yes",
+  "steps": [
+   "Open \"AGI Work\" from the menu and tap a task card.",
+   "Scroll to the \"Plan\" section (its heading reads Plan with a step count).",
+   "Read each step line: number, description, then a status.",
+   "Compare each status with the work the run has done."
+  ],
+  "where": "Open menu > AGI Work > tap a task card > Plan section"
+ },
+ "S60.16": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/tasks/runPresentation.ts",
+    "text": "In progress"
+   }
+  ],
+  "needs": "A task that is still running.",
+  "note": "A step that was running when the run stopped shows \"Stopped\" instead of \"In progress\" (CloudRunDetailSheet.tsx).",
+  "reachable": "yes",
+  "steps": [
+   "Start a task with \"New task\" in \"AGI Work\" or open one that is in the Running filter.",
+   "Tap its card and scroll to the \"Plan\" section while it runs.",
+   "Look for the one step whose status reads \"In progress\".",
+   "Wait a moment and check that the marked step moves on."
+  ],
+  "where": "Open menu > AGI Work > tap a running task card > Plan section"
+ },
+ "S60.18": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/tasks/runPresentation.ts",
+    "text": "Needs you"
+   },
+   {
+    "file": "apps/mobile/src/features/tasks/components/CloudRunInputForm.tsx",
+    "text": "Send answer"
+   }
+  ],
+  "needs": "A task where the agent asked a question. The tester cannot force this.",
+  "note": "The form is shown from the run's pending input in CloudRunDetailSheet.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Open \"AGI Work\" and tap the \"Needs you\" filter.",
+   "Tap a task that is waiting for a question.",
+   "Fill in the questions in the form that appears.",
+   "Tap \"Send answer\" (or \"Continue\" when there are no fields).",
+   "Check that the task moves back to Running and continues."
+  ],
+  "where": "Open menu > AGI Work > Needs you > tap the task > answer the form"
+ },
+ "S60.19": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Approve"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Deny"
+   },
+   {
+    "file": "apps/mobile/src/features/tasks/runPresentation.ts",
+    "text": "Needs you"
+   }
+  ],
+  "needs": "A task that is waiting for approval. The tester cannot force this.",
+  "note": "The Approve and Deny buttons are shown in CloudRunDetailSheet.tsx only when the run has a pending approval.",
+  "reachable": "yes",
+  "steps": [
+   "Open \"AGI Work\" and tap the \"Needs you\" filter.",
+   "Tap a task that is waiting for approval.",
+   "Read the pending action rows.",
+   "Tap \"Approve\" or \"Deny\", then check that the task continues or stops."
+  ],
+  "where": "Open menu > AGI Work > Needs you > tap the task > Approve or Deny"
+ },
+ "S60.20": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/tasks/components/CloudRunSteerSection.tsx",
+    "text": "Message the agent"
+   },
+   {
+    "file": "apps/mobile/src/features/tasks/components/CloudRunSteerSection.tsx",
+    "text": "Send to the agent"
+   }
+  ],
+  "needs": "A task that is still running, queued or paused.",
+  "note": "The section is shown only while the run is steerable (CloudRunSteerSection.tsx), so it is not shown for finished tasks.",
+  "reachable": "yes",
+  "steps": [
+   "Open \"AGI Work\" and tap a task that is Running.",
+   "Scroll to the \"Message the agent\" section at the bottom of the task.",
+   "Type in \"Add instructions or change course\" and tap \"Send to the agent\".",
+   "Check that your message appears and that the task keeps going without starting over."
+  ],
+  "where": "Open menu > AGI Work > tap a running task > Message the agent"
+ },
+ "S60.23": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx",
+    "text": "Stop this task"
+   },
+   {
+    "file": "apps/mobile/src/features/tasks/CloudTasksScreen.tsx",
+    "text": "Stop task"
+   },
+   {
+    "file": "apps/mobile/src/features/tasks/CloudTasksScreen.tsx",
+    "text": "Keep it running"
+   }
+  ],
+  "needs": "A task that is still running.",
+  "note": "The server-side cancel is in apps/mobile/src/features/tasks/service.ts; the server result is not checked by reading the code.",
+  "reachable": "yes",
+  "steps": [
+   "Open \"AGI Work\" and tap a task that is Running.",
+   "Scroll to the bottom and tap \"Stop this task\".",
+   "Read the dialog, then tap \"Stop task\" (or \"Keep it running\" to cancel).",
+   "Check that the task state changes to stopped, and compare with Expected."
+  ],
+  "where": "Open menu > AGI Work > tap a running task > Stop this task"
+ },
+ "S60.29": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx",
+    "text": "Latest output"
+   },
+   {
+    "file": "apps/mobile/src/features/tasks/runPresentation.ts",
+    "text": "Finished"
+   }
+  ],
+  "needs": "A finished AGI Work task.",
+  "note": "There is no separate summary heading; the summary is the latest output section.",
+  "reachable": "yes",
+  "steps": [
+   "Open \"AGI Work\" and tap the \"Finished\" filter.",
+   "Tap a finished task card.",
+   "Scroll to the \"Latest output\" section.",
+   "Read the result text and compare it with Expected."
+  ],
+  "where": "Open menu > AGI Work > Finished > tap a finished task > Latest output"
+ },
+ "S60.30": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/tasks/components/CloudRunFilesSection.tsx",
+    "text": "Could not open this file"
+   }
+  ],
+  "needs": "A task that produced a file. A file to produce one may need to be asked for in the task.",
+  "note": "The heading is a template string, \"Files \u00b7 N\", in CloudRunFilesSection.tsx, so there is no fixed label to search for.",
+  "reachable": "yes",
+  "steps": [
+   "Open \"AGI Work\" and tap a finished task that produced files.",
+   "Scroll to the Files section and read the file names and sizes.",
+   "Tap a file row to open or share it.",
+   "If it fails, read the alert text. Compare with Expected."
+  ],
+  "where": "Open menu > AGI Work > tap a task with files > Files section"
+ },
+ "S60.31": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/tasks/runPresentation.ts",
+    "text": "Stopped"
+   }
+  ],
+  "needs": "A task that was stopped before it finished.",
+  "note": "The line is a template string in CloudRunDetailSheet.tsx: \"Done N of M steps before it stopped.\".",
+  "reachable": "yes",
+  "steps": [
+   "Open \"AGI Work\" and tap a task that was stopped (for example, one you stopped with \"Stop this task\").",
+   "Scroll to the \"Plan\" section and read the step statuses.",
+   "Read the line that says how many steps were done before it stopped.",
+   "Compare with Expected."
+  ],
+  "where": "Open menu > AGI Work > Finished > tap a stopped task > plan list"
+ },
+ "S60.32": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/tasks/CloudTasksScreen.tsx",
+    "text": "Load more"
+   },
+   {
+    "file": "apps/mobile/src/features/tasks/runPresentation.ts",
+    "text": "Needs you"
+   },
+   {
+    "file": "apps/mobile/src/features/tasks/CloudTasksScreen.tsx",
+    "text": "No Cloud tasks yet"
+   }
+  ],
+  "needs": "A signed-in account with several past AGI Work tasks.",
+  "note": "The filter pill text comes from CLOUD_RUN_FILTERS in runPresentation.ts.",
+  "reachable": "yes",
+  "steps": [
+   "On the chat screen, tap \"Open menu\", then tap \"AGI Work\".",
+   "Tap each filter pill: \"All\", \"Needs you\", \"Running\", \"Finished\".",
+   "Scroll down and tap \"Load more\" if it appears.",
+   "Tap any card to open its detail, and compare with Expected."
+  ],
+  "where": "Open menu > AGI Work"
+ },
+ "S60.34": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/drawer/components/DrawerContent.tsx",
+    "text": "AGI Work"
+   },
+   {
+    "file": "apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx",
+    "text": "Resume this task"
+   },
+   {
+    "file": "apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx",
+    "text": "Pause this task"
+   }
+  ],
+  "needs": "Two devices (or a phone and the web or desktop app) signed in to the same account.",
+  "note": "The task list is loaded from the server (service.ts); the cross-device result was not checked by reading the code.",
+  "reachable": "yes",
+  "steps": [
+   "On device A, start a task from \"AGI Work\" > \"New task\".",
+   "On device B, signed in to the same account, open \"Open menu\" and tap \"AGI Work\".",
+   "Find the same task card, tap it, and read its state and steps.",
+   "Tap \"Resume this task\" or \"Pause this task\" on device B, then check device A shows the change."
+  ],
+  "where": "Open menu > AGI Work > tap the task > Resume this task (on the second device)"
+ }
+}

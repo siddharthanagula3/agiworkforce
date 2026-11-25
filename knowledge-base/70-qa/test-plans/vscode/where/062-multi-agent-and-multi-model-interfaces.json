@@ -1,0 +1,128 @@
+{
+ "S62.09": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Show Cloud Tasks"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/cloud-tasks/cloudTasksTree.ts",
+    "text": "Working"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/index.ts",
+    "text": "Refresh cloud tasks"
+   }
+  ],
+  "needs": "a signed-in AGI account with two or more cloud tasks running",
+  "note": "The list is a quick pick, not a live pane: no automatic refresh is wired in src (setAutoRefreshEnabled is only called from tests), so the tester must use Refresh to see changes. The cited line numbers in the plan were out of date; the grouping code is at cloudTasksTree.ts lines 45-52.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to AGI Cloud (the list needs an AGI account; if signed out, the list shows \"Sign in to see your cloud tasks\").",
+   "Start two or more cloud tasks, or use an account that already has them running.",
+   "Open the Command Palette and run \"Code: Show Cloud Tasks\".",
+   "Look at the list: several runs should appear at the same time, grouped under \"Working\" (and other groups), each with its own row.",
+   "Click \"Refresh cloud tasks\" in the title bar of the list and check that the states update."
+  ],
+  "where": "Command Palette > \"Code: Show Cloud Tasks\" (quick pick ending in \"Cloud tasks\"; the runs sit under group headings such as \"Working\")"
+ },
+ "S62.10": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/cloud-tasks/cloudTasksTree.ts",
+    "text": "Needs you"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Show Cloud Tasks"
+   }
+  ],
+  "needs": "a signed-in AGI account with a cloud task waiting for input or approval, and one running task",
+  "note": "The ordering is fixed in STAGE_GROUPS (cloudTasksTree.ts lines 45-52); the plan's cited lines 27 and 110 no longer hold the quoted code. Only the group order is shown; rows inside a group follow the server's page order.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to AGI Cloud and have at least one cloud task that is waiting for your input or for approval, and at least one task that is running.",
+   "Open the Command Palette and run \"Code: Show Cloud Tasks\".",
+   "Look at the group order: \"Needs you\" should be the first group, above \"Working\", \"Ready for review\", \"Done\" and \"Stopped\".",
+   "Compare: the waiting task should be listed under \"Needs you\" and not under \"Working\"."
+  ],
+  "where": "Command Palette > \"Code: Show Cloud Tasks\", then the first group \"Needs you\""
+ },
+ "S62.11": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/index.ts",
+    "text": "Approve this run"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/cloud-tasks/cloudRunApproval.ts",
+    "text": "Approve and continue"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Approve Cloud Task"
+   }
+  ],
+  "needs": "a signed-in AGI account with a cloud task that has a pending approval",
+  "note": "The row buttons appear only on runs with a pending approval (contextValue cloudRunPendingApproval). The same approve and reject choices are also in the run's detail pick (\"Approve\" and \"Reject\", cloudRunDetail.ts). Input requests, unlike approvals, have no inline button in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to AGI Cloud and have a cloud task with a pending approval (it shows under \"Needs you\").",
+   "Open the Command Palette and run \"Code: Show Cloud Tasks\" and stay in the list.",
+   "Hover the check button on the waiting row: the tooltip should read \"Approve this run\". Hover the x button: \"Reject this run\".",
+   "Click the check button, read the confirmation (it offers \"Approve and continue\"), and confirm.",
+   "Compare: the list should update and the run should leave \"Needs you\"; the x button rejects the run and asks for a reason."
+  ],
+  "where": "Command Palette > \"Code: Show Cloud Tasks\", then a row under \"Needs you\" with the check and x row buttons"
+ },
+ "S62.14": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Continue in the Cloud"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Continue in the cloud"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account, a workspace with a GitHub remote, and a pushed branch",
+  "note": "The code's handoff is local-to-cloud (\"Continue in the cloud\"), not agent-to-agent; the plan's cited file cloudCodeSessions.ts line 184 shows a session transcript row, not a handoff control. There is also a \"Continue in the cloud\" icon button in the chat's Sessions sheet, shown only on the Cloud tab. The exact confirmation wording comes from translation keys (cloud.continueQuestion) that were not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Open a folder whose git remote is on GitHub, check out a branch, and push it (the code refuses a detached commit or an unpushed branch).",
+   "Open the Command Palette and run \"Code: Continue in the Cloud\".",
+   "Read the review message, choose the continue option, and confirm the repository, branch and model shown.",
+   "Open the Command Palette and run \"Code: Show Cloud Tasks\" to find the new cloud task.",
+   "Open the new task (or \"Code: Open AGI Code Session\") and check that the cloud session continues the work from that branch."
+  ],
+  "where": "Command Palette > \"Code: Continue in the Cloud\" (hands the current branch to a cloud session; the cloud session then continues the work and shows under \"Code: Show Cloud Tasks\")"
+ },
+ "S62.17": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts",
+    "text": "Fork conversation and rewind code"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Fork Conversation"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Commands"
+   }
+  ],
+  "needs": "a developer session with a prompt that changed tracked files; the fork option appears only when the runtime offers it",
+  "note": "The fork option is offered only when the checkpoint has both a conversation point and tracked files, and when the runtime offers forkAndRewind. The Command Palette \"Code: Fork Conversation\" route forks a whole session (asks for a name, default \"<title> (fork)\") and is not tied to a point in the conversation; it has no menu entry in package.json.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI chat in the editor and send a prompt that changes a file, so a checkpoint exists.",
+   "Click the \"/\" button titled \"Commands\", then choose \"Rewind\" under Context.",
+   "In the list titled \"Checkpoints\", pick the prompt to go back to.",
+   "Choose \"Fork conversation and rewind code\" and confirm.",
+   "Compare: a new chat should open just before that prompt, the original chat keeps its history, and you can keep typing in the new chat."
+  ],
+  "where": "Chat: \"/\" button (title \"Commands\") > Context > \"Rewind\" > pick a prompt under \"Checkpoints\" > \"Fork conversation and rewind code\"; or Command Palette > \"Code: Fork Conversation\""
+ }
+}

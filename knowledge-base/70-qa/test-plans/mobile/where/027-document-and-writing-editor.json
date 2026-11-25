@@ -1,0 +1,113 @@
+{
+ "S27.01": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/InlineArtifactCard.tsx",
+    "text": "Document"
+   }
+  ],
+  "needs": "A signed-in account that can generate documents in Chat",
+  "note": "The card and viewer use the document's title, and the default comes from the artifact title helpers (artifactTitle.ts, artifactDisplayTitle falls back to artifactKindTitle), which I did not confirm end to end; the old quoted lines in the plan are gone, so this is from the current files, and I could not confirm the exact default text a person would see for an untitled document.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open Chat.",
+   "Send a message that asks for a written document, for example a short one-page plan.",
+   "Wait for the answer to show a document card, and read the title shown on the card.",
+   "Tap the card to open the document full screen.",
+   "Compare the title at the top of the full-screen view with the title on the card, and check that it is not blank."
+  ],
+  "where": "Chat (first screen after signing in) > ask for a document > tap the document card in the answer > read the title at the top of the full-screen view, shown as the title followed by \" \u00b7 Document\""
+ },
+ "S27.29": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactVersionHistorySheet.tsx",
+    "text": "Version history"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactVersionHistorySheet.tsx",
+    "text": "Restore"
+   }
+  ],
+  "needs": "A document with at least two versions (ask for a change once, or edit it, before starting)",
+  "note": "The version counter is a button with an accessibility label rather than a visible word, and the times depend on formatVersionTime in apps/mobile/src/features/artifacts/versionSummary.ts, which I did not run.",
+  "reachable": "yes",
+  "steps": [
+   "Open a document that has been changed at least once, for example by asking for changes in Chat, so it has more than one version.",
+   "In the document's top bar, tap the version counter (it shows the version number out of the total).",
+   "Read the \"Version history\" sheet: check that each past version is listed with its time.",
+   "Tap an older version row to view it, then check that the document shows that version's content.",
+   "Tap \"Restore\" on that older row, then check that the document content returns to that version and that a newer entry is kept in the history."
+  ],
+  "where": "Chat > open a document (tap its card) > tap the version counter in the top bar (accessibility hint \"Opens the version history\") > \"Version history\" sheet > tap a version row to view it, or tap \"Restore\" on an older row"
+ },
+ "S27.35": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactExportSheet.tsx",
+    "text": "Download as"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/utils/artifactExport.ts",
+    "text": "Word"
+   }
+  ],
+  "needs": "A signed-in account with a document open; a Mac app that opens .docx files",
+  "note": "The Word option appears for document-type artifacts that are not slide decks (artifactExport.ts lines 88-96); the sheet only opens when there is more than one export choice, so a single-choice file would download directly.",
+  "reachable": "yes",
+  "steps": [
+   "Open a document in Chat so the full-screen view shows.",
+   "Tap the download icon in the top bar. It has no visible words; VoiceOver reads it as \"Download artifact\".",
+   "In the sheet headed \"Download as\", look for the option \"Word\" with the detail \"A .docx document you can edit\".",
+   "Tap \"Word\" and wait for the share or save step to appear.",
+   "Open the saved or shared file on the Mac and check that it is a Word document with the document's text."
+  ],
+  "where": "Chat > open a document (tap its card) > tap the download icon in the top bar (accessibility label \"Download artifact\") > \"Download as\" sheet > tap \"Word\""
+ },
+ "S27.36": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactExportSheet.tsx",
+    "text": "Download as"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/utils/artifactExport.ts",
+    "text": "PDF"
+   }
+  ],
+  "needs": "A signed-in account with a document open",
+  "note": "The PDF option appears for document-type artifacts (artifactExport.ts lines 88-95) and the export itself runs through apps/mobile/src/features/chat/utils/artifactExport.ts exportArtifact; I did not run it.",
+  "reachable": "yes",
+  "steps": [
+   "Open a document in Chat so the full-screen view shows.",
+   "Tap the download icon in the top bar. It has no visible words; VoiceOver reads it as \"Download artifact\".",
+   "In the sheet headed \"Download as\", look for the option \"PDF\" with the detail \"A styled document\".",
+   "Tap \"PDF\" and wait for the share or save step to appear.",
+   "Open the saved or shared file and check that it is a PDF with the document's title and text."
+  ],
+  "where": "Chat > open a document (tap its card) > tap the download icon in the top bar (accessibility label \"Download artifact\") > \"Download as\" sheet > tap \"PDF\""
+ },
+ "S27.37": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactExportSheet.tsx",
+    "text": "Download as"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/utils/artifactExport.ts",
+    "text": "Markdown"
+   }
+  ],
+  "needs": "A signed-in account with a document open",
+  "note": "The Markdown option is listed first for document-type artifacts (artifactExport.ts lines 88-91); the sheet and download path were read from source only and not run.",
+  "reachable": "yes",
+  "steps": [
+   "Open a document in Chat so the full-screen view shows.",
+   "Tap the download icon in the top bar. It has no visible words; VoiceOver reads it as \"Download artifact\".",
+   "In the sheet headed \"Download as\", look for the option \"Markdown\" with the detail \"A .md file that keeps the formatting\".",
+   "Tap \"Markdown\" and wait for the share or save step to appear.",
+   "Open the saved or shared file and check that it is a .md file whose formatting (headings, lists) is kept as Markdown text."
+  ],
+  "where": "Chat > open a document (tap its card) > tap the download icon in the top bar (accessibility label \"Download artifact\") > \"Download as\" sheet > tap \"Markdown\""
+ }
+}

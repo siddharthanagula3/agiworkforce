@@ -1,0 +1,554 @@
+{
+ "S15.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+    "text": "Change model"
+   }
+  ],
+  "needs": "none",
+  "note": "The name on the button is data-driven (selectedModel.name); the Code line's quoted line 1324 moved, but the button is rendered from triggerLabel at ComposerFooter.tsx:1460-1483.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open New chat.",
+   "Look at the model button in the composer footer and note the model name shown.",
+   "Click the model button and pick a different model in the list.",
+   "Send a short message and compare the name on the composer footer with the Expected text: the composer still shows the model the next message uses."
+  ],
+  "where": "New chat > composer footer model button. The button shows the name of the selected model, with \"Change model\" as its accessible name."
+ },
+ "S15.02": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ModelCatalogue.tsx",
+    "text": "Search models"
+   }
+  ],
+  "needs": "none",
+  "note": "The developer name comes from catalogue data (entry.developerLabel), so the exact names are not in the code. The full catalogue list is reached through the picker; its opening control was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open New chat and click the model button in the composer footer.",
+   "In the list, read the small grey line under each model name and look at the provider logo.",
+   "Compare with Expected: each model shows which company makes it."
+  ],
+  "where": "New chat > composer footer model button > model list. Each row shows a provider logo and a developer name line."
+ },
+ "S15.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ModelCatalogue.tsx",
+    "text": "Back to the model list"
+   }
+  ],
+  "needs": "none",
+  "note": "The Family value is data-driven. I did not confirm the visible group heading text used for grouping, only that groupByModelLine builds the groups.",
+  "reachable": "yes",
+  "steps": [
+   "Open the model list from the composer footer model button.",
+   "Click the help icon (accessible name \"About <model name>\") on a model row.",
+   "Read the Family line on the card.",
+   "Go back with \"Back to the model list\" and check that models of the same family sit together in the list, as Expected says."
+  ],
+  "where": "New chat > composer footer model button > model list > \"About\" button on a model row (accessible name \"About <model name>\") > Family line."
+ },
+ "S15.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ModelCatalogue.tsx",
+    "text": "Search models"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open the model list from the composer footer model button.",
+   "Click the search field labelled \"Search models\".",
+   "Type part of a model name, such as qwen.",
+   "Compare: the list narrows to matching models."
+  ],
+  "where": "New chat > composer footer model button > search field labelled \"Search models\"."
+ },
+ "S15.05": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+    "text": "Favourites"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open the model list from the composer footer model button.",
+   "Click the star button on a model row (accessible name \"Add <model name> to favourites\").",
+   "Close the list and open it again.",
+   "Compare: the starred model appears in the \"Favourites\" section at the top."
+  ],
+  "where": "New chat > composer footer model button > model list > star button (accessible name \"Add <model name> to favourites\"). Favourites appear under the \"Favourites\" heading."
+ },
+ "S15.06": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ModelCatalogue.tsx",
+    "text": "Recent"
+   }
+  ],
+  "needs": "none",
+  "note": "The Recent rail is in the model list; its exact position relative to the short list was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Use two or three different models in a few chats.",
+   "Open the model list from the composer footer model button.",
+   "Click the \"Recent\" rail.",
+   "Compare: the models you used most recently are listed."
+  ],
+  "where": "New chat > composer footer model button > \"Recent\" rail in the model list."
+ },
+ "S15.07": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+    "text": "Recommended"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open the model list from the composer footer model button.",
+   "Look at the section titled \"Recommended\".",
+   "Compare: it shows a short list of recommended models for your plan."
+  ],
+  "where": "New chat > composer footer model button > \"Recommended\" section at the top of the list."
+ },
+ "S15.08": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+    "text": "Picks the best model for each message"
+   }
+  ],
+  "needs": "none",
+  "note": "The auto row label is built from data (shortList.auto.label); I used the fixed guidance text as the visible words.",
+  "reachable": "yes",
+  "steps": [
+   "Open the model list from the composer footer model button.",
+   "Click the first row, the Auto row.",
+   "Send a message and check the model name on the composer footer and the model that answers.",
+   "Compare: Auto picks a model for each message, as Expected says."
+  ],
+  "where": "New chat > composer footer model button > first row \"Auto\" in the list (guidance text \"Picks the best model for each message\")."
+ },
+ "S15.09": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "Default model"
+   }
+  ],
+  "needs": "a paid account for models outside the Free plan",
+  "note": "Outside the requested range; included for reference only.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and go to General.",
+   "Find the \"Default model\" select (its first option is \"Last used\").",
+   "Choose a model, then open a new chat.",
+   "Compare: the new chat starts with the model you chose."
+  ],
+  "where": "Settings > General > \"Default model\"."
+ },
+ "S15.10": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+    "text": "Change model"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click the model button in the composer footer.",
+   "Click a model row that is not locked.",
+   "Type a message and send it.",
+   "Compare: the answer comes from the model you picked, and the composer shows that model name."
+  ],
+  "where": "New chat > composer footer model button > model row."
+ },
+ "S15.11": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ModelCatalogue.tsx",
+    "text": "Back to the model list"
+   }
+  ],
+  "needs": "none",
+  "note": "The guidance text is data-driven. When no guidance exists the row falls back to the provider name, so some rows may show only the provider.",
+  "reachable": "yes",
+  "steps": [
+   "Open the model list from the composer footer model button.",
+   "Read the short grey line under each model name.",
+   "Click the help icon \"About <model name>\" and read the card.",
+   "Compare: each model has a short line about what it is good for."
+  ],
+  "where": "New chat > composer footer model button > model row guidance line under the model name. Full card: \"About <model name>\" button."
+ },
+ "S15.12": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ModelCatalogue.tsx",
+    "text": "Vision"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open the model list from the composer footer model button.",
+   "Look at the small chips on a model row, or open its \"About\" card.",
+   "Find the \"Vision\" chip on a model that accepts images.",
+   "Compare: the chip shows which inputs the model accepts."
+  ],
+  "where": "New chat > composer footer model button > model row or \"About <model name>\" card > capability chips."
+ },
+ "S15.13": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ModelCatalogue.tsx",
+    "text": "Image out"
+   }
+  ],
+  "needs": "none",
+  "note": "Whether a model shows an output chip depends on catalogue data.",
+  "reachable": "yes",
+  "steps": [
+   "Open the model list from the composer footer model button.",
+   "Look for chips such as \"Image out\", \"Video out\" or \"Audio out\".",
+   "Compare the chips with the outputs the model produces."
+  ],
+  "where": "New chat > composer footer model button > model row or \"About <model name>\" card > capability chips."
+ },
+ "S15.14": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ModelCatalogue.tsx",
+    "text": "Tools"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open the model list from the composer footer model button.",
+   "Find the \"Tools\" chip on a model row.",
+   "Open the \"About\" card for a model with and without the chip.",
+   "Compare: the chip appears only on models that can use tools."
+  ],
+  "where": "New chat > composer footer model button > model row or \"About <model name>\" card > capability chips."
+ },
+ "S15.15": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ModelCatalogue.tsx",
+    "text": "Context ceiling"
+   }
+  ],
+  "needs": "none",
+  "note": "The figures appear only on the About card, and are left out when the catalogue has no value. Not on the row itself.",
+  "reachable": "yes",
+  "steps": [
+   "Open the model list from the composer footer model button.",
+   "Click the help icon \"About <model name>\" on a model row.",
+   "Read the \"Context ceiling\" and \"Output ceiling\" lines.",
+   "Compare: they show the context size in K or M."
+  ],
+  "where": "New chat > composer footer model button > \"About <model name>\" button > \"Context ceiling\" line."
+ },
+ "S15.16": {
+  "labels": [],
+  "needs": "none",
+  "note": "No relative speed label found. Searched for speed, faster, slower and latency in packages/ui/unified-chat/src/lib/modelPicker.ts, packages/ai/routing/src/model-picker.ts, ModelCatalogue.tsx and ComposerFooter.tsx. The only match is the Fast mode text \"Faster answers at ... the usage\" (ComposerFooter.tsx:2034), which is not a speed comparison between models.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S15.17": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ModelCatalogue.tsx",
+    "text": "Credits per 1M tokens"
+   }
+  ],
+  "needs": "none",
+  "note": "Free-pool models show no credit figures. The bar text is generated from data.",
+  "reachable": "yes",
+  "steps": [
+   "Open the model list from the composer footer model button.",
+   "Look at the price bars on each row, or hover a bar to see its title.",
+   "Click the help icon \"About <model name>\" and read \"Credits per 1M tokens\" and \"Typical message\".",
+   "Compare: more filled bars or larger numbers mean a higher cost or faster use of the allowance."
+  ],
+  "where": "New chat > composer footer model button > price bars on a model row (accessible text \"Price band X of Y\") and the \"About <model name>\" card > \"Credits per 1M tokens\" and \"Typical message\"."
+ },
+ "S15.18": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+    "text": "Upgrade"
+   }
+  ],
+  "needs": "a Free account",
+  "note": "The plan name comes from resolvePlanLockLabel (packages/ai/routing/src/model-picker.ts:247); the fallback text is \"Upgrade\".",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with a Free account.",
+   "Open the model list from the composer footer model button.",
+   "Find a row with an \"Upgrade\" label, marked with a lock.",
+   "Compare: the row names the plan that unlocks the model, as Expected says."
+  ],
+  "where": "New chat > composer footer model button > model row marked \"Upgrade\" (locked rows show the plan that unlocks them)."
+ },
+ "S15.19": {
+  "labels": [
+   {
+    "file": "packages/ai/routing/src/model-picker.ts",
+    "text": "Preview"
+   }
+  ],
+  "needs": "a preview or experimental model in the catalogue",
+  "note": "I did not confirm that any preview model is in the current catalogue, so the badge may not be visible.",
+  "reachable": "yes",
+  "steps": [
+   "Open the model list from the composer footer model button.",
+   "Look for a badge reading \"Preview\", \"Experimental\", \"Beta\" or \"Alpha\" on a row.",
+   "Compare: the model carries the badge, as Expected says."
+  ],
+  "where": "New chat > composer footer model button > model row badge (Preview, Experimental, Beta or Alpha)."
+ },
+ "S15.20": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+    "text": "Leaving"
+   }
+  ],
+  "needs": "a model with a retirement date in the catalogue",
+  "note": "The date comes from catalogue data; I did not confirm that a model with a retirement date exists now.",
+  "reachable": "yes",
+  "steps": [
+   "Open the model list from the composer footer model button.",
+   "Look for a row whose grey line reads \"Leaving\" followed by a date.",
+   "Compare: the notice shows the retirement date before the model leaves the list."
+  ],
+  "where": "New chat > composer footer model button > model row guidance reads \"Leaving <date>\"."
+ },
+ "S15.21": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+    "text": "Unavailable right now"
+   }
+  ],
+  "needs": "a provider in a degraded state, which a tester cannot set up",
+  "note": "The state depends on live provider availability; the row text is \"Temporarily unavailable\" inside the catalogue (ModelCatalogue.tsx:41).",
+  "reachable": "yes",
+  "steps": [
+   "Open the model list from the composer footer model button.",
+   "Look for a row whose grey line reads \"Unavailable right now\".",
+   "Click that row and check that the model is not selected.",
+   "Compare: the row is marked unavailable and cannot be picked."
+  ],
+  "where": "New chat > composer footer model button > model row guidance reads \"Unavailable right now\" and the row cannot be picked."
+ },
+ "S15.22": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+    "text": "Reasoning effort"
+   }
+  ],
+  "needs": "a reasoning model, and a paid account for the higher levels",
+  "note": "The control is shown only for models with an effort ladder; Settings > General also has the same label.",
+  "reachable": "yes",
+  "steps": [
+   "Select a reasoning model in the composer footer model button.",
+   "Click the \"Reasoning effort\" control in the composer footer.",
+   "Drag the slider to a different level, or pick an option.",
+   "Send a message and compare the level chosen with Expected: the model thinks at that level."
+  ],
+  "where": "New chat > composer footer reasoning control (the control whose accessible name starts \"Reasoning effort:\") > effort slider labelled \"Reasoning effort\". Settings > General > \"Reasoning effort\"."
+ },
+ "S15.23": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+    "text": "Fast mode"
+   }
+  ],
+  "needs": "a paid account and a model with a fast tier",
+  "note": "The switch is disabled when fast mode is not allowed for the account or workspace; the enclosing popover was inferred from file order and not run.",
+  "reachable": "yes",
+  "steps": [
+   "Select a model that offers a faster tier in the composer footer model button.",
+   "Click the composer footer reasoning control.",
+   "Turn on the \"Fast mode\" switch.",
+   "Send a message and check the \"Fast\" pill and the usage note: faster answers at the stated usage multiplier."
+  ],
+  "where": "New chat > composer footer reasoning control > \"Fast mode\" switch. The \"Fast\" pill appears when it is on."
+ },
+ "S15.24": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/StyleSelector.tsx",
+    "text": "Response Length"
+   }
+  ],
+  "needs": "none",
+  "note": "The Settings entry point to Settings > Personalization was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Click the \"Style\" button in the composer footer.",
+   "Find the \"Response Length\" row.",
+   "Click \"Brief\" or \"Thorough\".",
+   "Send the same question twice, once with each setting, and compare the answer lengths with Expected."
+  ],
+  "where": "New chat > composer footer \"Style\" button > \"Response Length\" row (Brief, Default, Thorough). Also Settings > Personalization > \"Response length\"."
+ },
+ "S15.29": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "Last used"
+   }
+  ],
+  "needs": "none",
+  "note": "The choice is saved in localStorage under the key agi-model-store (apps/web/shared/stores/model-store.ts:376); it is per browser, not per account.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Choose a model in the composer footer model button.",
+   "Close the browser tab and open the app again.",
+   "Open New chat and read the model name on the composer footer.",
+   "Compare with Expected: the chosen model is still selected. If Settings > General > \"Default model\" is set to a fixed model, that setting wins over this memory."
+  ],
+  "where": "No control. Effect is seen after a restart: the composer model name in a new chat matches the model last chosen."
+ },
+ "S15.30": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+    "text": "Models"
+   }
+  ],
+  "needs": "an account with more than one model available",
+  "note": "The per-conversation save path is handleConversationModelChange in apps/web/features/chat/pages/WebChatPage.tsx; the only visible error is the toast 'Could not save the model for this conversation. The previous model remains active.' Default-versus-conversation behaviour in a new chat was not traced in code.",
+  "reachable": "yes",
+  "steps": [
+   "Open or start a conversation in the web app.",
+   "Click the model name button at the bottom of the message box (it opens the picker titled Models).",
+   "Choose a different model from the list.",
+   "Send a message in this same conversation and wait for the answer.",
+   "Open a new chat and look at the model name in its composer.",
+   "Compare: this conversation keeps the model you chose, and the new chat shows the default model."
+  ],
+  "where": "Composer footer > model name button > Models (pick a model), then send a message in the same conversation"
+ },
+ "S15.31": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Try again with"
+   }
+  ],
+  "needs": "an account with more than one model available",
+  "note": "The refresh icon has no visible text, only an aria-label 'Regenerate response'. The model list comes from regenerateModelOptions, and the override is passed in handleRegenerateMessage in apps/web/features/chat/pages/WebChatPage.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message and wait for the answer to finish.",
+   "Hover under the answer and click the refresh icon (it opens a menu).",
+   "Under Try again with, click a model name.",
+   "Look at the new answer, and then open the composer model picker.",
+   "Compare: the new answer comes from the model you picked, and the composer still shows the conversation's previous model."
+  ],
+  "where": "Under an answer, click the refresh icon (Regenerate response) > Try again with > pick a model"
+ },
+ "S15.32": {
+  "labels": [],
+  "needs": "none",
+  "note": "The label text is built at runtime from the model id (apps/web/features/chat/components/messages/MessageBubble.tsx around line 2411), so no fixed visible words exist to quote. It is hidden until hover on pointer devices.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message and wait for the answer to finish.",
+   "Move the mouse over the answer (on touch screens the label is always shown).",
+   "Read the small muted model name under the answer.",
+   "Compare: the name matches the model that actually answered, shown on the composer or in the Try again with menu."
+  ],
+  "where": "Hover over an answer; the model name that answered shows under it (data-testid message-answered-by in MessageBubble)"
+ },
+ "S15.33": {
+  "labels": [],
+  "needs": "none; a model failure or outage is needed to trigger the notice, which a tester cannot force from the UI",
+  "note": "The notice text is generated at runtime by describeFallbackReason (packages/contracts/types/src/chat-fallback-reason.ts; apps/web/lib/chat-fallback-reason.ts). The close control's aria-label is 'Dismiss model substitution notice' but it has no visible text. The notice is not shown while the answer is still streaming.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message with a model; wait for the answer to finish.",
+   "Look under the answer for a small notice with an alert icon and a close control.",
+   "Read the notice text: it says the different model answered and gives the reason.",
+   "Click the close control to dismiss the notice.",
+   "Compare: the notice names the model that answered and the reason, and it appears only when the chosen model failed or was unavailable."
+  ],
+  "where": "A notice appears under an answer when a fallback happened (role status, data-testid fallback-reason-notice)"
+ },
+ "S15.34": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+    "text": "Models"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+    "text": "Switch anyway"
+   }
+  ],
+  "needs": "a file or image to upload, and an account with a model that cannot read it",
+  "note": "The warning sentences come from evaluateModelCompatibility at runtime; the Keep button text is built from the current model name, so it is not quoted as a fixed label.",
+  "reachable": "yes",
+  "steps": [
+   "Attach an image to the chat (use the attach control in the message box).",
+   "Click the model name button and open the Models picker.",
+   "Choose a model that cannot read images or other files in this chat.",
+   "Look for the line Switch to <model name>? with a warning sentence under it.",
+   "Read the sentence, then compare: it says what will be lost, and the two buttons are Switch anyway and Keep <current model name>."
+  ],
+  "where": "Composer footer > model name button > Models > choose a model that cannot handle the current chat"
+ },
+ "S15.35": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Use Auto"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Remove attachments"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Choose a compatible model"
+   }
+  ],
+  "needs": "a file or image to upload; a Free account shows Use Free Auto instead of Use Auto",
+  "note": "The alert text is chosen at runtime by attachmentConflictKind. For local-model attachments the alert shows Switch to a cloud model and Remove attachments instead (ChatComposerNew.tsx around line 5321-5357).",
+  "reachable": "yes",
+  "steps": [
+   "Attach an image or document to the chat.",
+   "Click the model name button and choose a model that cannot read that file type.",
+   "Look at the alert above the message box: it says the selected model can't read the attachment.",
+   "To keep the files, click Use Auto, or click Choose a compatible model and pick a listed model.",
+   "To drop them instead, click Remove attachments.",
+   "Compare: the files are kept with a model that can read them, or removed, and the alert goes away."
+  ],
+  "where": "Attach a file or image, then choose a model that cannot read it; an alert appears above the message box with Use Auto, Remove attachments and Choose a compatible model"
+ }
+}

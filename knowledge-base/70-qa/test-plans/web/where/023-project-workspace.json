@@ -1,0 +1,469 @@
+{
+ "S23.01": {
+  "labels": [
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Projects"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/ProjectGallery.tsx",
+    "text": "New project"
+   },
+   {
+    "file": "apps/web/features/chat/components/dialogs/CreateProjectDialog.tsx",
+    "text": "Create project"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The gallery has its own inline create form (ProjectGallery.tsx around lines 180-300) as well as CreateProjectDialog; the gallery's Create button label was not confirmed in the source read.",
+  "reachable": "yes",
+  "steps": [
+   "Click Projects in the left sidebar.",
+   "Click New project.",
+   "Type a name in the Project name box. Leave it empty first and check that submitting does nothing.",
+   "Click Create project (or press Enter in the name box).",
+   "Check that the new project opens as its own page with that name shown."
+  ],
+  "where": "Sidebar > Projects > New project > Project name > Create project"
+ },
+ "S23.02": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/dialogs/CreateProjectDialog.tsx",
+    "text": "Description"
+   },
+   {
+    "file": "apps/web/app/chat/projects/[id]/page.tsx",
+    "text": "Project settings"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The name and description edit fields and the Save button label in ProjectSettingsDialog.tsx were not confirmed in this read; the 'Project options' control is an aria-label only, not visible text.",
+  "reachable": "yes",
+  "steps": [
+   "At creation, type a name and a Description, then click Create project.",
+   "Open the project, click the Project options button (top right of the project page).",
+   "Click Project settings and change the name or description.",
+   "Save, reload the page, and check the new name and description are still shown."
+  ],
+  "where": "Projects > New project > Description (at creation); later Projects > open a project > Project options > Project settings"
+ },
+ "S23.03": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/ProjectGallery.tsx",
+    "text": "New project"
+   }
+  ],
+  "needs": "none",
+  "note": "The icon and colour controls have only aria-labels (for example 'Change project icon and colour' in apps/web/app/chat/projects/[id]/page.tsx), not visible words, so the tester must find them by the icon; the picker and colour control are in ProjectGallery.tsx around lines 280-360.",
+  "reachable": "yes",
+  "steps": [
+   "Click New project and click the icon button next to the Project name box to open the icon list.",
+   "Pick an icon, then pick a colour swatch.",
+   "Click Create project.",
+   "Look at the project card in the Projects list and at the project page header; both should show the chosen icon and colour."
+  ],
+  "where": "Projects > New project > icon button beside the name; later open a project and use its icon and colour control"
+ },
+ "S23.05": {
+  "labels": [
+   {
+    "file": "apps/web/app/chat/projects/[id]/page.tsx",
+    "text": "Chats"
+   },
+   {
+    "file": "apps/web/app/chat/projects/[id]/page.tsx",
+    "text": "Sources"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The page has tabs Chats, Artifacts, Work, Sources and Scheduled; there is no visible 'Instructions' tab (instructions sit under Project settings > Instructions) and no visible counts were found in the read, so the Expected wording differs.",
+  "reachable": "yes",
+  "steps": [
+   "Click Projects in the sidebar, then click a project card.",
+   "Look at the page title and the description under it.",
+   "Look at the tabs: Chats, Artifacts, Work, Sources, Scheduled.",
+   "Compare with Expected: name, description, counts and the main sections."
+  ],
+  "where": "Projects > click a project card"
+ },
+ "S23.06": {
+  "labels": [
+   {
+    "file": "apps/web/app/chat/projects/[id]/page.tsx",
+    "text": "Chats"
+   }
+  ],
+  "needs": "a signed-in account with a chat that can generate",
+  "note": "The new-chat box uses a template placeholder 'New chat in ${project.name}' (apps/web/app/chat/projects/[id]/page.tsx line 1088); generation may be gated by plan.",
+  "reachable": "yes",
+  "steps": [
+   "Open a project and stay on the Chats tab.",
+   "Check the list of conversations; click one to open it.",
+   "Type in the box that says 'New chat in <project name>' and send a message.",
+   "Go back to the project's Chats tab and check the new chat is listed."
+  ],
+  "where": "Projects > open a project > Chats tab"
+ },
+ "S23.07": {
+  "labels": [
+   {
+    "file": "apps/web/app/chat/projects/[id]/page.tsx",
+    "text": "Sources"
+   }
+  ],
+  "needs": "a paid account with project knowledge storage (a Free account is blocked) and a file to upload",
+  "note": "Upload button label was not found in the panel read; SourcesPanel.tsx shows 'Preview <file>' and 'Remove <file>' aria-labels. Earlier run recorded a plan gate on upload.",
+  "reachable": "yes",
+  "steps": [
+   "Open a project and click the Sources tab.",
+   "Find the upload control in the Sources panel and choose a small text file.",
+   "Check the file appears in the list with a Preview button and a Remove button.",
+   "Preview and then remove it, and check the list updates."
+  ],
+  "where": "Projects > open a project > Sources tab"
+ },
+ "S23.08": {
+  "labels": [
+   {
+    "file": "apps/web/app/chat/projects/[id]/page.tsx",
+    "text": "Sources"
+   }
+  ],
+  "needs": "a paid account; for Google Drive the owner must set the Picker keys",
+  "note": "Marked unfinished in the audit: the Google Picker needs GOOGLE_PICKER_API_KEY and GOOGLE_PICKER_APP_ID, which are not set; text sources and add-source labels were not found in the read, and the Drive refresh control is aria-labelled 'Refresh <file> from Google Drive' (SourcesPanel.tsx line 757).",
+  "reachable": "yes",
+  "steps": [
+   "Open a project and click the Sources tab.",
+   "Look for the add-source options (files, text, Google Drive).",
+   "Try adding a Google Drive file if the picker is shown.",
+   "Check the added source appears in the Sources list."
+  ],
+  "where": "Projects > open a project > Sources tab"
+ },
+ "S23.09": {
+  "labels": [
+   {
+    "file": "apps/web/features/projects/components/ProjectSettingsDialog.tsx",
+    "text": "Instructions"
+   },
+   {
+    "file": "apps/web/app/chat/projects/[id]/page.tsx",
+    "text": "Project settings"
+   }
+  ],
+  "needs": "a signed-in account and a chat that can generate",
+  "note": "Effect on chat answers is server-side (apps/web/lib/services/project-context-service.ts) and cannot be seen directly in the UI.",
+  "reachable": "yes",
+  "steps": [
+   "Open a project, click Project options, then Project settings.",
+   "Type text in the Instructions box and save.",
+   "Reload, reopen Project settings and check the text is kept.",
+   "Start a new chat in this project, ask a question the instruction would change, and compare the answer."
+  ],
+  "where": "Projects > open a project > Project options > Project settings > Instructions"
+ },
+ "S23.11": {
+  "labels": [
+   {
+    "file": "apps/web/features/projects/components/ProjectSettingsDialog.tsx",
+    "text": "Memory"
+   },
+   {
+    "file": "apps/web/features/projects/components/ProjectSettingsDialog.tsx",
+    "text": "Use memories from outside this project"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "Earlier run recorded Save staying disabled in settings; reload persistence was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open Project settings and find the Memory section.",
+   "Tick or untick 'Use memories from outside this project'.",
+   "Save, reload and reopen Project settings.",
+   "Check the box state and the explanation text under it are kept."
+  ],
+  "where": "Projects > open a project > Project options > Project settings > Memory"
+ },
+ "S23.12": {
+  "labels": [
+   {
+    "file": "apps/web/app/chat/projects/[id]/page.tsx",
+    "text": "Artifacts"
+   }
+  ],
+  "needs": "a signed-in account with a chat that can make an artifact",
+  "note": "Empty-state wording of ProjectArtifactsPanel.tsx was not read.",
+  "reachable": "yes",
+  "steps": [
+   "Open a project and click the Artifacts tab.",
+   "Check the list of artifacts, or the empty state if none.",
+   "Create an artifact in a chat in this project, then return to the Artifacts tab.",
+   "Click the artifact and check it opens."
+  ],
+  "where": "Projects > open a project > Artifacts tab"
+ },
+ "S23.14": {
+  "labels": [
+   {
+    "file": "apps/web/app/chat/projects/[id]/page.tsx",
+    "text": "Work"
+   }
+  ],
+  "needs": "a paid plan that allows Work",
+  "note": "The empty-state text is 'Switch a chat in {projectName} to Work and its runs will be listed here.' (ProjectWorkPanel.tsx line 119). How to switch a chat to Work was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open a project and click the Work tab.",
+   "Read the empty-state text.",
+   "Switch a chat in the project to Work and run a task.",
+   "Return to the Work tab and check the run is listed with its state."
+  ],
+  "where": "Projects > open a project > Work tab"
+ },
+ "S23.15": {
+  "labels": [
+   {
+    "file": "apps/web/app/chat/projects/[id]/page.tsx",
+    "text": "Scheduled"
+   }
+  ],
+  "needs": "a paid plan (Basic or higher); earlier run was blocked by the plan gate",
+  "note": "The create button label on the Scheduled tab was not confirmed; the schedule list lives in apps/web/features/schedules/components/SchedulesPage.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Open a project and click the Scheduled tab.",
+   "Click the control that creates a routine or scheduled task.",
+   "Fill it in and save.",
+   "Check the new routine is listed on the project's Scheduled tab."
+  ],
+  "where": "Projects > open a project > Scheduled tab"
+ },
+ "S23.16": {
+  "labels": [
+   {
+    "file": "apps/web/features/projects/components/ProjectDefaultModelField.tsx",
+    "text": "Default model"
+   }
+  ],
+  "needs": "a signed-in account; the chosen model must be allowed on the plan",
+  "note": "The new-chat default is applied in apps/web/features/chat/pages/WebChatPage.tsx (no visible label).",
+  "reachable": "yes",
+  "steps": [
+   "Open Project settings.",
+   "Find the Default model field and choose a model.",
+   "Save, then start a new chat inside the project.",
+   "Check the new chat's model selector shows the chosen default."
+  ],
+  "where": "Projects > open a project > Project options > Project settings > Default model"
+ },
+ "S23.20": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/ProjectGallery.tsx",
+    "text": "Search projects..."
+   }
+  ],
+  "needs": "at least two projects with different names and descriptions",
+  "note": "Whether the search matches descriptions was not confirmed (ProjectGallery.tsx line 118 filter not fully read).",
+  "reachable": "yes",
+  "steps": [
+   "Click Projects in the sidebar.",
+   "Click the search box with the placeholder 'Search projects...'.",
+   "Type part of a project's name, then part of its description.",
+   "Check that only matching projects stay in the list."
+  ],
+  "where": "Projects (sidebar) > search box at the top of the Projects page"
+ },
+ "S23.21": {
+  "labels": [
+   {
+    "file": "apps/web/app/chat/projects/[id]/page.tsx",
+    "text": "Share"
+   },
+   {
+    "file": "apps/web/features/projects/components/ProjectSharingControls.tsx",
+    "text": "Owner"
+   }
+  ],
+  "needs": "a team workspace and a second account in it",
+  "note": "The share dialog says 'Only you can open this project. Switch to a team workspace to share it.' outside a team workspace (ProjectShareDialog.tsx line 79).",
+  "reachable": "yes",
+  "steps": [
+   "Open a project in a team workspace and click Project options, then Share.",
+   "Read the dialog title 'Share <project name>' and the list of people.",
+   "Check the owner is shown with the detail 'Owner'.",
+   "Sign in as a second member and open the same project; check it appears as shared with you."
+  ],
+  "where": "Projects > open a project > Project options > Share"
+ },
+ "S23.22": {
+  "labels": [
+   {
+    "file": "apps/web/features/projects/components/ProjectSharingControls.tsx",
+    "text": "Can view"
+   },
+   {
+    "file": "apps/web/features/projects/components/ProjectSharingControls.tsx",
+    "text": "Can edit"
+   },
+   {
+    "file": "apps/web/features/projects/components/ProjectSharingControls.tsx",
+    "text": "No access"
+   }
+  ],
+  "needs": "two accounts in the same workspace with different roles",
+  "note": "The server-side enforcement is in apps/web/lib/services/org-sharing-service.ts; the access labels are shown in the UI.",
+  "reachable": "yes",
+  "steps": [
+   "Open Share for a shared project as the owner.",
+   "Change a member's access between Can view, Can edit and No access.",
+   "As that member, try to edit the project's instructions and try to view it.",
+   "Check the owner and member see what the role allows and that the server refuses edits from a view-only member."
+  ],
+  "where": "Projects > open a project > Project options > Share > access dropdown next to a member"
+ },
+ "S23.23": {
+  "labels": [
+   {
+    "file": "apps/web/features/projects/components/ProjectSharingControls.tsx",
+    "text": "Add people"
+   }
+  ],
+  "needs": "an owner or manager account and a second member account",
+  "note": "A separate 'Remove' control was not found; removal is shown as 'No access' in the code (ProjectSharingControls.tsx line 43).",
+  "reachable": "yes",
+  "steps": [
+   "Open Share as the owner or a manager.",
+   "Click Add people and pick a workspace member.",
+   "Check the person appears in the list with a role.",
+   "Set that person to No access to remove them from the project, then check they lose it."
+  ],
+  "where": "Projects > open a project > Project options > Share > Add people"
+ },
+ "S23.24": {
+  "labels": [
+   {
+    "file": "apps/web/features/projects/components/ProjectShareDialog.tsx",
+    "text": "Copy link"
+   }
+  ],
+  "needs": "a team workspace and a second account in it",
+  "note": "Copy link is also reachable from the card's Share action (packages/ui/unified-chat/src/components/ProjectCard.tsx line 248).",
+  "reachable": "yes",
+  "steps": [
+   "Open a shared project as the owner and click Project options, then Share.",
+   "Click Copy link.",
+   "Open the copied link in a private window signed in as a shared member.",
+   "Check the project opens for that member."
+  ],
+  "where": "Projects > open a project > Project options > Share > Copy link"
+ },
+ "S23.29": {
+  "labels": [
+   {
+    "file": "apps/web/features/projects/components/ProjectSettingsDialog.tsx",
+    "text": "Duplicate"
+   }
+  ],
+  "needs": "a project owner; file copy needs a plan with project knowledge storage",
+  "note": "A source comment in ProjectSettingsDialog.tsx (around line 436) says the duplicate route shipped without a caller; the button exists in code. Files duplicated wording is shown after duplication (line 155).",
+  "reachable": "yes",
+  "steps": [
+   "Open Project settings as the project owner.",
+   "Click Duplicate.",
+   "Wait until the button stops showing 'Duplicating\u2026'.",
+   "Check the copy appears in the Projects list with the same instructions and settings, and that its files are copied too."
+  ],
+  "where": "Projects > open a project > Project options > Project settings > Duplicate"
+ },
+ "S23.30": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/ProjectCard.tsx",
+    "text": "Archive"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/ProjectCard.tsx",
+    "text": "Unarchive"
+   },
+   {
+    "file": "apps/web/app/chat/projects/page.tsx",
+    "text": "Archived ("
+   }
+  ],
+  "needs": "a signed-in account with a project",
+  "note": "The archived-toggle label is a template 'Archived (${archivedProjects.length})'; that its contents are intact after restore was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "On the Projects page, open a project card's menu and click Archive.",
+   "Check the project leaves the active list.",
+   "Click the toggle that shows 'Archived (<n>)' and find the project.",
+   "Click Unarchive and check the project is back in the active list with its chats and files still there."
+  ],
+  "where": "Projects > card menu (More) > Archive; then Show archived toggle > Unarchive"
+ },
+ "S23.32": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/ProjectCard.tsx",
+    "text": "Delete"
+   },
+   {
+    "file": "apps/web/features/projects/components/ProjectSettingsDialog.tsx",
+    "text": "Delete project?"
+   }
+  ],
+  "needs": "a project owner and a test project",
+  "note": "The settings dialog text for non-Health projects was not read; the shown delete warning says chats are permanently deleted only for Health spaces (ProjectSettingsDialog.tsx line 230), so check the non-Health wording before testing.",
+  "reachable": "yes",
+  "steps": [
+   "On the Projects page, open a project card's menu and click Delete.",
+   "Read the confirmation 'Delete \"<name>\"?' and click Delete to confirm.",
+   "Check the project is gone from the Projects list.",
+   "Open an existing chat that was in the project and check it still exists and is no longer filed under the project."
+  ],
+  "where": "Projects > card menu (More) > Delete > confirm Delete; or Project options > Project settings > Delete project?"
+ },
+ "S23.33": {
+  "labels": [
+   {
+    "file": "apps/web/features/projects/components/ProjectSettingsDialog.tsx",
+    "text": "Use memories from outside this project"
+   },
+   {
+    "file": "apps/web/features/projects/components/ProjectSettingsDialog.tsx",
+    "text": "Use your profile and instructions for AGI"
+   }
+  ],
+  "needs": "a signed-in account with some account-wide memories and chats",
+  "note": "The code excludes account-wide memory and profile instructions only; it does not show other chats being excluded, so the Expected wording goes beyond it. Generation was blocked in the earlier run.",
+  "reachable": "yes",
+  "steps": [
+   "Open Project settings.",
+   "Untick 'Use memories from outside this project' and untick 'Use your profile and instructions for AGI'.",
+   "Save and reopen Project settings.",
+   "Ask a project chat a question about a memory or chat from outside the project, and check the answer does not use it."
+  ],
+  "where": "Projects > open a project > Project options > Project settings > Memory and Personalization"
+ },
+ "S23.34": {
+  "labels": [
+   {
+    "file": "apps/web/app/chat/projects/[id]/page.tsx",
+    "text": "Shared with you"
+   }
+  ],
+  "needs": "a second account and a project shared with it",
+  "note": "The explanation text is 'This project\u2019s instructions and files are shared with you. Your chats and memories here stay private to you.' (apps/web/app/chat/projects/[id]/page.tsx around line 1036); it only shows for shared projects.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in as a member of a team workspace and open a project shared with you.",
+   "Look for the label 'Shared with you' next to the title.",
+   "Read the line under the title: instructions and files are shared, your chats and memories stay private.",
+   "Compare with Expected; then open the owner's view and check the explanation is not shown there."
+  ],
+  "where": "Projects > open a project shared with you (you are a member) > read the line under the title"
+ }
+}

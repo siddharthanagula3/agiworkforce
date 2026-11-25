@@ -1,0 +1,507 @@
+{
+ "S19.01": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/MessageBubble.tsx",
+    "text": "Preparing"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/SendButton.tsx",
+    "text": "Send message"
+   }
+  ],
+  "needs": "none",
+  "note": "Send message is an accessibility name on the button, not printed text. Preparing shows only when no reasoning or tool steps exist yet; no separate accepted message was found.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Chat tab and tap the message box.",
+   "Type a short question.",
+   "Tap the round Send message button.",
+   "Look right under your message for the spinner with the word Preparing (or Working...) before any answer text appears. Compare with Expected: the app shows the request was accepted and work has started."
+  ],
+  "where": "Chat tab > type in the message box > Send message"
+ },
+ "S19.02": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Offline, message will send on reconnect"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/MessageBubble.tsx",
+    "text": "queued"
+   }
+  ],
+  "needs": "phone width, ability to switch off network",
+  "note": "Queueing found here is the offline queue. Queueing behind a running turn is handled in ChatInput but no visible word for it was confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Turn off Wi-Fi and mobile data on the phone.",
+   "Type a message in the composer.",
+   "Tap Send.",
+   "Look at the composer placeholder and at your message bubble for the small queued tag. Compare with Expected: the request is shown as waiting in the queue."
+  ],
+  "where": "Chat tab > turn Wi-Fi and mobile data off > type in the message box > Send"
+ },
+ "S19.03": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/MessageBubble.tsx",
+    "text": "Preparing"
+   }
+  ],
+  "needs": "a file to upload",
+  "note": "The attach control name was not confirmed in code. Preparing shows only when no reasoning or tool steps exist yet.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Chat tab and attach a file or photo with the attach control.",
+   "Type a short question about it.",
+   "Tap Send.",
+   "Look under your message for the Preparing spinner before the answer starts. Compare with Expected: the app shows it is reading the context before the answer."
+  ],
+  "where": "Chat tab > attach a file or photo > Send"
+ },
+ "S19.04": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/WebSearchToolCard.tsx",
+    "text": "Searching for"
+   }
+  ],
+  "needs": "a network connection; a question that triggers web search",
+  "note": "The way to turn web search on was not confirmed in code; the query text is inside the quoted part of the label.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Chat tab.",
+   "Ask a question that needs current web information, such as today's news on a topic.",
+   "While the answer is loading, look at the tool step row under the message.",
+   "Compare with Expected: the row shows Searching for with the query in quotes."
+  ],
+  "where": "Chat tab > ask a question that needs current web sources > the tool step row"
+ },
+ "S19.05": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/CodeExecutionBlock.tsx",
+    "text": "Running Python\u2026"
+   }
+  ],
+  "needs": "a request that triggers code execution",
+  "note": "The request that triggers code execution was not confirmed in code.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Chat tab.",
+   "Ask for something that needs code to run, such as a calculation or a chart.",
+   "While the code block is working, look for the label Running Python.",
+   "Compare with Expected: the code step shows it is running."
+  ],
+  "where": "Chat tab > ask for a calculation or chart that runs Python > the code block"
+ },
+ "S19.06": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/tool-status.ts",
+    "text": "Running"
+   }
+  ],
+  "needs": "a connected service account (outside account may be needed)",
+  "note": "The exact service name in the row was not confirmed in code; Running comes from the shared status table.",
+  "reachable": "yes",
+  "steps": [
+   "Connect a service first in the app's connectors screen (apps/mobile/app/(app)/connectors).",
+   "Open the Chat tab and ask for something that uses that service.",
+   "Open the tool step row under the answer while the call is in progress.",
+   "Compare with Expected: the row shows Running and names the service."
+  ],
+  "where": "Chat tab > send a request that uses a connected connector > the tool step row under the answer"
+ },
+ "S19.07": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx",
+    "text": "Needs approval"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Allow once"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Deny"
+   }
+  ],
+  "needs": "a request that triggers an approval",
+  "note": "The approve and deny buttons are in apps/mobile/src/features/chat/components/CloudToolApprovalControls.tsx; the scope labels come from packages/contracts/cloud-contracts/src/tool-approval-presentation.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Chat tab and send a request that needs a tool the app asks permission for.",
+   "Look for the Needs approval line in the activity row.",
+   "Read the choices: Allow once, Allow for this chat, Always allow, and Deny.",
+   "Compare with Expected: the turn waits and shows approve and deny controls."
+  ],
+  "where": "Chat tab > send a request that needs a tool approval > the approval row under the step"
+ },
+ "S19.08": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ClarifyCard.tsx",
+    "text": "Something else\u2026"
+   }
+  ],
+  "needs": "a request that triggers a clarifying question",
+  "note": "No separate waiting-for-input word was found; the question card itself is the visible state.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Chat tab and send a vague request, such as asking for a plan without details.",
+   "When a question card appears in the answer, read the questions.",
+   "Pick an option or type in the Something else... box and answer.",
+   "Compare with Expected: the turn shows it is waiting for your answer and lets you reply."
+  ],
+  "where": "Chat tab > send a request where the assistant needs a detail > the question card"
+ },
+ "S19.09": {
+  "labels": [],
+  "needs": "none",
+  "note": "",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Send a message in the Chat tab.",
+   "Watch the Preparing or Working spinner under your message.",
+   "Compare with Expected: when the first words arrive, the spinner row is replaced by the answer text."
+  ],
+  "where": "Effect seen in the Chat tab when the first words of an answer arrive"
+ },
+ "S19.10": {
+  "labels": [],
+  "needs": "none",
+  "note": "",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Send a question that needs a long answer.",
+   "Watch the answer bubble while the spinner is still showing.",
+   "Compare with Expected: text grows in the bubble before the answer is complete."
+  ],
+  "where": "Effect seen in the Chat tab while the answer is being written"
+ },
+ "S19.11": {
+  "labels": [],
+  "needs": "none",
+  "note": "",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Ask for an answer that includes a bulleted list, a table or a code block.",
+   "Watch the answer while it is still streaming.",
+   "Compare with Expected: the list, table and code block show in their formatted form before the answer ends."
+  ],
+  "where": "Effect seen in the Chat tab when an answer contains lists, tables or code"
+ },
+ "S19.13": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ImageGenProgress.tsx",
+    "text": "Generating Image\u2026"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Describe the image to create"
+   }
+  ],
+  "needs": "an account that can create images",
+  "note": "The control that switches the composer to image mode was not confirmed in code. Video progress shows Generating video\u2026 in VideoGenProgress.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Chat tab and switch the composer to image mode.",
+   "Type a description, such as a simple picture of a cat.",
+   "Tap Send.",
+   "Look for the Generating Image... card and its Stop generating button. Compare with Expected: generation progress is shown."
+  ],
+  "where": "Chat tab > select image mode in the composer > type a description > Send"
+ },
+ "S19.15": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx",
+    "text": "Worked for"
+   }
+  ],
+  "needs": "a request that uses tool steps",
+  "note": "The label is built from a time value, so the full text is Worked for followed by the elapsed time.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Chat tab and send a request that uses tool steps.",
+   "Wait until the answer ends.",
+   "Look at the activity row under the answer for the words Worked for and a time.",
+   "Compare with Expected: the spinner has stopped and the turn is shown as completed."
+  ],
+  "where": "Chat tab > send a request that uses steps > the activity row under the answer"
+ },
+ "S19.16": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx",
+    "text": "Finished with errors after"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-status.ts",
+    "text": "Partial result"
+   }
+  ],
+  "needs": "a request that makes some steps fail (not controlled by the tester)",
+  "note": "Whether a partial run can be made to happen on demand was not confirmed in code.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Chat tab and send a request that runs several steps.",
+   "Wait for a run where some steps fail while others succeed.",
+   "Look at the activity row under the answer.",
+   "Compare with Expected: the row says Finished with errors, which is distinct from Worked for and from Failed."
+  ],
+  "where": "Chat tab > send a request with several steps where one step fails > the activity row"
+ },
+ "S19.17": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/SendButton.tsx",
+    "text": "Stop generating"
+   },
+   {
+    "file": "packages/contracts/types/src/cloud-code.ts",
+    "text": "Stopping the task"
+   }
+  ],
+  "needs": "none",
+  "note": "In the Chat tab the composer does not receive a stopping state (stopPending is only passed by the cloud-code composer), so no Stopping word was found there. Stopping the task is the cloud-code session wording.",
+  "reachable": "yes",
+  "steps": [
+   "Send a long request in the Chat tab.",
+   "While the answer streams, tap the square Stop generating button.",
+   "Look at the composer and the answer for a stopping state.",
+   "Compare with Expected: the surface shows the stop is in progress until it takes effect."
+  ],
+  "where": "Chat tab > send a message > tap Stop generating (square button)"
+ },
+ "S19.18": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/MessageBubble.tsx",
+    "text": "Response stopped."
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx",
+    "text": "Stopped after"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Send a long request in the Chat tab.",
+   "Tap the Stop generating square button while the answer streams.",
+   "Wait for the turn to end.",
+   "Look for the notice Response stopped. with a Try again button under the partial answer, and check the text that arrived is kept."
+  ],
+  "where": "Chat tab > send a long request > tap Stop generating"
+ },
+ "S19.19": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/MessageBubble.tsx",
+    "text": "Reconnecting\u2026"
+   }
+  ],
+  "needs": "phone width, ability to switch off network",
+  "note": "Whether the turn resumes is decided by the server and was not verified from code.",
+  "reachable": "yes",
+  "steps": [
+   "Send a long request in the Chat tab.",
+   "While the answer streams, turn off Wi-Fi and mobile data on the phone.",
+   "Look at the spinner under the answer for the words Reconnecting.",
+   "Turn the network back on and compare with Expected: the turn resumes when possible."
+  ],
+  "where": "Chat tab > send a long request > turn off Wi-Fi and mobile data during the answer"
+ },
+ "S19.20": {
+  "labels": [],
+  "needs": "none",
+  "note": "No visible resuming word was found for chat turns; the research plan card shows Starting... while a resume runs (apps/mobile/src/features/chat/components/research/ResearchRunCard.tsx).",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Send a long request in the Chat tab.",
+   "While it streams, close the app fully and reopen it.",
+   "Open the same chat again and look for the answer continuing, not starting over.",
+   "Compare with Expected: the work is picked up and shown as resuming rather than restarting."
+  ],
+  "where": "Effect seen when a streaming chat is reopened after the app is closed"
+ },
+ "S19.21": {
+  "labels": [
+   {
+    "file": "services/failureCopy.ts",
+    "text": "Try again in"
+   }
+  ],
+  "needs": "an account that hits a rate limit",
+  "note": "The message text comes from the server; the time is shown only when the server gives one. The path for this string is apps/mobile/services/failureCopy.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Send messages in the Chat tab until a rate limit is reached (the app cannot force this).",
+   "Read the failure notice under the turn.",
+   "Look for the words Try again in and a time.",
+   "Compare with Expected: the notice says the turn was rate-limited and when to retry."
+  ],
+  "where": "Chat tab > send a message after the rate limit is reached > the failure notice under the turn"
+ },
+ "S19.22": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx",
+    "text": "Not included in your plan"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx",
+    "text": "Choose a plan"
+   }
+  ],
+  "needs": "a Free account at its limit",
+  "note": "Upgrade to and Update billing are the other titles this sheet can show, depending on the plan state.",
+  "reachable": "yes",
+  "steps": [
+   "Use up the plan's usage in the Chat tab (or use an account at its limit).",
+   "Send another message.",
+   "Read the sheet that opens.",
+   "Compare with Expected: the sheet says the feature is not included and points to Upgrade or Choose a plan."
+  ],
+  "where": "Chat tab > send a message after the plan's usage is used up > the paywall sheet"
+ },
+ "S19.23": {
+  "labels": [
+   {
+    "file": "apps/mobile/stores/chat/chatExecutionStore.ts",
+    "text": "Sign in to use AGI Cloud."
+   },
+   {
+    "file": "apps/mobile/stores/chat/chatExecutionStore.ts",
+    "text": "Sign in to resume this AGI Cloud task."
+   }
+  ],
+  "needs": "a Clerk sign-in that can expire",
+  "note": "No separate sign-in button was confirmed next to these messages; the tester should check whether one appears.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, then let the sign-in expire (or sign out in another place).",
+   "Open the Chat tab, choose a cloud model and send a message.",
+   "Read the error that shows under the composer or the turn.",
+   "Compare with Expected: the error says sign in is needed and offers to sign in again."
+  ],
+  "where": "Chat tab > choose a cloud model > send after the sign-in has expired"
+ },
+ "S19.24": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx",
+    "text": "Waiting for"
+   }
+  ],
+  "needs": "a paired desktop that is offline",
+  "note": "If no device name is known the row says Waiting for your device.",
+  "reachable": "yes",
+  "steps": [
+   "Pair a desktop and then turn it off or let it go offline.",
+   "In the Chat tab, send a request that needs that desktop.",
+   "Open the activity row under the answer.",
+   "Compare with Expected: the row says Waiting for followed by the desktop name."
+  ],
+  "where": "Chat tab > send a request that needs your desktop > the activity row"
+ },
+ "S19.25": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/MessageBubble.tsx",
+    "text": "Switch model"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/MessageBubble.tsx",
+    "text": "Retry"
+   }
+  ],
+  "needs": "a provider outage (not controlled by the tester)",
+  "note": "The wording of the outage message comes from the server; the Switch model button shows only for the errors that offer it.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message in the Chat tab while the provider is unavailable (the tester cannot force this).",
+   "Read the failure notice under the turn.",
+   "Look for the Retry button and the Switch model button.",
+   "Compare with Expected: the turn says the provider is unavailable and offers retry or another model."
+  ],
+  "where": "Chat tab > send a message while the model provider is down > the failure notice under the turn > Retry or Switch model"
+ },
+ "S19.26": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/MessageBubble.tsx",
+    "text": "Tap to try again."
+   }
+  ],
+  "needs": "a file to upload that the service rejects",
+  "note": "The explanation words come from the server copy in apps/web/app/api/llm/v1/chat/completions/lib/upstream-error-copy.ts, not from the app.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message that is too long, or attach a file the app cannot use.",
+   "Read the failure notice under the turn.",
+   "Look for the text Tap to try again and the Try again action.",
+   "Compare with Expected: the notice explains what to change so you can fix it and send again."
+  ],
+  "where": "Chat tab > send a message that is too long or has a bad attachment > the failure notice under the turn"
+ },
+ "S19.27": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/utils/messageStreamError.ts",
+    "text": "Response may be incomplete"
+   }
+  ],
+  "needs": "a way to cut the network during an answer",
+  "note": "The failure text is shown after the partial answer; the exact wording after the prefix comes from the server.",
+  "reachable": "yes",
+  "steps": [
+   "Send a long request in the Chat tab.",
+   "Turn off the network after some answer text appears, and keep it off until the turn gives up.",
+   "Read the answer text that is still shown.",
+   "Compare with Expected: the text that arrived is kept and the failure is marked with Response may be incomplete."
+  ],
+  "where": "Chat tab > send a request > connection fails after some answer text has arrived > the answer stays"
+ },
+ "S19.28": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "See all chats"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/ChatsListScreen.tsx",
+    "text": "Chats"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "No recent chats"
+   }
+  ],
+  "needs": "a Free account or a paid account; a chat with at least one finished answer; for the stopped case, a chat stopped before quitting the app",
+  "note": "Restore is persisted on the device only for chats in Local mode that are not temporary (chatMessageStore.ts partialize); other chats come back from the server, so the check depends on the chat's execution mode. An answer cut off by the app closing is marked stopped (stoppedByAppExit), and an interrupted image or video shows 'Video generation stopped when the app closed. Retry to generate it again.' (chatCloudMessageStore.ts). The drawer's visible label text in common.json was partly unreadable in the tool output, so verify the exact drawer menu wording on screen.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, open a chat that has a finished answer and, if you can, one that was stopped part way.",
+   "Force-quit the app completely (swipe it away in the app switcher) and open it again.",
+   "Open the drawer and tap the same chat in Recent chats, or tap See all chats and then the chat in the Chats list.",
+   "Check that the messages are still there and that each answer shows the same final state as before the restart (finished, failed or stopped). An answer that was still streaming when the app closed should show as stopped, not as still running."
+  ],
+  "where": "Open the drawer (menu button, top left) > Recent chats > tap a chat, or Drawer > See all chats > Chats > tap a chat"
+ },
+ "S19.29": {
+  "labels": [],
+  "needs": "a device; a long-running turn started on the phone, then the app closed or sent to the background",
+  "note": "Searched apps/mobile for background, resume, reopen, keeps running and in the background. The only background code found is background fetch for alerts (apps/mobile/app/_layout.tsx around lines 710-740, apps/mobile/services/backgroundFetch) and the upload message 'Upload stopped in the background' (apps/mobile/src/features/chat/upload/uploadLifecycle.ts:52). app.config.js gates background tasks on v1Feature('dispatch'). No visible control or label for a chat turn continuing after the UI closes was found, so the Expected behaviour could not be tied to a screen. Code location in the plan is unverified.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ }
+}

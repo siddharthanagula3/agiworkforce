@@ -1,0 +1,133 @@
+{
+ "S42.01": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Shortcuts"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "New schedule"
+   },
+   {
+    "file": "packages/contracts/cloud-contracts/src/schedules.ts",
+    "text": "Daily briefing"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The Daily briefing template repeats on weekdays at 08:00 (cadence label Weekdays at 8:00 AM), not every day; Every day is a separate Repeat choice.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side panel, click More, then click Shortcuts. The Options page opens on the Shortcuts section.",
+   "Scroll to the Schedules section and click New schedule.",
+   "Under Start from a template, click Daily briefing. The Name, Instructions, Repeat and Time fields fill in.",
+   "Choose a Model if none is chosen, then click Create schedule.",
+   "Compare with Expected: a status line reads Created Daily briefing. It runs in the cloud even when this browser is closed, and the new schedule appears in the Schedules list."
+  ],
+  "where": "Side panel > More > Shortcuts (opens Options page on Shortcuts) > Schedules > New schedule > Start from a template > Daily briefing > Create schedule"
+ },
+ "S42.04": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Time zone"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Every day"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Time"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The code sets the time zone from the Time zone list and falls back to the browser zone; I did not confirm the list row shows it.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side panel, click More, then click Shortcuts.",
+   "In the Schedules section click New schedule and pick a name and prompt.",
+   "Set Repeat to Every day, type a value in Time, and open the Time zone list to choose a zone.",
+   "Click Create schedule.",
+   "Compare with Expected: the new schedule is saved with the time and zone you set. The Time zone list defaults to the browser's own zone, so a different choice should show up. I did not confirm that the schedule list row displays the time and zone."
+  ],
+  "where": "Side panel > More > Shortcuts > Schedules > New schedule > Repeat, Time and Time zone fields > Create schedule"
+ },
+ "S42.10": {
+  "labels": [
+   {
+    "file": "apps/extension/src/background.ts",
+    "text": "Task Completed"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "How can I help you today?"
+   }
+  ],
+  "needs": "a signed-in account with a finished scheduled run that produced an answer, and Task completion notifications turned on",
+  "note": "The notification and its click-to-open path only exist when the run returned an answer; I did not trace whether the follow-up reply itself is correct.",
+  "reachable": "yes",
+  "steps": [
+   "Make sure a scheduled task has finished with an answer (for example Daily briefing after its run).",
+   "When the Chrome notification Task Completed appears, click it.",
+   "The side panel opens the conversation that holds the scheduled answer.",
+   "Click the message box that shows How can I help you today? and type a follow-up question about one item in the briefing, then send.",
+   "Compare with Expected: the follow-up is sent in that same conversation and gets a reply about the briefing item."
+  ],
+  "where": "Chrome notification \"Task Completed\" > click it > side panel opens the conversation > type in the message box \"How can I help you today?\" and send"
+ },
+ "S42.15": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Pause"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Resume"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Schedule paused."
+   }
+  ],
+  "needs": "a signed-in account with at least one schedule in the list",
+  "note": "The code audit's quoted lines in apps/extension/src/side_panel.ts (10574, 10577) moved and are a selection-context feature, not pause; the real Pause/Resume button is in apps/extension/src/features/side-panel/schedulesSection.ts near line 905, shown on the Options page, not the side panel.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side panel, click More, then click Shortcuts.",
+   "In the Schedules list, find a schedule (create one first with S42.01 if none exists).",
+   "Click Pause on that schedule row.",
+   "Compare with Expected: the status line reads Schedule paused. and the button on that row now reads Resume.",
+   "Click Resume and check the status line reads Schedule resumed. and the button reads Pause again."
+  ],
+  "where": "Side panel > More > Shortcuts > Schedules > [schedule row] > Pause, then Resume"
+ },
+ "S42.17": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Task completion notifications"
+   },
+   {
+    "file": "apps/extension/src/background.ts",
+    "text": "Task Completed"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Run now"
+   }
+  ],
+  "needs": "a signed-in account with at least one schedule, and Chrome notifications allowed for the browser",
+  "note": "The code audit's background.ts line 2482 is the notifications-enabled check and 3436 is the publish call; the notification fires only when the toggle is on. I did not confirm that Run now produces a finished run within a test session.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side panel, click More, then click Extension settings. The Options page opens.",
+   "Click Options in the left list and check that the Task completion notifications toggle is on.",
+   "Go to Shortcuts, find a schedule in the Schedules list and click Run now.",
+   "Wait for the run to finish.",
+   "Compare with Expected: a Chrome notification titled Task Completed appears, reading the schedule name and answer snippet or Scheduled task \"<name>\" finished."
+  ],
+  "where": "Side panel > More > Extension settings > Options > Task completion notifications (toggle on); then Shortcuts > Schedules > [schedule row] > Run now and wait for the Chrome notification Task Completed"
+ }
+}

@@ -1,0 +1,285 @@
+{
+ "S63.02": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Shortcuts"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "New schedule"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Create schedule"
+   }
+  ],
+  "needs": "a signed-in AGI account",
+  "note": "A second route exists: the chat title's More actions menu has 'Schedule\u2026', which opens Shortcuts with the form pre-filled from the chat's first prompt.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side panel and click More, then Shortcuts (this opens the Options page on the Shortcuts section).",
+   "Under Schedules, click New schedule.",
+   "Type a Name and write the instructions in Instructions.",
+   "Pick a Repeat option, fill in the Time, and click Create schedule.",
+   "Compare: a message 'Created <name>. It runs in the cloud even when this browser is closed.' appears and the new routine is listed in Schedules."
+  ],
+  "where": "Side panel: More > Shortcuts > Schedules > New schedule"
+ },
+ "S63.04": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Edit"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Description (optional)"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Save changes"
+   }
+  ],
+  "needs": "a signed-in AGI account and one saved routine",
+  "reachable": "yes",
+  "steps": [
+   "Open More, then Shortcuts, and find the routine in Schedules.",
+   "Click Edit on that routine row.",
+   "Change the Name, and type or clear the Description (optional) field.",
+   "Click Save changes.",
+   "Compare: the message 'Saved <name>.' appears and the row shows the new name and description; Edit again shows the saved values."
+  ],
+  "where": "Side panel: More > Shortcuts > Schedules > (routine row) Edit"
+ },
+ "S63.05": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Instructions"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Edit"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Save changes"
+   }
+  ],
+  "needs": "a signed-in AGI account and one saved routine",
+  "reachable": "yes",
+  "steps": [
+   "Open More, then Shortcuts, and click Edit on a routine.",
+   "Click inside the Instructions box.",
+   "Type several lines, pressing Return between them.",
+   "Click Save changes, then click Edit again.",
+   "Compare: the Instructions box is a multi-line box that keeps all the lines you typed."
+  ],
+  "where": "Side panel: More > Shortcuts > Schedules > (routine row) Edit > Instructions"
+ },
+ "S63.12": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Repeat"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Every day"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "On chosen days of the week"
+   }
+  ],
+  "needs": "a signed-in AGI account; waiting past a scheduled time to see a run",
+  "note": "The Repeat options in code are Once, Every day, On chosen days of the week and Once a month.",
+  "reachable": "yes",
+  "steps": [
+   "Open More, then Shortcuts, then click New schedule.",
+   "Fill in Name and Instructions.",
+   "Open Repeat and choose Every day (or On chosen days of the week, or Once a month), then fill in Time.",
+   "Click Create schedule.",
+   "Compare: the routine row shows 'Next <time>' matching the cadence you chose. Whether a run starts at each occurrence is decided on the server and can only be seen later in Runs."
+  ],
+  "where": "Side panel: More > Shortcuts > Schedules > New schedule > Repeat"
+ },
+ "S63.19": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Run now"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Run started."
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Runs"
+   }
+  ],
+  "needs": "a signed-in AGI account and one saved routine",
+  "reachable": "yes",
+  "steps": [
+   "Open More, then Shortcuts, and find a routine in Schedules.",
+   "Click Run now on its row.",
+   "Compare: the message 'Run started.' appears.",
+   "Click Runs on the same row and wait for the new run to show a final status.",
+   "Compare: the run is listed with status Finished or Failed and its output text."
+  ],
+  "where": "Side panel: More > Shortcuts > Schedules > (routine row) Run now"
+ },
+ "S63.20": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Schedules"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Next $TIME$"
+   }
+  ],
+  "needs": "a signed-in AGI account and one saved routine",
+  "note": "The Next line is only added to the row when a next time exists.",
+  "reachable": "yes",
+  "steps": [
+   "Open More, then Shortcuts, and scroll to Schedules.",
+   "Read the line 'Next <time>' on each routine row.",
+   "Compare the time with the schedule you set in Repeat and Time.",
+   "Create a routine with a future time and check that its row shows the new Next time."
+  ],
+  "where": "Side panel: More > Shortcuts > Schedules > (routine row)"
+ },
+ "S63.21": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Last $TIME$"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Not run yet"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Last run: $ERROR$"
+   }
+  ],
+  "needs": "a signed-in AGI account; a routine that has run (a failed run shows the error line)",
+  "note": "The status badge on the row shows the raw status word from the data (for example 'failed'), not a translated label.",
+  "reachable": "yes",
+  "steps": [
+   "Open More, then Shortcuts, and find a routine in Schedules.",
+   "Read the line 'Last <time>' or 'Not run yet' on its row.",
+   "If a run failed, read the 'Last run: <error>' line under it.",
+   "Compare with the Runs list: the newest run's time and status should match the row."
+  ],
+  "where": "Side panel: More > Shortcuts > Schedules > (routine row)"
+ },
+ "S63.23": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Runs"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Finished"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "This schedule hasn\u2019t run yet."
+   }
+  ],
+  "needs": "a signed-in AGI account and a routine that has run at least once",
+  "reachable": "yes",
+  "steps": [
+   "Open More, then Shortcuts, and click Runs on a routine row that has run.",
+   "Read the run list under the heading Runs.",
+   "For each run, read its status (Finished, Failed and so on) and the output text under it.",
+   "Compare: each run shows its output text, not only its status."
+  ],
+  "where": "Side panel: More > Shortcuts > Schedules > (routine row) Runs"
+ },
+ "S63.24": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Pause"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Resume"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Schedule paused."
+   }
+  ],
+  "needs": "a signed-in AGI account and one saved routine",
+  "reachable": "yes",
+  "steps": [
+   "Open More, then Shortcuts, and find a routine in Schedules.",
+   "Click Pause on its row.",
+   "Compare: the message 'Schedule paused.' appears and the button changes to Resume; the routine stays in the list.",
+   "Click Resume.",
+   "Compare: the message 'Schedule resumed.' appears and the button changes back to Pause."
+  ],
+  "where": "Side panel: More > Shortcuts > Schedules > (routine row) Pause"
+ },
+ "S63.27": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Delete"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Cancel"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Delete $NAME$ and its run history? This cannot be undone."
+   }
+  ],
+  "needs": "a signed-in AGI account and one saved routine you can afford to delete",
+  "reachable": "yes",
+  "steps": [
+   "Open More, then Shortcuts, and click Delete on a routine row.",
+   "Read the confirmation 'Delete <name> and its run history? This cannot be undone.'",
+   "Click Cancel first and check the routine is still listed.",
+   "Click Delete again, then Delete in the confirmation.",
+   "Compare: the message 'Deleted <name>.' appears and the routine is gone from the list."
+  ],
+  "where": "Side panel: More > Shortcuts > Schedules > (routine row) Delete"
+ },
+ "S63.32": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Paused until you approve or deny this step"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Approve"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Deny"
+   }
+  ],
+  "needs": "a signed-in AGI account and a routine whose unattended run reaches a tool call that needs approval",
+  "note": "The code does not name a simple user action that triggers an approval; the approval comes from the tool-call gate during an unattended run, so the tester may need a routine whose run calls a tool that requires approval.",
+  "reachable": "yes",
+  "steps": [
+   "Open More, then Shortcuts, and find a routine whose run is waiting for approval.",
+   "Read the block 'Paused until you approve or deny this step' with its expiry line and the action it asks for.",
+   "Click Approve (or Deny).",
+   "Compare: the message 'Approved. The run continued.' (or 'Denied. The run continued without that step.') appears, the waiting block goes away, and the run reaches a final status under Runs."
+  ],
+  "where": "Side panel: More > Shortcuts > Schedules > (routine row with a waiting run)"
+ }
+}

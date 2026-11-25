@@ -1,0 +1,327 @@
+{
+ "S15.01": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx",
+    "text": "Models"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   }
+  ],
+  "needs": "none",
+  "note": "The name is computed by getShortDisplayName, so there is no literal visible string for it in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Open the app and go to a new chat.",
+   "Look at the bottom bar of the message box, next to the + button.",
+   "Read the model name on that button.",
+   "Send a short message and compare the name on the button with the model shown under the answer (see S15.32)."
+  ],
+  "where": "Chat screen > composer bar: the model name button beside the + (Add to chat) button"
+ },
+ "S15.02": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/model-picker/service.ts",
+    "text": "On device"
+   },
+   {
+    "file": "apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx",
+    "text": "Models"
+   }
+  ],
+  "needs": "none",
+  "note": "For providers with a logo, the row shows the logo icon and no provider text; the provider name text appears only for providers without a logo. The text itself is built from the provider name in service.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Tap the model name in the composer bar.",
+   "In the Models sheet, look at the small grey text to the right of each model name.",
+   "Compare the text with the company or provider shown for that model."
+  ],
+  "where": "Chat screen > tap the model name in the composer > Models sheet > any model row"
+ },
+ "S15.03": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx",
+    "text": "Models"
+   }
+  ],
+  "needs": "none",
+  "note": "The chevron has no visible words; its accessibility label is 'More <line name> models'.",
+  "reachable": "yes",
+  "steps": [
+   "Tap the model name in the composer bar.",
+   "Scroll the Models sheet to a model row that has a chevron on its right.",
+   "Tap the chevron to open the other models in that line.",
+   "Check that the related versions of one model line appear together under that row."
+  ],
+  "where": "Chat screen > tap the model name in the composer > Models sheet > open a model row's chevron (More models)"
+ },
+ "S15.04": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx",
+    "text": "Search models\u2026"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Tap the model name in the composer bar.",
+   "Tap the field that says Search models\u2026.",
+   "Type part of a model name, such as a few letters.",
+   "Check that the list shrinks to the models whose names match."
+  ],
+  "where": "Chat screen > tap the model name in the composer > Models sheet > Search models\u2026"
+ },
+ "S15.05": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx",
+    "text": "Favorites"
+   }
+  ],
+  "needs": "none",
+  "note": "Long-press on a model that needs sign-in or an upgrade opens the upgrade path instead of favouriting.",
+  "reachable": "yes",
+  "steps": [
+   "Tap the model name in the composer bar.",
+   "Press and hold a model row for about half a second.",
+   "Check that a small gold star appears on that row.",
+   "Scroll to the top of the Models sheet and check that the starred model is in the Favorites group."
+  ],
+  "where": "Chat screen > tap the model name in the composer > Models sheet > long-press a model row"
+ },
+ "S15.06": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx",
+    "text": "Recent"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Pick any model from the Models sheet so the sheet closes.",
+   "Tap the model name in the composer bar again.",
+   "Look at the group titled Recent at the top of the list.",
+   "Check that the model you just used is listed there."
+  ],
+  "where": "Chat screen > tap the model name in the composer > Models sheet > Recent group at the top"
+ },
+ "S15.08": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/routing-profile-choice.ts",
+    "text": "Auto"
+   }
+  ],
+  "needs": "none",
+  "note": "Auto rows are built from the routing profiles in apps/mobile/lib/models.ts; the other profile names in that file are Instant, Best and Economy.",
+  "reachable": "yes",
+  "steps": [
+   "Tap the model name in the composer bar.",
+   "Look at the rows at the top of the Models sheet, above Recent.",
+   "Tap the row named Auto and wait for the sheet to close.",
+   "Send a message and check the model shown under the answer (see S15.32) to see which model the product picked."
+  ],
+  "where": "Chat screen > tap the model name in the composer > Models sheet > top row labelled Auto"
+ },
+ "S15.10": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx",
+    "text": "Models"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Tap the model name in the composer bar.",
+   "Tap a model row that has no lock icon.",
+   "Check that the sheet closes and the composer shows the new name.",
+   "Send a message and check the model shown under the answer (see S15.32)."
+  ],
+  "where": "Chat screen > tap the model name in the composer > Models sheet > tap a model row"
+ },
+ "S15.16": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/model-picker/modelFilters.ts",
+    "text": "Instant"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account",
+  "note": "The chip only filters to fast-speed models; the code has no visible text that says models are faster or slower. The Speed section with the Fast switch only states that fast answers cost more usage.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu and tap AGI Cloud in the mode switch.",
+   "Tap the model name in the composer bar.",
+   "Tap the chip labelled Instant under the search field.",
+   "Check that only the quick models remain in the list."
+  ],
+  "where": "Chat screen > side menu > AGI Cloud (mode switch) > tap the model name in the composer > Instant chip in the Models sheet"
+ },
+ "S15.18": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/model-picker/components/ModelRow.tsx",
+    "text": "Upgrade"
+   }
+  ],
+  "needs": "a Free account",
+  "note": "The badge reads Upgrade or Not included depending on whether purchases are available. The plan name (for example Max) appears only in the row's accessibility hint, not as visible text.",
+  "reachable": "yes",
+  "steps": [
+   "Tap the model name in the composer bar.",
+   "Find a model row with a lock icon and a yellow badge.",
+   "Read the badge text and compare it with Expected.",
+   "Tap that row and check that the upgrade options open."
+  ],
+  "where": "Chat screen > tap the model name in the composer > Models sheet > a model row with a lock icon and an Upgrade badge"
+ },
+ "S15.21": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/model-picker/components/ModelRow.tsx",
+    "text": "Unavailable"
+   }
+  ],
+  "needs": "a live provider outage (cannot be made on demand) or an on-device model that is not on this device",
+  "note": "The badge appears only when the server reports an outage, so a tester cannot force it. The visible line under the row says Unavailable right now. Try again soon or pick another model.",
+  "reachable": "yes",
+  "steps": [
+   "Tap the model name in the composer bar.",
+   "Look for a row with a grey Unavailable badge and a dimmed look.",
+   "Tap the row and check that nothing changes and the model is not selected."
+  ],
+  "where": "Chat screen > tap the model name in the composer > Models sheet > a model row with an Unavailable badge"
+ },
+ "S15.22": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ComposerEffort.tsx",
+    "text": "Reasoning effort"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ComposerEffort.tsx",
+    "text": "Done"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account and a reasoning model",
+  "note": "The button is hidden for models without reasoning, so the tester must choose a reasoning model first.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu and tap AGI Cloud, then open a new chat.",
+   "Choose a model that thinks (reasoning model) from the Models sheet.",
+   "Tap the effort button in the composer bar.",
+   "Move the effort slider to another level, then tap Done.",
+   "Check that the effort name changes on the slider and in the composer."
+  ],
+  "where": "Chat screen > composer bar > reasoning effort button (appears for a reasoning model in AGI Cloud mode)"
+ },
+ "S15.24": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Choose style"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/StyleSelector.tsx",
+    "text": "Concise"
+   }
+  ],
+  "needs": "none",
+  "note": "The styles are Normal, Concise, Explanatory, Learning and Formal, with the description Short, direct answers for Concise. There is no explicit longer-answer option, so the length preference is only a style.",
+  "reachable": "yes",
+  "steps": [
+   "Tap the + button in the composer bar (labelled Add to chat).",
+   "Tap Choose style.",
+   "Pick Concise, Normal, Explanatory, Learning or Formal.",
+   "Send the same question twice, once with Concise and once with Explanatory, and compare the answer lengths."
+  ],
+  "where": "Chat screen > + (Add to chat) > Choose style"
+ },
+ "S15.27": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/model-picker/service.ts",
+    "text": "On device"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ModeToggle.tsx",
+    "text": "Local Mode"
+   }
+  ],
+  "needs": "a device with room for an on-device model (downloading is required for Ready)",
+  "note": "The On device group title is in ModelPickerSheet.tsx. The Local Mode label is the switch's accessibility label.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu and tap Local Mode in the mode switch.",
+   "Tap the model name in the composer bar.",
+   "Look for the group titled On device and a row with a chip icon.",
+   "Download a model if needed (Download badge), wait until it shows Ready, then pick it and check the composer name."
+  ],
+  "where": "Side menu > Local Mode (mode switch) > tap the model name in the composer > Models sheet > On device group"
+ },
+ "S15.29": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx",
+    "text": "Models"
+   }
+  ],
+  "needs": "none",
+  "note": "The choice is stored under the model-store key in apps/mobile/src/features/model-picker/store.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Pick a model from the Models sheet.",
+   "Close the app completely and open it again.",
+   "Go to a new chat and read the model name in the composer bar.",
+   "Check that it is the model you picked before closing."
+  ],
+  "where": "Chat screen > tap the model name in the composer > Models sheet > pick a model, then close and reopen the app"
+ },
+ "S15.30": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx",
+    "text": "Models"
+   }
+  ],
+  "needs": "two chats",
+  "note": "Selecting a model in an existing chat is saved for that conversation through setConversationModel in app/(app)/chat/[id].tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Open chat A and pick model X from the Models sheet.",
+   "Start a new chat and check its composer model name differs or stays as the default.",
+   "Go back to chat A and check the composer still shows model X.",
+   "Check that a different chat with no change still shows its own model."
+  ],
+  "where": "Open an existing chat > tap the model name in the composer > Models sheet > pick a model"
+ },
+ "S15.32": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/MessageBubble.tsx",
+    "text": "AGI Cloud"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account for the AGI Cloud label",
+  "note": "The footer is built in ProvenanceFooter.tsx; it is hidden while the answer is still streaming. An Auto answer shows the model as Auto.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message in a chat and wait for the answer to finish streaming.",
+   "Look at the small text line under the answer.",
+   "Read the text, which joins the provider and the model name with a dot.",
+   "Compare it with the model you picked in the composer."
+  ],
+  "where": "Chat screen > under any finished assistant answer, the small line with provider and model"
+ }
+}

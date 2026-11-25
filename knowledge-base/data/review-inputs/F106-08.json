@@ -1,0 +1,463 @@
+{
+ "feature": {
+  "id": "F106-08",
+  "aliases": [
+   "Conversation-to-session mapping (S106.23)",
+   "Slack thread continuity",
+   "Thread-to-conversation lookup",
+   "findSlackThreadConversation"
+  ],
+  "summary": "In a Slack channel, when a person mentions AGI again inside a thread where AGI already ran a task for them, the new message continues the same AGI conversation. Answer-mode and direct-message runs keep no session; they rebuild context from Slack history. Web only; desktop shows the same hosted app.",
+  "purpose": {
+   "what_it_does": "Maps a Slack thread to one AGI conversation for task-mode runs, so follow-ups add to the same conversation (apps/web/lib/slack/slack-tasks.ts:93-119,167-174). For answers, it re-reads the Slack thread or recent history on each message (apps/web/lib/slack/slack-context.ts:92-122).",
+   "why_it_exists": "S106.23 requires each channel thread to map to one persistent agent session so follow-ups continue it. Without it each mention would start a fresh conversation with no memory of the task.",
+   "who_uses_it": "A linked Slack user working with AGI in a channel thread.",
+   "problems_solved": [
+    "Losing earlier work when asking a follow-up",
+    "Many one-off conversations for one thread",
+    "Repeating context in each message"
+   ],
+   "use_cases": [
+    "Ask AGI to draft a report, then reply in the thread 'make it shorter' with a mention",
+    "Ask a question in a thread and follow up; AGI reads the thread to see earlier messages",
+    "Open the single AGI conversation to see the whole thread's work"
+   ]
+  },
+  "user_experience": {
+   "where_to_find_it": [
+    "Slack: reply in the thread of an earlier AGI task and mention the app. A plain reply without a mention is not read: only app_mention and direct-message events are taken up (apps/web/lib/slack/slack-events.ts:67-68).",
+    "Web: the one conversation appears in the normal conversation list; Desktop shows the same hosted web app (doc: AGENTS.md section 5)."
+   ],
+   "prerequisites": [
+    "Channel mode is task (or default) and task is available for the account (slack-assistant.ts:354-362)",
+    "The first message in the thread ran in task mode and created an agent run (slack-tasks.ts:169-192)",
+    "Same AGI person, workspace, installation and channel (slack-tasks.ts:105-117)"
+   ],
+   "screens_and_controls": [
+    "No dedicated control. The thread itself is the control."
+   ],
+   "journey": [
+    "Person mentions AGI in a channel; task mode starts and a conversation is created titled from the first line (slack-tasks.ts:39-43,171-174).",
+    "AGI replies in the thread (slack-assistant.ts:99-101).",
+    "Person mentions AGI again in that thread.",
+    "AGI looks for the earliest earlier run in the same thread by the same person and reuses its conversation (slack-tasks.ts:93-119).",
+    "The new request is saved as a user message and a new agent run is created in that conversation (slack-tasks.ts:175-189).",
+    "AGI answers in the thread."
+   ],
+   "feedback_and_outputs": [
+    "The answer in the thread with a link to the task (slack-assistant.ts:151-155)",
+    "The AGI conversation grows with each follow-up (slack-tasks.ts:175-179,216-222)"
+   ],
+   "settings": [
+    "Per-channel mode (F106-07): answer mode disables sessions",
+    "No setting for context sizes; they are constants (apps/web/lib/slack/slack-config.ts:32-41)"
+   ]
+  },
+  "current_implementation": {
+   "working": [
+    "Task runs find an earlier run in the same thread and reuse its conversation; otherwise create one (slack-tasks.ts:167-174).",
+    "Lookup matches thread root as earlier.thread_ts or earlier.message_ts, excludes the current run, and requires same user, organization, installation, channel and a non-deleted conversation (slack-tasks.ts:98-117).",
+    "Answer-mode and DM runs read Slack: thread up to 40 messages (20 in DMs), DM history up to 20 messages within 12 hours, channel history last 10 (slack-context.ts:92-122; slack-config.ts:32-41)."
+   ],
+   "incomplete": [
+    "Only task-mode runs get a persistent AGI conversation; answer-mode runs have none (slack-assistant.ts:401; slack-tasks.ts).",
+    "Continuity is per person: another person mentioning AGI in the same thread gets their own conversation, because the lookup requires the same user_id (slack-tasks.ts:109).",
+    "A follow-up needs a mention; thread replies without a mention are ignored (slack-events.ts:67-68).",
+    "Direct messages never use task mode (slackRunModeFor with no policy and task unavailable for DMs, slack-assistant.ts:354-362), so DM threads are answer-only [inferred]."
+   ],
+   "disconnected_or_disabled": [
+    "Brief says missing; the code exists for task mode, so the brief is out of date [inferred]."
+   ],
+   "not_available": [
+    "Teams and email thread continuity: no code (F106-09, F106-10)",
+    "Mobile, CLI, VS Code, Chrome: n/a per brief"
+   ]
+  },
+  "required_behaviour": {
+   "established": [
+    {
+     "statement": "Each channel conversation or thread maps to one persistent agent session, so follow-ups in the thread continue it.",
+     "source": "S106.23"
+    },
+    {
+     "statement": "Only task-mode runs are linked to a conversation; the lookup reuses an earlier run's conversation in the same thread.",
+     "source": "apps/web/lib/slack/slack-tasks.ts:93-119,170-172"
+    },
+    {
+     "statement": "Answer-mode runs rebuild context from Slack history each message.",
+     "source": "apps/web/lib/slack/slack-context.ts:92-110"
+    }
+   ],
+   "acceptance_criteria": [
+    "Two mentions in one thread by one person in task mode produce one conversation with both requests.",
+    "A mention in a new thread or a top-level message creates a new conversation.",
+    "Another Slack workspace or channel never reuses the conversation.",
+    "A deleted conversation is not reused; a new one is created.",
+    "In answer mode no conversation is created and the second answer sees earlier thread messages.",
+    "Two people in one thread each get their own conversation."
+   ],
+   "inferred": [
+    "The thread should survive the first run failing: a run with no agent_run_id is skipped by the join [inferred from the join on cloud_agent_runs]."
+   ],
+   "proposed": [
+    "[proposed] Share one conversation per thread across people in the same workspace, if the product wants that.",
+    "[proposed] Also read unmentioned thread replies once AGI has joined a thread."
+   ]
+  },
+  "implementation_map": [
+   {
+    "kind": "service",
+    "name": "findSlackThreadConversation",
+    "path": "apps/web/lib/slack/slack-tasks.ts",
+    "role": "Finds earlier conversation for the thread"
+   },
+   {
+    "kind": "service",
+    "name": "slackTask observer routed",
+    "path": "apps/web/lib/slack/slack-tasks.ts",
+    "role": "Reuses or creates conversation, creates agent run"
+   },
+   {
+    "kind": "service",
+    "name": "slack-assistant answerMessage",
+    "path": "apps/web/lib/slack/slack-assistant.ts",
+    "role": "Chooses task or answer mode, builds task holder"
+   },
+   {
+    "kind": "service",
+    "name": "buildSlackTurnContext",
+    "path": "apps/web/lib/slack/slack-context.ts",
+    "role": "Reads Slack thread or history for context"
+   },
+   {
+    "kind": "config",
+    "name": "SLACK_CONTEXT_LIMITS",
+    "path": "apps/web/lib/slack/slack-config.ts",
+    "role": "Message counts, window, character limits"
+   },
+   {
+    "kind": "service",
+    "name": "readSlackAssistantEvent",
+    "path": "apps/web/lib/slack/slack-events.ts",
+    "role": "Accepts only mentions and DMs; carries thread_ts"
+   },
+   {
+    "kind": "endpoint",
+    "name": "POST /api/webhooks/slack",
+    "path": "apps/web/app/api/webhooks/slack/route.ts",
+    "role": "Receives Slack events and hands them to the assistant"
+   },
+   {
+    "kind": "table",
+    "name": "slack_assistant_runs",
+    "path": "apps/web/db/neon/0330_slack_app.sql",
+    "role": "Stores channel_id, message_ts, thread_ts, agent_run_id"
+   },
+   {
+    "kind": "table",
+    "name": "cloud_agent_runs",
+    "path": "apps/web/lib/services/cloud-agent-run-service.ts",
+    "role": "Agent run with conversation_id (created by createCloudAgentRun)"
+   },
+   {
+    "kind": "table",
+    "name": "web_conversations",
+    "path": "apps/web/lib/slack/slack-tasks.ts",
+    "role": "Conversation row inserted for a new thread"
+   },
+   {
+    "kind": "service",
+    "name": "persistConversationMessage",
+    "path": "apps/web/app/api/chat/conversations/[id]/messages/lib/persist-message.ts",
+    "role": "Saves the request and the answer into the conversation"
+   },
+   {
+    "kind": "service",
+    "name": "slackRunModeFor",
+    "path": "apps/web/lib/slack/slack-channel-policies.ts",
+    "role": "Decides task or answer"
+   },
+   {
+    "kind": "test",
+    "name": "slack-tasks.thread.test",
+    "path": "apps/web/lib/slack/slack-tasks.thread.test.ts",
+    "role": "Covers thread reuse"
+   }
+  ],
+  "execution_and_data_flow": {
+   "steps": [
+    {
+     "what_happens": "Slack posts an app_mention event with thread_ts; server verifies and queues handling after the response.",
+     "runs_on": "outside service",
+     "evidence": "apps/web/app/api/webhooks/slack/route.ts:84-91; slack-events.ts:67-68"
+    },
+    {
+     "what_happens": "AGI resolves the link, mode and creates a run row with channel, message and thread timestamps.",
+     "runs_on": "our servers",
+     "evidence": "slack-assistant.ts:320-379; slack-runs.ts:177-202"
+    },
+    {
+     "what_happens": "Context is read from Slack's API (thread or history).",
+     "runs_on": "outside service",
+     "evidence": "slack-context.ts:92-122"
+    },
+    {
+     "what_happens": "When the model route is chosen, the observer looks up an earlier conversation, else inserts one, saves the user message and creates an agent run.",
+     "runs_on": "our servers",
+     "evidence": "slack-tasks.ts:167-192"
+    },
+    {
+     "what_happens": "The answer is saved as an assistant message and the agent run moves to ready_for_review.",
+     "runs_on": "our servers",
+     "evidence": "slack-tasks.ts:216-223"
+    }
+   ],
+   "data": [
+    {
+     "what": "Slack run with thread timestamps and agent_run_id",
+     "where_stored": "slack_assistant_runs",
+     "synced": "Server only",
+     "retained_or_deleted": "Deleted with the installation or account erasure (apps/web/lib/server/account-erasure.ts:106-107); the agent run link is set null if the agent run goes"
+    },
+    {
+     "what": "Conversation and messages",
+     "where_stored": "web_conversations and its messages",
+     "synced": "Available to the web app; desktop shows the same hosted app",
+     "retained_or_deleted": "Stay after the Slack link is removed (SlackSection.tsx:616 says tasks stay in your tasks)"
+    }
+   ],
+   "models_and_providers": "The model is picked per turn by server routing and stored on the conversation when it is created (slack-tasks.ts:171-174). A follow-up reuses the conversation but picks its model again [inferred from selectRoute running each turn]. No Local or own-key route found."
+  },
+  "access_and_usage": {
+   "account": "Linked AGI account (slack-assistant.ts:320-338).",
+   "permissions": "Lookup is limited to the same user and organization (slack-tasks.ts:105-109).",
+   "subscription": "Task mode needs the Slack and AGI Work capabilities: pro, max, max_15x, team, team_premium, enterprise (billing-catalog.ts:354,360; slack-assistant-turn.ts:415-428).",
+   "limits_and_metering": "Team and user rate limits per message (slack-assistant.ts:284-293); compute access check per turn (slack-assistant-turn.ts:429-437). Values unknown.",
+   "flags": "WORK capability kill switch (slack-tasks.ts:45-65).",
+   "model_compatibility": "none found in the code that is specific to continuity.",
+   "provider_restrictions": "Same Slack rules as F106-07 (Google tools never offered).",
+   "local_mode": "Not applicable: none found in the code for Local; runs on our servers."
+  },
+  "states_and_edge_cases": [
+   {
+    "state": "Top-level message",
+    "behaviour": "No thread, so lookup returns null and a new conversation is made",
+    "evidence": "slack-tasks.ts:97"
+   },
+   {
+    "state": "Earlier conversation deleted",
+    "behaviour": "Join requires deleted_at is null; a new conversation is created",
+    "evidence": "slack-tasks.ts:104-108"
+   },
+   {
+    "state": "Earlier run had no agent run",
+    "behaviour": "Not found by the join; new conversation",
+    "evidence": "slack-tasks.ts:99-103"
+   },
+   {
+    "state": "Task stopped in AGI",
+    "behaviour": "Run settles cancelled and the person gets 'You stopped this task in AGI...'",
+    "evidence": "slack-assistant.ts:63,169-177"
+   },
+   {
+    "state": "Duplicate Slack delivery",
+    "behaviour": "Ignored by unique (installation, event id)",
+    "evidence": "slack-runs.ts:186; 0330_slack_app.sql:165"
+   },
+   {
+    "state": "Very long threads",
+    "behaviour": "Context bounded to 40 messages, 24000 characters",
+    "evidence": "slack-config.ts:32-41"
+   },
+   {
+    "state": "Offline, timeout",
+    "behaviour": "Answer turn aborts after the tool loop budget; person gets 'I could not finish that answer. Please try again.'",
+    "evidence": "slack-assistant.ts:60,234-254"
+   }
+  ],
+  "verification": {
+   "existing_tests": [
+    {
+     "path": "apps/web/lib/slack/slack-tasks.thread.test.ts",
+     "covers": "continues the earlier conversation, new thread starts new, lookup limited to same person, workspace, installation, channel and thread"
+    }
+   ],
+   "scenarios": [
+    {
+     "name": "Follow-up in thread",
+     "steps": [
+      "In a task-enabled channel mention AGI with a request",
+      "In the thread mention AGI again with a follow-up",
+      "Open the AGI web app"
+     ],
+     "expected": "One conversation holds both requests and answers"
+    },
+    {
+     "name": "New thread",
+     "steps": [
+      "Mention AGI at top level twice"
+     ],
+     "expected": "Two conversations"
+    },
+    {
+     "name": "Answer-only channel",
+     "steps": [
+      "Set channel to answer only",
+      "Mention AGI twice in a thread"
+     ],
+     "expected": "No conversation in AGI; second answer reflects first via Slack history"
+    },
+    {
+     "name": "Reply without mention",
+     "steps": [
+      "Reply in the thread without mentioning AGI"
+     ],
+     "expected": "No run is created"
+    },
+    {
+     "name": "Second person",
+     "steps": [
+      "A different linked person mentions AGI in the same thread"
+     ],
+     "expected": "A separate conversation for that person"
+    }
+   ],
+   "diagnostics": [
+    "slack_assistant_runs rows (thread_ts, message_ts, agent_run_id)",
+    "cloud_agent_runs.conversation_id",
+    "Log 'Slack task run state was not recorded'",
+    "Log 'Slack answer failed; the person was told'"
+   ]
+  },
+  "gaps": [
+   {
+    "gap": "Brief says missing, code exists for task mode",
+    "affects": "Planning",
+    "evidence": "slack-tasks.ts:93-119",
+    "work_needed": "Update brief to partial"
+   },
+   {
+    "gap": "Answer-mode and DM runs have no persistent session",
+    "affects": "Slack users in answer-only channels and DMs",
+    "evidence": "slack-assistant.ts:401",
+    "work_needed": "Decide if S106.23 requires sessions there"
+   },
+   {
+    "gap": "Continuity is per person, not per thread",
+    "affects": "Teams of people in one thread",
+    "evidence": "slack-tasks.ts:109",
+    "work_needed": "Product decision"
+   },
+   {
+    "gap": "Follow-ups require a mention",
+    "affects": "Slack users",
+    "evidence": "slack-events.ts:67-68",
+    "work_needed": "Subscribe to thread message events if wanted"
+   },
+   {
+    "gap": "No continuity for Teams or email",
+    "affects": "Those users",
+    "evidence": "No code",
+    "work_needed": "Build channels first"
+   }
+  ],
+  "depends_on": [
+   "surface:web",
+   "surface:desktop",
+   "mode:cloud",
+   "plan:pro",
+   "plan:max",
+   "table:slack_assistant_runs",
+   "table:cloud_agent_runs",
+   "table:web_conversations",
+   "api:POST /api/webhooks/slack",
+   "SYS-chat-turn-pipeline",
+   "SYS-sync-and-continuity",
+   "SYS-memory-projects-and-context",
+   "F106-07",
+   "F106-11"
+  ],
+  "relationships": [
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/web/lib/slack/slack-tasks.ts",
+    "evidence": "findSlackThreadConversation lines 93-119"
+   },
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/web/lib/slack/slack-context.ts",
+    "evidence": "priorMessages lines 92-122"
+   },
+   {
+    "rel": "stores_data_in",
+    "to": "table:slack_assistant_runs",
+    "evidence": "thread_ts column, 0330_slack_app.sql:149"
+   },
+   {
+    "rel": "stores_data_in",
+    "to": "table:web_conversations",
+    "evidence": "slack-tasks.ts:83-88"
+   },
+   {
+    "rel": "stores_data_in",
+    "to": "table:cloud_agent_runs",
+    "evidence": "slack-tasks.ts:99-103"
+   },
+   {
+    "rel": "exposes_api",
+    "to": "api:POST /api/webhooks/slack",
+    "evidence": "route.ts:129"
+   },
+   {
+    "rel": "depends_on",
+    "to": "F106-07",
+    "evidence": "mode decides task vs answer, slack-channel-policies.ts:60-67"
+   },
+   {
+    "rel": "depends_on",
+    "to": "F106-11",
+    "evidence": "conversation created by the task"
+   },
+   {
+    "rel": "governed_by_subscription",
+    "to": "plan:pro",
+    "evidence": "billing-catalog.ts:354,360"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/web/lib/slack/slack-tasks.thread.test.ts",
+    "evidence": "test titles lines 66-101"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:web",
+    "evidence": "server code in apps/web"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:desktop",
+    "evidence": "doc: AGENTS.md section 5"
+   }
+  ],
+  "unknowns": [
+   "Whether Slack delivers non-mention thread replies to the app (event subscriptions are owner configured)",
+   "How the model is chosen for a follow-up relative to the stored conversation model",
+   "Rate limit values"
+  ]
+ },
+ "corrections": [
+  {
+   "section": "Frontmatter vs 6",
+   "claim": "Frontmatter: implementation web/desktop 'missing', available_on [], Status table 'not built'; section 9 'Hands-on test plans: none: not built on any app'",
+   "verdict": "wrong",
+   "what_the_code_shows": "Web code fully implements thread reuse for task mode (findSlackThreadConversation, routed observer) and has a test file; section 3 itself says so.",
+   "evidence": "apps/web/lib/slack/slack-tasks.ts:93-119,167-192",
+   "correction": "Web: partial (task-mode channel runs only; answer-mode and DM runs keep no conversation). Desktop is not separately built, it shows the hosted app. Status table and 'not built on any app' should be updated."
+  }
+ ],
+ "missing_facts": [
+  "Free and other non-Pro plans are refused for every Slack run (slack_app uses PRO_TIERS), so no thread continuity or even answers exist for them: packages/contracts/types/src/billing-catalog.ts:341,360; apps/web/lib/slack/slack-assistant-turn.ts:415-421.",
+  "The conversation is created in the run's organization with model from the first routed turn, and an agent run is created only when the model route is chosen (observer.routed); a run refused before routing (plan, compute access) leaves no agent_run_id, so later follow-ups cannot join to it: apps/web/lib/slack/slack-tasks.ts:167-190; slack-assistant-turn.ts:415-437.",
+  "Task runs also read Slack context (buildSlackTurnContext runs before slackTask), so Slack API reads occur for task runs too, not only answer/DM runs: apps/web/lib/slack/slack-assistant.ts:~385-400."
+ ]
+}

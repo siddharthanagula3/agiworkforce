@@ -1,0 +1,89 @@
+{
+ "S87.14": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/hooks"
+   },
+   {
+    "file": "apps/cli/src/features/hooks/hooks.rs",
+    "text": "Your workspace administrator has turned hooks off, so none of these run."
+   }
+  ],
+  "needs": "A Managed Cloud account that is a member of a workspace where the administrator has turned hooks off",
+  "note": "The admin switch itself is not in apps/cli. The refusal line only prints when at least one hook is configured; with no hooks, /hooks prints \"No hooks configured.\" instead. Only the hooks feature was found checked against the switch in the CLI; other feature switches were not found.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with /login on a Managed session as a member of a workspace whose administrator has turned hooks off (that switch is set outside this app; no CLI control for it was found).",
+   "Add one hook so the list is not empty: run agi hooks add SessionStart \"echo hook-ran\" in a terminal.",
+   "In the chat, type /hooks and press Enter.",
+   "Look for the line \"Your workspace administrator has turned hooks off, so none of these run.\" under the hook list, and check that \"hook-ran\" does not print when a new session starts, as Expected says."
+  ],
+  "where": "Chat, after /login on a Managed session: type /hooks and press Enter (agi hooks list shows the same)"
+ },
+ "S87.15": {
+  "labels": [
+   {
+    "file": "apps/cli/src/features/exec/tools/mod.rs",
+    "text": "Workspace policy requires approval for"
+   }
+  ],
+  "needs": "A trusted project folder you can write to (an administrator would normally set this rule through managed policy)",
+  "note": "The admin-side tool rules are written in files (project policy.toml, or the managed policy file) rather than in an admin screen in this app; allow and block decisions were not tested for their wording.",
+  "reachable": "yes",
+  "steps": [
+   "Trust a project folder in agi, then create .agiworkforce/policy.toml in it with this block: [[rules]] then tool = \"read_file\" then decision = \"ask\" (the file is read only when the folder is trusted).",
+   "Start agi in that folder and ask it to read a file that is in the folder.",
+   "When the tool call starts, look for the prompt \"Workspace policy requires approval for `read_file`. Allow it?\"",
+   "Answer no and check that the file is not read and the tool reports it was not approved under the workspace policy, as Expected says."
+  ],
+  "where": "Trusted project folder: create .agiworkforce/policy.toml with a [[rules]] entry, then run agi in that folder and ask it to read a file"
+ },
+ "S87.16": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "Workspace connectors"
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "Your workspace administrator has blocked the"
+   }
+  ],
+  "needs": "A Managed Cloud account in a workspace whose administrator has blocked a connector (or allows custom connectors only from an approved list)",
+  "note": "The quoted code path cited in the plan (apps/cli/src/agent/mod.rs:525) no longer holds this text; the connector checks are in apps/cli/src/claude_parity.rs. In the CLI, the block is enforced only for the GitHub app install command; the rule that connectors are not offered on each turn is applied by the server and was not found in apps/cli.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with /login on a Managed session as a member of a workspace whose administrator has allowed or blocked some connectors (set outside this app).",
+   "In the chat, type /connectors and press Enter.",
+   "Look for the \"Workspace connectors\" block with the approved:, blocked:, custom endpoints: and approved plugins: lines, and compare them with what the administrator set.",
+   "If GitHub is blocked, type /install-github-app and press Enter, and look for \"Your workspace administrator has blocked the\" with the connector name."
+  ],
+  "where": "Chat, after /login on a Managed session: type /connectors and press Enter (then /install-github-app for a blocked GitHub connector)"
+ },
+ "S87.17": {
+  "labels": [],
+  "needs": "a Managed Cloud account in a workspace with plugin or skill limits set by the administrator",
+  "note": "Searched apps/cli for skill and plugin admin controls. /connectors shows approved plugins and blocked plugins lines, and a blocked-plugin refusal function exists (evaluate_plugin_access in apps/cli/src/claude_parity.rs), but no production code calls it. Found no per-skill admin switch. The signed-plugin rule in the managed plugin policy is wired, but no path was found where a person would see it refuse a skill or plugin install.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S87.27": {
+  "labels": [
+   {
+    "file": "apps/cli/src/onboarding.rs",
+    "text": "Your organization's managed policy does not allow trusting workspaces."
+   }
+  ],
+  "needs": "A Mac with admin rights to place a managed settings file, and an untrusted folder",
+  "note": "The managed settings file is installed by an administrator or MDM, not from the app, so the tester needs admin access on the Mac. The trust-choice limit was not checked in detail, and the managed policy also reads a cached file and an environment variable (AGIWORKFORCE_MANAGED_POLICY) per apps/cli/src/platform/policy/managed.rs.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "On a Mac with admin rights, place a managed-settings.json file in /Library/Application Support/AGIWorkforce/ that sets a managed policy that does not allow trusting workspaces (the file name and folder are read in apps/cli/src/features/hooks/managed.rs).",
+   "Open a terminal, go to a folder that has not been trusted, and start agi.",
+   "Look for the line \"Your organization's managed policy does not allow trusting workspaces.\" above the question \"Do you trust the contents of this directory?\", and check that the trust choices are limited, as Expected says."
+  ],
+  "where": "Folder trust prompt on first run in an untrusted folder (effect only; the device setup itself is done by an administrator)"
+ }
+}

@@ -1,0 +1,141 @@
+{
+ "S3.01": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Sign in to start chatting in Chrome."
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Sign in"
+   }
+  ],
+  "needs": "an AGI account (email or outside provider login)",
+  "note": "The same sign-in also opens from Options > Account > Sign in and from the welcome page's Sign in button. The sign-in tab goes to /sign-in, which apps/web/next.config.ts redirects to /login.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI side panel in Chrome while signed out (click the AGI toolbar icon).",
+   "Read the notice in the composer area: \"Sign in to start chatting in Chrome.\"",
+   "Click the \"Sign in\" button. A new tab opens on the AGI sign-in page.",
+   "Finish signing in in that tab, return to the side panel and click \"Check sign-in\".",
+   "Compare: the side panel should show you as signed in and the chat should be usable, as Expected says."
+  ],
+  "where": "Side panel > composer area shows \"Sign in to start chatting in Chrome.\" > Sign in"
+ },
+ "S3.02": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Sign in"
+   }
+  ],
+  "needs": "a new email address or an outside account (Google)",
+  "note": "The extension has no sign-up screen of its own. It only hands off to the web sign-in page (/sign-in, redirected to /login in apps/web/next.config.ts), and apps/web/features/auth/authRoutes.ts defines /signup. The exact create-account wording is on the web page and was not confirmed in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI side panel while signed out.",
+   "Click \"Sign in\" in the composer area.",
+   "In the new tab that opens, look for the option to create a new account (wording not verified in the extension code).",
+   "Create an account with email or a provider, then return to the side panel and click \"Check sign-in\".",
+   "Compare: the new account should reach a signed-in state in the side panel, as Expected says."
+  ],
+  "where": "Side panel > Sign in > create a new account on the AGI sign-in page that opens in a new tab"
+ },
+ "S3.19": {
+  "labels": [],
+  "needs": "a Free account, with the Terms version changed on the server",
+  "note": "The extension has no Terms acceptance screen. apps/extension/src/features/cloud-bridge/freeTrialClient.ts only turns a TERMS_ACCEPTANCE_REQUIRED error into a block message to accept the updated Terms on agiworkforce.com. Acceptance is recorded on the web at apps/web/app/signup/complete/RecordTermsAcceptance.tsx. I searched apps/extension/src for terms, Terms of Service and terms_required and found no acceptance control.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S3.25": {
+  "labels": [],
+  "needs": "a signed-in account",
+  "note": "No memory setup step or memory-use choice was found in apps/extension/src. The closest screens are the side panel account menu > Memory (apps/extension/src/side_panel.ts, label \"Memory\", sheet intro \"What AGI remembers about you in every app...\") and Options > Account > Your account > Memory > Open, which opens the web memory settings. I searched apps/extension/src for memory, spMemory and remember strings.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S3.30": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Pair with Desktop"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Desktop app"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Confirm Code"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Open settings"
+   }
+  ],
+  "needs": "AGI Desktop app open and showing a pairing code",
+  "note": "Options nav labels are Permissions, Shortcuts, Options, Account and Help. The pairing rows are built in apps/extension/src/features/options/desktop-pairing-rows.ts and placed in the Account section by apps/extension/src/features/options/destinations.ts. The side panel's Desktop connection menu label is not shown in the side panel UI found in code.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Options page: click \"Open settings\" on the welcome page, or open the AGI extension's Options from Chrome's extensions menu.",
+   "Click \"Account\" in the left navigation and scroll to \"Desktop app\".",
+   "Click \"Pair with Desktop\", type the code shown by AGI Desktop in the field (placeholder ABCD-EFGH), then click \"Confirm Code\".",
+   "Compare: the status should change from \"Not paired\" to paired, and the \"Unpair\" button should appear, as Expected says.",
+   "Click \"Unpair\", read the message \"Unpair the desktop app? ...\", then click \"Unpair\" again or \"Keep paired\" to check the way back out."
+  ],
+  "where": "Options > Account > Desktop app > Pair with Desktop"
+ },
+ "S3.32": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Task completion notifications"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Open settings"
+   }
+  ],
+  "needs": "none",
+  "note": "No first-run notification primer was found. The toggle is on by default (apps/extension/src/features/options/notifications-row.ts reads agi_task_notifications with a default of true), so declining means switching it off on the Options page.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Options page: click \"Open settings\" on the welcome page, or open the AGI extension's Options from Chrome's extensions menu.",
+   "Click \"Options\" in the left navigation.",
+   "Find the \"Task completion notifications\" row and read its hint.",
+   "Switch the toggle off and back on. Compare: the status reads \"Task completion notifications are off.\" or \"...are on.\"",
+   "Compare the toggle with Expected: it is optional and can be changed later."
+  ],
+  "where": "Options > Options > Task completion notifications"
+ },
+ "S3.35": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Next"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Let's go"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Getting started with AGI"
+   }
+  ],
+  "needs": "a fresh install or a profile whose tour is not finished",
+  "note": "The tour is mounted by apps/extension/src/features/side-panel/onboardingPrompt.ts above the composer (apps/extension/src/side_panel.ts). It finishes on the shortcuts step and does not itself start a chat. After install, the welcome page (apps/extension/src/features/onboarding/welcome-page.ts) opens first, with an \"Open side panel\" button.",
+  "reachable": "yes",
+  "steps": [
+   "Install AGI, or use a profile where the side panel tour has not been finished, then open the AGI side panel.",
+   "Read the first tour step above the composer: \"AGI reads a page only when you attach it or ask it to act there.\"",
+   "Click \"Next\" and read the shortcuts step.",
+   "Click \"Let's go\" to finish the tour.",
+   "Compare: the bar should go away and the composer should be ready for a first chat, as Expected says."
+  ],
+  "where": "Side panel, first open after install > \"Getting started with AGI\" bar above the composer > Next > Let's go"
+ }
+}

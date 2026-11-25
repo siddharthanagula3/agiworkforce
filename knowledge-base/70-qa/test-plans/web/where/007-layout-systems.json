@@ -1,0 +1,409 @@
+{
+ "S7.01": {
+  "labels": [
+   {
+    "file": "apps/web/shared/components/CommandPalette/CommandPalette.tsx",
+    "text": "New chat"
+   }
+  ],
+  "needs": "none",
+  "note": "The sidebar button itself was not traced; the label is taken from the command palette entry. The centring rule is in apps/web/features/chat/pages/WebChatPage.tsx around line 7637.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and select New chat from the sidebar, or open the command palette and choose New chat.",
+   "Look at the empty chat before typing anything.",
+   "Check that the greeting and the composer sit in the middle of the area, with no empty transcript above them.",
+   "Widen and narrow the window and check the start view stays centred."
+  ],
+  "where": "Sidebar or command palette > New chat, then look at the empty start screen"
+ },
+ "S7.02": {
+  "labels": [],
+  "needs": "a conversation with long messages",
+  "note": "Width rule is in apps/web/app/globals.css and apps/web/features/chat/components/messages/MessageBubble.tsx; the exact max width value was not read.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open a conversation that has long assistant replies.",
+   "Make the window very wide.",
+   "Check that the message text stays in a centred column of limited width rather than running edge to edge."
+  ],
+  "where": "Inner layout rule; visible in any conversation with long replies"
+ },
+ "S7.03": {
+  "labels": [],
+  "needs": "a conversation with a wide table",
+  "note": "Found the table components in packages/ui/unified-chat/src/components/markdown/MarkdownTable.tsx and MarkdownContent.tsx, but found no control that switches to a full-width data layout. Searched for full-width and data-view toggles in the chat folders.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S7.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Close artifact viewer"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactsPanel.tsx",
+    "text": "Resize artifacts panel"
+   }
+  ],
+  "needs": "a conversation that produces an artifact",
+  "note": "The artifact panel code exists (ArtifactsPanel.tsx), but the control that opens an artifact beside the conversation was not traced to a visible label.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S7.05": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "text": "Sources"
+   }
+  ],
+  "needs": "a conversation with sources",
+  "note": "ResearchPanel.tsx has a Sources heading and empty state, but the control that opens the inspector beside the conversation was not found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S7.07": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/components/CodePanes.tsx",
+    "text": "Session pane"
+   }
+  ],
+  "needs": "a Free or paid account with a code session",
+  "note": "The code workspace panels (CodeChangesPanel and the draft terminal or side panel) exist in apps/web/features/code/CloudCodePage.tsx, but the entry path from the chat screen was not confirmed.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S7.08": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/components/CodePanes.tsx",
+    "text": "Place panes side by side"
+   },
+   {
+    "file": "apps/web/features/code/components/CodePanes.tsx",
+    "text": "Stack panes"
+   }
+  ],
+  "needs": "two code sessions",
+  "note": "The code page's entry path from the sidebar was not confirmed; the Cmd/Ctrl-click split is in apps/web/features/code/components/CodeRail.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Open the code page with at least two sessions in the session list.",
+   "Click one session, then Cmd-click (or Ctrl-click) a second session to open it in a second pane.",
+   "Click the button labelled Place panes side by side if the panes are stacked.",
+   "Use each pane: type in one, then the other, and check both stay live and usable."
+  ],
+  "where": "Code session list: Cmd-click (Ctrl-click) a second session, then use the pane button Place panes side by side"
+ },
+ "S7.09": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/components/CodePanes.tsx",
+    "text": "Stack panes"
+   }
+  ],
+  "needs": "two or more code sessions",
+  "note": "The stacked layout styles are in apps/web/features/code/CloudCodePage.module.css; the code page's entry path was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open the code page with at least two sessions in the session list.",
+   "Cmd-click (or Ctrl-click) a second and a third session to open them as panes.",
+   "Click the button labelled Stack panes to place them one above another.",
+   "Check each stacked session is live and usable on its own."
+  ],
+  "where": "Code session list: Cmd-click (Ctrl-click) several sessions, then use the pane button Stack panes"
+ },
+ "S7.11": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactsPanel.tsx",
+    "text": "Resize artifacts panel"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "text": "Resize research panel"
+   }
+  ],
+  "needs": "an artifact or research panel open",
+  "note": "Keyboard resizing is implemented in apps/web/features/chat/components/SidePanelResizeHandle.tsx. The work-session panel label was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open an artifact or a research panel beside the conversation.",
+   "Drag the thin handle on the panel edge labelled Resize artifacts panel (or Resize research panel).",
+   "Release, then check the conversation column gets narrower or wider.",
+   "Click the handle, press the Left or Right arrow key, and check the panel width changes."
+  ],
+  "where": "Open the artifacts panel or the research panel, then drag its left edge labelled Resize artifacts panel or Resize research panel"
+ },
+ "S7.12": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Collapse sidebar"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Toggle sidebar"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Open navigation"
+   }
+  ],
+  "needs": "none",
+  "note": "The collapse state lives in apps/web/shared/stores/layout-store.ts; the text of the sidebar button itself was taken from the translation keys.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and look at the left sidebar.",
+   "Use the control labelled Collapse sidebar to hide it.",
+   "Check the conversation area widens and the sidebar is gone.",
+   "Use the control labelled Toggle sidebar or Open navigation to bring it back."
+  ],
+  "where": "Sidebar > Collapse sidebar (or Toggle sidebar); on narrow screens, Open navigation"
+ },
+ "S7.15": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Expand message input"
+   }
+  ],
+  "needs": "none",
+  "note": "Expected says the editor takes the whole screen, but the code only grows the composer to min(60dvh, 40rem) (apps/web/features/chat/components/Composer/ComposerInput.tsx); it does not go full screen.",
+  "reachable": "yes",
+  "steps": [
+   "Type a long prompt in the message box.",
+   "Click the button labelled Expand message input.",
+   "Check the editor gets taller so you can edit more text at once.",
+   "Click the same button again (its label changes when expanded) and check the editor returns to its normal height."
+  ],
+  "where": "Chat composer > Expand message input"
+ },
+ "S7.16": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/research/ResearchReportView.tsx",
+    "text": "Full screen"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchReportView.tsx",
+    "text": "Exit full screen"
+   }
+  ],
+  "needs": "a research report",
+  "note": "The path to open a research report from the chat was not traced; the desktop copy is apps/desktop/src/features/research/DeepResearchPage.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Open a research report in the chat.",
+   "Click the button titled Full screen.",
+   "Read the report in the full-screen view and check it fills the window.",
+   "Click Exit full screen to return to the chat."
+  ],
+  "where": "Research report > Full screen (exit with Exit full screen)"
+ },
+ "S7.17": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/ImageLightbox.tsx",
+    "text": "Download image"
+   }
+  ],
+  "needs": "a conversation with an image",
+  "note": "The close and zoom controls were not read by label; they are in the same file.",
+  "reachable": "yes",
+  "steps": [
+   "Ask for an image, or open a conversation that already has one.",
+   "Click the image in the message.",
+   "Check the image opens in a full-screen viewer over the chat, with a Download image button.",
+   "Close the viewer and check you are back at the same place in the chat."
+  ],
+  "where": "Chat > click an image in a message to open it in the viewer; close it from the chat"
+ },
+ "S7.20": {
+  "labels": [],
+  "needs": "a long conversation",
+  "note": "Layout is in apps/web/features/chat/pages/WebChatPage.tsx and ChatComposerNew.tsx.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open a long conversation.",
+   "Scroll the transcript up and down.",
+   "Check the composer stays fixed at the bottom while the messages scroll above it."
+  ],
+  "where": "Layout rule; visible when a conversation is long enough to scroll"
+ },
+ "S7.21": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Expand message input"
+   }
+  ],
+  "needs": "none",
+  "note": "Resting maximum height is 240px and expanded maximum is min(60dvh, 40rem), per apps/web/features/chat/components/Composer/ComposerInput.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Click the message box and type a long prompt over several lines.",
+   "Check the box grows taller as you type, up to a maximum height.",
+   "Click Expand message input to make the editor taller still.",
+   "Check the text stays readable and the send button stays usable."
+  ],
+  "where": "Chat composer > type a long prompt > Expand message input"
+ },
+ "S7.22": {
+  "labels": [],
+  "needs": "a long conversation and an open side panel",
+  "note": "Scroll regions are set in apps/web/features/chat/pages/WebChatPage.tsx and apps/web/features/chat/components/messages/ChatMessageList.tsx.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open a long conversation and open a side panel such as the artifacts panel.",
+   "Scroll only the transcript and check the header, side panel and composer stay where they are.",
+   "Scroll the side panel and check the transcript does not move."
+  ],
+  "where": "Layout rule; visible when a side panel is open and the transcript is long"
+ },
+ "S7.23": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Close artifact viewer"
+   }
+  ],
+  "needs": "an artifact",
+  "note": "The sticky rule itself was not read in the code, only the toolbar controls.",
+  "reachable": "yes",
+  "steps": [
+   "Open an artifact so its viewer shows.",
+   "Scroll the artifact content down.",
+   "Check the toolbar (download, view and close controls) stays visible at the top.",
+   "Click Close artifact viewer to close it."
+  ],
+  "where": "Open an artifact > the viewer toolbar with Close artifact viewer; scroll the artifact body"
+ },
+ "S7.24": {
+  "labels": [],
+  "needs": "a conversation with a long table",
+  "note": "The sticky header class is in packages/ui/unified-chat/src/components/markdown/MarkdownContent.tsx.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open a message with a long table, such as a table in a report.",
+   "Scroll the page or the table down.",
+   "Check the table header row stays pinned at the top."
+  ],
+  "where": "Table header rule; visible when a long table is in a message"
+ },
+ "S7.25": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactsPanel.tsx",
+    "text": "Resize artifacts panel"
+   }
+  ],
+  "needs": "an open side panel and a window that can be resized",
+  "note": "The overlay switch is in ArtifactsPanel.tsx and WorkSessionPanel.tsx; the exact width breakpoint was not read.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open the artifacts panel beside the conversation.",
+   "Make the window narrow, about a phone width.",
+   "Check the panel appears over the conversation as an overlay or sheet.",
+   "Widen the window and check the panel returns beside the conversation."
+  ],
+  "where": "Layout rule; visible when the window is narrowed with a panel open"
+ },
+ "S7.26": {
+  "labels": [],
+  "needs": "phone width",
+  "note": "Drawer use is in apps/web/features/chat/components/Composer/ComposerFooter.tsx; the picker's visible title text was not read.",
+  "reachable": "yes",
+  "steps": [
+   "Open the app on a phone-sized window or a phone.",
+   "Tap the model picker in the chat composer footer.",
+   "Check it opens as a bottom sheet that slides up, not a small desktop popover.",
+   "Close it by swiping down or tapping outside, and check it returns to the chat."
+  ],
+  "where": "Composer footer model picker at phone width (a menu or picker opens as a bottom drawer)"
+ },
+ "S7.27": {
+  "labels": [],
+  "needs": "a tablet-width window or an iPad",
+  "note": "Breakpoint is in apps/web/shared/components/layout/app-shell-layout.ts and apps/web/features/chat/pages/WebChatPage.tsx.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open the app in a window about tablet width (around 768 to 1024 px).",
+   "Check navigation and content show as two columns side by side.",
+   "Compare with a phone-width window, which shows a single column."
+  ],
+  "where": "Layout rule; visible at tablet width"
+ },
+ "S7.28": {
+  "labels": [],
+  "needs": "a phone with a notch or home indicator",
+  "note": "Safe-area rules are in apps/web/features/chat/components/Composer/ChatComposerNew.tsx, apps/web/app/globals.css and apps/web/app/layout.tsx.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "On a phone, open a chat and check the composer is not under the home indicator.",
+   "Tap the message box so the on-screen keyboard opens.",
+   "Check the composer moves up above the keyboard and the transcript stays usable."
+  ],
+  "where": "Layout rule; visible on a phone with a notch or home indicator and the on-screen keyboard"
+ },
+ "S7.29": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactsPanel.tsx",
+    "text": "Resize artifacts panel"
+   }
+  ],
+  "needs": "an open side panel",
+  "note": "The limits are 280 and 900 in packages/ui/unified-chat/src/stores/uiStore.ts.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open the artifacts panel or research panel.",
+   "Drag its edge as far left as it goes, then check the panel stops at its minimum width.",
+   "Drag it as far right as it goes, then check the panel stops at its maximum width and the conversation keeps some width."
+  ],
+  "where": "Resize limit rule; visible when dragging a side panel edge to the far limits"
+ },
+ "S7.30": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Collapse sidebar"
+   }
+  ],
+  "needs": "none",
+  "note": "Only the sidebar state is persisted under the agi-ui-store key in packages/ui/unified-chat/src/stores/uiStore.ts; panel widths and open panels were not confirmed as persisted.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Collapse the sidebar using Collapse sidebar.",
+   "Resize a side panel and open another one.",
+   "Reload the page or close and reopen the browser tab.",
+   "Check the sidebar is still collapsed and the panel width and open panels are as you left them."
+  ],
+  "where": "Saved layout choice; visible after collapsing the sidebar and reloading the page"
+ },
+ "S7.32": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/ConversationTitleMenu.tsx",
+    "text": "Print"
+   }
+  ],
+  "needs": "a conversation with messages",
+  "note": "The title menu's trigger control was not identified by a visible label; print flow is in apps/web/features/chat/lib/print-conversation.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Open a conversation with a few messages.",
+   "Open the conversation's title menu and choose Print.",
+   "In the print preview, check there is no sidebar or header, the whole transcript is included, and the colours suit paper.",
+   "Check the page breaks fall between messages."
+  ],
+  "where": "Conversation title menu > Print"
+ }
+}

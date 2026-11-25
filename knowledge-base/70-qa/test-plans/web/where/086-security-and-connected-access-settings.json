@@ -1,0 +1,417 @@
+{
+ "S86.01": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Security"
+   },
+   {
+    "file": "apps/web/features/settings/components/Settings/SignInMethodsPanel.tsx",
+    "text": "Passkeys"
+   },
+   {
+    "file": "apps/web/features/settings/components/Settings/SignInMethodsPanel.tsx",
+    "text": "Single sign-on"
+   }
+  ],
+  "needs": "a signed-in account (removing a method may need re-confirmation)",
+  "note": "The sign-in methods list is rendered from SecuritySection, but the panel has no visible heading of its own in the code; the 'Passkeys and security keys' list is inside Advanced Account Security.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then click Security in the left list.",
+   "Find the sign-in methods list: Email address, Password, Passkeys, and any Single sign-on or Linked account rows.",
+   "Click Change or Add on the Password row, and use Connect or Disconnect on a linked account row.",
+   "Look at whether every sign-in method is listed and whether you can add or remove one, and compare with Expected."
+  ],
+  "where": "Settings > Security, then the sign-in methods list (Email address, Password, Passkeys, Single sign-on, linked accounts)"
+ },
+ "S86.02": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/components/Settings/TwoFactor.tsx",
+    "text": "Change Password"
+   },
+   {
+    "file": "apps/web/features/settings/components/Settings/TwoFactor.tsx",
+    "text": "Current Password"
+   },
+   {
+    "file": "apps/web/features/auth/AuthPasswordStep.tsx",
+    "text": "Forgot password?"
+   }
+  ],
+  "needs": "a password account and access to its email for the reset step",
+  "note": "The Forgot password? link is on the sign-in page, not in Settings; the code does not show whether the password change asks for a recent re-authentication, only the current password.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, click Security, and find the Change Password section.",
+   "Type the Current Password, then a new password in New Password and Confirm Password.",
+   "Click Change Password and read the result line.",
+   "To test reset, sign out, go to the sign-in page, type your email, and click Forgot password?. Compare with Expected."
+  ],
+  "where": "Settings > Security > Change Password (current password, new password, confirm); reset a forgotten one from the sign-in page with Forgot password?"
+ },
+ "S86.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/components/Settings/PasskeysPanel.tsx",
+    "text": "Add a passkey"
+   },
+   {
+    "file": "apps/web/features/settings/components/Settings/PasskeysPanel.tsx",
+    "text": "Rename"
+   },
+   {
+    "file": "apps/web/features/settings/components/Settings/PasskeysPanel.tsx",
+    "text": "Remove passkey"
+   }
+  ],
+  "needs": "a browser with passkey support and a device that can create one",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, click Security, and find the passkeys list.",
+   "Click Add a passkey and follow the browser prompt.",
+   "Click Rename on the new passkey, type a new name, and press Enter.",
+   "Click Remove passkey on a passkey you added, read the confirmation, and compare the list with Expected."
+  ],
+  "where": "Settings > Security > Passkeys section: Add a passkey, then Rename and Remove passkey on each row"
+ },
+ "S86.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/components/Settings/TwoFactorEnrollment.tsx",
+    "text": "Enable two-factor"
+   },
+   {
+    "file": "apps/web/features/settings/components/Settings/TwoFactorEnrollment.tsx",
+    "text": "Scan this in your authenticator app"
+   },
+   {
+    "file": "apps/web/features/settings/components/Settings/TwoFactorEnrollment.tsx",
+    "text": "Turn off two-factor"
+   }
+  ],
+  "needs": "an authenticator app on a phone",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, click Security, and find the two-factor section.",
+   "Click Enable two-factor and scan Scan this in your authenticator app with an authenticator app.",
+   "Type the current 6-digit code and confirm; read Two-factor authentication is now enabled on your account.",
+   "Sign out and sign in again: a code should be asked. Then click Turn off two-factor, confirm, and compare with Expected."
+  ],
+  "where": "Settings > Security > Enable two-factor; turn it off with Turn off two-factor"
+ },
+ "S86.05": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/components/Settings/TwoFactorEnrollment.tsx",
+    "text": "Save your backup codes"
+   },
+   {
+    "file": "apps/web/features/settings/components/Settings/TwoFactorEnrollment.tsx",
+    "text": "Download codes"
+   },
+   {
+    "file": "apps/web/features/settings/components/Settings/TwoFactorEnrollment.tsx",
+    "text": "Replace backup codes"
+   }
+  ],
+  "needs": "two-factor turned on",
+  "note": "The code shows a Print action only when a printer is available; the Print unavailable state also exists.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, click Security, and turn on two-factor first if it is off.",
+   "Look at the Backup codes list under Save your backup codes.",
+   "Click Download codes and check the file, or use Print if it is shown.",
+   "Click Replace backup codes, confirm, and check that the old codes are described as no longer working. Compare with Expected."
+  ],
+  "where": "Settings > Security > Save your backup codes (view), Download codes (download), Replace backup codes (regenerate)"
+ },
+ "S86.06": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/AccountSection.tsx",
+    "text": "Active sessions"
+   },
+   {
+    "file": "apps/web/features/settings/sections/AccountSection.tsx",
+    "text": "Last active"
+   }
+  ],
+  "needs": "a second browser or device signed in to the same account",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Account.",
+   "Scroll to the Active sessions heading.",
+   "Read the Device, Location, Created and Last active columns for each row.",
+   "Sign in from a second browser and check that its row appears. Compare with Expected."
+  ],
+  "where": "Settings > Account > Active sessions (columns Device, Location, Created, Last active)"
+ },
+ "S86.07": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/components/LinkedDevicesPanel.tsx",
+    "text": "Linked devices"
+   },
+   {
+    "file": "apps/web/features/settings/components/LinkedDevicesPanel.tsx",
+    "text": "Unlink device"
+   },
+   {
+    "file": "apps/web/features/settings/components/DeviceSignInToggle.tsx",
+    "text": "Device sign-in"
+   }
+  ],
+  "needs": "a linked device (CLI, VS Code, Chrome extension or desktop app)",
+  "note": "No list of devices that skip checks is shown; the Device sign-in toggle only sets approval by device code, and the earlier check said trusted-device lists are unavailable.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, click Account, and find the Linked devices section.",
+   "Read each linked device row: its kind, status and Personal sign-in or Workspace sign-in label.",
+   "Click Unlink device on a test device, read the confirmation, and confirm.",
+   "Open Security and look at the Device sign-in toggle. Compare the list and toggle with Expected."
+  ],
+  "where": "Settings > Account > Linked devices (remove link with Unlink device); Settings > Security > Device sign-in (toggle)"
+ },
+ "S86.08": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/components/LinkedDevicesPanel.tsx",
+    "text": "Linked devices"
+   },
+   {
+    "file": "apps/web/features/settings/components/LinkedDevicesPanel.tsx",
+    "text": "Mobile app"
+   },
+   {
+    "file": "apps/web/features/settings/components/LinkedDevicesPanel.tsx",
+    "text": "Unlink device"
+   }
+  ],
+  "needs": "a phone or desktop app paired to the account",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, click Account, and find Linked devices.",
+   "Read the kind label on each row: Desktop app, Mobile app, Chrome extension or Remote Control.",
+   "Click Unlink device on a test row, read the message, and confirm.",
+   "Compare the list with Expected."
+  ],
+  "where": "Settings > Account > Linked devices (rows for Desktop app, VS Code extension, Chrome extension, Mobile app, Remote Control); Unlink device"
+ },
+ "S86.09": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/AccountSection.tsx",
+    "text": "Active sessions"
+   },
+   {
+    "file": "apps/web/features/settings/sections/AccountSection.tsx",
+    "text": "Log out current session"
+   },
+   {
+    "file": "apps/web/features/settings/sections/AccountSection.tsx",
+    "text": "Log out"
+   }
+  ],
+  "needs": "none",
+  "note": "The code shows no separate sign-out control for the device in the settings menu; this is the only in-settings path found for the current session.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, click Account, and find Active sessions.",
+   "Find the row for this browser and click Log out current session.",
+   "Read the dialog Log out this session? and click Log out.",
+   "Check that you return to the sign-in page. Compare with Expected."
+  ],
+  "where": "Settings > Account > Active sessions > the row marked as the current session > Log out current session"
+ },
+ "S86.10": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/SecuritySection.tsx",
+    "text": "Log out of all devices"
+   },
+   {
+    "file": "apps/web/features/settings/sections/SecuritySection.tsx",
+    "text": "Log out everywhere"
+   }
+  ],
+  "needs": "a second browser signed in to the same account",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Security.",
+   "Scroll to the Log out of all devices row and click Log out.",
+   "Read the dialog Log out of all devices? and click Log out everywhere.",
+   "Check that you are returned to the sign-in page, then sign in from a second browser to see its session gone. Compare with Expected."
+  ],
+  "where": "Settings > Security > Log out of all devices > Log out"
+ },
+ "S86.11": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/NotificationsSection.tsx",
+    "text": "Security alerts"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Notifications"
+   }
+  ],
+  "needs": "an email inbox for the test account",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Notifications.",
+   "Find the Security alerts heading and read its description: sign-in, password, email, two-factor and device changes.",
+   "Turn the Security alerts control on or off and check the setting is saved.",
+   "Make a sign-in or password change from another device and check for an email. Compare with Expected."
+  ],
+  "where": "Settings > Notifications > Security alerts"
+ },
+ "S86.12": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Connectors"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Disconnect"
+   }
+  ],
+  "needs": "a connected connector (for example GitHub)",
+  "note": "Some connectors disconnect through their own flow, for example GitHub uses its App installations.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Connectors.",
+   "Open a connector that is connected.",
+   "Read its account details and find the Disconnect button.",
+   "Click Disconnect, read the confirmation, and compare with Expected."
+  ],
+  "where": "Settings > Connectors, open a connected connector, then Disconnect"
+ },
+ "S86.13": {
+  "labels": [
+   {
+    "file": "apps/web/features/connectors/components/ConnectorScopeList.tsx",
+    "text": "Permissions granted"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Connectors"
+   }
+  ],
+  "needs": "a connected connector",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Connectors.",
+   "Open a connected connector.",
+   "Find the Permissions granted box with the scopes list.",
+   "Read each scope sentence and its access badge, and compare with Expected."
+  ],
+  "where": "Settings > Connectors > open a connected connector > Permissions granted"
+ },
+ "S86.14": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/AccountSection.tsx",
+    "text": "API keys"
+   },
+   {
+    "file": "apps/web/features/settings/components/Settings/ApiKeys.tsx",
+    "text": "Generate New API Key"
+   },
+   {
+    "file": "apps/web/features/settings/components/Settings/ApiKeys.tsx",
+    "text": "Delete Key"
+   }
+  ],
+  "needs": "none",
+  "note": "The UI calls revoking a key Delete Key, and the code does not show a masked key value; this was not confirmed in code.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, click Account, and click the API keys row.",
+   "Click Generate New API Key, enter a Key Name, and copy the key once shown.",
+   "Read the list: each key row should show its name, scopes and expiry, and the key itself should be masked.",
+   "Click Delete Key on the test key, read the warning, and confirm. Compare with Expected."
+  ],
+  "where": "Settings > Account > API keys > API Keys panel (Generate New API Key; Delete Key)"
+ },
+ "S86.23": {
+  "labels": [
+   {
+    "file": "apps/web/features/connectors/components/ToolPermissionsPanel.tsx",
+    "text": "Tool Permissions"
+   },
+   {
+    "file": "apps/web/features/connectors/components/ToolPermissionsPanel.tsx",
+    "text": "Always run without asking"
+   },
+   {
+    "file": "apps/web/features/connectors/components/ToolPermissionsPanel.tsx",
+    "text": "Never run this tool"
+   }
+  ],
+  "needs": "a connected connector with tools",
+  "note": "The phrase Saved approvals appears only in the VS Code extension locale (packages/ui/i18n/locales/en/vscode.json), not in the web app.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Connectors.",
+   "Open a connected connector and click Tool Permissions.",
+   "Look at each tool's current level, and change one to Always run without asking or Never run this tool.",
+   "Click Reset all to default and confirm the reset. Compare with Expected."
+  ],
+  "where": "Settings > Connectors > open a connector > Tool Permissions (Always run without asking, Needs approval each time, Never run this tool; Reset all to default)"
+ },
+ "S86.24": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/components/ToolApprovalDefaultsPanel.tsx",
+    "text": "Default approval for tool actions"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Ask before every action"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Skip approvals"
+   }
+  ],
+  "needs": "a signed-in account (Skip approvals is blocked when the workspace does not allow it)",
+  "note": "The option labels are Ask before every action, Run read-only actions without asking and Skip approvals, not the names in Expected; enforcement is in apps/web/app/api/llm/v1/chat/completions/lib/tool-approval-policy.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Capabilities.",
+   "Find Default approval for tool actions and pick Ask before every action, Run read-only actions without asking, or Skip approvals.",
+   "Read the Saved and Synced to your account status after each change.",
+   "Start a chat that runs a tool and check whether it asks. Compare with Expected."
+  ],
+  "where": "Settings > Capabilities > Default approval for tool actions"
+ },
+ "S86.26": {
+  "labels": [
+   {
+    "file": "apps/web/features/account-security/components/AdvancedAccountSecurityPanel.tsx",
+    "text": "Advanced Account Security"
+   },
+   {
+    "file": "apps/web/features/account-security/components/AdvancedAccountSecurityPanel.tsx",
+    "text": "Turn on Advanced Account Security"
+   },
+   {
+    "file": "apps/web/features/account-security/components/AdvancedAccountSecurityPanel.tsx",
+    "text": "Turn off Advanced Account Security"
+   }
+  ],
+  "needs": "a passkey or security key, and access to the account email",
+  "note": "The hardened mode is the Advanced Account Security card, and the support article and recovery files are not UI.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, click Security, and find the Advanced Account Security card.",
+   "Read its description: for accounts at higher risk, sign-in needs a passkey or security key.",
+   "Click Turn on Advanced Account Security after entering the code from the email, and read the result.",
+   "Check that password and email-code sign-in stop working, then click Turn off Advanced Account Security to undo it if the test allows. Compare with Expected."
+  ],
+  "where": "Settings > Security > Advanced Account Security > Turn on Advanced Account Security"
+ }
+}

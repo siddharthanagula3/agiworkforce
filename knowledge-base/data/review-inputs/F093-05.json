@@ -1,0 +1,522 @@
+{
+ "feature": {
+  "id": "F093-05",
+  "aliases": [
+   "Retrieval index",
+   "Document chunking",
+   "Embedding generation",
+   "Indexing for search",
+   "index-retrieval-documents",
+   "S93.18",
+   "S93.19"
+  ],
+  "summary": "The indexer cuts project files, library files, chats, artifacts, reports and developer sessions into overlapping text chunks and stores them with a text-search column and, when possible, an embedding vector. Embedding is a metered call. If it fails, chunks stay keyword-searchable and indexing retries with growing delays. A cron sweep every ten minutes starts the work.",
+  "purpose": {
+   "what_it_does": "Claims a pending retrieval document, loads its source text, cuts it into 1,400-character windows with 200 overlap (max 400 chunks), embeds the chunks in metered batches, writes chunks and settles the document status in one transaction (apps/web/lib/services/retrieval-index-service.ts:417-436,479-518,658-785; packages/platform/data-layer/src/search/chunk.ts:10-15).",
+   "why_it_exists": "Search by meaning and by keyword needs a prepared copy of the content; 0202 says nothing was embedded before so there was no semantic or hybrid retrieval on managed cloud (apps/web/db/neon/0202_retrieval_index.sql:6-10).",
+   "who_uses_it": "The platform runs it in the background; people see only index status on project files.",
+   "problems_solved": [
+    "Large files that cannot be sent whole.",
+    "Search that matched only titles and messages (0202:6-8).",
+    "A failed embedding losing the content: chunks are still stored for keyword (retrieval-index-service.ts:496-512).",
+    "Duplicate work: unchanged text costs nothing (lines 700-717)."
+   ],
+   "use_cases": [
+    "A new project file is indexed within ten minutes.",
+    "A chat is re-indexed after it changes.",
+    "A failed file is retried by the person with 'Retry indexing'.",
+    "A file restored after deletion is indexed again."
+   ]
+  },
+  "user_experience": {
+   "where_to_find_it": [
+    "Web: Projects, knowledge files list: status 'Indexing for search', 'Keyword search only', 'Not indexed', and 'Retry indexing' for failed files (KnowledgeIndexStatus.tsx:28-70; KnowledgeFilesPanel.tsx:125).",
+    "No status or retry for chats, library files, artifacts or reports was found. unknown.",
+    "Other apps: no indexing control found."
+   ],
+   "prerequisites": [
+    "A source saved on the Cloud service; for semantic indexing a managed embedding route and managed compute access."
+   ],
+   "screens_and_controls": [
+    "Index status line per knowledge file; 'Retry indexing' link shown when status is failed (KnowledgeIndexStatus.tsx:56-71)."
+   ],
+   "journey": [
+    "The person adds a project file or chats.",
+    "A database trigger creates or marks the retrieval document (0202 header lines 26-30).",
+    "Within about ten minutes the cron sweep reserves it and starts a workflow (vercel.json:62-63; route.ts:25-33).",
+    "The workflow indexes it (index-retrieval-document.ts:33-50).",
+    "The file list shows status until indexed; a failed file shows the reason and 'Retry indexing'.",
+    "The person can press 'Retry indexing', which posts to the reindex route."
+   ],
+   "feedback_and_outputs": [
+    "Status text and error messages such as 'Semantic indexing needs managed compute on your plan or workspace; keyword search still works.' (retrieval-index-service.ts:104-117).",
+    "202 response with indexing state and 'dispatched' flag from the reindex route."
+   ],
+   "settings": [
+    "None for the person. Operator: cron route and low-power skip (route.ts:21-22)."
+   ]
+  },
+  "current_implementation": {
+   "working": [
+    "Chunking with paragraph and sentence boundary search (chunk.ts:17-47).",
+    "Per-kind source loaders for project files, library files, chats, artifacts, reports and developer sessions (retrieval-index-service.ts:240-410, partly read).",
+    "Metered embedding in batches with reservation and settle (retrieval-embedding-service.ts:204-333).",
+    "Failure keeps chunks and retries: 5-minute base doubling to 24 hours, 6 hours for no route or not entitled, max 5 attempts (retrieval-index-service.ts:39,48-49,452-454,720-724).",
+    "Run fenced to the claiming workflow id, so a stale run writes nothing (lines 520-540,745-753).",
+    "Cron sweep every 10 minutes, 50 documents per sweep, skip on low power (vercel.json:62-63; retrieval-index-service.ts:790-815; route.ts:21-33).",
+    "Retry route and media-asset reindex (lines 868-925)."
+   ],
+   "incomplete": [
+    "After five failed attempts the sweep no longer picks the document up; only 'Retry indexing' for project files resets attempts (retrieval-index-service.ts:803-806,868-880). No equivalent control for other kinds was found.",
+    "Embedding entitlement check hardcodes surface 'web' (retrieval-embedding-service.ts:226-234)."
+   ],
+   "disconnected_or_disabled": [
+    "0202 header: NOT YET APPLIED : draft only; apply state unknown."
+   ],
+   "not_available": [
+    "No on-device indexing: the index is built on our servers for every app. CLI, VS Code and Chrome extension do not build or query it (none found)."
+   ]
+  },
+  "required_behaviour": {
+   "established": [
+    {
+     "statement": "Documents are split into chunks for indexing.",
+     "source": "S93.18 (brief)"
+    },
+    {
+     "statement": "Chunks get embeddings generated (metered) for semantic search.",
+     "source": "S93.19 (brief)"
+    },
+    {
+     "statement": "A chunk written without an embedding is still found by full text.",
+     "source": "0202 header lines 20-23"
+    },
+    {
+     "statement": "Embedding usage is reserved and settled through the managed usage ledger.",
+     "source": "retrieval-embedding-service.ts:199-203,254-331"
+    },
+    {
+     "statement": "Sources soft-deleted, temporary or archived leave the index.",
+     "source": "0202 header lines 26-28; 0244 header"
+    }
+   ],
+   "acceptance_criteria": [
+    "A new project file gets a retrieval_documents row and, after the sweep, status indexed with chunk_count > 0.",
+    "A document never exceeds 400 chunks.",
+    "If embedding fails, chunks exist with null embeddings, status failed, last_error set and next_attempt_at in the future.",
+    "After 5 failures the sweep does not pick it up; 'Retry indexing' resets attempts to 0.",
+    "Unchanged text and existing embeddings cause no new embedding call.",
+    "A deleted source removes its document and chunks.",
+    "Every embedding call writes a reservation and a settlement."
+   ],
+   "inferred": [
+    "Free accounts index by keyword always and semantically within managed access [inferred from the failure messages]."
+   ],
+   "proposed": [
+    "[proposed] Offer retry and status for chats and library files.",
+    "[proposed] Alert when a document hits the attempt limit."
+   ]
+  },
+  "implementation_map": [
+   {
+    "kind": "service",
+    "name": "indexRetrievalDocument",
+    "path": "apps/web/lib/services/retrieval-index-service.ts",
+    "role": "Claim, load, chunk, embed, write, settle (line 658)."
+   },
+   {
+    "kind": "service",
+    "name": "prepareChunks / windowText",
+    "path": "packages/platform/data-layer/src/search/chunk.ts",
+    "role": "Window cutting with offsets."
+   },
+   {
+    "kind": "service",
+    "name": "embedTextsMetered",
+    "path": "apps/web/lib/services/retrieval-embedding-service.ts",
+    "role": "Billed embedding call (line 204)."
+   },
+   {
+    "kind": "service",
+    "name": "reserveDueRetrievalDocuments",
+    "path": "apps/web/lib/services/retrieval-index-service.ts",
+    "role": "Reserves due documents for the sweep (line 790)."
+   },
+   {
+    "kind": "job",
+    "name": "index-retrieval-documents cron",
+    "path": "apps/web/app/api/cron/index-retrieval-documents/route.ts",
+    "role": "GET every 10 minutes; starts workflows."
+   },
+   {
+    "kind": "config",
+    "name": "Cron schedule",
+    "path": "vercel.json",
+    "role": "'*/10 * * * *' at line 62-63."
+   },
+   {
+    "kind": "job",
+    "name": "retrievalIndexWorkflow",
+    "path": "apps/web/lib/workflows/retrieval-index-workflow.ts",
+    "role": "Durable workflow wrapper."
+   },
+   {
+    "kind": "job",
+    "name": "indexRetrievalDocumentWorkflowStep",
+    "path": "apps/web/lib/workflows/steps/index-retrieval-document.ts",
+    "role": "Step that calls the indexer under a scoped database."
+   },
+   {
+    "kind": "endpoint",
+    "name": "POST reindex",
+    "path": "apps/web/app/api/projects/[id]/knowledge-files/[fileId]/reindex/route.ts",
+    "role": "Owner-triggered re-index of one file."
+   },
+   {
+    "kind": "table",
+    "name": "retrieval_documents",
+    "path": "apps/web/db/neon/0202_retrieval_index.sql",
+    "role": "Index state per source (lines 48-99)."
+   },
+   {
+    "kind": "table",
+    "name": "retrieval_chunks",
+    "path": "apps/web/db/neon/0202_retrieval_index.sql",
+    "role": "Chunks, tsvector, vector(1536) (lines 116-137)."
+   },
+   {
+    "kind": "schema",
+    "name": "Archive triggers",
+    "path": "apps/web/db/neon/0244_archived_resources_leave_ai_retrieval.sql",
+    "role": "Delete index rows for archived chats and project files."
+   },
+   {
+    "kind": "config",
+    "name": "embedding_default slot",
+    "path": "apps/web/lib/services/retrieval-embedding-service.ts",
+    "role": "Routing slot for the embedding model (line 48)."
+   },
+   {
+    "kind": "component",
+    "name": "KnowledgeIndexStatus",
+    "path": "apps/web/features/projects/components/KnowledgeIndexStatus.tsx",
+    "role": "Shows status and retry."
+   },
+   {
+    "kind": "service",
+    "name": "Free daily vector cap",
+    "path": "apps/web/lib/services/tier-unit-quota-service.ts",
+    "role": "Query-embedding allowance (lines 157-160,196-199)."
+   },
+   {
+    "kind": "test",
+    "name": "Index service tests",
+    "path": "apps/web/lib/services/__tests__/retrieval-index-service.test.ts",
+    "role": "Chunking, indexing, retry, fencing."
+   }
+  ],
+  "execution_and_data_flow": {
+   "steps": [
+    {
+     "what_happens": "A trigger on the source table enqueues or marks stale a retrieval document.",
+     "runs_on": "our servers",
+     "evidence": "0202 header 26-30; 0244:26-60"
+    },
+    {
+     "what_happens": "Cron reserves due documents (holds them 15 minutes) and starts index workflows.",
+     "runs_on": "our servers",
+     "evidence": "route.ts:25-33; retrieval-index-service.ts:790-815"
+    },
+    {
+     "what_happens": "The step claims the document, loads source text, windows it and hashes it.",
+     "runs_on": "our servers",
+     "evidence": "retrieval-index-service.ts:658-700"
+    },
+    {
+     "what_happens": "Embedding call reserves usage, calls the gateway or Google embeddings, settles the cost.",
+     "runs_on": "outside service",
+     "evidence": "retrieval-embedding-service.ts:254-331"
+    },
+    {
+     "what_happens": "One transaction settles the document and rewrites chunks.",
+     "runs_on": "our servers",
+     "evidence": "retrieval-index-service.ts:741-753"
+    }
+   ],
+   "data": [
+    {
+     "what": "retrieval_documents state and retrieval_chunks (text, offsets, tsvector, 1536-number vector)",
+     "where_stored": "cloud database, row-level security by owner",
+     "synced": "Server only",
+     "retained_or_deleted": "Cascade delete with the source; deleted when source is soft-deleted or temporary; archive removal via 0244 (draft)."
+    },
+    {
+     "what": "Embedding usage records (type retrieval_embedding)",
+     "where_stored": "managed usage ledger and COGS ledger",
+     "synced": "Server only",
+     "retained_or_deleted": "unknown"
+    }
+   ],
+   "models_and_providers": "The embedding model comes from routing slot embedding_default; routes must use the vercel_gateway/embeddings or google/embeddings harness and a credentialed managed provider (retrieval-embedding-service.ts:48,68-73,96-115). Providers: provider:vercel-gateway, provider:google. Google-user-data text is limited to providers that keep inputs out of training (lines 215-220)."
+  },
+  "access_and_usage": {
+   "account": "Signed in owner; the workflow runs under a user-scoped database (index-retrieval-document.ts:36-41).",
+   "permissions": "Owner must own the source (0202:159-207 policies).",
+   "subscription": "Free plan is allowed managed compute (managed-compute-access.ts:55) and has a 200 queries/day cap for query embeddings only; document embedding has no daily cap in this code. Paid plans: no cap in this rule (billing-catalog.ts:737-739). Reservation and entitlement can still refuse: code not_entitled or billing_refused.",
+   "limits_and_metering": "Max 400 chunks, 200,000 source characters, 400 chat messages, 50 documents per sweep, 5 attempts (retrieval-index-service.ts:39-48). A quota read failure lets the call through (tier-unit-quota-service.ts:391-405).",
+   "flags": "Low-power cron skip (route.ts:21-22).",
+   "model_compatibility": "Vector width fixed at 1536; a different width needs a migration and full re-index (types.ts:12-17; 0202:130).",
+   "provider_restrictions": "Needs a managed embedding provider; none means keyword only with message 'Semantic indexing is not configured on this deployment; keyword search still works.'",
+   "local_mode": "No Local indexing exists. Local-mode content is not indexed by this feature; chat and project content saved to Cloud is indexed and embedded on our servers, using managed compute regardless of the chat's mode."
+  },
+  "states_and_edge_cases": [
+   {
+    "state": "Embedding refused or failed",
+    "behaviour": "Chunks stored without vectors; status failed; retry scheduled.",
+    "evidence": "retrieval-index-service.ts:496-512,720-740"
+   },
+   {
+    "state": "No route or not entitled",
+    "behaviour": "Retry in 6 hours.",
+    "evidence": "retrieval-index-service.ts:46,720-722"
+   },
+   {
+    "state": "Source gone",
+    "behaviour": "Document deleted, outcome removed.",
+    "evidence": "retrieval-index-service.ts:690-697"
+   },
+   {
+    "state": "Newer run took over",
+    "behaviour": "This run writes nothing and skips.",
+    "evidence": "retrieval-index-service.ts:741-748"
+   },
+   {
+    "state": "Chunk write fails",
+    "behaviour": "Settled as failed with 'This source could not be indexed. Retry indexing to try again.'",
+    "evidence": "retrieval-index-service.ts:130,754-769"
+   },
+   {
+    "state": "Workflow does not start",
+    "behaviour": "Warn; the next sweep retries.",
+    "evidence": "apps/web/lib/workflows/start-retrieval-index-workflow.ts:43-46"
+   },
+   {
+    "state": "Unchanged text",
+    "behaviour": "Settled 'unchanged' with no cost.",
+    "evidence": "retrieval-index-service.ts:700-717"
+   },
+   {
+    "state": "Lease expiry",
+    "behaviour": "A stuck 'indexing' document is picked up again after 10 minutes.",
+    "evidence": "retrieval-index-service.ts:50,478-492,806"
+   },
+   {
+    "state": "Offline or cancel",
+    "behaviour": "not handled in the code; background job.",
+    "evidence": "Searched retrieval-index-service.ts and the cron route; no cancel path exists, only lease expiry and retry."
+   }
+  ],
+  "verification": {
+   "existing_tests": [
+    {
+     "path": "apps/web/lib/services/__tests__/retrieval-index-service.test.ts",
+     "covers": "Chunk windows, digest, embed and index, retry on refusal, unchanged cost, deletion, fencing."
+    },
+    {
+     "path": "apps/web/lib/services/__tests__/retrieval-embedding-service.test.ts",
+     "covers": "Route resolution, reserve and settle, fingerprint, failure release, no-managed-compute refusal, training policy."
+    },
+    {
+     "path": "apps/web/lib/services/__tests__/retrieval-index-withdrawal.test.ts",
+     "covers": "Each source kind leaves the index when its original does."
+    },
+    {
+     "path": "apps/web/app/api/cron/index-retrieval-documents/route.test.ts",
+     "covers": "Cron route (name only; contents not read)."
+    },
+    {
+     "path": "packages/platform/data-layer/src/__tests__/search-chunk-contract.test.ts",
+     "covers": "Chunk contract."
+    }
+   ],
+   "scenarios": [
+    {
+     "name": "New file indexed",
+     "steps": [
+      "Add a text file to a project.",
+      "Wait for the sweep or trigger the cron route with the cron secret.",
+      "Read retrieval_documents."
+     ],
+     "expected": "status indexed, chunk_count > 0, embedding_model set."
+    },
+    {
+     "name": "Embedding down",
+     "steps": [
+      "Remove the embedding credential.",
+      "Add a file."
+     ],
+     "expected": "Chunks exist with null embedding; status failed; last_error says keyword search still works; retry in 6 hours."
+    },
+    {
+     "name": "Retry",
+     "steps": [
+      "Open a failed file and press Retry indexing."
+     ],
+     "expected": "202 with dispatched true; attempts reset to 0."
+    },
+    {
+     "name": "Edit",
+     "steps": [
+      "Replace the file text."
+     ],
+     "expected": "Document goes stale, new chunk_version, old chunks replaced."
+    },
+    {
+     "name": "Give up",
+     "steps": [
+      "Fail embedding five times."
+     ],
+     "expected": "Sweep stops picking it; only manual retry resumes."
+    }
+   ],
+   "diagnostics": [
+    "Logs '[retrieval] embedding failed; chunks are stored for keyword search only', '[retrieval] chunk write failed', 'Retrieval index sweep failed'.",
+    "retrieval_documents.status, attempts, last_error, next_attempt_at.",
+    "Cron response JSON {due, started, failed}."
+   ]
+  },
+  "gaps": [
+   {
+    "gap": "Dead-end after 5 failures for chats, library files, artifacts and reports.",
+    "affects": "Web users of search over those sources.",
+    "evidence": "retrieval-index-service.ts:803-806; only project files have a retry control (KnowledgeFilesPanel.tsx:125).",
+    "work_needed": "Add retry or a periodic reset; or alert."
+   },
+   {
+    "gap": "Index and embedding are Cloud-only, even for Local-mode content saved to Cloud.",
+    "affects": "Local users on web, desktop, mobile who also sync.",
+    "evidence": "retrieval-embedding-service.ts:215-234.",
+    "work_needed": "Confirm Local content never reaches the index; document the boundary."
+   },
+   {
+    "gap": "Embedding entitlement is evaluated as surface 'web'.",
+    "affects": "Users of other apps whose content is indexed.",
+    "evidence": "retrieval-embedding-service.ts:226-234.",
+    "work_needed": "Pass the real surface if rules differ."
+   },
+   {
+    "gap": "0202 and 0244 not established as applied.",
+    "affects": "All indexing.",
+    "evidence": "Headers at line 4 and 3.",
+    "work_needed": "Check migration tracking."
+   },
+   {
+    "gap": "No on-device index for mobile or desktop Local search.",
+    "affects": "Mobile and desktop Local mode.",
+    "evidence": "Mobile uses string search of stored chats (pastChatContext.ts:37-70).",
+    "work_needed": "Decide if a local index is required."
+   }
+  ],
+  "depends_on": [
+   "SYS-data-model-and-migrations",
+   "SYS-subscriptions-entitlements-and-usage",
+   "SYS-inference-providers",
+   "SYS-model-catalog-and-routing",
+   "SYS-files-artifacts-and-storage",
+   "SYS-execution-boundaries",
+   "mode:cloud",
+   "surface:web",
+   "table:retrieval_documents",
+   "table:retrieval_chunks",
+   "provider:vercel-gateway",
+   "provider:google"
+  ],
+  "relationships": [
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/web/lib/services/retrieval-index-service.ts",
+    "evidence": "indexRetrievalDocument at line 658"
+   },
+   {
+    "rel": "stores_data_in",
+    "to": "table:retrieval_chunks",
+    "evidence": "insert into retrieval_chunks at retrieval-index-service.ts:529"
+   },
+   {
+    "rel": "stores_data_in",
+    "to": "table:retrieval_documents",
+    "evidence": "update retrieval_documents at retrieval-index-service.ts:456"
+   },
+   {
+    "rel": "exposes_api",
+    "to": "api:GET /api/cron/index-retrieval-documents",
+    "evidence": "route.ts:15"
+   },
+   {
+    "rel": "exposes_api",
+    "to": "api:POST /api/projects/[id]/knowledge-files/[fileId]/reindex",
+    "evidence": "reindex route.ts:63"
+   },
+   {
+    "rel": "uses_provider",
+    "to": "provider:vercel-gateway",
+    "evidence": "createVercelGatewayEmbeddings at retrieval-embedding-service.ts:155"
+   },
+   {
+    "rel": "uses_provider",
+    "to": "provider:google",
+    "evidence": "embedTextsWithGoogle at retrieval-embedding-service.ts:161"
+   },
+   {
+    "rel": "governed_by_subscription",
+    "to": "SYS-subscriptions-entitlements-and-usage",
+    "evidence": "evaluateManagedComputeAccess and reserveManagedUsageRequest at retrieval-embedding-service.ts:226,254"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:web",
+    "evidence": "Status UI in features/projects/components/KnowledgeIndexStatus.tsx"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/web/lib/services/__tests__/retrieval-index-service.test.ts",
+    "evidence": "describe('indexRetrievalDocument') at line 192"
+   },
+   {
+    "rel": "configured_by",
+    "to": "file:vercel.json",
+    "evidence": "Cron entry at lines 62-63"
+   }
+  ],
+  "unknowns": [
+   "Whether 0202 and 0244 are applied anywhere.",
+   "Which concrete embedding model and provider route runs in production.",
+   "Retention of usage records for embedding.",
+   "Paid-plan limits on document embedding beyond the reservation check.",
+   "Whether library files, artifacts, reports and developer sessions ever show index status in a UI."
+  ]
+ },
+ "corrections": [
+  {
+   "section": "7",
+   "claim": "Free plan is allowed managed compute (managed-compute-access.ts:55)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The Free-tier allow is at line 74 (isFreePlanTier returns SUBSCRIPTION_ALLOWED), not 55. Also this is only the subscription half; evaluateManagedComputeAccess then runs a workspace access check that can still refuse.",
+   "evidence": "apps/web/lib/services/managed-compute-access.ts:74,177-191",
+   "correction": "Free plan passes the subscription check (managed-compute-access.ts:74), but workspace policy (:191) can still refuse."
+  },
+  {
+   "section": "3/10",
+   "claim": "0202 header: NOT YET APPLIED, draft only; apply state unknown",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The header text does say NOT YET APPLIED, but it is a stale comment. Migrations form an applied, append-only checksummed chain far beyond 0202 (production is at 0425 per project notes and AGENTS.md), so 0202 and 0244 are applied in the chain. 'Unknown' and the Gap row 'not established as applied' overstate the doubt.",
+   "evidence": "apps/web/db/neon/0202_retrieval_index.sql:4; apps/web/db/neon/0244_archived_resources_leave_ai_retrieval.sql:3; AGENTS.md section 5",
+   "correction": "The 0202/0244 headers still say NOT YET APPLIED but are stale; later migrations are applied past them. Check migration tracking to confirm, but treat as applied."
+  }
+ ],
+ "missing_facts": [
+  "Only the cron sweep (route.ts:25-33) and the reindex route start indexing; the workflow step runs under createClaimedUserScopedDb with the owner's userId and organizationId (apps/web/lib/workflows/steps/index-retrieval-document.ts:38-45), so organization/workspace policy applies to indexing, not just individual accounts.",
+  "Embedding input is truncated per text (MAX_EMBEDDING_INPUT_CHARS) and each call is capped at MAX_EMBEDDING_INPUTS, with a no-training provider filter applied when the user opted out of side-call training (retrieval-embedding-service.ts:210-220); the page mentions only Google user data.",
+  "A document is dispatch-held for 15 minutes (DISPATCH_HOLD_MINUTES) at reservation, separate from the 10-minute lease (retrieval-index-service.ts:50-51,790-815); the page notes both but never explains that a failed workflow start waits up to 15 minutes, not 10, for retry."
+ ]
+}

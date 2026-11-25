@@ -1,0 +1,196 @@
+{
+ "S36.01": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/MarkdownInline.tsx",
+    "text": "Dismiss sources"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/CitationChip.tsx",
+    "text": "Open page"
+   }
+  ],
+  "needs": "a Free or paid account with web search available for the chat",
+  "note": "The marker is drawn in MarkdownInline.tsx (CitationMarker), not MessageBubble.tsx:1972 as the plan says; whether the model writes a marker is up to the answer, and I did not confirm the on-screen control that turns web search on.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and start a new chat on the first screen.",
+   "Ask a question that needs current web information, such as recent news on a topic.",
+   "Wait for the answer to finish streaming.",
+   "Look for teal bracket markers like [1] or [2] inside the answer text.",
+   "Tap a marker: a dialog opens with the source title, publisher and buttons Cancel and Open page.",
+   "Compare with Expected: each marker should point to the source for the claim next to it."
+  ],
+  "where": "First screen after sign-in > start a chat > ask a question that needs current web facts > read the answer > find the small teal bracket markers such as [1] placed after claims > tap one"
+ },
+ "S36.02": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/CollapsibleSources.tsx",
+    "text": "Sources"
+   }
+  ],
+  "needs": "a chat answer that used web search, so the answer has cited sources",
+  "note": "The sheet shows the title on each row; the Sources pill is hidden for research reports, which use a separate list instead.",
+  "reachable": "yes",
+  "steps": [
+   "Ask a question that uses web search and wait for the answer.",
+   "Under the answer, tap the pill whose text is Sources.",
+   "In the sheet titled Sources, read the bold line of each row.",
+   "Compare with Expected: each cited source should show its title."
+  ],
+  "where": "First screen after sign-in > start a chat > ask a question that uses web search > under the answer tap the Sources pill > read the rows in the sheet"
+ },
+ "S36.03": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/CollapsibleSources.tsx",
+    "text": "Sources"
+   }
+  ],
+  "needs": "a chat answer that used web search",
+  "note": "The publisher is shown as a domain taken from the URL, not a publisher name, unless the source supplies one.",
+  "reachable": "yes",
+  "steps": [
+   "Open a web-search answer and tap the Sources pill under it.",
+   "Look at the small grey first line of each row.",
+   "Compare with Expected: each row should show the site domain, for example the publisher name, before the title."
+  ],
+  "where": "First screen after sign-in > start a chat > ask a question that uses web search > under the answer tap the Sources pill > read the small grey first line of each row"
+ },
+ "S36.04": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/CitationChip.tsx",
+    "text": "Open page"
+   }
+  ],
+  "needs": "a chat answer that used web search and a network connection",
+  "note": "The web address itself is not printed on screen; the row only shows an accessibility hint, Opens in the in-app browser. Tapping a marker also offers Open page.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Sources sheet under a web-search answer.",
+   "Tap a source row that has a web address.",
+   "Watch for the in-app browser to open the source page.",
+   "Compare with Expected: the source opens. A row with no valid web address is not tappable."
+  ],
+  "where": "First screen after sign-in > start a chat > ask a question that uses web search > under the answer tap the Sources pill > tap a source row"
+ },
+ "S36.05": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/CitationChip.tsx",
+    "text": "Published"
+   }
+  ],
+  "needs": "a chat answer that used web search, where the source reports a publication date",
+  "note": "If the source has no date, no date appears; this is the expected behaviour in code.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Sources sheet under a web-search answer.",
+   "Read the grey first line of a row: it shows the publisher then a date after a dot.",
+   "Tap a bracket marker in the answer and read the dialog body for a line that starts with Published.",
+   "Compare with Expected: the date shows when the source has one, and no date is shown when it is unknown."
+  ],
+  "where": "First screen after sign-in > start a chat > ask a question that uses web search > under the answer tap the Sources pill > read the grey first line of a row, or tap a bracket marker and read the dialog"
+ },
+ "S36.06": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/markdown/citationPublisher.ts",
+    "text": "Retrieved"
+   },
+   {
+    "file": "apps/mobile/src/features/research/ReportsScreen.tsx",
+    "text": "Sources retrieved"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Reports"
+   }
+  ],
+  "needs": "a chat answer with a source that has a retrieval time; for the report path, a saved research report",
+  "note": "The retrieval date is shown once for the whole report, not per source, and the chat Sources sheet does not show it; how the side drawer is opened was not confirmed in the code.",
+  "reachable": "yes",
+  "steps": [
+   "In a chat answer with web search, tap a bracket marker such as [1].",
+   "Read the dialog body for a line that starts with Retrieved followed by a date.",
+   "Optionally open the side drawer, tap Reports, open a saved report, and scroll to the end.",
+   "Compare with Expected: the report shows the line Sources retrieved with a date."
+  ],
+  "where": "Tap a bracket marker in a web-search answer and read the dialog for a line starting with Retrieved; or open the side drawer > Reports > open a saved report > scroll to the bottom"
+ },
+ "S36.07": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/CollapsibleSources.tsx",
+    "text": "Sources"
+   }
+  ],
+  "needs": "a chat answer that used web search; for the file icon, a project with a file that a chat cites",
+  "note": "Web sources do not get a type icon: the square mark shows a letter for the site, and the Globe icon shows only in the search result cards. File and past-chat citations have their own chips with icons; I did not confirm a path to open a project chat.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Sources sheet under a web-search answer.",
+   "Look at the square mark at the left of each row: it holds the first letter of the site and has a Globe icon beside the domain in the search result cards.",
+   "Open a chat that cites a project file, if you have one, and look for the file icon on its citation chip.",
+   "Compare with Expected: web sources, file sources and chat sources should each show an icon for their type."
+  ],
+  "where": "First screen after sign-in > start a chat > ask a question that uses web search > under the answer tap the Sources pill > look at the mark at the left of each row"
+ },
+ "S36.08": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/CollapsibleSources.tsx",
+    "text": "Sources"
+   }
+  ],
+  "needs": "a chat answer that used web search and whose sources include snippets",
+  "note": "The app shows the source snippet; it does not check that the snippet is the sentence that supports the claim, so the tester should judge that.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Sources sheet under a web-search answer.",
+   "Read the smaller text under each row title, which is up to three lines.",
+   "Tap a bracket marker and read the body text of the dialog.",
+   "Compare with Expected: the excerpt shown should be the text that supports the claim."
+  ],
+  "where": "First screen after sign-in > start a chat > ask a question that uses web search > under the answer tap the Sources pill > read the grey text under a row title, or tap a bracket marker and read the dialog body"
+ },
+ "S36.16": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/MarkdownInline.tsx",
+    "text": "Dismiss sources"
+   }
+  ],
+  "needs": "a chat answer that used web search with several sources",
+  "note": "Where a marker lands depends on the model's text; the code only moves markers next to their links, so placement is judged by the tester.",
+  "reachable": "yes",
+  "steps": [
+   "Ask a question that uses web search and wait for the answer.",
+   "Find a sentence with a teal bracket marker such as [1] right after it.",
+   "Tap the marker: the dialog names the source for that marker.",
+   "If a marker has several numbers, tap it and pick one entry from the list, which has the button Dismiss sources.",
+   "Compare with Expected: each marker should sit at the claim that its source supports."
+  ],
+  "where": "First screen after sign-in > start a chat > ask a question that uses web search > read the answer and compare each bracket marker with the sentence before it"
+ },
+ "S36.19": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/CitationChip.tsx",
+    "text": "Could not open citation"
+   }
+  ],
+  "needs": "a chat answer with a source that has no valid web address, which is rare, so the tester may not find one",
+  "note": "On mobile there is no text saying a source was not captured; an uncaptured source row is only greyed out and not tappable. The uncaptured-source notice exists only on web in apps/web/features/chat/components/research/ResearchReportView.tsx, using the key counts.uncapturedSources, which mobile does not use.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Sources sheet under a web-search answer.",
+   "Look for a row without an external-link arrow at its right; such a row cannot be tapped.",
+   "Tap a bracket marker whose source cannot open; if the open fails, a dialog titled Could not open citation appears.",
+   "Compare with Expected: the product should say the source cannot be opened, not show a dead link."
+  ],
+  "where": "First screen after sign-in > start a chat > ask a question that uses web search > under the answer tap the Sources pill > look at a source row that has no web address"
+ }
+}

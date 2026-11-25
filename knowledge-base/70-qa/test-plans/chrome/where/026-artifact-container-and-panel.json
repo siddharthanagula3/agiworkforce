@@ -1,0 +1,442 @@
+{
+ "S26.02": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Open"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Untitled artifact"
+   }
+  ],
+  "needs": "a signed-in account and a reply that makes an artifact",
+  "note": "The 'Untitled artifact' fallback is in the code only for an artifact still being written (artifactPanel.ts line 345); a finished artifact's title comes from a package outside apps/extension that was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the side panel chat.",
+   "Ask the chat for one HTML page or one code file and wait for the reply to finish.",
+   "Look at the artifact card under the reply: its name line should show the artifact's title.",
+   "Click Open on the card.",
+   "Compare the heading at the top of the artifact panel with the card name; both should show the same title."
+  ],
+  "where": "Side panel chat > reply with an artifact > artifact card under the reply (name line) > Open"
+ },
+ "S26.03": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Artifact \u00b7 $FORMAT$"
+   }
+  ],
+  "needs": "a signed-in account and a reply that makes an artifact",
+  "note": "Only HTML, React, SVG and Mermaid have a fixed name; other types show their language in capitals, and the code for a document or spreadsheet type was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Ask the chat for one HTML page and wait for the reply to finish.",
+   "Look at the line under the card name: it should read 'Artifact \u00b7 HTML'.",
+   "Ask for a React component, then for a Mermaid diagram, and check the same line reads 'Artifact \u00b7 React' and 'Artifact \u00b7 Mermaid'.",
+   "Ask for a code file or a document and compare the line with Expected."
+  ],
+  "where": "Side panel chat > reply with an artifact > artifact card under the reply (line under the name)"
+ },
+ "S26.05": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Open"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Outputs"
+   }
+  ],
+  "needs": "a signed-in account and a reply that makes an artifact",
+  "note": "The only artifact list found is the card list under each reply; the Outputs popover lists produced files, and its entries open the file in a new tab, not the viewer.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, ask the chat for one HTML page and wait for the reply.",
+   "Find the artifact card under the reply.",
+   "Click Open on the card.",
+   "Look: the artifact panel opens above the messages and shows the artifact's content."
+  ],
+  "where": "Side panel chat > reply with an artifact > artifact card under the reply > Open"
+ },
+ "S26.06": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Close artifact"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Open"
+   }
+  ],
+  "needs": "a signed-in account and a reply that makes an artifact",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open an artifact with the card's Open button.",
+   "Click the X icon at the top right of the panel, or press Escape.",
+   "Look: the panel hides and the card under the reply still shows, with its button reading Open again.",
+   "Click Open on the card to check the artifact is still there."
+  ],
+  "where": "Artifact panel header > close icon button (tooltip 'Close artifact')"
+ },
+ "S26.07": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Open"
+   }
+  ],
+  "needs": "a signed-in account and a reply that makes an artifact",
+  "note": "The code rebuilds cards from the saved chat messages, but the reopen-after-reload path was not traced in code.",
+  "reachable": "yes",
+  "steps": [
+   "Open an artifact, then close the panel with the X icon.",
+   "Click Open on the same artifact card again.",
+   "Look: the panel opens with the same title and content as before.",
+   "Reload the side panel and check whether the card under the reply still opens the artifact."
+  ],
+  "where": "Artifact card under the reply > Open (after the panel is closed)"
+ },
+ "S26.08": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Open"
+   }
+  ],
+  "needs": "a signed-in account and a reply that makes an artifact",
+  "note": "Code stacks the panel above the messages at 55% height (artifactPanel.ts CSS, flex 0 0 55%), not beside them as Expected says.",
+  "reachable": "yes",
+  "steps": [
+   "Ask for one HTML page and wait for the reply.",
+   "Click Open on the artifact card.",
+   "Look: the artifact panel takes the top part of the chat and the messages stay visible below it.",
+   "Compare with Expected: both should be visible at once, side by side."
+  ],
+  "where": "Artifact card under the reply > Open; the panel appears above the chat messages"
+ },
+ "S26.09": {
+  "labels": [],
+  "needs": "none",
+  "note": "Searched artifactPanel.ts and side_panel.ts for resize, drag and width controls; none found, and the panel height is fixed at 55%.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S26.10": {
+  "labels": [],
+  "needs": "none",
+  "note": "Searched artifactPanel.ts and side_panel.ts for full-screen and expand controls; none found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S26.11": {
+  "labels": [],
+  "needs": "none",
+  "note": "Searched for detach and pop-out controls; none found, and the 'Run ... in this chat on the web' button opens the whole chat in a browser tab, not the artifact alone.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S26.12": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Open"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Hide"
+   }
+  ],
+  "needs": "a signed-in account and a reply that makes two artifacts",
+  "note": "Switching works from the cards; the viewer itself has no switcher control.",
+  "reachable": "yes",
+  "steps": [
+   "Ask the chat for two different artifacts in one reply and wait for the reply to finish.",
+   "Click Open on the first artifact card.",
+   "Click Open on the second artifact card.",
+   "Look: the panel now shows the second artifact and the second card's button reads Hide, without closing the panel."
+  ],
+  "where": "Side panel chat > reply with two or more artifacts > artifact cards under the reply > Open on the second card"
+ },
+ "S26.13": {
+  "labels": [],
+  "needs": "none",
+  "note": "No tab strip was found in artifactPanel.ts; the viewer shows one artifact at a time and each artifact in a reply has its own card.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S26.14": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Preview"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Code"
+   }
+  ],
+  "needs": "a signed-in account and a reply that makes an HTML artifact",
+  "note": "The Preview and Code buttons appear only for HTML, React and Mermaid artifacts; SVG and code artifacts have no toggle.",
+  "reachable": "yes",
+  "steps": [
+   "Ask for one HTML page, wait for the reply, and click Open on its card.",
+   "Look: the Preview button is pressed and the rendered page shows.",
+   "Click Code.",
+   "Look: the artifact's source shows in a code block with Code pressed; click Preview to return."
+  ],
+  "where": "Artifact panel > Preview and Code buttons above the panel body"
+ },
+ "S26.15": {
+  "labels": [],
+  "needs": "none",
+  "note": "Searched artifactPanel.ts and side_panel.ts for edit controls; the viewer offers only copy, download and Code view, with no edit mode found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S26.16": {
+  "labels": [],
+  "needs": "none",
+  "note": "The code has no edit state, so the viewer is always read-only, and no read-only state for older versions or shared copies was found.",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": "Artifact panel, which has no edit control"
+ },
+ "S26.20": {
+  "labels": [],
+  "needs": "none",
+  "note": "Searched artifactPanel.ts and side_panel.ts for version controls; none found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S26.21": {
+  "labels": [],
+  "needs": "none",
+  "note": "No previous or next version control was found in the artifact code.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S26.23": {
+  "labels": [],
+  "needs": "none",
+  "note": "No restore-version control was found in the artifact code.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S26.24": {
+  "labels": [],
+  "needs": "none",
+  "note": "No duplicate-artifact control was found in the artifact code.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S26.26": {
+  "labels": [],
+  "needs": "none",
+  "note": "Searched apps/extension for a Save to Library control on artifacts; none found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S26.27": {
+  "labels": [],
+  "needs": "none",
+  "note": "No artifact-to-project control was found; the chat has a project chip (sp-project-chip in side_panel.ts) that is not specific to artifacts.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S26.28": {
+  "labels": [],
+  "needs": "none",
+  "note": "No continue-in-new-chat control was found; the 'Run ... in this chat on the web' button opens the same chat on the web, not a new one.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S26.29": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Download $FILE$"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Saved $NAME$."
+   }
+  ],
+  "needs": "a signed-in account and a reply that makes an artifact",
+  "note": "There is no export format menu; Download saves one file in the artifact's own format, which differs from Expected.",
+  "reachable": "yes",
+  "steps": [
+   "Open an artifact from its card.",
+   "Click the Download icon in the panel header.",
+   "Look: the status line under the header reads 'Saved' with the file name, and one file is saved in the artifact's own format.",
+   "Compare with Expected: Expected says a menu of export formats, but no menu was found."
+  ],
+  "where": "Artifact panel header > Download icon button (tooltip 'Download $FILE$')"
+ },
+ "S26.30": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Copied."
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Copy the source of $TITLE$"
+   }
+  ],
+  "needs": "a signed-in account and a reply that makes an artifact",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open an artifact from its card.",
+   "Click the Copy icon in the panel header.",
+   "Look: the status line under the header reads 'Copied.'.",
+   "Paste into a plain text field and compare with the text in the Code view."
+  ],
+  "where": "Artifact panel header > Copy icon button (tooltip 'Copy the source of $TITLE$')"
+ },
+ "S26.31": {
+  "labels": [],
+  "needs": "none",
+  "note": "No artifact publish, link, access or take-down control was found; chat-level sharing exists (createChromeShareLink in side_panel.ts) but is not artifact-specific.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S26.32": {
+  "labels": [],
+  "needs": "none",
+  "note": "No private, published or workspace state is shown on artifact cards or in the artifact panel.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S26.35": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "The preview could not start. Review the source or try again."
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Code"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Open"
+   }
+  ],
+  "needs": "a signed-in account, and an artifact that fails to render (not something the tester can fully control)",
+  "note": "No retry control was found in apps/extension/src/features/side-panel/artifactPanel.ts. The failure is a status line, not a replacement error panel. The render-error case is at line 843 and the runtime-request case (AI or saved data) shows \"AI and saved data are available once this app is published and opened by a signed-in viewer.\"",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the AGI side panel in Chrome.",
+   "Ask the assistant for a small web page (HTML) or another artifact that may fail to run. A deliberate script error is the reliable way to trigger it.",
+   "Click Open on the artifact card in the answer.",
+   "If the preview fails, read the status line under the panel header.",
+   "Click Code to see the source.",
+   "Compare with Expected: Expected asks for an error panel that explains the failure and offers source and retry. The code shows a status line plus the Preview/Code switch only, with no retry button."
+  ],
+  "where": "Side panel: an answer with an artifact card > Open > the panel's status line that reads \"The preview could not start. Review the source or try again.\" > Code switch to see the source"
+ },
+ "S26.36": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Starting the preview\u2026"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "The live preview is not available right now, so the panel shows the source."
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Open"
+   }
+  ],
+  "needs": "a signed-in account; a way to block or slow the preview (for example a network block) to see the failure path",
+  "note": "Timeouts are in apps/extension/src/features/side-panel/artifactPanel.ts lines 268-270 (3 s to connect, 15 s to load the document, 15 s to render). Only one loading line exists, not a separate state for libraries.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the AGI side panel in Chrome.",
+   "Ask the assistant for an HTML artifact, then wait for the reply to finish.",
+   "Click Open on the artifact card.",
+   "Look right after it opens for the status line \"Starting the preview\u2026\".",
+   "If the preview does not start, wait about 15 seconds. The panel should switch to the source with the note \"The live preview is not available right now, so the panel shows the source.\"",
+   "Compare with Expected: Expected asks for a loading state while libraries load and a reported failure. The code shows the status line and the timeout note, and has no separate library-loading indicator."
+  ],
+  "where": "Side panel: an answer with an artifact card > Open > the panel's status line \"Starting the preview\u2026\"; if the preview never starts, the note \"The live preview is not available right now, so the panel shows the source.\""
+ },
+ "S26.38": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Open"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Run $TITLE$ in this chat on the web"
+   }
+  ],
+  "needs": "a signed-in account and a chat saved to the account (the button is hidden for Temporary chat or for chats not synced to the account)",
+  "note": "No gallery, list or library view for artifacts was found in apps/extension, so the only path is from a chat reply. The tab URL is built in apps/extension/src/features/cloud-bridge/artifactsClient.ts (function at line 3) and used in apps/extension/src/side_panel.ts line 6073.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the AGI side panel in Chrome, in a normal chat (not a Temporary chat).",
+   "Ask for an artifact so a card appears in the reply.",
+   "Click Open on the artifact card.",
+   "Hover the external-link icon button in the panel header to read its tooltip.",
+   "Click that button. A new browser tab should open for the same chat on the web.",
+   "Compare with Expected: Expected asks for a jump from a gallery, list or library. The extension has no such view; the jump exists only from the panel opened from a chat reply."
+  ],
+  "where": "Side panel: an answer with an artifact card > Open > the panel's external-link icon button (tooltip \"Run $TITLE$ in this chat on the web\")"
+ },
+ "S26.39": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Creating $TITLE$"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Open"
+   }
+  ],
+  "needs": "a signed-in account and a reply long enough to stay in progress while the tester watches",
+  "note": "The live update path is in apps/extension/src/features/side-panel/artifactPanel.ts (canRunInSandbox returns false while streaming, around line 767). Timing of the visible update was not verified.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the AGI side panel in Chrome.",
+   "Ask for a long artifact (for example a multi-section HTML page) and do not wait for the reply to finish.",
+   "While the reply is still writing, look for the card titled \"Creating $TITLE$\".",
+   "Click Open on that card and watch the source area for text appearing as the reply streams.",
+   "Compare with Expected: Expected asks for the view to update live as content arrives. The code re-renders the panel when the artifact changes, and the preview only runs after streaming ends, so the panel shows source while it updates."
+  ],
+  "where": "Side panel: an answer that is still writing > artifact card titled \"Creating $TITLE$\" > Open, then watch the source update"
+ },
+ "S26.40": {
+  "labels": [],
+  "needs": "a phone-sized screen",
+  "note": "Searched apps/extension for artifact readers, and checked artifactPanel.ts and side_panel.ts for media queries and phone, mobile or sheet layout terms. The extension is a Chrome side panel only, and no phone-sized artifact reader was found. The phone sheet in apps/extension/src/features/side-panel/phoneSheet.ts is for pairing a phone, not for reading artifacts.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ }
+}

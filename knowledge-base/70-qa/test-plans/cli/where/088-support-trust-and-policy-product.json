@@ -1,0 +1,172 @@
+{
+ "S88.04": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "/bug"
+   },
+   {
+    "file": "apps/cli/src/cloud/feedback.rs",
+    "text": "Bug report sent to the AGI Workforce team. Thank you."
+   }
+  ],
+  "needs": "an account that can reach the AGI server (the report is posted to the server)",
+  "note": "The code sends the version and platform, but the tester cannot see that it is stored for the team; only the confirmation line is shown.",
+  "reachable": "yes",
+  "steps": [
+   "Start the CLI with agi and wait for the chat prompt.",
+   "Type /bug alone and press Enter; read the usage text that appears.",
+   "Type /bug the diff view hangs on large files and press Enter.",
+   "Look for the line Bug report sent to the AGI Workforce team. Thank you. Compare with Expected: the usage text says the report carries the CLI version and platform."
+  ],
+  "where": "In the chat, type /bug and press Enter (usage text), then type /bug <description> (for example /bug the diff view hangs on large files)"
+ },
+ "S88.05": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "/feedback"
+   },
+   {
+    "file": "apps/cli/src/cloud/feedback.rs",
+    "text": "Feedback sent to the AGI Workforce team. Thank you."
+   }
+  ],
+  "needs": "an account that can reach the AGI server",
+  "note": "Storage for the team is not visible from the CLI; only the confirmation is.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi and wait for the chat prompt.",
+   "Type /feedback and press Enter; read the usage text.",
+   "Type /feedback I would like a dark theme and press Enter.",
+   "Look for the line Feedback sent to the AGI Workforce team. Thank you. Compare with Expected."
+  ],
+  "where": "In the chat, type /feedback <message> and press Enter"
+ },
+ "S88.06": {
+  "labels": [
+   {
+    "file": "apps/cli/src/cloud/feedback.rs",
+    "text": "/feedback feature"
+   },
+   {
+    "file": "apps/cli/src/cloud/feedback.rs",
+    "text": "Feature request sent to the AGI Workforce team. Thank you."
+   }
+  ],
+  "needs": "an account that can reach the AGI server",
+  "note": "Storage for the team is not visible from the CLI; only the confirmation is.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi and wait for the chat prompt.",
+   "Type /feedback feature add a dark theme and press Enter.",
+   "Look for the line Feature request sent to the AGI Workforce team. Thank you. Compare with Expected."
+  ],
+  "where": "In the chat, type /feedback feature <request> and press Enter"
+ },
+ "S88.07": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Write a redacted diagnostics file to review and attach to a support request."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Read it before you attach it to a support request; it holds only what is listed above."
+   }
+  ],
+  "needs": "a signed-in account (the export is posted to the AGI server)",
+  "note": "No in-product choice to share with support exists in the code; the file is only written to the current folder.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi doctor --export in the folder where you want the file.",
+   "Read the printed summary above the Wrote line.",
+   "Find the Wrote <file>.json line; open that JSON file and check it holds only what the printed report lists.",
+   "Compare with Expected: the file is written, but the CLI has no prompt to share it; the user attaches it to support by hand."
+  ],
+  "where": "In a terminal, run agi doctor --export"
+ },
+ "S88.08": {
+  "labels": [
+   {
+    "file": "apps/cli/src/errors.rs",
+    "text": "Reference:"
+   }
+  ],
+  "needs": "a way to make a request fail, such as an expired sign-in or a model that rejects the request",
+  "note": "The id appears only when the failure carries a request id, so it is not shown for every error; the trigger is not in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi and send a message that makes the provider return an error (the code does not name a fixed trigger).",
+   "Read the error text under the failed turn.",
+   "Look for a line Reference: <id>. Compare with Expected: the id is shown only when the failure carries one."
+  ],
+  "where": "In the chat, send a message whose request fails; the error text shows a line that starts with Reference:"
+ },
+ "S88.13": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "What's new"
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "/release-notes"
+   }
+  ],
+  "needs": "an older CLI build than the latest release, so a newer release is available",
+  "note": "The What's new notice is shown once per version, and only when the release has notes.",
+  "reachable": "yes",
+  "steps": [
+   "Run an older build of agi, then update to a newer release (or use a build older than the latest release).",
+   "Start agi and read the start screen for the What's new line and the Release notes: link.",
+   "In the chat, type /changelog and press Enter.",
+   "Compare with Expected: the release notes are shown from inside the product."
+  ],
+  "where": "Start agi after an update and read the start screen for What's new; or in the chat type /changelog"
+ },
+ "S88.14": {
+  "labels": [
+   {
+    "file": "apps/cli/src/provider.rs",
+    "text": "deprecated, leaves the catalog"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/model"
+   }
+  ],
+  "needs": "none; a deprecated model appears only when the catalog has one, which a tester cannot choose",
+  "note": "No replacement is named in the code for a retiring model; the code only shows the retirement date and a deprecated flag, and the picker line is deprecated, leaves <date>.",
+  "reachable": "yes",
+  "steps": [
+   "Type agi models list and press Enter.",
+   "Find any model marked with ! and read its line deprecated, leaves the catalog <date> if one shows.",
+   "In the chat, type /model and press Enter; move to a model and read the detail line under the list (deprecated, leaves <date>).",
+   "Compare with Expected: a warning before retirement is shown, but no replacement model name is shown in these places."
+  ],
+  "where": "In a terminal, type agi models list; in the chat, type /model and move to a model"
+ },
+ "S88.15": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Migrate settings from another coding CLI. Defaults to Claude Code."
+   },
+   {
+    "file": "apps/cli/src/ecosystem.rs",
+    "text": "Claude Code migration dry run"
+   }
+  ],
+  "needs": "a Claude Code setup in ~/.claude (for example an mcp.json file) to import from",
+  "note": "The only migration source in the code is Claude Code; the chat has no /migrate command in the TUI, and the replaced-feature case is not covered.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi migrate --dry-run and read the output that starts with Claude Code migration dry run.",
+   "Check the MCP line (added, already present) and the Source line in the preview.",
+   "Run agi migrate (without --dry-run) and read Claude Code migration complete.",
+   "Compare with Expected: the preview comes before any change is written."
+  ],
+  "where": "In a terminal, run agi migrate --dry-run, then agi migrate"
+ }
+}

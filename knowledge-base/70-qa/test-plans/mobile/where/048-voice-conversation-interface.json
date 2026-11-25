@@ -1,0 +1,523 @@
+{
+ "S48.01": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Start voice mode"
+   }
+  ],
+  "needs": "a signed-in account and a microphone",
+  "note": "The button only appears when the message box is empty and voice mode is available; the voice bar opens in the same chat (id is passed in chat/[id].tsx).",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open an existing chat from the chat list.",
+   "Leave the message box empty and find the round button on the right of the composer.",
+   "Tap the button labelled \"Start voice mode\".",
+   "Look for the voice bar with the status \"Listening\" or \"Connecting live voice...\" and the \"End live voice\" button, and confirm it is the chat you opened."
+  ],
+  "where": "Chat screen with an existing chat open > composer button \"Start voice mode\" (shown when the message box is empty)"
+ },
+ "S48.02": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Start voice mode"
+   },
+   {
+    "file": "apps/mobile/src/features/voice/components/VoicePickerSheet.tsx",
+    "text": "Start voice"
+   }
+  ],
+  "needs": "a signed-in account and a microphone",
+  "note": "The new chat is created with the title \"Voice chat\" in app/(app)/(tabs)/chat.tsx when the live path is used; the tab's visible name was not found in the code, so the tester should look for the first tab.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a new chat so the message box is empty.",
+   "Tap the button labelled \"Start voice mode\" on the right of the composer.",
+   "If the first-time intro appears, tap \"Continue\" and then \"Start voice\".",
+   "Look for the app moving to a chat that is created for the voice session, with the voice bar showing \"Connecting live voice...\" or \"Listening\"."
+  ],
+  "where": "Chat screen (new chat, no conversation open) > composer button \"Start voice mode\""
+ },
+ "S48.03": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/voice/components/LiveVoiceBar.tsx",
+    "text": "Show captions"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Start voice mode"
+   }
+  ],
+  "needs": "a signed-in account, a microphone, and a speaker",
+  "note": "The spoken turns are shown in the voice bar's own transcript; the code did not show them appearing in the normal message list, so check that too.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat and tap \"Start voice mode\" in the composer.",
+   "Tap \"Show captions\" in the top bar of the voice view.",
+   "Say something and wait for a reply.",
+   "Check that the spoken turns appear in a transcript above the voice orb, under the labels \"YOU\" and \"AGI\", and compare with Expected."
+  ],
+  "where": "Chat screen > open a chat > \"Start voice mode\" > \"Show captions\""
+ },
+ "S48.04": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/voice/index.tsx",
+    "text": "Open Voice Companion"
+   },
+   {
+    "file": "apps/mobile/app/(app)/voice.tsx",
+    "text": "Tap to speak"
+   }
+  ],
+  "needs": "a phone with on-device speech recognition and a microphone",
+  "note": "The route to Settings from the first screen after sign-in was not found in the code, so the tester has to find the Settings screen first.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and tap \"Voice\".",
+   "Tap \"Open Voice Companion\" (this row only appears on phones that have on-device speech recognition).",
+   "Look for a full-screen view with a large orb, the text \"Tap to speak\" and \"Speech stays on this device\", and a close button.",
+   "Compare with Expected: voice fills the screen and no transcript is shown."
+  ],
+  "where": "Settings > Voice > \"Open Voice Companion\""
+ },
+ "S48.05": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/voice/components/LiveVoiceBar.tsx",
+    "text": "Listening"
+   },
+   {
+    "file": "apps/mobile/app/(app)/voice.tsx",
+    "text": "Listening..."
+   }
+  ],
+  "needs": "a signed-in account and a microphone",
+  "note": "The status text in the live voice bar has no live-region setting in the code, so whether a screen reader announces it was not confirmed; the full-screen companion does announce \"Listening...\".",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat and tap \"Start voice mode\".",
+   "Wait for the connection to finish.",
+   "Read the status text under the orb.",
+   "Check it shows \"Listening\" and compare with Expected."
+  ],
+  "where": "Chat > open a chat > \"Start voice mode\" > status text under the orb"
+ },
+ "S48.06": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/voice/components/LiveVoiceBar.tsx",
+    "text": "Speaking, talk any time to interrupt"
+   }
+  ],
+  "needs": "a signed-in account, a microphone, and a speaker",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Start voice mode in a chat and ask a question that gets a spoken answer.",
+   "While the reply is being spoken, read the status text under the orb.",
+   "Check it shows \"Speaking, talk any time to interrupt\" and that the orb moves.",
+   "Compare with Expected."
+  ],
+  "where": "Chat > open a chat > \"Start voice mode\" > status text under the orb while the reply plays"
+ },
+ "S48.07": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/voice/components/LiveVoiceBar.tsx",
+    "text": "Working on your request"
+   },
+   {
+    "file": "apps/mobile/src/features/voice/components/LiveVoiceBar.tsx",
+    "text": "Stop the task"
+   }
+  ],
+  "needs": "a signed-in account and a microphone",
+  "note": "Tool-specific wording comes from the server; the fallback is \"Working on it\" in src/features/voice/services/liveVoiceSession.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Start voice mode in a chat and ask for something that needs work, such as a lookup.",
+   "While the assistant is working, look at the step with the text \"Working on your request\" under the status area.",
+   "Check that the \"Stop the task\" button appears next to it.",
+   "Compare with Expected."
+  ],
+  "where": "Chat > open a chat > \"Start voice mode\" > ask for a task > \"Working on your request\""
+ },
+ "S48.08": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/voice/index.tsx",
+    "text": "Open Voice Companion"
+   }
+  ],
+  "needs": "a microphone and a speaker",
+  "note": "In the live voice bar the orb gets a fixed level (0.6) while the assistant speaks and 0 otherwise, so it does not follow the microphone level there.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Voice > \"Open Voice Companion\".",
+   "Speak and watch the orb while you talk.",
+   "Then wait for the reply and watch the orb while it speaks.",
+   "Compare with Expected: the orb should follow the sound level, not a fixed pattern."
+  ],
+  "where": "Settings > Voice > \"Open Voice Companion\" (full-screen orb) ; also the orb in \"Start voice mode\" view"
+ },
+ "S48.09": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/voice/components/LiveVoiceBar.tsx",
+    "text": "Mute microphone"
+   },
+   {
+    "file": "apps/mobile/src/features/voice/components/LiveVoiceBar.tsx",
+    "text": "Muted, tap the mic to talk"
+   }
+  ],
+  "needs": "a signed-in account and a microphone",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Start voice mode and wait for \"Listening\".",
+   "Tap the button labelled \"Mute microphone\".",
+   "Check the status changes to \"Muted, tap the mic to talk\" and the button now reads \"Unmute microphone\".",
+   "Tap \"Unmute microphone\" and check the call is still running (the voice bar stays open)."
+  ],
+  "where": "Chat > open a chat > \"Start voice mode\" > \"Mute microphone\" button (bottom right)"
+ },
+ "S48.10": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/voice/components/LiveVoiceBar.tsx",
+    "text": "End live voice"
+   }
+  ],
+  "needs": "a signed-in account and a microphone",
+  "note": "Usage settling is not visible on screen, so the tester cannot confirm it from the UI.",
+  "reachable": "yes",
+  "steps": [
+   "Start voice mode and wait for \"Listening\".",
+   "Tap the round button labelled \"End live voice\".",
+   "Check the voice bar closes and you are back at the chat.",
+   "Check that the chat shows no further voice activity (the session has ended)."
+  ],
+  "where": "Chat > open a chat > \"Start voice mode\" > \"End live voice\" button (X, bottom right)"
+ },
+ "S48.12": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/voice/index.tsx",
+    "text": "Push to talk"
+   },
+   {
+    "file": "apps/mobile/app/(app)/voice.tsx",
+    "text": "Switch to push-to-talk mode"
+   }
+  ],
+  "needs": "a phone with on-device speech recognition and a microphone",
+  "note": "The live voice bar in chat has no push-to-talk behaviour in the code; the setting applies to the full-screen Voice Companion.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Voice and under \"Mode\" tap \"Push to talk\".",
+   "Go back and tap \"Open Voice Companion\".",
+   "Check the orb hint \"Hold to talk, release to send\" and the status \"Hold to talk\".",
+   "Press and hold the orb, speak, release, and check the message is sent only after release."
+  ],
+  "where": "Settings > Voice > Mode > \"Push to talk\"; then Settings > Voice > \"Open Voice Companion\""
+ },
+ "S48.13": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/voice/index.tsx",
+    "text": "Hands free"
+   },
+   {
+    "file": "apps/mobile/app/(app)/voice.tsx",
+    "text": "Switch to hands-free mode"
+   }
+  ],
+  "needs": "a phone with on-device speech recognition and a microphone",
+  "note": "The orb hint in the companion reads \"Tap to start or stop listening\" in hands-free mode, which may be confusing next to the expected automatic listening.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Voice and under \"Mode\" tap \"Hands free\".",
+   "Go back and tap \"Open Voice Companion\".",
+   "Speak, wait for the reply, and speak again without pressing the orb.",
+   "Check the app listens again on its own and compare with Expected."
+  ],
+  "where": "Settings > Voice > Mode > \"Hands free\"; then Settings > Voice > \"Open Voice Companion\""
+ },
+ "S48.14": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/voice/components/LiveVoiceBar.tsx",
+    "text": "Speaking, talk any time to interrupt"
+   },
+   {
+    "file": "apps/mobile/src/features/voice/components/LiveVoiceBar.tsx",
+    "text": "Go ahead"
+   }
+  ],
+  "needs": "a microphone, a speaker, and a signed-in account (the live voice service)",
+  "note": "Barge-in is marked unverified in the plan and depends on the live service; the code was not run.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Start voice mode and ask a question with a long spoken answer.",
+   "While the reply is speaking, say something new.",
+   "Check the status changes to \"Go ahead\" and the reply stops.",
+   "Compare with Expected."
+  ],
+  "where": "Chat > \"Start voice mode\" > speak while the reply is playing"
+ },
+ "S48.15": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/voice-language/index.tsx",
+    "text": "Voice & Language"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/voice-language/index.tsx",
+    "text": "Voice mode"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/voice/index.tsx",
+    "text": "Voice"
+   }
+  ],
+  "needs": "a phone with the voices available and a microphone",
+  "note": "The voice picker sheet with \"Start voice\" appears in the first-time voice intro; the voices also have a \"Voice mode\" list in Settings.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Voice and tap the row \"Voice\".",
+   "On the \"Voice & Language\" screen, find the group \"Voice mode\".",
+   "Tap a different voice and go back.",
+   "Start voice mode in a chat and check the conversation speaks with the chosen voice."
+  ],
+  "where": "Settings > Voice > \"Voice\" > \"Voice & Language\" > \"Voice mode\" (list of voices)"
+ },
+ "S48.16": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/voice/components/VoicePickerSheet.tsx",
+    "text": "Play sample"
+   },
+   {
+    "file": "apps/mobile/src/features/voice/components/VoiceOnboardingSheet.tsx",
+    "text": "Continue"
+   }
+  ],
+  "needs": "a microphone is not needed; a speaker and a phone that has not yet seen the voice intro",
+  "note": "The plan says the sample files are not yet committed, so Play sample may do nothing; the code reads them from the sample map and falls back to none.",
+  "reachable": "yes",
+  "steps": [
+   "Use \"Start voice mode\" in a chat (the first-time intro appears only the first time).",
+   "Tap \"Continue\" on the intro, then select a voice in the picker.",
+   "Tap \"Play sample\" under the voice.",
+   "Listen and compare with Expected: a sample of the chosen voice plays."
+  ],
+  "where": "Chat > \"Start voice mode\" > first-time intro \"Continue\" > voice picker sheet > \"Play sample\""
+ },
+ "S48.17": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/voice/index.tsx",
+    "text": "Speech language"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/voice/index.tsx",
+    "text": "Uses your device language"
+   }
+  ],
+  "needs": "a microphone",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Voice and tap \"Speech language\".",
+   "Pick a language from the list (the first choice is \"Uses your device language\").",
+   "Go back and start voice mode in a chat.",
+   "Speak in the chosen language and check the app understands it."
+  ],
+  "where": "Settings > Voice > \"Speech language\""
+ },
+ "S48.21": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/voice/components/LiveVoiceBar.tsx",
+    "text": "Show captions"
+   },
+   {
+    "file": "apps/mobile/src/features/voice/components/LiveVoiceBar.tsx",
+    "text": "YOU"
+   }
+  ],
+  "needs": "a signed-in account, a microphone, and a speaker",
+  "note": "The captions panel only shows when there are turns to show.",
+  "reachable": "yes",
+  "steps": [
+   "Start voice mode and have a short exchange.",
+   "Tap \"Show captions\" in the top bar.",
+   "Check a transcript appears with the labels \"YOU\" and \"AGI\" for both speakers.",
+   "Tap \"Hide captions\" and check the transcript goes away."
+  ],
+  "where": "Chat > open a chat > \"Start voice mode\" > \"Show captions\" (top bar of the voice view)"
+ },
+ "S48.22": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/voice/components/LiveVoiceBar.tsx",
+    "text": "Show captions"
+   },
+   {
+    "file": "apps/mobile/src/features/voice/components/LiveVoiceBar.tsx",
+    "text": "End live voice"
+   }
+  ],
+  "needs": "a signed-in account and a microphone",
+  "note": "Whether the turns are saved into the chat message store was not confirmed in this audit (the store reference was not read).",
+  "reachable": "yes",
+  "steps": [
+   "Start voice mode, turn on \"Show captions\", and have a short exchange.",
+   "Tap \"End live voice\".",
+   "Look at the chat and check the spoken turns are kept with it.",
+   "Compare with Expected."
+  ],
+  "where": "Chat > open a chat > \"Start voice mode\" > \"Show captions\"; then check the chat after ending"
+ },
+ "S48.26": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/voice/components/LiveVoiceBar.tsx",
+    "text": "What the actions returned"
+   }
+  ],
+  "needs": "a signed-in account and a microphone",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Start voice mode in a chat.",
+   "Ask for something that uses a tool (for example a lookup or an image).",
+   "When the result comes back, look for the section \"What the actions returned\" in the voice view.",
+   "Check the tool name, output and any image are shown."
+  ],
+  "where": "Chat > open a chat > \"Start voice mode\" > ask for an action > \"What the actions returned\""
+ },
+ "S48.27": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/voice/components/LiveVoiceBar.tsx",
+    "text": "Waiting for your approval"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Allow"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Deny"
+   }
+  ],
+  "needs": "a signed-in account and a microphone; an action that needs approval",
+  "note": "The button text is taken from TOOL_APPROVAL_ACTION_LABELS; the rendered text itself was not read, so check the visible words on screen.",
+  "reachable": "yes",
+  "steps": [
+   "Start voice mode and ask for an action that needs your approval.",
+   "Look for the panel with the title \"Waiting for your approval\" and the summary of the action.",
+   "Tap \"Allow\" or \"Deny\" without leaving the voice view.",
+   "Check the request continues or stops and compare with Expected."
+  ],
+  "where": "Chat > open a chat > \"Start voice mode\" > ask for an action that needs approval > \"Waiting for your approval\" > \"Allow\" or \"Deny\""
+ },
+ "S48.36": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/voice/components/LiveVoiceBar.tsx",
+    "text": "Reconnecting live voice..."
+   },
+   {
+    "file": "apps/mobile/src/features/voice/components/LiveVoiceBar.tsx",
+    "text": "Try again"
+   }
+  ],
+  "needs": "a phone you can switch networks on and off, a signed-in account",
+  "note": "The message for a dropped connection is \"The live voice connection dropped.\" in src/features/voice/services/liveVoiceAvailability.ts; the exact retry wording after failure was not fully traced.",
+  "reachable": "yes",
+  "steps": [
+   "Start voice mode and wait for \"Listening\".",
+   "Turn off Wi-Fi and mobile data (or Airplane Mode) for a few seconds.",
+   "Look for the status \"Reconnecting live voice...\".",
+   "Turn the network back on and check the status returns to \"Listening\", or check for the error box with \"Try again\" if it does not reconnect."
+  ],
+  "where": "Chat > open a chat > \"Start voice mode\" > turn off Wi-Fi or mobile data > \"Reconnecting live voice...\""
+ },
+ "S48.37": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/voice/components/LiveVoiceBar.tsx",
+    "text": "Use the keyboard"
+   },
+   {
+    "file": "apps/mobile/src/features/voice/components/LiveVoiceBar.tsx",
+    "text": "Try again"
+   }
+  ],
+  "needs": "a signed-in account whose voice usage is used up",
+  "note": "The limit sentence comes from the server (extendLiveVoiceSession in src/features/voice/services/liveVoiceSession.ts); the app shows whatever the server sends.",
+  "reachable": "yes",
+  "steps": [
+   "Use up the voice allowance on the account (or use an account that has none left).",
+   "Tap \"Start voice mode\" in a chat.",
+   "Look for the error box in the voice view with a message that names the limit and when it resets.",
+   "Check the buttons \"Try again\" and \"Use the keyboard\" are shown."
+  ],
+  "where": "Chat > \"Start voice mode\" when the plan's voice allowance is used up > error box in the voice view"
+ },
+ "S48.38": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/voice/components/LiveVoiceBar.tsx",
+    "text": "Type instead"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Start voice mode in a chat.",
+   "Tap the bar labelled \"Type instead\" at the bottom left.",
+   "Check the voice view closes and the message box is ready to type in.",
+   "Type a message and send it, and check it continues the same chat."
+  ],
+  "where": "Chat > open a chat > \"Start voice mode\" > \"Type instead\" (bottom left of the voice view)"
+ },
+ "S48.39": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Start voice mode"
+   }
+  ],
+  "needs": "an earlier voice chat and a signed-in account",
+  "note": "The conversation is sent by id (src/features/voice/services/liveVoiceSession.ts); the use of earlier turns is decided by the server and was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open a voice chat from earlier (one started by voice).",
+   "Tap \"Start voice mode\" in the composer.",
+   "Say something that refers to an earlier turn.",
+   "Check the reply uses the earlier context and compare with Expected."
+  ],
+  "where": "Chat list > open an earlier voice chat > \"Start voice mode\" in the composer"
+ },
+ "S48.41": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/voice/components/LiveVoiceBar.tsx",
+    "text": "Stop the task and keep talking"
+   }
+  ],
+  "needs": "a signed-in account, a microphone, and a task that is running",
+  "note": "The button \"Stop the task\" (aria label \"Stop the task and keep talking\") in LiveVoiceBar.tsx cancels the task only; no separate on-screen control to stop just the spoken reply was found, so the tester cannot check this part from the UI.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ }
+}

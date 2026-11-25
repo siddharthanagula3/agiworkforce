@@ -1,0 +1,142 @@
+{
+ "S110.07": {
+  "labels": [
+   {
+    "file": "crates/agiworkforce-command-registry/src/lib.rs",
+    "text": "Toggle voice input (Whisper)"
+   },
+   {
+    "file": "apps/cli/src/voice.rs",
+    "text": "[SPACE to record, ESC to exit]"
+   },
+   {
+    "file": "apps/cli/src/voice.rs",
+    "text": "[ENTER to send, 'e' to edit, 'r' to re-record, ESC to discard]"
+   }
+  ],
+  "needs": "a microphone",
+  "note": "The voice loop sends the transcript through the same session.send call as typed text (apps/cli/src/voice.rs). No task creation or Tasks step was found in voice.rs, so the durable background task part is not confirmed by code.",
+  "reachable": "yes",
+  "steps": [
+   "Type /voice and press Enter.",
+   "Press SPACE to start recording, say the request, then stop recording as the prompt shows.",
+   "Press ENTER to send the transcribed text (or e to edit it first).",
+   "Look at the chat: the request should be sent to the agent. Compare with Expected: it should become a background task that shows in Tasks."
+  ],
+  "where": "/voice typed at the agi prompt"
+ },
+ "S110.08": {
+  "labels": [],
+  "needs": "a microphone",
+  "note": "The voice send path is the same as typed input (apps/cli/src/voice.rs, session.send). No voice-specific document output or open control was found. Searched apps/cli/src/voice.rs, apps/cli/src/documents.rs and all of apps/cli/src for docx and pdf references; the document result depends on what the agent produces, which this code audit did not confirm.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S110.14": {
+  "labels": [
+   {
+    "file": "crates/agiworkforce-command-registry/src/lib.rs",
+    "text": "Save the task you just finished as a reusable skill"
+   }
+  ],
+  "needs": "none",
+  "note": "The command sends a prompt that asks the agent to write .agiworkforce/skills/<name>/SKILL.md (apps/cli/src/claude_parity.rs, save_skill_prompt). Whether the skill then appears in the Skills list was not confirmed in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Finish a normal task in agi.",
+   "Type /save-skill and press Enter, optionally with a name after it.",
+   "Wait for the agent to write the skill file and show it to you.",
+   "Check that the file exists at .agiworkforce/skills/<name>/SKILL.md in the project folder, then start a new task that needs it and see whether the skill is used. Compare with Expected."
+  ],
+  "where": "/save-skill typed after a task finishes (optionally followed by a name)"
+ },
+ "S110.15": {
+  "labels": [
+   {
+    "file": "crates/agiworkforce-command-registry/src/lib.rs",
+    "text": "Turn the task you just finished into a scheduled routine"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "/save-routine only sends a prompt that makes the agent call cron_create (apps/cli/src/claude_parity.rs, save_routine_prompt). It does not run the cloud admit check that /schedule uses. The step 3 tool name is cron_create, not cron_check: correct it when following this. Whether the scheduled run succeeds is not shown in code.",
+  "reachable": "yes",
+  "steps": [
+   "Finish a normal task in agi.",
+   "Type /save-routine and press Enter, adding how often it should run, or leave it blank and answer the agent's question.",
+   "Wait for the agent to create the routine with cron_check tool and state the schedule and what each run does.",
+   "Wait for the first scheduled run and check that it did the same work and finished successfully. Compare with Expected."
+  ],
+  "where": "/save-routine typed after a task finishes (optionally followed by how often it runs)"
+ },
+ "S110.19": {
+  "labels": [],
+  "needs": "a Desktop app and a CLI session in the same folder",
+  "note": "CLI sessions are stored with the source value cli in apps/cli/src/app_server/developer_host.rs (source_to_stored). The desktop app's local-sessions list and folder filter are not in apps/cli, and the cited lib.rs line moved. The CLI side starts with agi resume (apps/cli/src/lib.rs, Continue previous session). The desktop screen words were not found in apps/cli.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S110.22": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Continue a local session in a new cloud Code session"
+   }
+  ],
+  "needs": "a signed-in account, a git repository with a pushed branch, a local session in that folder",
+  "note": "The cited lib.rs:2774 moved. The handoff command is the Handoff variant of CodeSubcommand (apps/cli/src/lib.rs). handle_code_handoff refuses with an unpushed-commit message (apps/cli/src/lib.rs) because the cloud session clones the pushed branch.",
+  "reachable": "yes",
+  "steps": [
+   "Push any unpushed commits: the handoff refuses while commits are not pushed.",
+   "In the repository folder, type agi code handoff and press Enter, optionally with a local session id.",
+   "Read the review shown and answer the prompt to continue, or use -y to skip the prompt.",
+   "Open the cloud session link printed at the end and check that the history and pending work came with it. Compare with Expected."
+  ],
+  "where": "agi code handoff typed in the repository folder"
+ },
+ "S110.24": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Link this directory to an account project by id or name."
+   }
+  ],
+  "needs": "a signed-in account with an account project",
+  "note": "The CLI has no in-chat picker for a notebook or project. The link is made in the shell, and the word notebook is not used in apps/cli. Grounding is in apps/cli/src/agent/chat.rs (project_conversation).",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to the account and make sure the privacy mode is Managed (project knowledge is used only in Managed mode).",
+   "In the folder, type agi projects link followed by the project name or id.",
+   "Start agi in that folder and ask a question that the project's instructions or files should answer.",
+   "Compare the answer with the project's instructions and sources. If a notice says the turn runs without your project's knowledge files, the link did not take effect."
+  ],
+  "where": "agi projects link <project> typed in the shell, then agi started in the same folder"
+ },
+ "S110.26": {
+  "labels": [
+   {
+    "file": "apps/cli/src/errors.rs",
+    "text": "Your plan also includes"
+   },
+   {
+    "file": "apps/cli/src/errors.rs",
+    "text": "Run `agi usage` to see when it resets."
+   },
+   {
+    "file": "apps/cli/src/usage_summary.rs",
+    "text": "Add credits or fix billing at"
+   }
+  ],
+  "needs": "a Free account or a paid account at its usage limit",
+  "note": "The named alternative appears only when a cached model list has a model other than the limited one (apps/cli/src/errors.rs, plan_alternative). The purchase link appears only for the billing recovery path. The one-step switch uses the /model text shown in the error.",
+  "reachable": "yes",
+  "steps": [
+   "Use the account until its usage limit is reached (a test account at its limit is easiest).",
+   "In agi, send any message.",
+   "Read the error: it gives a reset time, and if a model is listed it says Your plan also includes that model. It can also show a billing or plans link.",
+   "Type /model with the named model, send the message again, and check that the chat continues. Compare with Expected."
+  ],
+  "where": "agi, any chat message sent after the usage limit is reached; read the error text"
+ }
+}

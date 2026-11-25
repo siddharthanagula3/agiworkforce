@@ -1,0 +1,125 @@
+{
+ "S62.09": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/tasks/TasksPage.tsx",
+    "text": "Work history"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/v3.json",
+    "text": "Active"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/tasks/TasksPage.tsx",
+    "text": "Board"
+   }
+  ],
+  "needs": "two or more Work tasks running or queued at the same time",
+  "note": "The overview lists all of them, but the detail panel on the right follows only one selected task at a time. The sidebar has no Work history entry; the route is /tasks, reached here through the command palette or the \"Active\" section on the Chat home screen.",
+  "reachable": "yes",
+  "steps": [
+   "Press Command+K to open the command palette, then type \"Work history\" in the \"Search chats and actions\" box and press Enter on the \"Work history\" result.",
+   "On the Work history page, keep the filter on \"Active\" and check that each running or queued Work task has its own row, with a small live dot on the running ones.",
+   "Click the \"Board\" button in the layout control at the top right of the list.",
+   "Compare the rows or cards: several running tasks should be visible together in one view, not one at a time."
+  ],
+  "where": "Command+K (Ctrl+K on Windows) > type \"Work history\" > Work history. Then look at the list (the default filter is \"Active\"); \"Board\" is the second layout button, next to the \"List\" one."
+ },
+ "S62.10": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/tasks/TasksPage.tsx",
+    "text": "Needs you"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/tasks/TasksPage.tsx",
+    "text": "Waiting for your approval"
+   }
+  ],
+  "needs": "one Work task that is waiting for approval and one that is still running",
+  "note": "The code treats awaiting_input, awaiting_approval and paused as needing input and moves those rows to the top of the list. The top-of-list placement is set in code and is not a separate visible label.",
+  "reachable": "yes",
+  "steps": [
+   "Start two Work tasks, one that will ask for approval and one that keeps running, then open Work history from Command+K > \"Work history\".",
+   "With the filter on \"Active\", look at the top of the list: a task waiting for approval or paused should appear above the running ones.",
+   "Click the \"Needs you\" button in the filter control at the top of the list.",
+   "Compare: only tasks that need your input should be shown, and they should be the first rows."
+  ],
+  "where": "Work history > filter \"Needs you\" (or the unfiltered list, where these tasks are placed first)"
+ },
+ "S62.11": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/tasks/TasksPage.tsx",
+    "text": "Waiting for your approval"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Approve"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Deny"
+   }
+  ],
+  "needs": "a Work task that is waiting for your approval",
+  "note": "The inline unblock is for approval requests only. The \"Message the agent\" box in the task details panel is a separate steering control for live tasks.",
+  "reachable": "yes",
+  "steps": [
+   "Open Work history (Command+K > \"Work history\") and keep the list on the first page.",
+   "Find the task whose card says \"Waiting for your approval\". Optionally type a note in the box \"Guidance for this work session\".",
+   "Click \"Approve\" (or \"Deny\") on that card, without opening the task details.",
+   "Compare: the card should show a short busy spinner, then the task should move on, and you should still be on the Work history list."
+  ],
+  "where": "Work history > a task card showing \"Waiting for your approval\" > Approve or Deny buttons on that card"
+ },
+ "S62.12": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx",
+    "text": "Open source chat"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx",
+    "text": "Task details"
+   }
+  ],
+  "needs": "a Work task that has already run, ideally one with more than 4,000 events",
+  "note": "The panel shows a summary of the activity and stops at 4,000 events. The code says the full record is in the source chat, so the panel itself is not a complete transcript; the tester should check this against Expected.",
+  "reachable": "yes",
+  "steps": [
+   "Open Work history and click the title of any task row (it has an \"View details for\" label for screen readers).",
+   "On the right, the \"Task details\" panel opens with the goal, the plan, the latest output or result, and the activity list.",
+   "Scroll the panel to the bottom and read the note about events; if it says \"Showing the first 4,000 events\", click \"Open source chat\".",
+   "Compare: the chat that ran the task should open and show the conversation the task came from."
+  ],
+  "where": "Work history > click a task row > \"Task details\" panel > \"Open source chat\""
+ },
+ "S62.17": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Branch conversation from here"
+   },
+   {
+    "file": "apps/web/features/chat/components/ConversationTitleMenu.tsx",
+    "text": "Duplicate as branch"
+   },
+   {
+    "file": "apps/web/features/chat/components/ConversationTitleMenu.tsx",
+    "text": "Conversation options"
+   }
+  ],
+  "needs": "a conversation with at least one reply",
+  "note": "The branch icon on assistant replies appears only on hover, and the \"Duplicate as branch\" item is shown only when the conversation has messages.",
+  "reachable": "yes",
+  "steps": [
+   "Open a conversation that has at least two messages and one assistant reply.",
+   "Hover under the assistant reply and click the icon button labelled \"Branch conversation from here\" (or click \"More message actions\" on a user message and choose \"Branch conversation from here\").",
+   "Wait for the toast \"Conversation branch created\"; the app opens the new chat.",
+   "Type a new message in the new chat and send it, then go back to the original chat.",
+   "Compare: the new branch should continue on its own and the original chat should be unchanged. The arrows \"Previous branch\" and \"Next branch\" should move between versions."
+  ],
+  "where": "Chat > open a conversation with an answer > hover under an assistant reply and click the branch icon (tooltip \"Branch conversation: this chat stays unchanged\"); or the conversation's \"Conversation options\" menu > \"Duplicate as branch\""
+ }
+}

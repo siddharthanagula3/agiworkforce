@@ -1,0 +1,124 @@
+{
+ "S106.13": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Slack app"
+   },
+   {
+    "file": "apps/web/features/settings/sections/SlackSection.tsx",
+    "text": "Add to Slack"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Customize"
+   }
+  ],
+  "needs": "a Slack workspace where you can add apps, the Slack app set up by the owner first (see the code note)",
+  "note": "The Slack reply happens inside Slack, not in the AGI screens; the code marks this item unfinished until the owner creates the Slack app and applies migration 0333; the way into Settings from the first screen was not located in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and choose Slack app under Customize.",
+   "In the card Slack workspaces you added, click Add to Slack, and finish the install on Slack's own page.",
+   "In Slack, open a direct message with the AGI app and send a message such as hello.",
+   "Look at the DM: the assistant's reply should appear in that same DM, and compare it with Expected."
+  ],
+  "where": "Settings > Customize > Slack app > Slack workspaces you added > Add to Slack, then message AGI in Slack"
+ },
+ "S106.14": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/SlackSection.tsx",
+    "text": "Slack workspaces you added"
+   },
+   {
+    "file": "apps/web/features/settings/sections/SlackSection.tsx",
+    "text": "Waiting for your approval"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Slack app"
+   }
+  ],
+  "needs": "a Slack workspace where you can add apps and invite them to a channel, the Slack app set up by the owner first",
+  "note": "The channel reply and action happen in Slack; the owner must create the Slack app and apply migration 0333 first, and the code is marked partial.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, choose Slack app under Customize, and read the card Slack workspaces you added: it says to add the app, then /invite it to channels.",
+   "In Slack, type /invite and the app name in a channel to add the app to that channel.",
+   "Post a normal message in that channel and wait for the agent to act.",
+   "Check the channel for the agent's reply, and check Settings > Customize > Slack app > Waiting for your approval for any request, then compare with Expected."
+  ],
+  "where": "Settings > Customize > Slack app > Slack workspaces you added (read the text there), then in Slack use /invite in a channel"
+ },
+ "S106.16": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/SlackSection.tsx",
+    "text": "A task from a channel mention"
+   },
+   {
+    "file": "apps/web/features/settings/sections/SlackSection.tsx",
+    "text": "View task"
+   },
+   {
+    "file": "apps/web/features/settings/sections/SlackSection.tsx",
+    "text": "Waiting for your approval"
+   }
+  ],
+  "needs": "a Slack channel where the app is invited, the Slack app set up by the owner first",
+  "note": "The task is listed in that card only when the run needs approval; the link View task appears only when a task path exists, and where the task shows otherwise was not confirmed in the code.",
+  "reachable": "yes",
+  "steps": [
+   "In a Slack channel where the app is invited, write a message that mentions the app with a request.",
+   "In AGI, open Settings > Customize > Slack app and look at the card Waiting for your approval.",
+   "Find the item that says A task from a channel mention, and click View task if it appears.",
+   "Compare with Expected: the channel message should now be a task the agent runs."
+  ],
+  "where": "In Slack, @mention the app in a channel message; then in AGI open Settings > Customize > Slack app > Waiting for your approval"
+ },
+ "S106.21": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/SlackSection.tsx",
+    "text": "Your Slack accounts"
+   },
+   {
+    "file": "apps/web/app/slack/link/page.tsx",
+    "text": "Connect Slack account"
+   }
+  ],
+  "needs": "a Slack workspace where the app is installed and a Slack account of your own, the Slack app set up by the owner first",
+  "note": "The bot identity is shown by Slack, and the code that sets it was not checked against Slack's display; the item is marked partial in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, choose Slack app under Customize, and read the card Your Slack accounts: it says accounts AGI answers as you.",
+   "In Slack, mention the app in a channel with a short request.",
+   "Read the reply in Slack and compare its sender name with your own name.",
+   "Compare with Expected: the agent should answer under its own app identity, not as you."
+  ],
+  "where": "Settings > Customize > Slack app > Your Slack accounts; the agent's own name is seen in Slack"
+ },
+ "S106.24": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/ScheduleCard.tsx",
+    "text": "Run History"
+   },
+   {
+    "file": "apps/web/app/chat/schedules/page.tsx",
+    "text": "Scheduled"
+   }
+  ],
+  "needs": "a paid account with at least one schedule that has run",
+  "note": "The sidebar label for the Scheduled page was not found in the code; whether channel runs appear in this list was not confirmed by reading the code.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Scheduled page.",
+   "On a schedule card, click the history icon button (its tooltip says Run History).",
+   "Read the section Run History that opens under the card.",
+   "Compare with Expected: work started from a channel or host should be listed there for review."
+  ],
+  "where": "Scheduled page (route /chat/schedules, page title Scheduled) > schedule card > Run History button"
+ }
+}

@@ -1,0 +1,67 @@
+{
+ "S36.02": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "$COUNT$ sources"
+   }
+  ],
+  "needs": "an answer that uses web search; a network connection",
+  "note": "If a source has no title, the code shows the site host instead (sources.ts line 31 falls back to sourceHost). The web-search route is needed to produce sources; I did not confirm which plans have it.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and ask a question that gets a web-sourced answer (one that uses web search).",
+   "Under the answer, click the button that reads \"N sources\" (N is the number of sources).",
+   "Look at each item in the list: each should show a bold title line (the source title) with the site name above it.",
+   "Hover a numbered or site-name citation chip in the answer text and check that its card shows the same title for each source.",
+   "Compare with Expected: each cited source shows its title."
+  ],
+  "where": "Chat answer with web sources > click the \"$COUNT$ sources\" button under the answer (shows as e.g. \"5 sources\") > list of sources; also hover or tap an inline citation chip to see its card"
+ },
+ "S36.03": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "$SITE$ +$COUNT$"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "$COUNT$ sources"
+   }
+  ],
+  "needs": "an answer that uses web search; a network connection",
+  "note": "The site name is the source URL's host without www (sources.ts line 11 and 28); the visible text is the domain itself, so there is no fixed English word for it. The \"$SITE$ +$COUNT$\" label is only the grouped chip form; a single-source chip shows the bare domain.",
+  "reachable": "yes",
+  "steps": [
+   "Ask a question that gets a web-sourced answer.",
+   "Find the small citation chip in the answer text. A chip with more than one source reads with the site name and \"+N\".",
+   "Hover the chip (or tap it on a touch screen) and read the card: each source has a small globe icon and a site name line above its title.",
+   "Click the \"N sources\" button under the answer and check the site name line on each item.",
+   "Compare with Expected: each cited source shows its publisher or site name (domain without www)."
+  ],
+  "where": "Chat answer with web sources > inline citation chip (site name with \"+N\" when grouped) > hover or tap the chip; also the \"$COUNT$ sources\" button under the answer"
+ },
+ "S36.04": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "$COUNT$ sources"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Sources for $QUERY$"
+   }
+  ],
+  "needs": "an answer that uses web search; a network connection",
+  "note": "The URL itself is not printed as text; it is the link target (bubbles.ts lines 866-872 only allow http and https links in the activity step; sources.ts uses source.url directly for answer citations). The tester must check the new tab's address to confirm the URL.",
+  "reachable": "yes",
+  "steps": [
+   "Ask a question that gets a web-sourced answer.",
+   "Click the \"N sources\" button under the answer to open the list.",
+   "Click a source's title: a new browser tab should open at that address.",
+   "Optionally, in an agent run that searched the web, click the step row \"Sources for ...\" to expand it, then click a source link; it should open in a new tab.",
+   "Compare with Expected: each cited source exposes its URL and opens when clicked."
+  ],
+  "where": "Chat answer with web sources > click the \"$COUNT$ sources\" button under the answer > click a source title (opens in a new tab). Also Activity step \"Sources for $QUERY$\" in the agent steps (click the step row to expand it, then click a source)"
+ }
+}

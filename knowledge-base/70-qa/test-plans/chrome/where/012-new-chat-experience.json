@@ -1,0 +1,165 @@
+{
+ "S12.01": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "New chat"
+   }
+  ],
+  "needs": "a signed-in account to see the greeting; the empty area also appears when signed out",
+  "note": "The greeting text comes from packages/platform/utils/src/greeting.ts, outside apps/extension; the cited side_panel.ts line numbers had moved, so the empty state was found at side_panel.ts around the emptyState element.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the AGI side panel beside any page.",
+   "Click the \"New chat\" button (it has no visible text; it is the button with that accessible name).",
+   "Look: no earlier messages are shown, the AGI symbol and greeting appear in the empty area, and the message box is ready to type in."
+  ],
+  "where": "Side panel > New chat"
+ },
+ "S12.04": {
+  "labels": [],
+  "needs": "none",
+  "note": "No clickable suggested-prompt chips on the new-chat screen were found. Searched apps/extension/src for suggest, starter, welcome, onboard, intro and tour; the only hits were the in-page action chips (Summarize, Key points) and the saved / shortcuts feature, neither of which is shown on the new-chat screen.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S12.05": {
+  "labels": [],
+  "needs": "none",
+  "note": "No task-category shortcuts (write, research, image) on the side panel new-chat screen were found. Searched apps/extension/src for taskCategor, categor, spWrite, spResearch and spImage. The cited pageActions.ts and in-page-panel/panel.ts chips (Summarize, Key points) belong to the in-page panel on web pages, not to a category setup for the next message.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S12.06": {
+  "labels": [],
+  "needs": "none",
+  "note": "No recent-projects shortcut list was found. The only project list found is the Projects group in the @ menu (see S12.20), which does not show recency. Searched side_panel.ts and apps/extension/src for recent plus project.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S12.15": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "AI Assistant"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "AGI Work"
+   }
+  ],
+  "needs": "a paid account that includes AGI Work (other plans see a locked AGI Work row)",
+  "note": "The cited side_panel.ts line 13507 is the tab bar (Chat and Computer Use); the agentic entry is the AGI Work row in the model menu, found at side_panel.ts appendWorkModeRow.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in on a paid account that includes AGI Work, open New chat.",
+   "Click the \"AI Assistant\" button at the top of the side panel to open the model menu.",
+   "Turn on the \"AGI Work\" row.",
+   "Look: the header shows the \"AGI Work\" badge and the next message starts agentic work, not plain chat."
+  ],
+  "where": "AI Assistant button (header) > AGI Work toggle"
+ },
+ "S12.18": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "AI Assistant"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Auto"
+   }
+  ],
+  "needs": "a signed-in account to see the model list",
+  "note": "The cited side_panel.ts lines are the header build (buildUI) and updateModelBadge; the exact label after choosing a model comes from getModelBadgeLabel and was not traced further.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open New chat.",
+   "Look at the header button at the top: it reads \"AI Assistant\" until a model is chosen.",
+   "Click the button, choose a model from the list, and close the menu.",
+   "Look: the header button now shows that model's name before any message is sent."
+  ],
+  "where": "AI Assistant button (header)"
+ },
+ "S12.20": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Projects"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Start the chat in this project"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Project \u00b7 $NAME$"
+   }
+  ],
+  "needs": "a signed-in account with at least one project",
+  "note": "The project is picked through the @ menu, not a separate picker; the cited side_panel.ts line 11571 is the project chip code.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with an account that has at least one project, open New chat.",
+   "Click the message box and type @. The @ menu opens.",
+   "Under the \"Projects\" heading, click a project (its second line reads \"Start the chat in this project\").",
+   "Look: a header chip reads \"Project \u00b7 <name>\" with a \u00d7 to stop using it, and the next chat is filed under that project."
+  ],
+  "where": "Message box > type @ > Projects > project name"
+ },
+ "S12.21": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "AI Assistant"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Quick"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "AGI Work"
+   }
+  ],
+  "needs": "a signed-in account to see all rows",
+  "note": "The mode explanations are in the model menu, not on the new-chat empty screen, and only AGI Work has an example.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open New chat.",
+   "Click the \"AI Assistant\" button at the top to open the model menu.",
+   "Read the one-line description under each row: Auto, Quick, Extended thinking and AGI Work.",
+   "Look: each mode has a description; only the AGI Work description gives an example (researching a topic and building a report). Compare with Expected, which places this on the new-chat screen."
+  ],
+  "where": "AI Assistant button (header) > model menu rows"
+ },
+ "S12.22": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Next"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Let's go"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "AGI in Chrome"
+   }
+  ],
+  "needs": "a fresh install or cleared AGI onboarding state",
+  "note": "A separate review notice (\"Review\" button, which opens the welcome page) can appear before the tour when disclosures have changed; the tour step is in features/side-panel/onboardingPrompt.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Use a fresh install or a profile where AGI onboarding has not finished. On install, a \"AGI in Chrome\" welcome tab opens.",
+   "Open the AGI side panel. A notice titled \"Getting started with AGI\" appears above the message box, reading \"AGI reads a page only when you attach it or ask it to act there.\"",
+   "Click \"Next\". The notice shows the keyboard shortcut text (or a message to set shortcuts).",
+   "Click \"Let's go\" and look: the notice closes and the side panel is ready for a first chat."
+  ],
+  "where": "Side panel (first open) > notice above the message box > Next > Let's go"
+ }
+}

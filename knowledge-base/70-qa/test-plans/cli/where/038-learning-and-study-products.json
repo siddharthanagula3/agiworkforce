@@ -1,0 +1,24 @@
+{
+ "S38.01": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "/output-style"
+   },
+   {
+    "file": "apps/cli/src/output_styles.rs",
+    "text": "Teaches step by step with questions instead of finished answers."
+   }
+  ],
+  "needs": "A configured model provider so the CLI can answer the question",
+  "note": "Study is an output style, not a separate session: /output-style study switches the style that changes how the model teaches, and there is no separate Study entry point. The style text is in crates/agiworkforce-agent-core/assets/output_styles/study.md. The exact confirmation message after switching was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Start the agi CLI and type /output-style, then press Enter.",
+   "Look for the study row under \"Available styles\" with its description, and confirm the current style is marked with *.",
+   "Type /output-style study and press Enter. Add --session to the end to change only this session and leave your saved default alone.",
+   "Ask a question on a topic, such as how a sorting algorithm works, and check the reply teaches step by step and asks guiding questions instead of giving the finished answer."
+  ],
+  "where": "Type /output-style in the CLI, then /output-style study"
+ }
+}

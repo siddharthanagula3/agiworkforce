@@ -1,0 +1,658 @@
+{
+ "S73.01": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "AGI Code"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a signed-in AGI account or an API key (the code does not state this as a prerequisite; not verified)",
+  "note": "The plan calls it the AGI Workforce view; the code names the sidebar view \"AGI Code\".",
+  "reachable": "yes",
+  "steps": [
+   "Click the AGI Code icon in the Activity Bar (left edge of VS Code).",
+   "Click the box that says \"Describe a task\u2026\", type a short question and press Enter or click Send.",
+   "Look for the reply appearing word by word under your message (it streams), and for the turn staying in the chat."
+  ],
+  "where": "Activity Bar > AGI Code icon, then the box \"Describe a task\u2026\""
+ },
+ "S73.02": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Open Chat in Editor"
+   },
+   {
+    "file": "apps/extension-vscode/src/providers/chatEditorPanel.ts",
+    "text": "AGI Chat"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open any code file.",
+   "Press Cmd+Shift+P, type \"Code: Open Chat in Editor\", press Enter.",
+   "Look for a new editor tab named \"AGI Chat\" next to the code, with the chat inside it and able to send a turn.",
+   "Optional: in VS Code's Chat view type @agi and send a question; the reply should come from AGI Code."
+  ],
+  "where": "Command Palette > Code: Open Chat in Editor (also the editor title bar on a file tab)"
+ },
+ "S73.03": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Sessions"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Show Sessions History"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Sessions history"
+   }
+  ],
+  "needs": "at least one earlier local session and, for cloud, a signed-in account",
+  "note": "The Palette route opens a quick pick titled \"Sessions history\"; the cloud list depends on sign-in (not verified).",
+  "reachable": "yes",
+  "steps": [
+   "Click the clock icon with the tooltip \"Sessions\" in the AGI Code header.",
+   "Check the \"Local\" tab lists earlier sessions; the \"Cloud\" tab lists cloud ones.",
+   "Click one session row to reopen it.",
+   "Compare: the chosen earlier session should open with its messages."
+  ],
+  "where": "AGI Code header > Sessions (clock icon) > Local tab; or Command Palette > Code: Show Sessions History"
+ },
+ "S73.04": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Sessions history"
+   }
+  ],
+  "needs": "two local folders open in one window, with a session in each",
+  "note": "The code lists threads from every open workspace folder (conversationTreeProvider), so the check is that each row names its own folder.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open two folders in one VS Code window, start a session in each.",
+   "Run Code: Show Sessions History from the Command Palette.",
+   "Check that sessions from both open folders are listed and that each row's detail line shows its folder path after the model name."
+  ],
+  "where": "Sessions history rows show the folder path in their detail line"
+ },
+ "S73.05": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Attach the active editor file, the current selection and that file's problems to each chat turn."
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a code file in the editor and leave it active.",
+   "Click into the box \"Describe a task\u2026\" in the AGI Code sidebar.",
+   "Look for a chip with the file's name above the box, and click its \u00d7 to remove it.",
+   "Ask \"What file do you see?\" and compare the answer with the file that is open."
+  ],
+  "where": "Chat composer \"Describe a task\u2026\": a file-name chip appears by itself when a file is open"
+ },
+ "S73.06": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Explain Selection"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Send Selection to a New Chat"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Select a few lines of code in an open file.",
+   "Right-click the selection and choose \"Code: Explain Selection\" (shortcut Cmd+Shift+Alt+E).",
+   "Look in the chat composer for a chip named \"<file name> selection\" and for an explanation of the selected lines.",
+   "Compare: the explanation should refer to the selected code only."
+  ],
+  "where": "Editor right-click > Code: Explain Selection (and Code: Send Selection to a New Chat)"
+ },
+ "S73.07": {
+  "labels": [],
+  "needs": "a code file you can edit",
+  "note": "Attaching a dirty or untitled buffer is automatic; the setting to save before send defaults to off, so the unsaved text is what is sent.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open a file, type a new function near the top, and do not save it (no Cmd+S).",
+   "In the AGI Code box ask \"What is the first function in this file?\".",
+   "Compare the answer with the unsaved text; the saved file on disk does not contain it."
+  ],
+  "where": "Chat context for an edited but unsaved file"
+ },
+ "S73.08": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Workspace files and symbols"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a workspace with files",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click the box \"Describe a task\u2026\" and type @ then the first letters of a file name.",
+   "Use the arrow keys to pick the file in the list and press Enter.",
+   "Type a question about the file and send.",
+   "Compare: the answer should use the content of the chosen file."
+  ],
+  "where": "Chat composer: type @ followed by a file name; the list is titled \"Workspace files and symbols\""
+ },
+ "S73.09": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Workspace files and symbols"
+   }
+  ],
+  "needs": "a workspace whose language has a VS Code symbol provider (for example TypeScript); without one only files appear (per the code comment)",
+  "note": "The item label format comes from apps/extension-vscode/src/data/mentionSearch.ts (name \u00b7 kind \u00b7 path).",
+  "reachable": "yes",
+  "steps": [
+   "In \"Describe a task\u2026\" type @ and the name of a function or class from the project.",
+   "Look for an item in the same list with a kind word such as function or class and a file path with line numbers.",
+   "Pick it with Enter and send a question.",
+   "Compare: the attached part should be only the lines of that symbol, not the whole file."
+  ],
+  "where": "Chat composer: type @ then a function or class name; list items read \"<name> \u00b7 <kind> \u00b7 <path>\""
+ },
+ "S73.10": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "{count} problems"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Explain Error"
+   }
+  ],
+  "needs": "a file with at least one error or warning",
+  "note": "To fix rather than explain, select the code and use Code: Fix Issue (needs a selection).",
+  "reachable": "yes",
+  "steps": [
+   "Open a file that has a red error or yellow warning.",
+   "Look above the chat box for a chip such as \"1 problem\" or \"N problems\".",
+   "Right-click the line with the error in the editor and choose \"Code: Explain Error\" (shortcut Cmd+Shift+Alt+X).",
+   "Compare: the reply should explain that error."
+  ],
+  "where": "Chat composer chip \"{count} problems\" (appears by itself); editor right-click > Code: Explain Error"
+ },
+ "S73.11": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Send surrounding code to AGI Cloud for ghost-text inline completions."
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Sign In to AGI Cloud"
+   }
+  ],
+  "needs": "the setting turned on in your user settings, a signed-in account or AGI API key, and a trusted workspace",
+  "note": "Inline completions are off in untrusted workspaces (package.json capabilities). Tab acceptance is the standard VS Code inline-suggestion key; the extension does not define its own accept key.",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+, and search \"ghost-text inline completions\".",
+   "Tick the setting for AGI Code inline completions (it is off by default, user settings only).",
+   "Sign in with Code: Sign In to AGI Cloud (or set a key with Code: Set API Key), open a code file, type a few lines and pause.",
+   "Look for grey ghost text after the cursor, then press Tab to accept it."
+  ],
+  "where": "VS Code Settings (Cmd+,) > search \"ghost-text inline completions\" > turn on AGI Code inline completions (off by default); then type in any code file"
+ },
+ "S73.12": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Refactor Code"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Apply Inline"
+   }
+  ],
+  "needs": "a trusted workspace and a signed-in account or key",
+  "note": "Fix can apply automatically when the autoApplyFixes setting is on; the code shows an in-place edit only when the reply contains a code block.",
+  "reachable": "yes",
+  "steps": [
+   "Select a function in an open file in a trusted workspace.",
+   "Right-click the selection and choose \"Code: Refactor Code\", wait for the reply.",
+   "When the notice appears, click \"Apply Inline\" (or \"View in New Tab\").",
+   "Compare: the selected code in the editor should be replaced in place by the new version."
+  ],
+  "where": "Select code > right-click > Code: Fix Issue or Code: Refactor Code; then the notice button \"Apply Inline\""
+ },
+ "S73.13": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Review change"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Review changes"
+   }
+  ],
+  "needs": "a file the agent can edit, in a trusted workspace",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Ask the agent to edit a file in the chat (Ask or Auto mode) and wait for the approval card.",
+   "Click \"Review change\" on the card.",
+   "Look for VS Code's side-by-side diff editor showing the original and the proposed file.",
+   "Compare the diff with the change described in chat; then use Accept or Reject from the editor."
+  ],
+  "where": "Chat approval card > \"Review change\" (opens VS Code's diff editor); after a turn, \"Review changes\""
+ },
+ "S73.14": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Review change"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Edit it or revert parts, then approve to write your version."
+   }
+  ],
+  "needs": "an edit that has more than one separate block",
+  "note": "No separate per-hunk accept button was found in the extension; per-part choice uses VS Code's diff editor and the card's own tooltip text.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Review change\" on an approval card that proposes several edits.",
+   "In the diff editor, use the revert control on one block to undo only that part (VS Code's own diff control).",
+   "Approve the change in chat.",
+   "Compare: the file should keep the edits you did not revert."
+  ],
+  "where": "Chat approval card > \"Review change\", then revert parts in VS Code's diff editor and approve"
+ },
+ "S73.15": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/webview/render.ts",
+    "text": "Apply"
+   },
+   {
+    "file": "apps/extension-vscode/src/providers/diffDecorationProvider.ts",
+    "text": "Accept"
+   }
+  ],
+  "needs": "an open file in the editor (without one the chat shows a warning to open a file)",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Ask for a code change so the reply contains a code block, and hover over the block.",
+   "Click \"Apply\" (the button is labelled Opening\u2026 while it works).",
+   "Look in the open file for the highlighted change with an \"Accept\" link above it, and click \"Accept\".",
+   "Compare: the file should now contain the suggested code."
+  ],
+  "where": "Chat code block > \"Apply\" button (shows on hover); then the editor's \"Accept\" link above the change"
+ },
+ "S73.16": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Run Terminal Command"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Add Terminal Output to Chat"
+   }
+  ],
+  "needs": "a shell terminal (shell integration helps capture output)",
+  "note": "The terminal is named from PRODUCT_NAMES.code, which reads \"Code\"; the session-in-terminal command uses a separate terminal named \"AGI\".",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P, type \"Code: Run Terminal Command\", press Enter, type \"git status\" and press Enter.",
+   "Look for a terminal named \"Code\" that runs the command.",
+   "Right-click in the terminal and choose \"Code: Add Terminal Output to Chat\"; check the output appears as a chip in the chat box.",
+   "Optional: run \"Code: Explain Terminal Output\" from the Command Palette and read the reply."
+  ],
+  "where": "Command Palette > Code: Run Terminal Command; terminal right-click > Code: Add Terminal Output to Chat; Code: Continue This Session in the Terminal"
+ },
+ "S73.17": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Open Chat"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P.",
+   "Type \"Code:\" and scroll the list of actions.",
+   "Pick \"Code: Open Chat\" and press Enter.",
+   "Compare: the AGI Code chat should open."
+  ],
+  "where": "Command Palette (Cmd+Shift+P) > type \"Code:\""
+ },
+ "S73.18": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Open Chat"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Explain Selection"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: New Conversation"
+   }
+  ],
+  "needs": "none (Explain needs a selection)",
+  "note": "Cmd+Shift+A is shared with Code: Accept Current Diff when the cursor is on a proposed diff.",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+A anywhere in the editor and check the AGI Code chat opens.",
+   "Select some code and press Cmd+Shift+Alt+E.",
+   "Press Cmd+Shift+Alt+N and check a new conversation starts.",
+   "Compare each result with the action named in the Keyboard Shortcuts list."
+  ],
+  "where": "Keyboard shortcuts: Cmd+K Cmd+S and search \"Code:\"; defaults include Cmd+Shift+A (Code: Open Chat) and Cmd+Shift+Alt+E (Code: Explain Selection)"
+ },
+ "S73.19": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/extension.ts",
+    "text": "click to change model"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Select Model"
+   }
+  ],
+  "needs": "none",
+  "note": "The exact status text depends on the active model; the code builds it as an AGI label with the model and mode.",
+  "reachable": "yes",
+  "steps": [
+   "Look at the bottom-right status bar for the AGI item with a model name and a mode word.",
+   "Hover it and check the tooltip \"click to change model\".",
+   "Click it, pick a different model in the list.",
+   "Compare: the status bar text should show the new model name."
+  ],
+  "where": "Status bar, bottom right: the AGI item showing the model and mode; click it to open the model picker (Code: Select Model)"
+ },
+ "S73.20": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Mode and reasoning effort"
+   },
+   {
+    "file": "packages/contracts/local-runtime/src/developer-session.ts",
+    "text": "Bypass permissions"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Set Reasoning Effort"
+   }
+  ],
+  "needs": "a plan that allows the model choice; the effort list appears only for models that take it",
+  "note": "On a plan that uses Auto the code shows an upgrade message instead of a model list.",
+  "reachable": "yes",
+  "steps": [
+   "Click the \"Mode and reasoning effort\" button at the bottom of the composer.",
+   "Under \"Mode\" pick \"Plan\" (or Ask, Auto, Bypass permissions) and check the button icon changes.",
+   "Under \"Reasoning effort\" pick a level, if the model offers it.",
+   "Click the model pill \"Auto\" and pick another model; check the status bar shows it."
+  ],
+  "where": "Chat composer: \"Mode and reasoning effort\" button (mode icon, left of the model name) and the model pill \"Auto\"; palette: Code: Choose Agent Mode, Code: Set Reasoning Effort, Code: Select Model"
+ },
+ "S73.21": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/sessionActivityAlert.ts",
+    "text": "Allow once"
+   },
+   {
+    "file": "packages/contracts/cloud-contracts/src/local-code-session-activity.ts",
+    "text": "Approval needed"
+   },
+   {
+    "file": "packages/contracts/cloud-contracts/src/local-code-session-activity.ts",
+    "text": "Task finished"
+   }
+  ],
+  "needs": "a task that needs approval, and the VS Code window not focused",
+  "note": "The notices appear only when the VS Code window is not focused (sessionActivityAlert.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Ask the agent for a task that needs a command approval; then click another app so VS Code is not focused.",
+   "Wait for the notice \"Code: Approval needed.\" to appear.",
+   "Click \"Allow once\" or \"Deny\" on the notice.",
+   "Compare: the chat should show the decision, and a finished task shows \"Task finished\" with \"Open chat\"."
+  ],
+  "where": "Switch to another app while a task runs; a system notice appears with \"Allow once\", \"Deny\" and \"Open chat\"; the Activity Bar icon also shows a badge"
+ },
+ "S73.22": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Show Instructions"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Instructions & editor"
+   }
+  ],
+  "needs": "a folder you can edit with AGENTS.md, CLAUDE.md or .agiworkforce/instructions.md",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Put an AGENTS.md or CLAUDE.md file in the folder with a short rule, and open that folder.",
+   "Open Code: Open Settings and click \"Instructions & editor\"; look for the file name in the sources list.",
+   "Run Code: Show Instructions from the Command Palette and check the same file is offered.",
+   "Ask the chat a question that the rule should affect and compare the reply."
+  ],
+  "where": "Command Palette > Code: Show Instructions; or Code: Open Settings > \"Instructions & editor\""
+ },
+ "S73.23": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "MCP servers"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Show MCP Servers"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/capabilityManagement.ts",
+    "text": "Add an MCP server"
+   }
+  ],
+  "needs": "none to view; adding a server, skill or plugin runs code, so only view it in testing",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click the \"More\" (\u2026) button in the AGI Code header.",
+   "Choose \"MCP servers\" and read the list (the quick pick is titled \"Code, MCP servers\").",
+   "Go back and choose \"Skills\" or \"Plugins\"; view the list only.",
+   "Compare: the list should match what the AGI CLI has configured."
+  ],
+  "where": "More actions (\u2026) in the AGI Code header > MCP servers / Skills / Plugins / Hooks; or Command Palette > Code: Show MCP Servers, Code: Show Skills, Code: Show Plugins, Code: Show Hooks"
+ },
+ "S73.24": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Continue CLI Session Here"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Continue This Session in the Terminal"
+   }
+  ],
+  "needs": "the AGI CLI installed (Code: Install AGI CLI) and a session already started",
+  "note": "The terminal command needs a message sent first; the code shows a notice otherwise.",
+  "reachable": "yes",
+  "steps": [
+   "In a terminal run the AGI CLI (agi) and send one message so a session exists.",
+   "In VS Code press Cmd+Shift+P and run \"Code: Continue CLI Session Here\"; choose that session.",
+   "Check the session opens in the AGI Code chat with its earlier messages.",
+   "Back in a chat with a sent message, run \"Code: Continue This Session in the Terminal\" and check a terminal opens that resumes it."
+  ],
+  "where": "Command Palette > Code: Continue CLI Session Here (CLI session into VS Code); Command Palette > Code: Continue This Session in the Terminal (chat session into a terminal)"
+ },
+ "S73.25": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Check the CLI in This Environment"
+   },
+   {
+    "file": "apps/extension-vscode/src/platform/remoteEnvironment.ts",
+    "text": "the SSH host"
+   }
+  ],
+  "needs": "an SSH host you can reach with Remote-SSH, with the AGI CLI installed there",
+  "note": "extensionKind is workspace, so the extension runs on the remote host; the Remote-SSH connect step is VS Code's own and not verified here.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Connect the VS Code window to an SSH host with Remote-SSH (VS Code's own command, not in this repo).",
+   "Open a folder on that host and press Cmd+Shift+P, run \"Code: Check the CLI in This Environment\".",
+   "Read the message: it should say the CLI runs from a path \"in the SSH host\".",
+   "Open AGI Code and send a message to check replies come from the host."
+  ],
+  "where": "Remote-SSH window: Command Palette > Code: Check the CLI in This Environment shows the environment name, e.g. \"the SSH host\""
+ },
+ "S73.26": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Check the CLI in This Environment"
+   },
+   {
+    "file": "apps/extension-vscode/src/platform/remoteEnvironment.ts",
+    "text": "the dev container"
+   }
+  ],
+  "needs": "a dev container set up on this Mac (Docker or a container host) and the AGI CLI installed inside it",
+  "note": "The message text is built from a template in src/platform/remoteEnvironment.ts (cliProbeMessage), so the exact wording may differ slightly. Container support is shown through this command and the environment label, not through a separate screen.",
+  "reachable": "yes",
+  "steps": [
+   "Open the project in a dev container with VS Code's own Remote menu (bottom-left corner, Reopen in Container). This is not an AGI control.",
+   "Press Cmd+Shift+P.",
+   "Type Check the CLI in This Environment and choose Code: Check the CLI in This Environment.",
+   "Read the message. It should name the place it runs (the dev container) and the CLI path there. Compare with Expected: the extension works in the container, not only on the Mac."
+  ],
+  "where": "In a dev container window, Command Palette (Cmd+Shift+P) > Code: Check the CLI in This Environment. WSL is Windows only, so on a Mac only the dev container case applies."
+ },
+ "S73.27": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Review this workspace first."
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Manage trust"
+   }
+  ],
+  "needs": "a folder opened as untrusted (Restricted Mode)",
+  "note": "The Manage trust button runs VS Code's own command (workbench.trust.manage). The card shows only when the onboarding state reports an untrusted workspace; the tester may need to get past the intro first.",
+  "reachable": "yes",
+  "steps": [
+   "Open a folder in VS Code and choose Don't Trust when VS Code asks about trust.",
+   "Click the AGI Code icon in the Activity Bar to open the sidebar view.",
+   "Look for the heading Review this workspace first. and the text saying AGI keeps project files and tools disabled while VS Code is in Restricted Mode.",
+   "Click Manage trust and check that VS Code's workspace trust page opens. Compare with Expected: the extension explains why it is limited and links to Manage Trust."
+  ],
+  "where": "Open a folder in VS Code and choose Don't Trust in VS Code's Restricted Mode prompt (VS Code's own dialog). Then AGI Code sidebar view > Review this workspace first. > Manage trust."
+ },
+ "S73.28": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Developer runtime needs setup"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Try again"
+   }
+  ],
+  "needs": "no AGI CLI available for the folder, to reach the setup state; a network drop or sign-in failure is needed for an error state",
+  "note": "The chat error Retry label comes from a translation key (L10N.retry) whose text was not found in the app folder, so the exact word for that error state is unconfirmed. Whether a network error or sign-in failure produces the error state was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Click the AGI Code icon in the Activity Bar.",
+   "Look for the status panel titled Developer runtime needs setup. Right after opening, it should show Checking the workspace developer runtime\u2026 while the check runs.",
+   "Click Try again and watch the button change while the check runs.",
+   "Click Open setup and check that a setup path opens. Compare with Expected: loading, setup-needed and error states, each with a retry."
+  ],
+  "where": "AGI Code sidebar view > Developer runtime needs setup (runtime status panel) > Open setup / Try again. The loading text is Checking the workspace developer runtime\u2026"
+ },
+ "S73.29": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/core/hostNotices.ts",
+    "text": "What\u2019s new"
+   },
+   {
+    "file": "apps/extension-vscode/src/utils/api.ts",
+    "text": "Update the extension to continue."
+   }
+  ],
+  "needs": "an earlier AGI Code version installed before the newer one, and a browser for What\u2019s new; the required-update case needs the server to reject the current client version",
+  "note": "The button label for the chat error is a translation key (chatError.updateExtension) whose text was not found in the app folder. The update step itself is VS Code's, not AGI's. The notice only appears when the stored version differs from the new one.",
+  "reachable": "yes",
+  "steps": [
+   "Install an earlier AGI Code version first, then install the newer version from the VS Code Extensions view and reload the window.",
+   "Look for the notice that says the product was updated to the new version, with a button What\u2019s new.",
+   "Click What\u2019s new and check that release notes open in the browser.",
+   "For the required-update case, the sidebar chat shows Update the extension to continue. Compare with Expected: the user is told an update is needed or available, what changed, and can update. The update button itself is VS Code's, not an AGI control."
+  ],
+  "where": "VS Code Extensions view > AGI Code > Update (VS Code's own control), then reload the window. The notice reads as product name was updated to version, with a button What\u2019s new. A required update appears as a chat error in AGI Code sidebar."
+ },
+ "S73.30": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/core/hostNotices.ts",
+    "text": "Open chat"
+   },
+   {
+    "file": "apps/extension-vscode/src/core/hostNotices.ts",
+    "text": "has no native Chat view"
+   }
+  ],
+  "needs": "a VS Code build or fork without the native Chat view; the notice shows only once per install",
+  "note": "The notice depends on the host build lacking the native Chat API; on a normal VS Code build it does not appear. The engines minimum in package.json (vscode ^1.100.0) is enforced by VS Code at install, which is not an AGI message.",
+  "reachable": "yes",
+  "steps": [
+   "Start VS Code on a build or fork that has no native Chat view (for example an older or modified build).",
+   "Look for the notice that says the build has no native Chat view, so @agi is not available here.",
+   "Click Open chat and check that the AGI Code sidebar opens.",
+   "Start VS Code again and confirm the notice does not repeat. Compare with Expected: the user is told which part is incompatible and where chat runs instead."
+  ],
+  "where": "Shown once on startup in a VS Code build that has no native Chat view. The notice reads AGI Code: [app name] [version] has no native Chat view, so @agi is not available here. Chat runs in the AGI Code sidebar instead. Button: Open chat."
+ }
+}

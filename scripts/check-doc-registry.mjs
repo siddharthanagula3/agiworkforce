@@ -55,6 +55,7 @@ const NON_DOC_MARKDOWN = [
   'apps/mobile/scripts/release/',
   'apps/web/content/',
   'audit/',
+  'knowledge-base/',
 ];
 
 const NON_DOC_FILES = new Map([

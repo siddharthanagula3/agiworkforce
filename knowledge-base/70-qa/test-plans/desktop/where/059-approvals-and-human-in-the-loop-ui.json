@@ -1,0 +1,604 @@
+{
+ "S59.01": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+    "text": "This tool requires approval before execution."
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Allow"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Deny"
+   }
+  ],
+  "needs": "a connected app or the Ask before every action setting",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, open Chat and ask the agent for an action that needs approval (for example a write or a send). Set Settings > Capabilities > Tool approvals > Ask before every action first if nothing asks.",
+   "When the card shows \"This tool requires approval before execution.\", click Deny on that one card.",
+   "Look: the run continues, the card records Denied and the agent answers without running that tool.",
+   "Repeat with a new request and click Allow: the tool runs and the run continues."
+  ],
+  "where": "Chat > a tool step that shows \"This tool requires approval before execution.\" > Allow or Deny on that one card"
+ },
+ "S59.02": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/tasks/TasksPage.tsx",
+    "text": "Waiting for your approval"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Approve"
+   }
+  ],
+  "needs": "a task run that asks for several approvals",
+  "note": "The chat Approvals inbox has no bulk button; each request there is answered on its own.",
+  "reachable": "yes",
+  "steps": [
+   "Start a task that calls several tools that need approval, then open the Tasks page.",
+   "Find the run that shows \"Waiting for your approval\".",
+   "Click Approve once.",
+   "Look: all pending requests of that run are approved together, as Expected. The Tasks page path was taken from code and not confirmed on screen."
+  ],
+  "where": "Tasks page > a run under \"Waiting for your approval\" > Approve or Deny (one button decides every request in that run)"
+ },
+ "S59.03": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Allow for this chat"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+    "text": "This tool requires approval before execution."
+   }
+  ],
+  "needs": "a tool that asks for approval",
+  "note": "The UI says \"Allow for this chat\" and is not offered for high-risk calls; the code does not use the word session.",
+  "reachable": "yes",
+  "steps": [
+   "In a chat, trigger a tool that needs approval.",
+   "Click Allow for this chat on its card.",
+   "Trigger the same tool again in the same chat and watch whether it asks.",
+   "Look: the second call runs without a card, as Expected. It lasts for the chat, not for the whole app session."
+  ],
+  "where": "Chat > a tool step that shows \"This tool requires approval before execution.\" > Allow for this chat"
+ },
+ "S59.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/connectors/hooks/useConnectorsSettingsAdapter.tsx",
+    "text": "Tool permissions"
+   },
+   {
+    "file": "apps/web/features/connectors/components/ToolPermissionsPanel.tsx",
+    "text": "Always run without asking"
+   }
+  ],
+  "needs": "a connected app with tools",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and choose Connectors.",
+   "Click the connector, then Tool permissions.",
+   "Pick Allow, Ask or Deny for a tool or a group such as Read-only tools.",
+   "Look: the choice shows as selected, and the next run of that tool follows it (runs without asking, asks each time, or never runs)."
+  ],
+  "where": "Settings > Connectors > (connector row) > Tool permissions > Allow, Ask or Deny for each tool or group"
+ },
+ "S59.05": {
+  "labels": [
+   {
+    "file": "apps/web/features/desktop-host/components/LocalFolderAttachDialog.tsx",
+    "text": "Attach from a local folder"
+   }
+  ],
+  "needs": "the Desktop app and a local folder",
+  "note": "The composer control that opens this dialog was not located by its visible label; revoking a folder is in dispatcher code (workspace_revoke_root), not a clearly labelled button.",
+  "reachable": "yes",
+  "steps": [
+   "In the Desktop app, open a chat and use the composer's folder attach action.",
+   "Choose a folder and check that the dialog title reads \"Attach from a local folder\".",
+   "Confirm the folder appears as granted and the agent can read it.",
+   "Open Settings > Desktop app > General > Permissions and remove or stop the folder, then check the agent no longer reaches it."
+  ],
+  "where": "Desktop app > chat composer > attach a local folder > \"Attach from a local folder\" dialog (grant); revoke under Settings > Desktop app > Permissions"
+ },
+ "S59.06": {
+  "labels": [
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceConnectorPolicy.tsx",
+    "text": "Websites"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceConnectorPolicy.tsx",
+    "text": "Allow site"
+   }
+  ],
+  "needs": "a workspace owner or admin account",
+  "note": "The page path was taken from the component and not confirmed on screen; the code marks Desktop partial.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in as a workspace owner or admin and open the workspace Connectors page.",
+   "Find the Websites section and type a domain such as example.com in the field.",
+   "Click Allow site and save.",
+   "Look: the site is listed, and web search and fetch in chat are limited to it. In the Desktop app, local and BYOK turns still use the provider's own search, as Expected notes."
+  ],
+  "where": "Workspace console > Connectors > Websites > type a site in the field and click Allow site (owners and admins only)"
+ },
+ "S59.07": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/components/ToolApprovalDefaultsPanel.tsx",
+    "text": "Tool approvals"
+   },
+   {
+    "file": "apps/web/features/settings/components/ToolApprovalDefaultsPanel.tsx",
+    "text": "Synced to your account"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and choose Capabilities.",
+   "Under Tool approvals, pick a different option and wait for the status to say Saved or Synced to your account.",
+   "Close Settings, sign out and back in, or open the app on a second device.",
+   "Look: the same option is still selected."
+  ],
+  "where": "Settings > Capabilities > Tool approvals > pick one option"
+ },
+ "S59.08": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Ask before every action"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Skip approvals"
+   },
+   {
+    "file": "apps/web/features/settings/components/ToolApprovalDefaultsPanel.tsx",
+    "text": "Tool approvals"
+   }
+  ],
+  "needs": "a Free or paid account; a tool that needs approval",
+  "note": "Skip approvals is greyed out when the workspace blocks it.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Capabilities.",
+   "Select Ask before every action, then start a chat and ask for a read such as a search: it waits for approval.",
+   "Select Skip approvals and run the same request: tools run without waiting.",
+   "Look: destructive or unknown actions still ask under Skip approvals, as the option text says."
+  ],
+  "where": "Settings > Capabilities > Tool approvals > radio buttons: Ask before every action, Run read-only actions without asking, Skip approvals"
+ },
+ "S59.09": {
+  "labels": [],
+  "needs": "a connected app with write tools",
+  "note": "No single read-only mode that refuses writes was found in the UI; the nearest control is Settings > Connectors > Tool permissions, where a whole write category can be set to Deny. Searched for read-only mode and read-only tools in ToolPermissionsPanel.tsx and tool-approval-policy.ts.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S59.10": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Run read-only actions without asking"
+   }
+  ],
+  "needs": "a connected app or a tool that writes",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Capabilities and select Run read-only actions without asking under Tool approvals.",
+   "In a chat, ask for a read (search or page fetch): it runs without a card.",
+   "Ask for a write (for example a send or an edit): a card with \"This tool requires approval before execution.\" appears.",
+   "Look: reads run and writes stop and ask, as Expected."
+  ],
+  "where": "Settings > Capabilities > Tool approvals > Run read-only actions without asking"
+ },
+ "S59.11": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Run read-only actions without asking"
+   }
+  ],
+  "needs": "a tool that can read and one that can write",
+  "note": "This is the same control as S59.10; the UI has no separate low-risk mode.",
+  "reachable": "yes",
+  "steps": [
+   "Select Run read-only actions without asking under Tool approvals.",
+   "Trigger a low-risk read in chat and confirm it runs without asking.",
+   "Trigger a riskier action and confirm a card asks first.",
+   "Look: low-risk runs automatically while the riskier one still asks."
+  ],
+  "where": "Settings > Capabilities > Tool approvals > Run read-only actions without asking"
+ },
+ "S59.12": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+    "text": "This tool requires approval before execution."
+   },
+   {
+    "file": "apps/web/features/chat/components/approvals/ApprovalInbox.tsx",
+    "text": "Approvals"
+   }
+  ],
+  "needs": "a tool that asks for approval",
+  "note": "The reason is one generic sentence; the tool summary comes from the tool's label.",
+  "reachable": "yes",
+  "steps": [
+   "Trigger a tool that needs approval in chat.",
+   "Read the card: the label line and the parameters block show what the tool does.",
+   "Open the Approvals button in the chat header and read the request there.",
+   "Look: the card shows the tool name and the reason in the line \"This tool requires approval before execution.\""
+  ],
+  "where": "Chat > a tool step waiting for approval > the card and the Approvals button in the chat header"
+ },
+ "S59.13": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+    "text": "This tool requires approval before execution."
+   }
+  ],
+  "needs": "a connected messaging or email app",
+  "note": "The row names are built from argument names (for example to, cc) in packages/contracts/types/src/tool-approval-stakes.ts, so they are not fixed visible strings.",
+  "reachable": "yes",
+  "steps": [
+   "Ask the agent to send a message or email to a named person.",
+   "When the card says \"This tool requires approval before execution.\", read the rows under it.",
+   "Look: recipients are listed in the rows (To, Cc, and similar) before you click Allow."
+  ],
+  "where": "Chat > a send tool step (email, message or invite) waiting for approval > the card shows the recipient rows"
+ },
+ "S59.14": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+    "text": "This tool requires approval before execution."
+   }
+  ],
+  "needs": "a tool that sends data outside the app",
+  "note": "Expected says the destination is shown explicitly; the code shows it only inside the raw arguments.",
+  "reachable": "yes",
+  "steps": [
+   "Ask the agent to call a tool that goes to a site or service.",
+   "Open the card's parameters block under \"This tool requires approval before execution.\"",
+   "Look for the URL, host or target in the parameters block.",
+   "Note: the code shows raw arguments only; there is no dedicated destination row."
+  ],
+  "where": "Chat > an outbound tool step waiting for approval > the card's parameters block"
+ },
+ "S59.15": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+    "text": "This tool requires approval before execution."
+   }
+  ],
+  "needs": "a connected payment or store app",
+  "note": "Rows come from argument names in packages/contracts/types/src/tool-approval-stakes.ts; no fixed label text.",
+  "reachable": "yes",
+  "steps": [
+   "Ask the agent to make a purchase or payment in a connected store.",
+   "Read the card before approving.",
+   "Look: the amount and item rows (from arguments such as amount and item) appear under the approval line."
+  ],
+  "where": "Chat > a payment or purchase tool step waiting for approval > the card shows amount and item rows"
+ },
+ "S59.16": {
+  "labels": [
+   {
+    "file": "apps/desktop/electron/runtime/dispatcher.ts",
+    "text": "Run a local command?"
+   },
+   {
+    "file": "apps/desktop/electron/runtime/dispatcher.ts",
+    "text": "Run once"
+   }
+  ],
+  "needs": "the Desktop app and a granted folder",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "In the Desktop app, ask the agent to run a shell command in a folder you granted.",
+   "Read the dialog: the message says Run <program> in this folder and the detail lists the command.",
+   "Look: the buttons are Cancel and Run once (or Run without a sandbox when the sandbox is off).",
+   "Click Cancel and check the command does not run."
+  ],
+  "where": "Desktop app > agent runs a local command > native dialog \"Run a local command?\""
+ },
+ "S59.17": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+    "text": "This tool requires approval before execution."
+   }
+  ],
+  "needs": "a granted folder or a connected files app",
+  "note": "The file row comes from the timeline icon and the diff block, not a fixed label.",
+  "reachable": "yes",
+  "steps": [
+   "Ask the agent to edit or create a file in a granted folder.",
+   "Read the card before clicking Allow.",
+   "Look: the card shows the file name icon and the requested content or diff under \"This tool requires approval before execution.\""
+  ],
+  "where": "Chat > a file-changing tool step waiting for approval > the card shows the file and its change"
+ },
+ "S59.18": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+    "text": "This tool requires approval before execution."
+   }
+  ],
+  "needs": "a file edit request",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Ask the agent to change text in a file.",
+   "Before you approve, read the diff block in the card.",
+   "Look: removed and added lines are shown before Allow."
+  ],
+  "where": "Chat > a file edit tool step waiting for approval > the card shows the diff block"
+ },
+ "S59.19": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Allow"
+   }
+  ],
+  "needs": "a tool that asks for approval",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Trigger a tool that needs approval.",
+   "Click Allow on that card.",
+   "Look: the card changes to the result and the tool runs as Expected."
+  ],
+  "where": "Chat > a tool step waiting for approval > Allow"
+ },
+ "S59.20": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Deny"
+   }
+  ],
+  "needs": "a tool that asks for approval",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Trigger a tool that needs approval.",
+   "Click Deny on that card.",
+   "Look: the card shows Denied and the tool does not run; the agent replies that the action was refused."
+  ],
+  "where": "Chat > a tool step waiting for approval > Deny"
+ },
+ "S59.22": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/approvals/ApprovalInbox.tsx",
+    "text": "Approvals"
+   },
+   {
+    "file": "apps/web/features/chat/components/approvals/ApprovalInbox.tsx",
+    "text": "Add guidance to steer the run (optional)"
+   }
+  ],
+  "needs": "a tool that asks for approval",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Trigger a tool that needs approval, then open the Approvals button in the chat header.",
+   "Type an instruction in the guidance box, for example a different way to do the task.",
+   "Click Deny.",
+   "Look: the request is denied and the run continues with the guidance, as Expected."
+  ],
+  "where": "Chat header > Approvals > pick a request > type in \"Add guidance to steer the run (optional)\" > Deny or Approve"
+ },
+ "S59.23": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+    "text": "This approval request expired or is no longer active."
+   }
+  ],
+  "needs": "a request left unanswered until it expires",
+  "note": "The expiry time is not stated in the UI or in the code lines checked.",
+  "reachable": "yes",
+  "steps": [
+   "Trigger a tool that needs approval and leave the card unanswered until the run ends or times out.",
+   "Come back to the card.",
+   "Look: it shows \"This approval request expired or is no longer active.\" and has no Allow or Deny; the Approvals header shows \"This request expired. Open the conversation to rerun the turn.\""
+  ],
+  "where": "Chat > an approval card whose run has ended > \"This approval request expired or is no longer active.\""
+ },
+ "S59.24": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/components/ApprovalHistoryPanel.tsx",
+    "text": "Approval history"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/settings.json",
+    "text": "Capabilities"
+   }
+  ],
+  "needs": "at least one past approval decision",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Capabilities and scroll below Tool approvals.",
+   "Read the section \"Approval history\" with its entries list.",
+   "Look: past requests appear newest first with the decision for each."
+  ],
+  "where": "Settings > Capabilities > Approval history"
+ },
+ "S59.25": {
+  "labels": [
+   {
+    "file": "apps/web/features/connectors/components/ToolPermissionsPanel.tsx",
+    "text": "Reset all to default"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/DesktopPermissionsSection.tsx",
+    "text": "Remove"
+   }
+  ],
+  "needs": "a saved always-allow permission",
+  "note": "Web offers reset for all tools of a connector, not one tool; the per-folder revoke is in the Desktop Permissions list.",
+  "reachable": "yes",
+  "steps": [
+   "Set a tool to Always run without asking under Settings > Connectors > Tool permissions.",
+   "Click Reset all to default and confirm.",
+   "Trigger that tool again and look: it asks again.",
+   "On the Desktop app, open Settings > Desktop app > General > Permissions, click Remove on a saved answer, and check it asks next time."
+  ],
+  "where": "Settings > Connectors > (connector) > Tool permissions > Reset all to default; Desktop: Settings > Desktop app > General > Permissions > Remove or Ask again"
+ },
+ "S59.26": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/approvals/ApprovalInbox.tsx",
+    "text": "Approvals"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/tasks/TasksPage.tsx",
+    "text": "Waiting for your approval"
+   }
+  ],
+  "needs": "two signed-in devices on the same account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Start an approval on the first device and leave it pending.",
+   "On a second device signed into the same account, open the same chat.",
+   "Open Approvals in the header, approve the request.",
+   "Look: the first device shows the result (Allowed or Denied) and the run continues."
+  ],
+  "where": "Second signed-in device > open the same chat > Approvals in the chat header (or Tasks > run \"Waiting for your approval\")"
+ },
+ "S59.28": {
+  "labels": [
+   {
+    "file": "apps/desktop/electron/runtime/permissionManager.ts",
+    "text": "Permission required"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Private data from this chat could be sent outside AGI. Check where it goes before you allow it."
+   },
+   {
+    "file": "apps/desktop/electron/runtime/permissionManager.ts",
+    "text": "Never allow"
+   }
+  ],
+  "needs": "a Desktop app and a run that asks for a high-impact permission; the tester cannot choose the trigger directly, so it may take a few tries",
+  "note": "The Code line numbers in the plan are stale (the prompt is now around permissionManager.ts lines 354-410, the high-impact list is in packages/contracts/local-runtime/src/capabilities.ts); the exact trigger that opens the native prompt was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Desktop app and sign in.",
+   "In a chat, ask AGI to run a shell command, or to control another app.",
+   "When the native window \"Permission required\" appears, read its warning text and buttons.",
+   "Check that the text says it is a high-impact permission that lasts until you quit the app, and that there is no \"Always allow\" button.",
+   "For a web tool card with the high-risk notice, check that \"Allow for this chat\" is missing and the card is red.",
+   "Compare with Expected: a stronger warning, no permanent allow, and the permission is asked again later."
+  ],
+  "where": "Desktop app > ask AGI to run a shell command or control another app > the native window titled \"Permission required\" (its buttons are \"Deny\", \"Allow this session\", and \"Never allow\" for app control only). In the web chat, a high-risk tool card shows the notice and has no \"Allow for this chat\" button."
+ },
+ "S59.29": {
+  "labels": [
+   {
+    "file": "apps/web/features/desktop-host/components/ComputerUseControlBar.tsx",
+    "text": "Take over"
+   },
+   {
+    "file": "apps/desktop/electron/appMenu.ts",
+    "text": "Take Over Screen Control"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/ComputerUseControlBar.tsx",
+    "text": "Paused. You have the screen."
+   }
+  ],
+  "needs": "a Desktop app, computer use turned on, and a task that uses the screen (a Mac with screen permission for the app)",
+  "note": "A second bar with the text \"Screen control is yours. Agents cannot click or type.\" also exists in apps/desktop/src/features/voice/ComputerUseControlStatus.tsx; whether that bar is mounted in the app was not confirmed. The Take Over menu item is in the File menu (apps/desktop/electron/appMenu.ts), while the plan's Code line cited the protocol and session files.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Desktop app, sign in, and turn on computer use in Settings > Computer use.",
+   "Start a chat task that makes AGI use the screen, for example a click on a visible app.",
+   "While AGI is using your computer, click the \"Take over\" button in the bar at the bottom of the window, or choose File > Take Over Screen Control.",
+   "Check that the bar now says \"Paused. You have the screen.\" and that AGI stops moving the pointer.",
+   "Click \"Hand back\" in the bar, or choose File > Hand Back Screen Control, and check that AGI can act again.",
+   "Compare with Expected: the user can take control while AGI works and give it back."
+  ],
+  "where": "Desktop app > File > Take Over Screen Control (also the bar \"AGI is using your computer\" with the \"Take over\" button; hand back with File > Hand Back Screen Control or \"Hand back\"). Computer use must be on in Settings > Computer use."
+ },
+ "S59.30": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Allow"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+    "text": "This tool requires approval before execution."
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/ComputerUseControlBar.tsx",
+    "text": "Hand back"
+   }
+  ],
+  "needs": "none for the approval card (a signed-in account where a tool needs approval); the computer-use hand-back needs the Desktop app and a paused computer-use run",
+  "note": "The resume after approval is handled by apps/web/app/api/llm/v1/chat/completions/approve/route.ts, which is server-side, so the tester only sees the same run continue. Whether a particular tool needs approval depends on the account's tool approval policy.",
+  "reachable": "yes",
+  "steps": [
+   "In a chat, send a request that makes AGI call a tool needing approval.",
+   "When the tool card shows \"This tool requires approval before execution.\", click \"Allow\".",
+   "Watch the same chat and the same tool entry: check that the run continues in this chat and does not start over.",
+   "Optional on the Desktop app: while AGI is paused, click \"Hand back\" in the bar; check that a new message saying the control was handed back appears and that AGI takes a new screenshot and continues.",
+   "Compare with Expected: after the user acts, the same run carries on where it stopped."
+  ],
+  "where": "Chat > send a request that needs approval > click \"Allow\" on the tool card (the card text is \"This tool requires approval before execution.\"). For computer use: \"Hand back\" in the Desktop bar sends a message that makes the run carry on."
+ },
+ "S59.31": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "You denied {{count}} tool call"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/ToolTimeline.tsx",
+    "text": "Tool run complete"
+   },
+   {
+    "file": "apps/web/lib/hooks/useChatStream.ts",
+    "text": "You denied this tool."
+   }
+  ],
+  "needs": "none beyond a signed-in account where a tool needs approval",
+  "note": "The denial text is in apps/web/lib/hooks/useChatStream.ts and the summary is in ToolTimeline.tsx; the plan's cited line numbers were not checked for drift beyond these files.",
+  "reachable": "yes",
+  "steps": [
+   "In a chat, send a request that makes AGI call a tool needing approval.",
+   "Click \"Deny\" on the tool card and read the tool entry: it should say \"You denied this tool.\" as the error and \"The user denied permission to run this tool.\" as the result.",
+   "Look at the tool timeline summary line: it should read \"You denied 1 tool call\" (or \"You denied N tool calls\").",
+   "Send another request, click \"Allow\", and read the summary line when the tool finishes: it should read \"Tool run complete\" and the tool entry should show the result.",
+   "Compare with Expected: each decision shows what was decided and what happened (denied, or ran with a result)."
+  ],
+  "where": "Chat > send a request that needs approval > click \"Allow\" or \"Deny\" on the tool card > read the tool summary line in the chat (the timeline)."
+ }
+}

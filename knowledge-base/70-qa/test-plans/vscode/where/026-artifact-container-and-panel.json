@@ -1,0 +1,221 @@
+{
+ "S26.02": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "Artifacts"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "More"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/index.ts",
+    "text": "Open an artifact\u2026"
+   }
+  ],
+  "needs": "a signed-in account with at least one artifact, and one artifact with no title for the fallback check",
+  "note": "The fallback is Untitled plus the type (artifactPresentation.ts:79), not a fixed word; the viewer tab name is a slug of the title plus an extension, so it does not show the title verbatim.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and make sure the account has at least one artifact.",
+   "Click More in the chat panel.",
+   "Click Artifacts. The list opens under the title Code, Artifacts.",
+   "Read the title on each row. Rows with no title should show Untitled followed by the type.",
+   "Open a row and compare the file name shown on the viewer tab with the title. The tab shows the title turned into a file name with an extension, not the title text itself."
+  ],
+  "where": "Chat panel > More > Artifacts, then read the row title"
+ },
+ "S26.03": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "Artifacts"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/index.ts",
+    "text": "Open an artifact\u2026"
+   }
+  ],
+  "needs": "a signed-in account with artifacts of different types",
+  "note": "The code only gives special icons to html, react, svg, mermaid and code; other types such as diagram, document or spreadsheet are shown as the raw type word from the server, with the generic file-code icon, and the code does not confirm those kinds exist.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and make sure the account has artifacts of more than one type.",
+   "Click More in the chat panel, then click Artifacts.",
+   "Read the text after the icon on each row. The first word is the artifact type.",
+   "Open a row and look at the language shown in the status bar of the viewer.",
+   "Compare the type word and icon with Expected."
+  ],
+  "where": "Chat panel > More > Artifacts, then read the row description"
+ },
+ "S26.05": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Show Artifacts"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Open Artifact"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "Artifacts"
+   }
+  ],
+  "needs": "a signed-in account with an artifact",
+  "note": "No control to open an artifact was found in the chat webview, so the list is the only path from the UI; the palette command Code: Open Artifact takes an artifact id and no picker was found for it.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and make sure the account has an artifact.",
+   "Click More in the chat panel, then click Artifacts.",
+   "Click an artifact row.",
+   "Look for a read-only text tab that shows the artifact content."
+  ],
+  "where": "Chat panel > More > Artifacts, then click a row. The palette command is Code: Open Artifact"
+ },
+ "S26.06": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "Artifacts"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/index.ts",
+    "text": "Open an artifact\u2026"
+   }
+  ],
+  "needs": "a signed-in account with an artifact",
+  "note": "The extension has no close command; closing is VS Code's own tab close. The row actions are copy, save into the workspace and open on web, and none deletes an artifact.",
+  "reachable": "yes",
+  "steps": [
+   "Open an artifact from More > Artifacts.",
+   "Close its editor tab with the tab close button or Cmd+W.",
+   "Click More, then Artifacts again.",
+   "Look for the same row still in the list.",
+   "Click the row and check that the content opens again."
+  ],
+  "where": "Artifacts > click a row > close the viewer tab with its close button or Cmd+W"
+ },
+ "S26.07": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "Artifacts"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Show Artifacts"
+   }
+  ],
+  "needs": "a signed-in account with an artifact; the reload step needs VS Code's Developer: Reload Window command",
+  "note": "No toggle was found; the list is loaded from the server index, so reopening after a reload works only while signed in.",
+  "reachable": "yes",
+  "steps": [
+   "Open an artifact, then close its tab.",
+   "Click More, then Artifacts, and click the same row.",
+   "Run Developer: Reload Window from the Command Palette, then repeat the Artifacts step.",
+   "Compare the reopened content with the first view."
+  ],
+  "where": "Chat panel > More > Artifacts, then click the same row again"
+ },
+ "S26.12": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/index.ts",
+    "text": "Open an artifact\u2026"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "Artifacts"
+   }
+  ],
+  "needs": "a signed-in account with a conversation that has several artifacts",
+  "note": "Switching goes through the list picker, which closes after each pick; the viewer itself has no switch control, so the expectation of switching without leaving the viewer is not met by the code.",
+  "reachable": "yes",
+  "steps": [
+   "Use a conversation with at least two artifacts.",
+   "Click More, then Artifacts, and click the first artifact.",
+   "Click More, then Artifacts again, and click the second artifact.",
+   "Compare the second content with the first and check that both can be opened."
+  ],
+  "where": "Chat panel > More > Artifacts, then click a different row"
+ },
+ "S26.16": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/artifacts/artifactPresentation.ts",
+    "text": "Opens read-only, re-derived from the message that produced it"
+   }
+  ],
+  "needs": "a signed-in account with an artifact",
+  "note": "The read-only state comes from the document being served by a content provider; the code sets no explicit read-only flag, and no older-version or shared-copy read-only state was found.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open More, then Artifacts.",
+   "Hover a row and read its tooltip.",
+   "Click the row to open the artifact.",
+   "Try to type into the viewer tab.",
+   "Compare the tooltip and the viewer with Expected."
+  ],
+  "where": "Chat panel > More > Artifacts, then hover a row"
+ },
+ "S26.30": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/index.ts",
+    "text": "Copy the content"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "Artifacts"
+   }
+  ],
+  "needs": "a signed-in account with an artifact",
+  "note": "The confirmation text is the product name, then copied and the title in quotes; the product name comes from a constant, so it is not a literal in the file.",
+  "reachable": "yes",
+  "steps": [
+   "Open More, then Artifacts.",
+   "Hover the row of an artifact and click its copy icon, tooltip Copy the content.",
+   "Paste into any editor.",
+   "Compare the pasted text with the artifact content, and check for a confirmation message that says copied with the title."
+  ],
+  "where": "Chat panel > More > Artifacts, then hover a row and click the Copy the content icon"
+ },
+ "S26.32": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/artifacts/artifactPresentation.ts",
+    "text": "published publicly"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/artifacts/artifactPresentation.ts",
+    "text": "shared with your workspace"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/artifacts/artifactPresentation.ts",
+    "text": "shared with invited people"
+   }
+  ],
+  "needs": "a signed-in account with at least one published artifact and one unpublished artifact",
+  "note": "Only published artifacts get a label; an unpublished artifact shows no label, and the word private does not appear anywhere in the code. No publish control was found in VS Code.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with an account that has a published artifact and one that is not published.",
+   "Click More, then Artifacts.",
+   "Read the end of each row description for the visibility words.",
+   "Hover a published row and read the tooltip explanation.",
+   "Compare the labels with Expected."
+  ],
+  "where": "Chat panel > More > Artifacts, then read the row description"
+ },
+ "S26.39": {
+  "labels": [],
+  "needs": "a reply that is still producing an artifact",
+  "note": "The viewer loads the content once when opened and does not change as a reply streams; the list refreshes every 60 seconds while the picker is open (ARTIFACTS_REFRESH_INTERVAL_MS in apps/extension-vscode/src/features/artifacts/artifactsTree.ts), and treeQuickPick.ts:178 only turns that timer on. Searched apps/extension-vscode/src for artifact in the chat webview and chatSetup.ts: no live content path found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ }
+}

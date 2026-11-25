@@ -1,0 +1,283 @@
+{
+ "S41.01": {
+  "labels": [
+   {
+    "file": "apps/web/lib/temporary-chat-policy.ts",
+    "text": "Use incognito"
+   },
+   {
+    "file": "apps/desktop/electron/appMenu.ts",
+    "text": "New Temporary Chat"
+   }
+  ],
+  "needs": "none",
+  "note": "The composer row reads Use incognito, not Temporary chat. The Settings toggle Start new chats as temporary (S41.18) also makes new chats temporary by default. The desktop menu item sends the same flag to the hosted web app.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a new chat.",
+   "Click the + button in the message box (its own label was not checked in the code).",
+   "Click Use incognito. The row changes to Exit incognito.",
+   "Send one message, then look at the top header for Temporary chat with an eye icon. Compare with Expected: the user can start a temporary chat from the chat surface."
+  ],
+  "where": "Composer > + menu > Use incognito (desktop: File > New Temporary Chat)"
+ },
+ "S41.02": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Temporary chat"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Won't be saved to your history and skips memory for this turn."
+   }
+  ],
+  "needs": "none",
+  "note": "On narrow screens the note after the label is hidden; the full note is also the hover text of the label.",
+  "reachable": "yes",
+  "steps": [
+   "Start a temporary chat (Use incognito in the + menu).",
+   "With no messages yet, look at the header: Temporary chat with an eye icon, then the note Won't be saved to your history and skips memory for this turn.",
+   "Send a message and open a second chat; the header shows Temporary chat only, with no note.",
+   "Return to the temporary chat and check the banner is still there. Compare with Expected: it stays visible while the chat is open."
+  ],
+  "where": "Top header of a temporary chat: Temporary chat"
+ },
+ "S41.03": {
+  "labels": [
+   {
+    "file": "apps/web/lib/temporary-chat-policy.ts",
+    "text": "Stays out of your history, search, memory and Library."
+   },
+   {
+    "file": "apps/web/features/settings/sections/PrivacySection.tsx",
+    "text": "Start new chats as temporary"
+   }
+  ],
+  "needs": "none",
+  "note": "The retention wording differs slightly between the header note, the row hover text and the Privacy page; the code was not checked for whether each clause matches behaviour.",
+  "reachable": "yes",
+  "steps": [
+   "Open the + menu in a new chat and hover over Use incognito.",
+   "Read the line under the row: Stays out of your history, search, memory and Library.",
+   "Open Settings > Privacy and read the description under Start new chats as temporary: Not saved to history or search, and deleted after 30 days.",
+   "Compare with Expected: the explanation should match what happens to the chat."
+  ],
+  "where": "Hover over the Use incognito row in the + menu, or Settings > Privacy > Start new chats as temporary"
+ },
+ "S41.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Temporary chats never read or save memory."
+   }
+  ],
+  "needs": "none",
+  "note": "The code offers no per-chat choice to let a temporary chat read memory. Expected says where offered, so this may not apply.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Start a temporary chat and open the + menu.",
+   "Look at the memory item: it is greyed out, not switchable.",
+   "Hover over it to see Temporary chats never read or save memory.",
+   "Compare with Expected: no choice is offered in the code, so memory is never read in a temporary chat."
+  ],
+  "where": "The memory control in the composer is greyed out in a temporary chat; hover it to read why"
+ },
+ "S41.05": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Temporary chats never read or save memory."
+   }
+  ],
+  "needs": "a Free or paid account with Memory turned on",
+  "note": "The code path that skips memory writes was found, but the exact Settings memory screen was not traced.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Start a temporary chat and tell the assistant a personal fact to remember.",
+   "Open Settings and look at the memory section for new saved items.",
+   "Compare with Expected: nothing from the temporary chat should be saved to memory."
+  ],
+  "where": "Effect is seen in Settings memory after a temporary chat; there is no control"
+ },
+ "S41.06": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Personalized"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Personalized uses your profile, instructions and response style."
+   }
+  ],
+  "needs": "none",
+  "note": "The switch is shown only while a temporary chat is active, and hidden in voice mode. The effect on custom instructions was located in the request code but not traced to the screen.",
+  "reachable": "yes",
+  "steps": [
+   "Start a temporary chat.",
+   "Find the switch in the header labelled Personalized (it is the switch beside Temporary chat).",
+   "Hover it to read Personalized uses your profile, instructions and response style.",
+   "Click it: the word changes to Unpersonalized. Compare with Expected: custom instructions should apply or not as the switch says."
+  ],
+  "where": "Top header of a temporary chat: the Personalized switch"
+ },
+ "S41.07": {
+  "labels": [
+   {
+    "file": "apps/web/lib/temporary-chat-policy.ts",
+    "text": "a connector asks before every call even where you saved Always allow"
+   }
+  ],
+  "needs": "a connector set up in the account",
+  "note": "The text is a hover title only, not on-screen copy. The plan's Code line cited a line that moved; the policy file was used instead.",
+  "reachable": "yes",
+  "steps": [
+   "Open the + menu in a new chat.",
+   "Hover over Use incognito and read the hover text.",
+   "Look for the clause: a connector asks before every call even where you saved Always allow, and a connector call still reaches that service.",
+   "Compare with Expected: the user should be able to tell which connectors work in a temporary chat and how."
+  ],
+  "where": "Hover over the Use incognito row in the + menu (the retention note)"
+ },
+ "S41.08": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/PrivacySection.tsx",
+    "text": "How we protect your data"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Kept out of your Library and deleted with this temporary chat."
+   }
+  ],
+  "needs": "none",
+  "note": "Where the attach-row note is shown on screen was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Privacy.",
+   "Expand How we protect your data.",
+   "Read the paragraph: A temporary chat and its attachments are removed after 30 days.",
+   "Open the + menu in a temporary chat and hover over an attach row; compare with Expected: the note should say what happens to files."
+  ],
+  "where": "Settings > Privacy > How we protect your data (retention paragraph); also the attach note in the + menu"
+ },
+ "S41.09": {
+  "labels": [],
+  "needs": "a temporary chat that makes an image or video",
+  "note": "The code keeps generated media for a temporary chat in media-assets.ts, video-generation-jobs.ts and the video route, but no control for a user to choose to keep the output was found in the chat UI. Searched the chat and library folders for save and keep wording without a match.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S41.10": {
+  "labels": [
+   {
+    "file": "apps/web/lib/temporary-chat-policy.ts",
+    "text": "Exit incognito"
+   },
+   {
+    "file": "apps/web/features/chat/pages/WebChatPage.tsx",
+    "text": "Save this chat?"
+   },
+   {
+    "file": "apps/web/features/chat/pages/WebChatPage.tsx",
+    "text": "Save chat"
+   }
+  ],
+  "needs": "a temporary chat with at least one message",
+  "note": "The dialog and save path are in WebChatPage.tsx; the Save chat button is the confirm label.",
+  "reachable": "yes",
+  "steps": [
+   "Start a temporary chat and send a message.",
+   "Open the + menu and click Exit incognito.",
+   "In the dialog Save this chat?, read the list of what will be kept, then click Save chat.",
+   "Look for the toast Chat saved to your history. and open the chat in the sidebar. Compare with Expected: everything in it is kept."
+  ],
+  "where": "Composer > + menu > Exit incognito, then the Save this chat? dialog > Save chat (only when the chat has messages)"
+ },
+ "S41.11": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/pages/WebChatPage.tsx",
+    "text": "Save this chat?"
+   }
+  ],
+  "needs": "a temporary chat with messages",
+  "note": "Cancel is the dialog's cancel action in the confirm flow; its exact label was not read.",
+  "reachable": "yes",
+  "steps": [
+   "Start a temporary chat with a few messages and attach a file if you can.",
+   "Open the + menu and click Exit incognito.",
+   "Read the dialog Save this chat?: it says how many messages and any files will be kept in your history.",
+   "Click Cancel or the close control to check nothing changed, then repeat and click Save chat. Compare with Expected: the user sees what is kept and confirms first."
+  ],
+  "where": "Composer > + menu > Exit incognito, then the Save this chat? dialog (before confirming)"
+ },
+ "S41.18": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/PrivacySection.tsx",
+    "text": "Start new chats as temporary"
+   },
+   {
+    "file": "apps/web/features/settings/sections/PrivacySection.tsx",
+    "text": "Only use models that do not train on your chats"
+   },
+   {
+    "file": "apps/web/features/settings/sections/PrivacySection.tsx",
+    "text": "How we protect your data"
+   }
+  ],
+  "needs": "none",
+  "note": "The Settings label Privacy comes from packages/ui/i18n/locales/en/settings.json; how the user reaches Settings was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Privacy.",
+   "Read Start new chats as temporary with its switch and its description.",
+   "Read the switch Only use models that do not train on your chats under the heading Model improvement.",
+   "Expand How we protect your data and read the retention paragraph. Compare with Expected: history, training and retention each have their own control or statement."
+  ],
+  "where": "Settings > Privacy: Start new chats as temporary, Only use models that do not train on your chats, How we protect your data"
+ },
+ "S41.19": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/PrivacySection.tsx",
+    "text": "Start new chats as temporary"
+   },
+   {
+    "file": "apps/web/features/settings/sections/PrivacySection.tsx",
+    "text": "Only use models that do not train on your chats"
+   }
+  ],
+  "needs": "none",
+  "note": "The descriptions for the model improvement switches were not read in full.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Privacy.",
+   "Read the description under Start new chats as temporary.",
+   "Read the description under each model improvement switch, including Only use models that do not train on your chats.",
+   "Compare with Expected: each setting should say in context what it does."
+  ],
+  "where": "Settings > Privacy: the one-line description under each switch"
+ },
+ "S41.20": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/PrivacySection.tsx",
+    "text": "Where each feature processes your data"
+   }
+  ],
+  "needs": "none",
+  "note": "Rows are built from a PROCESSING_LOCATIONS list in the same file; the full list was not read.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Privacy.",
+   "Expand Where each feature processes your data.",
+   "Read the rows: Chat, Files you attach, Memory and past-chat search, Web search and Deep Research, Image and video generation, Dictation, Voice mode, Read aloud, Connectors.",
+   "Compare with Expected: each row names the place the data is processed, such as Cloud or a named provider."
+  ],
+  "where": "Settings > Privacy > Where each feature processes your data"
+ }
+}

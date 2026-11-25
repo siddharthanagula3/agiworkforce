@@ -1,0 +1,554 @@
+{
+ "feature": {
+  "id": "F014-09",
+  "aliases": [
+   "Attachment chip",
+   "Attachment thumbnail",
+   "File-type icon",
+   "Remove attachment",
+   "Attachment preview",
+   "Attachment replacement",
+   "S14.16",
+   "S14.17",
+   "S14.18",
+   "S14.22",
+   "S14.28",
+   "S14.29",
+   "S14.30"
+  ],
+  "summary": "Shows each attachment before sending as a chip: a thumbnail for images, an icon with kind and size for documents, and a remove control. Web and desktop, phone, VS Code and Chrome have chips; the CLI lists staged items in text. Only the phone opens an image full screen. No app replaces a file in place.",
+  "purpose": {
+   "what_it_does": "Lets the person see what is attached, tell files apart, and take one out before the message goes.",
+   "why_it_exists": "A person must be sure the right files go to the model and must be able to undo a mistake. Brief items S14.16 to S14.18, S14.22, S14.28 to S14.30.",
+   "who_uses_it": "Everyone who attaches files on any app.",
+   "problems_solved": [
+    "Sending the wrong file",
+    "Not knowing whether a file is still uploading or ready",
+    "Telling several files with similar names apart"
+   ],
+   "use_cases": [
+    "Drop two pictures on web, see two thumbnails numbered in image-edit mode, remove one.",
+    "Phone: tap a picture chip to look at it full screen, then remove it.",
+    "CLI: run /attach list to see what is staged, /attach remove 2 to drop one.",
+    "VS Code: drag a file in, see its icon and size, press the X."
+   ]
+  },
+  "user_experience": {
+   "where_to_find_it": [
+    "Web and desktop: row of chips above the text box in the composer (apps/web/features/chat/components/Composer/ChatComposerNew.tsx:5781; apps/web/features/chat/components/Composer/AttachmentPreview.tsx).",
+    "Phone: horizontal strip labelled 'Attached files' above the input (apps/mobile/src/features/chat/components/AttachmentPreview.tsx:579).",
+    "CLI: '/attach list', '/attach remove [n|all]' and a chip line starting with a paperclip (apps/cli/src/tui/tui_app.rs:6215-6250, :3278).",
+    "VS Code: attachment strip in the sidebar chat (apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:7568).",
+    "Chrome: chips in the side panel composer (apps/extension/src/side_panel.ts:10416)."
+   ],
+   "prerequisites": [
+    "At least one file added to the draft."
+   ],
+   "screens_and_controls": [
+    "Web image chip: 56 px square thumbnail, tooltip with name and size, a corner X with label 'Remove {name}'; images may carry a number 'Image N' in image-edit or video-reference mode (AttachmentPreview.tsx:188-247).",
+    "Web document chip: icon, name shortened to 20 characters, and 'Kind \u00b7 size' where Kind is PDF, Spreadsheet, Code, Document, Text, Presentation or File (AttachmentPreview.tsx:31-83, :249-295).",
+    "Web: after 4 document chips a toggle 'Show all attachments' / 'Show fewer attachments'; images are never hidden (AttachmentPreview.tsx:85-86, :313-380).",
+    "Phone image tile 72 px, document tile 96 px wide with icon, name, 'Kind \u00b7 size'; tap an image to open it full screen (accessibility hint 'Shows the picture full screen'); X labelled 'Remove {name}' (AttachmentPreview.tsx:187-260).",
+    "Phone overlays: 'No longer available' when the source file is gone (line 385).",
+    "CLI staged label: 'path (size)'.",
+    "VS Code chip: icon by extension or image thumbnail, name, size (only when the file object is known), x labelled 'Remove attachment {name}' (webviewContent.ts:7544-7627).",
+    "Chrome chip: 48 px thumbnail or icon, file name, a status line and an x labelled 'Remove {file}' (side_panel.ts:10416-10470); no size shown."
+   ],
+   "journey": [
+    "Add one or more files.",
+    "A chip appears for each.",
+    "Check name, kind and size; on phone tap an image to view it.",
+    "Press the X (or /attach remove) on any chip to take it out.",
+    "Send; removed files are not sent."
+   ],
+   "feedback_and_outputs": [
+    "A ready draft chip shows no progress text on web (AttachmentPreview.tsx:138-143 returns nothing for 'ready' or 'complete').",
+    "Phone ready chip shows no overlay.",
+    "CLI: 'Removed {label}.' or 'Removed N staged image(s).' or 'Nothing staged for the next turn.' (tui_app.rs:943-962, :6223)."
+   ],
+   "settings": [
+    "none found"
+   ]
+  },
+  "current_implementation": {
+   "working": [
+    "Web/desktop chips with thumbnails, kind icons, size, remove, collapse and image numbering (apps/web/features/chat/components/Composer/AttachmentPreview.tsx).",
+    "Removal releases the preview URL and frees the file count and byte budget (apps/web/features/chat/hooks/use-attachments.ts:531-547).",
+    "Phone chips with thumbnails, kind icons, size, remove and full-screen image view (apps/mobile/src/features/chat/components/AttachmentPreview.tsx:187-260, :609).",
+    "CLI staged list with sizes and removal by number or all (apps/cli/src/tui/tui_app.rs:6222-6250, :943).",
+    "VS Code chips with icon, name, size and remove; removal of a not-yet-acknowledged chip is deferred until the host assigns an id (webviewContent.ts:7594-7612).",
+    "Chrome chips with thumbnail or icon, name and remove, which also aborts an upload in flight (apps/extension/src/side_panel.ts:10312-10319)."
+   ],
+   "incomplete": [
+    "Web image chips show size only in a tooltip, not as visible text (AttachmentPreview.tsx:222).",
+    "Chrome chips show no size (side_panel.ts:10416-10470).",
+    "CLI has no thumbnail or icon; files added with /files appear as a path list in /files with no sizes and no per-file remove command was found (apps/cli/src/claude_parity.rs:416-433).",
+    "VS Code size is shown only for files with a size known to the page, which is the drag, drop and paste path; picker-added files go through a different message (ChatStateManager.ts:3976-4040) [inferred]."
+   ],
+   "disconnected_or_disabled": [
+    "none found"
+   ],
+   "not_available": [
+    "Replace in place: no app (brief S14.29; no code found).",
+    "Preview of a document or full content before sending: all apps.",
+    "Image full-screen preview: web, desktop, CLI, VS Code, Chrome (phone only).",
+    "File-type icons in the CLI."
+   ]
+  },
+  "required_behaviour": {
+   "established": [
+    {
+     "statement": "An attached image shows a small thumbnail in the composer before sending.",
+     "source": "brief S14.16"
+    },
+    {
+     "statement": "Each non-image attachment shows an icon matching its type (PDF, spreadsheet, code, other).",
+     "source": "brief S14.17"
+    },
+    {
+     "statement": "Each attachment shows its name and size before sending.",
+     "source": "brief S14.18"
+    },
+    {
+     "statement": "The composer makes clear when an attachment is ready and the message can be sent.",
+     "source": "brief S14.22"
+    },
+    {
+     "statement": "Each attachment can be removed before sending and a removed file is not sent.",
+     "source": "brief S14.28"
+    },
+    {
+     "statement": "An attached file can be replaced in place keeping its position.",
+     "source": "brief S14.29"
+    },
+    {
+     "statement": "Before sending the user can open an attachment to view it at full size or read its content.",
+     "source": "brief S14.30"
+    },
+    {
+     "statement": "Attachment-ready controls with honest unavailable states.",
+     "source": "doc: docs/product/requirements.md (line ~808)"
+    }
+   ],
+   "acceptance_criteria": [
+    "Each image on web and phone shows a thumbnail; each document shows an icon, name and size.",
+    "Pressing X removes exactly that chip; the removed file is absent from the sent message.",
+    "On web, with 5 documents attached, 4 show and 'Show all attachments' reveals the fifth; images stay visible.",
+    "On the phone, tapping an image chip opens it full screen and closing returns to the draft.",
+    "CLI '/attach list' numbers staged items and '/attach remove 1' removes the first.",
+    "Chrome and VS Code chips each have a remove control with a name in its accessible label."
+   ],
+   "inferred": [
+    "Replace and preview are not required by any decision record found; the brief marks them missing, not built [inferred]."
+   ],
+   "proposed": [
+    "[proposed] Show size as visible text on web image chips and on Chrome chips.",
+    "[proposed] Add a document preview before send, starting with images and text on web.",
+    "[proposed] Add 'Replace' to the chip menu on web and phone."
+   ]
+  },
+  "implementation_map": [
+   {
+    "kind": "component",
+    "name": "AttachmentPreview (web)",
+    "path": "apps/web/features/chat/components/Composer/AttachmentPreview.tsx",
+    "role": "Image thumbnail, document chip, remove button, upload status and collapse toggle."
+   },
+   {
+    "kind": "hook",
+    "name": "useAttachments",
+    "path": "apps/web/features/chat/hooks/use-attachments.ts",
+    "role": "Holds files and preview URLs; removeFile (531) and clearAll (549)."
+   },
+   {
+    "kind": "component",
+    "name": "ChatComposerNew",
+    "path": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "role": "Mounts the chip rows (5769, 5781) and defers send while a picture is being prepared (3598)."
+   },
+   {
+    "kind": "component",
+    "name": "AttachmentPreview (phone)",
+    "path": "apps/mobile/src/features/chat/components/AttachmentPreview.tsx",
+    "role": "Tiles, overlays, remove and image viewer."
+   },
+   {
+    "kind": "component",
+    "name": "ImageFullScreen",
+    "path": "apps/mobile/src/features/chat/components/ImageFullScreen.tsx",
+    "role": "Full-screen image view opened from a chip."
+   },
+   {
+    "kind": "component",
+    "name": "ChatInput (phone)",
+    "path": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "role": "Owns the attachment list and the missing-file alert (line 869)."
+   },
+   {
+    "kind": "service",
+    "name": "formatAttachmentSize",
+    "path": "apps/mobile/src/features/chat/utils/attachmentSize.ts",
+    "role": "Size text on phone chips."
+   },
+   {
+    "kind": "command",
+    "name": "/attach list and remove",
+    "path": "apps/cli/src/tui/tui_app.rs",
+    "role": "Staged list, chip line and removal (6215-6250, 943, 3278)."
+   },
+   {
+    "kind": "component",
+    "name": "makeAttachmentChip",
+    "path": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "role": "VS Code chip builder with icon table (7544-7627)."
+   },
+   {
+    "kind": "service",
+    "name": "removePendingAttachment handler",
+    "path": "apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts",
+    "role": "Host side removal of a pending attachment (line 2239)."
+   },
+   {
+    "kind": "component",
+    "name": "renderComposerDocumentChip",
+    "path": "apps/extension/src/side_panel.ts",
+    "role": "Chrome chip with thumbnail, name, status and remove (10416)."
+   },
+   {
+    "kind": "test",
+    "name": "AttachmentPreview tests (web)",
+    "path": "apps/web/features/chat/components/Composer/AttachmentPreview.test.tsx",
+    "role": "Chip behaviour tests."
+   },
+   {
+    "kind": "test",
+    "name": "AttachmentPreviewStates (phone)",
+    "path": "apps/mobile/__tests__/AttachmentPreviewStates.test.tsx",
+    "role": "Phone chip state tests."
+   },
+   {
+    "kind": "test",
+    "name": "AttachmentPreviewViewer (phone)",
+    "path": "apps/mobile/__tests__/AttachmentPreviewViewer.test.tsx",
+    "role": "Phone image viewer tests."
+   }
+  ],
+  "execution_and_data_flow": {
+   "steps": [
+    {
+     "what_happens": "A file is admitted and a preview URL is created from the File object.",
+     "runs_on": "device",
+     "evidence": "apps/web/features/chat/hooks/use-attachments.ts:~318-331 (admit)"
+    },
+    {
+     "what_happens": "The chip renders thumbnail or icon, name and size from the File.",
+     "runs_on": "device",
+     "evidence": "apps/web/features/chat/components/Composer/AttachmentPreview.tsx:188-295"
+    },
+    {
+     "what_happens": "Remove revokes the preview URL and removes the file from the lists.",
+     "runs_on": "device",
+     "evidence": "use-attachments.ts:531-547"
+    },
+    {
+     "what_happens": "Phone tap on an image opens a local full-screen viewer.",
+     "runs_on": "device",
+     "evidence": "apps/mobile/src/features/chat/components/AttachmentPreview.tsx:609"
+    },
+    {
+     "what_happens": "VS Code removal posts removePendingAttachment to the extension host, which deletes the pending file.",
+     "runs_on": "device",
+     "evidence": "webviewContent.ts:7594-7603; ChatStateManager.ts:2239"
+    }
+   ],
+   "data": [
+    {
+     "what": "Draft files and preview URLs",
+     "where_stored": "Memory of the web page or phone app until send",
+     "synced": "No (phone keeps a draft store; see ChatInput.draftAttachments.test.tsx)",
+     "retained_or_deleted": "Removed on X, on clear, or at send"
+    }
+   ],
+   "models_and_providers": "No model is involved in showing or removing chips."
+  },
+  "access_and_usage": {
+   "account": "none found in the code for the chip display itself.",
+   "permissions": "none found in the code",
+   "subscription": "none found in the code",
+   "limits_and_metering": "Web collapses documents after 4 (AttachmentPreview.tsx:85). No other limit belongs to the chip.",
+   "flags": "none found in the code",
+   "model_compatibility": "Chip display is independent of the model; the model warning is F014-12.",
+   "provider_restrictions": "none found in the code",
+   "local_mode": "Chips work the same in Local mode on phone (local files are listed as chips). On web, an on-device model shows the conflict banner next to the chips (ChatComposerNew.tsx:5336)."
+  },
+  "states_and_edge_cases": [
+   {
+    "state": "No attachments",
+    "behaviour": "Component returns nothing.",
+    "evidence": "AttachmentPreview.tsx:300 (web); AttachmentPreview.tsx:556 (phone)"
+   },
+   {
+    "state": "Remove while uploading",
+    "behaviour": "Label becomes 'Cancel upload of {name}'.",
+    "evidence": "web AttachmentPreview.tsx:132-136; phone AttachmentPreview.tsx:187-198"
+   },
+   {
+    "state": "Source file gone (phone)",
+    "behaviour": "Overlay 'No longer available'; send blocked with alert 'File no longer available'.",
+    "evidence": "phone AttachmentPreview.tsx:385; ChatInput.tsx:869"
+   },
+   {
+    "state": "Picture still being cleaned of location data (web)",
+    "behaviour": "Send waits until preparation ends.",
+    "evidence": "ChatComposerNew.tsx:3598"
+   },
+   {
+    "state": "Accessibility",
+    "behaviour": "Web remove target is enlarged to about 40 px with a pseudo-element; phone chips carry spoken labels with name, kind, size and destination.",
+    "evidence": "AttachmentPreview.tsx:108-122; phone AttachmentPreview.tsx:213-236"
+   },
+   {
+    "state": "Remove an unsent upload in VS Code before the host answers",
+    "behaviour": "Removal is held and applied when the host assigns an id.",
+    "evidence": "webviewContent.ts:7604-7609, :8515-8520"
+   },
+   {
+    "state": "Preview or replace",
+    "behaviour": "not handled in the code",
+    "evidence": "no code found"
+   }
+  ],
+  "verification": {
+   "existing_tests": [
+    {
+     "path": "apps/web/features/chat/components/Composer/AttachmentPreview.test.tsx",
+     "covers": "Unique keys, remove by index, staged files of every kind, indeterminate phase, retry from chip, kind beside size, Office naming, image numbering, collapse toggle, images never hidden."
+    },
+    {
+     "path": "apps/mobile/__tests__/AttachmentPreviewStates.test.tsx",
+     "covers": "Retry and Not sent overlays, Remove beside Retry, Verifying, image numbering."
+    },
+    {
+     "path": "apps/mobile/__tests__/AttachmentPreviewViewer.test.tsx",
+     "covers": "Phone image viewer (titles not read in full)."
+    },
+    {
+     "path": "apps/web/features/chat/hooks/__tests__/useAttachments.reset.test.tsx",
+     "covers": "Draft reset behaviour (titles not read in full)."
+    },
+    {
+     "path": "apps/extension-vscode/src/__tests__/attachmentGeneration.webview.test.ts",
+     "covers": "Webview attachment generation handling (titles not read in full)."
+    }
+   ],
+   "scenarios": [
+    {
+     "name": "Remove one of three",
+     "steps": [
+      "Attach three files on web.",
+      "Press X on the second."
+     ],
+     "expected": "Two chips remain; sending includes only those two."
+    },
+    {
+     "name": "Collapse documents",
+     "steps": [
+      "Attach five documents on web."
+     ],
+     "expected": "Four chips and 'Show all attachments'; pressing it shows five and the label changes."
+    },
+    {
+     "name": "Phone image view",
+     "steps": [
+      "Attach a photo on phone.",
+      "Tap the tile."
+     ],
+     "expected": "The picture opens full screen; closing returns to the draft."
+    },
+    {
+     "name": "CLI staged list",
+     "steps": [
+      "/attach a.png then /attach b.pdf.",
+      "/attach list then /attach remove 1."
+     ],
+     "expected": "List shows two numbered rows; after removal one remains."
+    },
+    {
+     "name": "Chrome size missing",
+     "steps": [
+      "Attach a PDF in the Chrome side panel."
+     ],
+     "expected": "Chip shows name and status; no size text (known gap)."
+    }
+   ],
+   "diagnostics": [
+    "Web test ids: attachment-order.",
+    "Phone test ids: attachment-view-, attachment-remove-, attachment-cancel-."
+   ]
+  },
+  "gaps": [
+   {
+    "gap": "No replace-in-place on any app.",
+    "affects": "All",
+    "evidence": "brief S14.29; no code found",
+    "work_needed": "Design a replace control and keep order."
+   },
+   {
+    "gap": "No preview of document content or full-size image outside the phone.",
+    "affects": "Web, desktop, CLI, VS Code, Chrome",
+    "evidence": "brief S14.30",
+    "work_needed": "Add a viewer."
+   },
+   {
+    "gap": "Chrome chips show no size.",
+    "affects": "Chrome",
+    "evidence": "side_panel.ts:10416-10470; brief S14.18",
+    "work_needed": "Render a size label."
+   },
+   {
+    "gap": "CLI has no icons or thumbnails and no per-file remove for /files items.",
+    "affects": "CLI",
+    "evidence": "claude_parity.rs:416-433",
+    "work_needed": "Add a remove option for context files."
+   },
+   {
+    "gap": "Web image chips show size only in a tooltip.",
+    "affects": "Web, desktop",
+    "evidence": "AttachmentPreview.tsx:222",
+    "work_needed": "Show visible size text."
+   }
+  ],
+  "depends_on": [
+   "surface:web",
+   "surface:desktop",
+   "surface:mobile",
+   "surface:cli",
+   "surface:vscode",
+   "surface:chrome",
+   "file:apps/web/features/chat/hooks/use-attachments.ts",
+   "F014-10",
+   "F014-11",
+   "F014-12",
+   "SYS-shared-ui-and-design",
+   "SYS-files-artifacts-and-storage"
+  ],
+  "relationships": [
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/web/features/chat/components/Composer/AttachmentPreview.tsx",
+    "evidence": "Chip components."
+   },
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/mobile/src/features/chat/components/AttachmentPreview.tsx",
+    "evidence": "Phone tiles and viewer."
+   },
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/cli/src/tui/tui_app.rs",
+    "evidence": "/attach list and remove."
+   },
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "evidence": "makeAttachmentChip."
+   },
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/extension/src/side_panel.ts",
+    "evidence": "renderComposerDocumentChip."
+   },
+   {
+    "rel": "depends_on",
+    "to": "F014-10",
+    "evidence": "Chips carry upload status and Retry."
+   },
+   {
+    "rel": "depends_on",
+    "to": "store:useUploadLifecycleStore",
+    "evidence": "Phone chip reads upload state (phone AttachmentPreview.tsx:~179)."
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:desktop",
+    "evidence": "Desktop shows the hosted web app (doc: AGENTS.md section 5)."
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/web/features/chat/components/Composer/AttachmentPreview.test.tsx",
+    "evidence": "Web chip tests."
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/mobile/__tests__/AttachmentPreviewStates.test.tsx",
+    "evidence": "Phone chip tests."
+   },
+   {
+    "rel": "governed_by_subscription",
+    "to": "SYS-subscriptions-entitlements-and-usage",
+    "evidence": "No plan rule on chips; limits live in F014-11."
+   }
+  ],
+  "unknowns": [
+   "Whether VS Code picker-added files show size; the picker path posts contextAttached and its chip builder was not read.",
+   "Where CLI users remove a file added with /files; no command found in the code read.",
+   "The web draft preview for the desktop Tauri build was not read.",
+   "Whether any record shows the chip looks right to a human; no such record found."
+  ]
+ },
+ "corrections": [
+  {
+   "section": "2/3",
+   "claim": "Web: a ready draft chip shows no progress text (AttachmentPreview.tsx:138-143 returns nothing for 'ready' or 'complete').",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "Behaviour is right, line is wrong. The ready/complete check is at line 147. Lines 138-143 are the UploadStatus props.",
+   "evidence": "apps/web/features/chat/components/Composer/AttachmentPreview.tsx:147",
+   "correction": "Cite :147 for the ready/complete early return."
+  },
+  {
+   "section": "8",
+   "claim": "No attachments: component returns nothing. Web AttachmentPreview.tsx:300; phone :556.",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "Web returns null at 320. Phone returns null at 564, and only when there are no attachments and nothing preparing.",
+   "evidence": "AttachmentPreview.tsx:320 (web); apps/mobile/src/features/chat/components/AttachmentPreview.tsx:564",
+   "correction": "Web :320; phone :564, when attachments and preparing are both empty."
+  },
+  {
+   "section": "7",
+   "claim": "Local mode: on web, an on-device model shows the conflict banner next to the chips (ChatComposerNew.tsx:5336).",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The banner exists at 5333-5345, with a 'switch to cloud' button. localAttachmentConflict is true whenever a local model is selected and any attachment is present (line 1589). Send is then blocked: the early return at ~3596 (`if (localAttachmentConflict) return;`) stops it. So on web, attachments cannot be sent with an on-device model. The page does not say this.",
+   "evidence": "ChatComposerNew.tsx:1589, :3596, :5333-5345",
+   "correction": "On web, attaching any file while an on-device model is selected shows a refusal banner and blocks sending until the person leaves the local model or removes the files."
+  },
+  {
+   "section": "2/8",
+   "claim": "Remove while uploading: label becomes 'Cancel upload of {name}' (web :132-136; phone :187-198).",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "Web is correct: the label changes for the preparing, uploading and verifying phases (:132-136). Phone builds the label at line 476, not 187-198.",
+   "evidence": "web AttachmentPreview.tsx:132-136; mobile AttachmentPreview.tsx:476",
+   "correction": "Phone citation is :476."
+  },
+  {
+   "section": "2/3",
+   "claim": "CLI: '/attach list', '/attach remove [n|all]'; staged label 'path (size)'; messages 'Removed {label}.' / 'Removed N staged image(s).' / 'Nothing staged for the next turn.'",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The commands and messages match (tui_app.rs:6222-6250, :943-962). But the list holds staged images only (staged_images; the error reads 'Not a staged image number'). The label is 'path (size)' or 'path (size, full resolution)' (:871-876). The page implies all attachments are listed. The command also accepts the alias 'rm'.",
+   "evidence": "apps/cli/src/tui/tui_app.rs:871-876, :6222-6250, :943-962",
+   "correction": "/attach list and /attach remove cover staged images only. Labels are 'path (size)' or 'path (size, full resolution)'."
+  },
+  {
+   "section": "3/6",
+   "claim": "VS Code removal posts removePendingAttachment to the host, which deletes the pending file; removal of an un-acked chip is deferred (webviewContent.ts:7594-7612; ChatStateManager.ts:2239).",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The post and the deferral are correct (data-remove-requested). The host handler at ChatStateManager.ts:2239 only splices the entry from the in-memory _pendingAttachments list and removes it from in-flight, queued and steering sends. It does not delete a file. The page also labels this step 'device', but it runs in the extension host.",
+   "evidence": "apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:2239-2248; webviewContent.ts:7594-7612",
+   "correction": "The host drops the attachment from its pending list and from queued or in-flight sends. It does not delete a file."
+  }
+ ],
+ "missing_facts": [
+  "On web, an on-device (Local) model refuses attachments entirely. localAttachmentConflict (ChatComposerNew.tsx:1589) blocks send (~:3596) until the person switches to cloud or removes the files. The page mentions only a banner.",
+  "The CLI /attach list and /attach remove act on staged images only (tui_app.rs:6222-6250, :943). The CLI also accepts 'rm' as an alias and local file paths, not just images.",
+  "The web send path defers send while an attachment is being prepared, via deferredSendRef (ChatComposerNew.tsx:3596-3600). The page ties this only to location-data cleaning, but attachmentPreparing is generic."
+ ]
+}

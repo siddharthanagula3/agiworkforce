@@ -1,0 +1,355 @@
+{
+ "S108.01": {
+  "labels": [],
+  "needs": "none (no bank can be connected yet, so the page has no data to show)",
+  "note": "The Finances page exists at /chat/finance (heading 'Finances', apps/web/features/finance/components/FinanceDashboard.tsx:356) and shows accounts, 'Where your money went' and 'By month' only once a bank is linked. No sidebar, menu or palette entry for it was found; it is reached only by typing the address or from a toast after a bank connects. Searched: 'Finances', '/chat/finance', 'FINANCE_PAGE_HREF'.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S108.02": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Connectors"
+   },
+   {
+    "file": "packages/contracts/cloud-contracts/src/connector-trust-copy.ts",
+    "text": "Bank accounts"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Coming soon"
+   }
+  ],
+  "needs": "none",
+  "note": "Bank linking is gated as coming soon (connector release state coming_soon, bank-accounts is not in SELECTIVELY_RELEASED_CONNECTOR_IDS) and Plaid settings are not set, per the owner's note.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Connectors in the list on the left.",
+   "Find the card named Bank accounts.",
+   "Look at its button: it reads Coming soon and does not start a link. Expected says the user links accounts, which cannot be done yet."
+  ],
+  "where": "Settings > Connectors > Bank accounts"
+ },
+ "S108.03": {
+  "labels": [],
+  "needs": "none",
+  "note": "Spending by category ('Where your money went') and by month ('By month') are on the Finances page at /chat/finance (apps/web/features/finance/components/FinanceDashboard.tsx:180, :216), but that page has no sidebar or menu entry and needs linked bank data, which cannot be connected yet. Searched: 'Where your money went', 'By month', 'Finances'.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S108.09": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Deep Research"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "More composer options"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Upgrade to use Deep Research"
+   }
+  ],
+  "needs": "a paid plan (on Free the row shows 'Upgrade to use Deep Research')",
+  "note": "Deep Research is the only path found; the finance-specific data sources (Fitch, FMP directory entries) are Coming soon, so sources come from web search.",
+  "reachable": "yes",
+  "steps": [
+   "In a new chat, pick a model; open the composer's options menu (its panel is labelled More composer options).",
+   "Turn on the row Deep Research.",
+   "Type a financial question, for example about a listed company's filings or a market instrument, and send.",
+   "Watch the run: a plan, several search rounds, then a final answer with its sources listed. Compare with Expected: sourced, cited output."
+  ],
+  "where": "Chat composer > More composer options > Deep Research"
+ },
+ "S108.10": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Deep Research"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "More composer options"
+   }
+  ],
+  "needs": "a paid plan",
+  "note": "No separate company-profile screen was found; the profile is the research answer. Company-data directory entries are Coming soon.",
+  "reachable": "yes",
+  "steps": [
+   "In a new chat, pick a model; open the composer's options menu (panel labelled More composer options).",
+   "Turn on the row Deep Research.",
+   "Type a request such as 'Research [company name]: business, financials, recent news and competitors' and send.",
+   "Compare the answer with Expected: business, financials, news and competitors, each with sources."
+  ],
+  "where": "Chat composer > More composer options > Deep Research"
+ },
+ "S108.12": {
+  "labels": [
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Health"
+   },
+   {
+    "file": "apps/web/features/health/components/HealthSpaceLanding.tsx",
+    "text": "Health stays out of your other chats, and only uses models that keep chats out of training."
+   }
+  ],
+  "needs": "a Health-enabled account (owner has said Health stays off)",
+  "note": "The Health page only opens a Health space; the HealthEx records connector referenced in the plan's Code line is not released.",
+  "reachable": "yes",
+  "steps": [
+   "Look for Health in the left sidebar. It shows only when the server enables Health for the account; if it is not there, this item cannot be reached.",
+   "Click Health.",
+   "Read the heading Health and its sentence about chats and training.",
+   "Look for a control that imports medical records. None was found on this page; the records connector is Coming soon. Compare with Expected: browse and ask about imported records."
+  ],
+  "where": "Sidebar > Health"
+ },
+ "S108.17": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Deep Research"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "More composer options"
+   }
+  ],
+  "needs": "a paid plan",
+  "note": "Legal databases in the directory (CourtListener, Midpage, Descrybe) are Coming soon, so authorities come from web search.",
+  "reachable": "yes",
+  "steps": [
+   "In a new chat, pick a model; open the composer's options menu (panel labelled More composer options).",
+   "Turn on the row Deep Research.",
+   "Type a legal question, for example about a case or statute, and send.",
+   "Compare with Expected: case law and statutes searched, with cited authorities listed."
+  ],
+  "where": "Chat composer > More composer options > Deep Research"
+ },
+ "S108.19": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Skills"
+   },
+   {
+    "file": ".agents/skills/review-contract/SKILL.md",
+    "text": "review-contract"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Add photos & files"
+   }
+  ],
+  "needs": "a contract file or text, and your own playbook",
+  "note": "Whether the skill appears in the Skills list for every account was not verified.",
+  "reachable": "yes",
+  "steps": [
+   "Open the composer's options menu (panel labelled More composer options) and click Skills.",
+   "Pick review-contract if it is listed for the account.",
+   "Attach the contract with Add photos & files, or paste its text, and send.",
+   "Compare with Expected: clause-by-clause findings, flagged risks and suggested redlines against the playbook you supply."
+  ],
+  "where": "Chat composer > More composer options > Skills > review-contract"
+ },
+ "S108.20": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Deep Research"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "More composer options"
+   }
+  ],
+  "needs": "a paid plan",
+  "note": "Literature connectors (alphaXiv, Consensus) are Coming soon, so papers come from web search.",
+  "reachable": "yes",
+  "steps": [
+   "In a new chat, pick a model; open the composer's options menu (panel labelled More composer options).",
+   "Turn on the row Deep Research.",
+   "Type a research question on a scientific topic and send.",
+   "Compare with Expected: literature searched and a synthesis with cited papers."
+  ],
+  "where": "Chat composer > More composer options > Deep Research"
+ },
+ "S108.22": {
+  "labels": [],
+  "needs": "none",
+  "note": "The Code page is at /code (packages/contracts/types/src/cloud-code.ts:325) and is reached from the sidebar Code control (packages/ui/ui/src/sidebar/Sidebar.tsx). A notebook panel (aria-label 'Notebook', apps/web/features/notebook/NotebookPanel.tsx) appears only for a session whose runtime is code-interpreter-v1, and no control that starts such a session was found. Searched: 'notebook', 'NOTEBOOK_TEMPLATE_ID', 'Python' in apps/web/features/code.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S108.23": {
+  "labels": [
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Study"
+   },
+   {
+    "file": "apps/web/features/study/components/StudyPage.tsx",
+    "text": "What are you studying?"
+   },
+   {
+    "file": "apps/web/features/study/components/StudyPage.tsx",
+    "text": "Start studying"
+   }
+  ],
+  "needs": "none",
+  "note": "Expected mentions classes and assignments; searching apps/web/features/study for class, assignment and teacher found nothing.",
+  "reachable": "yes",
+  "steps": [
+   "Click Study in the left sidebar.",
+   "Type a subject in What are you studying? and pick a mode under How: Learn it, Practise it or Revise it.",
+   "Pick a level under Where you are with it and click Start studying.",
+   "Compare with Expected: a chat opens for that subject and the session appears under Your sessions. No classes or assignments screen was found."
+  ],
+  "where": "Sidebar > Study"
+ },
+ "S108.24": {
+  "labels": [
+   {
+    "file": "apps/web/features/study/components/StudyPage.tsx",
+    "text": "Start with a personal study plan"
+   }
+  ],
+  "needs": "none",
+  "note": "The plan is requested from the model as text; no structured lesson-plan format was found. Education directory entries (Brisk Teaching, Coteach) are Coming soon.",
+  "reachable": "yes",
+  "steps": [
+   "Click Study in the left sidebar and type a subject.",
+   "Tick Start with a personal study plan and click Start studying.",
+   "In the chat, the request to build a plan is filled into the message box; send it.",
+   "Compare with Expected: an ordered plan of what to cover, time for each part and how understanding is checked. The output is chat text, not a structured curriculum with objectives, activities and materials."
+  ],
+  "where": "Sidebar > Study > Start with a personal study plan"
+ },
+ "S108.26": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Skills"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Coming soon"
+   }
+  ],
+  "needs": "none for the guidance; a CRM connection for live data (not available)",
+  "note": "Live CRM lookup and update is not available yet; the skill works from data the user pastes or attaches.",
+  "reachable": "yes",
+  "steps": [
+   "Open the composer's options menu (panel labelled More composer options) and click Skills.",
+   "Pick pipeline-review or deal-review if listed.",
+   "Ask for a pipeline health check, for example 'review my pipeline', and send.",
+   "Compare with Expected: coverage, aging and at-risk deals. Expected also says contacts and deals are looked up and updated; that needs a CRM connector, and HubSpot and Salesforce show Coming soon."
+  ],
+  "where": "Chat composer > More composer options > Skills > pipeline-review"
+ },
+ "S108.27": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Skills"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Coming soon"
+   }
+  ],
+  "needs": "a support ticket text",
+  "note": "Ticket updates in a helpdesk are not available yet.",
+  "reachable": "yes",
+  "steps": [
+   "Open the composer's options menu and click Skills.",
+   "Pick ticket-triage (or draft-response, customer-escalation) if listed.",
+   "Paste a support ticket and send.",
+   "Compare with Expected: priority, owning team and a draft reply. Expected also says tickets are updated in a ticket system, which needs a connector (Intercom shows Coming soon)."
+  ],
+  "where": "Chat composer > More composer options > Skills > ticket-triage"
+ },
+ "S108.28": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Skills"
+   }
+  ],
+  "needs": "none",
+  "note": "No job-post publishing or candidate-tracker screen was found; Lattice and Metaview directory entries are Coming soon.",
+  "reachable": "yes",
+  "steps": [
+   "Open the composer's options menu and click Skills.",
+   "Pick recruiting-pipeline or interview-prep if listed.",
+   "Type 'interview plan for [role]' or 'recruiting update' and send.",
+   "Compare with Expected: candidate stages, interview questions and scorecards from the chat answer."
+  ],
+  "where": "Chat composer > More composer options > Skills > recruiting-pipeline"
+ },
+ "S108.29": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Skills"
+   }
+  ],
+  "needs": "none",
+  "note": "Braze and Adobe Marketing Agent directory entries are Coming soon, so analytics and campaign actions are not available.",
+  "reachable": "yes",
+  "steps": [
+   "Open the composer's options menu and click Skills.",
+   "Pick a marketing skill if listed (for example marketing-plan or copywriting).",
+   "Send a campaign request in chat.",
+   "Compare with Expected: audiences, campaigns, assets and analytics. Only written advice is produced; no campaign, audience or analytics screen was found."
+  ],
+  "where": "Chat composer > More composer options > Skills"
+ },
+ "S108.31": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/cards/ProductComparisonCard.tsx",
+    "text": "Prices checked"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/cards/ProductComparisonCard.tsx",
+    "text": "View product"
+   }
+  ],
+  "needs": "a model that can search the web",
+  "note": "The card appears only when the model calls the comparison tool; the tester cannot force it from a menu.",
+  "reachable": "yes",
+  "steps": [
+   "In a new chat with a model that can search the web, type a buying question with compare or which and a price word, for example 'Compare two or three specific headphones under $400 and tell me which to buy', and send.",
+   "Wait for a card titled with the comparison, showing each product with its price, store and a buy link.",
+   "Check the Spec table under the cards and the 'Prices checked' line.",
+   "Compare with Expected: side-by-side specs, prices and merchants."
+  ],
+  "where": "Chat > type a buying question and send (no button)"
+ },
+ "S108.33": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/cards/ItineraryCard.tsx",
+    "text": "Driving directions in Google Maps"
+   }
+  ],
+  "needs": "none",
+  "note": "Reservations need a booking connector that is not released; the card appears only when the model calls the itinerary tool.",
+  "reachable": "yes",
+  "steps": [
+   "In a new chat, type 'Plan a day trip in Rome' and send.",
+   "Wait for an itinerary card with numbered stops on a map and a route.",
+   "Open a route link: the labels read Walking directions in Google Maps or Driving directions in Google Maps.",
+   "Compare with Expected: itinerary, places and routes. Reservations are not made here; the assistant only points to Settings, under Connectors, to connect a booking connector (Booking.com and Expedia show Coming soon)."
+  ],
+  "where": "Chat > type a trip request and send (no button)"
+ }
+}

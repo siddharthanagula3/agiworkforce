@@ -1,0 +1,417 @@
+{
+ "S37.01": {
+  "labels": [
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Projects"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/ProjectGallery.tsx",
+    "text": "Search projects..."
+   }
+  ],
+  "needs": "a signed-in account (a project already created helps, to see a list)",
+  "note": "The app calls notebooks \"Projects\"; the word \"Notebook\" does not appear in the UI. The sidebar entry can be hidden by the user (hideable: true).",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and click \"Projects\" in the left sidebar.",
+   "Look for the page heading \"Projects\" and the search box \"Search projects...\".",
+   "Each card is one project. Click a card's name (\"Open project <name>\") to open it.",
+   "Compare: you should see your list of projects and open one. If there are none, the text \"Create one to group conversations, attach files, and share instructions.\" shows."
+  ],
+  "where": "Sidebar > Projects (the Projects page lists every project as cards, with the search box \"Search projects...\")"
+ },
+ "S37.02": {
+  "labels": [
+   {
+    "file": "apps/web/app/chat/projects/page.tsx",
+    "text": "New project"
+   },
+   {
+    "file": "apps/web/features/chat/components/dialogs/CreateProjectDialog.tsx",
+    "text": "Create project"
+   },
+   {
+    "file": "apps/web/features/chat/components/dialogs/CreateProjectDialog.tsx",
+    "text": "Project name"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The Projects page also has its own inline create form (\"New project\" in packages/ui/unified-chat/src/components/ProjectGallery.tsx) with the placeholder \"Project name\"; the path above is the one the page opens.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Projects\" in the sidebar.",
+   "Click \"New project\" at the top of the page.",
+   "In the dialog titled \"Create project\", type a name in the field \"Project name\" (optional: pick a template under \"Start from\").",
+   "Click the \"Create project\" button at the bottom right. Compare: the dialog closes and the new project appears in the Projects list and stays there after you reload."
+  ],
+  "where": "Sidebar > Projects > New project > Create project"
+ },
+ "S37.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/dialogs/CreateProjectDialog.tsx",
+    "text": "Description"
+   },
+   {
+    "file": "apps/web/app/chat/projects/[id]/page.tsx",
+    "text": "Project settings"
+   },
+   {
+    "file": "apps/web/features/projects/components/ProjectSettingsDialog.tsx",
+    "text": "Save"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "Project cards in Projects also have a menu with \"Edit details\" that opens the same settings.",
+  "reachable": "yes",
+  "steps": [
+   "Create a project (see S37.02) and open it from Projects.",
+   "Fill the \"Description\" box in the \"Create project\" dialog, or later click \"Project options\" at the top right of the project and then \"Project settings\".",
+   "In \"Project settings\", change the \"Project name\" or \"Description\" text.",
+   "Click \"Save\". Compare: the new title and description show on the project page and stay after reload."
+  ],
+  "where": "Sidebar > Projects > open a project > Project options > Project settings"
+ },
+ "S37.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/pages/WebChatPage.tsx",
+    "text": "Panels"
+   },
+   {
+    "file": "apps/web/features/projects/components/ProjectSourcesPanel.tsx",
+    "text": "Project sources"
+   }
+  ],
+  "needs": "a project with at least one source file added (see S37.06)",
+  "note": "On a narrow window the same toggle may appear only inside the Panels menu.",
+  "reachable": "yes",
+  "steps": [
+   "Open a project from Projects and send a first message in its composer (placeholder \"New chat in <project name>\").",
+   "In the chat, click the \"Panels\" button in the top bar.",
+   "Click the folder icon labelled \"Project sources\" (its tooltip; it toggles to \"Close project sources\").",
+   "Compare: a list of the project's sources opens beside the conversation."
+  ],
+  "where": "Sidebar > Projects > open a project > New chat in <project name> (send a message) > Panels > Project sources"
+ },
+ "S37.06": {
+  "labels": [
+   {
+    "file": "apps/web/features/projects/components/SourcesPanel.tsx",
+    "text": "Add sources"
+   },
+   {
+    "file": "apps/web/features/projects/components/AddSourcesModal.tsx",
+    "text": "Upload"
+   },
+   {
+    "file": "apps/web/features/projects/components/AddSourcesModal.tsx",
+    "text": "Files from your device"
+   }
+  ],
+  "needs": "a PDF or text file on the Mac",
+  "note": "Accepted types are images, PDF, Office files and text (packages/contracts/types/src/chat.ts). Indexing for chats is server work and is not visible as its own screen.",
+  "reachable": "yes",
+  "steps": [
+   "Open a project and click the \"Sources\" tab.",
+   "Click \"Add sources\" (or \"+ Add sources\" when files already exist).",
+   "Click \"Upload\" (\"Files from your device\") and choose a PDF or text file from the Mac file picker.",
+   "Compare: an \"Uploading\" banner shows the progress, then the file appears in the source list."
+  ],
+  "where": "Sidebar > Projects > open a project > Sources tab > Add sources > Upload"
+ },
+ "S37.10": {
+  "labels": [
+   {
+    "file": "apps/web/features/projects/components/AddSourcesModal.tsx",
+    "text": "Google Drive"
+   },
+   {
+    "file": "packages/contracts/types/src/connector-release.ts",
+    "text": "Coming soon"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "Connectors are set to coming_soon (CONNECTOR_RELEASE_STATE in packages/contracts/types/src/connector-release.ts). The picker needs GOOGLE_PICKER_API_KEY and GOOGLE_PICKER_APP_ID, which the owner has not set, so the Expected cannot be met yet.",
+  "reachable": "yes",
+  "steps": [
+   "Open a project and click the \"Sources\" tab.",
+   "Click \"Add sources\", then look at the \"Google Drive\" card.",
+   "Compare: the card is disabled and shows \"Coming soon\", so a Drive file cannot be picked in this build."
+  ],
+  "where": "Sidebar > Projects > open a project > Sources tab > Add sources > Google Drive (shows Coming soon)"
+ },
+ "S37.11": {
+  "labels": [
+   {
+    "file": "apps/web/features/projects/components/AddSourcesModal.tsx",
+    "text": "Text input"
+   },
+   {
+    "file": "apps/web/features/projects/components/AddSourcesModal.tsx",
+    "text": "Add text"
+   }
+  ],
+  "needs": "none beyond a signed-in account",
+  "note": "If no title is typed, the source is named \"Text note\" (AddSourcesModal.tsx). Notes in the Notes section are a separate feature.",
+  "reachable": "yes",
+  "steps": [
+   "Open a project and click the \"Sources\" tab.",
+   "Click \"Add sources\", then \"Text input\" (\"Paste or type text\").",
+   "Optionally type a title in \"Title (optional)\", then paste or type text in the large box.",
+   "Click \"Add text\". Compare: a new source with that title appears in the Sources list."
+  ],
+  "where": "Sidebar > Projects > open a project > Sources tab > Add sources > Text input"
+ },
+ "S37.14": {
+  "labels": [
+   {
+    "file": "apps/web/app/chat/projects/[id]/page.tsx",
+    "text": "New chat in"
+   }
+  ],
+  "needs": "a project with a source file added",
+  "note": "Grounding happens on the server; the answer quality is not checked by this step.",
+  "reachable": "yes",
+  "steps": [
+   "Open a project that has at least one source file added (see S37.06).",
+   "Click the composer box with the placeholder \"New chat in <project name>\" and type a question about the file's content.",
+   "Send it and wait for the answer.",
+   "Compare: the answer uses the project's sources and points to them (citation chips such as \"p. 2\" appear in the answer)."
+  ],
+  "where": "Sidebar > Projects > open a project > composer \"New chat in <project name>\""
+ },
+ "S37.15": {
+  "labels": [
+   {
+    "file": "apps/web/app/chat/projects/[id]/page.tsx",
+    "text": "Project settings"
+   },
+   {
+    "file": "apps/web/features/projects/components/ProjectSettingsDialog.tsx",
+    "text": "Instructions"
+   }
+  ],
+  "needs": "a project",
+  "note": "A checkbox in the same dialog, labelled \"Use your profile and instructions for AGI\", controls whether account instructions also apply.",
+  "reachable": "yes",
+  "steps": [
+   "Open a project and click \"Project options\" at the top right.",
+   "Click \"Project settings\", then type in the \"Instructions\" box (for example: answer in one sentence).",
+   "Click \"Save\".",
+   "Open a new chat in the project and ask a question. Compare: the reply follows the instruction."
+  ],
+  "where": "Sidebar > Projects > open a project > Project options > Project settings > Instructions"
+ },
+ "S37.19": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/project-file-citations.ts",
+    "text": "p. "
+   },
+   {
+    "file": "apps/web/app/chat/projects/[id]/page.tsx",
+    "text": "Sources"
+   }
+  ],
+  "needs": "a project with a PDF source and a question that uses it",
+  "note": "The chip is a link built from the citation (packages/contracts/types/src/project-file-citations.ts); a page location appears only when the citation has one.",
+  "reachable": "yes",
+  "steps": [
+   "In a project chat that has sources, ask a question whose answer comes from a file.",
+   "Look for the citation chip under the answer, showing the file name and a place such as \"p. 2\".",
+   "Click the chip.",
+   "Compare: the project's Sources tab opens with a preview of that file at the cited page."
+  ],
+  "where": "Sidebar > Projects > open a project > ask a question in a project chat > click the citation chip under the answer"
+ },
+ "S37.23": {
+  "labels": [
+   {
+    "file": "apps/web/features/projects/components/ProjectStudio.tsx",
+    "text": "Create from your sources"
+   },
+   {
+    "file": "apps/web/features/projects/components/ProjectStudio.tsx",
+    "text": "Briefing doc"
+   }
+  ],
+  "needs": "a project with source files",
+  "note": "The button opens a chat with a prompt; the briefing is a chat reply, not a saved file. The label is \"Briefing doc\", not \"Briefing document\".",
+  "reachable": "yes",
+  "steps": [
+   "Open a project with a source file and click the \"Sources\" tab.",
+   "Under \"Create from your sources\", click \"Briefing doc\".",
+   "Compare: a new chat in this project opens and starts writing a briefing from the sources."
+  ],
+  "where": "Sidebar > Projects > open a project > Sources tab > Create from your sources > Briefing doc"
+ },
+ "S37.24": {
+  "labels": [
+   {
+    "file": "apps/web/features/projects/components/ProjectStudio.tsx",
+    "text": "Study guide"
+   }
+  ],
+  "needs": "a project with source files",
+  "note": "Opens a new chat; the guide appears as the chat reply.",
+  "reachable": "yes",
+  "steps": [
+   "Open a project with source files and click the \"Sources\" tab.",
+   "Click \"Study guide\" under \"Create from your sources\".",
+   "Compare: a new chat opens and writes a study guide (quiz, essay questions, glossary) from the sources."
+  ],
+  "where": "Sidebar > Projects > open a project > Sources tab > Create from your sources > Study guide"
+ },
+ "S37.25": {
+  "labels": [
+   {
+    "file": "apps/web/features/projects/components/ProjectStudio.tsx",
+    "text": "FAQ"
+   }
+  ],
+  "needs": "a project with source files",
+  "note": "The button is labelled \"FAQ\", not \"Frequently asked questions\".",
+  "reachable": "yes",
+  "steps": [
+   "Open a project with source files and click the \"Sources\" tab.",
+   "Click \"FAQ\" under \"Create from your sources\".",
+   "Compare: a new chat opens and writes a list of questions and answers from the sources."
+  ],
+  "where": "Sidebar > Projects > open a project > Sources tab > Create from your sources > FAQ"
+ },
+ "S37.26": {
+  "labels": [
+   {
+    "file": "apps/web/features/projects/components/ProjectStudio.tsx",
+    "text": "Timeline"
+   }
+  ],
+  "needs": "a project with source files",
+  "note": "Opens a new chat; the diagram is shown as the chat reply.",
+  "reachable": "yes",
+  "steps": [
+   "Open a project with source files and click the \"Sources\" tab.",
+   "Click \"Timeline\" under \"Create from your sources\".",
+   "Compare: a new chat opens and writes a dated timeline (as a Mermaid diagram plus a list) from the sources."
+  ],
+  "where": "Sidebar > Projects > open a project > Sources tab > Create from your sources > Timeline"
+ },
+ "S37.27": {
+  "labels": [
+   {
+    "file": "apps/web/features/projects/components/ProjectStudio.tsx",
+    "text": "Mind map"
+   }
+  ],
+  "needs": "a project with source files",
+  "note": "Opens a new chat; the map is a Mermaid mindmap in the reply.",
+  "reachable": "yes",
+  "steps": [
+   "Open a project with source files and click the \"Sources\" tab.",
+   "Click \"Mind map\" under \"Create from your sources\".",
+   "Compare: a new chat opens and draws a mind map of the sources' topics."
+  ],
+  "where": "Sidebar > Projects > open a project > Sources tab > Create from your sources > Mind map"
+ },
+ "S37.28": {
+  "labels": [
+   {
+    "file": "apps/web/features/projects/components/ProjectStudio.tsx",
+    "text": "Data table"
+   }
+  ],
+  "needs": "a project with source files",
+  "note": "Opens a new chat; the table is a chat reply.",
+  "reachable": "yes",
+  "steps": [
+   "Open a project with source files and click the \"Sources\" tab.",
+   "Click \"Data table\" under \"Create from your sources\".",
+   "Compare: a new chat opens and returns a markdown table of facts from the sources."
+  ],
+  "where": "Sidebar > Projects > open a project > Sources tab > Create from your sources > Data table"
+ },
+ "S37.30": {
+  "labels": [
+   {
+    "file": "apps/web/features/projects/components/ProjectStudio.tsx",
+    "text": "Slide deck"
+   }
+  ],
+  "needs": "a project with source files",
+  "note": "The request sets officeCreationEnabled, so the result is meant to be a .pptx file; whether it is produced is not checked here.",
+  "reachable": "yes",
+  "steps": [
+   "Open a project with source files and click the \"Sources\" tab.",
+   "Click \"Slide deck\" under \"Create from your sources\".",
+   "Compare: a new chat opens with a request for a PowerPoint file built from the sources."
+  ],
+  "where": "Sidebar > Projects > open a project > Sources tab > Create from your sources > Slide deck"
+ },
+ "S37.34": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/ProjectCard.tsx",
+    "text": "Share"
+   },
+   {
+    "file": "apps/web/features/projects/components/ProjectSharingControls.tsx",
+    "text": "Everyone in the workspace can view"
+   },
+   {
+    "file": "apps/web/features/projects/components/ProjectSharingControls.tsx",
+    "text": "Can view"
+   }
+  ],
+  "needs": "a team workspace with a second member account in it",
+  "note": "The plan marks this as unfinished in the UI. Sharing is also on the project page under Project options > Share.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Projects\" in the sidebar, then open the menu on a project card (\"Project options\").",
+   "Click \"Share\". The dialog titled \"Share <project name>\" opens.",
+   "Choose \"Everyone in the workspace can view\" or \"Only people you invite\", then click \"Share\".",
+   "Compare: the access list shows \"Can view\" or \"Can edit\" for members. On a personal account the dialog only says \"Only you can open this project. Switch to a team workspace to share it.\""
+  ],
+  "where": "Sidebar > Projects > project card menu > Share > Share <project name>"
+ },
+ "S37.37": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Project"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Search projects..."
+   }
+  ],
+  "needs": "a project with a source file",
+  "note": "The plan marks this as unfinished in the UI. On plans with AGI Work the same button is labelled \"Project or folder\" (ChatComposerNew.tsx).",
+  "reachable": "yes",
+  "steps": [
+   "On the main chat screen, click the \"Project\" button in the composer's bottom bar.",
+   "Type part of a project name in \"Search projects...\" and click the project.",
+   "Type a question about that project's content and send it.",
+   "Compare: the reply uses that project's sources and instructions, and the chat is shown as part of that project."
+  ],
+  "where": "New chat (main chat) > the \"Project\" button in the composer > pick a project in \"Search projects...\""
+ },
+ "S37.38": {
+  "labels": [
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Projects"
+   }
+  ],
+  "needs": "a second app or browser signed in to the same account",
+  "note": "Sync is server-side (apps/web/app/api/projects/[id]/route.ts); the Desktop app shows the hosted web app, so this is the same screen on both.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "On the Desktop app, open \"Projects\" and note a project name, its sources and its notes.",
+   "Sign in to the web app with the same account and click \"Projects\".",
+   "Compare: the same project, with the same sources, appears there."
+  ],
+  "where": "No control of its own; visible by signing in to a second app with the same account and comparing the Projects list"
+ }
+}

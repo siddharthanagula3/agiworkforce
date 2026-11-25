@@ -1,0 +1,423 @@
+{
+ "feature": {
+  "id": "F020-04",
+  "aliases": [
+   "Footnotes",
+   "S20.14",
+   "footnote reference [^1]",
+   "Footnotes section"
+  ],
+  "summary": "Shows a reference like [^1] as a small raised marker tied to a note at the bottom of the answer. Web, desktop and Chrome link the marker to a footnotes list with a back-link. Mobile shows a numbered marker, a bottom list, and an alert on tap. VS Code and CLI have no footnote support.",
+  "purpose": {
+   "what_it_does": "Links a marker in the text to a note, so an answer can carry side comments without breaking the sentence.",
+   "why_it_exists": "Models sometimes use Markdown footnotes. Without support the reader sees literal [^1] text (doc: knowledge-base/data/area-briefs/020-markdown-and-text-rendering.md S20.14).",
+   "who_uses_it": "Readers of answers that cite or annotate with footnotes.",
+   "problems_solved": [
+    "Raw [^1] markers do not litter the text.",
+    "Notes are reachable and the reader can return to the spot (web, Chrome).",
+    "Two messages on one page do not clash ids (web)."
+   ],
+   "use_cases": [
+    "Read an answer with a definition note.",
+    "Jump from a marker to its note and back.",
+    "Tap a marker on mobile to read the note."
+   ]
+  },
+  "user_experience": {
+   "where_to_find_it": [
+    "Web and Desktop (Tauri): markers and a footnotes section at the end of the message (remark-gfm output, MarkdownContent.tsx:339-343, 891-894).",
+    "Mobile: marker in text, tap opens an alert titled 'Footnote <n>' (MarkdownInline.tsx:157-159, 410-430), and a 'Footnotes' list at the end of the message (MessageContentRenderer.tsx:876-925, 1672-1675).",
+    "Chrome: raised number linking to a section labelled 'Footnotes' with a back-link (markdown.ts:217-246; test side-panel-markdown-parity.test.ts:216-260)."
+   ],
+   "prerequisites": [
+    "A reply with a footnote reference and a definition line like [^1]: text."
+   ],
+   "screens_and_controls": [
+    "Web and Chrome: click the marker to jump; click the back arrow to return.",
+    "Mobile: tap the marker (button role when a note exists)."
+   ],
+   "journey": [
+    "Reply has [^1] and [^1]: text.",
+    "Marker is drawn raised.",
+    "Reader activates it.",
+    "Web and Chrome jump to the list item; mobile opens an alert."
+   ],
+   "feedback_and_outputs": [
+    "Raised numbered marker.",
+    "Footnotes list at the bottom.",
+    "Mobile alert with the note's plain text."
+   ],
+   "settings": [
+    "None found."
+   ]
+  },
+  "current_implementation": {
+   "working": [
+    "Web and desktop: footnote links stay in the same tab and their target id gets the sanitiser prefix so the jump lands (MarkdownContent.tsx:335-343, 371-378). A per-message scope keeps ids unique (891-894; test MarkdownContent.render.test.tsx:329).",
+    "Streaming: a settled block that uses a footnote label is not trusted until the definition arrives; the whole message folds into one unit (StreamingMarkdownContent.tsx:22-47, 89-103; test StreamingMarkdownContent.test.tsx:221-235).",
+    "Mobile: footnote nodes parse, number and open an alert; a Footnotes section lists referenced notes (MarkdownInline.tsx:410-430; MessageContentRenderer.tsx:1634-1636, 1672-1675).",
+    "Chrome: markdown-it-footnote with custom renderers, a labelled section, and a back-link labelled with the note number (markdown.ts:217-246)."
+   ],
+   "incomplete": [
+    "Mobile list items have no back-link (renderFootnoteSection draws number and text only, MessageContentRenderer.tsx:876-925)."
+   ],
+   "disconnected_or_disabled": [
+    "The brief's status for mobile and Chrome says missing; the code shows both implemented. The brief status is stale."
+   ],
+   "not_available": [
+    "VS Code: no footnote plugin in markdown-it setup (render.ts:16-24); the marker shows as literal text [inferred].",
+    "CLI: ENABLE_FOOTNOTES is not in the parser options (markdown_renderer.rs:147-150); marker shows as literal text [inferred]."
+   ]
+  },
+  "required_behaviour": {
+   "established": [
+    {
+     "statement": "Footnote references ([^1]) render as superscript markers linked to a footnotes section.",
+     "source": "doc: knowledge-base/data/area-briefs/020-markdown-and-text-rendering.md S20.14"
+    }
+   ],
+   "acceptance_criteria": [
+    "'A[^1]' with '[^1]: note' shows a raised marker and a footnotes list on web and Chrome.",
+    "The marker link jumps to the note and the back-link returns.",
+    "Two messages each using [^1] on one web page keep separate ids (test line 329).",
+    "On mobile tapping the marker opens 'Footnote 1' with the note text.",
+    "A footnote whose definition streams in later still resolves on web (test StreamingMarkdownContent.test.tsx:221)."
+   ],
+   "inferred": [
+    "VS Code and CLI should at least keep the note text readable; today they would show the marker and definition as plain text [inferred]."
+   ],
+   "proposed": [
+    "[proposed] Add the footnote plugin to the VS Code renderer reusing the Chrome rules.",
+    "[proposed] Print footnote notes at the end of CLI output.",
+    "[proposed] Add a back-link on mobile or document that the alert replaces it."
+   ]
+  },
+  "implementation_map": [
+   {
+    "kind": "config",
+    "name": "remark-gfm (footnote parsing)",
+    "path": "packages/ui/unified-chat/src/components/markdown/remarkPlugins.ts",
+    "role": "GFM plugin carries footnote support [inferred from remark-gfm]; REMARK_PLUGINS 71-77."
+   },
+   {
+    "kind": "component",
+    "name": "MarkdownLink footnote handling",
+    "path": "packages/ui/unified-chat/src/components/markdown/MarkdownContent.tsx",
+    "role": "Same-tab footnote links and prefixed fragment (335-390)."
+   },
+   {
+    "kind": "hook",
+    "name": "footnoteScope option",
+    "path": "packages/ui/unified-chat/src/components/markdown/MarkdownContent.tsx",
+    "role": "Unique id prefix per message (835, 891-894)."
+   },
+   {
+    "kind": "component",
+    "name": "StreamingMarkdownContent",
+    "path": "packages/ui/unified-chat/src/components/markdown/StreamingMarkdownContent.tsx",
+    "role": "Late-definition handling (22-47, 87-103)."
+   },
+   {
+    "kind": "component",
+    "name": "Web MessageBubble",
+    "path": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "role": "Passes footnoteScope per message (2884-2906)."
+   },
+   {
+    "kind": "component",
+    "name": "footnote node",
+    "path": "apps/mobile/src/features/chat/components/MarkdownInline.tsx",
+    "role": "Marker, alert, button role (157-159, 410-430)."
+   },
+   {
+    "kind": "component",
+    "name": "renderFootnoteSection",
+    "path": "apps/mobile/src/features/chat/components/MessageContentRenderer.tsx",
+    "role": "Footnotes list at the end (876-925)."
+   },
+   {
+    "kind": "service",
+    "name": "markdownInlineSyntax",
+    "path": "apps/mobile/src/features/chat/utils/markdownInlineSyntax.ts",
+    "role": "footnoteNumber and marker helpers (imported at MessageContentRenderer.tsx:64-69)."
+   },
+   {
+    "kind": "service",
+    "name": "Chrome footnote rules",
+    "path": "apps/extension/src/features/side-panel/markdown.ts",
+    "role": "markdown-it-footnote and custom ref, block, item, anchor renderers (217-246)."
+   },
+   {
+    "kind": "test",
+    "name": "Web footnote tests",
+    "path": "packages/ui/unified-chat/src/components/markdown/MarkdownContent.render.test.tsx",
+    "role": "Link and back-link ids, unique ids, sanitiser prefix (314-345)."
+   },
+   {
+    "kind": "test",
+    "name": "Chrome footnote tests",
+    "path": "apps/extension/__tests__/side-panel-markdown-parity.test.ts",
+    "role": "Footnotes section label and unique ids (216-260)."
+   },
+   {
+    "kind": "test",
+    "name": "Streaming footnote test",
+    "path": "packages/ui/unified-chat/src/components/markdown/__tests__/StreamingMarkdownContent.test.tsx",
+    "role": "Definition streams later (221-235)."
+   },
+   {
+    "kind": "service",
+    "name": "CLI parser options",
+    "path": "apps/cli/src/tui/markdown_renderer.rs",
+    "role": "No footnote option (147-150)."
+   },
+   {
+    "kind": "service",
+    "name": "VS Code markdown-it setup",
+    "path": "apps/extension-vscode/src/webview/render.ts",
+    "role": "No footnote plugin (16-24)."
+   }
+  ],
+  "execution_and_data_flow": {
+   "steps": [
+    {
+     "what_happens": "Parser finds references and definitions in the reply.",
+     "runs_on": "device",
+     "evidence": "MarkdownContent.tsx:943-951; markdown.ts:217"
+    },
+    {
+     "what_happens": "The renderer prefixes ids per message and builds a footnotes section.",
+     "runs_on": "device",
+     "evidence": "MarkdownContent.tsx:891-894"
+    },
+    {
+     "what_happens": "On mobile the marker press shows a native alert.",
+     "runs_on": "device",
+     "evidence": "MarkdownInline.tsx:157-159"
+    }
+   ],
+   "data": [
+    {
+     "what": "Rendered footnote DOM or views",
+     "where_stored": "In memory",
+     "synced": "No",
+     "retained_or_deleted": "Discarded with the view"
+    }
+   ],
+   "models_and_providers": "No model or provider involvement."
+  },
+  "access_and_usage": {
+   "account": "none found in the code.",
+   "permissions": "none found in the code.",
+   "subscription": "none found in the code.",
+   "limits_and_metering": "none found in the code.",
+   "flags": "none found in the code.",
+   "model_compatibility": "Any model that writes the footnote syntax.",
+   "provider_restrictions": "none found in the code.",
+   "local_mode": "Works offline and in Local mode; no network step."
+  },
+  "states_and_edge_cases": [
+   {
+    "state": "Reference without a definition",
+    "behaviour": "Mobile marker has no button role and does nothing on press when no note exists.",
+    "evidence": "MarkdownInline.tsx:419-425"
+   },
+   {
+    "state": "Definition arrives later while streaming",
+    "behaviour": "Web re-renders the message as one unit so the reference resolves.",
+    "evidence": "StreamingMarkdownContent.tsx:97-103"
+   },
+   {
+    "state": "Same label in two messages",
+    "behaviour": "Web ids differ by footnoteScope.",
+    "evidence": "MarkdownContent.tsx:891-894"
+   },
+   {
+    "state": "Accessibility",
+    "behaviour": "Mobile marker has label 'Footnote <n>'; Chrome section has aria-label 'Footnotes' and back-link label.",
+    "evidence": "MarkdownInline.tsx:418; markdown.ts:236-246"
+   },
+   {
+    "state": "Offline, error, retry",
+    "behaviour": "not handled in the code (nothing to fail).",
+    "evidence": "Searched the footnote paths in MarkdownContent.tsx, MarkdownInline.tsx and markdown.ts; no network or retry code."
+   }
+  ],
+  "verification": {
+   "existing_tests": [
+    {
+     "path": "packages/ui/unified-chat/src/components/markdown/MarkdownContent.render.test.tsx",
+     "covers": "Footnote links and back-links match by id; ids unique between messages; sanitiser prefix kept (314-345)."
+    },
+    {
+     "path": "packages/ui/unified-chat/src/components/markdown/__tests__/StreamingMarkdownContent.test.tsx",
+     "covers": "Footnote reference resolves against a definition that streams later (221-235)."
+    },
+    {
+     "path": "apps/extension/__tests__/side-panel-markdown-parity.test.ts",
+     "covers": "Chrome footnotes section label, back-link, unique ids (216-260)."
+    },
+    {
+     "path": "apps/mobile/src/features/chat/components/__tests__/MarkdownInline.render.test.tsx",
+     "covers": "Matched a search for footnote; cases not read."
+    },
+    {
+     "path": "apps/mobile/src/features/chat/utils/__tests__/markdownInlineSyntax.test.ts",
+     "covers": "Matched a search for footnote; cases not read."
+    }
+   ],
+   "scenarios": [
+    {
+     "name": "Jump and return",
+     "steps": [
+      "Send reply 'Claim[^1]' and '[^1]: Source text'.",
+      "Click the marker on web.",
+      "Click the back arrow."
+     ],
+     "expected": "Page lands on the note, then back at the marker, with no new tab."
+    },
+    {
+     "name": "Mobile note",
+     "steps": [
+      "Render the same reply on mobile.",
+      "Tap the marker."
+     ],
+     "expected": "Alert 'Footnote 1' with the note text; list at end shows '1.' and the note."
+    },
+    {
+     "name": "Unsupported apps",
+     "steps": [
+      "Render the reply in VS Code and CLI."
+     ],
+     "expected": "Observe how [^1] appears; record it (expected: literal text)."
+    },
+    {
+     "name": "Two messages",
+     "steps": [
+      "Show two replies both using [^1] on one web page.",
+      "Click each marker."
+     ],
+     "expected": "Each lands on its own note."
+    }
+   ],
+   "diagnostics": [
+    "Web: inspect ids with the sanitiser prefix on footnote elements.",
+    "No log lines found."
+   ]
+  },
+  "gaps": [
+   {
+    "gap": "VS Code and CLI show no footnotes.",
+    "affects": "VS Code, CLI",
+    "evidence": "render.ts:16-24; markdown_renderer.rs:147-150",
+    "work_needed": "Add support or decide not to."
+   },
+   {
+    "gap": "Brief marks mobile and Chrome as missing though both are built.",
+    "affects": "Documentation, planning",
+    "evidence": "MarkdownInline.tsx:410-430; markdown.ts:217-246",
+    "work_needed": "Update the brief."
+   },
+   {
+    "gap": "Mobile has no back-link from the list.",
+    "affects": "Mobile users",
+    "evidence": "MessageContentRenderer.tsx:876-925",
+    "work_needed": "Add a link or accept the alert."
+   },
+   {
+    "gap": "No test found proving the mobile alert text.",
+    "affects": "Mobile",
+    "evidence": "Mobile tests matched 'footnote' but cases not read",
+    "work_needed": "Read or add a test."
+   }
+  ],
+  "depends_on": [
+   "SYS-shared-ui-and-design",
+   "SYS-chat-turn-pipeline",
+   "file:packages/ui/unified-chat/src/components/markdown/MarkdownContent.tsx"
+  ],
+  "relationships": [
+   {
+    "rel": "implemented_by",
+    "to": "file:packages/ui/unified-chat/src/components/markdown/MarkdownContent.tsx",
+    "evidence": "335-390, 891-894"
+   },
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/mobile/src/features/chat/components/MarkdownInline.tsx",
+    "evidence": "410-430"
+   },
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/extension/src/features/side-panel/markdown.ts",
+    "evidence": "217-246"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:web",
+    "evidence": "MarkdownContent.render.test.tsx:314"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:desktop",
+    "evidence": "Shared renderer, unified-chat MessageBubble.tsx:827-835"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:mobile",
+    "evidence": "MarkdownInline.tsx:410"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:chrome",
+    "evidence": "markdown.ts:217"
+   },
+   {
+    "rel": "blocked_by",
+    "to": "file:apps/extension-vscode/src/webview/render.ts",
+    "evidence": "No footnote plugin at 16-24"
+   },
+   {
+    "rel": "blocked_by",
+    "to": "file:apps/cli/src/tui/markdown_renderer.rs",
+    "evidence": "No footnote parser option at 147-150"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:packages/ui/unified-chat/src/components/markdown/MarkdownContent.render.test.tsx",
+    "evidence": "314-345"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/extension/__tests__/side-panel-markdown-parity.test.ts",
+    "evidence": "216-260"
+   },
+   {
+    "rel": "depends_on",
+    "to": "SYS-chat-turn-pipeline",
+    "evidence": "Streaming splitter handles late definitions"
+   }
+  ],
+  "unknowns": [
+   "Whether VS Code and CLI really print raw markers (no run allowed).",
+   "Exact HTML of the web footnotes section heading (library default assumed).",
+   "Mobile footnote test case contents.",
+   "Whether the web footnote heading is visually hidden."
+  ]
+ },
+ "corrections": [
+  {
+   "section": "3/2",
+   "claim": "Mobile: footnote nodes parse, number and open an alert; tap opens an alert titled 'Footnote <n>' (MarkdownInline.tsx:157-159, 410-430)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "showFootnote calls Alert.alert(`Footnote ${n}`, inlinePlainText(note)) (:157-159). That is only the fallback. If context.options.onFootnotePress is supplied, it is called with the label instead (:413, :424). The test MarkdownInline.render.test.tsx:545 exercises that path with a jump callback.",
+   "evidence": "MarkdownInline.tsx:49,413,424",
+   "correction": "Tapping a footnote marker on mobile opens an alert titled 'Footnote <n>' unless the caller passes onFootnotePress, in which case that handler runs and no alert shows."
+  }
+ ],
+ "missing_facts": [
+  "Mobile footnote taps can be overridden by an onFootnotePress option (MarkdownInline.tsx:49,413,424), and a test covers it (MarkdownInline.render.test.tsx:545). The page says the tap always opens an alert.",
+  "The page's front matter (implementation mobile/chrome: missing, available_on web+desktop) and its Status table (Mobile and Chrome 'not built') contradict its own body and gaps section, which say mobile and Chrome are built (MarkdownInline.tsx:410-430; markdown.ts:217-246). Section 10's 'Not built on: Mobile, ... Chrome' line repeats the stale claim.",
+  "Web footnote parsing is not a footnote-specific plugin: REMARK_PLUGINS (remarkPlugins.ts:71-77) holds remarkGfm, remarkMath, remarkBreaks, remarkLosslessTables and remarkAssistantFenceIdentity. Footnote ids use a clobberPrefix built from footnoteScope (MarkdownContent.tsx:891-894), and unscoped callers get an empty prefix, so uniqueness depends on the caller."
+ ]
+}

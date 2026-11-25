@@ -1,0 +1,80 @@
+{
+ "S50.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "More message actions"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Read message aloud"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Stop reading message"
+   }
+  ],
+  "needs": "a browser or desktop app with speech support (a system voice); an account with a chat that has an assistant reply",
+  "note": "A second button with the same action exists in the reply action bar (aria-label \"Read message aloud\" in packages/ui/unified-chat/src/components/ActionBar.tsx), which I did not confirm is shown in the web app. The menu item is hidden when the browser cannot speak, and is shown disabled with a reason when a reason exists. The button is not visible text, so the tester must hover or look for the icon.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a chat that has at least one assistant reply.",
+   "Hover over an assistant reply and click the \"More message actions\" button (three-dot button).",
+   "Click \"Read message aloud\" in the menu.",
+   "Check that the reply is spoken aloud, and that the menu item changes to \"Stop reading message\" while it plays. Click it again to stop."
+  ],
+  "where": "Open a chat with an assistant reply > hover the reply and click the \"More message actions\" button > \"Read message aloud\""
+ },
+ "S50.02": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "Preferences"
+   },
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "Backup read-aloud voice"
+   },
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "Browser default"
+   }
+  ],
+  "needs": "a browser or desktop app that lists system voices (if it lists none, the row says \"This browser has no voices, so read-aloud has no backup.\")",
+  "note": "There is no separate spoken-language picker. The language comes from the chosen voice (shown in brackets), and \"Display Language\" in the same section changes the app's UI language, not spoken playback. The row is called a backup voice, and the text says the AGI voice is separate.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and choose the \"General\" section.",
+   "Scroll to the \"Preferences\" heading and find the \"Backup read-aloud voice\" row.",
+   "Open the drop-down. It starts at \"Browser default\"; pick another voice from the list, which shows each voice name and its language in brackets.",
+   "Click \"Preview\" and listen. The voice is used for read-aloud when it falls back to this voice. Compare with Expected: the chosen voice and language are used for spoken playback."
+  ],
+  "where": "Settings > General > Preferences > \"Backup read-aloud voice\""
+ },
+ "S50.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "Read-aloud speed"
+   },
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "Preferences"
+   },
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "Fast"
+   }
+  ],
+  "needs": "a browser or desktop app with speech support; a chat with an assistant reply",
+  "note": "The row is hidden when the browser cannot speak (the code returns nothing when speech is not supported). The rate is applied to the browser speech voice only, and the code gives three steps, not a numeric slider. A separate \"Voice conversation pace\" row (Slower, Normal, Faster, Fastest) controls the live voice conversation, not read-aloud.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and choose the \"General\" section.",
+   "Scroll to the \"Preferences\" heading and find the \"Read-aloud speed\" row, just below \"Backup read-aloud voice\".",
+   "Click \"Slow\", \"Normal\" or \"Fast\" (the selected one is pressed).",
+   "Click \"Read message aloud\" on an assistant reply (see S50.01) and listen. Compare with Expected: the speech speed changes with the setting."
+  ],
+  "where": "Settings > General > Preferences > \"Read-aloud speed\""
+ }
+}

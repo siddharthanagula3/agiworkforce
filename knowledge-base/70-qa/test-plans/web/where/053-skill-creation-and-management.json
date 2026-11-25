@@ -1,0 +1,390 @@
+{
+ "S53.01": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Skills"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Browse"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Add from the catalog"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The Browse button comes from the shared directory panel; the catalogue and detail views are the same screens used for the Installed list.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and choose Skills under the Customize group.",
+   "Click Browse at the top right of the Skills page.",
+   "Look for the catalogue list of skills, including ones not yet installed.",
+   "Click one skill name to open its detail page and check it opens."
+  ],
+  "where": "Settings > Customize > Skills > Browse (then Add from the catalog)"
+ },
+ "S53.02": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Skills"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Installed"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The list header 'Installed' is the catalogue label for skills; the Status column text comes from the skill data, not a fixed label.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and choose Skills under the Customize group.",
+   "Look at the list of skills shown for this account.",
+   "Check the Status column of each row (for example 'Available' or an installed state).",
+   "Compare the rows with the skills you know are active for this account."
+  ],
+  "where": "Settings > Customize > Skills"
+ },
+ "S53.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/directory/hooks/useDirectoryAdapter.ts",
+    "text": "Create a skill"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "No skills of your own yet."
+   },
+   {
+    "file": "apps/web/features/skills/components/SkillEditorDialog.tsx",
+    "text": "Create skill"
+   }
+  ],
+  "needs": "an account that can create skills",
+  "note": "Creating a skill is shown only when the account has the skill-create capability; the page ownership rule itself is server-side and not visible here.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Skills.",
+   "Click Add and choose Create a skill.",
+   "Fill in Name, Description and Instructions, then click Create skill.",
+   "Check the new skill appears in your own list, and that the empty-state text 'No skills of your own yet.' is gone."
+  ],
+  "where": "Settings > Customize > Skills > Add > Create a skill"
+ },
+ "S53.06": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Source and access"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Enable skill"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Try in chat"
+   }
+  ],
+  "needs": "none",
+  "note": "Instruction text is shown through the Rendered and Raw buttons in the skill file viewer.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Skills.",
+   "Click any skill name in the list.",
+   "Check the detail page shows the description, the Source and access section, and the skill's instructions (Rendered and Raw buttons).",
+   "Check the Enable skill switch and the Try in chat button are visible."
+  ],
+  "where": "Settings > Customize > Skills > [skill name]"
+ },
+ "S53.07": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Browse"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Description"
+   }
+  ],
+  "needs": "none",
+  "note": "The manage list columns for skills are name, author and updated date (constants.ts), so the description may show only in the catalogue and detail views; the fallback Skills table in SettingsModal shows description under the name but the web app does not render that fallback.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Skills.",
+   "Click Browse and look at the catalogue cards.",
+   "Check each skill shows its name and a description line.",
+   "Click a skill and check the Description label appears on the detail page."
+  ],
+  "where": "Settings > Customize > Skills > Browse"
+ },
+ "S53.08": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Try in chat"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Skills"
+   }
+  ],
+  "needs": "a signed-in account with at least one skill",
+  "note": "The copy 'Use one in chat with / or @' exists only in the fallback Skills panel in packages/ui/ui/src/settings-modal/SettingsModal.tsx, which the web app does not render; the slash menu itself is the visible guidance.",
+  "reachable": "yes",
+  "steps": [
+   "In a chat, click the message box and type /.",
+   "Look for the skill names in the menu, each with its description.",
+   "Open Settings > Skills, click a skill and find the Try in chat button.",
+   "Check that the text tells you how to use the skill (slash name, button, or automatic matching)."
+  ],
+  "where": "Chat message box > type / (slash), or Settings > Customize > Skills > [skill name] > Try in chat"
+ },
+ "S53.09": {
+  "labels": [
+   {
+    "file": "apps/web/features/skills/components/SkillEditorDialog.tsx",
+    "text": "Instructions"
+   },
+   {
+    "file": "apps/web/features/skills/components/SkillEditorDialog.tsx",
+    "text": "Create skill"
+   },
+   {
+    "file": "apps/web/features/directory/hooks/useDirectoryAdapter.ts",
+    "text": "Create a skill"
+   }
+  ],
+  "needs": "an account that can create skills",
+  "note": "The editor dialog title is New skill for create mode; an edit entry point for an existing own skill was not confirmed in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Skills.",
+   "Click Add and choose Create a skill.",
+   "In the dialog, find the Instructions field and type or edit text.",
+   "Click Create skill (or Save changes when editing) and check the text is kept."
+  ],
+  "where": "Settings > Customize > Skills > Add > Create a skill (editor dialog titled New skill)"
+ },
+ "S53.10": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Skill files"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Download file"
+   }
+  ],
+  "needs": "a skill with reference files",
+  "note": "The UI shows the bundled files; whether the model reads them during a run is not visible in the Skills screens.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Skills.",
+   "Click a skill that has more than one file.",
+   "Look at the Skill files list and click a reference file.",
+   "Check the file content appears, with Copy file contents and Download file available."
+  ],
+  "where": "Settings > Customize > Skills > [skill name] > Skill files"
+ },
+ "S53.11": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Skill files"
+   }
+  ],
+  "needs": "a skill with a script file and code execution allowed",
+  "note": "No control runs scripts directly; execution happens inside the chat tool loop and is inferred from the chat output.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open Settings, then Skills, click a skill whose Skill files list includes script files.",
+   "Start a chat, select that skill with Try in chat, and send a request that needs the script.",
+   "Look in the chat for a code run or tool result that the skill's script produced."
+  ],
+  "where": "Effect appears in chat, when a skill that bundles scripts runs code; the script files are listed under Settings > Customize > Skills > [skill name] > Skill files"
+ },
+ "S53.14": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Needs tools"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/SlashCommandMenu.tsx",
+    "text": "Needs "
+   }
+  ],
+  "needs": "a skill that declares required tools",
+  "note": "The slash menu line is built from the tool list (skillRequirementNote); the label text is 'Needs' followed by the tool names.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Skills.",
+   "Click a skill that declares tools.",
+   "Find the Needs tools row on the detail page and read the tool names.",
+   "Open the chat slash menu (type /) and check the same skill shows a Needs line with those tools."
+  ],
+  "where": "Settings > Customize > Skills > [skill name] > Needs tools"
+ },
+ "S53.15": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Needs connectors"
+   }
+  ],
+  "needs": "a skill that declares connectors, and a connector account",
+  "note": "Enforcement at run time is server-side and not visible on the page.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Skills.",
+   "Click a skill that needs connectors.",
+   "Find the Needs connectors row and read the connector names.",
+   "Check each connector shows a connected state, or an option to open it when it is not connected."
+  ],
+  "where": "Settings > Customize > Skills > [skill name] > Needs connectors"
+ },
+ "S53.17": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Add attachments and tools"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Skills"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Manage skills"
+   }
+  ],
+  "needs": "a signed-in account with at least one skill",
+  "note": "Whether the reply actually uses the skill is a judgement for the tester, not checked by the code reference.",
+  "reachable": "yes",
+  "steps": [
+   "In a chat, click the Add attachments and tools button next to the message box.",
+   "Click Skills and choose a skill name from the list.",
+   "Check the Skills entry now shows the chosen skill name in place of Skills.",
+   "Send a message and check the reply follows that skill."
+  ],
+  "where": "Chat > Add attachments and tools > Skills > [skill name]"
+ },
+ "S53.18": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Add attachments and tools"
+   }
+  ],
+  "needs": "a skill with a clear description and an account that has it installed",
+  "note": "Matching happens on the server when no skill is selected; the UI shows no indicator of it, so the tester can only judge from the reply.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Start a new chat without choosing any skill from Add attachments and tools.",
+   "Send a request that matches the description of a skill you have installed.",
+   "Look at the reply for the skill's style or steps, without any skill name shown in the message box."
+  ],
+  "where": "Effect appears in the chat reply, with no skill chosen; no UI control selects it"
+ },
+ "S53.20": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Enable skill"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Try in chat"
+   }
+  ],
+  "needs": "an installed skill that is not your own (own skills have no switch on the detail page)",
+  "note": "The switch shows only for installed, non-editable skills (SkillDetailView.tsx); the list switch appears when the row has an enabled state.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Skills, and click an installed skill.",
+   "Switch Enable skill off and read the hint text about keeping it in the catalogue.",
+   "Check the skill is still listed and its status changes.",
+   "Switch Enable skill back on and check the skill is offered again in the chat slash menu."
+  ],
+  "where": "Settings > Customize > Skills > [skill name] > Enable skill"
+ },
+ "S53.21": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Upload a skill"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "A .zip, .skill or SKILL.md file."
+   },
+   {
+    "file": "apps/web/features/skills/components/SkillEditorDialog.tsx",
+    "text": "Import a SKILL.md"
+   }
+  ],
+  "needs": "a file to upload (.zip, .skill or SKILL.md)",
+  "note": "The Upload a skill item is added only when the upload capability exists; the editor also has an Import a SKILL.md button.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Skills.",
+   "Click Add and choose Upload a skill.",
+   "Pick a .zip, .skill or SKILL.md file from your computer.",
+   "Check the skill appears in the list and can be opened and used."
+  ],
+  "where": "Settings > Customize > Skills > Add > Upload a skill"
+ },
+ "S53.22": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Download file"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Skill files"
+   }
+  ],
+  "needs": "none",
+  "note": "Download works per file; no whole-skill package export was found in the skill screens.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Skills, and click a skill.",
+   "Click a file in the Skill files list.",
+   "Click Download file.",
+   "Check the file saves to your computer with the same content as shown."
+  ],
+  "where": "Settings > Customize > Skills > [skill name] > Skill files > [file] > Download file"
+ },
+ "S53.36": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Source and access"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Source"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Needs tools"
+   }
+  ],
+  "needs": "none",
+  "note": "Skills have no separate permissions list; the summary shows tools, connectors and source. The Permissions heading exists only for plugins (constants.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Skills, and click a skill.",
+   "Scroll to the Source and access section.",
+   "Read the Source row and the Needs tools and Needs connectors rows, plus Added and Version if shown.",
+   "Compare the Source text with where you got the skill (built in, uploaded or your own)."
+  ],
+  "where": "Settings > Customize > Skills > [skill name] > Source and access"
+ }
+}

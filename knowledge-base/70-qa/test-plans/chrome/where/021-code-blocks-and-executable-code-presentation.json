@@ -1,0 +1,30 @@
+{
+ "S21.19": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Outputs"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Open $FILE$"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Download $FILE$"
+   }
+  ],
+  "needs": "a chat whose answer produced a file (the tester must get the app to produce one)",
+  "note": "The plan's Code line numbers are stale (generatedFiles.ts:73, :317 and :126 do not match the quoted code); the feature exists at apps/extension/src/features/side-panel/generatedFiles.ts (buildFileActions and buildFileCard, around lines 281-330 and 380-440) and apps/extension/src/features/side-panel/artifactPanel.ts (createArtifactOutputs, around lines 463-580). The Outputs button is hidden when there are no outputs (artifactPanel.ts around line 918). The Expected wording covers only opening and downloading; I did not judge whether it works.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a chat whose answer produced a file.",
+   "Look at the top right of the side panel header for the Outputs button; it is hidden when the chat has no files.",
+   "Click Outputs. A popover titled \"Outputs\" opens with a list of the produced files.",
+   "Hover a file and check its Open and Download icon buttons (tooltips read \"Open <file name>\" and \"Download <file name>\").",
+   "Click Open to check a new tab opens with the file, then click Download and check the file is saved.",
+   "Compare with Expected: the produced files are listed and can be opened or downloaded."
+  ],
+  "where": "Top right of the side panel header > Outputs (icon button with the tooltip \"Outputs\"); it appears only once a chat has produced a file. Then, in the popover list, use the \"Open <file name>\" and \"Download <file name>\" icon buttons next to each file. The same files also appear as cards under the answer that produced them, under the label \"Files from this answer\", with the same Open and Download buttons."
+ }
+}

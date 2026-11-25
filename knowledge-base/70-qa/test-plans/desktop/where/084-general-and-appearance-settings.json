@@ -1,0 +1,376 @@
+{
+ "S84.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "Display Language"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "General"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Settings"
+   }
+  ],
+  "needs": "none",
+  "note": "The drop-down's accessible name is Display language (LanguageSelector.tsx); how Settings is opened from the first screen was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and choose General in the settings list (the group is titled Settings).",
+   "Find the row labelled Display Language and open its drop-down (options show a flag and the language's own name).",
+   "Pick a different language.",
+   "Look at whether the interface text switches to that language, and compare with Expected."
+  ],
+  "where": "Settings > General > Display Language"
+ },
+ "S84.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "Appearance"
+   },
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "Theme"
+   },
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "System"
+   }
+  ],
+  "needs": "none",
+  "note": "packages/ui/ui/src/settings-nav.ts labels the same appearance key Personalization, while web-settings-navigation.ts labels it Appearance; the tester should use the label on screen.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and choose Appearance.",
+   "Find the row labelled Theme with three buttons: System, Light, Dark.",
+   "Click Light, then Dark, then System.",
+   "Look whether the colours of the whole app change each time and whether the choice is still selected after closing and reopening Settings."
+  ],
+  "where": "Settings > Appearance > Theme"
+ },
+ "S84.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "Accent colour"
+   }
+  ],
+  "needs": "none",
+  "note": "The accent row is rendered without a visible condition in this file; whether it is hidden on some plans or surfaces was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and choose Appearance.",
+   "Find the row labelled Accent colour and its group of colour buttons.",
+   "Click a different accent colour.",
+   "Look whether buttons, links and highlights across the app take the new colour."
+  ],
+  "where": "Settings > Appearance > Accent colour"
+ },
+ "S84.05": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "Chat text size"
+   }
+  ],
+  "needs": "a chat with some messages",
+  "note": "Options are Small, Default and Large.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and choose Appearance.",
+   "Find the row labelled Chat text size and open its drop-down.",
+   "Choose Large, then Small.",
+   "Open a chat with several messages and look whether message text grows and shrinks."
+  ],
+  "where": "Settings > Appearance > Chat text size"
+ },
+ "S84.07": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "Motion"
+   },
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "Reduced"
+   }
+  ],
+  "needs": "none",
+  "note": "System follows the operating-system preference; the exact OS setting was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and choose Appearance.",
+   "Find the row labelled Motion with two buttons: System and Reduced.",
+   "Click Reduced.",
+   "Trigger an animation in chat (for example send a message or open a menu) and look whether motion is reduced; then check that System follows the device reduce-motion setting."
+  ],
+  "where": "Settings > Appearance > Motion"
+ },
+ "S84.08": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "Code theme"
+   }
+  ],
+  "needs": "a chat that shows a code block",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and choose Appearance.",
+   "Find the row labelled Code theme and open its drop-down.",
+   "Pick a different code theme.",
+   "Open a chat that shows a code block and look whether its colours change."
+  ],
+  "where": "Settings > Appearance > Code theme"
+ },
+ "S84.09": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "Wrap long code lines"
+   }
+  ],
+  "needs": "a chat with a long line of code",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and choose Appearance.",
+   "Find the row labelled Wrap long code lines and turn its switch on or off.",
+   "Open a chat with a code block that has a very long line.",
+   "Look whether the long line wraps onto the next line or runs off to the side."
+  ],
+  "where": "Settings > Appearance > Wrap long code lines"
+ },
+ "S84.10": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "Default model"
+   },
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "Last used"
+   }
+  ],
+  "needs": "none; a model marked Upgrade to use needs a paid plan to choose",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and choose General.",
+   "Find the row labelled Default model and open its drop-down; the first option is Last used.",
+   "Pick a model name (a model marked Upgrade to use is locked to your plan).",
+   "Open a new chat and look whether the model picker starts on the chosen model."
+  ],
+  "where": "Settings > General > Default model"
+ },
+ "S84.11": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "Reasoning effort"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and choose General.",
+   "Find the row labelled Reasoning effort and open its drop-down.",
+   "Choose a different effort level (levels above your plan are marked and cannot be picked).",
+   "Open a new chat and look whether the effort picker in the composer shows the chosen level."
+  ],
+  "where": "Settings > General > Reasoning effort"
+ },
+ "S84.12": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "New chats start in"
+   }
+  ],
+  "needs": "a paid plan may be needed for Work (the row shows a plan hint)",
+  "note": "The row shows a plan-entitlement hint from planCapabilityEntitlementHint; the exact gating was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and choose General.",
+   "Find the row labelled New chats start in and open its drop-down (options Chat and Work).",
+   "Choose Work.",
+   "Click the new-chat control and look whether the new chat opens in Work mode."
+  ],
+  "where": "Settings > General > New chats start in"
+ },
+ "S84.14": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "Send with Enter"
+   },
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "Composer"
+   }
+  ],
+  "needs": "none",
+  "note": "This is an on/off switch only; the code does not offer a choice of which modifier sends, unlike Expected's wording.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and choose General, then scroll to the heading Composer.",
+   "Turn the switch on the row labelled Send with Enter on or off.",
+   "Read the hint under the row (it says Off: Enter starts a new line and the key combination sends).",
+   "Open a chat, type two lines, press Enter, and look whether the message sends or a new line is added."
+  ],
+  "where": "Settings > General > Composer > Send with Enter"
+ },
+ "S84.15": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "Keyboard shortcuts"
+   },
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "View shortcuts"
+   },
+   {
+    "file": "apps/web/features/chat/components/dialogs/KeyboardShortcutsDialog.tsx",
+    "text": "Search shortcuts"
+   }
+  ],
+  "needs": "none",
+  "note": "The shortcut pane is KeyboardShortcutsDialog.tsx; the desktop shortcut settings (Quick Ask and others) are listed under S84.22 and the Desktop app group.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and choose General, then find the row labelled Keyboard shortcuts and click View shortcuts (or choose the Keyboard item in the settings list).",
+   "Read the list of shortcuts and search with the field labelled Search shortcuts.",
+   "Click the control labelled Change keys for a rebindable shortcut and press a new key combination.",
+   "Turn off a shortcut with its on/off switch and look whether the list updates and the key stops working."
+  ],
+  "where": "Settings > General > Keyboard shortcuts > View shortcuts, or Settings > Keyboard"
+ },
+ "S84.18": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Notifications"
+   },
+   {
+    "file": "apps/web/features/settings/sections/NotificationsSection.tsx",
+    "text": "Mobile push"
+   },
+   {
+    "file": "apps/web/features/settings/sections/NotificationsSection.tsx",
+    "text": "Email"
+   }
+  ],
+  "needs": "a second device or email inbox to confirm delivery; mobile push needs the phone app",
+  "note": "Channel names are Browser, Email, Mobile push and Push (per event); the exact menu for picking channels was not fully traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and choose Notifications.",
+   "Find the event rows (for example Reply ready, Scheduled task finished, Security alerts) and open the choice for each.",
+   "Choose a channel combination (Browser, Email, Mobile push, or Push where shown) or Off.",
+   "Trigger or wait for that event and look whether it arrives on the chosen channel only."
+  ],
+  "where": "Settings > Notifications"
+ },
+ "S84.19": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Time and focus"
+   },
+   {
+    "file": "apps/web/features/settings/sections/TimeFocusSection.tsx",
+    "text": "Quiet hours"
+   }
+  ],
+  "needs": "none",
+  "note": "Whether notifications are actually held during the window needs a real notification to check; that was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and choose Time and focus.",
+   "Find the row labelled Quiet hours and turn on its switch labelled Enable quiet hours.",
+   "Set the start and end time using the fields labelled Quiet hours start and Quiet hours end.",
+   "Read the note under the row (it says notifications are held, and approvals and failures still arrive) and compare with Expected."
+  ],
+  "where": "Settings > Time and focus > Quiet hours"
+ },
+ "S84.21": {
+  "labels": [
+   {
+    "file": "apps/web/features/desktop-host/components/DesktopSettingsSection.tsx",
+    "text": "Run on startup"
+   },
+   {
+    "file": "apps/desktop/electron/appMenu.ts",
+    "text": "Launch at Login"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "General"
+   }
+  ],
+  "needs": "the Electron desktop app on a Mac",
+  "note": "The desktop settings row is shown only when the app runs in the desktop host; the Launch at login label in apps/desktop/src is the internal Tauri build and is not the public app.",
+  "reachable": "yes",
+  "steps": [
+   "In the desktop app, open Settings and choose General under the group Desktop app.",
+   "Find the row labelled Run on startup and turn its switch on.",
+   "Optionally open the Mac app menu (the app name menu) and look for the item Launch at Login, which should show a tick.",
+   "Quit and reopen the Mac, or log out and back in, and look whether AGI opens by itself."
+  ],
+  "where": "Settings > Desktop app > General > Run on startup (desktop app only)"
+ },
+ "S84.22": {
+  "labels": [
+   {
+    "file": "apps/web/features/desktop-host/components/DesktopSettingsSection.tsx",
+    "text": "Quick Ask shortcut"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/DesktopSettingsSection.tsx",
+    "text": "No shortcut"
+   },
+   {
+    "file": "apps/desktop/electron/appMenu.ts",
+    "text": "Quick Ask"
+   }
+  ],
+  "needs": "the Electron desktop app on a Mac",
+  "note": "The window's position on screen was not traced; the hint says it is for messaging AGI from anywhere on the desktop.",
+  "reachable": "yes",
+  "steps": [
+   "In the desktop app, open Settings, choose General under Desktop app, and find the row labelled Quick Ask shortcut.",
+   "Open its drop-down (it lists shortcut choices, and No shortcut) and pick a different key combination or No shortcut.",
+   "Press the chosen combination from another app and look whether the Quick Ask window appears.",
+   "Open the Mac app menu or File menu and look for the item Quick Ask to compare the shortcut shown."
+  ],
+  "where": "Settings > Desktop app > General > Quick Ask shortcut (desktop app only)"
+ },
+ "S84.23": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "Sidebar items"
+   },
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "Hide anything you do not use from the left rail."
+   }
+  ],
+  "needs": "none",
+  "note": "Only the Sidebar items toggles were found; no collapsed-by-default or auto-hide setting exists in the settings files. Chat cannot be hidden. Sidebar collapse is a toggle in WebChatPage.tsx, not a setting.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and choose General, then find the row labelled Sidebar items.",
+   "Click a destination name (the hint says Hide anything you do not use from the left rail) to switch it off; click again to switch it on.",
+   "Close Settings and look at the left rail; the switched-off item should disappear and reappear when switched back on.",
+   "Check whether there is any control for collapsed-by-default or auto-hide (none was found)."
+  ],
+  "where": "Settings > General > Sidebar items"
+ }
+}

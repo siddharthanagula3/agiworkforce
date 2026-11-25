@@ -1,0 +1,174 @@
+{
+ "S28.01": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Code"
+   }
+  ],
+  "needs": "a chat that makes an HTML or React artifact",
+  "note": "The Code view is a read-only pre/code block (artifactPanel.ts sets textContent); no edit control or contenteditable was found, so editing is likely not possible.",
+  "reachable": "yes",
+  "steps": [
+   "Ask the chat for a small HTML page or a React component so it creates an artifact card.",
+   "Click the artifact card to open the artifact panel.",
+   "Click Code.",
+   "Try to type or change text in the code box, then close and reopen the panel and check whether the change was kept, and compare with Expected."
+  ],
+  "where": "Side panel chat > answer with an artifact card > click the card > Code"
+ },
+ "S28.02": {
+  "labels": [],
+  "needs": "none",
+  "note": "Each artifact is a single file shown in one panel; no file tree was found. Searched apps/extension/src for tree, file tree and project in the side panel and artifact code.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S28.09": {
+  "labels": [],
+  "needs": "a chat that makes an HTML or React artifact",
+  "note": "The artifact panel has Preview and Code buttons that switch one view at a time (artifactPanel.ts selectView); no side-by-side split view was found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S28.10": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Preview"
+   }
+  ],
+  "needs": "a chat that makes an HTML artifact",
+  "note": "If the live preview cannot start, the panel shows the source with the text \"The live preview is not available right now, so the panel shows the source.\"",
+  "reachable": "yes",
+  "steps": [
+   "Ask the chat for a single HTML page with a button, for example a small counter.",
+   "Click the artifact card to open the artifact panel.",
+   "Check that the Preview button is pressed and the page appears.",
+   "Click the page's button and check that the page responds live, and compare with Expected."
+  ],
+  "where": "Side panel chat > answer with an HTML artifact card > click the card > Preview"
+ },
+ "S28.11": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Preview"
+   }
+  ],
+  "needs": "a chat that makes a React artifact",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Ask the chat for a small React component, for example a button that changes a number.",
+   "Click the artifact card to open the artifact panel.",
+   "Check that the Preview button is pressed and the component renders.",
+   "Click the component's button and check that it responds, and compare with Expected."
+  ],
+  "where": "Side panel chat > answer with a React artifact card > click the card > Preview"
+ },
+ "S28.16": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Preview"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Code"
+   }
+  ],
+  "needs": "a chat that makes an artifact that fails to render",
+  "note": "The error shows as a text line in the panel, not an overlay, and there is no retry button; switching to Code is the only recovery found.",
+  "reachable": "yes",
+  "steps": [
+   "Open an HTML or React artifact that fails when it runs (an artifact whose code throws an error on load).",
+   "Click the artifact card and look under the Preview and Code buttons for the message \"The preview could not start. Review the source or try again.\"",
+   "Click Code to review the source and recover.",
+   "Compare with Expected: an overlay with a way to recover."
+  ],
+  "where": "Side panel chat > answer with an HTML or React artifact card > click the card > Preview"
+ },
+ "S28.18": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Code"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Preview"
+   }
+  ],
+  "needs": "a chat that makes an HTML or React artifact",
+  "note": "There is no Reload button; switching Code then Preview creates a new preview frame (artifactPanel.ts mountFrame). Whether state resets is inferred from the code, not verified.",
+  "reachable": "yes",
+  "steps": [
+   "Open a previewable artifact in the artifact panel with Preview showing.",
+   "Click Code.",
+   "Click Preview.",
+   "Check that the page is rebuilt from its start, and compare with Expected."
+  ],
+  "where": "Side panel chat > answer with an HTML or React artifact card > click the card > Code, then Preview"
+ },
+ "S28.19": {
+  "labels": [],
+  "needs": "none",
+  "note": "No restart control for the preview runtime was found. Searched apps/extension/src for restart, reload and runtime controls; only the message about AI and saved data for published apps was found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S28.24": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Download $FILE$"
+   }
+  ],
+  "needs": "a chat that makes an artifact",
+  "note": "The download icon has a tooltip and label but no visible text; it saves one artifact file, not a whole project.",
+  "reachable": "yes",
+  "steps": [
+   "Ask the chat for a small HTML page or a React component so it creates an artifact card.",
+   "Hover the download icon on the card and read its tooltip.",
+   "Click the download icon and check for the status text \"Saved\" followed by the file name.",
+   "Open the saved file and compare its code with Expected."
+  ],
+  "where": "Side panel chat > answer with an artifact card > Download icon labelled \"Download $FILE$\" (also in the panel header after clicking the card)"
+ },
+ "S28.25": {
+  "labels": [],
+  "needs": "none",
+  "note": "Only single-file download of one artifact was found (artifactDownload in artifactPanel.ts). Searched apps/extension/src for zip, archive and export.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S28.27": {
+  "labels": [],
+  "needs": "none",
+  "note": "No publish-to-preview control was found. The only web action is \"Run $TITLE$ in this chat on the web\", which opens the chat in the browser, not a shareable preview link.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S28.28": {
+  "labels": [],
+  "needs": "none",
+  "note": "No in-app production publish control was found. Searched apps/extension for publish; the only match is the Chrome Web Store release script, which is not an app control.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S28.30": {
+  "labels": [],
+  "needs": "none",
+  "note": "No rollback or version-restore control for artifacts was found. Searched apps/extension/src for rollback, roll back, restore and version in artifact code.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ }
+}

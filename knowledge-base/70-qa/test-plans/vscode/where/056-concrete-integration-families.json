@@ -1,0 +1,426 @@
+{
+ "S56.01": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Connected apps"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Ask with it"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/display-name.ts",
+    "text": "Gmail"
+   }
+  ],
+  "needs": "an outside account (Google) with Gmail connected on the web",
+  "note": "The search runs on the server through the Gmail connector; the extension only shows the chat, and the tool result was not run.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to the extension and open the AGI sidebar chat.",
+   "In the Connected apps group, click the Ask with it row for Gmail (it is listed only when Gmail is connected on the web).",
+   "Type: find emails from a sender you know, and send.",
+   "Compare the reply with Expected: matching messages from that sender are listed."
+  ],
+  "where": "Sidebar chat start screen > Connected apps > Gmail > Ask with it, then type a search request"
+ },
+ "S56.02": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Connected apps"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Ask with it"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/display-name.ts",
+    "text": "Gmail"
+   }
+  ],
+  "needs": "an outside account (Google) with Gmail connected on the web",
+  "note": "Whether the full body is returned depends on the server tool, which was not run.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI sidebar chat.",
+   "Click Ask with it on the Gmail row under Connected apps.",
+   "Type: open the latest email from a named sender and show the full text.",
+   "Compare the reply with Expected: the full body of that email is shown, not only a summary line."
+  ],
+  "where": "Sidebar chat start screen > Connected apps > Gmail > Ask with it, then type a read request"
+ },
+ "S56.03": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Connected apps"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Ask with it"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/display-name.ts",
+    "text": "Gmail"
+   }
+  ],
+  "needs": "an outside account (Google) with Gmail connected on the web",
+  "note": "The Gmail scopes include gmail.compose for drafts, per packages/contracts/cloud-contracts/src/connector-scopes.ts; the draft itself was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI sidebar chat.",
+   "Click Ask with it on the Gmail row under Connected apps.",
+   "Type: draft a reply to the latest email from a named sender, and do not send it.",
+   "Open Gmail in a browser and check the Drafts folder for the new draft, comparing with Expected."
+  ],
+  "where": "Sidebar chat start screen > Connected apps > Gmail > Ask with it, then type a draft request"
+ },
+ "S56.07": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Connected apps"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Ask with it"
+   },
+   {
+    "file": "packages/contracts/cloud-contracts/src/trigger-sources.ts",
+    "text": "Google Calendar"
+   }
+  ],
+  "needs": "an outside account (Google) with Google Calendar connected on the web",
+  "note": "The calendar connector id is google-calendar in apps/web/features/connectors/data/connectors.ts; no visible display name for it was found there.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI sidebar chat.",
+   "Click Ask with it on the Google Calendar row under Connected apps.",
+   "Type: what events do I have next Tuesday, or search for the word standup.",
+   "Compare the reply with the calendar in Google Calendar, using Expected as the test."
+  ],
+  "where": "Sidebar chat start screen > Connected apps > Google Calendar > Ask with it, then type a calendar request"
+ },
+ "S56.13": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Connected apps"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Ask with it"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/display-name.ts",
+    "text": "OneDrive"
+   }
+  ],
+  "needs": "an outside account (Google or Microsoft) with a cloud drive connected on the web",
+  "note": "Google Drive has connector id google-drive in apps/web/features/connectors/data/connectors.ts with no display name found; the search was not run.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI sidebar chat.",
+   "Click Ask with it on a cloud drive row under Connected apps (OneDrive or Google Drive).",
+   "Type: find files named with a word you know in that drive.",
+   "Compare the reply with Expected: matching files from the drive are listed."
+  ],
+  "where": "Sidebar chat start screen > Connected apps > OneDrive or Google Drive > Ask with it, then type a file search request"
+ },
+ "S56.14": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Connected apps"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Ask with it"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/display-name.ts",
+    "text": "OneDrive"
+   }
+  ],
+  "needs": "an outside account (Google or Microsoft) with a cloud drive connected on the web",
+  "note": "The download behaviour is a server tool and was not run.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI sidebar chat.",
+   "Click Ask with it on a cloud drive row under Connected apps.",
+   "Type: open the file named with a word you know and show its text.",
+   "Compare the reply with Expected: the text of that file is shown."
+  ],
+  "where": "Sidebar chat start screen > Connected apps > OneDrive or Google Drive > Ask with it, then type a read request"
+ },
+ "S56.15": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Connected apps"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Ask with it"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/display-name.ts",
+    "text": "OneDrive"
+   }
+  ],
+  "needs": "an outside account (Google or Microsoft) with a cloud drive connected on the web",
+  "note": "Google Drive creation is limited to the drive.file scope and OneDrive to its app folder, per packages/contracts/cloud-contracts/src/connector-scopes.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI sidebar chat.",
+   "Click Ask with it on a cloud drive row under Connected apps.",
+   "Type: create a new text file named with a test word in that drive.",
+   "When the approval prompt appears in the chat, read it and choose approve or deny; then check the drive for the new file against Expected."
+  ],
+  "where": "Sidebar chat start screen > Connected apps > OneDrive or Google Drive > Ask with it, then type a create request"
+ },
+ "S56.16": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Connected apps"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Ask with it"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/display-name.ts",
+    "text": "OneDrive"
+   }
+  ],
+  "needs": "an outside account (Google or Microsoft) with a cloud drive connected on the web, and a file you can safely change",
+  "note": "Editing rights depend on the drive scopes; the edit was not run.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI sidebar chat.",
+   "Click Ask with it on a cloud drive row under Connected apps.",
+   "Type: add one line that says a test word to a file you created in that drive.",
+   "When the approval prompt appears, read it and choose approve or deny.",
+   "Open the file in the drive and check the new line against Expected."
+  ],
+  "where": "Sidebar chat start screen > Connected apps > OneDrive or Google Drive > Ask with it, then type an edit request"
+ },
+ "S56.17": {
+  "labels": [],
+  "needs": "a cloud drive connected on the web",
+  "note": "Searched connector-scopes.ts and connectors.ts for folder or sharing scopes; only drive.file creation and OneDrive app-folder scopes were found, with no sharing or collaborator scope.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S56.22": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Connected apps"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Ask with it"
+   },
+   {
+    "file": "packages/contracts/cloud-contracts/src/trigger-sources.ts",
+    "text": "Slack"
+   }
+  ],
+  "needs": "an outside account (Slack) with Slack connected on the web and a test channel",
+  "note": "The approval prompt is built by the approval_requested path in apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts; its exact wording was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI sidebar chat.",
+   "Click Ask with it on the Slack row under Connected apps (Slack must be connected on the web).",
+   "Type: draft a short status message for a named channel and post it.",
+   "When the approval prompt appears, read the channel name and text, then approve or deny.",
+   "Open the Slack channel and compare the posted message with Expected."
+  ],
+  "where": "Sidebar chat start screen > Connected apps > Slack > Ask with it, then type a posting request"
+ },
+ "S56.23": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Connected apps"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Ask with it"
+   }
+  ],
+  "needs": "an outside account (Notion or Atlassian) with the knowledge base connected on the web",
+  "note": "Notion (id notion) and Confluence (id confluence) are in apps/web/features/connectors/data/connectors.ts; no display names for them were found there, and the search was not run.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI sidebar chat.",
+   "Click Ask with it on a Notion or Confluence row under Connected apps.",
+   "Type: search the knowledge base for a page title you know.",
+   "Compare the reply with Expected: matching pages from that workspace are listed."
+  ],
+  "where": "Sidebar chat start screen > Connected apps > Notion or Confluence > Ask with it, then type a search request"
+ },
+ "S56.26": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Connected apps"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Ask with it"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/display-name.ts",
+    "text": "Jira"
+   }
+  ],
+  "needs": "an outside account (Atlassian or Linear) with a tracker connected on the web and a test issue",
+  "note": "Linear is connector id linear in apps/web/features/connectors/data/connectors.ts; the update was not run.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI sidebar chat.",
+   "Click Ask with it on the Jira row under Connected apps (or Linear, if connected).",
+   "Type: move a named test issue to In Progress, or change its priority.",
+   "When the approval prompt appears, read it and approve or deny.",
+   "Open the issue in Jira and compare its status or field with Expected."
+  ],
+  "where": "Sidebar chat start screen > Connected apps > Jira > Ask with it, then type an issue update request"
+ },
+ "S56.28": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Connected apps"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Ask with it"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/display-name.ts",
+    "text": "HubSpot"
+   }
+  ],
+  "needs": "an outside account (HubSpot or Salesforce) with the CRM connected on the web",
+  "note": "Salesforce is connector id salesforce in apps/web/features/connectors/data/connectors.ts; the lookup was not run.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI sidebar chat.",
+   "Click Ask with it on the HubSpot row under Connected apps (Salesforce is the other CRM connector).",
+   "Type: find the contact or account for a company name you know.",
+   "Compare the reply with the CRM record and Expected."
+  ],
+  "where": "Sidebar chat start screen > Connected apps > HubSpot > Ask with it, then type a lookup request"
+ },
+ "S56.31": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Connected apps"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Ask with it"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/display-name.ts",
+    "text": "GitHub"
+   }
+  ],
+  "needs": "a folder open in VS Code; a GitHub account connected on the web for hosted search",
+  "note": "Local search is run by the local runtime (apps/extension-vscode/src/integrations/localRuntimeClient.ts); the 'Code: Show Connectors' command only opens the connector list, so it is not the search control.",
+  "reachable": "yes",
+  "steps": [
+   "Open a folder that has a project in it, then open the AGI sidebar chat.",
+   "Type a question about the code, for example: where is a function name you know defined.",
+   "For a hosted repository, click Ask with it on the GitHub row under Connected apps (GitHub must be connected on the web).",
+   "Compare the reply with the file and line in the editor, using Expected as the test."
+  ],
+  "where": "Code: Show Connectors (Command Palette) for hosted repos; for the local checkout, sidebar chat > type a code question"
+ },
+ "S56.32": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Connected apps"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Ask with it"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/display-name.ts",
+    "text": "GitHub"
+   }
+  ],
+  "needs": "an outside account (GitHub) with GitHub connected on the web and a test pull request",
+  "note": "The GitHub connector summary in apps/web/features/connectors/data/connectors.ts lists pull request diffs, issue comments and PR reviews; the review was not run.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI sidebar chat.",
+   "Click Ask with it on the GitHub row under Connected apps (GitHub must be connected on the web).",
+   "Type: review pull request number N in a named repository and list the review comments.",
+   "When the approval prompt appears for posting comments, read it and approve or deny.",
+   "Open the pull request on GitHub and compare the comments with Expected."
+  ],
+  "where": "Sidebar chat start screen > Connected apps > GitHub > Ask with it, then type a pull request request"
+ },
+ "S56.35": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Connected apps"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Ask with it"
+   }
+  ],
+  "needs": "an outside account (Figma) with Figma connected on the web and a design file",
+  "note": "Figma is connector id figma in apps/web/features/connectors/data/connectors.ts; no display name was found in display-name.ts, and the lookup was not run.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI sidebar chat.",
+   "Click Ask with it on the Figma row under Connected apps (Figma must be connected on the web).",
+   "Paste a link to a Figma frame and ask for the code references for it.",
+   "Compare the reply with the design file in Figma, using Expected as the test."
+  ],
+  "where": "Sidebar chat start screen > Connected apps > Figma > Ask with it, then paste a Figma link"
+ },
+ "S56.36": {
+  "labels": [],
+  "needs": "a database connector connected on the web or a database added by URL",
+  "note": "Searched the connector catalog, display names and scopes: only a read-only BigQuery query scope and a Snowflake MCP entry added by URL were found; no general database connector was confirmed as a chat tool.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S56.46": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Connected apps"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Ask with it"
+   }
+  ],
+  "needs": "an outside health provider account in the United States, with HealthEx connected on the web",
+  "note": "HealthEx is connector id healthex (category Healthcare, United States only) in apps/web/features/connectors/data/connectors.ts; its display name was not found in display-name.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI sidebar chat.",
+   "Click Ask with it on the HealthEx row under Connected apps (HealthEx must be connected on the web).",
+   "Type: list my recent lab results from my care provider.",
+   "Compare the reply with the records in the provider's portal, using Expected as the test."
+  ],
+  "where": "Sidebar chat start screen > Connected apps > HealthEx > Ask with it, then type a records request"
+ }
+}

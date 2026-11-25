@@ -1,0 +1,196 @@
+{
+ "S37.01": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Projects"
+   },
+   {
+    "file": "apps/mobile/app/(app)/(tabs)/projects.tsx",
+    "text": "Projects"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The app calls notebooks \"Projects\"; a notebook's own screen is titled \"Notebook\". The list is cloud-synced only in Cloud mode.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the side menu.",
+   "Tap \"Projects\" in the menu.",
+   "Look for the \"Projects\" title and a list of your projects, each opening with a tap."
+  ],
+  "where": "Side menu > Projects (the list opens on the Projects screen, titled \"Projects\")"
+ },
+ "S37.02": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/(tabs)/projects.tsx",
+    "text": "New project"
+   },
+   {
+    "file": "apps/mobile/app/(app)/(tabs)/projects.tsx",
+    "text": "Create Project"
+   },
+   {
+    "file": "apps/mobile/src/features/projects/components/ProjectEditorModal.tsx",
+    "text": "Create project"
+   }
+  ],
+  "needs": "a signed-in account (Cloud mode to check the account save)",
+  "note": "Local projects are saved on the device, not the account; the account save applies to Cloud projects.",
+  "reachable": "yes",
+  "steps": [
+   "Open Projects from the side menu.",
+   "Tap \"New project\" at the bottom, or \"Create Project\" if no projects exist.",
+   "Type a name in \"Project name\" and tap \"Create project\".",
+   "Look for the new project in the list, then close and reopen the app to confirm it is still there."
+  ],
+  "where": "Side menu > Projects > \"New project\" (floating button); when the list is empty, \"Create Project\""
+ },
+ "S37.03": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/projects/useProjectActions.ts",
+    "text": "Edit project"
+   },
+   {
+    "file": "apps/mobile/src/features/projects/components/ProjectEditorModal.tsx",
+    "text": "Edit Project"
+   },
+   {
+    "file": "apps/mobile/src/features/projects/components/ProjectEditorModal.tsx",
+    "text": "Save project"
+   }
+  ],
+  "needs": "a project you own",
+  "note": "The \"...\" button's visible text was not found in the code; \"Edit project\" is also reached by long-pressing a project card in the list.",
+  "reachable": "yes",
+  "steps": [
+   "Open a project of your own from the Projects list.",
+   "Tap the \"...\" button at the top right of the project screen (it has no visible text), then tap \"Edit project\".",
+   "Look for the \"Edit Project\" sheet with \"Project name\" and \"Description\" fields.",
+   "Change the Description, tap \"Save project\", then open \"Edit project\" again to check the new text."
+  ],
+  "where": "Side menu > Projects > open a project > the \"...\" button at the top right > \"Edit project\""
+ },
+ "S37.04": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/projects/components/ProjectSourcesButton.tsx",
+    "text": "The files this project\u2019s chats can read."
+   },
+   {
+    "file": "apps/mobile/src/features/projects/components/ProjectSourcesTab.tsx",
+    "text": "No sources added yet"
+   }
+  ],
+  "needs": "a project with sources and a chat assigned to that project",
+  "note": "The source list opens as a full sheet over the chat, not as a rail beside it; the folder icon does not appear for chats without a project.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat that belongs to a project.",
+   "Tap the folder icon in the chat header (accessibility label \"Open project sources\").",
+   "Look for the sheet titled \"<project name> sources\" with the list of files, or \"No sources added yet\" if empty."
+  ],
+  "where": "Open a chat that belongs to a project > folder icon at the top of the chat (opens a sheet titled \"<project name> sources\")"
+ },
+ "S37.06": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/projects/[id].tsx",
+    "text": "Sources"
+   },
+   {
+    "file": "apps/mobile/src/features/projects/components/ProjectSourcesTab.tsx",
+    "text": "Add sources"
+   },
+   {
+    "file": "apps/mobile/src/features/projects/components/ProjectSourcesTab.tsx",
+    "text": "Indexing"
+   }
+  ],
+  "needs": "a file to upload (PDF) and a signed-in account",
+  "note": "The mobile picker accepts image and attachment types from a shared list; PDF is not named by itself in the mobile code, so confirm it appears in the picker. Indexing happens on the server, which was not checked here.",
+  "reachable": "yes",
+  "steps": [
+   "Open a project and tap the \"Sources\" tab.",
+   "Tap \"Add sources\" and choose a file in the system picker (for example a PDF).",
+   "Watch the row for \"Indexing\" change to a final status.",
+   "Look for the file name in the list, and check that a chat in this project can use it."
+  ],
+  "where": "Side menu > Projects > open a project > \"Sources\" tab > \"Add sources\""
+ },
+ "S37.14": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/projects/[id].tsx",
+    "text": "Chats"
+   },
+   {
+    "file": "apps/mobile/src/features/projects/useProjectActions.ts",
+    "text": "New chat in project"
+   }
+  ],
+  "needs": "a file to upload, and Local mode (the code adds source text to the chat only when the execution mode is local)",
+  "note": "In the chat store, source text is added only when the execution mode is local (apps/mobile/stores/chat/chatExecutionStore.ts around line 2757); no cloud-mode path for sources was found in this file.",
+  "reachable": "yes",
+  "steps": [
+   "Open a project that has a source file added under \"Sources\".",
+   "Tap the \"Chats\" tab, then start a chat in the project.",
+   "Ask a question that only the source file can answer.",
+   "Compare the answer with the file's content: it should use the source."
+  ],
+  "where": "Side menu > Projects > open a project > \"Chats\" tab > \"New chat in project\", then ask a question about a file in \"Sources\""
+ },
+ "S37.15": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/projects/components/ProjectInstructionsSheet.tsx",
+    "text": "Save instructions"
+   },
+   {
+    "file": "apps/mobile/src/features/projects/components/ProjectEditorModal.tsx",
+    "text": "Custom Instructions"
+   }
+  ],
+  "needs": "a project you own; Local mode for the chat to apply the text (see note)",
+  "note": "The chat store adds project instructions only when the execution mode is local (apps/mobile/stores/chat/chatExecutionStore.ts around line 2772); the Instructions row's visible text was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open a project and tap the Instructions row (accessibility label \"Instructions\"), or tap \"Add instructions\".",
+   "Type an instruction such as a reply style, then tap \"Save instructions\".",
+   "Start a new chat in the same project and ask a question.",
+   "Check the reply follows the instruction."
+  ],
+  "where": "Side menu > Projects > open a project > \"Instructions\" row > type text > \"Save instructions\""
+ },
+ "S37.37": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ProjectSelectorBar.tsx",
+    "text": "No project"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ProjectSelectorBar.tsx",
+    "text": "Choose the project context for this chat."
+   }
+  ],
+  "needs": "a project with sources or instructions, and Local mode for the context to apply",
+  "note": "The selector hides when there are no projects; the context is applied only in local mode per the chat store code.",
+  "reachable": "yes",
+  "steps": [
+   "On the main chat screen, tap the \"No project\" pill.",
+   "In the sheet titled \"Projects\", tap a project name.",
+   "Look for the pill to change to that project's name.",
+   "Send a question and check the reply uses that project's sources or instructions."
+  ],
+  "where": "Chats tab (main chat screen) > \"No project\" pill above the message box > pick a project in the \"Projects\" sheet"
+ },
+ "S37.38": {
+  "labels": [],
+  "needs": "a second app signed into the same account (for example web or desktop)",
+  "note": "Known unfinished and flag-off per the audit; no feature flag was found in the mobile project files, and the mobile app keeps local projects on the device (\"Local project. Details, chats, and sources stay on this device.\" in apps/mobile/app/(app)/projects/[id].tsx).",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": "Seen only as the same project list and sources in another app signed into the same account (none is shown in the mobile app itself)"
+ }
+}

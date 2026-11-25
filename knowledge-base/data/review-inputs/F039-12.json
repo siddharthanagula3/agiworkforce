@@ -1,0 +1,765 @@
+{
+ "feature": {
+  "id": "F039-12",
+  "aliases": [
+   "Never remember",
+   "Exclusions",
+   "Sensitive-memory controls",
+   "Temporary chat",
+   "Memory used",
+   "Memory \u00b7 N",
+   "Manage memory",
+   "Include sensitive topics in memory",
+   "Cross-model personalization",
+   "Cross-surface continuity",
+   "S39.27",
+   "S39.28",
+   "S39.29",
+   "S39.31",
+   "S39.32"
+  ],
+  "summary": "Rules for what memory may hold and use. People list terms to never remember; credentials and other prohibited facts are refused for every source; sensitive topics need opt-in for automatic saves. Temporary chats neither read nor save memory. Web and mobile show which memories a reply used. The server applies one memory context to every model.",
+  "purpose": {
+   "what_it_does": "Enforces privacy rules on memory: a never-remember list of terms, automatic refusal of credential-like and other prohibited facts, an opt-in for sensitive topics, temporary chats that skip memory completely, a 'Memory \u00b7 N' indication on replies that used memory, and the same memory for every model and every signed-in client.",
+   "why_it_exists": "People must be able to stop sensitive information being remembered and see when memory shaped a reply. Brief S39.27 to S39.32 and docs/product/requirements.md:765 require temporary chats to neither update nor reference memory.",
+   "who_uses_it": "Every person who uses memory; privacy-minded people; workspace admins relying on policy; testers.",
+   "problems_solved": [
+    "Passwords, payment details or identifiers ending up in memory.",
+    "Private topics being remembered without consent.",
+    "Not knowing whether an answer came from memory.",
+    "Memory working on one model or app and not another."
+   ],
+   "use_cases": [
+    "Add 'home address' to Never remember; a later attempt to save a fact containing it is refused with a message naming the term.",
+    "Start a temporary chat and tell the assistant a fact; it is not saved and no memory is read.",
+    "Open a reply's 'Memory \u00b7 3' control to see which saved facts were used.",
+    "Save a fact in the CLI and see it on web and in VS Code."
+   ]
+  },
+  "user_experience": {
+   "where_to_find_it": [
+    "Web: Settings, Memory, group 'Never remember' with input 'Term to never remember' and a group 'Where memories come from' with 'Suppress: <source>' boxes (apps/web/features/settings/components/MemoryExclusions.tsx:162,184,295).",
+    "Web: switches 'Save memories from chats', 'Search past chats', 'Include sensitive topics in memory' (apps/web/features/settings/sections/MemorySection.tsx:395,408,419).",
+    "Web temporary chat: the composer menu entry for memory is disabled with 'Temporary chats never read or save memory.' (apps/web/features/chat/components/Composer/ChatComposerNew.tsx:6137).",
+    "Web memory used: on an assistant reply, the Sources panel section 'Memory \u00b7 N' with 'Manage memory' (apps/web/features/chat/components/research/ResearchPanel.tsx:156-191).",
+    "Mobile: Settings, Memory, row 'Never remember' (apps/mobile/app/(app)/settings/memory.tsx:569) with screen 'Never remember' (memory-exclusions.tsx:161); Settings, General, switch 'Temporary Chat' (apps/mobile/src/features/settings/general/index.tsx:149) and a banner; reply chip 'Memory \u00b7 N' (apps/mobile/src/features/chat/components/MemoryUsedChip.tsx:13).",
+    "CLI: agi memory never [--add term] [--remove term] (apps/cli/src/lib.rs:1435,4237); agi --no-memory for a process (lib.rs:6691).",
+    "VS Code: memory quick pick entry 'Never remember\u2026' (apps/extension-vscode/src/core/commandSetup.ts:1961).",
+    "Desktop Tauri: no never-remember list found in apps/desktop/src (grep for exclusion terms found no memory UI). Electron shows the web app (doc: AGENTS.md section 5) [inferred].",
+    "Chrome: no never-remember list found; a temporary chat mode exists (apps/extension/src/side_panel.ts:914,8902)."
+   ],
+   "prerequisites": [
+    "Signed in for the never-remember list (stored in the account).",
+    "Memory on for memory to be read or saved.",
+    "For automatic saving of sensitive topics: the opt-in switch."
+   ],
+   "screens_and_controls": [
+    "Add term box (minimum 3 characters, maximum 50 terms, 100 characters each); remove buttons 'Stop excluding <term>' (MemoryExclusions.tsx:135,184,268).",
+    "Source suppression checkboxes: kept saved but out of answers.",
+    "Memory used chip or panel with list of facts and 'Manage memory'.",
+    "Temporary chat switch or composer toggle; mobile banner offers Personalized or Unpersonalized (TemporaryChatBanner.tsx:17-18)."
+   ],
+   "journey": [
+    "1. Open Settings, Memory, Never remember and add a term.",
+    "2. Any later save (typed, imported, auto-saved or spoken 'remember') whose text contains the term is refused.",
+    "3. Credentials and other prohibited facts are refused with a reason for every source.",
+    "4. Start a temporary chat: memory is neither read nor saved.",
+    "5. In a normal chat, if memory shaped a reply, open Memory \u00b7 N to see which facts.",
+    "6. Pick any model; the same memory is used."
+   ],
+   "feedback_and_outputs": [
+    "Refusal text: 'Not saved. This memory contains \"<term>\", which you asked AGI never to remember.' (apps/web/lib/services/memory-write-service.ts:24).",
+    "Sensitive-topic refusal explaining Remember that ... or the opt-in switch (packages/contracts/context/src/memory-content-policy.ts:580).",
+    "Temporary chat reply: 'This is a temporary chat, so it neither reads nor saves Memory.' (apps/web/lib/server/tools/memory-tools.ts:121).",
+    "Banner text on mobile: 'Won't appear in history or use memory, and is normally deleted after 30 days.' (Cloud) and a Local version (TemporaryChatBanner.tsx:12-15).",
+    "CLI: 'Not remembered: <reason>' and import counts of excluded items."
+   ],
+   "settings": [
+    "Never remember list and source suppression (user settings memory namespace).",
+    "Include sensitive topics in memory.",
+    "Memory and Search past chats switches.",
+    "Mobile: Temporary Chat and temporaryChatPersonalized."
+   ]
+  },
+  "current_implementation": {
+   "working": [
+    "Exclusions are stored in user settings (memory.excludedTerms), normalized to lower case, at least 3 characters, at most 50 (apps/web/lib/services/managed-memory-context-service.ts:283-300).",
+    "Typed saves, edits, sync pushes, imports, explicit remember commands and automatic saves all check the list; a read failure refuses the write (apps/web/lib/services/memory-write-service.ts:39,44; apps/web/app/api/memory/route.ts:148; apps/web/app/api/memory/sync/route.ts:170; apps/web/app/api/memory/import/route.ts:107; apps/web/lib/services/memory-commands.ts:114; managed-memory-context-service.ts:1372).",
+    "Prohibited categories are credential, payment_instrument, government_identifier, biometric, precise_location, criminal_history and immigration_status, and are refused for every source (packages/contracts/context/src/memory-content-policy.ts:1-9; managed-memory-context-service.ts:570).",
+    "Sensitive topics (health, ethnic origin, religion, politics, sexual orientation, gender identity, union membership) are refused for automatic saves unless the person opts in or explicitly asks (memory-content-policy.ts:13-21; managed-memory-context-service.ts:603-640).",
+    "A temporary conversation gets a disabled memory policy and no memory or past-chat read; past-chat search excludes temporary chats (apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4126; apps/web/lib/services/turn-context-service.ts:124-131; apps/web/lib/services/past-chat-context-service.ts:256). Memory tools refuse in temporary chats (memory-tools.ts:121).",
+    "A temporary chat may still ask to forget, never to remember (memory-commands.ts:71).",
+    "Server sends memory citations with the reply; web shows 'Memory \u00b7 N' and mobile a 'Memory \u00b7 N' chip (request-processor.ts:6889; ResearchPanel.tsx:156; MemoryUsedChip.tsx:13; chatExecutionStore.ts:3459).",
+    "Memory is loaded by user, workspace, project and source filters only, with no model input, so every model gets the same context (managed-memory-context-service.ts:1128). Local-model turns on web and desktop prefetch the same account context (apps/web/app/api/memory/local-context/route.ts; apps/web/lib/hooks/useChatStream.ts:4479).",
+    "Memory crosses clients through /api/memory and /api/memory/sync (apps/web/app/api/memory/sync/route.ts:393; apps/cli/src/cloud/memory.rs:15; apps/extension/src/features/cloud-bridge/memoryClient.ts:43; apps/extension-vscode/src/memory/accountMemoryClient.ts).",
+    "Mobile temporary chat reads no memory and skips memory commands and capture (apps/mobile/stores/chat/chatExecutionStore.ts:2797,2962)."
+   ],
+   "incomplete": [
+    "Never-remember is account-level: mobile Local writes check credentials and sensitive topics but not the term list (apps/mobile/src/features/memory/services/localMemoryWriter.ts:25-35; excludedTerms appears only in memory-exclusions.tsx).",
+    "Temporary chat in CLI, VS Code and Chrome: CLI offers --no-memory and --no-session-persistence flags (lib.rs:6691) but no temporary chat; Chrome has a temporary chat mode whose server-side memory effect depends on the server marking the conversation temporary [inferred from request-processor.ts:4081,4126; side_panel.ts:1095]; VS Code none found.",
+    "The brief lists the memory-used indication as missing on mobile, but mobile has it (MemoryUsedChip.tsx); CLI, VS Code, Chrome and desktop Tauri have none found.",
+    "Mobile temporary chat 'Personalized' option sets personalization true or false; the server turns memory off when personalization is false (request-processor.ts:3523), and what 'Personalized' adds in a temporary chat beyond instructions is not traced."
+   ],
+   "disconnected_or_disabled": [
+    "Model-based extraction of automatic memories is switched by the environment setting AGI_MODEL_MEMORY_EXTRACTION and only runs when the turn text was kept (apps/web/lib/services/managed-auto-memory-service.ts:36-58; docs/decisions/2026-09-15-founder-decisions.md:53-58)."
+   ],
+   "not_available": [
+    "Never-remember list UI in desktop Tauri and Chrome.",
+    "Memory-used indication in CLI, VS Code, Chrome and desktop Tauri.",
+    "A way to see why a particular fact was refused after the fact: not found."
+   ]
+  },
+  "required_behaviour": {
+   "established": [
+    {
+     "statement": "The user can stop sensitive information being remembered (never-remember terms or categories) and sensitive facts such as credentials are refused automatically.",
+     "source": "brief S39.29 Should"
+    },
+    {
+     "statement": "In a temporary chat nothing is read from or saved to memory, and the chat is never used later as past-chat context.",
+     "source": "brief S39.28 Should"
+    },
+    {
+     "statement": "When saved memory or past chats shaped a reply, the reply shows it and which memories.",
+     "source": "brief S39.27 Should"
+    },
+    {
+     "statement": "Saved memory and personalization apply the same way whichever model the user picks.",
+     "source": "brief S39.31 Should"
+    },
+    {
+     "statement": "A memory saved on one client appears and is used on every other client signed in to the same account.",
+     "source": "brief S39.32 Should"
+    },
+    {
+     "statement": "Temporary chats must not update or reference memory unless the user explicitly changes that behavior.",
+     "source": "docs/product/requirements.md:765"
+    },
+    {
+     "statement": "Mobile keeps Local and Cloud memory separate; one is never copied into the other.",
+     "source": "docs/decisions/2026-09-27-founder-decisions.md:159"
+    },
+    {
+     "statement": "Temporary chats, Memory-off sessions, API and zero-data-retention traffic stay excluded from automatic extraction.",
+     "source": "docs/decisions/2026-09-15-founder-decisions.md:53-58"
+    },
+    {
+     "statement": "Sensitive categories require explicit controls.",
+     "source": "docs/product/experience-contract.md:28-31"
+    }
+   ],
+   "acceptance_criteria": [
+    "Adding 'home address' to Never remember then saving 'my home address is X' by typing, import, remember command and auto-save all refuse with the term named.",
+    "A fact that looks like a password or card number is refused in every app that writes memory.",
+    "A health-related fact is not auto-saved unless 'Include sensitive topics in memory' is on; saying 'Remember that ...' saves it.",
+    "In a temporary chat on web and mobile, no memory is read, no fact is saved, and the chat is not found by past-chat search.",
+    "A normal reply that used memory shows 'Memory \u00b7 N' listing the facts on web and mobile.",
+    "The same prompt on two different models gets the same memory context.",
+    "A fact added in the CLI shows in web Settings, Memory and in VS Code after sync.",
+    "Exclusion terms shorter than 3 characters are rejected with a message."
+   ],
+   "inferred": [
+    "Never-remember should also apply to mobile Local memory to meet 'stop sensitive info being remembered' there [inferred from the account-level list and the local writer].",
+    "The Chrome temporary chat probably excludes memory through the server's temporary conversation check [inferred]."
+   ],
+   "proposed": [
+    "[proposed] Apply the term list in the mobile Local writer using a device copy of the list.",
+    "[proposed] Show the memory-used indication in the CLI and in VS Code chat.",
+    "[proposed] Add a never-remember screen to desktop Tauri and Chrome."
+   ]
+  },
+  "implementation_map": [
+   {
+    "kind": "service",
+    "name": "memory-write-service",
+    "path": "apps/web/lib/services/memory-write-service.ts",
+    "role": "Never-remember checks and refusal message"
+   },
+   {
+    "kind": "service",
+    "name": "memory eligibility gate",
+    "path": "apps/web/lib/services/managed-memory-context-service.ts",
+    "role": "Content refusal, temporary chat, sensitive topics, workspace and trust mode"
+   },
+   {
+    "kind": "schema",
+    "name": "memory-content-policy",
+    "path": "packages/contracts/context/src/memory-content-policy.ts",
+    "role": "Prohibited categories and sensitive topics"
+   },
+   {
+    "kind": "component",
+    "name": "MemoryExclusions",
+    "path": "apps/web/features/settings/components/MemoryExclusions.tsx",
+    "role": "Web Never remember and source suppression"
+   },
+   {
+    "kind": "component",
+    "name": "MemorySection toggles",
+    "path": "apps/web/features/settings/sections/MemorySection.tsx",
+    "role": "Memory switches including sensitive topics"
+   },
+   {
+    "kind": "service",
+    "name": "resolveInteractiveTurnContext",
+    "path": "apps/web/lib/services/turn-context-service.ts",
+    "role": "Skips memory and past chats for temporary chats; builds citations"
+   },
+   {
+    "kind": "service",
+    "name": "past-chat-context-service",
+    "path": "apps/web/lib/services/past-chat-context-service.ts",
+    "role": "Excludes temporary conversations from recall"
+   },
+   {
+    "kind": "service",
+    "name": "memory-commands",
+    "path": "apps/web/lib/services/memory-commands.ts",
+    "role": "Explicit remember and forget with the same gate"
+   },
+   {
+    "kind": "service",
+    "name": "memory-tools",
+    "path": "apps/web/lib/server/tools/memory-tools.ts",
+    "role": "Model memory tools refuse in temporary chats"
+   },
+   {
+    "kind": "service",
+    "name": "managed-auto-memory-service",
+    "path": "apps/web/lib/services/managed-auto-memory-service.ts",
+    "role": "Automatic saving after a turn"
+   },
+   {
+    "kind": "component",
+    "name": "ResearchPanel MemorySources",
+    "path": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "role": "Web Memory \u00b7 N panel"
+   },
+   {
+    "kind": "component",
+    "name": "MemoryUsedChip",
+    "path": "apps/mobile/src/features/chat/components/MemoryUsedChip.tsx",
+    "role": "Mobile used-memory chip and sheet"
+   },
+   {
+    "kind": "component",
+    "name": "TemporaryChatBanner",
+    "path": "apps/mobile/src/features/chat/components/TemporaryChatBanner.tsx",
+    "role": "Mobile temporary chat explainer"
+   },
+   {
+    "kind": "store",
+    "name": "chatExecutionStore memory gating",
+    "path": "apps/mobile/stores/chat/chatExecutionStore.ts",
+    "role": "Skips memory reads and commands in temporary chats"
+   },
+   {
+    "kind": "service",
+    "name": "localMemoryWriter",
+    "path": "apps/mobile/src/features/memory/services/localMemoryWriter.ts",
+    "role": "Mobile Local refusal of credentials and sensitive topics"
+   },
+   {
+    "kind": "screen",
+    "name": "memory-exclusions (mobile)",
+    "path": "apps/mobile/app/(app)/settings/memory-exclusions.tsx",
+    "role": "Mobile Never remember screen"
+   },
+   {
+    "kind": "endpoint",
+    "name": "GET /api/memory/local-context",
+    "path": "apps/web/app/api/memory/local-context/route.ts",
+    "role": "Account memory for local-model turns"
+   },
+   {
+    "kind": "service",
+    "name": "CLI never_remember",
+    "path": "apps/cli/src/cloud/personalization.rs",
+    "role": "agi memory never"
+   },
+   {
+    "kind": "component",
+    "name": "VS Code memoryExclusions",
+    "path": "apps/extension-vscode/src/memory/memoryExclusions.ts",
+    "role": "Quick pick to manage excluded terms"
+   },
+   {
+    "kind": "service",
+    "name": "Chrome memoryClient",
+    "path": "apps/extension/src/features/cloud-bridge/memoryClient.ts",
+    "role": "Account memory calls for the side panel"
+   },
+   {
+    "kind": "job",
+    "name": "purge-temporary-chats cron",
+    "path": "apps/web/app/api/cron/purge-temporary-chats/route.ts",
+    "role": "Deletes expired temporary chats"
+   },
+   {
+    "kind": "table",
+    "name": "user_settings (memory namespace)",
+    "path": "apps/web/lib/services/managed-memory-context-service.ts",
+    "role": "excludedTerms and suppressedSources"
+   },
+   {
+    "kind": "table",
+    "name": "web_conversations.is_temporary",
+    "path": "apps/web/lib/services/past-chat-context-service.ts",
+    "role": "Marks temporary chats"
+   }
+  ],
+  "execution_and_data_flow": {
+   "steps": [
+    {
+     "what_happens": "Person adds a term; the client saves it in the account's memory settings namespace.",
+     "runs_on": "device and our servers",
+     "evidence": "apps/web/features/settings/components/MemoryExclusions.tsx:100-150"
+    },
+    {
+     "what_happens": "Any memory write reaches the server, which loads the list (failing closed on error), then runs the content and policy gate.",
+     "runs_on": "our servers",
+     "evidence": "apps/web/lib/services/memory-write-service.ts:39-60; managed-memory-context-service.ts:570-660"
+    },
+    {
+     "what_happens": "For a chat turn the server checks if the conversation is temporary; if so it uses a disabled memory policy and loads no memory or past chats.",
+     "runs_on": "our servers",
+     "evidence": "request-processor.ts:4126; turn-context-service.ts:124-131"
+    },
+    {
+     "what_happens": "Otherwise it loads memories filtered by user, workspace, project and suppressed sources, ranks them against the question, takes up to 30, and places them in the prompt fenced as untrusted data.",
+     "runs_on": "our servers",
+     "evidence": "managed-memory-context-service.ts:1128-1215,1281"
+    },
+    {
+     "what_happens": "The model provider receives the prompt; the reply stream carries memory citations back to the app.",
+     "runs_on": "outside service",
+     "evidence": "request-processor.ts:6889"
+    },
+    {
+     "what_happens": "The app shows 'Memory \u00b7 N' from the citations.",
+     "runs_on": "device",
+     "evidence": "ResearchPanel.tsx:156; MemoryUsedChip.tsx:13"
+    },
+    {
+     "what_happens": "After the turn, automatic saving extracts facts, applies the exclusions and the eligibility gate and writes rows.",
+     "runs_on": "our servers",
+     "evidence": "managed-memory-context-service.ts:1343-1385; managed-auto-memory-service.ts:36"
+    },
+    {
+     "what_happens": "Other clients pull the new rows by delta sync.",
+     "runs_on": "device and our servers",
+     "evidence": "apps/web/app/api/memory/sync/route.ts:73; apps/cli/src/cloud/memory.rs:15"
+    }
+   ],
+   "data": [
+    {
+     "what": "Never-remember terms and suppressed sources",
+     "where_stored": "table user_settings, settings.memory",
+     "synced": "Read by every client of the account",
+     "retained_or_deleted": "Until the person removes them; existing memories containing a term are not deleted (MemoryExclusions.tsx:162 copy)"
+    },
+    {
+     "what": "Memories and citations",
+     "where_stored": "table user_memories; citations travel in the reply metadata and are stored on the assistant message",
+     "synced": "Yes across clients",
+     "retained_or_deleted": "Deleted memories keep a text-less tombstone (managed-memory-context-service.ts:391)"
+    },
+    {
+     "what": "Temporary chats",
+     "where_stored": "web_conversations with is_temporary true",
+     "synced": "Not shown in history",
+     "retained_or_deleted": "Purged by a scheduled job; mobile banner says normally deleted after 30 days (purge-temporary-chats/route.ts:30; TemporaryChatBanner.tsx:12)"
+    },
+    {
+     "what": "Mobile Local memory",
+     "where_stored": "Device SQLite memory_facts",
+     "synced": "No (decision D-2026-09-28-02)",
+     "retained_or_deleted": "Cleared by the person or by data deletion (apps/mobile/services/dsarExport.ts)"
+    }
+   ],
+   "models_and_providers": "Memory is added by the server for every model and provider and no model identifier enters the query (managed-memory-context-service.ts:1128). Auto-extraction may use a utility model route when the environment flag is on and the turn is not zero-data-retention (managed-auto-memory-service.ts:36-58). On Local-model turns on web and desktop the device asks for account memory and injects it itself (useChatStream.ts:4479); in own-key and Local modes content outside Managed storage is never saved to user_memories (trust_mode_outside_managed_storage, managed-memory-context-service.ts:540,654)."
+  },
+  "access_and_usage": {
+   "account": "Signed-in account for the term list and for Cloud memory. Mobile Local memory needs none.",
+   "permissions": "Workspace policy can close memory entirely (managed-memory-context-service.ts:115). The person controls their own switches.",
+   "subscription": "none found in the code for these rules.",
+   "limits_and_metering": "50 terms of 3 to 100 characters; 30 memories and 8,000 characters per prompt; at most 5 automatic memories per turn (managed-memory-context-service.ts:67,71,72 MAX_AUTO_MEMORIES_PER_TURN); mobile reads 5 facts per local turn (chatExecutionStore.ts retrieveMemoryContext(content, 5)).",
+   "flags": "AGI_MODEL_MEMORY_EXTRACTION for model-based auto extraction; user switches memory, generateFromHistory, searchPastChats, includeSensitiveTopics, allowToolAssistedGeneration (readUserMemoryCapabilities, managed-memory-context-service.ts:258).",
+   "model_compatibility": "Same for every model; no capability check was found. Tool-assisted memory generation has its own switch.",
+   "provider_restrictions": "Memory is not saved from turns in own-key or Local trust modes (managed-memory-context-service.ts:654). Content tied to Google user data is excluded from memory reads (managed-memory-context-service.ts:1170 memoryFreeOfGoogleUserDataSql).",
+   "local_mode": "Mobile Local mode keeps memory on the device, refuses credentials and sensitive topics, skips memory in temporary chats, and has no never-remember term check (localMemoryWriter.ts:25-35). CLI Local sessions do not receive account memory; only Managed sessions do (apps/cli/src/cloud/memory.rs header)."
+  },
+  "states_and_edge_cases": [
+   {
+    "state": "Exclusion list unreadable",
+    "behaviour": "Write refused: 'Could not read your never remember list, so nothing was saved.'",
+    "evidence": "memory-write-service.ts:39-41"
+   },
+   {
+    "state": "Term too short or list full",
+    "behaviour": "Messages 'Enter at least 3 characters...' and 'You can store up to 50 exclusions.'",
+    "evidence": "MemoryExclusions.tsx:135,144"
+   },
+   {
+    "state": "Existing memory contains a new term",
+    "behaviour": "Stays until deleted",
+    "evidence": "MemoryExclusions.tsx:162 copy"
+   },
+   {
+    "state": "Temporary chat and forget",
+    "behaviour": "Forget allowed, remember refused",
+    "evidence": "memory-commands.ts:71"
+   },
+   {
+    "state": "Memory off",
+    "behaviour": "Nothing read, nothing saved; existing memories stay",
+    "evidence": "MemorySection.tsx:60 MEMORY_DISABLED_CONTRACT; managed-memory-context-service.ts:1140"
+   },
+   {
+    "state": "Context source fails to load",
+    "behaviour": "Turn continues without it and logs a warning",
+    "evidence": "turn-context-service.ts:170-180"
+   },
+   {
+    "state": "Offline",
+    "behaviour": "Web local-model turns keep cached personal context if refresh fails",
+    "evidence": "apps/web/features/chat/lib/local-personal-context.ts (catch comment 'An offline refresh must not expire still-owned personal context')"
+   },
+   {
+    "state": "Memory citations with more facts than listed",
+    "behaviour": "Panel says 'And N more'",
+    "evidence": "ResearchPanel.tsx:156-185"
+   },
+   {
+    "state": "Accessibility",
+    "behaviour": "Mobile chip has a spoken label naming the count; web section has aria-label Memory",
+    "evidence": "MemoryUsedChip.tsx; ResearchPanel.tsx:159"
+   }
+  ],
+  "verification": {
+   "existing_tests": [
+    {
+     "path": "apps/web/app/api/memory/__tests__/exclusion-enforcement.test.ts",
+     "covers": "Refuses excluded content on create and on edit, still saves clean content, leaves pin toggles alone, drops excluded items in bulk"
+    },
+    {
+     "path": "apps/web/lib/services/__tests__/memory-exclusions.test.ts",
+     "covers": "Never-remember term logic (file exists; titles not read)"
+    },
+    {
+     "path": "apps/web/lib/services/__tests__/memory-eligibility-gate.test.ts",
+     "covers": "Eligibility gate (file exists; titles not read)"
+    },
+    {
+     "path": "packages/contracts/context/src/__tests__/memory-content-policy.test.ts",
+     "covers": "Prohibited and sensitive content rules"
+    },
+    {
+     "path": "packages/contracts/context/src/__tests__/memory-content-policy.redos.test.ts",
+     "covers": "Rule patterns resistant to slow-match input"
+    },
+    {
+     "path": "apps/web/lib/services/__tests__/memory-commands.test.ts",
+     "covers": "Explicit remember and forget"
+    },
+    {
+     "path": "apps/web/lib/__tests__/temporary-chat-policy.test.ts",
+     "covers": "Temporary chat policy"
+    },
+    {
+     "path": "apps/web/features/chat/components/Composer/ChatComposerNew.temporaryChat.test.tsx",
+     "covers": "Composer in temporary chat"
+    },
+    {
+     "path": "apps/web/features/settings/components/__tests__/MemoryExclusions.sources.test.tsx",
+     "covers": "Source suppression controls"
+    },
+    {
+     "path": "apps/web/features/chat/components/messages/MessageBubble.sources.test.tsx",
+     "covers": "Memory sources on message bubble"
+    },
+    {
+     "path": "apps/mobile/__tests__/MemoryExclusionsScreen.test.tsx",
+     "covers": "Mobile Never remember screen"
+    },
+    {
+     "path": "apps/mobile/__tests__/TemporaryChatBanner.test.tsx",
+     "covers": "Mobile banner"
+    },
+    {
+     "path": "apps/mobile/src/features/chat/components/__tests__/MemoryUsedChip.test.tsx",
+     "covers": "Mobile used-memory chip"
+    },
+    {
+     "path": "apps/web/app/api/cron/purge-temporary-chats/route.test.ts",
+     "covers": "Purge job for temporary chats"
+    },
+    {
+     "path": "apps/web/app/api/memory/__tests__/workspace-lifecycle.test.ts",
+     "covers": "Sync and write refusal when workspace memory is off"
+    }
+   ],
+   "scenarios": [
+    {
+     "name": "Never remember term",
+     "steps": [
+      "Settings, Memory, Never remember, add 'home address'.",
+      "Type a memory 'my home address is 5 Elm Street'."
+     ],
+     "expected": "Not saved; message names the term."
+    },
+    {
+     "name": "Credential refusal",
+     "steps": [
+      "Tell the assistant to remember a password-like string in a normal chat, then use the Add memory box with the same text."
+     ],
+     "expected": "Both refused as a credential; nothing listed."
+    },
+    {
+     "name": "Temporary chat",
+     "steps": [
+      "Start a temporary chat on web.",
+      "Say 'Remember that I like tea'.",
+      "Ask 'what do I like' in the same chat and then in a normal chat."
+     ],
+     "expected": "Nothing is saved; no memory is used; Memory is not offered in the composer."
+    },
+    {
+     "name": "Memory used indication",
+     "steps": [
+      "Save 'I work in logistics'.",
+      "In a normal chat ask for career advice.",
+      "Open the reply's Memory \u00b7 N."
+     ],
+     "expected": "The saved fact is listed; Manage memory opens Settings, Memory. Repeat on mobile for the chip."
+    },
+    {
+     "name": "Same memory on two models",
+     "steps": [
+      "Pick one model and ask 'what do you know about me'.",
+      "Pick another model and repeat."
+     ],
+     "expected": "Both answers draw on the same saved facts."
+    },
+    {
+     "name": "Cross-surface",
+     "steps": [
+      "agi memory add 'prefers metric units'.",
+      "Open web Settings, Memory and VS Code memory tree."
+     ],
+     "expected": "The fact appears in both."
+    },
+    {
+     "name": "Mobile Local never-remember (expected failure)",
+     "steps": [
+      "Add a term in Never remember in Cloud mode.",
+      "Switch to Local mode and save a fact containing it."
+     ],
+     "expected": "Likely saved, because the Local writer has no term check; record the result."
+    }
+   ],
+   "diagnostics": [
+    "Refusal codes in the gate: prohibited_content_category, temporary_chat, user_memory_disabled, sensitive_topic_not_opted_in, organization_memory_disabled, source_class_cannot_generate_memory, trust_mode_outside_managed_storage (managed-memory-context-service.ts:533-541).",
+    "Log 'Memory exclusion read failed; refusing the write'; 'Managed memory load failed; continuing without account memory'.",
+    "Span memory.context.load attributes retrieval.skipped memory_disabled and retrieval.result_count.",
+    "Tables user_settings (memory namespace), user_memories, web_conversations.is_temporary."
+   ]
+  },
+  "gaps": [
+   {
+    "gap": "Mobile Local mode ignores the never-remember terms",
+    "affects": "Mobile Local users",
+    "evidence": "localMemoryWriter.ts:25-35; excludedTerms only in memory-exclusions.tsx",
+    "work_needed": "Keep a device copy of the list and check it in the local writer"
+   },
+   {
+    "gap": "No never-remember UI in desktop Tauri and Chrome",
+    "affects": "Desktop Tauri and Chrome users",
+    "evidence": "No exclusion code in apps/desktop/src or apps/extension/src",
+    "work_needed": "Add the control or link to web"
+   },
+   {
+    "gap": "No temporary-chat exclusion in CLI and VS Code; Chrome unverified",
+    "affects": "CLI, VS Code, Chrome users",
+    "evidence": "Only --no-memory in CLI (lib.rs:6691)",
+    "work_needed": "Add a temporary mode or verify and document Chrome"
+   },
+   {
+    "gap": "Memory-used indication missing in CLI, VS Code, Chrome and desktop Tauri",
+    "affects": "Those apps",
+    "evidence": "Grep for memoryCitations found only web and mobile code",
+    "work_needed": "Render citations from the reply metadata"
+   },
+   {
+    "gap": "Brief says mobile lacks the memory-used indication",
+    "affects": "Brief readers",
+    "evidence": "MemoryUsedChip.tsx:13",
+    "work_needed": "Correct the brief"
+   },
+   {
+    "gap": "Brief says all six apps have never-remember with refusal; UI exists on four apps and enforcement is server-side",
+    "affects": "Status reporting",
+    "evidence": "see where to find it",
+    "work_needed": "Regrade"
+   },
+   {
+    "gap": "Exclusion check on existing memories does not remove them",
+    "affects": "All users",
+    "evidence": "MemoryExclusions.tsx:162 copy",
+    "work_needed": "Offer to review existing matches"
+   }
+  ],
+  "depends_on": [
+   "SYS-security-and-privacy",
+   "SYS-memory-projects-and-context",
+   "SYS-chat-turn-pipeline",
+   "SYS-model-catalog-and-routing",
+   "SYS-sync-and-continuity",
+   "SYS-execution-boundaries",
+   "SYS-local-inference",
+   "SYS-authorization-and-workspaces",
+   "surface:web",
+   "surface:mobile",
+   "surface:cli",
+   "surface:vscode",
+   "surface:chrome",
+   "surface:desktop",
+   "mode:local",
+   "mode:own-key",
+   "mode:cloud",
+   "table:user_memories",
+   "table:user_settings",
+   "table:web_conversations",
+   "api:POST /api/memory",
+   "api:POST /api/memory/sync",
+   "api:GET /api/memory/local-context",
+   "F039-09",
+   "F039-10"
+  ],
+  "relationships": [
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/web/lib/services/memory-write-service.ts",
+    "evidence": "memory-write-service.ts:24-60"
+   },
+   {
+    "rel": "implemented_by",
+    "to": "file:packages/contracts/context/src/memory-content-policy.ts",
+    "evidence": "memory-content-policy.ts:1,13"
+   },
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/web/lib/services/turn-context-service.ts",
+    "evidence": "turn-context-service.ts:124-131"
+   },
+   {
+    "rel": "stores_data_in",
+    "to": "table:user_settings",
+    "evidence": "managed-memory-context-service.ts:299-315"
+   },
+   {
+    "rel": "stores_data_in",
+    "to": "table:user_memories",
+    "evidence": "managed-memory-context-service.ts:1128-1180"
+   },
+   {
+    "rel": "exposes_api",
+    "to": "api:GET /api/memory/local-context",
+    "evidence": "apps/web/app/api/memory/local-context/route.ts"
+   },
+   {
+    "rel": "exposes_api",
+    "to": "api:POST /api/memory/sync",
+    "evidence": "apps/web/app/api/memory/sync/route.ts:394"
+   },
+   {
+    "rel": "depends_on",
+    "to": "SYS-chat-turn-pipeline",
+    "evidence": "request-processor.ts:4126,6889"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:mobile",
+    "evidence": "MemoryUsedChip.tsx:13; memory-exclusions.tsx:161"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:vscode",
+    "evidence": "commandSetup.ts:1961"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:cli",
+    "evidence": "apps/cli/src/lib.rs:4237"
+   },
+   {
+    "rel": "uses_provider",
+    "to": "SYS-inference-providers",
+    "evidence": "Memory text is sent to whichever provider serves the turn (request-processor.ts:6889 context)"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/web/app/api/memory/__tests__/exclusion-enforcement.test.ts",
+    "evidence": "file exists; titles read"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:packages/contracts/context/src/__tests__/memory-content-policy.test.ts",
+    "evidence": "file exists"
+   },
+   {
+    "rel": "blocked_by",
+    "to": "surface:desktop",
+    "evidence": "No never-remember or memory-used UI in apps/desktop/src (Tauri)"
+   }
+  ],
+  "unknowns": [
+   "Whether the Chrome temporary chat reaches the server as a temporary conversation for memory purposes (inferred only).",
+   "Whether the Electron desktop shows web never-remember and memory-used UI (inferred from AGENTS.md).",
+   "What the mobile Personalized option adds in a temporary chat.",
+   "Whether CLI sessions record any memory when --no-session-persistence is set (not traced).",
+   "Which provider serves automatic extraction in production.",
+   "Titles of memory-exclusions.test.ts and memory-eligibility-gate.test.ts were not read.",
+   "No tests were run."
+  ]
+ },
+ "corrections": [
+  {
+   "section": "7",
+   "claim": "Limits: 50 terms of 3 to 100 characters; 30 memories and 8,000 characters per prompt; at most 5 automatic memories per turn; mobile reads 5 facts per local turn",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "MAX_MEMORIES=30, MAX_TOTAL_MEMORY_CHARS=8000 and MAX_AUTO_MEMORIES_PER_TURN=5 are right (lines 67-72). The 50 and 3 limits are right. The 100-character limit exists only as maxLength={100} on the web input; the server normalizer sets no maximum length. Mobile retrieveMemoryContext(content, 5) is right, but it runs only when memory reads are enabled and !serverAssemblesContext. In Cloud mode the server builds the context instead.",
+   "evidence": "managed-memory-context-service.ts:67-72,283-298; MemoryExclusions.tsx:186; chatExecutionStore.ts:2798-2803",
+   "correction": "Terms must be at least 3 characters, with at most 50 per account. The 100-character cap is a web input limit only and the server does not enforce it. Mobile reads up to 5 local facts per turn only when the app, not the server, assembles the context."
+  },
+  {
+   "section": "6/7",
+   "claim": "Local mode: mobile Local refuses credentials and sensitive topics and has no never-remember term check; CLI Local sessions get no account memory, only Managed ones",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "localMemoryWriter always refuses prohibited categories. It refuses sensitive topics only when source==='learned' and includeSensitiveTopics!==true, so explicit saves of sensitive topics go through. It has no term check, and excludedTerms is used only in memory-exclusions.tsx. The CLI header says only a Managed session's prompt carries account memory, which is right.",
+   "evidence": "apps/mobile/src/features/memory/services/localMemoryWriter.ts:30-39; apps/cli/src/cloud/memory.rs:1-7",
+   "correction": "Mobile Local refuses credential-like and other prohibited facts for every source. It refuses sensitive topics only for learned (automatic) saves unless the person opted in. It does not check the never-remember list."
+  },
+  {
+   "section": "2/3/10",
+   "claim": "Desktop Tauri: no never-remember list found; temporary-chat coverage lists only web, mobile and Chrome",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "No exclusion UI exists in apps/desktop/src. Desktop does have a Local-mode temporary chat: useTemporaryChatControl creates an incognito conversation that is never written to SQLite, and its comment says the native runtime skips memory for it. The page never mentions it, and acceptance criterion 4 covers only web and mobile. A Memory settings tab also exists (features/settings/tabs/Memory.tsx) and is not described.",
+   "evidence": "apps/desktop/src/features/chat/useTemporaryChat.ts:1-15",
+   "correction": "Add: desktop Tauri has a Local-mode temporary chat (incognito conversation, not stored, memory skipped by the native runtime, switch works only on an empty chat). It has no never-remember list."
+  },
+  {
+   "section": "6/8",
+   "claim": "Temporary chats are purged by a scheduled job; mobile banner says normally deleted after 30 days (purge-temporary-chats/route.ts:30; TemporaryChatBanner.tsx:12)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The banner text is right (TemporaryChatBanner.tsx:11-12). In the purge route, RETENTION_DAYS = 30 is at line 24, and line 30 is the GET handler's start. The queries I read (lines 45, 98, 105) filter candidate and job tables by created_at. I did not trace a delete of web_conversations with is_temporary, so the purge claim is not confirmed by the lines read.",
+   "evidence": "apps/web/app/api/cron/purge-temporary-chats/route.ts:24,30,45,98; TemporaryChatBanner.tsx:11-12",
+   "correction": "Cite route.ts:24 for the 30-day RETENTION_DAYS constant, and confirm that the job deletes web_conversations rows with is_temporary before stating it."
+  }
+ ],
+ "missing_facts": [
+  "Mobile Personalized or Unpersonalized in a temporary chat: the page lists it as not traced. A request with personalization === false forces memory_enabled = false (apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:3523). The mobile store sends personalization from temporaryChatPersonalized (apps/mobile/stores/chat/chatExecutionStore.ts:3453,5216). The banner says Unpersonalized also leaves out profile, instructions and response style (apps/mobile/src/features/chat/components/TemporaryChatBanner.tsx:19-20).",
+  "Desktop Tauri has a Local-mode temporary chat (apps/desktop/src/features/chat/useTemporaryChat.ts:1-15) and a Memory settings tab (apps/desktop/src/features/settings/tabs/Memory.tsx). The page describes neither.",
+  "The server-side never-remember term check has no length cap. The 100-character limit exists only on the web input (apps/web/features/settings/components/MemoryExclusions.tsx:186). normalizeMemoryExclusions (apps/web/lib/services/managed-memory-context-service.ts:289-298) enforces only the 3-character minimum and the 50-term maximum, so the CLI and VS Code can write longer terms."
+ ]
+}

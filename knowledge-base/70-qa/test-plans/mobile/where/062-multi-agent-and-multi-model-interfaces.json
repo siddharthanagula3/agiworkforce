@@ -1,0 +1,279 @@
+{
+ "S62.04": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/compare/index.tsx",
+    "text": "Compare Models"
+   },
+   {
+    "file": "apps/mobile/src/features/compare/index.tsx",
+    "text": "vs"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/CommandPalette.tsx",
+    "text": "compare"
+   }
+  ],
+  "needs": "an AGI Cloud account, signed in, on a plan that has at least two cloud models",
+  "note": "The pill shows the provider name from the model registry; I did not verify which plans get two models, only that the screen says so when they do not.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and switch the chat to AGI Cloud mode (Local Mode shows a notice and no compare command).",
+   "In the message box type \"/\" and tap \"compare\" in the list that appears.",
+   "On the \"Compare Models\" screen, look at the pill labelled A and the pill labelled B, separated by \"vs\".",
+   "Check that each pill shows a model name and, under it, the provider name, and compare with Expected."
+  ],
+  "where": "Chat > type \"/\" in the message box > \"compare\" > the \"Compare Models\" screen, read the two model pills at the top (name, then provider name under it)"
+ },
+ "S62.05": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/compare/index.tsx",
+    "text": "Generating..."
+   },
+   {
+    "file": "apps/mobile/src/features/compare/index.tsx",
+    "text": "Compare Models"
+   },
+   {
+    "file": "apps/mobile/src/features/compare/index.tsx",
+    "text": "Stopped before this answer finished."
+   }
+  ],
+  "needs": "an AGI Cloud account, signed in, with two cloud models",
+  "note": "Status is shown per panel only as text and small stat chips; the code has no separate status screen.",
+  "reachable": "yes",
+  "steps": [
+   "Open \"compare\" from the \"/\" list as in S62.04.",
+   "Type a short prompt in the message box and send it.",
+   "Watch each panel while it works: the panel shows \"Generating...\" while its model is streaming.",
+   "When an answer finishes, check the panel shows its status (ms to first token, approximate tokens, total time) and compare with Expected."
+  ],
+  "where": "Chat > type \"/\" > \"compare\" > type a prompt and tap send > watch panel A and panel B on the \"Compare Models\" screen"
+ },
+ "S62.06": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/compare/index.tsx",
+    "text": "No response yet."
+   },
+   {
+    "file": "apps/mobile/src/features/compare/index.tsx",
+    "text": "Compare Models"
+   }
+  ],
+  "needs": "an AGI Cloud account, signed in, with two cloud models",
+  "note": "No separate transcript view was found; each panel's own answer text is the per-agent transcript.",
+  "reachable": "yes",
+  "steps": [
+   "Open \"compare\" from the \"/\" list.",
+   "Send a prompt and wait until both panels stop showing \"Generating...\".",
+   "Scroll the screen and read the answer text inside panel A, then inside panel B.",
+   "Check that each panel shows only its own model's answer and compare with Expected."
+  ],
+  "where": "Chat > type \"/\" > \"compare\" > send a prompt > read the text inside panel A and panel B on the \"Compare Models\" screen"
+ },
+ "S62.07": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/compare/index.tsx",
+    "text": "Faster"
+   },
+   {
+    "file": "apps/mobile/src/features/compare/index.tsx",
+    "text": "tie"
+   },
+   {
+    "file": "apps/mobile/src/features/compare/index.tsx",
+    "text": "Compare Models"
+   }
+  ],
+  "needs": "an AGI Cloud account, signed in, with two cloud models",
+  "note": "The \"Faster\" tag only appears after both answers finish.",
+  "reachable": "yes",
+  "steps": [
+   "Open \"compare\" from the \"/\" list and send one prompt.",
+   "Wait until both panels finish.",
+   "Read panel A and panel B separately, each with its own answer.",
+   "Look for the \"Faster\" badge on one panel or \"tie\" in the model pills, and compare with Expected."
+  ],
+  "where": "Chat > type \"/\" > \"compare\" > send a prompt > read each panel's result and the \"Faster\" or \"tie\" tag on the \"Compare Models\" screen"
+ },
+ "S62.09": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/drawer/components/DrawerContent.tsx",
+    "text": "AGI Work"
+   },
+   {
+    "file": "apps/mobile/src/features/tasks/runPresentation.ts",
+    "text": "Running"
+   },
+   {
+    "file": "apps/mobile/src/features/tasks/runPresentation.ts",
+    "text": "Today"
+   }
+  ],
+  "needs": "an AGI Cloud account with AGI Work, and two or more tasks running at once",
+  "note": "The list is a single view of all runs; the section headers come from the code's time grouping.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu and tap \"AGI Work\" (shown only in AGI Cloud mode on a plan that includes AGI Work).",
+   "Start two or more tasks, or use tasks already running.",
+   "Tap the filter chip \"Running\" to see only running tasks.",
+   "Check that several running tasks appear together in the list, each with its state label, and compare with Expected."
+  ],
+  "where": "AGI Work (drawer) > Filter chip \"Running\" > task cards in one list, grouped under \"Today\", \"Yesterday\", \"This Week\" or \"Older\""
+ },
+ "S62.10": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/tasks/runPresentation.ts",
+    "text": "Needs you"
+   },
+   {
+    "file": "apps/mobile/src/features/drawer/components/DrawerContent.tsx",
+    "text": "AGI Work"
+   },
+   {
+    "file": "packages/contracts/types/src/cross-device.ts",
+    "text": "Waiting for input"
+   }
+  ],
+  "needs": "an AGI Cloud account with AGI Work, and at least one task waiting for input or approval",
+  "note": "The default \"All\" list is not reordered: it sorts by last activity time (runPresentation.ts), so waiting tasks are first only through the \"Needs you\" filter.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu and tap \"AGI Work\".",
+   "Tap the filter chip \"Needs you\" to show only tasks that wait for you.",
+   "Check that tasks in \"Waiting for input\" or waiting for approval are listed, and compare with Expected."
+  ],
+  "where": "AGI Work (drawer) > filter chip \"Needs you\""
+ },
+ "S62.11": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/tasks/components/CloudRunInputForm.tsx",
+    "text": "Send answer"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Approve"
+   },
+   {
+    "file": "apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx",
+    "text": "Waiting for your approval"
+   }
+  ],
+  "needs": "an AGI Cloud account with AGI Work, and a task waiting for input or for approval",
+  "note": "The approval buttons take their words from TOOL_APPROVAL_ACTION_LABELS; I did not confirm the sheet closes or stays open after an answer.",
+  "reachable": "yes",
+  "steps": [
+   "Open \"AGI Work\" from the side menu and tap the filter chip \"Needs you\".",
+   "Tap a task card that shows a waiting state.",
+   "If the sheet shows \"Waiting for your approval\", tap \"Approve\" or \"Deny\". If it shows an input form, fill it and tap \"Send answer\".",
+   "Check that the task updates while you are still on the task list behind the sheet, and compare with Expected."
+  ],
+  "where": "AGI Work (drawer) > tap a task card that is waiting > in the detail sheet, answer with \"Send answer\" or tap \"Approve\" or \"Deny\""
+ },
+ "S62.12": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx",
+    "text": "Latest output"
+   },
+   {
+    "file": "apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx",
+    "text": "Activity"
+   },
+   {
+    "file": "apps/mobile/src/features/drawer/components/DrawerContent.tsx",
+    "text": "AGI Work"
+   }
+  ],
+  "needs": "an AGI Cloud account with AGI Work, and a task that has run",
+  "note": "No separate full-transcript screen was found; the sheet shows the stored transcript, which the store trims to a maximum length (apps/mobile/src/features/tasks/store.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Open \"AGI Work\" from the side menu.",
+   "Tap any task card.",
+   "Scroll the detail sheet to the section \"Latest output\" and then to \"Activity\".",
+   "Check that the task's output and activity lines match the task's history, and compare with Expected."
+  ],
+  "where": "AGI Work (drawer) > tap a task card > in the detail sheet scroll to \"Latest output\" and \"Activity\""
+ },
+ "S62.19": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/CommandPalette.tsx",
+    "text": "compare"
+   },
+   {
+    "file": "apps/mobile/src/features/compare/index.tsx",
+    "text": "Compare Models"
+   },
+   {
+    "file": "apps/mobile/src/features/compare/index.tsx",
+    "text": "vs"
+   }
+  ],
+  "needs": "an AGI Cloud account, signed in",
+  "note": "In Local Mode the screen shows a notice instead of the comparison.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and switch to AGI Cloud mode.",
+   "Type \"/\" in the message box; the command list appears.",
+   "Tap \"compare\".",
+   "Check that the \"Compare Models\" screen opens with two model pills, A and B, and a message box, and compare with Expected."
+  ],
+  "where": "Chat > type \"/\" in the message box > \"compare\" > the \"Compare Models\" screen with two model panels"
+ },
+ "S62.20": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/compare/index.tsx",
+    "text": "Generating..."
+   },
+   {
+    "file": "apps/mobile/src/features/compare/index.tsx",
+    "text": "Your plan runs one answer at a time, so the second waits for the first."
+   },
+   {
+    "file": "apps/mobile/src/features/compare/index.tsx",
+    "text": "Compare Models"
+   }
+  ],
+  "needs": "an AGI Cloud account, signed in; a plan that allows two answers at once to see true parallel answers",
+  "note": "Whether the two answers really arrive at the same time depends on the plan's concurrency limit (runsOneAnswerAtATime in compare/index.tsx), which I did not check against the plan table.",
+  "reachable": "yes",
+  "steps": [
+   "Open \"compare\" from the \"/\" list.",
+   "Type one prompt and tap send.",
+   "Check that panel A and panel B both show \"Generating...\" at the same time.",
+   "On a plan that allows one answer at a time, check that panel B shows \"Your plan runs one answer at a time, so the second waits for the first.\" instead, and compare with Expected."
+  ],
+  "where": "Chat > type \"/\" > \"compare\" > type a prompt and send > both panels show \"Generating...\" together on the \"Compare Models\" screen"
+ },
+ "S62.26": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/compare/index.tsx",
+    "text": "Compare Models"
+   },
+   {
+    "file": "apps/mobile/src/features/compare/index.tsx",
+    "text": "vs"
+   }
+  ],
+  "needs": "an AGI Cloud account, signed in, with at least two cloud models",
+  "note": "Choosing a new model clears the current comparison; the picker offers only the cloud models the plan allows. The picker's own title text was not found.",
+  "reachable": "yes",
+  "steps": [
+   "Open \"compare\" from the \"/\" list.",
+   "Tap the pill labelled A (or B) at the top of the screen.",
+   "A model picker sheet opens; choose another model.",
+   "Check that the pill now shows the new model's name and that the choice is kept for the next prompt, and compare with Expected."
+  ],
+  "where": "Chat > type \"/\" > \"compare\" > tap the model pill A or B on the \"Compare Models\" screen > choose a model in the picker sheet"
+ }
+}

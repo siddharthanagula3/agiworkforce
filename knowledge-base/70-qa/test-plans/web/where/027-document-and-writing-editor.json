@@ -1,0 +1,322 @@
+{
+ "S27.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactLabels.tsx",
+    "text": "Untitled"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactTitleField.tsx",
+    "text": "Rename"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Artifact"
+   }
+  ],
+  "needs": "a signed-in account and a Document artifact from a chat reply",
+  "note": "The card falls back to Untitled but the viewer falls back to Artifact, so the defaults differ.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a chat that has a Document artifact (ask the assistant to write a document if none exists).",
+   "Look at the Document artifact card in the chat and note its title.",
+   "Click the card to open the viewer and read the title at the top.",
+   "Click the title and look for the Rename action (tooltip text) to change it.",
+   "Clear the title and compare: the card should show the default word Untitled and the viewer should show the default word Artifact."
+  ],
+  "where": "Chat > open a Document artifact card > read the title at the top of the viewer; click the title to rename it"
+ },
+ "S27.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Source"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Edit source"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Save"
+   }
+  ],
+  "needs": "a signed-in account and a Document artifact from a chat reply",
+  "note": "Source editing is offered only on the latest version and not for PDF, Word or image artifacts.",
+  "reachable": "yes",
+  "steps": [
+   "Open a Document artifact from a chat reply (it must be the latest version).",
+   "Click the Source icon in the viewer header, or open the More menu and click Edit source.",
+   "Change some text in the Markdown source.",
+   "Click Save (Save artifact source) to save it.",
+   "Look for a new version in the version stepper and check that the text you typed is shown."
+  ],
+  "where": "Chat > open a Document artifact > Source (header icon) or More > Edit source, type, then Save"
+ },
+ "S27.06": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/DocumentFormattingToolbar.tsx",
+    "text": "Formatting"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/DocumentFormattingToolbar.tsx",
+    "text": "Bold"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/DocumentFormattingToolbar.tsx",
+    "text": "Link"
+   }
+  ],
+  "needs": "a signed-in account and a Document artifact from a chat reply",
+  "note": "The toolbar has no Underline button; it has Strikethrough instead. Documents with math, footnotes or raw HTML open as plain Markdown instead.",
+  "reachable": "yes",
+  "steps": [
+   "Open a Document that the rich editor can keep (it opens in the formatting view, not the plain Markdown view).",
+   "Select some words and click Bold, then Italic.",
+   "Select words, click Link, type a web address and confirm.",
+   "Click the Link text and check the address it opens.",
+   "Compare what you see with the Expected: bold, italic and link should show on the text."
+  ],
+  "where": "Chat > open a Document artifact > Edit source or Formatting toolbar > Bold, Italic, Link"
+ },
+ "S27.07": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/DocumentFormattingToolbar.tsx",
+    "text": "Bulleted list"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/DocumentFormattingToolbar.tsx",
+    "text": "Numbered list"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/DocumentFormattingToolbar.tsx",
+    "text": "Checklist"
+   }
+  ],
+  "needs": "a signed-in account and a Document artifact from a chat reply",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a Document artifact in the formatting view.",
+   "Click the Bulleted list button and type two lines.",
+   "Click the Numbered list button on a new line.",
+   "Click the Checklist button on a new line and type an item.",
+   "Look at the result: three kinds of list should appear and the checklist should show a checkbox."
+  ],
+  "where": "Chat > open a Document artifact > Formatting toolbar > Bulleted list, Numbered list, Checklist"
+ },
+ "S27.08": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/DocumentFormattingToolbar.tsx",
+    "text": "Insert table"
+   }
+  ],
+  "needs": "a signed-in account and a Document artifact from a chat reply",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a Document artifact in the formatting view.",
+   "Click the Insert table button.",
+   "Type text into the table cells and press Tab to move between cells.",
+   "Look at the table: it should show rows and columns that can be edited."
+  ],
+  "where": "Chat > open a Document artifact > Formatting toolbar > Insert table"
+ },
+ "S27.09": {
+  "labels": [],
+  "needs": "a signed-in account and a Document artifact from a chat reply",
+  "note": "Searched the artifacts folder for Insert image, Add image, Upload image and Insert: no image button exists in the document toolbar. Images render from Markdown, and the only image-replacement path found is for design artifacts (replaceImage in ArtifactPreview.tsx).",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S27.11": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/DocumentFormattingToolbar.tsx",
+    "text": "Code block"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Source"
+   }
+  ],
+  "needs": "a signed-in account and a Document artifact from a chat reply",
+  "note": "The toolbar has no equation button; math is entered as text in the Markdown source, and math documents open as Markdown.",
+  "reachable": "yes",
+  "steps": [
+   "Open a Document artifact in the formatting view.",
+   "Click the Code block button and type some code.",
+   "Open Source (or Edit source) and type a math line between dollar signs, for example a formula.",
+   "Go back to the Preview and check that the code block shows as code and the formula renders as an equation."
+  ],
+  "where": "Chat > open a Document artifact > Formatting toolbar > Code block; equations are typed in the Markdown source"
+ },
+ "S27.12": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Outline"
+   }
+  ],
+  "needs": "a signed-in account and a Document artifact with 3 or more headings",
+  "note": "The Outline appears only when the document has at least 3 headings (OUTLINE_MIN_HEADINGS = 3).",
+  "reachable": "yes",
+  "steps": [
+   "Open a Document artifact that has at least three headings, in Preview.",
+   "Click Outline to open the list of headings.",
+   "Click a heading in the list.",
+   "Check that the document scrolls to that section."
+  ],
+  "where": "Chat > open a Document artifact in Preview > Outline (click to open) > click a heading"
+ },
+ "S27.27": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Save"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Draft kept on this device"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Checklist changes save as a new version when you pause."
+   }
+  ],
+  "needs": "a signed-in account and a Document artifact from a chat reply",
+  "note": "No saving or saved indicator was found. Source edits save only when Save is clicked, and checklist ticks save as a new version about 4 seconds after you pause.",
+  "reachable": "yes",
+  "steps": [
+   "Open a Document artifact and start editing it (Source, or Edit source).",
+   "Type a few words and pause.",
+   "Look at the header for the status text (Draft kept on this device or Draft not kept) and the Save button.",
+   "Click Save and check that the status text and the new version appear.",
+   "Compare with Expected: there should be a saving and a saved indicator."
+  ],
+  "where": "Chat > open a Document artifact > Edit source or Formatting view; watch the Save button and the status text"
+ },
+ "S27.28": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Undo"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Redo"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/DocumentFormattingToolbar.tsx",
+    "text": "Undo"
+   }
+  ],
+  "needs": "a signed-in account and a Document artifact with at least two saved versions",
+  "note": "The More menu Undo and Redo appear only in the panel view and only when there is more than one version.",
+  "reachable": "yes",
+  "steps": [
+   "Open a Document artifact that has at least two versions (edit and save once more).",
+   "Open More and click Undo; check that the text goes back to the previous version.",
+   "Open More again and click Redo; check that the newer text returns.",
+   "In the formatting view, type text, then click Undo and Redo in the Formatting toolbar.",
+   "Compare with Expected: undo and redo should move through the changes."
+  ],
+  "where": "Chat > open a Document artifact > More > Undo / Redo; in the formatting view, Formatting toolbar > Undo / Redo"
+ },
+ "S27.29": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactVersionHistory.tsx",
+    "text": "Version history"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactVersionHistory.tsx",
+    "text": "Restore"
+   }
+  ],
+  "needs": "a signed-in account and a Document artifact with at least two versions",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a Document artifact that has at least two versions.",
+   "Click the Version history button in the header.",
+   "Read the list: each entry shows Version N and its time.",
+   "Click Restore on an earlier version and confirm the Restore dialog.",
+   "Check that the earlier text is shown and a new version was added."
+  ],
+  "where": "Chat > open a Document artifact > Version history (clock icon in the header) > Restore"
+ },
+ "S27.35": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Download as Word (.docx)"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Download artifact"
+   }
+  ],
+  "needs": "a signed-in account and a Document artifact from a chat reply",
+  "note": "This item appears only for Document artifacts, not for PDF or Word artifacts.",
+  "reachable": "yes",
+  "steps": [
+   "Open a Document artifact in the viewer.",
+   "Click the Download artifact button in the header.",
+   "Click Download as Word (.docx).",
+   "Open the downloaded file in Word or Pages.",
+   "Compare with Expected: a Word document with the same text should open."
+  ],
+  "where": "Chat > open a Document artifact > Download artifact > Download as Word (.docx)"
+ },
+ "S27.36": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Download as PDF"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Download artifact"
+   }
+  ],
+  "needs": "a signed-in account and a Document artifact from a chat reply",
+  "note": "The same label also appears for presentations; this item uses the Document path.",
+  "reachable": "yes",
+  "steps": [
+   "Open a Document artifact in the viewer.",
+   "Click the Download artifact button in the header.",
+   "Click Download as PDF.",
+   "Open the downloaded file in a PDF viewer.",
+   "Compare with Expected: a PDF with the document text should open."
+  ],
+  "where": "Chat > open a Document artifact > Download artifact > Download as PDF"
+ },
+ "S27.37": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Download as Markdown"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Download artifact"
+   }
+  ],
+  "needs": "a signed-in account and an artifact from a chat reply",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a Document artifact in the viewer.",
+   "Click the Download artifact button in the header.",
+   "Click Download as Markdown.",
+   "Open the downloaded .md file in a text editor.",
+   "Compare with Expected: the file should contain the document as Markdown text."
+  ],
+  "where": "Chat > open an artifact > Download artifact > Download as Markdown"
+ }
+}

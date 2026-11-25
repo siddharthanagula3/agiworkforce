@@ -1,0 +1,199 @@
+{
+ "S27.01": {
+  "labels": [],
+  "needs": "none",
+  "note": "The extension has no document type. Searched apps/extension for document, title and untitled. The closest is artifact cards and the artifact panel title, which fall back to \"Untitled artifact\" (spArtifactsUntitled in apps/extension/_locales/en/messages.json), but that is not a document.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S27.03": {
+  "labels": [],
+  "needs": "none",
+  "note": "No Markdown source mode or save-as-new-version found. The artifact panel has a Preview and Code view toggle (apps/extension/src/features/side-panel/artifactPanel.ts), and the Code view shows text with no editing or save found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S27.06": {
+  "labels": [],
+  "needs": "none",
+  "note": "No bold, italic, underline or link controls found. The chat composer is a plain textarea (sp-input in apps/extension/src/side_panel.ts). Markdown bold and links appear only in assistant replies.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S27.07": {
+  "labels": [],
+  "needs": "none",
+  "note": "Checklists render as checkboxes in assistant replies (apps/extension/src/features/side-panel/markdown.ts). Bulleted and numbered lists are standard Markdown rendering. There is no control to create checklists in a document.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side panel and click in the chat box.",
+   "Type a request such as: make a checklist for packing a suitcase, then send it.",
+   "In the reply, find the checklist items shown with checkboxes.",
+   "Tick one box and check that the item is marked done, compared with the Expected line."
+  ],
+  "where": "Side panel chat box > ask the assistant for a checklist"
+ },
+ "S27.08": {
+  "labels": [],
+  "needs": "none",
+  "note": "No insert or edit table control found in apps/extension. Tables are not shown as editable in any place searched.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S27.09": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Upload from device"
+   },
+   {
+    "file": "apps/extension/src/side_panel.ts",
+    "text": "Add attachment"
+   }
+  ],
+  "needs": "a file to upload",
+  "note": "Images go into the chat, not into a document. The rendering of the attached thumbnail was not traced in code.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side panel and click the Add attachment button beside the chat box.",
+   "Click Upload from device and pick a PNG, JPEG, WebP or GIF image.",
+   "Check the image appears as an attachment in the chat box before sending.",
+   "Send, and check the image is rendered in the sent message, compared with the Expected line."
+  ],
+  "where": "Side panel chat box > Add attachment button > Upload from device > choose a PNG, JPEG, WebP or GIF image"
+ },
+ "S27.11": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Copy code"
+   }
+  ],
+  "needs": "none",
+  "note": "Code blocks and KaTeX math render in assistant replies (apps/extension/src/features/side-panel/markdown.ts). Users cannot add code or equation blocks to a document.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side panel and click in the chat box.",
+   "Type a request such as: show a short Python function and the quadratic formula in LaTeX, then send it.",
+   "In the reply, check the code block has a Copy code button.",
+   "Check the formula is shown as typeset math and not as raw LaTeX, compared with the Expected line."
+  ],
+  "where": "Side panel chat box > ask the assistant for a code sample and a math formula"
+ },
+ "S27.12": {
+  "labels": [],
+  "needs": "none",
+  "note": "No outline or heading navigation panel found in apps/extension. Searched for outline and heading terms.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S27.21": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Translate this"
+   }
+  ],
+  "needs": "none",
+  "note": "The menu entry is set in apps/extension/src/background.ts (translate-selection). The side panel prompt code is in apps/extension/src/side_panel.ts; the line numbers in the QA ledger have moved.",
+  "reachable": "yes",
+  "steps": [
+   "Open any web page with readable text and select a sentence or two.",
+   "Right-click the selection and choose Translate this.",
+   "Check that the side panel opens and the chat box is filled with a prompt to translate the selected text into your browser language.",
+   "Send the prompt and check the reply is the translation, compared with the Expected line."
+  ],
+  "where": "Web page > select some text > right-click the selection > Translate this"
+ },
+ "S27.27": {
+  "labels": [],
+  "needs": "none",
+  "note": "No document editor, so no autosave or saving or saved indicator for documents was found. The only saved state found is on the options page (apps/extension/src/options.ts).",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S27.28": {
+  "labels": [],
+  "needs": "none",
+  "note": "No document undo or redo found. The only undo found is Undo insertion after Rewrite selection on a web page text field (spRewriteUndo in apps/extension/_locales/en/messages.json).",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S27.29": {
+  "labels": [],
+  "needs": "none",
+  "note": "No revision history in apps/extension. The version history component (packages/ui/unified-chat/src/components/artifact-components/ArtifactVersionHistory.tsx) is not imported by the extension.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S27.34": {
+  "labels": [],
+  "needs": "none",
+  "note": "No citation add, edit or bibliography control found. Source citations appear only in replies (spCitationMore in apps/extension/_locales/en/messages.json).",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S27.35": {
+  "labels": [],
+  "needs": "none",
+  "note": "No DOCX export found. The artifact panel Download covers only html, react, svg and mermaid types (ARTIFACT_FILE_EXTENSION in apps/extension/src/features/side-panel/artifactPanel.ts). Server answer files were not traced for DOCX.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S27.36": {
+  "labels": [],
+  "needs": "none",
+  "note": "No PDF export found in apps/extension. Searched for pdf and export terms. Server answer files were not traced for PDF.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S27.37": {
+  "labels": [],
+  "needs": "none",
+  "note": "No Markdown file export found. The artifact panel Copy copies the source text, and Download covers only html, react, svg and mermaid types.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S27.39": {
+  "labels": [
+   {
+    "file": "apps/extension/src/features/side-panel/markdown.ts",
+    "text": "Copy email"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/markdown/assistantFence.ts",
+    "text": "Email"
+   }
+  ],
+  "needs": "none",
+  "note": "The draft is shown as a plain-text block with To, Cc, Bcc and Subject lines inside it, not as separate email fields, so it may not match Expected.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side panel and click in the chat box.",
+   "Type a request such as: draft an email to a colleague about Thursday's review, then send it.",
+   "In the reply, find the section headed Email with a Copy email button.",
+   "Check that To and Subject lines are shown with the body, compared with the Expected line."
+  ],
+  "where": "Side panel chat box > ask the assistant to draft an email"
+ },
+ "S27.40": {
+  "labels": [],
+  "needs": "none",
+  "note": "The extension renders email drafts as static text (apps/extension/src/features/side-panel/markdown.ts). Editable To, Subject and body fields exist only in the shared React EmailBlock (packages/ui/unified-chat/src/components/markdown/EmailBlock.tsx), which the extension does not use. EmailDraft has no attachment field.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ }
+}

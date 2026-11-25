@@ -1,0 +1,250 @@
+{
+ "S42.01": {
+  "labels": [
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Scheduled"
+   },
+   {
+    "file": "apps/web/features/schedules/components/SchedulesPage.tsx",
+    "text": "Start from a template"
+   },
+   {
+    "file": "packages/contracts/cloud-contracts/src/schedules.ts",
+    "text": "Daily briefing"
+   }
+  ],
+  "needs": "A paid account (Scheduled tasks are available on Basic and higher plans). A Free account may see the page locked.",
+  "note": "Delivery is shown on the Scheduled page and by the Scheduled task finished notification (see S42.17); the in-app delivery path was not traced end to end.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and click Scheduled in the sidebar.",
+   "Click the arrow button beside New task, then click Start from a template.",
+   "Click the card named Daily briefing (it shows Weekdays at 8:00 AM).",
+   "Submit the Create Schedule dialog (the submit button's exact text was not checked).",
+   "Look for the new schedule card named Daily briefing with a Next: row of upcoming times, and compare with Expected (recurring, generated and delivered)."
+  ],
+  "where": "Sidebar > Scheduled > New task > (arrow button beside it) > Start from a template > Daily briefing"
+ },
+ "S42.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "Local Time"
+   },
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "Time Zone"
+   },
+   {
+    "file": "apps/web/features/schedules/components/SchedulesPage.tsx",
+    "text": "Create from scratch"
+   }
+  ],
+  "needs": "A paid account (Basic or higher).",
+  "note": "The ScheduleForm line cited in Code moved; the Local Time and Time Zone fields are at lines 387 and 510 today.",
+  "reachable": "yes",
+  "steps": [
+   "Click Scheduled in the sidebar, then New task.",
+   "Click Create from scratch (or start from a template).",
+   "Set Recurrence, then change Local Time.",
+   "Change Time Zone (the field offers a list of zones).",
+   "Save, then look at the card's Next: row, whose tooltip reads Times are shown in <zone>, and compare with Expected."
+  ],
+  "where": "Sidebar > Scheduled > New task > Create from scratch > Local Time and Time Zone fields"
+ },
+ "S42.15": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/ScheduleCard.tsx",
+    "text": "Paused"
+   },
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Scheduled"
+   }
+  ],
+  "needs": "A paid account with at least one schedule.",
+  "note": "The switch has no visible text; it is labelled only by its aria-label Pause <name> or Resume <name>.",
+  "reachable": "yes",
+  "steps": [
+   "Click Scheduled in the sidebar.",
+   "Find the Daily briefing card.",
+   "Click its switch to pause it; look for the Paused text on the card and the message Schedule paused.",
+   "Click the switch again; look for Schedule resumed and the card's Paused text going away, and compare with Expected."
+  ],
+  "where": "Sidebar > Scheduled > the briefing's card > its on/off switch (labelled Pause or Resume by name)"
+ },
+ "S42.16": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/TimeFocusSection.tsx",
+    "text": "Time and focus"
+   },
+   {
+    "file": "apps/web/features/settings/sections/TimeFocusSection.tsx",
+    "text": "Quiet hours"
+   },
+   {
+    "file": "apps/web/features/time-focus/TimeFocusReminder.tsx",
+    "text": "Quiet hours are active"
+   }
+  ],
+  "needs": "A way to see push notifications (a phone with AGI installed) for the hold to be checked. Web alone only shows the Quiet hours are active banner.",
+  "note": "Approvals and failures are exempt from the hold, as the page text says. The push hold lives in apps/web/lib/services/push-notification-service.ts (heldByQuietHours); its cited line moved.",
+  "reachable": "yes",
+  "steps": [
+   "Open the account menu at the bottom of the sidebar and click Settings.",
+   "Click Time and focus.",
+   "Turn on Quiet hours and set a start and an end time that differ.",
+   "Keep the page open during those hours (or set a window that includes now) and look for the banner Quiet hours are active.",
+   "Holding of push notifications happens on the server; check on a phone with push that a non-exempt notification is held, and compare with Expected."
+  ],
+  "where": "Account menu > Settings > Time and focus > Quiet hours"
+ },
+ "S42.17": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/NotificationsSection.tsx",
+    "text": "Scheduled task finished"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/settings.json",
+    "text": "Notifications"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Settings"
+   }
+  ],
+  "needs": "An email inbox and/or a phone with AGI push, plus a scheduled task that can run.",
+  "note": "Earlier check only saw the channels; delivery was not tested. The web settings row offers Email and Mobile push, not a browser channel, for this event.",
+  "reachable": "yes",
+  "steps": [
+   "Open the account menu and click Settings, then Notifications.",
+   "Find the row Scheduled task finished with its channel switches (Email, Mobile push).",
+   "Turn the channels on or off and note the change.",
+   "Run a scheduled task and wait for it to finish, then check the email or phone push for the finished or failed message.",
+   "Compare what arrives with Expected."
+  ],
+  "where": "Account menu > Settings > Notifications > Scheduled task finished"
+ },
+ "S42.19": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/ReflectSection.tsx",
+    "text": "Reflect"
+   },
+   {
+    "file": "apps/web/features/settings/sections/ReflectSection.tsx",
+    "text": "Turn on Memory and Save memories from chats to create a recap."
+   },
+   {
+    "file": "apps/web/features/settings/components/web-settings-navigation.ts",
+    "text": "Save memories from chats"
+   }
+  ],
+  "needs": "Memory and Save memories from chats turned on, and a paid or signed-in account with past chats. Without them the page is blocked.",
+  "note": "The earlier check named Generate from past chats, but the code's visible text says Save memories from chats. Memory is the gate, as the earlier check found.",
+  "reachable": "yes",
+  "steps": [
+   "Open the account menu, click Settings, then Reflect.",
+   "Read the page. If it says Turn on Memory and Save memories from chats to create a recap, turn those two settings on under Personalization and reload.",
+   "Choose a range in the Reflect range dropdown (Past 30 days by default).",
+   "Look for the usage reflection (topics and times) and compare with Expected."
+  ],
+  "where": "Account menu > Settings > Reflect"
+ },
+ "S42.21": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/ReflectSection.tsx",
+    "text": "Past year"
+   },
+   {
+    "file": "apps/web/features/settings/sections/ReflectSection.tsx",
+    "text": "Reflect"
+   }
+  ],
+  "needs": "Memory and Save memories from chats turned on, with a year of chats.",
+  "note": "No screen says Annual recap. The recap is the Past year range of the Reflect page, not a calendar-year report. Gated the same way as S42.19.",
+  "reachable": "yes",
+  "steps": [
+   "Open the account menu, click Settings, then Reflect.",
+   "Open the Reflect range dropdown and choose Past year.",
+   "Wait for the recap to reload.",
+   "Look at the recap for the last 365 days and compare with Expected (a recap of the past year)."
+  ],
+  "where": "Account menu > Settings > Reflect > Reflect range > Past year"
+ },
+ "S42.22": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/TimeFocusSection.tsx",
+    "text": "Break reminder"
+   },
+   {
+    "file": "apps/web/features/time-focus/TimeFocusReminder.tsx",
+    "text": "Time for a break?"
+   }
+  ],
+  "needs": "Patience: the reminder needs the chosen amount of visible time in AGI that day.",
+  "note": "The reminder is shown once a day, per the page text (one gentle nudge each day). The minimum option length was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Open the account menu, click Settings, then Time and focus.",
+   "Set Break reminder to the shortest value offered.",
+   "Go back to a chat and keep using AGI in the same tab until the chosen time has passed.",
+   "Look for the box Time for a break? and compare with Expected."
+  ],
+  "where": "Account menu > Settings > Time and focus > Break reminder"
+ },
+ "S42.23": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/TimeFocusSection.tsx",
+    "text": "Time and focus"
+   },
+   {
+    "file": "apps/web/features/settings/sections/TimeFocusSection.tsx",
+    "text": "Quiet hours"
+   },
+   {
+    "file": "apps/web/features/settings/sections/TimeFocusSection.tsx",
+    "text": "Break reminder"
+   }
+  ],
+  "needs": "A signed-in account.",
+  "note": "The nav label Time and focus comes from packages/ui/i18n/locales/en/settings.json (key time-focus).",
+  "reachable": "yes",
+  "steps": [
+   "Open the account menu and click Settings.",
+   "Click Time and focus in the settings list.",
+   "Look for the sections Break reminder and Quiet hours on the page.",
+   "Change one of them, look for the save status line, and compare with Expected."
+  ],
+  "where": "Account menu > Settings > Time and focus"
+ },
+ "S42.25": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/ScheduleCard.tsx",
+    "text": "Run History"
+   },
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Scheduled"
+   }
+  ],
+  "needs": "A schedule that has run at least once.",
+  "note": "No visible text says saved editions. Recent results (RecentScheduleResults.tsx) is also a history list, but its visible heading was not found in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Click Scheduled in the sidebar.",
+   "On the Daily briefing card, click the History icon (title Run History).",
+   "Look at the list of past runs with their status (for example completed, failed, timeout).",
+   "Open a run to see its result, and compare with Expected (past briefings kept as a browsable history)."
+  ],
+  "where": "Sidebar > Scheduled > the briefing's card > History icon (title Run History)"
+ }
+}

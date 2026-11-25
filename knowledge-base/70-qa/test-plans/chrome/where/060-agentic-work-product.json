@@ -1,0 +1,282 @@
+{
+ "S60.02": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Tasks"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Untitled task"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Rename"
+   }
+  ],
+  "needs": "a paid account with AGI Work (the Tasks menu row appears only when signed in)",
+  "note": "The Tasks sheet has no rename control; the only rename found is for chat history entries, and it is not confirmed to change the task title.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, click the More button (aria-label \"More\") in the side panel header.",
+   "Click \"Tasks\" to open the Tasks sheet.",
+   "Look at each task row: the bold line is the task title, or \"Untitled task\" when none is set.",
+   "Click Recent chats (the history icon in the header), find the chat, open More actions and click Rename; type a name in \"Chat name\" and save.",
+   "Reopen Tasks and compare the title with Expected."
+  ],
+  "where": "More > Tasks (the task list shows each title; titles are read-only there). To change a title, use Recent chats > More actions > Rename"
+ },
+ "S60.13": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "AGI Work"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Start work"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Plan"
+   }
+  ],
+  "needs": "a paid account with AGI Work",
+  "note": "The plan card is skipped for unattended runs and for goals longer than the AGI Work goal limit; the toggle label in code is spAgiWork, shown as \"AGI Work\" in messages.json.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with an account whose plan includes AGI Work, then open the model menu (aria-label \"Available models\").",
+   "Turn on the AGI Work toggle (row label \"AGI Work\").",
+   "Type a multi-step goal in the composer and send it.",
+   "Look for the plan card headed \"Plan\" with the help text \"Edit any step before the work starts. The agent follows the plan you start here.\"",
+   "Edit a step or click \"Add a step\", then click \"Start work\" (or \"Cancel\") and compare with Expected."
+  ],
+  "where": "Available models menu > turn on \"AI Work\" toggle, then send a goal in the composer; the plan appears before work starts"
+ },
+ "S60.14": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Working for $ELAPSED$"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Worked for $ELAPSED$"
+   }
+  ],
+  "needs": "a Free or paid account; a task that uses tools",
+  "note": "Per-step status is rendered in apps/extension/src/features/side-panel/bubbles.ts; accuracy is not checked here.",
+  "reachable": "yes",
+  "steps": [
+   "Send a request that uses tools, such as a research task, in a chat with AGI Work on.",
+   "While it runs or after it ends, click the activity line that starts with \"Working for\" or \"Worked for\".",
+   "Read the step rows that appear under it, each with a summary and an elapsed time.",
+   "Compare each step's status (running, failed, cancelled) with what the run actually did."
+  ],
+  "where": "Chat > the activity line under the reply (e.g. \"Working for \u2026\" with \"N steps\") > click it to expand the step list"
+ },
+ "S60.16": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Working for $ELAPSED$"
+   }
+  ],
+  "needs": "a Free or paid account; a task that uses tools",
+  "note": "The running-step marker is an icon only (Loader2 in bubbles.ts), with no visible word.",
+  "reachable": "yes",
+  "steps": [
+   "Start a tool-using request and click the \"Working for\" activity line to expand it.",
+   "Find the step row that is still in progress.",
+   "Look for its spinning icon (no text label) and compare with Expected: only the executing step should spin."
+  ],
+  "where": "Chat > the activity line \"Working for \u2026\" > expand; the step that is executing shows a spinning icon on its row"
+ },
+ "S60.18": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Send answers"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "I'll just type it"
+   }
+  ],
+  "needs": "a Free or paid account; an ambiguous request the agent chooses to clarify",
+  "note": "The card is rendered by buildClarifyCard in apps/extension/src/features/side-panel/interactiveCards.ts; whether the agent asks is up to the agent, so the tester may not trigger it on demand.",
+  "reachable": "yes",
+  "steps": [
+   "Send a request that is ambiguous enough for the agent to ask a question, such as an unclear instruction.",
+   "Wait for the question card to appear in the reply.",
+   "Choose an answer option or type one, then click \"Send answers\".",
+   "Check that the run continues with the answer, and compare with Expected."
+  ],
+  "where": "Chat > a clarifying question card inside the reply, answered with the \"Send answers\" button or \"I'll just type it\""
+ },
+ "S60.19": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Needs your approval \u00b7 $ELAPSED$"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Approve"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Decline"
+   }
+  ],
+  "needs": "a Free or paid account; a request that triggers an approval",
+  "note": "The approval card is built in apps/extension/src/features/side-panel/bubbles.ts; which actions need approval is decided by the agent and policy, so the tester may need to request one.",
+  "reachable": "yes",
+  "steps": [
+   "Send a request that needs an action the agent asks permission for, such as a browser or file action.",
+   "When the activity line shows \"Needs your approval\", click it to expand.",
+   "Read the card text \"Your approval is required before this tool can run.\" (or the version with a risk level).",
+   "Click \"Approve\" or \"Decline\" (or \"Allow for this chat\"), then check that the run pauses before the decision and continues or stops after it."
+  ],
+  "where": "Chat > the activity line \"Needs your approval \u00b7 \u2026\" > expand > the approval card with \"Approve\" or \"Decline\""
+ },
+ "S60.20": {
+  "labels": [],
+  "needs": "a running task",
+  "note": "The only guidance box found is \"Add guidance to steer the run (optional)\", shown on an approval card (apps/extension/src/features/side-panel/bubbles.ts), not as a mid-run control; I searched apps/extension/src for steer, redirect and guidance and found no free-text redirect while a run is going.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S60.23": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Tasks"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Stop"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Keep running"
+   }
+  ],
+  "needs": "a paid account with a long-running task",
+  "note": "The stop control is in apps/extension/src/features/side-panel/tasksSheet.ts and calls cancelChromeManagedRun; the chat's \"Stop response\" button ends only the reply stream, not the task.",
+  "reachable": "yes",
+  "steps": [
+   "Start a long task and sign in with the same account.",
+   "Click More (aria-label \"More\"), then \"Tasks\".",
+   "On a running task row, click \"Stop\" and read the confirmation text.",
+   "Click \"Stop\" to confirm, then check the row state and the status line \"Task stopped.\" and compare with Expected."
+  ],
+  "where": "More > Tasks > \"Stop\" on a running task > \"Stop\" in the confirmation (\"Keep running\" to cancel)"
+ },
+ "S60.29": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Worked for $ELAPSED$"
+   }
+  ],
+  "needs": "a Free or paid account; a task that finishes",
+  "note": "No separate results-summary block was found; the summary is the final reply itself, so reachability rests on the reply, not a dedicated control.",
+  "reachable": "yes",
+  "steps": [
+   "Send a task and wait until it ends.",
+   "Read the reply below the activity line \"Worked for \u2026\".",
+   "Compare the reply with what the task did and with Expected."
+  ],
+  "where": "Chat > the final reply after the activity line \"Worked for \u2026\""
+ },
+ "S60.30": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Download $FILE$"
+   }
+  ],
+  "needs": "a Free or paid account; a task that generates a file",
+  "note": "Built in apps/extension/src/features/side-panel/generatedFiles.ts; opening a file (not only downloading) was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Send a request that produces a file, such as a generated report.",
+   "Look for the file row in the reply.",
+   "Click the download control on the file row (aria-label \"Download <file name>\").",
+   "Check that the file saves and that the status reads \"Downloading \u2026\" then succeeds or fails, and compare with Expected."
+  ],
+  "where": "Chat > the reply's file list > \"Download\" button on each file"
+ },
+ "S60.31": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Finished with errors \u00b7 $ELAPSED$"
+   },
+   {
+    "file": "packages/contracts/types/src/cross-device.ts",
+    "text": "Partially completed"
+   }
+  ],
+  "needs": "a task that ends partly done",
+  "note": "The code shows a status and failed-step count, but no separate \"what remains\" text was found.",
+  "reachable": "yes",
+  "steps": [
+   "Run a task that is expected to fail partly, such as a browser task on a page that blocks it.",
+   "Read the activity line at the end of the reply and expand it.",
+   "Check the failed steps shown in the step list.",
+   "Open More > Tasks and read the state of the task row, then compare with Expected (what was done and what remains)."
+  ],
+  "where": "Chat > the activity line \"Finished with errors \u00b7 \u2026\" or \"Worked for \u2026 \u00b7 N failed attempts\", and Tasks > the row state \"Partially completed\""
+ },
+ "S60.32": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Tasks"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Open"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "No tasks yet."
+   }
+  ],
+  "needs": "at least one past task on the account",
+  "note": "\"Open\" opens the web app in a new tab rather than inside the side panel.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and click More (aria-label \"More\"), then \"Tasks\".",
+   "Read the list: each row shows the title, then the state and last-updated time.",
+   "Click \"Open\" on a task with a conversation to open it in a new Chrome tab on the web.",
+   "Compare the list and the opened task with Expected."
+  ],
+  "where": "More > Tasks (lists tasks with state and time; \"Open\" on each row)"
+ },
+ "S60.34": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "All tasks on the web"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Tasks AGI is running or has run for you, from every app."
+   }
+  ],
+  "needs": "a second device or the web app with the same account",
+  "note": "The list is built from listChromeManagedRuns, so cross-device listing is inferred from that call; following the task live was not confirmed in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Start a task on a second device or on the web with the same account.",
+   "On this Chrome, click More (aria-label \"More\"), then \"Tasks\".",
+   "Find the task started on the other device in the list and click \"Open\" or \"All tasks on the web\".",
+   "Check that the task state updates and that Stop works from here, and compare with Expected."
+  ],
+  "where": "More > Tasks (runs from every app are listed; \"Open\" and \"Stop\" work on them), plus \"All tasks on the web\" at the bottom of the sheet"
+ }
+}

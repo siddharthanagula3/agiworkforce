@@ -1,0 +1,622 @@
+{
+ "feature": {
+  "id": "F052-10",
+  "aliases": [
+   "Who can use it",
+   "Sharing",
+   "Visibility",
+   "Private access",
+   "Named-user access",
+   "Workspace access",
+   "Public listing",
+   "S52.31",
+   "S52.32",
+   "S52.33",
+   "S52.34",
+   "Shared with you",
+   "Specific people",
+   "Everyone in the workspace",
+   "user_agent_access"
+  ],
+  "summary": "Controls who may chat with an agent: only the owner, named workspace members, or everyone in the workspace. Sharing needs a workspace and a published version. Web and Mobile support it against our servers. A public directory does not exist. CLI agents are private by file location.",
+  "purpose": {
+   "what_it_does": "The owner sets visibility to private, people or workspace. For people, named workspace members get an access row. Those people (or all members) can chat with the published version, read-only. (apps/web/lib/services/custom-agent-service.ts:561-600; apps/web/db/neon/0370_user_agents.sql:18-22).",
+   "why_it_exists": "Teams want to reuse one assistant. Private-only agents force copying instructions around (migration purpose, 0370_user_agents.sql:1-9; brief S52.31 to S52.34).",
+   "who_uses_it": "Owners who build agents for a workspace; teammates who use them.",
+   "problems_solved": [
+    "Sharing without copying.",
+    "Keeping unfinished work private.",
+    "Choosing a few people rather than the whole workspace."
+   ],
+   "use_cases": [
+    "Share a drafting agent with three teammates.",
+    "Share an onboarding agent with the whole workspace.",
+    "Keep a personal prompt helper private.",
+    "In the CLI, commit a project agent file so the team inherits it."
+   ]
+  },
+  "user_experience": {
+   "where_to_find_it": [
+    "Web: open an agent, Agent tab, section 'Sharing' with radio choices and 'Save sharing' (apps/web/features/agents/components/AgentPublishPanel.tsx:192-299).",
+    "Web list: sections 'Your agents' and 'Shared with you' (apps/web/features/agents/components/AgentsPage.tsx:219-230).",
+    "Mobile: Sharing section with chips 'Only you', 'Specific people', and the workspace name; list sections 'Your agents', 'Shared with you', 'Retired' (apps/mobile/src/features/agents/components/AgentManageSections.tsx:55-59, 302-400; AgentsScreen.tsx:80-102).",
+    "CLI: no sharing command; scope is the folder: project .agiworkforce/agents or global (apps/cli/src/agents.rs:258-268, 1062-1090).",
+    "Desktop Tauri: scope radio global or project when creating (apps/desktop/src/features/settings/CustomAgentEditor.tsx:272-285).",
+    "VS Code, Chrome: not found."
+   ],
+   "prerequisites": [
+    "Agent lives in a workspace (organization); personal-space agents stay private (service:569-573).",
+    "Agent has a published version (service:574-576).",
+    "Agent not retired for recipients (0370_user_agents.sql:189-191)."
+   ],
+   "screens_and_controls": [
+    "Radio options: 'Only you' (help 'Nobody else can see or use it.'), 'Specific people' (help 'Members of this workspace you pick can chat with the published version.'), 'Everyone in the workspace' plus ' in <workspace name>' (AgentPublishPanel.tsx:19-31, 234-236).",
+    "Checkbox list of workspace members with name and email when 'Specific people' is chosen (AgentPublishPanel.tsx:249-284).",
+    "'Save sharing' button, enabled only when something changed and the agent is published (AgentPublishPanel.tsx:285-296).",
+    "Notices: 'Personal agents stay private. Create it in a workspace to share it.', 'Publish the agent before you share it.', 'Nobody else is in this workspace yet.' (AgentPublishPanel.tsx:211-213, 244-248, 250-253).",
+    "Recipient view: label 'Shared by <name>', read-only form, line '<name> built this agent. Only its owner can change it.' (agent-display.ts:22; AgentEditorPage.tsx:416-420)."
+   ],
+   "journey": [
+    "Create the agent inside a workspace and publish it (see F052-09).",
+    "Open the Sharing section and choose who can use it.",
+    "If 'Specific people', tick members.",
+    "Press 'Save sharing'; toast 'Sharing saved.'",
+    "Teammates see it under 'Shared with you' and press Chat; chats run the published version.",
+    "To stop sharing, choose 'Only you' and save, or retire the agent."
+   ],
+   "feedback_and_outputs": [
+    "Toasts 'Sharing saved.' and 'Sharing could not be saved.' (AgentPublishPanel.tsx:134, 136).",
+    "Server messages: 'Agents in your personal space stay private. Create it in a workspace to share it.', 'Publish the agent before you share it.', 'Choose at least one person to share with.' (service:570-583).",
+    "A workspace audit event 'agent_shared' is recorded with the visibility and head count (apps/web/app/api/custom-agents/[id]/share/route.ts:89-98).",
+    "Recipient list label 'Shared by <name>' or 'Shared with you'."
+   ],
+   "settings": [
+    "Visibility value private, people or workspace (packages/contracts/cloud-contracts/src/agents.ts:12).",
+    "Up to 100 named people per share (agents.ts:28)."
+   ]
+  },
+  "current_implementation": {
+   "working": [
+    "Share route GET returns visibility, workspace name and the first 100 other members with a hasAccess flag; PUT validates and saves (apps/web/app/api/custom-agents/[id]/share/route.ts:71-100).",
+    "shareAgent runs in a transaction: needs a workspace, a published version and at least one person for 'people'; updates visibility; deletes access rows not in the list; inserts new ones (service:561-600).",
+    "Database rules: non-private needs organization_id (0370_user_agents.sql:72-73); recipients can read only published, non-retired agents in the current workspace, and for 'people' only with an access row (policy lines 185-206); only the owner can grant, and only to workspace members (lines 241-255).",
+    "The list shows the owner's agents plus others' agents in the current workspace (service:281-297).",
+    "Teammates run the published copy only (service:146-149).",
+    "Mobile has the same sharing control and also 'Report' and 'Hide' for a shared agent from a sharer (apps/mobile/src/features/agents/components/AgentManageSections.tsx:302-400; AgentEditorScreen.tsx:150-160).",
+    "CLI: an agent is private by where it is stored; project agents load only when the workspace is trusted and a project agent never replaces your own agent of the same name (agents.rs:258-274, tests at 2199, 2217)."
+   ],
+   "incomplete": [
+    "Share member list is limited to the first 100 workspace members with no paging (share route:46-51) [inferred: larger workspaces cannot pick everyone].",
+    "Switching visibility to 'workspace' does not remove old access rows? It does: access rows not in the new list are deleted, and the list is empty for non-people (service:577, 585-589).",
+    "Brief cites agents.rs:228 and :255 for workspace access; those lines are in subagent application and discovery code, not sharing. The nearest CLI idea is project scope shared by committing the file [inferred]."
+   ],
+   "disconnected_or_disabled": [
+    "Brief marks Web and Mobile 'missing' while code works."
+   ],
+   "not_available": [
+    "Public listing or directory of agents: no code found (S52.34). The mobile 'By <company>' group is a fixed built-in list in code, not user listings (packages/contracts/cloud-contracts/src/agent-catalog.ts:5-17).",
+    "Sharing from CLI, desktop file editor, VS Code or Chrome.",
+    "Sharing with people outside the workspace, or by link: not found."
+   ]
+  },
+  "required_behaviour": {
+   "established": [
+    {
+     "statement": "An assistant can be kept private to its creator.",
+     "source": "brief S52.31"
+    },
+    {
+     "statement": "A builder can share an assistant with named people.",
+     "source": "brief S52.32"
+    },
+    {
+     "statement": "A builder can make an assistant available to everyone in their workspace.",
+     "source": "brief S52.33"
+    },
+    {
+     "statement": "A builder can list an assistant in a public directory others can browse.",
+     "source": "brief S52.34"
+    },
+    {
+     "statement": "Workspace and role rules decide who may read a resource; sharing a Local item to another boundary needs consent.",
+     "source": "doc: AGENTS.md section 6"
+    },
+    {
+     "statement": "Custom GPTs and the GPT Store are a migration source, not the enduring target architecture, so a public store is not assumed.",
+     "source": "doc: docs/product/definition.md:183-184"
+    }
+   ],
+   "acceptance_criteria": [
+    "A new agent is private: another workspace member does not see it in 'Shared with you'.",
+    "Sharing before publishing is refused with 'Publish the agent before you share it.'",
+    "A personal-space agent cannot be shared and the panel says so.",
+    "'Specific people' with nobody ticked is refused.",
+    "After sharing with person A only, person B cannot read or chat with the agent (route and database both refuse).",
+    "After 'Everyone in the workspace', every member sees it; after 'Only you', they no longer do.",
+    "A recipient cannot edit, publish, share, transfer or delete.",
+    "Retiring the agent removes it from recipients."
+   ],
+   "inferred": [
+    "Sharing should extend to every app that can run an agent; VS Code and Chrome do not list agents today [inferred].",
+    "The 100-person cap and member listing should page for larger workspaces [inferred].",
+    "A public directory, if wanted, needs review, reporting and a separate visibility value; none exists [inferred]."
+   ],
+   "proposed": [
+    "[proposed] Add paging and search to the people picker.",
+    "[proposed] Decide on public listing in a decision record before building, given the product direction on GPT stores.",
+    "[proposed] Show the owner who currently has access in the list row."
+   ]
+  },
+  "implementation_map": [
+   {
+    "kind": "service",
+    "name": "shareAgent",
+    "path": "apps/web/lib/services/custom-agent-service.ts",
+    "role": "Validates and saves visibility and access rows (lines 561-600)."
+   },
+   {
+    "kind": "service",
+    "name": "readAgentAccess / listAgentRows",
+    "path": "apps/web/lib/services/custom-agent-service.ts",
+    "role": "Reads who has access and which agents a viewer sees (lines 281-297, 553-559)."
+   },
+   {
+    "kind": "endpoint",
+    "name": "api:GET /api/custom-agents/[id]/share and api:PUT /api/custom-agents/[id]/share",
+    "path": "apps/web/app/api/custom-agents/[id]/share/route.ts",
+    "role": "Share state and update; GET at line 71 (exported 102), PUT at line 82 (exported 103); writes an audit event."
+   },
+   {
+    "kind": "service",
+    "name": "recordWorkspaceAuditEvent",
+    "path": "apps/web/lib/workspace-audit.ts",
+    "role": "Records 'agent_shared' (called in share route:89-98)."
+   },
+   {
+    "kind": "service",
+    "name": "listWorkspaceMembers / readWorkspaceMember",
+    "path": "apps/web/lib/services/organization-member-admin-service.ts",
+    "role": "Member list for the people picker."
+   },
+   {
+    "kind": "schema",
+    "name": "AgentShareRequestSchema / AgentShareResponseSchema",
+    "path": "packages/contracts/cloud-contracts/src/agents.ts",
+    "role": "Share wire shapes, up to 100 people (lines 175-195)."
+   },
+   {
+    "kind": "table",
+    "name": "table:user_agents (visibility, organization_id)",
+    "path": "apps/web/db/neon/0370_user_agents.sql",
+    "role": "Visibility and workspace columns with the shared-needs-workspace check (lines 44-76)."
+   },
+   {
+    "kind": "table",
+    "name": "table:user_agent_access",
+    "path": "apps/web/db/neon/0370_user_agents.sql",
+    "role": "Named people with access (lines 106-115)."
+   },
+   {
+    "kind": "config",
+    "name": "row-level policies user_agents_shared_read / user_agent_access_grant",
+    "path": "apps/web/db/neon/0370_user_agents.sql",
+    "role": "Database-level rules for who reads and who may be granted (lines 185-206, 241-255)."
+   },
+   {
+    "kind": "component",
+    "name": "AgentPublishPanel (Sharing section)",
+    "path": "apps/web/features/agents/components/AgentPublishPanel.tsx",
+    "role": "Web sharing UI."
+   },
+   {
+    "kind": "component",
+    "name": "AgentsPage",
+    "path": "apps/web/features/agents/components/AgentsPage.tsx",
+    "role": "Lists 'Your agents' and 'Shared with you'."
+   },
+   {
+    "kind": "service",
+    "name": "agentStateLabel",
+    "path": "packages/contracts/cloud-contracts/src/agent-drafts.ts",
+    "role": "Labels like 'Shared with workspace' and 'Shared by <name>' (lines 50-67)."
+   },
+   {
+    "kind": "component",
+    "name": "AgentShareSection (Mobile)",
+    "path": "apps/mobile/src/features/agents/components/AgentManageSections.tsx",
+    "role": "Mobile sharing chips and member toggles (lines 302-400)."
+   },
+   {
+    "kind": "component",
+    "name": "SharedItemSafetyActions",
+    "path": "apps/mobile/src/features/shared-with-you/SharedItemSafetyActions.tsx",
+    "role": "Report and Hide for a shared agent (used in AgentEditorScreen.tsx:150-158)."
+   },
+   {
+    "kind": "service",
+    "name": "AgentsScreen",
+    "path": "apps/mobile/src/features/agents/AgentsScreen.tsx",
+    "role": "Mobile list groups: Your agents, Shared with you, Retired, built-in group."
+   },
+   {
+    "kind": "command",
+    "name": "discover_agents / trusted_project",
+    "path": "apps/cli/src/agents.rs",
+    "role": "CLI scope by folder, trust check for project agents (lines 258-274)."
+   },
+   {
+    "kind": "component",
+    "name": "CustomAgentEditor scope control",
+    "path": "apps/desktop/src/features/settings/CustomAgentEditor.tsx",
+    "role": "Desktop global or project scope (lines 272-285)."
+   },
+   {
+    "kind": "schema",
+    "name": "AGENT_CATALOG",
+    "path": "packages/contracts/cloud-contracts/src/agent-catalog.ts",
+    "role": "First-party built-in agents shown by Mobile, not a public directory."
+   }
+  ],
+  "execution_and_data_flow": {
+   "steps": [
+    {
+     "what_happens": "Owner opens the Sharing section; the client fetches GET share to get visibility, workspace name and members.",
+     "runs_on": "our servers",
+     "evidence": "share/route.ts:71-80; AgentPublishPanel.tsx:67-85"
+    },
+    {
+     "what_happens": "Owner saves; PUT sends visibility and user ids; the server checks ownership, workspace, published version and people count, then updates user_agents and user_agent_access in one transaction.",
+     "runs_on": "our servers",
+     "evidence": "service:561-600; share/route.ts:82-100"
+    },
+    {
+     "what_happens": "An audit event 'agent_shared' is recorded.",
+     "runs_on": "our servers",
+     "evidence": "share/route.ts:89-98"
+    },
+    {
+     "what_happens": "A recipient's list call returns agents in the current workspace; database policies filter what they may read; presentation hides unpublished data.",
+     "runs_on": "our servers",
+     "evidence": "service:281-297; 0370_user_agents.sql:185-206; service:146-178"
+    },
+    {
+     "what_happens": "The recipient starts a chat: a conversation row is made with the agent id and each turn loads the published copy.",
+     "runs_on": "our servers",
+     "evidence": "conversations/route.ts:13-24; agent-turn-config.ts:57-105"
+    }
+   ],
+   "data": [
+    {
+     "what": "Visibility and access rows",
+     "where_stored": "table:user_agents and table:user_agent_access",
+     "synced": "Same database for Web and Mobile",
+     "retained_or_deleted": "Access rows deleted when sharing changes, when the agent is deleted, or when ownership transfers to that person (0370_user_agents.sql:323-325)."
+    },
+    {
+     "what": "Audit event agent_shared",
+     "where_stored": "Workspace audit log (store not opened)",
+     "synced": "unknown",
+     "retained_or_deleted": "unknown"
+    },
+    {
+     "what": "CLI agent file",
+     "where_stored": "Folder on the device",
+     "synced": "No sync found; a project folder can be shared by version control [inferred]",
+     "retained_or_deleted": "File delete"
+    }
+   ],
+   "models_and_providers": "Sharing does not involve a model. Recipients' chats use the owner's pinned model only when their chat is on Auto (agent-turn-config.ts:175-182); billing for the recipient's turns is not described in the agent code: unknown."
+  },
+  "access_and_usage": {
+   "account": "Signed in on Web or Mobile; the recipient must be a member of the workspace.",
+   "permissions": "Only the owner changes sharing (requireOwnedAgent). Grant only to workspace members (policy lines 241-255). Recipients are read-only (AgentEditorPage.tsx:184).",
+   "subscription": "No plan gate found on sharing. Workspace membership comes from team plans [inferred]; Team and Enterprise tiers carry team admin (billing-catalog.ts:358).",
+   "limits_and_metering": "Up to 100 people per share (agents.ts:28). Optional per-person daily message cap and workspace-wide monthly credit cap set by the owner apply to recipients (agent-turn-config.ts:81-100).",
+   "flags": "none found in the code",
+   "model_compatibility": "none found in the code",
+   "provider_restrictions": "none found in the code",
+   "local_mode": "Sharing exists only for Cloud agents. Mobile Local mode shows the gate 'Agents run in AGI Cloud' (AgentEditorScreen.tsx:79-90). CLI project agents are shared by the repository, outside the product."
+  },
+  "states_and_edge_cases": [
+   {
+    "state": "Personal agent",
+    "behaviour": "Panel says 'Personal agents stay private. Create it in a workspace to share it.'; server refuses non-private.",
+    "evidence": "AgentPublishPanel.tsx:210-213; service:569-573"
+   },
+   {
+    "state": "Not yet published",
+    "behaviour": "Radios disabled with 'Publish the agent before you share it.'",
+    "evidence": "AgentPublishPanel.tsx:216, 244-248"
+   },
+   {
+    "state": "Zero people picked",
+    "behaviour": "Server refuses 'Choose at least one person to share with.'",
+    "evidence": "service:578-583"
+   },
+   {
+    "state": "Member list loading or failing",
+    "behaviour": "'Loading sharing...' then message with Try again.",
+    "evidence": "AgentPublishPanel.tsx:196-209"
+   },
+   {
+    "state": "Paused agent",
+    "behaviour": "Recipients still see it but Chat is disabled with state 'Paused'.",
+    "evidence": "agent-display.ts:10-12, 20; 0370 policy excludes only retired"
+   },
+   {
+    "state": "Retired agent",
+    "behaviour": "Disappears for recipients.",
+    "evidence": "0370_user_agents.sql:189-191; Retire confirm text in AgentManagePanel.tsx:206-215"
+   },
+   {
+    "state": "Recipient opens an agent that was unshared",
+    "behaviour": "Chat turn refused: 'The agent this chat runs as is no longer shared with you or was deleted. Start a new chat to continue.'",
+    "evidence": "agent-turn-config.ts:65-72"
+   },
+   {
+    "state": "Owner changes workspace context",
+    "behaviour": "List shows agents of the current workspace only.",
+    "evidence": "service:291-292"
+   },
+   {
+    "state": "Offline",
+    "behaviour": "not handled in the code beyond error text.",
+    "evidence": "agents-client.ts"
+   },
+   {
+    "state": "Mobile sharer abuse",
+    "behaviour": "Recipient can report or hide a sharer's agent.",
+    "evidence": "AgentEditorScreen.tsx:150-158; AgentsScreens.test.tsx 'hides every agent from a sharer after confirmation'"
+   }
+  ],
+  "verification": {
+   "existing_tests": [
+    {
+     "path": "apps/web/app/api/custom-agents/[id]/share/route.test.ts",
+     "covers": "GET lists workspace people, personal agent answer, PUT shares and writes the audit event, invalid visibility refused."
+    },
+    {
+     "path": "apps/web/db/neon/user-agents-migration.test.ts",
+     "covers": "Row security forced; shared reads only for published agents in the active workspace; only the owner grants to workspace members."
+    },
+    {
+     "path": "apps/web/lib/agents/__tests__/custom-agent-service.test.ts",
+     "covers": "Teammate sees only the published copy with owner name."
+    },
+    {
+     "path": "apps/web/lib/agents/__tests__/agent-turn-config.test.ts",
+     "covers": "Refusal when no longer shared; teammate runs published copy; never-published refused."
+    },
+    {
+     "path": "apps/web/features/agents/__tests__/AgentsPage.test.tsx",
+     "covers": "Own agents listed apart from shared ones."
+    },
+    {
+     "path": "apps/web/features/agents/__tests__/AgentEditorPage.test.tsx",
+     "covers": "Teammate sees a read-only agent with no owner controls."
+    },
+    {
+     "path": "apps/mobile/src/features/agents/__tests__/AgentsScreens.test.tsx",
+     "covers": "Recipient read-only, report and hide, Shared segment."
+    },
+    {
+     "path": "apps/cli/src/agents.rs",
+     "covers": "In-file tests: untrusted project supplies no agents; project agent never replaces your own."
+    }
+   ],
+   "scenarios": [
+    {
+     "name": "Private by default",
+     "steps": [
+      "User A creates and publishes an agent in a workspace.",
+      "User B in the same workspace opens Agents."
+     ],
+     "expected": "B does not see it."
+    },
+    {
+     "name": "Share with one person",
+     "steps": [
+      "A chooses 'Specific people', ticks B, saves.",
+      "B opens Agents, then A's agent, presses Chat.",
+      "User C tries the same."
+     ],
+     "expected": "B can chat; C cannot see it."
+    },
+    {
+     "name": "Workspace share then revoke",
+     "steps": [
+      "A chooses 'Everyone in the workspace', saves.",
+      "B and C see it.",
+      "A chooses 'Only you', saves."
+     ],
+     "expected": "B and C lose it; their old chats stop with the 'no longer shared' message."
+    },
+    {
+     "name": "Unpublished refusal",
+     "steps": [
+      "Create an agent and open Sharing without publishing."
+     ],
+     "expected": "Choices disabled; API PUT returns 'Publish the agent before you share it.'"
+    },
+    {
+     "name": "Personal space",
+     "steps": [
+      "Sign in with no workspace and open Sharing."
+     ],
+     "expected": "Message that personal agents stay private."
+    },
+    {
+     "name": "CLI untrusted project",
+     "steps": [
+      "Open an untrusted repo containing .agiworkforce/agents/x.md",
+      "Run /agents"
+     ],
+     "expected": "The project agent is not listed."
+    }
+   ],
+   "diagnostics": [
+    "Tables user_agent_access and user_agents.visibility.",
+    "Workspace audit events of type agent_shared.",
+    "HTTP 400 validation and 409 conflict from PUT share.",
+    "Database policy denials appear as not found (404 'Agent not found')."
+   ]
+  },
+  "gaps": [
+   {
+    "gap": "No public listing or directory.",
+    "affects": "All apps",
+    "evidence": "No code found; brief S52.34",
+    "work_needed": "Product decision first (docs/product/definition.md:183), then visibility value, review and browse UI."
+   },
+   {
+    "gap": "People picker limited to 100 members, no paging.",
+    "affects": "Web and Mobile owners in large workspaces",
+    "evidence": "share/route.ts:46-51; agents.ts:28",
+    "work_needed": "Paging and search."
+   },
+   {
+    "gap": "No sharing in CLI, VS Code, Chrome or desktop file editor beyond folders.",
+    "affects": "Those apps",
+    "evidence": "No code found",
+    "work_needed": "Decide whether those apps read cloud agents."
+   },
+   {
+    "gap": "Brief marks Web and Mobile 'missing'; CLI 'partial' for workspace access using lines that are not sharing.",
+    "affects": "Planning",
+    "evidence": "Brief S52.31-S52.33",
+    "work_needed": "Correct the brief."
+   },
+   {
+    "gap": "How recipient turns are billed is not visible in the agent code.",
+    "affects": "Owners and recipients",
+    "evidence": "agent-turn-config.ts has only caps",
+    "work_needed": "Confirm in SYS-subscriptions page."
+   }
+  ],
+  "depends_on": [
+   "surface:web",
+   "surface:mobile",
+   "surface:cli",
+   "mode:cloud",
+   "table:user_agents",
+   "table:user_agent_access",
+   "api:GET /api/custom-agents/[id]/share",
+   "api:PUT /api/custom-agents/[id]/share",
+   "SYS-authorization-and-workspaces",
+   "SYS-data-model-and-migrations",
+   "SYS-security-and-privacy",
+   "F052-09",
+   "F052-11"
+  ],
+  "relationships": [
+   {
+    "rel": "stores_data_in",
+    "to": "table:user_agent_access",
+    "evidence": "Insert at custom-agent-service.ts:590-597."
+   },
+   {
+    "rel": "exposes_api",
+    "to": "api:PUT /api/custom-agents/[id]/share",
+    "evidence": "share/route.ts:103"
+   },
+   {
+    "rel": "exposes_api",
+    "to": "api:GET /api/custom-agents/[id]/share",
+    "evidence": "share/route.ts:102"
+   },
+   {
+    "rel": "depends_on",
+    "to": "SYS-authorization-and-workspaces",
+    "evidence": "Workspace membership checks (share/route.ts:41-44; 0370 policy lines 241-255)."
+   },
+   {
+    "rel": "depends_on",
+    "to": "F052-09",
+    "evidence": "Sharing requires published_version (service:574-576)."
+   },
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/web/lib/services/custom-agent-service.ts",
+    "evidence": "shareAgent lines 561-600."
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:mobile",
+    "evidence": "AgentManageSections.tsx:302-400"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/web/app/api/custom-agents/[id]/share/route.test.ts",
+    "evidence": "Test titles cover GET, PUT and refusals."
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/web/db/neon/user-agents-migration.test.ts",
+    "evidence": "Row security contract."
+   },
+   {
+    "rel": "governed_by_subscription",
+    "to": "plan:team",
+    "evidence": "Team tiers hold team admin (billing-catalog.ts:358); no agent-specific plan gate was found [inferred]."
+   },
+   {
+    "rel": "depends_on",
+    "to": "mode:cloud",
+    "evidence": "Mobile gate (AgentEditorScreen.tsx:79-90)."
+   }
+  ],
+  "unknowns": [
+   "Where workspace audit events are stored and how long.",
+   "How a recipient's turn cost is metered (to the recipient, owner or workspace).",
+   "Whether a workspace role can disable agent sharing; no setting found.",
+   "Electron desktop rendering of these pages."
+  ]
+ },
+ "corrections": [
+  {
+   "section": "3",
+   "claim": "The list shows the owner's agents plus others' agents in the current workspace (service:281-297)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The query selects other users' agents in the workspace with no visibility, published or access filter, and caps at 500 rows. Row-level security does the filtering, so the SQL does not filter by visibility.",
+   "evidence": "custom-agent-service.ts:281-297",
+   "correction": "The list query returns the owner's agents in the current organization (or personal space) plus any other user's agents with organization_id equal to the current workspace, limit 500. The database row policy decides which of those the viewer may read."
+  },
+  {
+   "section": "3",
+   "claim": "Share route GET returns visibility, workspace name and the first 100 other members with a hasAccess flag",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The service lists up to 100 members (AGENT_SHARE_PEOPLE_MAX) and then filters out the owner, so at most 100 and usually 99 others. GET also returns an empty member list and null workspace name when the owner is no longer an active member.",
+   "evidence": "apps/web/app/api/custom-agents/[id]/share/route.ts:40-65,71-80; packages/contracts/cloud-contracts/src/agents.ts:28",
+   "correction": "GET returns visibility, workspace name and members from the first page of 100 workspace members with the owner removed. It returns no members or workspace name if the owner's membership is not active."
+  },
+  {
+   "section": "7",
+   "claim": "Local mode: Sharing exists only for Cloud agents. Mobile Local mode shows the gate 'Agents run in AGI Cloud' (AgentEditorScreen.tsx:79-90)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The gate (CloudFeatureGate with 'Agents run in AGI Cloud; switching won't upload your local chats.') is at AgentEditorScreen.tsx:66-75, not 79-90. It is shown when !access.ready, not only in Local mode. The list screen has the same gate at AgentsScreen.tsx:495.",
+   "evidence": "apps/mobile/src/features/agents/AgentEditorScreen.tsx:66-75; AgentsScreen.tsx:495",
+   "correction": "Mobile shows a CloudFeatureGate ('Agents run in AGI Cloud; switching won't upload your local chats.') whenever cloud access is not ready (Local mode or signed out), on both the editor and the list screen. Cite AgentEditorScreen.tsx:66-75."
+  },
+  {
+   "section": "7",
+   "claim": "Optional per-person daily message cap and workspace-wide monthly credit cap set by the owner apply to recipients (agent-turn-config.ts:81-100)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The daily cap is counted per user and agent (countAgentTurnsToday(db,userId,agentId)). The monthly cap is spend against the single agent id (readAgentMonthSpendMicrousd(db, agentId)). It is per agent across all users, not workspace-wide. Both are skipped when null.",
+   "evidence": "apps/web/lib/agents/agent-turn-config.ts:81-100",
+   "correction": "The daily cap is per person per agent and resets at midnight UTC. The monthly credit cap is per agent, summed over everyone who uses it, and resets on the 1st UTC. It is not a workspace-wide cap."
+  },
+  {
+   "section": "7",
+   "claim": "Subscription: Team and Enterprise tiers carry team admin (billing-catalog.ts:358)",
+   "verdict": "wrong",
+   "what_the_code_shows": "The billing-catalog.ts at the cited line sits in packages/contracts/types/src/, not apps/web/lib. Line 358 is `managed_api: PRO_TIERS`, not a team-admin entry. The cite does not support the claim.",
+   "evidence": "packages/contracts/types/src/billing-catalog.ts:355-360",
+   "correction": "Cite the real file path and the line that defines team features, or drop the sentence. No plan gate on sharing was found; membership comes from the organization_members table."
+  }
+ ],
+ "missing_facts": [
+  "The access-row delete runs when ownership is transferred, but it is not the only revoke path. Switching to 'workspace' or 'private' deletes all access rows because the people list is empty (custom-agent-service.ts:577-589). The page covers this, but it also states a false doubt about it in the 'Incomplete' list.",
+  "The monthly credit limit is spent per agent across all users, so one heavy recipient can lock out every other recipient for the month (agent-turn-config.ts:91-100). The page calls it workspace-wide, which hides this.",
+  "GET share returns an empty member list and null workspace name when the owner is no longer an active workspace member, so an owner who has left the workspace cannot pick people (apps/web/app/api/custom-agents/[id]/share/route.ts:40-44). The page does not mention it."
+ ]
+}

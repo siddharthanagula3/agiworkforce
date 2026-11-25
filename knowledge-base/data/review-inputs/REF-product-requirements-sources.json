@@ -1,0 +1,492 @@
+{
+ "page": {
+  "summary": "Index of established product requirements and founder decisions in docs/product, docs/decisions and audit/decisions, each with source and date. Covers the trust modes, one subscription across six apps, plan catalog, gated paid upgrades, mobile decisions of November 2026, unresolved choices, and where documents contradict each other or the code. Read-only; nothing was run.",
+  "sections": [
+   {
+    "heading": "How to read this page",
+    "markdown": "This page collects what the repository records as product requirements and founder decisions. It is an index for citing, not a spec.\n\n**Basis tags.** [code] means I opened the file at that line. [requirement] means a project document states it. [inferred] is my reasoning from code. [proposed] is my suggestion. [unknown] means not established. Nothing here is [executed]: no document I read records a real run of these requirements, and I ran nothing.\n\n**Two statuses.** Implementation status is whether code exists and is connected. Verification status is whether anyone ran it. This page gives only implementation status, and only where quick to check. The surface matrix says a Present cell has been located, not exercised (file:docs/product/surface-feature-matrix.md, header).\n\n**Precedence.** AGENTS.md section 2 ranks code above prose. Where a document disagrees with code, code wins and the document is listed under Contradictions.\n\n**Handles.** REQ-* names are my stable short names for requirements. D-yyyy-mm-dd-nn are the founder's own decision IDs.\n\n| Topic | Owner file | Status line |\n|---|---|---|\n| Product definition | file:docs/product/definition.md | Current, 2026-11-19 |\n| Long PRD | file:docs/product/requirements.md | see its section 27 |\n| Suite thesis, sync boundary | file:docs/product/suite.md | Current |\n| Commercial model | file:docs/product/commercial.md | Current, 2026-11-11 |\n| Experience contract | file:docs/product/experience-contract.md | Current target, implementation incomplete, 2026-11-11 |\n| Feature by surface matrix | file:docs/product/surface-feature-matrix.json (rendered to .md) | Generated, 2026-09-20 |\n| Competitive guidance | file:docs/product/competitive-guidance.md | Current, 2026-11-19 |\n| Decision index | file:docs/decisions/README.md | Last updated 2026-11-11 |\n| Founder decision records | file:docs/decisions/2026-09-15-founder-decisions.md, 2026-09-27, 2026-11-10, 2026-11-12, 2026-11-13 | Current |\n| Open founder calls | file:audit/decisions/founder-decisions.md, open-questions.md, founder-actions.md | open lists |\n\nI read the product and decision files and the audit/decisions headings. I did not read all of founder-actions.md (about 106 KB) or wire-or-cut.md (about 976 KB); I read their section lists only. I did not read the full text of competitive-guidance.md (76 KB) beyond its opening and its surface inventory."
+   },
+   {
+    "heading": "Product definition",
+    "markdown": "| Name | Statement | Source and date | Code today |\n|---|---|---|---|\n| REQ-six-surfaces | AGI is one suite across six first-class surfaces: Web, Mobile, Desktop, Chrome extension, VS Code extension, CLI. Seven code implementations map to six surfaces because Electron is the public Desktop and Tauri is retained internal code. | [requirement] file:docs/product/definition.md (Product Definition), file:AGENTS.md section 5 | [code] app folders exist: apps/web, apps/mobile, apps/desktop (electron and src-tauri), apps/cli, apps/extension, apps/extension-vscode (paths named in file:docs/product/competitive-guidance.md inventory table) |\n| REQ-parity-plus-modes | v1 target is practical parity with leading AI apps, plus one differentiator: the user chooses Local models, own provider key (BYOK), or AGI Managed Cloud. Parity means user capability and workflow, not copied code or branding. | [requirement] definition.md, Product Definition | [code] three modes exist as a typed contract, TRUST_MODE_CONTRACTS (packages/contracts/types/src/trust-mode-contract.ts:52) |\n| REQ-model-agnostic | Models and providers are interchangeable underneath; model-specific behaviour stays behind shared provider and model abstractions; no dependency on one AI company because a reference product uses it. | [requirement] file:docs/decisions/2026-09-15-founder-decisions.md, Governing rule (2026-09-15); AGENTS.md section 4 | [code] one generated model catalog is the only place model IDs may be literal (AGENTS.md section 4; enforced by check:model-id-literals per that file). I did not re-run the guard. |\n| REQ-provider-agnostic | Several inference providers; decision 8 of the index says gateways and proxy paths are never default for Local or strict BYOK. | [requirement] file:docs/decisions/README.md, Locked Decisions 7 and 8 | [inferred] provider adapters live under packages/ai/providers/* (AGENTS.md section 5); coupling not audited here |\n| REQ-brand | Public product name AGI; formal name AGI Workforce; CLI command agi; repo identifiers stay agiworkforce. Brand strings come from the product-names registry. | [requirement] requirements.md 2.1; definition.md; AGENTS.md section 4 | [unknown] not checked. The registry file is packages/contracts/types/src/product-names.ts per AGENTS.md. |\n| REQ-serial-order | Build one surface at a time: Website, Mobile, Desktop, Chrome, CLI, VS Code. Founder order of 2026-09-21; supersedes the 2026-08-05 shortest-first order. | [requirement] definition.md Launch Lock; requirements.md 2.2 | Not a code property. Contradicted in practice by later decisions that run mobile and desktop work in parallel (see Contradictions). |\n| REQ-surface-roles | Web: account, projects, synced chat, billing, admin, no BYOK. Desktop: account Cloud app plus trusted local developer host. Mobile: on-device Local plus Cloud, no BYOK in v1. CLI: developer agent and canonical local session host. VS Code: thin client over the CLI-hosted session. Chrome: Cloud-only browser assistant. | [requirement] definition.md Surface Roles table | [code, partial] mobile has no BYOK mode, per the comment in apps/mobile/src/features/chat/utils/sessionLabeling.ts:10. Web BYOK exists only as a docs page (matrix row BYOK, web: apps/web/lib/byok-providers.ts reached by apps/web/app/docs/byok-env/page.tsx). |\n| REQ-two-domains | Two continuity domains. Account Cloud: Web, Mobile Cloud, Desktop Cloud, eligible Chrome Managed Cloud chats. Host Developer: Desktop Code, CLI, VS Code. Desktop is the explicit bridge; moving context between domains is a previewed, secret-scanned, consented handoff. | [requirement] definition.md Continuity And Reuse Lock; suite.md Sync Boundary; experience-contract.md section 1 | [unknown] sync behaviour not verified here; owned by other pages |\n| REQ-chrome-mirror | A Chrome conversation mirrors to the account store only if every turn ran in Managed Cloud. Unknown, Local or BYOK provenance fails closed and stays browser-local. | [requirement] definition.md; docs/decisions/README.md Locked Decision 4 | [unknown] |\n| REQ-docs-honesty | Documentation describes current reality; the product never shows a control for a capability that does not work. 'If a visible control conflicts with the effective runtime capability, the control is the bug.' | [requirement] AGENTS.md section 11; experience-contract.md header | n/a |"
+   },
+   {
+    "heading": "Experience requirements",
+    "markdown": "| Name | Statement | Source and date | Code today |\n|---|---|---|---|\n| REQ-local-never-silent | Local never silently routes chats, files, tools or developer sessions to BYOK or Cloud. The original Local thread stays Local forever; a move is an explicit fork with context selection, secret scan, payload preview, provider label, retention/cost disclosure and consent. | [requirement] definition.md Trust Modes; requirements.md 2.4 and 7.4; AGENTS.md section 6 | [code] local contract: storage device, keyAttribution none, failover refuse, cloudEgressAllowed false, syncsAcrossDevices false (packages/contracts/types/src/trust-mode-contract.ts:52-60). Per-surface enforcement is [unknown] here; AGENTS.md names check:trust-boundaries. |\n| REQ-byok-labeled | BYOK is user-controlled provider routing, not private like Local. Label provider, model, endpoint class and tool route. Provider retention shown from verified metadata or marked unknown. | [requirement] requirements.md 7.2, 4.3 | [unknown] |\n| REQ-byok-native-first | In BYOK, prefer provider-native tools by default, with consent before sending files or screenshots; never use native tools in Local. | [requirement] requirements.md 2.5 | [unknown] |\n| REQ-capability-honesty | Never claim a model can do something unless capability metadata proves it. Hide or disable tools for a route that cannot call tools. Web search, memory, MCP, sandbox and similar depend on a provider route or AGI harness, not the model. | [requirement] requirements.md 4.3; AGENTS.md section 4 | [code] on-device models carry a capabilities record (text, visionIn, audioIn, toolCalls, structuredOutput) in packages/contracts/types/src/on-device-models.ts:20-26 |\n| REQ-one-chat | No separate 'file chat'. One chat takes files, references, projects, tools, connectors, artifacts. | [requirement] requirements.md 4.2; definition.md Launch Lock | [unknown] |\n| REQ-home-two-shapes | One home answers directly or escalates to a durable work run with progress, approvals and reopenable output. | [requirement] experience-contract.md, September 21 Ecosystem Delta | [inferred] Work and AGI Code exist in the matrix as Present on all surfaces except where noted; not exercised |\n| REQ-inspectable-memory | Memory scopes (saved, referenced history, project, work, local workspace) are separate; each entry shows provenance, update time, edit, exclusion, export, delete. | [requirement] experience-contract.md Delta; requirements.md 18 | [unknown] |\n| REQ-artifact-lifecycle | Generated outputs are versioned objects with preview, edit, compare, restore, share, export, revoke, reopen. | [requirement] experience-contract.md Delta, section 10 | [unknown] |\n| REQ-approvals | Safe read-only actions are automatic; consequential external actions ask. An action a user cannot undo asks first and names the consequence; agents never destroy user data on their own. | [requirement] D-2026-09-15-01; AGENTS.md section 9 | [unknown] AGENTS.md names useConfirmAction as the surface |\n| REQ-precision-order | Use the most precise path first: typed connector or tool, then controlled browser automation, then screen-level computer use. A less precise path never bypasses a permission or trust boundary. | [requirement] definition.md Competitive Ecosystem Synthesis Lock | [unknown] |\n| REQ-usage-ui | Usage is shown as percentage progress and reset time on Web, Mobile, Desktop, CLI and VS Code, without private plan allowance units, token conversion or provider cost. The top-up checkout is the exception (50 top-up units per $1). Chrome has no usage dashboard. | [requirement] definition.md Continuity And Reuse Lock | [unknown] |\n| REQ-unavailable-hidden | Unsupported or incomplete capabilities are hidden or clearly unavailable. | [requirement] D-2026-09-15 Governing rule | [unknown] |\n| REQ-leaders-benchmark | Where ChatGPT and Claude converge, that is the default; where they differ, choose what fits our architecture; copy behaviour, never proprietary implementation. D-2026-09-27-02: features neither leader offers are not built. | [requirement] file:docs/decisions/2026-09-15-founder-decisions.md Governing rule; file:docs/decisions/2026-09-27-founder-decisions.md D-2026-09-27-02 | n/a |\n| REQ-phone-web-rules | Below 768 px the web app never scrolls sideways, keeps a 16 px gutter, no text under 12 px, 44 px icon buttons, no autofocus on touch (sign-in excepted). | [requirement] D-2026-11-13-07 (2026-11-13) | [unknown] The decision names the check apps/web/e2e/phone-layout-rules.spec.ts. I did not open it or run it; the decision says Safari on iPhone was not used. |\n| REQ-one-line-copy | Text under an option is one short line; on web 12 px. Consequences (cannot be undone, what is billed, who sees it, what leaves the device) stay. | [requirement] D-2026-11-13-08 | [unknown] |\n| REQ-mobile-empty-chat | A new mobile chat shows only the logo symbol, greeting and composer. | [requirement] D-2026-11-10-01 | [unknown] |\n| REQ-mobile-mode-switch | Mode (Local or Cloud) is switched in the side panel and in Settings, not in the new-chat header. | [requirement] D-2026-11-10-02, amended by D-2026-11-12-02 and D-2026-11-13-05 | [unknown] |\n| REQ-mobile-model-picker | Model picker sits on the composer; one row per provider with logo; Auto is the only routing choice; Instant, Economy, Images, Files are filters read from the catalog. Web and desktop still offer Instant, Best and Economy. | [requirement] D-2026-11-12-04 to -07 (2026-11-12) | [unknown] |\n| REQ-mobile-destination-scope | In Local mode the phone shows only what works with no account. Each destination is classified device or cloud; an unclassified one is treated as cloud. | [requirement] D-2026-11-13-05 | [code] apps/mobile/src/features/shell/destinationScope.ts:54-63 (unclassified route returns cloud; isShownInMode) |\n| REQ-mobile-code | On the phone, Code is one list mixing cloud sessions and sessions on the paired computer; Remote is no longer a destination. | [requirement] D-2026-11-13-06 | [unknown] |"
+   },
+   {
+    "heading": "Commercial and plan requirements",
+    "markdown": "| Name | Statement | Source and date | Code today |\n|---|---|---|---|\n| REQ-one-subscription | One AGI account has one effective suite entitlement. Free access and any paid plan resolve through the same account or organization entitlement on every surface. No per-surface subscription. | [requirement] definition.md Continuity Lock; commercial.md Subscription Ownership; requirements.md 4.1 | [code] effectivePlanTier returns the plan only if status is active or trialing, else free (packages/contracts/types/src/subscription-entitlement.ts:3-18). Whether every surface calls it is [unknown]. |\n| REQ-one-billing-owner | One subscriptions row has exactly one billing owner: Stripe, Apple or Google. While the owner is entitled the second channel loses; once not entitled, a new purchase takes over and clears the other channel's identifiers. Cancellation stays with the selling channel. | [requirement] commercial.md Subscription Ownership | [code, partial] files named by the document exist as references: apps/web/lib/server/subscription-billing-owner.ts is imported by billing-waitlist-access.ts:6; the handoff file was not opened |\n| REQ-local-free | Local use is free of any paid subscription and core differentiation. Local and BYOK stay useful without paying AGI. | [requirement] commercial.md Launch Posture; suite.md Current Product Direction | [code] plan local-only has monthlyPriceUsd 0 (packages/contracts/types/src/billing-catalog.ts:167-172); isFreeOfChargePlanTier covers local-only, byok, free (billing-catalog.ts:296-300) |\n| REQ-local-no-account | Local mode needs no AGI account. Account and sign-in are a separate question from payment. | [requirement] requirements.md 7.1 | [inferred] destinationScope comment says Local shows only what works without an account (destinationScope.ts:54). Mobile code has an age-assurance feature (apps/mobile/src/features/age-assurance); whether it blocks Local sign-out use is [unknown]. |\n| REQ-plan-catalog | Public plan names and prices are owned by billing-catalog.ts. Plan IDs: local-only, byok, free, basic ($7), pro (label Premium, $20), max (label Max, $100), max_15x (label Ultra, $200), team ($25 per seat, $240 yearly), team_premium ($125 per seat), enterprise (contract). Display names changed while stored IDs stayed. | [requirement] commercial.md Plan Presentation | [code] packages/contracts/types/src/billing-catalog.ts:167-231 (BILLING_PLAN_PRICING). Relationship names: plan:local-only, plan:byok, plan:free, plan:basic, plan:pro, plan:max, plan:max_15x, plan:team, plan:team_premium, plan:enterprise. |\n| REQ-monthly-only | Individual plans (Basic, Pro, Max 5x, Max 20x) are sold monthly only; yearly Pro withdrawn. Team keeps both cadences. A legacy yearly Pro keeps renewing at its price. | [requirement] D-2026-09-27-01 (2026-09-27) | [code] only team and team_premium carry yearlyPriceUsd among self-serve tiers beyond the free ones (billing-catalog.ts:209-224); the type satisfies a check that individual tiers have no yearlyPriceUsd (billing-catalog.ts:230) |\n| REQ-managed-free-open | Managed Cloud Free is public alpha, open to signed-in users (founder, 2026-06-27). Env AGI_MANAGED_COMPUTE_PRIVATE_BETA is an incident kill-switch only. Metering, quotas, abuse, refund, retention and provider-terms controls must keep pace but do not gate Free. | [requirement] definition.md; commercial.md Bootstrap Rule; requirements.md 7.3 | [code] the env name is defined as MANAGED_COMPUTE_PRIVATE_BETA_ENV (apps/web/lib/managed-compute-gate.ts:40). How the gate is evaluated was not read. |\n| REQ-paid-gated | Paid acquisition stays waitlist or access-code gated until the founder opens purchasing. Working checkout code does not open it. Access codes authorise acquisition, not a second subscription owner. | [requirement] commercial.md Paid Acquisition Gate; D-founder 2026-09-21 clarification (docs/decisions/README.md Locked Decision 5) | [code] apps/web/lib/server/billing-waitlist-access.ts: message 'Paid upgrades are opening in stages' (line 11); gate is open if AGI_BILLING_WAITLIST_OPEN is 1 (line 28) or an operator runtime flag is on (lines 38-40); a beta_redemptions row also grants access (lines 44-52). An unreadable flag store reads closed (apps/web/lib/feature-flags/billing-upgrade-gate.ts, comment above readBillingUpgradesOpen). Consumers listed by search: apps/web/app/api/checkout/route.ts, portal/route.ts, waitlist/route.ts. |\n| REQ-mobile-sells-nothing | Mobile v1 sells nothing in the app; no purchase, upgrade, top-up or restore control; Play Billing permission dropped. Changing it needs a new store build and review. | [requirement] commercial.md Paid Acquisition Gate; owner deferral 2026-11-10 | [code] apps/mobile/src/features/billing/storePurchases.json:2 has nativePurchases false |\n| REQ-usage-windows | max_15x has no rolling 5-hour cap; weekly and monthly allowances remain. Zero ceiling means zero usage, including unknown plans. credits.five_hour is null for that tier. | [requirement] commercial.md Plan Presentation | [unknown] cited files packages/contracts/types/src/managed-usage-limits.ts and apps/web/lib/server/managed-usage-policy.ts not opened |\n| REQ-credit-crossing | A turn that crosses a 5-hour, weekly or flagship-weekly window finishes on the plan; the monthly period keeps a hard edge. Purchased credits are not spent while usage credits are off. | [requirement] D-2026-10-25-01 (2026-10-25, owner's delegation of reversible billing calls) | [unknown] decision names migration 0420_managed_usage_plan_finishes_crossing_turn.sql; not opened |\n| REQ-credits-hand-billed | Usage credits and top-ups appear in Billing only for Stripe, Apple or Google billed accounts; other accounts are pointed to whoever manages the plan. | [requirement] D-2026-10-25-02 | [unknown] |\n| REQ-official-price | Managed users are billed the model's official price in credits; the company keeps routing savings. Top-up is 50 credits per dollar. | [requirement] file:docs/decisions/2026-09-05-living-decision-model.md D-2026-09-06-17 | [unknown] |\n| REQ-per-seat | Team and Enterprise get per-seat credits, two-seat minimum, no admin cap on a member's personal spend (decision 29, 2026-10-22). | [requirement] audit/decisions/founder-decisions.md item 9 | [code] MIN_PURCHASABLE_SEATS = 2 (billing-catalog.ts:154) |\n| REQ-paid-launch-gates | Before self-serve paid opens: usage ledger, price table, quota reservation and settlement, fraud controls, refund and chargeback policy, dispute reserve, tax model, provider terms review, retention rules. | [requirement] commercial.md Managed Credit Requirements | [unknown] |\n| REQ-enterprise-path | Enterprise needs org policy, audit logs, SSO/SCIM, roles, provider/connector policy, credit ledger, support links. Enterprise Local licensing verifiers are kept as contract tests only, with no runtime consumer. | [requirement] commercial.md Enterprise Path; file:docs/decisions/2026-07-30-enterprise-local-verifier-retention.md (2026-07-30) | n/a |\n| REQ-us-only | Managed data and inference run in the US only today, on a region-neutral design. | [requirement] file:docs/decisions/2026-09-04-region-neutral-data-residency.md | [unknown] |\n\n**Execution boundaries.** What runs where, as the documents state it, not verified here.\n| Mode | Where it runs | Pays | Source |\n|---|---|---|---|\n| mode:local | on the device or local host; cloud egress false | nobody; free | trust-mode-contract.ts:52-60 [code]; commercial.md [requirement] |\n| mode:own-key | direct to the user's provider with their key; labeled | user pays provider | requirements.md 7.2 [requirement] |\n| mode:cloud | AGI-managed providers and compute; metered | plan or credits | requirements.md 7.3 [requirement] |\n\nThe documents say the public Electron Desktop does cloud chat only and runs inference in Managed Cloud (D-2026-09-15-04 note of 2026-10-24); the retained Tauri host carries Local and BYOK. [requirement]"
+   },
+   {
+    "heading": "Per-app requirements",
+    "markdown": "Matrix counts: file:docs/product/surface-feature-matrix.json holds 51 features across seven columns (six surfaces plus api). I counted its cells today: 190 present, 106 absent, 60 unverified, 1 partial [code, computed from the JSON]. The matrix header is dated 2026-09-20.\n\n| Surface | Requirement | Source and date | Code today |\n|---|---|---|---|\n| surface:web | Managed Cloud only; account, projects, synced chat, artifacts, billing, admin, Neon-backed entitlement. Must not expose BYOK or env-key chat, or claim in-browser Local compute. Phone rules from D-2026-11-13-07. | definition.md; suite.md; experience-contract.md 12.1 | [code, partial] web BYOK appears only as docs page apps/web/app/docs/byok-env/page.tsx (matrix). Chat cell for web is Unverified in the matrix. |\n| surface:desktop | Electron is the one public Desktop (D-2026-09-15-04). It shows the hosted web app, runs Cloud chat, and hosts Desktop Code, local files, computer use, voice. Local MCP servers run through the bundled agi app-server (superseded in part 2026-10-24). Tauri second public app decided 2026-10-24 (name open). | D-2026-09-15-04; AGENTS.md section 5 | [requirement] AGENTS.md: a change to apps/desktop/src never reaches the Electron window. Electron folder exists: apps/desktop/electron. |\n| surface:mobile | Expo React Native; on-device Local plus Cloud; no BYOK in v1; sells nothing in v1; unpublished; small on-device models; no account needed for Local; Cloud needs sign-in. Release bar: App Store release, TestFlight QA pass, review blockers fixed, privacy and support links live, Local boundary verified. | requirements.md 2.3, section 10; commercial.md; suite.md | [code] nativePurchases false (storePurchases.json:2); BYOK absent (sessionLabeling.ts:10); on-device model catalog exists (on-device-models.ts) with a shipsInV1 flag per model. Store release status [unknown]. |\n| surface:cli | Developer agent, Rust TUI over the canonical session engine; Local, BYOK and admitted Managed; workspace-scoped; no automatic sync to app chats. Sandbox may read the whole disk (open question 46). | definition.md; experience-contract.md 12.4 | [code] apps/cli exists as a Rust binary agi (competitive-guidance.md inventory). The inventory records no successful release-cli run as of 2026-11-11 [requirement]. |\n| surface:vscode | Thin client over the CLI-hosted developer session; Local, BYOK, Managed claims must match the real execution stack; do not trust workspace settings for tier or endpoint. | definition.md; suite.md; experience-contract.md 12.5 | [code] apps/extension-vscode exists. Experience contract itself says to remove a secondary provider-stream settings path (12.5); whether done is [unknown]. |\n| surface:chrome | Cloud-only browser assistant; page context is untrusted; scope held at Claude in Chrome's (D-2026-09-28-23); Quick mode is a per-turn Auto Economy override; restricted pages keep chat but lose page tools. | definition.md; experience-contract.md 12.6 | [code] apps/extension exists. Two coexisting per-site tool mechanisms remain (audit open item 48). |\n\n**Release evidence on record.** The competitive guidance inventory (checked 2026-11-11) says the Mobile, Electron, Chrome and VS Code release workflows are active with no runs, the CLI has no successful run, one draft release exists and none published, and store availability is unverified [requirement, dated 2026-11-11]. I did not re-check GitHub."
+   },
+   {
+    "heading": "Owner decisions by date",
+    "markdown": "Each record is in its own file under docs/decisions unless noted. Memory-only items are not in the repository and are excluded from the table (see Unresolved).\n\n| Date | ID | Decision | Source |\n|---|---|---|---|\n| 2026-06-27 | founder note | Managed Free is open in public alpha after sign-in | definition.md, commercial.md (cited, no own record) |\n| 2026-07-30 | ADR | Keep the two Enterprise Local verifiers with no runtime claim | docs/decisions/2026-07-30-enterprise-local-verifier-retention.md |\n| 2026-09-04 | ADR | US-only data residency on a region-neutral design | docs/decisions/2026-09-04-region-neutral-data-residency.md |\n| 2026-09-05 | model | Living decision model; entries record question, evidence, options, decision, revisit trigger | docs/decisions/2026-09-05-living-decision-model.md |\n| 2026-09-06 | D-2026-09-06-17 | Bill official model price; company keeps routing saving; credits shown, top-up 50 per dollar | same file |\n| 2026-09-10 | D-2026-09-10-03 | Project chats keep opening in AGI Work (decided by the architect, status Decided) | docs/decisions/2026-09-10-managed-gateway-routes.md |\n| 2026-09-15 | D-2026-09-15-01 to -26 | 26 decisions: governing rule (leaders as benchmark), tool approvals, auto-memory, localization, Electron as the public Desktop (04), CLI auth, managed gateways, Managed Cloud plan-tier gate with trusted surface claim (09), dispatch pairing, TLS pinning, minimum age (12), Stripe cutover, India, connectors, QA accounts, migrations, signed releases | docs/decisions/2026-09-15-founder-decisions.md |\n| 2026-09-21 | order | Serial surface order Web, Mobile, Desktop, Chrome, CLI, VS Code; paid upgrades stay gated | definition.md; requirements.md 2.2 |\n| 2026-09-27 | D-2026-09-27-01, -02 | Individual plans monthly only; features the leaders lack are not built | docs/decisions/2026-09-27-founder-decisions.md |\n| 2026-09-28 | D-2026-09-28-01 to -29 | Local and Cloud mobile memory separate (02), voice on a live API (04), no device-only web chats (20), only cloud coding sessions shared (21), Chrome stays at Claude in Chrome scope (23), VS Code at Claude Code in VS Code scope (25), mobile sends web-billed plan management to web (27), terminal agent at Claude Code and Codex CLI scope (29) | same file |\n| 2026-10-19 | O2, O6 | Mobile store purchase opens with no waitlist; text names not provider logos (O6, later amended) | commercial.md; D-2026-11-12-06 |\n| 2026-10-22 | decisions 9, 29, 41 | Per-seat credits; ticker removed; home hero kept; agents page prose only | audit/decisions/founder-decisions.md items 9, 17, 18, 30 |\n| 2026-10-24 | amendment | Electron runs local MCP servers via app-server; Tauri app also ships as a second public desktop app, name open | D-2026-09-15-04 note |\n| 2026-10-25 | D-2026-10-25-01, -02 | Crossing turn finishes on plan; credits only on Stripe, Apple, Google billed accounts | 2026-09-27 file |\n| 2026-11-10 | D-2026-11-10-01 to -03 | Mobile empty chat; mode switch only in side panel; logo symbol alone | docs/decisions/2026-11-10-founder-decisions.md |\n| 2026-11-12 | D-2026-11-12-01 to -09 | Side panel is navigation only; Settings has the mode switch; add menu on one screen; model picker on composer; one row per provider; logos return; Auto plus filters; reasoning slider; layouts documented | docs/decisions/2026-11-12-founder-decisions.md |\n| 2026-11-13 | D-2026-11-13-01 to -08 | Build features shared by the leaders; multiple accounts; opt-in model-improvement switches (off by default, lawyer review open); app language row back; short side panel with More fold; Code is one list; phone rules for web; one-line explanations | docs/decisions/2026-11-13-founder-decisions.md |\n| 2026-11-18 | audit item 1 | Model calls are refused when a governed workspace's model policy cannot be read | audit/decisions/founder-decisions.md item 1 (not yet moved to docs/decisions) |\n\n**Note.** The decision text on 2026-11-13-03 supersedes earlier declines (GAP-032, GAP-160, GAP-176) and says 'today nothing uses customer content to improve a model' [requirement]. Any future use must treat a missing or unreadable choice as no."
+   },
+   {
+    "heading": "Unresolved product choices",
+    "markdown": "From file:audit/decisions/open-questions.md (undated list) and file:audit/decisions/founder-decisions.md (items 1 to 53). Counted as open unless the file says Decided.\n\n| Choice | Source | Status in source |\n|---|---|---|\n| When to open paid checkout (staged) | founder-decisions.md item 11 | Open |\n| Mobile bottom tab bar is hidden with no decision record: keep drawer-only or restore tabs | item 3 | Open |\n| Where mobile runs by default: Local (apps/web/app/mobile/page.tsx says) or managed cloud (privacy page groups it) | item 16 | Open; no route sentence about Mobile may be published |\n| Surface by route matrix: which of Local, Your key, AGI Cloud each surface supports | item 25 | Open |\n| Training choice and provider-training setting enforcement incomplete | items 2, 40 | Open (toggle exists, enforcement partial) |\n| Business-plan training default; temporary chats routing; CLI memory pool per provider | open-questions.md round of 2026-10-22 | Open |\n| What a downgrade removes (BYOK and local-only tiers losing connectors and Remote Control) | open-questions.md | Open |\n| Chat system prompt v14 versus keep v6 | open-questions.md | Open, about $2 gate |\n| Custom assistant editor port or cut; plugin marketplace content from another vendor | items 5, 6 | Open |\n| Two status registers (matrix versus audit/ledger) | open-questions.md | Open |\n| Mobile local runtime and model pack shipping mechanism; VS Code BYOK timing; store privacy labels; invite-code backend; retention schema; local encryption; memory import; artifact retention; desktop native host protocol; billing ledger before Cloud launch; visual artifact workspace | open-questions.md items 1 to 11 | Open |\n| Routing: canonical resolver, model snapshot identity, tier vocabulary, verifier owner, task identity, non-managed cost ledger | open-questions.md OQ-1 to OQ-8 | Open |\n| Browser agent isolation; second extension site-tool mechanism; desktop notification model; desktop browser pane sign-in import | items 12, 48, 49, 50, 52 | Open |\n| Support hours, accessibility scan scope, base text size, policy dates | items 14, 15, 21, 23 | Open |\n| Wording that lawyers must review: model-improvement switches, minimum age thresholds | D-2026-11-13-03; D-2026-09-15-12 | Open |\n| Free chat daily share per account versus 2026-10-07 no-cap decision | item 43 | Open; the 2026-10-07 decision is cited but I did not find its own record |\n\n**Not found in the repository.** The project owner's memory notes mention a decision that no subscription is sold on any surface before 2027-01-01 and an 18-and-over rule with a server-held decision (2026-11-20). I found no repository document recording either; they are [unknown] here and need a decision record."
+   },
+   {
+    "heading": "Contradictions between documents",
+    "markdown": "| Item | Document A says | Document B or code says | Winner |\n|---|---|---|---|\n| Desktop public count | file:docs/product/competitive-guidance.md (2026-11-19) and experience-contract.md 12.2: Electron is the one public Desktop; Tauri is not a public product | D-2026-09-15-04 amendment of 2026-10-24: Tauri ships as a second public app | Unresolved; the later dated decision outranks the guidance, but the guidance was updated 2026-11-19, after it. Ask the owner. |\n| Desktop modes | requirements.md 12: Desktop exposes Local, BYOK and Cloud | definition.md and experience-contract.md 12.2: Electron is Cloud chat plus host; inference is Managed Cloud | definition.md and the decision; requirements.md section 12 is stale |\n| Website scope | requirements.md 11: pricing is a placeholder, no full Cloud chat before controls proven | definition.md: Managed Free chat open to signed-in users since 2026-06-27 | definition.md |\n| Mobile status | suite.md: unpublished, Desktop steering planned | requirements.md section 10 treats store release as the bar; store state [unknown] | Not a conflict; status unknown |\n| Serial order | definition.md: one surface active at a time | Founder decisions of 2026-11-10 to 11-13 push mobile, desktop and web work in parallel | The decisions; the serial rule is no longer how work runs [inferred] |\n| Paid gate wording | commercial.md, suite.md: waitlist or access code gated | Code: a runtime operator flag plus env override plus beta_redemptions row (billing-waitlist-access.ts:28-52) | Code; the documents omit the flag mechanism |\n| Plan names | D-2026-09-27-01 and commercial.md use Pro, Max 5x, Max 20x, max_15x | Code labels: pro is Premium, max is Max, max_15x is Ultra (billing-catalog.ts:192-207); the Max 15x ID no longer matches a '20x' label | Code |\n| Decision index | docs/decisions/README.md lists dated records but omits 2026-11-12 and 2026-11-13, and lists wire-or-cut.md | Both files exist | Directory; README is incomplete |\n| Matrix counts | open-questions.md: 184 present, 95 absent, 63 unverified, 1 partial | JSON today: 190, 106, 60, 1 | JSON |\n| Model picker routing | D-2026-11-12-07: Auto only on mobile | Web and desktop still offer Instant, Best, Economy | Recorded as a deliberate deviation |\n| Local to Cloud on mobile model picker layout | D-2026-11-10-02 says side panel only | Amended twice (2026-11-12-02, 2026-11-13-05) | Latest |\n| Design rule 6 forbids decorative glow | D-2026-11-13-01 allows voice glow that carries state | Decision records the deviation | Decision |\n| Tauri-related guidance | competitive-guidance.md date 2026-11-19 but research baseline 2026-09-21 | Its own text says prefer the later comparisons | Later comparisons |"
+   }
+  ],
+  "key_facts": [
+   {
+    "fact": "Plan IDs are local-only, byok, free, basic, pro, max, max_15x, team, team_premium, enterprise; public labels differ (pro is Premium, max_15x is Ultra).",
+    "basis": "code",
+    "evidence": [
+     "packages/contracts/types/src/billing-catalog.ts:167-231"
+    ]
+   },
+   {
+    "fact": "Local plan and BYOK plan cost zero; isFreeOfChargePlanTier covers local-only, byok and free.",
+    "basis": "code",
+    "evidence": [
+     "packages/contracts/types/src/billing-catalog.ts:167-179",
+     "packages/contracts/types/src/billing-catalog.ts:296-300"
+    ]
+   },
+   {
+    "fact": "Entitlement resolves to free unless subscription status is active or trialing.",
+    "basis": "code",
+    "evidence": [
+     "packages/contracts/types/src/subscription-entitlement.ts:3-18"
+    ]
+   },
+   {
+    "fact": "One AGI account has one effective subscription across all six surfaces; surfaces never create a second entitlement.",
+    "basis": "requirement",
+    "evidence": [
+     "docs/product/definition.md Continuity And Reuse Lock",
+     "docs/product/commercial.md Subscription Ownership"
+    ]
+   },
+   {
+    "fact": "Mobile v1 sells nothing in the app: nativePurchases is false.",
+    "basis": "code",
+    "evidence": [
+     "apps/mobile/src/features/billing/storePurchases.json:2"
+    ]
+   },
+   {
+    "fact": "Paid upgrades are gated by a runtime operator flag, an env override AGI_BILLING_WAITLIST_OPEN=1, or a beta_redemptions row; unreadable flag means closed.",
+    "basis": "code",
+    "evidence": [
+     "apps/web/lib/server/billing-waitlist-access.ts:28-52",
+     "apps/web/lib/feature-flags/billing-upgrade-gate.ts"
+    ]
+   },
+   {
+    "fact": "Managed Free is public alpha after sign-in since 2026-06-27; AGI_MANAGED_COMPUTE_PRIVATE_BETA is only a kill-switch.",
+    "basis": "requirement",
+    "evidence": [
+     "docs/product/definition.md",
+     "docs/product/commercial.md Bootstrap Rule",
+     "apps/web/lib/managed-compute-gate.ts:40 (env name)"
+    ]
+   },
+   {
+    "fact": "Local mode never silently reaches BYOK or Cloud; the typed Local contract has cloudEgressAllowed false and failover refuse.",
+    "basis": "code",
+    "evidence": [
+     "packages/contracts/types/src/trust-mode-contract.ts:52-60"
+    ]
+   },
+   {
+    "fact": "Mobile has no BYOK mode in v1.",
+    "basis": "code",
+    "evidence": [
+     "apps/mobile/src/features/chat/utils/sessionLabeling.ts:10",
+     "docs/product/definition.md Surface Roles"
+    ]
+   },
+   {
+    "fact": "Individual plans are monthly only; Team keeps yearly. Decided 2026-09-27.",
+    "basis": "requirement",
+    "evidence": [
+     "docs/decisions/2026-09-27-founder-decisions.md D-2026-09-27-01"
+    ]
+   },
+   {
+    "fact": "Electron is the public Desktop; a 2026-10-24 amendment says Tauri also ships as a second public app, name undecided.",
+    "basis": "requirement",
+    "evidence": [
+     "docs/decisions/2026-09-15-founder-decisions.md D-2026-09-15-04"
+    ]
+   },
+   {
+    "fact": "Serial surface order is Website, Mobile, Desktop, Chrome, CLI, VS Code (founder 2026-09-21).",
+    "basis": "requirement",
+    "evidence": [
+     "docs/product/definition.md Launch Lock",
+     "docs/product/requirements.md 2.2"
+    ]
+   },
+   {
+    "fact": "Surface feature matrix today: 190 present, 106 absent, 60 unverified, 1 partial over 51 features; Present means located, not exercised.",
+    "basis": "code",
+    "evidence": [
+     "docs/product/surface-feature-matrix.json (computed)",
+     "docs/product/surface-feature-matrix.md header"
+    ]
+   },
+   {
+    "fact": "Two continuity domains: Account Cloud (Web, Mobile Cloud, Desktop Cloud, eligible Chrome) and Host Developer (Desktop Code, CLI, VS Code).",
+    "basis": "requirement",
+    "evidence": [
+     "docs/product/definition.md",
+     "docs/product/experience-contract.md section 1"
+    ]
+   },
+   {
+    "fact": "On mobile in Local mode only device-scoped destinations are shown; unclassified screens count as cloud.",
+    "basis": "code",
+    "evidence": [
+     "apps/mobile/src/features/shell/destinationScope.ts:54-63"
+    ]
+   },
+   {
+    "fact": "Model-improvement training switches (chats, voice) are decided opt-in and off by default on 2026-11-13, pending lawyer review; nothing uses customer content for training today.",
+    "basis": "requirement",
+    "evidence": [
+     "docs/decisions/2026-11-13-founder-decisions.md D-2026-11-13-03"
+    ]
+   },
+   {
+    "fact": "Model picker on mobile: Auto only, with Instant, Economy, Images, Files filters from the catalog; web and desktop keep Instant, Best, Economy.",
+    "basis": "requirement",
+    "evidence": [
+     "docs/decisions/2026-11-12-founder-decisions.md D-2026-11-12-07"
+    ]
+   },
+   {
+    "fact": "Managed turns that cross a usage window finish on the plan; monthly allowance is a hard edge (2026-10-25).",
+    "basis": "requirement",
+    "evidence": [
+     "docs/decisions/2026-09-27-founder-decisions.md D-2026-10-25-01"
+    ]
+   },
+   {
+    "fact": "Per-seat credits, two-seat minimum for Team (decision 29, 2026-10-22).",
+    "basis": "code",
+    "evidence": [
+     "packages/contracts/types/src/billing-catalog.ts:154",
+     "audit/decisions/founder-decisions.md item 9"
+    ]
+   },
+   {
+    "fact": "US-only managed data and inference, on a region-neutral design.",
+    "basis": "requirement",
+    "evidence": [
+     "docs/decisions/2026-09-04-region-neutral-data-residency.md"
+    ]
+   },
+   {
+    "fact": "Model IDs may be literals only in the generated catalog; defaults reference family slots.",
+    "basis": "requirement",
+    "evidence": [
+     "AGENTS.md section 4"
+    ]
+   },
+   {
+    "fact": "Competitive guidance: ChatGPT and Claude primary references; parity measured by outcomes and continuity, not label matching.",
+    "basis": "requirement",
+    "evidence": [
+     "docs/product/competitive-guidance.md section 1",
+     "docs/product/definition.md Competitive Ecosystem Synthesis Lock"
+    ]
+   },
+   {
+    "fact": "No release has been shown to have run as of 2026-11-11: surface workflows have no runs, one draft release, store availability unverified.",
+    "basis": "requirement",
+    "evidence": [
+     "docs/product/competitive-guidance.md inventory text, checked 2026-11-11"
+    ]
+   },
+   {
+    "fact": "A no-sales-before-2027-01-01 decision and an 18-and-over rule appear only in owner memory, not in any repository document I read.",
+    "basis": "unknown",
+    "evidence": [
+     "grep of docs, audit, apps/web/lib and packages/contracts for 2027-01-01 found only legal research dates"
+    ]
+   },
+   {
+    "fact": "Mobile Local sign-in requirement is documented as none; whether mobile age assurance blocks Local use was not established.",
+    "basis": "unknown",
+    "evidence": [
+     "docs/product/requirements.md 7.1",
+     "apps/mobile/src/features/age-assurance/ageAssurance.ts (opened, imports only)"
+    ]
+   }
+  ],
+  "relationships": [
+   {
+    "from": "REQ-one-subscription",
+    "rel": "implemented_by",
+    "to": "file:packages/contracts/types/src/subscription-entitlement.ts",
+    "evidence": [
+     "subscription-entitlement.ts:3-18 effectivePlanTier"
+    ]
+   },
+   {
+    "from": "REQ-plan-catalog",
+    "rel": "implemented_by",
+    "to": "file:packages/contracts/types/src/billing-catalog.ts",
+    "evidence": [
+     "billing-catalog.ts:167-231"
+    ]
+   },
+   {
+    "from": "REQ-local-free",
+    "rel": "governed_by_subscription",
+    "to": "plan:local-only",
+    "evidence": [
+     "billing-catalog.ts:167-172 monthlyPriceUsd 0"
+    ]
+   },
+   {
+    "from": "mode:own-key",
+    "rel": "governed_by_subscription",
+    "to": "plan:byok",
+    "evidence": [
+     "billing-catalog.ts:173-178"
+    ]
+   },
+   {
+    "from": "mode:cloud",
+    "rel": "governed_by_subscription",
+    "to": "plan:free",
+    "evidence": [
+     "billing-catalog.ts:179-184",
+     "docs/product/commercial.md Launch Posture"
+    ]
+   },
+   {
+    "from": "REQ-paid-gated",
+    "rel": "implemented_by",
+    "to": "file:apps/web/lib/server/billing-waitlist-access.ts",
+    "evidence": [
+     "billing-waitlist-access.ts:28-52"
+    ]
+   },
+   {
+    "from": "REQ-paid-gated",
+    "rel": "depends_on",
+    "to": "table:beta_redemptions",
+    "evidence": [
+     "billing-waitlist-access.ts:44-52 query"
+    ]
+   },
+   {
+    "from": "REQ-paid-gated",
+    "rel": "exposes_api",
+    "to": "api:POST /api/checkout",
+    "evidence": [
+     "apps/web/app/api/checkout/route.ts imports billing-waitlist-access (search result); HTTP method not opened"
+    ]
+   },
+   {
+    "from": "REQ-paid-gated",
+    "rel": "exposes_api",
+    "to": "api:POST /api/waitlist",
+    "evidence": [
+     "apps/web/app/api/waitlist/route.ts imports billing-waitlist-access; method not opened"
+    ]
+   },
+   {
+    "from": "REQ-managed-free-open",
+    "rel": "configured_by",
+    "to": "file:apps/web/lib/managed-compute-gate.ts",
+    "evidence": [
+     "managed-compute-gate.ts:40 MANAGED_COMPUTE_PRIVATE_BETA_ENV"
+    ]
+   },
+   {
+    "from": "REQ-mobile-sells-nothing",
+    "rel": "configured_by",
+    "to": "file:apps/mobile/src/features/billing/storePurchases.json",
+    "evidence": [
+     "storePurchases.json:2"
+    ]
+   },
+   {
+    "from": "REQ-mobile-sells-nothing",
+    "rel": "available_on",
+    "to": "surface:mobile",
+    "evidence": [
+     "commercial.md Launch Posture Mobile v1"
+    ]
+   },
+   {
+    "from": "REQ-local-never-silent",
+    "rel": "implemented_by",
+    "to": "file:packages/contracts/types/src/trust-mode-contract.ts",
+    "evidence": [
+     "trust-mode-contract.ts:52-60"
+    ]
+   },
+   {
+    "from": "REQ-mobile-destination-scope",
+    "rel": "implemented_by",
+    "to": "file:apps/mobile/src/features/shell/destinationScope.ts",
+    "evidence": [
+     "destinationScope.ts:54-63"
+    ]
+   },
+   {
+    "from": "REQ-mobile-destination-scope",
+    "rel": "available_on",
+    "to": "mode:local",
+    "evidence": [
+     "D-2026-11-13-05 in docs/decisions/2026-11-13-founder-decisions.md"
+    ]
+   },
+   {
+    "from": "REQ-surface-matrix",
+    "rel": "documented_in",
+    "to": "file:docs/product/surface-feature-matrix.json",
+    "evidence": [
+     "json keys features (51), groups, surfaceNotes; computed counts"
+    ]
+   },
+   {
+    "from": "REQ-two-domains",
+    "rel": "documented_in",
+    "to": "file:docs/product/definition.md",
+    "evidence": [
+     "Continuity And Reuse Lock"
+    ]
+   },
+   {
+    "from": "REQ-model-agnostic",
+    "rel": "governed_by_subscription",
+    "to": "file:AGENTS.md",
+    "evidence": [
+     "AGENTS.md section 4 catalog rule (file relationship; no subscription semantics intended)"
+    ]
+   },
+   {
+    "from": "surface:desktop",
+    "rel": "documented_in",
+    "to": "file:docs/decisions/2026-09-15-founder-decisions.md",
+    "evidence": [
+     "D-2026-09-15-04"
+    ]
+   },
+   {
+    "from": "surface:mobile",
+    "rel": "documented_in",
+    "to": "file:docs/decisions/2026-11-12-founder-decisions.md",
+    "evidence": [
+     "D-2026-11-12-01 to -09"
+    ]
+   },
+   {
+    "from": "surface:web",
+    "rel": "tested_by",
+    "to": "test:apps/web/e2e/phone-layout-rules.spec.ts",
+    "evidence": [
+     "named by D-2026-11-13-07; file not opened"
+    ]
+   },
+   {
+    "from": "REQ-usage-windows",
+    "rel": "documented_in",
+    "to": "file:docs/product/commercial.md",
+    "evidence": [
+     "Plan Presentation And Usage Windows"
+    ]
+   },
+   {
+    "from": "REQ-product-requirements-sources",
+    "rel": "depends_on",
+    "to": "file:docs/product/competitive-guidance.md",
+    "evidence": [
+     "section 1 Mission and authority"
+    ]
+   }
+  ],
+  "open_questions": [
+   "Whether Local mode on mobile and Electron desktop works fully signed out is documented as yes (requirements.md 7.1) but not verified in code; mobile age assurance may interact.",
+   "Whether the owner's recorded 2027-01-01 sales deferral and the 18-and-over rule exist in any repository record; none found.",
+   "Which of the 2026-10-24 Tauri-as-second-public-app decision and the 2026-11-19 competitive guidance (Tauri not public) stands.",
+   "Whether every surface calls effectivePlanTier and the shared entitlement path; only the contract file was read.",
+   "The Free chat daily share per account versus the 2026-10-07 no-cap decision (no record of that decision found).",
+   "Whether surface-by-mode support matrix (item 25) is published anywhere; no default exists.",
+   "The full contents of founder-actions.md (106 KB) and wire-or-cut.md (976 KB) were not read; requirements and decisions inside them may be missing.",
+   "Whether mobile has been submitted to any store; the repository does not settle it.",
+   "Model-improvement switch wording and minimum age thresholds await legal review."
+  ],
+  "outdated_documents": [
+   {
+    "document": "docs/product/requirements.md section 12 (Desktop Requirements)",
+    "what_is_outdated": "Says Desktop exposes Local, BYOK and Cloud modes and is the local-private compute host with BYOK setup.",
+    "what_the_code_says": "definition.md, experience-contract.md 12.2 and D-2026-09-15-04 say the public Electron Desktop shows hosted Cloud chat with inference in Managed Cloud; Local and BYOK live in the retained Tauri host.",
+    "evidence": "docs/product/requirements.md lines 1108-1147 versus docs/product/definition.md Surface Roles and docs/decisions/2026-09-15-founder-decisions.md D-2026-09-15-04"
+   },
+   {
+    "document": "docs/product/requirements.md section 11 (Website Requirements)",
+    "what_is_outdated": "Describes Website v1 as a pricing placeholder that must not launch a full Cloud chat product.",
+    "what_the_code_says": "definition.md and commercial.md say Managed Free chat is open to signed-in users since 2026-06-27 and Web chat is subscription-backed.",
+    "evidence": "docs/product/requirements.md lines 1080-1107 versus docs/product/definition.md Launch Lock"
+   },
+   {
+    "document": "docs/decisions/README.md",
+    "what_is_outdated": "Dated record list omits 2026-11-12 and 2026-11-13 founder decisions; last updated 2026-11-11.",
+    "what_the_code_says": "Both files exist in docs/decisions.",
+    "evidence": "ls docs/decisions; README Decision Sources list"
+   },
+   {
+    "document": "audit/decisions/open-questions.md (matrix paragraph)",
+    "what_is_outdated": "Reports matrix totals of 184 present, 95 absent, 63 unverified, 1 partial as of 2026-09-20.",
+    "what_the_code_says": "The JSON now computes to 190 present, 106 absent, 60 unverified, 1 partial.",
+    "evidence": "computed from docs/product/surface-feature-matrix.json"
+   },
+   {
+    "document": "docs/decisions/2026-09-27-founder-decisions.md D-2026-09-27-01 and docs/product/commercial.md",
+    "what_is_outdated": "Name plans Pro, Max 5x, Max 20x and max_15x.",
+    "what_the_code_says": "Public labels are Premium (pro), Max (max) and Ultra (max_15x).",
+    "evidence": "packages/contracts/types/src/billing-catalog.ts:192-207"
+   },
+   {
+    "document": "docs/product/competitive-guidance.md (surface inventory)",
+    "what_is_outdated": "States Tauri is not a second public Desktop 'under the current founder decision'.",
+    "what_the_code_says": "D-2026-09-15-04 records a 2026-10-24 owner choice to ship Tauri as a second public app.",
+    "evidence": "docs/product/competitive-guidance.md inventory table row Retained Tauri Desktop versus docs/decisions/2026-09-15-founder-decisions.md lines 78-99"
+   }
+  ]
+ },
+ "issues": [
+  {
+   "page_a": "00-start/product-overview.md (lines 128-130: 'Nothing is sold before 2027-01-01 (owner decision)'; '18 and over on every app (owner decision)')",
+   "says_a": "Both are stated as established owner decisions.",
+   "page_b": "10-requirements/established-requirements.md (lines 177, 224, 230; 174 and 237 on minimum age); 40-systems/authentication-and-identity.md (lines 79-80 and 160)",
+   "says_b": "established-requirements: neither the 2027-01-01 deferral nor the 18-and-over rule is in any repository record, so both are [unknown]. Minimum-age thresholds are also listed as awaiting legal review. authentication-and-identity: 18 is enforced in code, with an `ACCOUNT_MINIMUM_AGE` constant and server enforcement points.",
+   "which_is_right": "On age, the authentication page is right and established-requirements is stale. 18 is code-enforced, and the code outranks prose. On the sales date, no repository source states 2027-01-01, so the overview should not present it as a code or repo fact. The code gate is the waitlist and access-code gate described in the subscriptions page.",
+   "evidence": "packages/contracts/types/src/account-eligibility.ts:1 has `ACCOUNT_MINIMUM_AGE = 18`. apps/mobile/src/features/auth/services/ageGate.ts:25-26, 50 and 69-70 floor every threshold at that constant. A grep of apps/web/lib, apps/web/app, packages/contracts, docs and apps/mobile/src for '2027-01-01' finds only test fixtures and contract dates. The code sales gate is apps/web/lib/server/billing-waitlist-access.ts, per the subscriptions page."
+  },
+  {
+   "page_a": "10-requirements/established-requirements.md (line 90 REQ-monthly-only; line 94 REQ-usage-windows)",
+   "says_a": "REQ-monthly-only names the individual plans 'Basic, Pro, Max 5x, Max 20x'. REQ-usage-windows marks the 5-hour cap rule [unknown] because the managed-usage-limits file was 'not opened'.",
+   "page_b": "Same page line 89 and line 189; 40-systems/subscriptions-entitlements-and-usage.md (lines 96-104); 00-start/glossary.md lines 85-97",
+   "says_b": "The public names are Basic, Premium (pro), Max and Ultra (max_15x). The Ultra 5-hour cap is null, and the file was read and confirmed.",
+   "which_is_right": "The code and the subscriptions page are right. Line 90 uses the retired names and line 94 is out of date.",
+   "evidence": "packages/contracts/types/src/billing-catalog.ts, BILLING_PLAN_PRICING: pro has label 'Premium' and monthlyPriceUsd 20, max has 'Max' and 100, max_15x has 'Ultra' and 200. packages/contracts/types/src/managed-usage-limits.ts: max_15x has fiveHourCredits null, weeklyCredits 5_000 and monthlyCredits 20_000."
+  },
+  {
+   "page": "40-systems/subscriptions-entitlements-and-usage.md (summary and line 28 area), 40-systems/model-catalog-and-routing.md (line 183), 10-requirements/established-requirements.md (lines 225, 229)",
+   "problem": "Whether Local needs an account is left [unknown] or 'not fully established'. The code settles it for Mobile and the CLI: no account is needed. Mobile does require an on-device age confirmation first. The local-inference and authentication pages state this correctly, so readers get opposite certainty depending on the page.",
+   "fix": "Replace the [unknown] text with the verified answer and link to SYS-local-inference. Mobile: no account, age gate first. CLI and VS Code: no account. Electron Desktop chat has no Local mode. Cite apps/mobile/src/features/auth/services/rootRouting.ts:30-60 and apps/mobile/app/index.tsx:9-12."
+  },
+  {
+   "page": "30-surfaces/desktop.md (table at line 24, Tauri row) versus 10-requirements/established-requirements.md (lines 119, 183, 211)",
+   "problem": "The pages disagree on how settled Tauri's public status is. desktop.md says the Tauri window shows the Vite app in `src` and that the 2026-10-24 second-public-app decision is unconfirmed [unknown]. established-requirements says on line 119 'Tauri second public app decided 2026-10-24' and on line 183 'Unresolved'. The decision text says the Tauri app loads the hosted web app. AGENTS.md section 5 and the README say Tauri is internal only.",
+   "fix": "State in one place that the decision exists (docs/decisions/2026-09-15-founder-decisions.md:78-99) and that the repository still treats Tauri as internal. State that the decision conflicts with what the code shows: the Tauri window shows the Vite renderer, not the hosted web app. Mark the public status as an owner question."
+  }
+ ]
+}

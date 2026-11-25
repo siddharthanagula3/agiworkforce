@@ -1,0 +1,571 @@
+{
+ "S19.01": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "How can I help you today?"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Preparing"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The code has no separate 'accepted' wording. The first visible state after send is the 'Preparing' indicator, which is set when the send starts.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI side panel in Chrome.",
+   "Type any short message in the composer and press send.",
+   "Look at the answer area right after pressing send and compare with Expected."
+  ],
+  "where": "Open the AGI side panel in Chrome, then in the composer (placeholder \"How can I help you today?\") type a message and press the send button"
+ },
+ "S19.02": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Reply to send it after this answer"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Queued"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Cancel"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The queued row reads 'Queued: <your text>' and, with more than one, 'Queued 1 of 2' style numbering.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message that gets a long answer.",
+   "While it is still answering, type a second message.",
+   "Look at the composer placeholder and the queued list above it: the second message should show as queued with Edit and Cancel."
+  ],
+  "where": "Open the AGI side panel, send a message, then type and send a second message while the first answer is still streaming"
+ },
+ "S19.03": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Reading the page"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Preparing"
+   }
+  ],
+  "needs": "a signed-in account and a normal web page open",
+  "note": "'Reading the page' is set when page context is read (side_panel.ts setThinkingLabel); attachment-only preparation may show only 'Preparing'.",
+  "reachable": "yes",
+  "steps": [
+   "Open a normal web page and open the AGI side panel.",
+   "Send a message that uses the page as context.",
+   "Look for the thinking label before the answer starts."
+  ],
+  "where": "Open the AGI side panel, attach or use the current page as context, then send a message"
+ },
+ "S19.04": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Searching browsing history"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Sources for $QUERY$"
+   }
+  ],
+  "needs": "a signed-in account and browsing-history access granted to the extension",
+  "note": "The query text is shown only when the activity carries one. The exact trigger depends on the model deciding to search, so it is not always reproducible.",
+  "reachable": "yes",
+  "steps": [
+   "Ask a question that needs the browsing history.",
+   "Watch the step row under the answer while it works.",
+   "Look for 'Searching browsing history' and, when sources are used, 'Sources for <query>'."
+  ],
+  "where": "Open the AGI side panel and ask a question that needs browsing history, for example 'What did I read about X yesterday?'"
+ },
+ "S19.05": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Running code\u2026"
+   }
+  ],
+  "needs": "a signed-in account; code execution must be available on the chosen route",
+  "note": "The label is shown in the code execution block (bubbles.ts). Whether code runs depends on the route.",
+  "reachable": "yes",
+  "steps": [
+   "Send a request that needs code to be run.",
+   "Watch the answer while the code step is running.",
+   "Look for the 'Running code\u2026' label, then the finished code block."
+  ],
+  "where": "Open the AGI side panel and ask for something that makes the assistant run code, for example 'Use code to add 1234 and 5678'"
+ },
+ "S19.06": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Working for $ELAPSED$"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Request"
+   }
+  ],
+  "needs": "a connected service (connector or MCP tool) and a signed-in account",
+  "note": "The service name comes from the server's step summary, not a fixed label, so the exact words depend on the service. Where the connector is set up was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Connect a service in the AGI account and ask for something that uses it.",
+   "While it works, open the activity row under the answer.",
+   "Expand the step and look for the service name in the step summary and the 'Request' heading while the call is in progress."
+  ],
+  "where": "Open the AGI side panel, ask for something that uses a connected service, then open the activity row under the answer ('Working for <time>') and expand the step"
+ },
+ "S19.07": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Needs your approval \u00b7 $ELAPSED$"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Your approval is required before this tool can run."
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Approve"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Decline"
+   }
+  ],
+  "needs": "a signed-in account and a tool that needs approval",
+  "note": "'Allow for this chat' is hidden for high-risk approvals (bubbles.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Send a request that needs a tool approval.",
+   "Open the activity row labelled 'Needs your approval \u00b7 <time>' under the answer.",
+   "Expand the step and look for the approval text with the Approve and Decline buttons, and for the 'Allow for this chat' choice."
+  ],
+  "where": "Open the AGI side panel and send a request that needs a tool approval; in the activity row under the answer, expand the step with 'Needs your approval \u00b7 <time>'"
+ },
+ "S19.08": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Needs your input \u00b7 $ELAPSED$"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "$SERVER$ needs your input"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Submit"
+   }
+  ],
+  "needs": "a signed-in account and a connector that asks for input",
+  "note": "The input form is built in apps/extension/src/features/side-panel/connectorInputForm.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Send a request that needs a detail from you.",
+   "Open the activity row labelled 'Needs your input \u00b7 <time>'.",
+   "Expand the step and look for the '<server> needs your input' heading and the form with a Submit button."
+  ],
+  "where": "Open the AGI side panel and send a request where the assistant needs information; the activity row under the answer shows 'Needs your input \u00b7 <time>' and an input form"
+ },
+ "S19.09": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Preparing"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "There is no control for this. The thinking indicator is removed when the first content arrives (side_panel.ts removeThinking).",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Send any message.",
+   "Watch the 'Preparing' indicator under the composer.",
+   "Look for it to disappear as soon as the first answer text appears."
+  ],
+  "where": "Visible in the answer area: the 'Preparing' indicator is replaced by the answer text"
+ },
+ "S19.10": {
+  "labels": [],
+  "needs": "a signed-in account",
+  "note": "A rendering behaviour with no control of its own.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Send a message that gets a long answer.",
+   "Watch the answer bubble while it is still answering.",
+   "Look for the text to grow line by line instead of appearing all at once."
+  ],
+  "where": "Visible in the answer bubble while the model is answering"
+ },
+ "S19.11": {
+  "labels": [],
+  "needs": "a signed-in account",
+  "note": "A rendering behaviour with no control of its own. Whether the model produces a table depends on the answer.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Ask for an answer that has a list, a table and a code block.",
+   "Watch the answer while it is still streaming.",
+   "Look for the list, table and code block to render correctly before the answer finishes."
+  ],
+  "where": "Visible in the answer bubble while the model is answering"
+ },
+ "S19.14": {
+  "labels": [
+   {
+    "file": "apps/extension/src/side_panel.ts",
+    "text": "Saved to your account"
+   },
+   {
+    "file": "apps/extension/src/side_panel.ts",
+    "text": "Saved on this device"
+   },
+   {
+    "file": "apps/extension/src/side_panel.ts",
+    "text": "Syncing to your account"
+   }
+  ],
+  "needs": "a signed-in account for the account copy; without it only 'Saved on this device' appears",
+  "note": "The save status is a badge on the Recent chats list, not inside the answer. The tooltip text is in the same code.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message and wait for the answer to finish.",
+   "Click the 'Recent chats' button in the side panel.",
+   "Look at the badge on the chat row: 'Syncing to your account' while it saves, then 'Saved to your account'; for a browser-only chat it says 'Saved on this device'."
+  ],
+  "where": "Click 'Recent chats' in the side panel, then look at the badge on each chat row"
+ },
+ "S19.15": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Worked for $ELAPSED$"
+   }
+  ],
+  "needs": "a signed-in account and a request that uses steps",
+  "note": "There is no separate 'Completed' word. A plain answer with no steps may show no activity row.",
+  "reachable": "yes",
+  "steps": [
+   "Send a request that uses at least one tool or browser step.",
+   "Wait for the answer to finish.",
+   "Look at the activity row under the answer: it should read 'Worked for <time>' and the streaming indicator should stop."
+  ],
+  "where": "Send a request that uses steps (for example a browser or tool step); when it ends, the activity row under the answer reads 'Worked for <time>'"
+ },
+ "S19.16": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Finished with errors \u00b7 $ELAPSED$"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "$COUNT$ failed attempts"
+   }
+  ],
+  "needs": "a signed-in account and a run where some steps fail",
+  "note": "Getting a partial run on demand is hard; the failed-attempts text is a plural key (_one and _other).",
+  "reachable": "yes",
+  "steps": [
+   "Send a request with several steps where one is expected to fail.",
+   "Wait for the run to finish.",
+   "Look at the activity row: 'Finished with errors \u00b7 <time>', or 'Worked for <time>' with failed attempts, which is distinct from 'Worked for' alone."
+  ],
+  "where": "Send a request where one step fails but others succeed; the activity row under the answer reads 'Finished with errors \u00b7 <time>'"
+ },
+ "S19.17": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Stop generating"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Stopping\u2026"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The 'Stopping\u2026' text also appears in the bubble status while the stop is pending.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message that gets a long answer.",
+   "While it is still streaming, press the button labelled 'Stop generating'.",
+   "Look at the button and the answer: it should show 'Stopping\u2026' and stay disabled until the stop takes effect."
+  ],
+  "where": "Send a message, then while the answer is streaming press the send button, which now reads 'Stop generating'"
+ },
+ "S19.18": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Cancelled after $ELAPSED$"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Stop generating"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "A plain streamed answer without steps may not show the activity row.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message with steps, then press 'Stop generating' while it runs.",
+   "Wait until the stop takes effect.",
+   "Look at the activity row: 'Cancelled after <time>', and check the text that already arrived is still shown."
+  ],
+  "where": "Stop a running answer with 'Stop generating'; the activity row under the answer reads 'Cancelled after <time>'"
+ },
+ "S19.19": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Reconnecting\u2026"
+   }
+  ],
+  "needs": "a signed-in account and the ability to drop the connection",
+  "note": "Reconnecting is set for cloud runs (side_panel.ts); the exact drop method is up to the tester.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message that gets a long answer.",
+   "Turn off the network connection briefly while it is answering, then turn it back on.",
+   "Look for the 'Reconnecting\u2026' status in the answer bubble, and check the answer continues when the connection returns."
+  ],
+  "where": "Send a message, then lose the connection while it is answering; the bubble shows 'Reconnecting\u2026'"
+ },
+ "S19.20": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Reconnecting\u2026"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "No separate 'Resuming' word exists in the code; the same 'Reconnecting\u2026' label is used while the run is picked up again.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message that gets a long answer.",
+   "Close the side panel while it is still answering.",
+   "Reopen the side panel and look at the answer: it should show 'Reconnecting\u2026' and keep going, not start over."
+  ],
+  "where": "Close and reopen the AGI side panel while an answer is still running; the bubble shows 'Reconnecting\u2026' and resumes"
+ },
+ "S19.21": {
+  "labels": [
+   {
+    "file": "apps/web/app/api/llm/v1/chat/completions/lib/upstream-error-copy.ts",
+    "text": "The model is busy right now."
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Try again in $WAIT$."
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Retry"
+   }
+  ],
+  "needs": "a model with a rate limit at the time of the test",
+  "note": "The wait time comes from the server. Making a rate limit happen on demand is not controllable from the app.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message on a model that is rate limited.",
+   "Wait for the error in the answer bubble.",
+   "Look for 'The model is busy right now.' and the 'Try again in' time, and the Retry button."
+  ],
+  "where": "Send a message on a model that is rate limited; the answer bubble shows 'The model is busy right now.' with a 'Try again in <time>.' line when a wait is known"
+ },
+ "S19.22": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Upgrade"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Add credits"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Manage usage"
+   },
+   {
+    "file": "apps/web/app/api/llm/v1/chat/completions/lib/upstream-error-copy.ts",
+    "text": "The free model has used up the allowance everyone on the Free plan shares, so this is not a limit on your account."
+   }
+  ],
+  "needs": "a Free account with its allowance used up, or an account with an exhausted limit",
+  "note": "Which copy appears depends on whether the limit is the shared free pool, a spending cap or the account allowance.",
+  "reachable": "yes",
+  "steps": [
+   "Use up the usage allowance on a Free account, or use an account with an exhausted limit.",
+   "Send a message.",
+   "Look for the limit text in the answer bubble and the 'Upgrade' button below it, and check it leads to the upgrade or usage page."
+  ],
+  "where": "Send a message when the account's usage allowance is used up; the answer bubble shows the limit text with an 'Upgrade' button (also 'Add credits' or 'Manage usage' when offered)"
+ },
+ "S19.23": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Sign in"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Sign in to use AGI Cloud chat."
+   },
+   {
+    "file": "apps/extension/src/side_panel.ts",
+    "text": "Sign in to AGI Cloud to send messages."
+   }
+  ],
+  "needs": "a signed-in account whose sign-in can be expired",
+  "note": "The answer bubble itself shows only the error text and a Retry button; the 'Sign in' offer is the gate above the composer.",
+  "reachable": "yes",
+  "steps": [
+   "Let the sign-in expire, or sign out in the AGI account, then open the side panel.",
+   "Send a message.",
+   "Look for the error text 'Sign in to AGI Cloud to send messages.' and the 'Sign in' button that offers to sign in again."
+  ],
+  "where": "Send a message after your sign-in has expired; the panel shows 'Sign in to use AGI Cloud chat.' with a 'Sign in' button"
+ },
+ "S19.24": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Waiting for your desktop \u00b7 $ELAPSED$"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Waiting for $DEVICE$ to run this step."
+   }
+  ],
+  "needs": "a paired device that can be turned off",
+  "note": "The device name comes from the step.",
+  "reachable": "yes",
+  "steps": [
+   "Turn off the paired device or desktop app.",
+   "Send a request that needs it.",
+   "Open the activity row under the answer and look for 'Waiting for your desktop' or 'Waiting for <device>', and in the step 'Waiting for <device> to run this step.'"
+  ],
+  "where": "Send a request that needs your desktop (or a paired device) while that device is offline; the activity row shows 'Waiting for your desktop \u00b7 <time>' or 'Waiting for <device> \u00b7 <time>'"
+ },
+ "S19.25": {
+  "labels": [
+   {
+    "file": "apps/web/app/api/llm/v1/chat/completions/lib/upstream-error-copy.ts",
+    "text": "The model is not available right now. Try again in a moment."
+   },
+   {
+    "file": "apps/web/app/api/llm/v1/chat/completions/lib/upstream-error-copy.ts",
+    "text": "The selected model is not available. It may have been retired. Choose another model, or switch to Auto."
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Switch model"
+   }
+  ],
+  "needs": "a model that is unavailable at the time of the test",
+  "note": "The exact sentence depends on whether Auto chose the model.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message on a model that is unavailable (for example a retired or down model).",
+   "Wait for the error in the answer bubble.",
+   "Look for 'The model is not available right now.' or 'The selected model is not available.', then the 'Retry' and 'Switch model' buttons."
+  ],
+  "where": "Send a message when the chosen model is unavailable; the answer bubble shows the error with 'Retry' and 'Switch model' buttons"
+ },
+ "S19.26": {
+  "labels": [
+   {
+    "file": "apps/web/app/api/llm/v1/chat/completions/lib/upstream-error-copy.ts",
+    "text": "An attachment is too large for the selected model. Remove or shrink it, or choose a model with larger media limits."
+   },
+   {
+    "file": "apps/web/app/api/llm/v1/chat/completions/lib/upstream-error-copy.ts",
+    "text": "This conversation is too long for the selected model. Start a new chat, remove some attachments, or choose a model with a larger context window."
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "$FILE$ was not added. Attachments must total under $LIMIT$."
+   }
+  ],
+  "needs": "a file too large for the model, or a very long conversation",
+  "note": "The attachment size check in the composer shows the second label before sending.",
+  "reachable": "yes",
+  "steps": [
+   "Attach a file that is too large, or keep a chat until it is too long for the model.",
+   "Send the message.",
+   "Look for 'An attachment is too large for the selected model.' or 'This conversation is too long for the selected model.' and the suggested fix, then check you can change it and send again with the Retry button."
+  ],
+  "where": "Send a message with an attachment too large for the model, or a very long chat; the answer bubble explains what to change"
+ },
+ "S19.27": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Retry"
+   }
+  ],
+  "needs": "a signed-in account and a way to fail mid-answer",
+  "note": "Code keeps the content and sets the error footer (chat-state.ts, bubbles.ts); a forced mid-answer failure is hard to produce on demand.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message that starts to answer.",
+   "Cause a failure after some text has arrived (for example lose the connection and keep it off).",
+   "Look at the answer: the text that arrived should still be there, with the error text and the 'Retry' button under it."
+  ],
+  "where": "Send a message, let some answer text arrive, then make the answer fail; the partial text stays with the error and a 'Retry' button below it"
+ },
+ "S19.28": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Recent chats"
+   }
+  ],
+  "needs": "an account (signed in) and a Chrome restart",
+  "note": "The code restores the latest stored chat on launch (side_panel.ts resumeLatestStoredManagedRun), but I did not confirm from the code that the panel always reopens that chat by itself, so the tester should open it from Recent chats; the interrupted footer text Cancelled comes from agentTaskStateLabel in packages/contracts/types/src/cross-device.ts, not from the extension files.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, start a chat, send a message and let the answer finish.",
+   "Send a second message and press the stop button while the answer is still arriving, so that turn ends stopped.",
+   "Close the side panel and quit Chrome completely, then open Chrome again and open the AGI side panel.",
+   "Click the clock button whose tooltip is Recent chats, then click the chat's row.",
+   "Compare with Expected: the earlier answer and the partial stopped answer are both there, and the stopped turn shows its Cancelled footer."
+  ],
+  "where": "Recent chats (clock button in the side panel header) > click the chat's row"
+ },
+ "S19.29": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "More"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Tasks"
+   }
+  ],
+  "needs": "an account (signed in) and a task that runs for a while, such as a Cloud agent run",
+  "note": "The code resumes managed Cloud runs after reopen (side_panel.ts resumeManagedCloudRun and adoptClosedPanelTurn); a browser-control run is noted in computerUsePanel.ts as still active after reopen, but I did not confirm whether a local browser task keeps running after the panel closes, so the tester should use a Cloud run.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and start a task that runs for a while, such as a Cloud agent run from the composer.",
+   "Close the side panel while the task is still running.",
+   "Wait a minute, then open the AGI side panel again.",
+   "Click the More button, then click Tasks.",
+   "Compare with Expected: the task is listed with its progress or result, the sheet intro reads Tasks AGI is running or has run for you, from every app, and the chat shows the finished result or resumes it instead of starting over."
+  ],
+  "where": "More (the three-dot button in the side panel header) > Tasks"
+ }
+}

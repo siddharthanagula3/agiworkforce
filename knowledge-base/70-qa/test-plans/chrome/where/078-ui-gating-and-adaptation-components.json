@@ -1,0 +1,307 @@
+{
+ "S78.01": {
+  "labels": [
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Upload from device"
+   }
+  ],
+  "needs": "A Free account and a paid account",
+  "note": "The resolver itself is in apps/extension/src/features/cloud-bridge/capabilityDocument.ts (the quoted lines at :15 and :36 no longer match). The controls read it through applyCapabilityGates in src/side_panel.ts.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Sign in and open the + button in the composer. Note whether Upload from device is listed.",
+   "Sign out, then sign in with an account that has a different plan or settings, and open + again.",
+   "Compare: an option is hidden only when the account cannot use that feature."
+  ],
+  "where": "No control of its own. Effect shows in the composer + menu, where Upload from device is listed or hidden."
+ },
+ "S78.02": {
+  "labels": [
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Effort"
+   },
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Extended thinking"
+   },
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Upload from device"
+   }
+  ],
+  "needs": "A Free account and a paid account, to compare",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and click the model button in the composer.",
+   "Pick a model that offers reasoning levels, then open the model button again and look for the Effort heading and the Extended thinking row.",
+   "Pick a model without reasoning options, reopen the model button, and check that Effort and Extended thinking change or disappear.",
+   "Click + and check whether Upload from device is listed for this account. Compare with Expected."
+  ],
+  "where": "Composer > model button (shows the model name) > Effort and Extended thinking rows; composer + > Upload from device"
+ },
+ "S78.04": {
+  "labels": [
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Effort"
+   },
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Default"
+   }
+  ],
+  "needs": "A paid account (some levels are gated)",
+  "note": "Whether an unsupported level is left out of the request was not checked in the UI; the cited request-processor line is in apps/web.",
+  "reachable": "yes",
+  "steps": [
+   "Pick a model that offers several reasoning levels, then click the model button.",
+   "Under the Effort heading, read the list of levels and find the one marked Default.",
+   "Choose a different level and send a message.",
+   "Switch to a model with fewer levels, reopen the model button, and check the Effort list matches that model. Compare with Expected."
+  ],
+  "where": "Composer > model button > Effort heading"
+ },
+ "S78.07": {
+  "labels": [
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Available on $PLAN$ and higher plans"
+   }
+  ],
+  "needs": "A Free account",
+  "note": "The plan name shown on a locked row comes from the picker code, not a fixed message. The server check is not visible to a tester.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with a Free account and click the model button.",
+   "Find a model row marked with a plan name on the right side. Hover it and read the tooltip or the row text.",
+   "Click the locked row and see that a plans page opens in a new tab.",
+   "Compare with Expected. The server-side check cannot be seen from the screen."
+  ],
+  "where": "Composer > model button > locked model row (plan name on the right) and Effort rows with a plan name"
+ },
+ "S78.08": {
+  "labels": [
+   {
+    "file": "_locales/en/messages.json",
+    "text": "More"
+   },
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Usage"
+   }
+  ],
+  "needs": "A signed-in account with some usage",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and click the More button at the top right of the side panel.",
+   "Read the Usage row, including its meter.",
+   "Click Usage. A web usage page opens in a new tab.",
+   "Compare the meter and the page with Expected."
+  ],
+  "where": "More (the three-dot button at the top right of the side panel) > Usage"
+ },
+ "S78.09": {
+  "labels": [],
+  "needs": "A workspace member account and a workspace administrator policy",
+  "note": "Searched apps/extension/src and apps/extension/_locales for admin, organization, workspace, policy and retention text. Found no workspace policy screen. The only denial gate found is connectors coming soon in src/features/cloud-bridge/capabilityDocument.ts. The cited src/side_panel.ts:6168 quote is gone.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S78.12": {
+  "labels": [],
+  "needs": "An account that is not eligible by age or account rules",
+  "note": "Searched apps/extension/src and _locales for age, 18, eligib and adult text. No age or eligibility check was found. The cited sign-in files are in apps/web or apps/extension-vscode, and apps/web/features/auth/AuthSwitchLine.tsx no longer exists.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S78.14": {
+  "labels": [
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Desktop tools are optional and currently disconnected."
+   },
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Reconnect"
+   }
+  ],
+  "needs": "The AGI Desktop app installed on the Mac, and an account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Make sure the AGI Desktop app is not running or not paired, then open the side panel.",
+   "Read the notice above the composer. It appears only while Desktop is disconnected.",
+   "Click Reconnect. Start the Desktop app and click Reconnect again.",
+   "Compare: the notice should disappear once Desktop is connected."
+  ],
+  "where": "Side panel > notice above the composer: Desktop tools are optional and currently disconnected."
+ },
+ "S78.17": {
+  "labels": [
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Extended thinking"
+   },
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Upload from device"
+   }
+  ],
+  "needs": "A Free account and a paid account, to compare",
+  "note": "The Voice input mic button is also hidden when voice is not allowed (src/side_panel.ts), but that label is a literal title, not a message.",
+  "reachable": "yes",
+  "steps": [
+   "Click the model button and pick a model that does not offer extended thinking. Look for the Extended thinking row.",
+   "Compare with a model that does offer it, where the row is listed.",
+   "Click + and check whether Upload from device is listed for this account.",
+   "Compare with Expected: a control that cannot apply is hidden, not shown disabled."
+  ],
+  "where": "Composer > model button (Extended thinking row) and composer + (Upload from device)"
+ },
+ "S78.18": {
+  "labels": [
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Available on $PLAN$ and higher plans"
+   },
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Effort"
+   }
+  ],
+  "needs": "A Free account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with a Free account and click the model button.",
+   "Find a model row that shows a plan name on the right. It stays listed but cannot be picked.",
+   "Hover the row, or open the Effort list of a model, and read the gated level with its plan name and tooltip.",
+   "Compare with Expected: the restricted control is visible, disabled, and says which plan unlocks it."
+  ],
+  "where": "Composer > model button > locked model row (plan name on the right) and Effort row with a plan name"
+ },
+ "S78.19": {
+  "labels": [
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Create a video \u00b7 Upgrade"
+   },
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Available on $PLAN$ and higher plans"
+   }
+  ],
+  "needs": "A Free account",
+  "note": "The + row does not name a plan. The plan name appears on the model and Effort rows. What the row opens when clicked was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with an account whose plan does not include video and click +.",
+   "Read the row Create a video \u00b7 Upgrade.",
+   "Click the model button and read a locked model row or an Effort row with a plan name.",
+   "Compare with Expected: the surface names the plan that unlocks the feature and how to upgrade."
+  ],
+  "where": "Composer > + > Create a video \u00b7 Upgrade (shown when the plan does not include video)"
+ },
+ "S78.21": {
+  "labels": [
+   {
+    "file": "_locales/en/messages.json",
+    "text": "AGI needs access to $HOST$"
+   },
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Allow for this task"
+   }
+  ],
+  "needs": "A website not yet on your approved sites",
+  "note": "The card is built by buildSiteGrantCard in src/features/side-panel/bubbles.ts and called from src/side_panel.ts around line 7902. The exact trigger was traced from code, not run. The approved-sites settings are in src/features/options/site-allowlist.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Open a website that is not on your approved sites.",
+   "In the side panel, ask AGI to read or act on that page.",
+   "When the card AGI needs access to the site appears, read its explanation text.",
+   "Look at the buttons Allow for this task, Always allow on this site and Decline. Compare with Expected."
+  ],
+  "where": "Side panel > an AGI task that needs to read or act on a site you have not approved yet (card titled AGI needs access to the site)"
+ },
+ "S78.22": {
+  "labels": [
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Switch model"
+   }
+  ],
+  "needs": "An account and a model that returns a plan or quota error",
+  "note": "The Switch model button opens the model menu. Whether the error text names a specific model was not confirmed; a separate notice names the fallback model.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message with a model whose request fails with a plan, quota or account error.",
+   "Read the failed reply and its error text.",
+   "Click Switch model. The model menu opens.",
+   "Compare with Expected: the user is told to use another model, and ideally which one."
+  ],
+  "where": "Side panel > a failed reply > Switch model button"
+ },
+ "S78.23": {
+  "labels": [
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Send selected text to a local app\u2026"
+   },
+   {
+    "file": "src/features/context-handoff/index.ts",
+    "text": "Send selected context?"
+   },
+   {
+    "file": "src/features/context-handoff/index.ts",
+    "text": "Send redacted context"
+   }
+  ],
+  "needs": "A web page with text, and optionally a cloud chat for the phone path",
+  "note": "The destinations are AGI Desktop, VS Code and AGI CLI, built from the constants in src/features/context-handoff/index.ts. Continue on phone is in the More menu of a history item.",
+  "reachable": "yes",
+  "steps": [
+   "Select a sentence on a normal web page, then right-click it.",
+   "Click Send selected text to a local app\u2026.",
+   "Read the dialog Send selected context? and its list of destinations. Do not click Send redacted context unless you want to send.",
+   "Compare with Expected: the surface offers an action that continues the work on another device or app."
+  ],
+  "where": "Right-click selected text on a web page > Send selected text to a local app\u2026 (dialog Send selected context?). Second path: side panel history item More > Continue on phone (cloud chats only)."
+ },
+ "S78.26": {
+  "labels": [
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Effort"
+   }
+  ],
+  "needs": "A paid account, to see several models",
+  "note": "Whether unsupported parameters are removed from the request before sending was not checked in the UI. The code is in src/features/cloud-bridge/managedModelPicker.ts.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Click the model button and pick a model that offers several Effort levels. Note the levels listed.",
+   "Pick a different model and reopen the model button.",
+   "Compare: the Effort levels and the Extended thinking row change to match the model. Unsupported levels are not offered."
+  ],
+  "where": "No control of its own. Effect shows in the composer model button > Effort and Extended thinking rows."
+ },
+ "S78.28": {
+  "labels": [],
+  "needs": "A paid account that can change plan, and a second browser tab",
+  "note": "The refresh code is in src/side_panel.ts around lines 13275 and 16387. Whether the side panel refreshes on its own without a reload was not run.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Sign in to the side panel with an account whose plan you can change, keeping the side panel open.",
+   "In a separate tab, change the plan on the AGI web app.",
+   "Return to the side panel without reloading the extension. Click + and then the model button.",
+   "Compare with Expected: gated controls reflect the new plan without reinstalling or restarting."
+  ],
+  "where": "No control of its own. Effect shows in the composer + menu and the model button after a plan change on the web."
+ }
+}

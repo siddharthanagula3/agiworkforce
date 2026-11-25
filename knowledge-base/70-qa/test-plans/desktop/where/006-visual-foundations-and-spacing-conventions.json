@@ -1,0 +1,541 @@
+{
+ "S6.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "Theme"
+   },
+   {
+    "file": "apps/desktop/electron/appMenu.ts",
+    "text": "Settings\u2026"
+   }
+  ],
+  "needs": "none",
+  "note": "Colour tokens are defined in packages/ui/design-tokens/src/foundation.css; the effect is seen by switching Theme.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open Settings\u2026 from the Mac menu bar (AGI app menu) or press Cmd+,.",
+   "Go to Appearance and click Light, then Dark, then System under Theme.",
+   "Compare the page and panel backgrounds in each theme with Expected."
+  ],
+  "where": ""
+ },
+ "S6.02": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "Theme"
+   }
+  ],
+  "needs": "none",
+  "note": "Raised-surface token is set in packages/ui/design-tokens/src/foundation.css; no visible control of its own.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open Settings\u2026 (Cmd+,) and go to Appearance.",
+   "Switch Theme between Light and Dark.",
+   "Compare cards, menus and dialogs with the page background in each theme; open a menu or the Settings dialog itself to see the raised surface."
+  ],
+  "where": ""
+ },
+ "S6.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "Theme"
+   }
+  ],
+  "needs": "none",
+  "note": "Text tokens are in packages/ui/design-tokens/src/foundation.css; contrast is verified by apps/web/shared/components/__tests__/theme-contrast.test.ts, not by a person.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open Settings\u2026 (Cmd+,) and go to Appearance.",
+   "Switch Theme to Light, then Dark.",
+   "Read primary and muted text in chat and settings in each theme and compare with Expected."
+  ],
+  "where": ""
+ },
+ "S6.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "Theme"
+   }
+  ],
+  "needs": "none",
+  "note": "Subtle and strong border tokens are in packages/ui/design-tokens/src/foundation.css; no separate control.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open Settings\u2026 (Cmd+,) and go to Appearance.",
+   "Switch Theme between Light and Dark.",
+   "Look at card edges, dividers and input borders in Settings > General and compare with Expected."
+  ],
+  "where": ""
+ },
+ "S6.05": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "Accent colour"
+   },
+   {
+    "file": "apps/desktop/electron/appMenu.ts",
+    "text": "Settings\u2026"
+   }
+  ],
+  "needs": "none",
+  "note": "Fill, text and on-fill roles are in CSS tokens; the swatch names come from apps/web/content/support/chat-basics.md.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings\u2026 (Cmd+,) and go to Appearance.",
+   "Click a colour under Accent colour (AGI amber, Green, Blue, Violet or Rose).",
+   "Look at selected controls and buttons, and check the text on them is readable, against Expected."
+  ],
+  "where": "Settings\u2026 (Cmd+,) > Appearance > Accent colour"
+ },
+ "S6.06": {
+  "labels": [],
+  "needs": "none",
+  "note": "Status colours are tokens in packages/ui/design-tokens/src/foundation.css; no single visible control, so the tester must find a screen that shows a status.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Trigger a status message, for example a failed or warning state, in the chat or settings.",
+   "Compare the success, warning, error or info text colour in Light and Dark Theme."
+  ],
+  "where": ""
+ },
+ "S6.07": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "Chat font"
+   },
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "Dyslexic friendly"
+   }
+  ],
+  "needs": "none",
+  "note": "Font families are declared in packages/ui/design-tokens/src/chat.css and apps/web/app/globals.css.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings\u2026 (Cmd+,) and go to Appearance.",
+   "Click Chat font and pick Sans, Serif or Dyslexic friendly.",
+   "Look at message text in a chat; code should stay monospace."
+  ],
+  "where": "Settings\u2026 (Cmd+,) > Appearance > Chat font"
+ },
+ "S6.08": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/components/web-settings-navigation.ts",
+    "text": "Appearance"
+   }
+  ],
+  "needs": "none",
+  "note": "The heading scale is in packages/ui/design-tokens/src/tailwind.css; no control of its own.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open Settings\u2026 (Cmd+,) and go to Appearance.",
+   "Compare the page title Appearance with the row labels such as Theme and Motion."
+  ],
+  "where": ""
+ },
+ "S6.09": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "Chat text size"
+   }
+  ],
+  "needs": "none",
+  "note": "Default is shown as Default in the options list.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings\u2026 (Cmd+,) and go to Appearance.",
+   "Choose Small, then Large under Chat text size.",
+   "Look at chat message text and compare with Default and Expected."
+  ],
+  "where": "Settings\u2026 (Cmd+,) > Appearance > Chat text size"
+ },
+ "S6.10": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "Contrast"
+   }
+  ],
+  "needs": "none",
+  "note": "The caption role is defined in packages/ui/design-tokens/src/tailwind.css; no single control of its own.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open a chat and look at small metadata text such as timestamps or hint text under a Settings row, for example the hint under Contrast."
+  ],
+  "where": ""
+ },
+ "S6.11": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "Chat font"
+   }
+  ],
+  "needs": "a chat that contains a code block",
+  "note": "Monospace family is declared in packages/ui/design-tokens/src/chat.css; the support page says code stays monospace.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings\u2026 (Cmd+,) and go to Appearance.",
+   "Set Chat font to Serif, then return to Default.",
+   "Open a chat with a code block and compare the code text with the body text."
+  ],
+  "where": "Settings\u2026 (Cmd+,) > Appearance > Chat font"
+ },
+ "S6.12": {
+  "labels": [],
+  "needs": "a chat reply with several lines",
+  "note": "Line-height is set per text role in apps/web/app/globals.css; no control of its own.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Read a multi-line chat reply and compare line spacing between lines of the same paragraph and in headings."
+  ],
+  "where": ""
+ },
+ "S6.13": {
+  "labels": [],
+  "needs": "a chat reply with several paragraphs",
+  "note": "Paragraph gap is set in apps/web/app/globals.css; no control of its own.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Ask for a reply with several paragraphs in a chat.",
+   "Look at the vertical gap between paragraphs and compare with Expected."
+  ],
+  "where": ""
+ },
+ "S6.14": {
+  "labels": [],
+  "needs": "a chat reply with a list",
+  "note": "List indentation is set in apps/web/app/globals.css; no control of its own.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Ask for a reply containing a bulleted or numbered list, with a nested item.",
+   "Look at the indent of the list and the nested list."
+  ],
+  "where": ""
+ },
+ "S6.15": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "Wrap long code lines"
+   }
+  ],
+  "needs": "a chat that contains a code block with a long line",
+  "note": "Padding itself is set in apps/web/app/globals.css; the toggle only changes wrapping.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings\u2026 (Cmd+,) and go to Appearance.",
+   "Turn on Wrap long code lines, then turn it off.",
+   "Open a chat with a long code line and look at the code block padding and whether the line wraps."
+  ],
+  "where": "Settings\u2026 (Cmd+,) > Appearance > Wrap long code lines"
+ },
+ "S6.16": {
+  "labels": [],
+  "needs": "a chat reply with a table",
+  "note": "Table-cell padding is applied in the shared layout rules; no control of its own.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open a chat reply or a data table that contains a table.",
+   "Compare the padding inside table cells."
+  ],
+  "where": ""
+ },
+ "S6.17": {
+  "labels": [],
+  "needs": "a chat with several turns",
+  "note": "Turn spacing is set in apps/web/features/chat/components/messages/ChatMessageList.tsx; no control of its own.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Send two or more messages in one chat.",
+   "Look at the vertical space between one turn and the next."
+  ],
+  "where": ""
+ },
+ "S6.18": {
+  "labels": [],
+  "needs": "a chat with a reply",
+  "note": "Spacing is in apps/web/features/chat/components/messages/messageActionRow.ts; the toolbar appears on hover.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Hover over a chat message to show its action toolbar.",
+   "Look at the distance between the message and its toolbar."
+  ],
+  "where": ""
+ },
+ "S6.19": {
+  "labels": [],
+  "needs": "none",
+  "note": "Composer padding is in apps/web/features/chat/components/Composer/ChatComposerNew.tsx; no control of its own.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open a chat and click into the message box at the bottom.",
+   "Look at the space around the typed text and the send and attach controls."
+  ],
+  "where": ""
+ },
+ "S6.20": {
+  "labels": [],
+  "needs": "a window that can be resized",
+  "note": "Gutters are in apps/web/app/globals.css and apps/web/features/chat/pages/WebChatPage.tsx; visible through window resize.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open a chat page and resize the window width from wide to narrow.",
+   "Look at the space between the page edge and the content."
+  ],
+  "where": ""
+ },
+ "S6.21": {
+  "labels": [],
+  "needs": "a few chats in the sidebar",
+  "note": "Row height is set in packages/ui/ui/src/sidebar/SessionItem.tsx; no control of its own.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open the sidebar and look at a row of the chat history list.",
+   "Look at the height of several rows and compare them."
+  ],
+  "where": ""
+ },
+ "S6.22": {
+  "labels": [],
+  "needs": "a chat in the sidebar",
+  "note": "Menu item height is in packages/ui/ui/src/primitives/DropdownMenu.tsx; no control of its own.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Click a menu button, for example the menu on a chat row in the sidebar.",
+   "Compare the height of the menu items with the other menus."
+  ],
+  "where": ""
+ },
+ "S6.23": {
+  "labels": [
+   {
+    "file": "apps/desktop/electron/appMenu.ts",
+    "text": "Settings\u2026"
+   }
+  ],
+  "needs": "none",
+  "note": "Dialog padding is set in packages/ui/ui/src/primitives/Dialog.tsx and AlertDialog.tsx.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open Settings\u2026 (Cmd+,) and look at the inner padding of the dialog.",
+   "Open a confirmation dialog, for example a delete prompt, and compare its inner padding."
+  ],
+  "where": ""
+ },
+ "S6.24": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "Full name"
+   }
+  ],
+  "needs": "none",
+  "note": "Spacing is set in the shared FieldRow component; no separate control.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings\u2026 (Cmd+,) and go to General.",
+   "Look at the Full name label and its input under Profile.",
+   "Look at the gap between the label and the input and between fields, and compare with Expected."
+  ],
+  "where": "Settings\u2026 (Cmd+,) > General > Full name"
+ },
+ "S6.25": {
+  "labels": [],
+  "needs": "none",
+  "note": "Icon grid and stroke are set in packages/ui/icons/src/grid.ts and CreateIcon.tsx; no control of its own.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Look at the icons in the sidebar and in the settings navigation.",
+   "Compare the stroke weight and size of icons across rows."
+  ],
+  "where": ""
+ },
+ "S6.26": {
+  "labels": [],
+  "needs": "none",
+  "note": "Button sizes (xs, sm, default, lg, icon) are set in code by the Button primitive, and a tester cannot pick one. Checked packages/ui/ui/src/primitives/Button.tsx.",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": "No control of its own. Button sizes show as buttons of different heights and widths across the app, for example in Settings."
+ },
+ "S6.27": {
+  "labels": [],
+  "needs": "",
+  "note": "Not in this range. Outside S6.26 to S6.35, so not handled.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S6.28": {
+  "labels": [],
+  "needs": "",
+  "note": "Not in this range. Outside S6.26 to S6.35, so not handled.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S6.29": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Settings"
+   }
+  ],
+  "needs": "none",
+  "note": "Layer values come from named z-index tokens in packages/ui/design-tokens/src/foundation.css (--z-control, --z-modal); the dialog uses var(--z-modal) in packages/ui/ui/src/primitives/Dialog.tsx.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Click the button whose name starts with Account menu for.",
+   "Click Settings in the menu.",
+   "Look: the Settings dialog sits above the chat and the sidebar, and the menu closes."
+  ],
+  "where": "No control. Its effect shows when menus and dialogs open over the chat and sidebar."
+ },
+ "S6.30": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Settings"
+   }
+  ],
+  "needs": "none",
+  "note": "Named durations are in packages/ui/design-tokens/src/foundation.css (--duration-instant 90ms, --duration-quick 160ms, --duration-moved 260ms). Sheets use them in packages/ui/ui/src/primitives/Sheet.tsx.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Click the button whose name starts with Account menu for and watch the menu open.",
+   "Click Settings and watch the Settings dialog open.",
+   "Look: the menu opens and closes with a short fade, and the dialog fades and slides in without a long pause."
+  ],
+  "where": "No control. Its effect shows in how fast menus and dialogs open and close."
+ },
+ "S6.31": {
+  "labels": [
+   {
+    "file": "apps/desktop/electron/appMenu.ts",
+    "text": "Settings\u2026"
+   },
+   {
+    "file": "apps/web/features/settings/components/web-settings-navigation.ts",
+    "text": "Appearance"
+   },
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "Motion"
+   },
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "Reduced"
+   }
+  ],
+  "needs": "none (optional: to test the OS setting, turn on Reduce motion in macOS System Settings > Accessibility > Display)",
+  "note": "The in-app Motion switch sets data-motion=reduced (apps/web/shared/components/AppearancePreferences.tsx); the OS setting uses prefers-reduced-motion in apps/web/app/globals.css. Only System and Reduced exist; there is no full-motion option.",
+  "reachable": "yes",
+  "steps": [
+   "Click the app menu, then Settings\u2026, or press Command+,.",
+   "Click Appearance in the left list.",
+   "Find the row labelled Motion and click Reduced.",
+   "Look: the Motion row shows Reduced as pressed, and looping or moving animation in the chat and interface stops or becomes gentle. Click System to return."
+  ],
+  "where": "Settings\u2026 > Appearance > Motion > Reduced (Settings\u2026 is in the app menu on the Mac)"
+ },
+ "S6.32": {
+  "labels": [
+   {
+    "file": "apps/desktop/electron/appMenu.ts",
+    "text": "Settings\u2026"
+   },
+   {
+    "file": "apps/web/features/settings/components/web-settings-navigation.ts",
+    "text": "Appearance"
+   },
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "Theme"
+   },
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "Light"
+   }
+  ],
+  "needs": "none (for System: access to macOS System Settings > Appearance)",
+  "note": "The Electron side follows the choice through nativeTheme.themeSource (apps/desktop/electron/main.ts). Code-block colour is a separate control (Code theme, applies in dark mode), so check the code block with Dark.",
+  "reachable": "yes",
+  "steps": [
+   "Click the app menu, then Settings\u2026, or press Command+,.",
+   "Click Appearance in the left list.",
+   "In the row labelled Theme, click Light. Look: the window, chat and code blocks turn light.",
+   "Click Dark, then System. Look: the window follows the choice; with System, change the Mac's appearance in System Settings > Appearance and check the window changes too."
+  ],
+  "where": "Settings\u2026 > Appearance > Theme > Light, Dark or System"
+ },
+ "S6.33": {
+  "labels": [
+   {
+    "file": "apps/desktop/electron/appMenu.ts",
+    "text": "Settings\u2026"
+   },
+   {
+    "file": "apps/web/features/settings/components/web-settings-navigation.ts",
+    "text": "Appearance"
+   },
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "Contrast"
+   },
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "High"
+   }
+  ],
+  "needs": "none (optional: macOS System Settings > Accessibility > Display > Increase contrast for the System choice)",
+  "note": "High sets data-contrast=more (apps/web/shared/components/AppearancePreferences.tsx), styled in apps/web/app/globals.css. The OS Increase contrast setting is not named in the code, so that route is from macOS, not from this app.",
+  "reachable": "yes",
+  "steps": [
+   "Click the app menu, then Settings\u2026, or press Command+,.",
+   "Click Appearance in the left list.",
+   "In the row labelled Contrast, open the drop-down and choose High.",
+   "Look: text, borders and focus rings look stronger than before. Choose System to return."
+  ],
+  "where": "Settings\u2026 > Appearance > Contrast > High"
+ },
+ "S6.34": {
+  "labels": [],
+  "needs": "none",
+  "note": "States are set in packages/ui/ui/src/primitives/Button.tsx (hover:, active:, focus-visible:, disabled:). The exact button that is disabled depends on the screen.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Move the mouse over a button in the chat or Settings and look for a colour change.",
+   "Press and hold the mouse on a button and look for a slight shrink and darker fill.",
+   "Press the Tab key until a button has a focus ring, and look for the ring.",
+   "Find a button that is greyed out and look that it is faded and cannot be clicked."
+  ],
+  "where": "No control. Its effect shows on any button: hover, press, keyboard focus, and disabled."
+ },
+ "S6.35": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/product-names.ts",
+    "text": "Desktop"
+   }
+  ],
+  "needs": "none",
+  "note": "Icon file is apps/desktop/electron/resources/icon.icns (set in apps/desktop/electron-builder.yml, line 71). Only one icon file exists in that folder, so the tester cannot check each size. Web tab icons are apps/web/app/favicon.ico and apps/web/app/icon.png. The About item label comes from Electron, not from code (role about in apps/desktop/electron/appMenu.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Click the first menu in the menu bar, the one named Desktop.",
+   "Click the About item (its label is set by Electron and reads About Desktop).",
+   "Look: the About panel shows the Desktop icon, name and version.",
+   "Look at the Dock: the Desktop app icon is shown there."
+  ],
+  "where": "The app menu (first menu, named Desktop) > About Desktop (opens the About panel that shows the app icon); the Dock shows the app icon."
+ }
+}

@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>Maple Point dispatch board</title>
+<main><h1>Dispatch to Maple Point</h1><p>Code: FEN-28</p>
+<details><summary>Expand dispatch details</summary><p>Dock seven, morning shift.</p></details>
+<form onsubmit="event.preventDefault(); document.getElementById('status').textContent='Form submitted locally'">
+<label>Marker <input name="marker" autocomplete="off"></label><button>Save marker locally</button></form>
+<label>Synthetic password <input type="password" autocomplete="off"></label>
+<button onclick="document.getElementById('status').textContent='Delete marker requested'">Delete marker</button>
+<a download="synthetic-marker.txt" href="data:text/plain,SYNTHETIC">Download synthetic marker</a>
+<p>Mock checkout without a backend. Nothing can be bought here.</p>
+<form onsubmit="event.preventDefault(); document.getElementById('status').textContent='Mock purchase triggered'">
+<label>Test order <input name="test-order" autocomplete="off"></label><button>Buy now</button><button lang="es">Comprar ahora</button></form>
+<output id="status" aria-live="polite">No actions yet</output></main></html>

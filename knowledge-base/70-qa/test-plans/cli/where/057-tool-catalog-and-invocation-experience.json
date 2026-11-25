@@ -1,0 +1,560 @@
+{
+ "S57.01": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Usage: /search <question>, answer from a web search"
+   },
+   {
+    "file": "apps/cli/src/agent/chat.rs",
+    "text": "/search needs a web search key in this session"
+   }
+  ],
+  "needs": "a web search key saved in the CLI (Brave or Tavily), or a model that can search the web",
+  "note": "The code shows the query on the tool line; I did not confirm where the sources are listed.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi in a terminal.",
+   "Type /search and a question that needs current web facts, then press Enter.",
+   "Look for a tool line for web_search that shows the query.",
+   "Compare the answer and any listed sources with Expected."
+  ],
+  "where": "agi, then type /search followed by a question that needs current web facts"
+ },
+ "S57.02": {
+  "labels": [
+   {
+    "file": "apps/cli/src/platform/runtime/tool_catalog.rs",
+    "text": "web_fetch"
+   }
+  ],
+  "needs": "a network connection",
+  "note": "There is no command for this tool; the assistant calls it when a request needs a page.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi.",
+   "Type a request that gives a web page address and asks what the page says, then press Enter.",
+   "Look for a tool line named web_fetch that shows the address.",
+   "Check that the answer uses text from that page."
+  ],
+  "where": "agi, then ask in chat for the content of a web page by its address"
+ },
+ "S57.03": {
+  "labels": [
+   {
+    "file": "apps/cli/src/features/exec/tools/file_ops/mod.rs",
+    "text": "read_file"
+   }
+  ],
+  "needs": "a PDF or Office file in the folder",
+  "note": "The code reads these files through read_file; I did not confirm the exact preview text for each format.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi in a folder that holds a PDF, Word, PowerPoint or Excel file.",
+   "Type a request that names the file and asks for part of its text, then press Enter.",
+   "Look for a read_file tool line that shows the file path.",
+   "Check that the answer quotes text from that file."
+  ],
+  "where": "agi, then ask in chat to read a PDF or Office file by its path"
+ },
+ "S57.04": {
+  "labels": [
+   {
+    "file": "apps/cli/src/platform/runtime/tool_catalog.rs",
+    "text": "search_files"
+   }
+  ],
+  "needs": "a folder with a few text files, one containing a known word",
+  "note": "There is no separate search control; the assistant calls the tool.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi in a folder with a few text files.",
+   "Type a request to find files that contain a word you know is in one of them, then press Enter.",
+   "Look for a search_files or grep_files tool line that shows the pattern.",
+   "Check that the answer lists the matching paths."
+  ],
+  "where": "agi, then ask in chat to find files by name or by text"
+ },
+ "S57.05": {
+  "labels": [
+   {
+    "file": "apps/cli/src/platform/runtime/tool_catalog.rs",
+    "text": "read_file"
+   }
+  ],
+  "needs": "a text file in the folder",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Start agi in a folder with a text file.",
+   "Type a request to read that file by name, then press Enter.",
+   "Look for a read_file tool line that shows the path.",
+   "Check that the answer matches the file's contents."
+  ],
+  "where": "agi, then ask in chat to read a named file"
+ },
+ "S57.06": {
+  "labels": [
+   {
+    "file": "apps/cli/src/platform/runtime/tool_catalog.rs",
+    "text": "write_file"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "text": "Tool Approval"
+   }
+  ],
+  "needs": "a folder agi may write to",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Start agi in a folder that agi may write to.",
+   "Type a request to create a file named notes.txt with one line of text, then press Enter.",
+   "If the Tool Approval box appears, choose Yes.",
+   "Look for a write_file tool line that shows the path, then check that notes.txt exists in the folder."
+  ],
+  "where": "agi, then ask in chat to create a file"
+ },
+ "S57.10": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "exit"
+   }
+  ],
+  "needs": "Python installed on the machine",
+  "note": "No separate code-execution tool was found; the script runs through the shell tool (run_command).",
+  "reachable": "yes",
+  "steps": [
+   "Start agi.",
+   "Type a request to write a short Python script that prints 2 plus 2 and to run it, then press Enter.",
+   "If the Tool Approval box appears, choose Yes.",
+   "Look for a line starting with $ and the printed result, and an exit line."
+  ],
+  "where": "agi, then ask in chat to write and run a short Python script"
+ },
+ "S57.11": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "exit"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "text": "Tool Approval"
+   }
+  ],
+  "needs": "a Mac or Linux shell with ls",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Start agi in a folder with some files.",
+   "Type a request to run the command ls -la in this folder, then press Enter.",
+   "If the Tool Approval box appears, choose Yes.",
+   "Look for a line starting with $ ls -la, the listing, and an exit 0 line."
+  ],
+  "where": "agi, then ask in chat to run a shell command"
+ },
+ "S57.12": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "text": "Tool Approval"
+   }
+  ],
+  "needs": "a text file with three lines",
+  "note": "The tool name edit_file appears in the catalog; I did not confirm how the diff is drawn beyond the edit result code.",
+  "reachable": "yes",
+  "steps": [
+   "Create a text file with three lines in the folder.",
+   "Type a request to change the second line of that file to say hello, then press Enter.",
+   "If the Tool Approval box appears, choose Yes.",
+   "Look for the edit tool line and the changed line, and check the other lines are unchanged."
+  ],
+  "where": "agi, then ask in chat to change one line of an existing file"
+ },
+ "S57.13": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "Chrome integration"
+   }
+  ],
+  "needs": "AGI Desktop with its Chrome extension paired",
+  "note": "Pairing state is shown by /chrome; I did not check the pairing steps themselves.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi.",
+   "Type /chrome and press Enter.",
+   "Look for the Chrome integration text and a Paired line.",
+   "Type a request to open https://example.com in the browser, then press Enter.",
+   "Look for an Open line in the transcript that shows the address."
+  ],
+  "where": "agi, then type /chrome, then ask in chat to open a web page in the browser"
+ },
+ "S57.14": {
+  "labels": [
+   {
+    "file": "apps/cli/src/platform/runtime/tool_catalog.rs",
+    "text": "Read the active tab"
+   }
+  ],
+  "needs": "AGI Desktop with its Chrome extension paired and a page open",
+  "note": "Clicking and typing use the same route with other browser tool names; the read line is the one given here.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi with the browser paired (see /chrome).",
+   "Type a request to read the text of the page open in the browser, then press Enter.",
+   "Look for a transcript line that says Read the active tab.",
+   "Compare the answer with the text on the page."
+  ],
+  "where": "agi, then type /chrome, then ask in chat to read the page open in the browser"
+ },
+ "S57.16": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/image"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/image open"
+   }
+  ],
+  "needs": "an account that can generate images",
+  "note": "I did not confirm whether the image also appears inline in the transcript.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi.",
+   "Type /image a red bicycle on a beach, then press Enter.",
+   "Wait for the generation to finish; a chip appears.",
+   "Type /image open to view the image.",
+   "Compare the image with the prompt."
+  ],
+  "where": "agi, then type /image followed by a short description"
+ },
+ "S57.21": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/memory"
+   }
+  ],
+  "needs": "none",
+  "note": "The assistant's memory tool is called by the model during a turn; this path covers the user's view of the same memory.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi.",
+   "Type /memory and press Enter to see saved facts.",
+   "Type /memory add local and a short test fact, then press Enter.",
+   "Type /memory again and check that the new fact is listed."
+  ],
+  "where": "agi, then type /memory"
+ },
+ "S57.22": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "/connectors"
+   }
+  ],
+  "needs": "a managed account with Google Calendar connected on the connectors page",
+  "note": "No dedicated calendar tool was found in the CLI; calendar access comes through a connector.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi on a managed account.",
+   "Type /connectors and press Enter.",
+   "Check that the text says connectors are offered to this session's turns.",
+   "Ask in chat about today's calendar events, then check for a tool line and an approval box before it runs."
+  ],
+  "where": "agi, then type /connectors"
+ },
+ "S57.23": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "/connectors"
+   }
+  ],
+  "needs": "a managed account with Slack connected on the connectors page",
+  "note": "No dedicated messaging tool was found in the CLI; Slack access comes through a connector.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi on a managed account.",
+   "Type /connectors and press Enter.",
+   "Check that the text lists the connectors offered to this session.",
+   "Ask in chat to read the latest Slack message, then check for a tool line and an approval box before it runs."
+  ],
+  "where": "agi, then type /connectors"
+ },
+ "S57.24": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "/schedule"
+   }
+  ],
+  "needs": "a managed account that can use cloud schedules",
+  "note": "The delete and list actions use cron_delete and cron_list; I did not walk through them.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi on an account that can use cloud schedules.",
+   "Type /schedule every day at 9am summarize today's notes, then press Enter.",
+   "Approve the schedule creation if asked.",
+   "Look for a cron_create tool line and confirm the new schedule is listed when you ask for your schedules."
+  ],
+  "where": "agi, then type /schedule followed by what to run and when"
+ },
+ "S57.25": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/agents"
+   }
+  ],
+  "needs": "at least one agent file, made with /agents create",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Start agi.",
+   "Type /agents and press Enter; an agent picker opens.",
+   "Pick an agent, or press Esc to close the picker.",
+   "Ask in chat to use a named agent, then look for an agent tool line that shows its name."
+  ],
+  "where": "agi, then type /agents"
+ },
+ "S57.26": {
+  "labels": [],
+  "needs": "an interactive terminal",
+  "note": "The plan marked this unverified; the ask_user tool and its question box were found in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi in an interactive terminal.",
+   "Type a request asking the assistant to ask you which of two options you want, then press Enter.",
+   "Look for a question box that shows the choices.",
+   "Pick one and check that the assistant continues with that choice."
+  ],
+  "where": "agi, then ask in chat for a question with choices"
+ },
+ "S57.27": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "text": "Tool Approval"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "text": "Yes"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Start agi.",
+   "Type a request asking the assistant to get my approval of a plan before doing anything, then press Enter.",
+   "Look for the Tool Approval box with a question.",
+   "Choose Yes and check that the assistant continues; choose No and check that it stops."
+  ],
+  "where": "agi, then ask in chat for approval of a plan"
+ },
+ "S57.28": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "/tools"
+   }
+  ],
+  "needs": "none",
+  "note": "The note to the model about on-demand tools is in the system prompt and is not shown to the user.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Start agi.",
+   "Type /tools and press Enter.",
+   "Check the line that says Tools the model can call in this session with a count.",
+   "Ask a request that needs a tool not on that list and look for a tool_search line in the transcript."
+  ],
+  "where": "not visible in the app; the list of tools the model can call appears under /tools"
+ },
+ "S57.29": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "/tools"
+   }
+  ],
+  "needs": "none",
+  "note": "Keyword search is run by the model; the user has no search box. /tools lists all tools and /tools <name> needs an exact name.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi.",
+   "Type a request that asks the assistant to find tools about files, then press Enter.",
+   "Look for a tool_search tool line in the transcript.",
+   "Check that the result lists matching tool names with descriptions."
+  ],
+  "where": "agi, then ask in chat for a tool by topic"
+ },
+ "S57.30": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "/tools"
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "Parameters:"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Start agi.",
+   "Type /tools and press Enter to see the list of tools with descriptions.",
+   "Type /tools read_file and press Enter.",
+   "Check that the name, description, and a Parameters: section with the schema appear."
+  ],
+  "where": "agi, then type /tools, then /tools <name>"
+ },
+ "S57.31": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "text": "Tool Approval"
+   },
+   {
+    "file": "apps/cli/src/tui/approval_broker.rs",
+    "text": "Allow this command?"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Start agi.",
+   "Type a request to run the command echo hello, then press Enter.",
+   "Look at the tool line; it should show the command after a $ sign.",
+   "If the Tool Approval box appears, check it shows the command before you choose Yes or No."
+  ],
+  "where": "agi, then ask in chat to run a command or change a file"
+ },
+ "S57.32": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "working"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "completed"
+   }
+  ],
+  "needs": "none",
+  "note": "The code shows the counts text; I did not confirm exactly where on screen it is drawn.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi.",
+   "Type a request to run the command sleep 5, then press Enter.",
+   "While it runs, look for a spinner on the tool line and the elapsed time in brackets.",
+   "When it finishes, look for a check mark for completed or a cross for failed, and the counts with working and completed."
+  ],
+  "where": "agi, then ask in chat for any request that runs a tool"
+ },
+ "S57.33": {
+  "labels": [],
+  "needs": "none",
+  "note": "The full output is shown with Ctrl-O, which is outside this item.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi in a folder with a few files.",
+   "Type a request to list the files in this folder, then press Enter.",
+   "Look for a short preview line under the tool line.",
+   "Check that the preview shows the first non-empty line of the result, shortened if long."
+  ],
+  "where": "agi, then ask in chat for any request that runs a tool"
+ },
+ "S57.34": {
+  "labels": [
+   {
+    "file": "apps/cli/src/command_registry.rs",
+    "text": "Show or hide full tool output"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "showing full tool output, Ctrl-O to collapse"
+   }
+  ],
+  "needs": "a Free account or paid account with a model that can call a shell tool",
+  "note": "Ctrl-O toggles every tool output in the transcript at once, not one call. The expanded view shows the result only, not the arguments; arguments are shown through \"/tools log <n>\" (S57.37), so Expected's \"full arguments\" is not met by Ctrl-O alone.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi and start a chat that makes a tool call (for example a shell command with several lines of output).",
+   "Find the finished tool call in the transcript and note its short result preview.",
+   "Press Ctrl-O. The status line shows \"showing full tool output, Ctrl-O to collapse\" and the output lines appear, up to 200, then \"\u2026 N more lines\" if longer.",
+   "Press Ctrl-O again. The status line shows \"tool output collapsed\" and the preview returns. Compare with Expected: the call expands and collapses."
+  ],
+  "where": "agi (chat screen), then press Ctrl-O; the key list in \"/help\" shows \"Show or hide full tool output\""
+ },
+ "S57.35": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "/tools retry reruns the last failed call"
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "No failed tool call in this session to retry."
+   }
+  ],
+  "needs": "a Free account or paid account with a model; a way to make a tool call fail",
+  "note": "The code shows the user-side retry (/tools retry). The failed-state mark is in apps/cli/src/tui/tui_app.rs (\"\u2717\" for TranscriptCellState::Failed). I did not confirm from the code that the error text is sent back to the model on its own, only that the retry prompt is built from the failed call; Expected's 'error goes back to the model' is therefore unverified.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi and ask the assistant for a tool call that fails (for example reading a file that does not exist).",
+   "Look for the failed call in the transcript; its state shows as a red failed mark with the error.",
+   "Type /tools retry and press Enter. The assistant is sent a prompt to run the failed call again and report the result.",
+   "If no call failed, look for the message \"No failed tool call in this session to retry.\" Compare with Expected: the error is shown, and the retry runs."
+  ],
+  "where": "agi (chat screen), then type /tools retry; the list shown by \"/tools\" says \"/tools retry reruns the last failed call\""
+ },
+ "S57.36": {
+  "labels": [
+   {
+    "file": "apps/cli/src/features/exec/tools/common/mod.rs",
+    "text": "[full output saved for the user to"
+   }
+  ],
+  "needs": "a Free account or paid account with a model that can run a shell command; a command with large output",
+  "note": "The code stores the output in the config folder's tool-output directory and tells the model that read_file cannot open it. The Expected line says the model can open it later, which the code contradicts; the tester should check that point against the notice text. The exact path is built at run time, so no fixed path is given.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi and ask the assistant to run a shell command that prints a very large amount of text (thousands of lines).",
+   "Look at the end of that tool result in the transcript for the notice that begins \"[full output saved for the user to\".",
+   "Open the path shown in the notice (in Finder or Terminal) and check that the full output is there.",
+   "Try asking the assistant to read that path with its file-read tool. Compare with Expected: the full text is stored and a reference is given; the code says the file-read tool cannot open it, so the reference is for the user only."
+  ],
+  "where": "agi (chat screen): a long tool result shows a notice at its end that begins \"[full output saved for the user to\" and gives a file path under the config folder's tool-output directory"
+ },
+ "S57.37": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "/tools log lists the calls made"
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "/tools log <n> shows one call in full."
+   }
+  ],
+  "needs": "a Free account or paid account with a model; the calls must be made in the same session",
+  "note": "The log reads the tool calls of the current session (session_tool_runs). The code does not show it kept after the session ends, so a tester should check whether a resumed session still lists older calls.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi and make two or three tool calls in the chat (for example a shell command and a file read).",
+   "Type /tools log and press Enter. A numbered list shows each call with its name, input and outcome.",
+   "Type /tools log 1 (or another number) and press Enter. It shows the call's name, its input as JSON, and its result, marked \"(failed)\" if it failed.",
+   "Compare with Expected: each call's tool, input and outcome can be reviewed afterwards."
+  ],
+  "where": "agi (chat screen), then type /tools log; then /tools log <n> for one call in full"
+ }
+}

@@ -1,0 +1,189 @@
+{
+ "S110.10": {
+  "labels": [],
+  "needs": "none",
+  "note": "The cited line apps/extension-vscode/src/integrations/localRuntimeClient.ts:1880 is writer hand-off code (releaseWriter, takeOverWriter), not email. Searched apps/extension-vscode/src for gmail, email, mailbox and forwarded and found no email intake, matching the plan's 'not written yet'.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S110.20": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Sessions"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/sessionRows.ts",
+    "text": "Desktop"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "AGI Code"
+   }
+  ],
+  "needs": "a session started in the desktop app in the same folder",
+  "note": "The Desktop label comes from the session origin the runtime reports. Resuming refuses with 'The developer session workspace does not match its owning local runtime' if the folder differs (packages/ui/i18n/locales/en/vscode.json). Whether a given desktop session is listed depends on the runtime, which was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Start a coding session in the desktop app for a folder, then open the same folder in VS Code.",
+   "Click the AGI Code icon in the activity bar, then click the Sessions button in the panel header.",
+   "On the Local tab, find the row labelled Desktop and click it.",
+   "Look: the earlier messages of the desktop session load in the chat, and you can send a new message that continues it."
+  ],
+  "where": "AGI Code panel > Sessions button in the panel header > Local tab > the row whose label reads Desktop"
+ },
+ "S110.21": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Remote Control"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/remote-control/remoteControlService.ts",
+    "text": "Allow this phone"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Pairing code"
+   }
+  ],
+  "needs": "a phone with the Mobile app, signed in to the same account",
+  "note": "The phone steps depend on the Mobile app, which was not checked. The pairing text is in packages/ui/i18n/locales/en/vscode.json (remote.howToPair). The cited code is in packages/platform/utils/src/remoteControl/codeRemoteController.ts and was not run.",
+  "reachable": "yes",
+  "steps": [
+   "In VS Code open the Command Palette and run Code: Remote Control.",
+   "Read the Remote Control panel: it shows a pairing QR code and a Pairing code.",
+   "On the phone, open the Mobile app, choose Pair with Desktop, and scan the code.",
+   "When the warning box asks to allow the phone, click Allow this phone.",
+   "From the phone send a new request, then check that the approval prompts appear on this computer and the result shows on the phone."
+  ],
+  "where": "Command Palette > Code: Remote Control, then the Remote Control panel shows the pairing code; on the phone, the Mobile app > Pair with Desktop"
+ },
+ "S110.22": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Continue in the Cloud"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "/cloud"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Continue in the cloud"
+   }
+  ],
+  "needs": "a signed-in account, a folder on a pushed GitHub branch, and AGI_E2B_EXECUTION=1 (per the plan)",
+  "note": "The Sessions button only shows the cloud button on the Cloud tab. The refusal texts are in apps/extension-vscode/src/features/cloud-tasks/continueInCloud.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Open a folder whose git remote is on GitHub and check out a branch that has been pushed to GitHub.",
+   "Open the AGI Code panel and run Code: Continue in the Cloud from the Command Palette, or type /cloud in the chat.",
+   "If the warning appears, read it: it asks you to check out a branch, push the branch, or open a GitHub folder.",
+   "Otherwise a cloud session opens; check that it names the repository and branch of this folder."
+  ],
+  "where": "Command Palette > Code: Continue in the Cloud, or the chat command /cloud, or Sessions > Cloud tab > Continue in the cloud button"
+ },
+ "S110.23": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/context-handoff/index.ts",
+    "text": "Bring the branch in"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Open AGI Code Session"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Cloud"
+   }
+  ],
+  "needs": "a signed-in account, a cloud session with a working branch, and AGI_E2B_EXECUTION=1 (per the plan)",
+  "note": "The item only appears when the session has a branch and a GitHub repository. The same text also appears in a message after a cloud handoff link is opened.",
+  "reachable": "yes",
+  "steps": [
+   "Run a cloud coding session that works on a branch of a GitHub repository open in this window.",
+   "Click Sessions in the AGI Code panel header, then the Cloud tab, then click that session's row.",
+   "In the list that opens, choose the item labelled Bring the branch in; its description shows the branch name.",
+   "Look: the folder moves to that branch only after you choose it, and the checkout guard runs before it changes."
+  ],
+  "where": "AGI Code panel > Sessions button > Cloud tab > click the cloud session row > Bring the branch in (or Command Palette > Code: Open AGI Code Session)"
+ },
+ "S110.24": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Show Projects"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/projects/projectActions.ts",
+    "text": "Use in this chat"
+   }
+  ],
+  "needs": "a signed-in account and a project with instructions or files",
+  "note": "The cited ChatStateManager.ts:5122 is the reference-attaching path, not the project path. The project is applied near apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:5354 (getActiveCloudProject). The CLI citation apps/cli/src/agent/chat.rs:875 was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open Code: Show Projects from the Command Palette.",
+   "Click a project that has instructions or files, then choose Use in this chat in the list that opens.",
+   "Send a message in the AGI Code chat that the project's instructions cover.",
+   "Look: the reply follows the project's instructions, and the project is shown as in use; choosing Used in this chat again stops using it."
+  ],
+  "where": "Command Palette > Code: Show Projects > click a project > Use in this chat"
+ },
+ "S110.26": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Continue with {model}"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Add credits"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Upgrade Your Plan"
+   }
+  ],
+  "needs": "an account that has used up its usage allowance",
+  "note": "The Continue with button appears only when the server names an eligible alternative model. The reset time text depends on the server, and the page the buttons open is set by the server reply.",
+  "reachable": "yes",
+  "steps": [
+   "Use up the usage allowance on the account, then send a message in the AGI Code chat.",
+   "Read the error card: it says that you have reached a usage limit and when it resets, or how long to wait.",
+   "If the card shows Continue with {model}, click it and check that the reply continues on that model in the same turn.",
+   "Otherwise click Add credits, Compare plans or See your usage, which open a web page; or run Code: Upgrade Your Plan from the Command Palette."
+  ],
+  "where": "AGI Code panel > chat: send a message when the account is at its usage limit > error card under the reply"
+ },
+ "S110.27": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Sign in and continue"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "{server} needs you to sign in again. AGI could not use it for this step."
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "AGI Code"
+   }
+  ],
+  "needs": "an MCP server that needs a sign-in, a way to expire that sign-in, and an outside account",
+  "note": "The card appears only when the runtime sends an mcp/authRequired signal during a turn (apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts). How to trigger that signal on demand was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Connect an MCP server that uses a sign-in, then ask for a task that needs it.",
+   "Let that server's sign-in expire while the task is running.",
+   "When the card appears, click Sign in and continue and finish the sign-in in the browser.",
+   "Look: the card changes to Signed in to {server}. AGI is continuing., and the interrupted turn resumes with a continue message."
+  ],
+  "where": "AGI Code panel > chat: a card appears in the chat that says {server} needs you to sign in again > click Sign in and continue"
+ }
+}

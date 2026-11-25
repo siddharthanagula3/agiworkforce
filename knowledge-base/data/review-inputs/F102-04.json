@@ -1,0 +1,558 @@
+{
+ "feature": {
+  "id": "F102-04",
+  "aliases": [
+   "Cloud code sandbox",
+   "Managed Code",
+   "Managed code sandbox",
+   "E2B sandbox",
+   "Cloud browser runtime",
+   "Cloud virtual-computer runtime",
+   "S102.08",
+   "S102.09",
+   "S102.10"
+  ],
+  "summary": "Cloud code runs in an isolated remote sandbox, but only when the server cutover flag AGI_E2B_EXECUTION is 1, a sandbox key and a compute price are set, and the plan includes AGI Code (Basic or above). A cloud browser and a cloud virtual computer do not exist; the cloud browser is declared unavailable.",
+  "purpose": {
+   "what_it_does": "Provides managed isolated sandboxes where the model runs code and where coding sessions run, billed by compute seconds. It also records that a cloud browser and a cloud computer are not built.",
+   "why_it_exists": "Running untrusted code needs isolation, metering and limits. Users without a local setup still want code execution in the cloud.",
+   "who_uses_it": "Paid users of AGI Code on the web and users whose chat uses the code-execution tool; operators who enable the sandbox.",
+   "problems_solved": [
+    "Running generated code safely away from the user's machine.",
+    "Charging for sandbox seconds and refusing when no price exists.",
+    "Keeping credentials out of the sandbox (egress proxy rules)."
+   ],
+   "use_cases": [
+    "A Basic user opens a Code session on the web and runs a repo task.",
+    "A chat turn runs a Python snippet in the sandbox when the execution tool is on.",
+    "On a deployment where the flag is off, the code session is refused with 'Managed Code is not enabled for this deployment. Use the desktop app for local code.'",
+    "A user asking the agent to drive a cloud browser gets the built-in browser or the user's own Chrome instead."
+   ]
+  },
+  "user_experience": {
+   "where_to_find_it": [
+    "Web: the Code workspace at /code and /code/[sessionId] (apps/web/app/code/[sessionId]/page.tsx); '/code/computer' titled 'Your computer \u00b7 Code' sends tasks to the user's own computer, not a cloud computer (apps/web/app/code/computer/page.tsx).",
+    "Desktop: coding sessions run locally (see F102-05, F102-06).",
+    "Visible entry label on the web nav: unknown."
+   ],
+   "prerequisites": [
+    "Signed-in account.",
+    "A plan that includes AGI Code: sandbox count above 0 and a coding-agent daily budget above 0 (billing-catalog.ts:836-839 planIncludesAgiCode); Free has 2 sandboxes but budget 0, so it does not include Code. basic and above do (budget 100 cents/day for basic).",
+    "Server: AGI_E2B_EXECUTION=1, E2B_API_KEY set and a priced compute rate (apps/web/lib/e2b/gate.ts:20-28).",
+    "Managed compute private beta not switched off (AGI_MANAGED_COMPUTE_PRIVATE_BETA; default on, apps/web/lib/managed-compute-gate.ts:55-58)."
+   ],
+   "screens_and_controls": [
+    "Code session creation (POST /api/code/sessions), network access choice (Isolated, Trusted hosts, Full internet) and extra hosts; full internet refused while credentials would enter the sandbox (cloud-code-session-open.ts:62-100)."
+   ],
+   "journey": [
+    "1. The user starts a Code session.",
+    "2. The server checks the deployment gates, workspace policy, managed-compute access and plan.",
+    "3. The server provisions a sandbox after reserving compute funds.",
+    "4. The user or agent runs code; output returns.",
+    "5. Idle sandboxes are reclaimed by a cron (vercel.json:54)."
+   ],
+   "feedback_and_outputs": [
+    "Errors: 'Managed Code is not enabled for this deployment. Use the desktop app for local code.'; 'Managed compute is temporarily unavailable. Use Local or BYOK in the meantime, or try again shortly.'; 'Your plan does not include managed Code sessions' (cloud-code-session-service.ts:1245).",
+    "Code-run route says 'Running code is not available on this deployment.' (chat code-runs route.ts:76)."
+   ],
+   "settings": [
+    "Network access, runtime id and extra hosts per session.",
+    "Server env names: AGI_E2B_EXECUTION, E2B_API_KEY, AGI_E2B_COMPUTE_MICROUSD_PER_SECOND, AGI_MANAGED_COMPUTE_PRIVATE_BETA (apps/web/.env.example:384-386, :435)."
+   ]
+  },
+  "current_implementation": {
+   "working": [
+    "Gates: cutover flag is exactly '1'; provisioning is ready only with flag, key and a resolvable compute price (gate.ts:16-28). The weaker e2bExecutionEnabled is key OR flag (gate.ts:9-14).",
+    "Session open refuses when provisioning is not ready or beta is off, then checks egress rules, harness credentials, workspace gates, managed compute access and plan (cloud-code-session-open.ts:37-200).",
+    "Runtime fails closed: refuses to provision without a compute rate or funds reservation (apps/web/lib/e2b/runtime.ts:801, :886, :941).",
+    "Chat tool loop returns 'Tool ... is not available.' for execution tools when the cutover is off (apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:2802-2808); code-runs route answers service unavailable (apps/web/app/api/chat/conversations/[id]/code-runs/route.ts:76).",
+    "Idle sandbox reclaim cron and stuck code-turn reaper (vercel.json:54, :58).",
+    "Cloud code turns run as a durable workflow (apps/web/lib/workflows/cloud-code-turn-workflow.ts:143)."
+   ],
+   "incomplete": [
+    "The brief says that with the sandbox off, code runs on the provider-native interpreter; the code only shows the execution tools becoming unavailable when the cutover is off. Provider-native fallback was not found: unknown."
+   ],
+   "disconnected_or_disabled": [
+    "Sandbox is off by default: the example environment ships AGI_E2B_EXECUTION=0 (apps/web/.env.example:384).",
+    "Cloud browser is declared but disabled: BROWSER_SESSION_CAPABILITIES.cloud has available:false and the reason 'The cloud browser is not available yet. Run this in the built-in browser, or in your own Chrome through the AGI extension.' (packages/contracts/types/src/browser-session.ts:34-59)."
+   ],
+   "not_available": [
+    "Cloud browser runtime (S102.09) and cloud virtual-computer runtime (S102.10): missing in the ledger (audit/ledger/ecosystem-capability-ledger.jsonl:3171-3172; audit/missing/102-runtime-inventory.md).",
+    "The Chrome extension's cloud agent client sends a task to a cloud agent but drives the user's own browser; it is not a cloud browser (apps/extension/src/features/computer-use/cloudAgentClient.ts:1-15).",
+    "'/code/computer' targets the user's own computer (apps/web/app/code/computer/page.tsx)."
+   ]
+  },
+  "required_behaviour": {
+   "established": [
+    {
+     "statement": "Cloud code runs in an isolated remote sandbox. Status: partial (off unless AGI_E2B_EXECUTION=1; turn it on in production).",
+     "source": "(doc: knowledge-base/data/area-briefs/102-runtime-inventory.md S102.08)"
+    },
+    {
+     "statement": "The product runs a browser in the cloud that the agent can drive. Status: missing.",
+     "source": "(doc: knowledge-base/data/area-briefs/102-runtime-inventory.md S102.09)"
+    },
+    {
+     "statement": "The product runs a virtual computer in the cloud that the agent can operate. Status: missing.",
+     "source": "(doc: knowledge-base/data/area-briefs/102-runtime-inventory.md S102.10)"
+    },
+    {
+     "statement": "Sandbox compute must be priced; provisioning fails closed otherwise.",
+     "source": "(apps/web/lib/e2b/runtime.ts:886)"
+    }
+   ],
+   "acceptance_criteria": [
+    "With AGI_E2B_EXECUTION unset or 0, opening a Code session returns the 'not enabled for this deployment' error.",
+    "With flag 1 and key but no compute rate, provisioning is not ready and no sandbox is created.",
+    "A Free-plan user is refused with 'Your plan does not include managed Code sessions'.",
+    "With everything on, a Basic user can open a session and the cap on active sessions equals the plan's sandbox count.",
+    "With the flag off, a chat turn that calls an execution tool receives 'is not available'.",
+    "The cloud browser capability reports available false with the stated reason."
+   ],
+   "inferred": [
+    "Local and own-key users keep code execution on their own computer (error text points to the desktop app) [inferred]."
+   ],
+   "proposed": [
+    "[proposed] Turn the sandbox on in production once pricing is configured, as the brief says.",
+    "[proposed] Decide whether the cloud browser and cloud computer are on the roadmap; the contract already reserves a 'cloud' browser session kind."
+   ]
+  },
+  "implementation_map": [
+   {
+    "kind": "config",
+    "name": "e2b gate",
+    "path": "apps/web/lib/e2b/gate.ts",
+    "role": "Flag, key and price checks (lines 6-28)."
+   },
+   {
+    "kind": "service",
+    "name": "e2b runtime",
+    "path": "apps/web/lib/e2b/runtime.ts",
+    "role": "Provision, reconnect, fail closed (lines 801, 886, 941)."
+   },
+   {
+    "kind": "service",
+    "name": "compute-metering",
+    "path": "apps/web/lib/e2b/compute-metering.ts",
+    "role": "Price per second; sandboxComputeIsPriceable (line 89)."
+   },
+   {
+    "kind": "service",
+    "name": "cloud-code-session-open",
+    "path": "apps/web/lib/services/cloud-code-session-open.ts",
+    "role": "Gates for opening a session (line 37)."
+   },
+   {
+    "kind": "service",
+    "name": "cloud-code-session-service",
+    "path": "apps/web/lib/services/cloud-code-session-service.ts",
+    "role": "Create session; plan and count checks (lines 1206-1260)."
+   },
+   {
+    "kind": "endpoint",
+    "name": "POST /api/code/sessions",
+    "path": "apps/web/app/api/code/sessions/route.ts",
+    "role": "Create a Code session (line 93)."
+   },
+   {
+    "kind": "endpoint",
+    "name": "POST /api/chat/conversations/[id]/code-runs",
+    "path": "apps/web/app/api/chat/conversations/[id]/code-runs/route.ts",
+    "role": "Run code from chat; cutover check line 76."
+   },
+   {
+    "kind": "service",
+    "name": "tool-loop execution tools",
+    "path": "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts",
+    "role": "Execution tool refusal when off (line 2802)."
+   },
+   {
+    "kind": "config",
+    "name": "managed-compute-gate",
+    "path": "apps/web/lib/managed-compute-gate.ts",
+    "role": "Private beta switch (line 55)."
+   },
+   {
+    "kind": "service",
+    "name": "managed-compute-access",
+    "path": "apps/web/lib/services/managed-compute-access.ts",
+    "role": "Subscription, workspace policy and spend limit for compute (line 69)."
+   },
+   {
+    "kind": "config",
+    "name": "plan product limits",
+    "path": "packages/contracts/types/src/billing-catalog.ts",
+    "role": "maxSandboxes, codeHarnessDailyCeilingCents, planIncludesAgiCode (lines 572-723, 836)."
+   },
+   {
+    "kind": "table",
+    "name": "cloud_code_sessions",
+    "path": "apps/web/lib/services/cloud-code-session-service.ts",
+    "role": "Session rows (line 834)."
+   },
+   {
+    "kind": "table",
+    "name": "cloud_code_agent_turns",
+    "path": "apps/web/lib/services/cloud-code-session-service.ts",
+    "role": "Turn rows (line 560)."
+   },
+   {
+    "kind": "job",
+    "name": "reclaim-sandboxes cron",
+    "path": "apps/web/app/api/cron/reclaim-sandboxes/route.ts",
+    "role": "Reclaims idle sandboxes; vercel.json:54."
+   },
+   {
+    "kind": "job",
+    "name": "reap-code-turns cron",
+    "path": "apps/web/app/api/cron/reap-code-turns/route.ts",
+    "role": "Ends stuck code turns."
+   },
+   {
+    "kind": "config",
+    "name": "browser session contract",
+    "path": "packages/contracts/types/src/browser-session.ts",
+    "role": "Declares cloud browser unavailable (lines 22-59)."
+   },
+   {
+    "kind": "screen",
+    "name": "Code workspace pages",
+    "path": "apps/web/app/code/[sessionId]/page.tsx",
+    "role": "Session page; /code/computer page routes to the user's own computer."
+   },
+   {
+    "kind": "integration",
+    "name": "extension cloud agent client",
+    "path": "apps/extension/src/features/computer-use/cloudAgentClient.ts",
+    "role": "Chrome extension asks a cloud agent for steps; drives the local browser."
+   },
+   {
+    "kind": "config",
+    "name": "env example",
+    "path": "apps/web/.env.example",
+    "role": "Ships AGI_E2B_EXECUTION=0 (line 384)."
+   }
+  ],
+  "execution_and_data_flow": {
+   "steps": [
+    {
+     "what_happens": "The web client asks to open a session.",
+     "runs_on": "device",
+     "evidence": "(apps/web/app/api/code/sessions/route.ts:93)"
+    },
+    {
+     "what_happens": "The server checks deployment gates, workspace policy, plan and spend.",
+     "runs_on": "our servers",
+     "evidence": "(cloud-code-session-open.ts:44-200)"
+    },
+    {
+     "what_happens": "The server reserves compute funds and creates the remote sandbox through the sandbox vendor.",
+     "runs_on": "outside service",
+     "evidence": "(lib/e2b/runtime.ts:886-941)"
+    },
+    {
+     "what_happens": "Code runs in the sandbox; provider credentials stay behind an egress proxy.",
+     "runs_on": "outside service",
+     "evidence": "(cloud-code-session-open.ts:62-80; lib/e2b/provider-proxy.ts)"
+    },
+    {
+     "what_happens": "Results return to the server and client; sandbox seconds are settled.",
+     "runs_on": "our servers",
+     "evidence": "(lib/e2b/compute-metering.ts)"
+    }
+   ],
+   "data": [
+    {
+     "what": "Session and turn rows",
+     "where_stored": "tables cloud_code_sessions, cloud_code_agent_turns",
+     "synced": "Server data",
+     "retained_or_deleted": "unknown"
+    },
+    {
+     "what": "Files inside the sandbox",
+     "where_stored": "the remote sandbox",
+     "synced": "No",
+     "retained_or_deleted": "Reclaimed by cron when idle (vercel.json:54)"
+    }
+   ],
+   "models_and_providers": "Sandboxes come from one outside sandbox vendor (named in code only as E2B). Model calls from a coding agent inside the sandbox go through a provider proxy keyed per session (lib/e2b/provider-proxy*.ts); which harnesses have managed credentials is checked at open (cloud-code-session-open.ts:84-100)."
+  },
+  "access_and_usage": {
+   "account": "Signed in.",
+   "permissions": "Workspace code policy and feature gate (cloud-code-session-open.ts:107-130).",
+   "subscription": "planIncludesAgiCode: plan:basic and above; Free refused (billing-catalog.ts:836-839; cloud-code-session-service.ts:1244). Subscription access check allows Free and missing subscriptions at that layer and blocks inactive paid ones (managed-compute-access.ts:69-100).",
+   "limits_and_metering": "Active sandboxes per plan (free 2, basic 5, pro 10, max and max_15x the managed cap), daily coding-agent budget per plan (basic 100, pro 500, max 2500, max_15x 7500 cents); compute seconds priced and reserved.",
+   "flags": "AGI_E2B_EXECUTION, E2B_API_KEY, AGI_E2B_COMPUTE_MICROUSD_PER_SECOND, AGI_MANAGED_COMPUTE_PRIVATE_BETA.",
+   "model_compatibility": "unknown for the in-sandbox coding agent beyond the harness list.",
+   "provider_restrictions": "Harness credentials must be available or the user brings a key (cloud-code-session-open.ts:84-100).",
+   "local_mode": "Not available: the error tells local users to use the desktop app for local code."
+  },
+  "states_and_edge_cases": [
+   {
+    "state": "Sandbox disabled",
+    "behaviour": "Capability-unavailable error; chat execution tools report not available.",
+    "evidence": "(cloud-code-session-open.ts:44-48; tool-loop.ts:2802)"
+   },
+   {
+    "state": "No compute price",
+    "behaviour": "Provisioning refused, logged as fail-closed.",
+    "evidence": "(runtime.ts:801, :886)"
+   },
+   {
+    "state": "Funds cannot be reserved",
+    "behaviour": "Refused.",
+    "evidence": "(runtime.ts:941)"
+   },
+   {
+    "state": "Network access needs proxy",
+    "behaviour": "HTTP 422 with a plain message.",
+    "evidence": "(cloud-code-session-open.ts:70-80)"
+   },
+   {
+    "state": "Plan limit reached",
+    "behaviour": "CloudCodeLimitError with count message.",
+    "evidence": "(cloud-code-session-service.ts:1243-1260)"
+   },
+   {
+    "state": "Cloud browser requested",
+    "behaviour": "Unavailable with stated reason.",
+    "evidence": "(browser-session.ts:34-59)"
+   },
+   {
+    "state": "Offline / reconnect",
+    "behaviour": "A resumed sandbox interval is limited to what its hold still funds (runtime.ts:~895-935).",
+    "evidence": "(runtime.ts:~895-935)"
+   },
+   {
+    "state": "Accessibility",
+    "behaviour": "unknown",
+    "evidence": "not read"
+   }
+  ],
+  "verification": {
+   "existing_tests": [
+    {
+     "path": "apps/web/lib/e2b/__tests__/gate.test.ts",
+     "covers": "The gates."
+    },
+    {
+     "path": "apps/web/lib/e2b/__tests__/runtime.test.ts",
+     "covers": "Sandbox runtime."
+    },
+    {
+     "path": "apps/web/lib/e2b/__tests__/sandbox-provision-refusal.test.ts",
+     "covers": "Fail-closed provisioning."
+    },
+    {
+     "path": "apps/web/lib/e2b/__tests__/compute-metering.test.ts",
+     "covers": "Compute metering."
+    },
+    {
+     "path": "apps/web/lib/e2b/__tests__/network-policy.test.ts",
+     "covers": "Network policy."
+    },
+    {
+     "path": "apps/web/lib/services/__tests__/managed-compute-access.test.ts",
+     "covers": "Managed compute access."
+    },
+    {
+     "path": "apps/web/app/api/code/sessions/route.test.ts",
+     "covers": "Create session route."
+    },
+    {
+     "path": "apps/extension/__tests__/computer-use-cloud-errors.test.ts",
+     "covers": "Extension cloud agent errors."
+    }
+   ],
+   "scenarios": [
+    {
+     "name": "Flag off",
+     "steps": [
+      "Use the shipped example env (flag 0).",
+      "Try to open a Code session."
+     ],
+     "expected": "Error 'Managed Code is not enabled for this deployment...'."
+    },
+    {
+     "name": "No price",
+     "steps": [
+      "Set flag 1 and a key but no compute rate.",
+      "Open a session."
+     ],
+     "expected": "Not ready; refused; no sandbox created."
+    },
+    {
+     "name": "Plan",
+     "steps": [
+      "Enable everything on a test deployment.",
+      "Open a session as Free, then as Basic."
+     ],
+     "expected": "Free refused with plan message; Basic opens."
+    },
+    {
+     "name": "Execution tool off",
+     "steps": [
+      "With flag 0, ask chat to run code with the execution tool declared."
+     ],
+     "expected": "Tool result 'is not available' and the model explains."
+    },
+    {
+     "name": "Cloud browser",
+     "steps": [
+      "Read the browser session capability for kind cloud."
+     ],
+     "expected": "available false with the unavailable reason."
+    }
+   ],
+   "diagnostics": [
+    "Logs: '[e2b] sandbox compute has no configured price; refusing to provision (fail-closed)', '[e2b] refusing widened egress'.",
+    "Tables: cloud_code_sessions, cloud_code_agent_turns.",
+    "Cron: reclaim-sandboxes, reap-code-turns."
+   ]
+  },
+  "gaps": [
+   {
+    "gap": "Sandbox is off by default and the brief asks to turn it on in production.",
+    "affects": "Web users of Code and chat code execution.",
+    "evidence": "(.env.example:384; brief S102.08)",
+    "work_needed": "Configure price, key and flag in production; run a live check."
+   },
+   {
+    "gap": "Brief's provider-native interpreter fallback not found.",
+    "affects": "Chat code execution when the sandbox is off.",
+    "evidence": "(tool-loop.ts:2802)",
+    "work_needed": "Confirm whether a native interpreter path exists."
+   },
+   {
+    "gap": "No cloud browser runtime.",
+    "affects": "Web users and all apps wanting a browser that survives disconnect.",
+    "evidence": "(browser-session.ts:52-59; ledger S102.09)",
+    "work_needed": "Build a runtime, session lifecycle, metering and entitlement."
+   },
+   {
+    "gap": "No cloud virtual computer runtime.",
+    "affects": "Web users.",
+    "evidence": "(ledger S102.10)",
+    "work_needed": "Same as above."
+   }
+  ],
+  "depends_on": [
+   "SYS-execution-boundaries",
+   "SYS-subscriptions-entitlements-and-usage",
+   "SYS-security-and-privacy",
+   "SYS-agents-tools-and-automation",
+   "SYS-authorization-and-workspaces",
+   "surface:web",
+   "surface:chrome",
+   "mode:cloud",
+   "plan:basic",
+   "plan:free",
+   "table:cloud_code_sessions",
+   "file:apps/web/lib/e2b/gate.ts",
+   "F102-02"
+  ],
+  "relationships": [
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/web/lib/e2b/gate.ts",
+    "evidence": "lines 6-28"
+   },
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/web/lib/services/cloud-code-session-open.ts",
+    "evidence": "line 37"
+   },
+   {
+    "rel": "exposes_api",
+    "to": "api:POST /api/code/sessions",
+    "evidence": "apps/web/app/api/code/sessions/route.ts:93"
+   },
+   {
+    "rel": "exposes_api",
+    "to": "api:POST /api/chat/conversations/[id]/code-runs",
+    "evidence": "code-runs/route.ts:217"
+   },
+   {
+    "rel": "configured_by",
+    "to": "file:apps/web/.env.example",
+    "evidence": "AGI_E2B_EXECUTION=0 at line 384"
+   },
+   {
+    "rel": "stores_data_in",
+    "to": "table:cloud_code_sessions",
+    "evidence": "cloud-code-session-service.ts:834"
+   },
+   {
+    "rel": "governed_by_subscription",
+    "to": "plan:basic",
+    "evidence": "planIncludesAgiCode (billing-catalog.ts:836-839)"
+   },
+   {
+    "rel": "governed_by_subscription",
+    "to": "plan:free",
+    "evidence": "Free budget 0, session refused (cloud-code-session-service.ts:1244)"
+   },
+   {
+    "rel": "blocked_by",
+    "to": "file:apps/web/.env.example",
+    "evidence": "flag off by default"
+   },
+   {
+    "rel": "blocked_by",
+    "to": "SYS-execution-boundaries",
+    "evidence": "no cloud browser or computer runtime (browser-session.ts:52-59)"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:web",
+    "evidence": "apps/web/app/code"
+   },
+   {
+    "rel": "depends_on",
+    "to": "F102-02",
+    "evidence": "cloud code turns are durable workflows (cloud-code-turn-workflow.ts:143)"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/web/lib/e2b/__tests__/gate.test.ts",
+    "evidence": "file exists"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/extension/__tests__/computer-use-cloud-errors.test.ts",
+    "evidence": "file exists"
+   }
+  ],
+  "unknowns": [
+   "Whether a provider-native code interpreter exists as fallback.",
+   "Visible label of the Code entry in the web navigation.",
+   "Whether the sandbox vendor is configured in production.",
+   "Compute price value (deliberately not recorded).",
+   "Whether desktop or mobile show any cloud code entry: not found.",
+   "Brief line apps/web/lib/e2b/runtime.ts:889 differs from the lines found (801, 886, 941)."
+  ]
+ },
+ "corrections": [
+  {
+   "section": "3/2",
+   "claim": "Session open refuses when provisioning is not ready or beta is off, then checks egress rules, harness credentials, workspace gates, managed compute access and plan (cloud-code-session-open.ts:37-200)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "Order is right, but the plan check is not in cloud-code-session-open.ts; it is inside createCloudCodeSession (transaction) in cloud-code-session-service.ts:1243-1245 using the entitlement plan passed in.",
+   "evidence": "cloud-code-session-open.ts:37-45, 137-155; cloud-code-session-service.ts:1243-1245",
+   "correction": "Open checks gates, egress, harness credential, workspace code gates, then managed-compute access; the plan (planIncludesAgiCode) and active-session count are enforced afterwards in createCloudCodeSession."
+  },
+  {
+   "section": "3",
+   "claim": "'/code/computer' targets the user's own computer, not a cloud computer; extension cloudAgentClient drives the user's own browser",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "/code/computer page description is 'Send a task to Cloud on your own computer', title 'Your computer \u00b7 Code' (confirmed). The cloudAgentClient.ts head (lines 1-20) imports the managed chat routing/free-trial client and shows no statement that it drives a local browser; the 'not a cloud browser' reading rests on lines 1-15 which only show imports, so the citation does not support it.",
+   "evidence": "apps/web/app/code/computer/page.tsx:5-6; apps/extension/src/features/computer-use/cloudAgentClient.ts:1-20",
+   "correction": "Keep the /code/computer claim; for the extension, cite where tool calls are returned to the local browser (e.g. toolHandoff usage), not lines 1-15."
+  }
+ ],
+ "missing_facts": [
+  "Free plan has maxSandboxes 2 but is refused Code; yet the chat code tool also uses a sandbox, and the page does not say which plans may use the chat execution tool (gate is only e2bCutoverEnabled in tool-loop.ts:2802 and code-runs/route.ts:76, with no planIncludesAgiCode check there) - billing-catalog.ts:834-839 comment says 'the chat code tool uses one too'.",
+  "The managed sandbox cap value is 20 (MAX_MANAGED_SANDBOXES_PER_USER) and per-plan sandbox TTL (sandboxTtlMs, e.g. Free 60 minutes) is a limit the page omits: billing-catalog.ts:473, 626.",
+  "Workspace policy gates run per extra egress host (reach_host) in addition to open_cloud_session: cloud-code-session-open.ts:124-135."
+ ]
+}

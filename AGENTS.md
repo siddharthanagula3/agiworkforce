@@ -8,7 +8,7 @@ The canonical, tool-neutral operating contract for every coding agent in this
 repository. `CLAUDE.md` is a thin adapter and may not weaken it. Path-scoped
 rules live in `.claude/rules/`; machine-readable ownership lives in
 `docs/agent-context/lanes.json`. This file states rules; every mutable value
-points to the thing that enforces it.
+points to its enforcer. How to work: `docs/standards/working-method.md`.
 
 ## 1. Verification
 
@@ -25,7 +25,6 @@ points to the thing that enforces it.
   counted as the product's, a check that passed over an input it never read.
 - **A second opinion sharing the first one's question is not independent.**
   Verification catches fabrication, not a premise both parties assumed.
-- **Working method:** follow `docs/standards/working-method.md` on every task.
 
 ## 2. Source-of-truth precedence
 
@@ -210,6 +209,7 @@ contradictory copies. Git carries history; the live tree does not.
 | Machine-readable agent context  | `docs/agent-context/`                 |
 | Temporary operational work      | `docs/work/`                          |
 | Audits, gaps, open product work | `audit/` only; read `audit/README.md` |
+| Product and feature reference   | `knowledge-base/`; read its README    |
 | Released user-facing change     | `CHANGELOG.md`                        |
 | Historical detail               | Git                                   |
 

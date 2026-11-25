@@ -1,0 +1,545 @@
+{
+ "feature": {
+  "id": "F035-09",
+  "aliases": [
+   "Export report",
+   "Download report",
+   "Save to library",
+   "Report to artifact",
+   "Convert report",
+   "Interactive page from report",
+   "Slides conversion (S35.29)",
+   "Audio overview (S35.30)",
+   "Interactive page (S35.31)"
+  ],
+  "summary": "Gets a report out of the app. Web has Markdown, PDF and Word buttons, plus Artifact, Project and Library buttons. Mobile has Download, Share and Save to Library in its report menu. Interactive pages come from a chat request routed to Artifacts, not from the reader. Slides and audio overview are not built.",
+  "purpose": {
+   "what_it_does": "Builds one markdown document from the report and hands it to the document export service (web) or the artifact export sheet (mobile), or saves it as an artifact, project source or library file.",
+   "why_it_exists": "Reports are work products people share, print and reuse outside the chat.",
+   "who_uses_it": "People who finished a Deep Research run.",
+   "problems_solved": [
+    "Sharing a cited report as a normal file.",
+    "Keeping a report beyond its conversation.",
+    "Turning findings into a visual or interactive page."
+   ],
+   "use_cases": [
+    "Export as Word to send to a colleague.",
+    "Save the report to a project so later chats can use it.",
+    "Ask in chat for an interactive visualization of the findings.",
+    "Share the report text from the phone."
+   ]
+  },
+  "user_experience": {
+   "where_to_find_it": [
+    "Web report header buttons 'Markdown', 'PDF', 'Word' (aria-label 'Export report as ...'), 'Artifact', 'Project' (when projects exist), 'Library' (ResearchReportView.tsx:133-137,366-434).",
+    "Mobile: report 'More report actions' menu: 'Download', 'Share', 'Save to Library' (ReportsScreen.tsx:343-351).",
+    "Interactive page: any chat composer on web, by wording (ChatComposerNew.tsx; WebChatPage.tsx:4435).",
+    "CLI, VS Code, Chrome: not available."
+   ],
+   "prerequisites": [
+    "A report with content. Mobile hides Download, Share and Save to Library when the report has no content (ReportsScreen.tsx:340-352).",
+    "Mobile Save to Library needs a cloud account epoch (ReportsScreen.tsx:351).",
+    "Artifact button appears only where a host supplies it: the Report tab (ResearchPanel.tsx:308), not the Library detail."
+   ],
+   "screens_and_controls": [
+    "Web export buttons disabled while one export runs.",
+    "Mobile export sheet offers PDF, Markdown, Word and Plain text for research (apps/mobile/src/features/chat/utils/artifactExport.ts:61-97)."
+   ],
+   "journey": [
+    "Open a report.",
+    "Press Markdown, PDF or Word; the browser downloads the file named from the title.",
+    "Or press Artifact; the report opens as a document in the artifacts panel and the research panel closes.",
+    "Or press Project and pick a project; the report becomes one of its sources.",
+    "For an interactive page, type a request such as 'turn this into an interactive page' in chat."
+   ],
+   "feedback_and_outputs": [
+    "Export failure shows a red alert with the error or 'Export failed' (ResearchReportView.tsx:272-275,465-472).",
+    "Project save: 'Saved to <project>. It is one of that project's sources now.'",
+    "Mobile: Alert 'Download failed' / 'Saved to Library' / 'Could not save to Library'."
+   ],
+   "settings": [
+    "None found."
+   ]
+  },
+  "current_implementation": {
+   "working": [
+    "Web export: markdown with front matter (status, sources, generated), PDF and DOCX built in the browser from the markdown blocks (apps/web/features/chat/services/document-export-service.ts:12-60; ResearchReportView.tsx:259-280).",
+    "Report to markdown includes title, summary, key findings, body, numbered Sources (packages/ui/unified-chat/src/lib/research-report.ts:13-36).",
+    "Artifact hand-off in the Report tab (ResearchPanel.tsx:232-248).",
+    "Save to project uses the project-knowledge upload (ResearchReportView.tsx:139-141,282-300).",
+    "Mobile Download, Share, Save to Library are wired (ReportsScreen.tsx:343-351,499-504).",
+    "Visual requests are classified to Artifacts by phrases like 'interactive visualization' and 'interactive page' (apps/web/features/chat/lib/visual-intent.ts:104-122,210-230)."
+   ],
+   "incomplete": [
+    "Interactive page is a chat request with no report attached by the reader; the composer does not carry the report text unless the person writes it (visual-intent.ts classifies only the prompt).",
+    "The 'Artifact' button makes a markdown document artifact, not an interactive page (research-report.ts:70-76)."
+   ],
+   "disconnected_or_disabled": [
+    "Web 'Library' button exists in ResearchReportView but no host passes onSaveToLibrary; grep found it only in ResearchReportView.tsx and tests, so the button never shows in the app (ResearchReportView.tsx:379; ResearchPanel.tsx:306-311).",
+    "Briefs says mobile export missing; the code has it (ReportsScreen.tsx:343-351). Code wins by source rank."
+   ],
+   "not_available": [
+    "Slides from a report: not built (brief S35.29). Slide-related helpers exist in packages/ui/unified-chat/src/lib (deck-model.ts, presentation-slides.ts) but nothing connects them to a report; connection status beyond file names unknown.",
+    "Audio overview: not built (brief S35.30).",
+    "Export on CLI, VS Code, Chrome: not available."
+   ]
+  },
+  "required_behaviour": {
+   "established": [
+    {
+     "statement": "The user can export a research report (PDF, Word, Markdown).",
+     "source": "brief S35.28"
+    },
+    {
+     "statement": "Convert report to slides: not built.",
+     "source": "brief S35.29"
+    },
+    {
+     "statement": "Convert report to audio overview: not built.",
+     "source": "brief S35.30"
+    },
+    {
+     "statement": "Convert report to interactive page: visual requests recognised by phrases and routed to Artifacts.",
+     "source": "brief S35.31"
+    },
+    {
+     "statement": "Export runs in the browser through the shared document export service; failure shows text, not silence.",
+     "source": "ResearchReportView.tsx:273-275"
+    }
+   ],
+   "acceptance_criteria": [
+    "Markdown export downloads a .md file with front matter and numbered Sources.",
+    "PDF and Word exports download files named from the title.",
+    "A failing export shows 'Export failed' or the error text in an alert.",
+    "Artifact button creates a document artifact and closes the research panel.",
+    "Project menu lists the user's projects and saves one markdown file.",
+    "Mobile Download offers formats and shares the file.",
+    "Typing 'interactive visualization of this' routes to Artifacts, not image generation.",
+    "Slides and audio controls do not exist."
+   ],
+   "inferred": [
+    "The Library button was meant to appear in the Report tab; the hosting code does not supply it [inferred].",
+    "Interactive page conversion should carry the report text; today it does not [inferred]."
+   ],
+   "proposed": [
+    "[proposed] Pass an onSaveToLibrary from the web app or remove the dead button.",
+    "[proposed] Add a reader button 'Interactive page' that sends the report with the visual request.",
+    "[proposed] Slides and audio overview built on the existing slide model and voice system."
+   ]
+  },
+  "implementation_map": [
+   {
+    "kind": "component",
+    "name": "ResearchReportView export controls",
+    "path": "apps/web/features/chat/components/research/ResearchReportView.tsx",
+    "role": "Export, artifact, project, library buttons and error display"
+   },
+   {
+    "kind": "service",
+    "name": "document-export-service",
+    "path": "apps/web/features/chat/services/document-export-service.ts",
+    "role": "Markdown, PDF, DOCX download"
+   },
+   {
+    "kind": "service",
+    "name": "researchReportToMarkdown",
+    "path": "packages/ui/unified-chat/src/lib/research-report.ts",
+    "role": "Single markdown document from a report"
+   },
+   {
+    "kind": "service",
+    "name": "markdown-document",
+    "path": "packages/ui/unified-chat/src/lib/markdown-document.ts",
+    "role": "Turns markdown into document blocks (imported by the export service)"
+   },
+   {
+    "kind": "store",
+    "name": "useArtifactsStore",
+    "path": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "role": "Receives the report as a document artifact"
+   },
+   {
+    "kind": "service",
+    "name": "uploadProjectKnowledgeFile",
+    "path": "apps/web/features/projects/services/project-knowledge-upload.ts",
+    "role": "Saves report into a project"
+   },
+   {
+    "kind": "service",
+    "name": "visual-intent",
+    "path": "apps/web/features/chat/lib/visual-intent.ts",
+    "role": "Phrase lists and artifact vs image decision"
+   },
+   {
+    "kind": "service",
+    "name": "structuredVisualArtifact",
+    "path": "apps/web/features/chat/components/artifacts/structuredVisualArtifact.ts",
+    "role": "routeVisualRequest to Artifacts"
+   },
+   {
+    "kind": "component",
+    "name": "ChatComposerNew routing",
+    "path": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "role": "Calls routeVisualRequest at send"
+   },
+   {
+    "kind": "screen",
+    "name": "WebChatPage routing",
+    "path": "apps/web/features/chat/pages/WebChatPage.tsx",
+    "role": "Calls routeVisualRequest at send"
+   },
+   {
+    "kind": "component",
+    "name": "ArtifactExportSheet",
+    "path": "apps/mobile/src/features/chat/components/ArtifactExportSheet.tsx",
+    "role": "Mobile export format sheet"
+   },
+   {
+    "kind": "service",
+    "name": "artifactExport",
+    "path": "apps/mobile/src/features/chat/utils/artifactExport.ts",
+    "role": "Format options and file creation"
+   },
+   {
+    "kind": "screen",
+    "name": "ReportsScreen actions",
+    "path": "apps/mobile/src/features/research/ReportsScreen.tsx",
+    "role": "Download, Share, Save to Library"
+   },
+   {
+    "kind": "service",
+    "name": "saveArtifactToLibrary",
+    "path": "apps/mobile/src/features/artifacts/libraryService.ts",
+    "role": "Mobile library save"
+   },
+   {
+    "kind": "component",
+    "name": "Tauri ResearchReport PDF export",
+    "path": "apps/desktop/src/features/research/ResearchReport.tsx",
+    "role": "Separate internal PDF export and copy"
+   }
+  ],
+  "execution_and_data_flow": {
+   "steps": [
+    {
+     "what_happens": "Report converted to markdown in the browser; PDF or DOCX built in the browser and downloaded.",
+     "runs_on": "device",
+     "evidence": "ResearchReportView.tsx:210,259-271; document-export-service.ts:30-60"
+    },
+    {
+     "what_happens": "Save to project uploads the markdown file to the project knowledge store.",
+     "runs_on": "our servers",
+     "evidence": "ResearchReportView.tsx:139-141 (uploadProjectKnowledgeFile)"
+    },
+    {
+     "what_happens": "Artifact hand-off stays in the browser store.",
+     "runs_on": "device",
+     "evidence": "ResearchPanel.tsx:232-247"
+    },
+    {
+     "what_happens": "Interactive page request: classifier decides artifact vs image locally, then the turn goes to the model for generation.",
+     "runs_on": "device and our servers",
+     "evidence": "visual-intent.ts:210-230; WebChatPage.tsx:4435"
+    },
+    {
+     "what_happens": "Mobile builds the file on the device and opens the share sheet; Save to Library writes through the library service.",
+     "runs_on": "device",
+     "evidence": "ArtifactExportSheet.tsx:51-56; ReportsScreen.tsx:343-351"
+    }
+   ],
+   "data": [
+    {
+     "what": "Exported file",
+     "where_stored": "User's device downloads or share target",
+     "synced": "No",
+     "retained_or_deleted": "Owned by the user"
+    },
+    {
+     "what": "Report saved to a project",
+     "where_stored": "Project knowledge files",
+     "synced": "Project storage; details in SYS-files-artifacts-and-storage",
+     "retained_or_deleted": "Project rules; unknown here"
+    },
+    {
+     "what": "Artifact copy",
+     "where_stored": "Browser artifact store",
+     "synced": "Unknown",
+     "retained_or_deleted": "Unknown"
+    }
+   ],
+   "models_and_providers": "Export uses no model. Interactive page generation uses the model chosen for the chat turn; the router itself is provider-neutral."
+  },
+  "access_and_usage": {
+   "account": "Signed in on web; mobile Library save needs a cloud account.",
+   "permissions": "Project save uses the project's own permissions (not read).",
+   "subscription": "No plan check found in export code. Interactive page generation is an ordinary chat turn metered normally.",
+   "limits_and_metering": "None found for export. Chat turn metering for interactive pages not examined: unknown.",
+   "flags": "Mobile FEATURES.research for the screen.",
+   "model_compatibility": "Not applicable for export.",
+   "provider_restrictions": "None found for export.",
+   "local_mode": "Export of an already-loaded report works on the device. Reports exist only in Cloud, so Local mode on mobile cannot reach the screen (ReportsScreen.tsx:532)."
+  },
+  "states_and_edge_cases": [
+   {
+    "state": "Export running",
+    "behaviour": "All export buttons disabled until done",
+    "evidence": "ResearchReportView.tsx:426"
+   },
+   {
+    "state": "Export error",
+    "behaviour": "role=alert text",
+    "evidence": "ResearchReportView.tsx:465-472"
+   },
+   {
+    "state": "Save to project error",
+    "behaviour": "Alert 'That report could not be saved to the project'",
+    "evidence": "ResearchReportView.tsx:294"
+   },
+   {
+    "state": "No projects",
+    "behaviour": "Project button not shown",
+    "evidence": "ResearchReportView.tsx:393"
+   },
+   {
+    "state": "Mobile empty content",
+    "behaviour": "Download and Share hidden",
+    "evidence": "ReportsScreen.tsx:340-352"
+   },
+   {
+    "state": "Mobile export failure",
+    "behaviour": "Alert 'Download failed'",
+    "evidence": "ArtifactExportSheet.tsx:58"
+   },
+   {
+    "state": "Charts in exports",
+    "behaviour": "unknown",
+    "evidence": "not established"
+   },
+   {
+    "state": "Offline",
+    "behaviour": "Web export is local and works; project save fails with message",
+    "evidence": "ResearchReportView.tsx:272-275,293-295"
+   }
+  ],
+  "verification": {
+   "existing_tests": [
+    {
+     "path": "apps/web/features/chat/components/research/ResearchReportView.test.tsx",
+     "covers": "Export call with assembled markdown, formats, failure alert"
+    },
+    {
+     "path": "apps/web/features/chat/components/research/ResearchReportView.projectSave.test.tsx",
+     "covers": "Save to project"
+    },
+    {
+     "path": "apps/web/features/chat/components/research/ResearchPanel.artifact.test.tsx",
+     "covers": "Artifact hand-off"
+    },
+    {
+     "path": "apps/web/features/chat/__tests__/visual-intent-router.test.ts",
+     "covers": "Artifact vs image routing"
+    },
+    {
+     "path": "packages/ui/unified-chat/src/lib/research-report.test.ts",
+     "covers": "Markdown, artifact input, filename"
+    },
+    {
+     "path": "apps/mobile/src/features/chat/components/__tests__/ArtifactExportSheet.test.tsx",
+     "covers": "Mobile export sheet"
+    },
+    {
+     "path": "apps/mobile/src/features/research/__tests__/ReportsScreenActions.test.tsx",
+     "covers": "Mobile report actions"
+    }
+   ],
+   "scenarios": [
+    {
+     "name": "Export all formats",
+     "steps": [
+      "Open a report",
+      "Press Markdown, PDF, Word"
+     ],
+     "expected": "Three files download; open each and check title, text, sources."
+    },
+    {
+     "name": "Export failure",
+     "steps": [
+      "Force the export service to throw (test)"
+     ],
+     "expected": "Alert shows 'Export failed' or the error."
+    },
+    {
+     "name": "Charts in files",
+     "steps": [
+      "Export a report containing a mermaid block as PDF"
+     ],
+     "expected": "Unknown; record what appears."
+    },
+    {
+     "name": "Interactive request",
+     "steps": [
+      "Type 'make an interactive visualization of these findings' in chat"
+     ],
+     "expected": "Routed to Artifacts, not image generation."
+    },
+    {
+     "name": "Library button",
+     "steps": [
+      "Open Report tab"
+     ],
+     "expected": "No 'Library' button (disconnected)."
+    },
+    {
+     "name": "Mobile menu",
+     "steps": [
+      "Open a report on mobile",
+      "Open More report actions"
+     ],
+     "expected": "Download, Share, Save to Library, Report this research report."
+    }
+   ],
+   "diagnostics": [
+    "Alert text in the report view.",
+    "Mobile Alert titles 'Download failed' and 'Could not save to Library'.",
+    "Artifact store in browser devtools."
+   ]
+  },
+  "gaps": [
+   {
+    "gap": "Library button is never shown on web",
+    "affects": "Web",
+    "evidence": "No caller passes onSaveToLibrary (ResearchPanel.tsx:306-311; ResearchReportsGallery.tsx:176)",
+    "work_needed": "Wire it to the library write path or delete the dead control."
+   },
+   {
+    "gap": "Brief says mobile export missing but code has it",
+    "affects": "Brief accuracy",
+    "evidence": "ReportsScreen.tsx:343-351",
+    "work_needed": "Update brief status after a device check."
+   },
+   {
+    "gap": "Interactive page is not a reader action and does not carry the report",
+    "affects": "Web, public Desktop",
+    "evidence": "visual-intent.ts classifies prompt only",
+    "work_needed": "Add reader action that sends report plus request."
+   },
+   {
+    "gap": "Slides and audio overview not built",
+    "affects": "All apps",
+    "evidence": "briefs S35.29, S35.30",
+    "work_needed": "Product decision, then build."
+   },
+   {
+    "gap": "Charts in PDF/Word unverified",
+    "affects": "Web",
+    "evidence": "Not found in export path",
+    "work_needed": "Test and implement."
+   }
+  ],
+  "depends_on": [
+   "surface:web",
+   "surface:desktop",
+   "surface:mobile",
+   "SYS-files-artifacts-and-storage",
+   "SYS-memory-projects-and-context",
+   "SYS-voice-and-media",
+   "F035-07",
+   "mode:cloud"
+  ],
+  "relationships": [
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/web/features/chat/services/document-export-service.ts",
+    "evidence": "Imported at ResearchReportView.tsx:48"
+   },
+   {
+    "rel": "implemented_by",
+    "to": "file:packages/ui/unified-chat/src/lib/research-report.ts",
+    "evidence": "researchReportToMarkdown"
+   },
+   {
+    "rel": "depends_on",
+    "to": "SYS-files-artifacts-and-storage",
+    "evidence": "Artifact and project upload paths"
+   },
+   {
+    "rel": "depends_on",
+    "to": "F035-07",
+    "evidence": "Buttons live in the reader header"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:web",
+    "evidence": "ResearchReportView.tsx:420-434"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:mobile",
+    "evidence": "ReportsScreen.tsx:343-351"
+   },
+   {
+    "rel": "stores_data_in",
+    "to": "store:artifacts store",
+    "evidence": "useArtifactsStore.addArtifact (ResearchPanel.tsx:234)"
+   },
+   {
+    "rel": "depends_on",
+    "to": "SYS-agents-tools-and-automation",
+    "evidence": "Interactive pages come from the Artifacts generation turn"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/web/features/chat/components/research/ResearchReportView.projectSave.test.tsx",
+    "evidence": "Exists"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/web/features/chat/__tests__/visual-intent-router.test.ts",
+    "evidence": "Exists"
+   },
+   {
+    "rel": "blocked_by",
+    "to": "mode:local",
+    "evidence": "Reports reachable only in Cloud on mobile"
+   }
+  ],
+  "unknowns": [
+   "Whether PDF and Word exports render mermaid charts.",
+   "Whether the slide helpers in unified-chat are connected to anything.",
+   "Where the artifact copy is persisted.",
+   "Whether interactive page generation is plan-gated.",
+   "Web export file naming collisions: not examined."
+  ]
+ },
+ "corrections": [
+  {
+   "section": "3",
+   "claim": "Visual requests are classified to Artifacts by phrases like 'interactive visualization' and 'interactive page' (visual-intent.ts:104-122,210-230)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "'interactive page' is in both INTERACTIVE_SIGNALS and EXPLICIT_ARTIFACT_DESTINATION_SIGNALS. 'interactive visualization' is only in the first list. WebChatPage only calls routeVisualRequest when classifyTaskLocally returns image_generation or explicitlyRequestsArtifact is true, so 'interactive visualization' alone is not guaranteed to route. The page does not mention this gate.",
+   "evidence": "visual-intent.ts:104-122,175-177; WebChatPage.tsx:4421-4435",
+   "correction": "'interactive page' and similar phrases route to Artifacts directly. 'interactive visualization' routes only if the local task classifier first tags the prompt as image generation. Acceptance criterion 7 is not guaranteed."
+  },
+  {
+   "section": "5",
+   "claim": "markdown-document service at packages/ui/unified-chat/src/lib/markdown-document.ts (not found)",
+   "verdict": "wrong",
+   "what_the_code_shows": "The file does not exist. The export service imports '@agiworkforce/unified-chat/markdown-document'. The package export maps that to src/components/markdown/markdownDocument.ts.",
+   "evidence": "packages/ui/unified-chat/package.json:20; document-export-service.ts:2",
+   "correction": "Path is packages/ui/unified-chat/src/components/markdown/markdownDocument.ts."
+  },
+  {
+   "section": "6",
+   "claim": "Mobile builds the file on the device and opens the share sheet; Save to Library writes through the library service. Row is marked 'device'.",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "Download builds the file and shares it on the device (ArtifactExportSheet.tsx:51-56). Save to Library calls api.post(LIBRARY_PATH, file), which is a server call to the cloud Library. Share sends the markdown via Share.share.",
+   "evidence": "apps/mobile/src/features/artifacts/libraryService.ts:19; ArtifactExportSheet.tsx:51-56",
+   "correction": "Mobile Download and Share run on the device. Save to Library posts to the cloud Library API, so it runs on our servers."
+  }
+ ],
+ "missing_facts": [
+  "The mobile Share action sends the report as plain message text through Share.share, not as a file (apps/mobile/src/features/research/ReportsScreen.tsx:343-347). The page's section 6 groups it with file building.",
+  "The mobile Library button needs a captured cloud account epoch (libraryOwnerId), and the service rejects anything that is not a Cloud artifact ('Only Cloud artifacts can be saved to your Library', apps/mobile/src/features/artifacts/libraryService.ts:10-12). The page does not mention this rule.",
+  "The 'Desktop partial' status is not explained. The public Desktop shows the hosted web app, so it inherits the web buttons. The page does not say which desktop code, if any, the Tauri ResearchReport.tsx PDF export row refers to."
+ ]
+}

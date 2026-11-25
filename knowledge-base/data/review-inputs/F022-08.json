@@ -1,0 +1,649 @@
+{
+ "feature": {
+  "id": "F022-08",
+  "aliases": [
+   "Approval card",
+   "Tool approval",
+   "Approval form",
+   "Clarify card",
+   "Clarifying questions",
+   "Questionnaire",
+   "ask_clarifying_questions",
+   "Elicitation overlay",
+   "Interactive card",
+   "AGI asks",
+   "S22.28",
+   "S22.29"
+  ],
+  "summary": "When the assistant needs permission for an action, an approval card shows what it will do, a risk label and the parameters, with Allow and Deny choices. When it needs facts from you, a question card lets you pick options or type an answer and send. Each app has its own version.",
+  "purpose": {
+   "what_it_does": "Approval cards stop a tool call until the person allows or denies it (once, for this chat, or always where the scope is offered). Question cards (clarify.v1) show up to four questions with up to four options each and an optional 'something else' box; the answers go back to the assistant as the next turn input. (apps/web/features/chat/components/approvals/ToolApprovalCard.tsx:57-140; apps/web/lib/services/clarify-tool-service.ts:12-16; apps/web/features/chat/components/messages/cards/ClarifyCard.tsx:86-229)",
+   "why_it_exists": "Consent must be explicit before an action that changes things, and a vague request is better answered with a few structured questions than with a guess. (doc: AGENTS.md section 9; area brief S22.28, S22.29)",
+   "who_uses_it": "Anyone using an agent that calls tools (all six apps) and anyone whose request is vague (web, desktop, mobile, Chrome, VS Code; CLI shows tool-server questions).",
+   "problems_solved": [
+    "The person sees the tool name, risk tier, destructive notice and parameters before saying yes.",
+    "The assistant does not guess missing details; it asks.",
+    "A tool server can ask for typed input (CLI elicitation) without leaving the terminal."
+   ],
+   "use_cases": [
+    "A cloud tool wants to send data to a connector; the card shows the parameters and the person presses Allow once.",
+    "A vague request 'plan my trip' triggers a card with questions about dates and budget; the person picks options and presses Send answers.",
+    "In the CLI, a command run asks 'Apply this patch?' with y/n keys.",
+    "An MCP server asks for a token; the CLI overlay shows a masked field with Accept, Decline, Cancel."
+   ]
+  },
+  "user_experience": {
+   "where_to_find_it": [
+    "Web and Desktop (hosted web app): approval card is a section labelled 'Approve <tool>' with buttons from the scope labels (Allow once, Allow for this chat, Always allow) and 'Deny' (apps/web/features/chat/components/approvals/ToolApprovalCard.tsx:79-140; packages/contracts/types/src/tool-approval-policy.ts:23-36). Question card is a card in the reply with buttons 'Send answers' and 'I'll just type it' (ClarifyCard.tsx:195-216).",
+    "Mobile: approval controls with 'Raw JSON' toggle, guidance field and decision buttons (apps/mobile/src/features/chat/components/CloudToolApprovalControls.tsx:260-410). Question card with 'Send answers' and 'I'll just type it' (apps/mobile/src/features/chat/components/ClarifyCard.tsx).",
+    "CLI: full-screen approval overlay titled 'Tool Approval' with keys y, n, s, a, d, t and Tab to add a note; MCP request overlay with Accept, Decline, Cancel (apps/cli/src/tui/widgets/approval_overlay.rs:1-30; elicitation_overlay.rs:1-25,375).",
+    "VS Code: approval card with approve/deny style buttons and a guidance field; question card titled 'AGI asks' with option buttons, 'Skip' and a typed-answer box (apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:7262-7360).",
+    "Chrome side panel: approval with 'Approve', 'Decline', 'Allow for this chat' and a guidance field (apps/extension/_locales/en/messages.json:1154-1170,1942; apps/extension/src/features/side-panel/bubbles.ts:946-1042); question card built by buildClarifyCard (apps/extension/src/features/side-panel/interactiveCards.ts; bubbles.ts:245)."
+   ],
+   "prerequisites": [
+    "Question cards need a saved chat (not temporary) and a finished reply; otherwise the controls are disabled (InteractiveCardBlock.tsx:60-86).",
+    "An approval card is live only while its turn is live; an expired turn shows no buttons (MessageBubble.tsx:1010-1019)."
+   ],
+   "screens_and_controls": [
+    "Web approval: label, risk badge (Low/Medium/High/Critical risk), destructive notice, parameter list, 'Raw JSON' details, decision group (ToolApprovalCard.tsx:79-140; packages/contracts/cloud-contracts/src/tool-approval-presentation.ts:16-23).",
+    "Web question card: question text with header chip, option chips (toggle, multi-select where allowed), 'Something else\u2026' box, Send answers, I'll just type it (ClarifyCard.tsx:129-216).",
+    "CLI approval: buttons Yes, No, Allow Session, Always allow, Deny All, Allow All; Enter confirms; Esc means No; scroll keys; allow answers are accepted only after the whole detail has been scrolled into view (approval_overlay.rs:1-30,754-822)."
+   ],
+   "journey": [
+    "The assistant requests a tool call or asks questions.",
+    "The card or overlay appears with the details.",
+    "The person reads, then chooses an option (or types an answer).",
+    "The app sends the decision; the card shows the outcome (for example 'Answered: ...', 'Skipped', or the saved decision) and the assistant continues."
+   ],
+   "feedback_and_outputs": [
+    "While streaming the card says 'Available when the reply finishes.'; in a temporary chat it says 'Buttons that send a message work in saved chats.' (InteractiveCardBlock.tsx:60-61).",
+    "A failed submit is stored on the message and shown as a red alert on the card (InteractiveCardBlock.tsx:95-102; ClarifyCard.tsx:219-224).",
+    "Expired question card: 'These questions are no longer answerable: ...' with a reason (ClarifyCard.tsx:100-112).",
+    "Mobile failure text: 'Couldn't send that answer, the questions are still waiting for you.' (apps/mobile ClarifyCard.tsx:28-29)."
+   ],
+   "settings": [
+    "Tool allowances per chat and always-allow lists (useChatToolAllowanceStore, MessageBubble.tsx:2331-2340).",
+    "CLI approval scopes depend on whether session or always-allow is available (approval_overlay.rs:811-816).",
+    "Settings, Connectors reset of tool approvals is mentioned in the scope note (tool-approval-presentation.ts:31-32)."
+   ]
+  },
+  "current_implementation": {
+   "working": [
+    "Web/desktop approval card with risk tier, parameters, scopes, destructive confirm (ToolApprovalCard.tsx:57-140).",
+    "Web/desktop question card with single and multi-select, other text, send, dismiss, expired/answered/dismissed states (ClarifyCard.tsx:86-229).",
+    "Server route that records a card response on the message (apps/web/app/api/interactive-cards/respond/route.ts:27-99).",
+    "Server tool ask_clarifying_questions with limits of 4 questions and 4 options and a gate that skips explicit commands (apps/web/lib/services/clarify-tool-service.ts:12-60).",
+    "Mobile ClarifyCard registered in InteractiveCardBlock (apps/mobile/src/features/chat/components/InteractiveCardBlock.tsx:1077-1088). The brief marks S22.29 mobile as missing; code contradicts it.",
+    "Mobile cloud approval controls (CloudToolApprovalControls.tsx).",
+    "CLI approval overlay and MCP elicitation overlay with unit tests inside the Rust files.",
+    "VS Code approval card and 'AGI asks' question card (webviewContent.ts:7262-7360). The brief marks vscode questionnaires missing; code contradicts it.",
+    "Chrome approval buttons and clarify card (bubbles.ts:946-1042; interactiveCards.ts:245)."
+   ],
+   "incomplete": [
+    "VS Code asks one question at a time with options and a typed answer, not a multi-question form (webviewContent.ts:7262-7360).",
+    "CLI elicitation overlay answers MCP server requests, not the model's clarify tool; the brief maps S22.29 to it (elicitation_overlay.rs:1-25). Whether the CLI has a model-driven question card is unknown.",
+    "The surface feature matrix lists CLI approvals as 'unverified' for reachability (doc: docs/product/surface-feature-matrix.md:397), though tui_app.rs maps overlay choices to decisions (apps/cli/src/tui/tui_app.rs:1595-1625)."
+   ],
+   "disconnected_or_disabled": [
+    "Card answering is off when no runtime provider is mounted or the chat is temporary or streaming (InteractiveCardBlock.tsx:150-160)."
+   ],
+   "not_available": [
+    "Mobile: nothing found showing a Local-mode question card; the clarify tool is a server tool (clarify-tool-service.ts imports server-only)."
+   ]
+  },
+  "required_behaviour": {
+   "established": [
+    {
+     "statement": "Actions needing consent render an approval form (what will happen, approve/deny).",
+     "source": "S22.28 (area brief)"
+    },
+    {
+     "statement": "The assistant can ask structured questions (options/fields) the user answers in an inline form.",
+     "source": "S22.29 (area brief)"
+    },
+    {
+     "statement": "A card cannot be sent while the reply is still streaming; the text says 'Available when the reply finishes.'",
+     "source": "apps/web/features/chat/components/messages/InteractiveCardBlock.tsx:60"
+    },
+    {
+     "statement": "A card cannot be sent in a temporary chat; the text says 'Buttons that send a message work in saved chats.'",
+     "source": "apps/web/features/chat/components/messages/InteractiveCardBlock.tsx:61"
+    },
+    {
+     "statement": "A failed submission is stored on the message and shown on the card.",
+     "source": "apps/web/features/chat/components/messages/InteractiveCardBlock.tsx:95-102"
+    },
+    {
+     "statement": "The CLI approval overlay is keyboard-driven.",
+     "source": "apps/cli/src/tui/widgets/approval_overlay.rs:1-30"
+    },
+    {
+     "statement": "An action a user cannot undo asks first and the question names the consequence.",
+     "source": "doc: AGENTS.md section 9"
+    },
+    {
+     "statement": "Security behaviour fails closed.",
+     "source": "doc: AGENTS.md section 6"
+    }
+   ],
+   "acceptance_criteria": [
+    "A tool call that needs approval shows its name, risk label and parameters and cannot run until Allow or Deny is chosen.",
+    "Choosing a wider scope on a destructive tool asks for confirmation first on web.",
+    "A question card with one selected option and Send answers produces an answered state showing the chosen labels.",
+    "'I'll just type it' dismisses the card with the dismissed note.",
+    "The card is not answerable while streaming or in a temporary chat and shows the stated message.",
+    "A failed submit leaves the card answerable and shows an alert.",
+    "In the CLI, y and n answer; Esc answers No; Allow keys are ignored until the detail is fully shown.",
+    "An expired card shows the reason text and has no buttons."
+   ],
+   "inferred": [
+    "Every app should show the same approval facts (tool, risk, parameters) because the shared labels live in contracts. [inferred from packages/contracts/types/src/tool-approval-policy.ts]",
+    "Questions in Local mode would need a local tool; none found. [inferred]"
+   ],
+   "proposed": [
+    "[proposed] Give VS Code and Chrome the same multi-question form as web.",
+    "[proposed] Show clarify questions in the CLI from the model, not only from MCP servers."
+   ]
+  },
+  "implementation_map": [
+   {
+    "kind": "component",
+    "name": "InteractiveCardBlock (web)",
+    "path": "apps/web/features/chat/components/messages/InteractiveCardBlock.tsx",
+    "role": "Renders cards from a registry, computes send-blocked reasons, submission error, deadline, resume."
+   },
+   {
+    "kind": "component",
+    "name": "ClarifyCard (web)",
+    "path": "apps/web/features/chat/components/messages/cards/ClarifyCard.tsx",
+    "role": "Question card with options, other text, send, dismiss."
+   },
+   {
+    "kind": "component",
+    "name": "ToolApprovalCard",
+    "path": "apps/web/features/chat/components/approvals/ToolApprovalCard.tsx",
+    "role": "Approval card with risk, parameters, scopes, Deny."
+   },
+   {
+    "kind": "component",
+    "name": "ApprovalInbox",
+    "path": "apps/web/features/chat/components/approvals/ApprovalInbox.tsx",
+    "role": "Lists pending approvals for the web chat."
+   },
+   {
+    "kind": "endpoint",
+    "name": "POST /api/interactive-cards/respond",
+    "path": "apps/web/app/api/interactive-cards/respond/route.ts",
+    "role": "Validates a card answer and updates the message metadata in web_messages."
+   },
+   {
+    "kind": "service",
+    "name": "clarify-tool-service",
+    "path": "apps/web/lib/services/clarify-tool-service.ts",
+    "role": "Defines ask_clarifying_questions, its limits and when it is offered."
+   },
+   {
+    "kind": "schema",
+    "name": "interactive card contracts",
+    "path": "packages/contracts/cloud-contracts/src/interactive-cards.ts",
+    "role": "Zod schemas for card bodies including clarify and mcp-app."
+   },
+   {
+    "kind": "schema",
+    "name": "card response rules",
+    "path": "packages/contracts/cloud-contracts/src/interactive-card-response.ts",
+    "role": "Deadline, accepts-response and needs-resume rules."
+   },
+   {
+    "kind": "schema",
+    "name": "interactive card types",
+    "path": "packages/contracts/types/src/interactive-cards.ts",
+    "role": "Card kinds, renderer registry resolver, clarify limits."
+   },
+   {
+    "kind": "config",
+    "name": "tool approval labels",
+    "path": "packages/contracts/types/src/tool-approval-policy.ts",
+    "role": "Allow, Deny, Approve labels shared by apps."
+   },
+   {
+    "kind": "hook",
+    "name": "useChatStream (card response and resume)",
+    "path": "apps/web/lib/hooks/useChatStream.ts",
+    "role": "respondToInteractiveCard and resume of the paused turn."
+   },
+   {
+    "kind": "component",
+    "name": "ClarifyCard (mobile)",
+    "path": "apps/mobile/src/features/chat/components/ClarifyCard.tsx",
+    "role": "Mobile question card."
+   },
+   {
+    "kind": "component",
+    "name": "CloudToolApprovalControls",
+    "path": "apps/mobile/src/features/chat/components/CloudToolApprovalControls.tsx",
+    "role": "Mobile approval controls with raw JSON and guidance."
+   },
+   {
+    "kind": "component",
+    "name": "approval overlay (CLI)",
+    "path": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "role": "Keyboard approval overlay."
+   },
+   {
+    "kind": "component",
+    "name": "elicitation overlay (CLI)",
+    "path": "apps/cli/src/tui/widgets/elicitation_overlay.rs",
+    "role": "Form for MCP server input requests."
+   },
+   {
+    "kind": "service",
+    "name": "tui_app approval mapping",
+    "path": "apps/cli/src/tui/tui_app.rs",
+    "role": "Maps overlay choices to approval decisions (line 1595)."
+   },
+   {
+    "kind": "component",
+    "name": "VS Code webview approval and question cards",
+    "path": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "role": "renderQuestionCard (line 7262) and approval cards."
+   },
+   {
+    "kind": "component",
+    "name": "Chrome side-panel bubbles and interactive cards",
+    "path": "apps/extension/src/features/side-panel/bubbles.ts",
+    "role": "Approval buttons and card registry (lines 245, 946-1042)."
+   },
+   {
+    "kind": "table",
+    "name": "web_messages",
+    "path": "apps/web/app/api/interactive-cards/respond/route.ts",
+    "role": "Stores the card state in message metadata."
+   },
+   {
+    "kind": "test",
+    "name": "InteractiveCardBlock.respond.test.tsx",
+    "path": "apps/web/features/chat/components/messages/InteractiveCardBlock.respond.test.tsx",
+    "role": "Card response behaviour on web."
+   }
+  ],
+  "execution_and_data_flow": {
+   "steps": [
+    {
+     "what_happens": "The model calls the clarify tool or a tool needing approval; the server builds a card and streams it with the reply.",
+     "runs_on": "our servers",
+     "evidence": "apps/web/lib/services/clarify-tool-service.ts; apps/web/app/api/llm/v1/chat/completions/lib/stream-transform.ts"
+    },
+    {
+     "what_happens": "The app validates the card, shows it, and blocks sending while streaming or in a temporary chat.",
+     "runs_on": "device",
+     "evidence": "InteractiveCardBlock.tsx:60-86,150-160"
+    },
+    {
+     "what_happens": "The person's answer is posted to the respond route, which checks the card and updates the stored message.",
+     "runs_on": "our servers",
+     "evidence": "apps/web/app/api/interactive-cards/respond/route.ts:27-99"
+    },
+    {
+     "what_happens": "The paused turn resumes with the answer.",
+     "runs_on": "our servers",
+     "evidence": "useCardTurnResume in InteractiveCardBlock.tsx:105-117"
+    },
+    {
+     "what_happens": "CLI approval and elicitation are answered on the device and returned to the local agent loop or MCP server.",
+     "runs_on": "device",
+     "evidence": "approval_overlay.rs; tui_app.rs:1595-1625"
+    }
+   ],
+   "data": [
+    {
+     "what": "Card state and answers",
+     "where_stored": "Message metadata in table web_messages (interactiveCards key)",
+     "synced": "Part of the conversation",
+     "retained_or_deleted": "Removed with the message; soft-delete column used in the lookup (route.ts:31)"
+    },
+    {
+     "what": "Tool allowances (once/chat/always)",
+     "where_stored": "Chat allowance store on web; permission store in CLI",
+     "synced": "unknown",
+     "retained_or_deleted": "Chat allowances last until the chat is deleted or the tool is reset (tool-approval-presentation.ts:31-32)"
+    }
+   ],
+   "models_and_providers": "The question card needs the model to call the clarify tool; this is a server tool. The cards themselves do not depend on a provider. Which providers support the tool in the server loop was not traced: unknown."
+  },
+  "access_and_usage": {
+   "account": "Web and mobile cards need a signed-in saved chat. CLI approval needs no account (local overlay).",
+   "permissions": "Approvals gate tool execution; risk tier and destructive flag come from a review object (tool-approval-presentation.ts:8-14). Unreviewed tools default to high risk, destructive, once-only.",
+   "subscription": "none found in the code for the cards; the turn is governed by SYS-subscriptions-entitlements-and-usage.",
+   "limits_and_metering": "Max 4 questions, 4 options, option label 60, question text 200 characters (clarify-tool-service.ts:15-20); other-answer cap CLARIFY_OTHER_MAX_LENGTH (ClarifyCard.tsx:17). The clarify tool is offered only for short messages without URL, code fence or attachment (clarify-tool-service.ts:49-60). Respond route imports rate limit and CSRF helpers (route.ts:13-14).",
+   "flags": "none found in the code",
+   "model_compatibility": "Any model that can call the clarify tool [inferred]. Not tied to a model.",
+   "provider_restrictions": "none found in the code",
+   "local_mode": "CLI approval overlay works on the device. Question cards come from a server tool, so a fully Local chat would not show them [inferred]; not verified."
+  },
+  "states_and_edge_cases": [
+   {
+    "state": "Streaming",
+    "behaviour": "Card controls disabled; text 'Available when the reply finishes.'",
+    "evidence": "InteractiveCardBlock.tsx:60,70"
+   },
+   {
+    "state": "Temporary chat",
+    "behaviour": "Controls disabled with 'Buttons that send a message work in saved chats.'",
+    "evidence": "InteractiveCardBlock.tsx:61,71"
+   },
+   {
+    "state": "Submitting",
+    "behaviour": "Button shows 'Sending' with spinner; others disabled.",
+    "evidence": "ClarifyCard.tsx:197-205"
+   },
+   {
+    "state": "Error on submit",
+    "behaviour": "Error stored on message and shown with role alert; card stays answerable.",
+    "evidence": "InteractiveCardBlock.tsx:95-102; ClarifyCard.tsx:219"
+   },
+   {
+    "state": "Deadline elapsed",
+    "behaviour": "A timer re-renders the card so it stops accepting answers.",
+    "evidence": "InteractiveCardBlock.tsx:119-129"
+   },
+   {
+    "state": "Expired / dismissed / answered",
+    "behaviour": "Read-only text per state.",
+    "evidence": "ClarifyCard.tsx:100-125,141"
+   },
+   {
+    "state": "Unknown card kind",
+    "behaviour": "Fallback section with headline and text.",
+    "evidence": "InteractiveCardBlock.tsx:213-228"
+   },
+   {
+    "state": "Approval turn expired",
+    "behaviour": "Approval buttons are withheld.",
+    "evidence": "MessageBubble.tsx:1010-1019"
+   },
+   {
+    "state": "CLI terminal too small",
+    "behaviour": "Draws a too-small notice; Esc cancels.",
+    "evidence": "approval_overlay.rs imports draw_too_small; elicitation_overlay.rs:632"
+   },
+   {
+    "state": "Offline",
+    "behaviour": "not handled in the code for the web card beyond the submit error.",
+    "evidence": "searched ClarifyCard.tsx and InteractiveCardBlock.tsx for offline handling; none found"
+   }
+  ],
+  "verification": {
+   "existing_tests": [
+    {
+     "path": "apps/web/features/chat/components/messages/InteractiveCardBlock.test.tsx",
+     "covers": "Card rendering and fallback"
+    },
+    {
+     "path": "apps/web/features/chat/components/messages/InteractiveCardBlock.respond.test.tsx",
+     "covers": "Responding to cards"
+    },
+    {
+     "path": "apps/web/app/api/interactive-cards/respond/route.test.ts",
+     "covers": "Respond endpoint"
+    },
+    {
+     "path": "apps/web/lib/services/clarify-tool-service.test.ts",
+     "covers": "Clarify tool rules"
+    },
+    {
+     "path": "apps/web/lib/hooks/useChatStream.card-answers.test.tsx",
+     "covers": "Card answers in the stream hook"
+    },
+    {
+     "path": "packages/contracts/cloud-contracts/src/__tests__/interactive-card-response.test.ts",
+     "covers": "Response deadline and acceptance"
+    },
+    {
+     "path": "apps/web/features/chat/components/approvals/ToolApprovalCard.test.tsx",
+     "covers": "Approval card"
+    },
+    {
+     "path": "apps/mobile/__tests__/CloudToolApprovalReview.test.tsx",
+     "covers": "Mobile approval review"
+    },
+    {
+     "path": "apps/extension-vscode/src/__tests__/approvalCard.webview.test.ts",
+     "covers": "VS Code approval card"
+    },
+    {
+     "path": "apps/cli/src/tui/widgets/approval_overlay.rs",
+     "covers": "Inline unit tests for the CLI approval overlay"
+    },
+    {
+     "path": "apps/cli/src/tui/widgets/elicitation_overlay.rs",
+     "covers": "Inline unit tests for the elicitation overlay"
+    }
+   ],
+   "scenarios": [
+    {
+     "name": "Answer a question card",
+     "steps": [
+      "In a saved web chat send a vague request such as 'Plan a trip'.",
+      "When a question card appears and the reply is finished, pick options and press Send answers."
+     ],
+     "expected": "The card shows the chosen labels as answered and the assistant continues."
+    },
+    {
+     "name": "Blocked while streaming",
+     "steps": [
+      "Send a request that yields a card.",
+      "Try to press a card button while text is still streaming."
+     ],
+     "expected": "Controls disabled with 'Available when the reply finishes.'"
+    },
+    {
+     "name": "Temporary chat",
+     "steps": [
+      "Open a temporary chat and trigger a card."
+     ],
+     "expected": "'Buttons that send a message work in saved chats.' is shown."
+    },
+    {
+     "name": "Deny a tool",
+     "steps": [
+      "Trigger a cloud tool that needs approval.",
+      "Press Deny."
+     ],
+     "expected": "Tool does not run; the card shows the denial."
+    },
+    {
+     "name": "CLI approval keys",
+     "steps": [
+      "Run an agent task that writes a file.",
+      "Scroll the detail to the end, press y; repeat pressing n and Esc."
+     ],
+     "expected": "y allows once, n and Esc deny; allow is ignored before the end of the detail."
+    },
+    {
+     "name": "Respond failure",
+     "steps": [
+      "Block the network and press Send answers."
+     ],
+     "expected": "Alert text on the card; card still answerable."
+    }
+   ],
+   "diagnostics": [
+    "Respond route errors: 'Interactive card not found', 'This card is no longer accepting a response', 'This card changed while the response was in flight' (route.ts:43,58,93).",
+    "Table web_messages metadata keys interactiveCards and interactiveCardSubmissionErrors."
+   ]
+  },
+  "gaps": [
+   {
+    "gap": "VS Code question card handles one question at a time, not the multi-question form.",
+    "affects": "VS Code",
+    "evidence": "webviewContent.ts:7262-7360",
+    "work_needed": "Render the clarify.v1 body fully in the VS Code webview."
+   },
+   {
+    "gap": "CLI has no model-driven question form; the overlay serves MCP elicitation only.",
+    "affects": "CLI",
+    "evidence": "elicitation_overlay.rs:1-25",
+    "work_needed": "Decide whether the clarify tool is offered in the CLI and render it."
+   },
+   {
+    "gap": "Brief is out of date on mobile, VS Code and Chrome questionnaires.",
+    "affects": "Brief accuracy",
+    "evidence": "mobile InteractiveCardBlock.tsx:1077; webviewContent.ts:7262; bubbles.ts:245",
+    "work_needed": "Update brief; live-check each app."
+   },
+   {
+    "gap": "Surface matrix marks CLI approvals 'unverified'.",
+    "affects": "CLI",
+    "evidence": "doc: docs/product/surface-feature-matrix.md:397",
+    "work_needed": "Run a CLI session and record the result."
+   },
+   {
+    "gap": "No Local-mode path for question cards.",
+    "affects": "Mobile and desktop Local mode",
+    "evidence": "clarify-tool-service.ts is server-only",
+    "work_needed": "Decide if local models should offer a clarify tool."
+   }
+  ],
+  "depends_on": [
+   "surface:web",
+   "surface:desktop",
+   "surface:mobile",
+   "surface:cli",
+   "surface:vscode",
+   "surface:chrome",
+   "mode:cloud",
+   "api:POST /api/interactive-cards/respond",
+   "table:web_messages",
+   "SYS-agents-tools-and-automation",
+   "SYS-chat-turn-pipeline",
+   "SYS-security-and-privacy",
+   "SYS-api-and-contracts",
+   "file:packages/contracts/cloud-contracts/src/interactive-cards.ts"
+  ],
+  "relationships": [
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/web/features/chat/components/messages/InteractiveCardBlock.tsx",
+    "evidence": "InteractiveCardBlock.tsx:38-51"
+   },
+   {
+    "rel": "exposes_api",
+    "to": "api:POST /api/interactive-cards/respond",
+    "evidence": "route.ts:99 exports POST"
+   },
+   {
+    "rel": "stores_data_in",
+    "to": "table:web_messages",
+    "evidence": "route.ts:31,79"
+   },
+   {
+    "rel": "depends_on",
+    "to": "SYS-agents-tools-and-automation",
+    "evidence": "Approvals gate tool calls (ToolApprovalCard.tsx)"
+   },
+   {
+    "rel": "depends_on",
+    "to": "SYS-api-and-contracts",
+    "evidence": "packages/contracts/cloud-contracts/src/interactive-cards.ts"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:cli",
+    "evidence": "apps/cli/src/tui/widgets/approval_overlay.rs"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:vscode",
+    "evidence": "webviewContent.ts:7262"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:chrome",
+    "evidence": "bubbles.ts:245,946-1042"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:mobile",
+    "evidence": "CloudToolApprovalControls.tsx; ClarifyCard.tsx"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/web/app/api/interactive-cards/respond/route.test.ts",
+    "evidence": "file exists"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/extension-vscode/src/__tests__/approvalCard.webview.test.ts",
+    "evidence": "file exists"
+   },
+   {
+    "rel": "governed_by_subscription",
+    "to": "SYS-subscriptions-entitlements-and-usage",
+    "evidence": "none found in the code for the cards; turn governed upstream"
+   }
+  ],
+  "unknowns": [
+   "Whether the CLI shows model-driven questions.",
+   "How approval allowances sync between devices.",
+   "Which providers' models reliably call the clarify tool.",
+   "Live behaviour on Chrome and VS Code (only unit tests exist).",
+   "Whether the Tauri desktop code has its own approval UI that is still used (public desktop shows the hosted web app, doc: AGENTS.md section 5)."
+  ]
+ },
+ "corrections": [
+  {
+   "section": "3 / 7",
+   "claim": "The clarify tool is 'offered only for short messages without URL, code fence or attachment (clarify-tool-service.ts:49-60)'",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "turnWarrantsClarifyTool also returns false for research turns, empty messages, messages over 400 characters, and (unless work_mode is agiwork) messages that open with an explicit verb such as search, write, explain, fix, list. The 4/4/200/60 limits are right.",
+   "evidence": "apps/web/lib/services/clarify-tool-service.ts:17,20,22-40,53-63",
+   "correction": "The clarify tool is offered only for non-research messages of 1 to 400 characters with no attachment, no URL and no code fence, and (outside AGI Work mode) not starting with an explicit-command verb."
+  },
+  {
+   "section": "3 / 7 / 1",
+   "claim": "Questions are a feature for 'web, desktop, mobile, Chrome, VS Code'; the clarify tool is a server tool that gates only on the message",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The server offers the tool only when the surface is web, mobile or chrome, the model can use tools, the request streams, and the client declares x_interactive_cards support for clarify.v1. VS Code and CLI never get it. The VS Code 'AGI asks' card is a separate request/response path (respondToApproval), not clarify.v1.",
+   "evidence": "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:1278-1291; apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:7262-7300",
+   "correction": "The model-driven clarify tool is offered only on web (and desktop via hosted web), mobile and Chrome, and only for streamed, tool-capable turns whose client advertises clarify.v1. The VS Code question card does not come from clarify.v1, so the section 10 gap 'render clarify.v1 fully in VS Code' is misframed."
+  },
+  {
+   "section": "6 / 7",
+   "claim": "Respond route 'soft-delete column used in the lookup (route.ts:31)'",
+   "verdict": "wrong",
+   "what_the_code_shows": "Line 31 is inside findQuestion. The deleted_at checks are in the SQL on the conversation lookup (about line 117-123) and the message lookup (about line 133).",
+   "evidence": "apps/web/app/api/interactive-cards/respond/route.ts:27-33,117-135",
+   "correction": "Soft-delete is checked on both web_conversations and web_messages in the lookups at route.ts:117-135."
+  },
+  {
+   "section": "9",
+   "claim": "Respond route errors at route.ts:43,58,93 ('Interactive card not found', 'no longer accepting a response', 'changed while in flight')",
+   "verdict": "wrong",
+   "what_the_code_shows": "Lines 43, 58 and 93 are inside toClarifyAnswer and settleClarifyBody. The three messages are at about lines 146, 165 and 212.",
+   "evidence": "apps/web/app/api/interactive-cards/respond/route.ts:146,165,212",
+   "correction": "Cite route.ts:146, 165 and 212. The route also rejects a card that is not an answer-ui card when payload.kind is message, with 'This card does not send messages'."
+  },
+  {
+   "section": "6",
+   "claim": "Respond route 'checks the card and updates the stored message' (server step; also 'rate limit and CSRF helpers imported')",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The helpers are used, not only imported: getUserScopedDb auth, requireCsrfToken, and withRateLimit with the 'chat-message' bucket. Update is optimistic: it matches the old metadata with 'is not distinct from' and returns 409 if no row changed. A payload.kind 'message' response does not write anything; it only returns composed text from an answer-ui card.",
+   "evidence": "route.ts:93-103,196-217",
+   "correction": "The route authenticates the user, requires a CSRF token, applies the chat-message rate limit, then either returns composed message text (answer-ui, nothing stored) or settles the clarify card with a compare-and-set update."
+  },
+  {
+   "section": "7",
+   "claim": "Limit 'other-answer cap CLARIFY_OTHER_MAX_LENGTH (ClarifyCard.tsx:17)'",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "It is imported at ClarifyCard.tsx:14, not 17. The value (500) is defined in packages/contracts/types/src/interactive-cards.ts:84, which also sets header max 32 and 4 questions/4 options. The page never gives the number.",
+   "evidence": "apps/web/features/chat/components/messages/cards/ClarifyCard.tsx:14; packages/contracts/types/src/interactive-cards.ts:80-84",
+   "correction": "Other-answer text is capped at 500 characters (CLARIFY_OTHER_MAX_LENGTH, interactive-cards.ts:84)."
+  }
+ ],
+ "missing_facts": [
+  "The clarify tool is gated server-side: only web, mobile and chrome surfaces, tool-capable models, streaming requests, and clients that declare clarify.v1 in x_interactive_cards (apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:1278-1291). The page says this is only 'a server tool' and lists VS Code as a user.",
+  "The respond route also handles payload.kind 'message' for answer-ui cards: it composes follow-up text and stores nothing (apps/web/app/api/interactive-cards/respond/route.ts:152-160). It uses optimistic concurrency on the metadata update (route.ts:196-217).",
+  "Interactive cards are capped at 4 per message and 12,000 serialized characters (packages/contracts/types/src/interactive-cards.ts:13-14), and the other-answer limit is 500 characters (line 84). The page's limits list omits all three."
+ ]
+}

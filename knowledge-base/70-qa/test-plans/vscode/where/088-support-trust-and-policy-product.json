@@ -1,0 +1,129 @@
+{
+ "S88.01": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Permission docs"
+   }
+  ],
+  "needs": "none (an internet connection to open the docs page)",
+  "note": "This is the only per-screen help link found in the VS Code app. The Help menu's Documentation item opens the general docs page. The configuration and custom-instructions articles (apps/web/content/support) are not linked from the VS Code app. I did not check when the onboarding screen is shown.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI Code sidebar and go to the onboarding screen that has the Permission docs link.",
+   "Click Permission docs.",
+   "Look at the browser that opens: it should be the docs page for permissions (URL contains topic=permissions), and the article should explain the permission settings shown on that screen."
+  ],
+  "where": "Sidebar > onboarding screen > Permission docs"
+ },
+ "S88.04": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/core/commandSetup.ts",
+    "text": "Report a Bug"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Send Feedback"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/help/helpMenu.ts",
+    "text": "Send feedback"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account (signed-out users get a Sign in prompt)",
+  "note": "The sidebar More actions button was located from its markup (title More, aria-label More actions) but its visible position was not confirmed. The build and platform are added to the sent report silently, so the tester cannot see them in the UI.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Command Palette and type Code: Send Feedback, or open the sidebar's More actions menu and choose Help > Send feedback.",
+   "Pick Report a Bug from the list.",
+   "Type a description in the box that reads Report a Bug: Describe your feedback, then press Enter.",
+   "Look for the notification that says your feedback reached the team. Compare with Expected: the form asks only for text, and the build and platform are sent with the report without being shown to you."
+  ],
+  "where": "Command palette > Code: Send Feedback > Report a Bug (also Sidebar > More actions > Help > Send feedback)"
+ },
+ "S88.05": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/core/commandSetup.ts",
+    "text": "General Feedback"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Send Feedback"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account",
+  "note": "The tester cannot see the stored record from inside the app; the code sends it to the server endpoint /api/feedback and labels it as general feedback.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Command Palette and type Code: Send Feedback.",
+   "Pick General Feedback (description: Share thoughts about the extension).",
+   "Type a message in the box and press Enter.",
+   "Look for the notification that says your feedback reached the team. Compare with Expected."
+  ],
+  "where": "Command palette > Code: Send Feedback > General Feedback"
+ },
+ "S88.06": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/core/commandSetup.ts",
+    "text": "Feature Request"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Send Feedback"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account",
+  "note": "The request is stored on the server as a feature-type report, which the tester cannot see from the app.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Command Palette and type Code: Send Feedback.",
+   "Pick Feature Request (description: Suggest a new feature or improvement).",
+   "Type the request in the box and press Enter.",
+   "Look for the notification that says your feedback reached the team. Compare with Expected."
+  ],
+  "where": "Command palette > Code: Send Feedback > Feature Request"
+ },
+ "S88.07": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Export Diagnostics"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/help/helpMenu.ts",
+    "text": "Export diagnostics"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account",
+  "note": "The Expected line says the user can see what the bundle contains and choose to share it. The code only offers a save dialog after the server redacts the bundle; sharing with support is a manual step, and the Help item's description reads: A redacted report to attach when you contact support.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to AGI Cloud (signed-out, the command shows a message and exports nothing).",
+   "Open the Command Palette and type Code: Export Diagnostics, or use Help > Export diagnostics from the sidebar's More actions menu.",
+   "Wait for the save dialog to open, then save the JSON file somewhere you choose.",
+   "Open the saved file and check its fields (for example collectedAt, surface, appVersion, platform, locale, recentEvents), then compare with Expected. Note the save dialog is the only point of choice: there is no preview in the app and no share-with-support button, so the tester attaches the file to support by hand. Cancelling the dialog writes nothing."
+  ],
+  "where": "Command palette > Code: Export Diagnostics (also Sidebar > More actions > Help > Export diagnostics)"
+ },
+ "S88.08": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Reference:"
+   }
+  ],
+  "needs": "a request that fails with a server failure (not controllable from the app)",
+  "note": "The reference is shown only when the failure carries a requestId and the turn failure is the typed kind. A failure without that id shows no reference. I did not confirm that the reference text can be copied, and I could not find a way to trigger a failure on demand.",
+  "reachable": "yes",
+  "steps": [
+   "Send a chat message in the AGI Code sidebar.",
+   "Make the request fail (this cannot be set up on demand; it needs a failing request that the server answers with a typed failure).",
+   "Read the error message in the chat. It should end with Reference: followed by an id.",
+   "Copy the id and compare with Expected: the id must be one the user can quote to support."
+  ],
+  "where": "Sidebar chat > a message that fails > error message (the Reference: line)"
+ }
+}

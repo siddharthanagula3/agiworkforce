@@ -1,0 +1,326 @@
+{
+ "S44.01": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/image <prompt> draws an image on your account and saves it here; Esc stops it."
+   },
+   {
+    "file": "apps/cli/src/cloud/image.rs",
+    "text": "Add a prompt: /image a red bicycle"
+   }
+  ],
+  "needs": "a Managed Cloud account (the /image command is hidden in Local and BYOK mode)",
+  "note": "The Code line's web route (apps/web/app/api/media/image/generate/route.ts) is gone from the audit path, but the CLI calls the same hosted route from apps/cli/src/cloud/image.rs.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with a Managed Cloud account and start the app with agi.",
+   "Type /image a red bicycle and press Enter.",
+   "Wait for the reply. Look for a Saved line with a file path, the line AI-generated with, and a chip that says /image open to view."
+  ],
+  "where": "Type /image a red bicycle in the interactive app (run agi, then type it). In a terminal: agi image \"a red bicycle\""
+ },
+ "S44.02": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "List the image models this account can generate with, and exit."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Catalogue image model to use instead of the first admitted one."
+   }
+  ],
+  "needs": "a Managed Cloud account",
+  "note": "There is no picker screen. The model is chosen with the --model or -m flag, and without it the first admitted model is used.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi image --list-models and note the model names and their states.",
+   "Run agi image \"a red bicycle\" --model <one name from the list>.",
+   "Read the AI-generated with line in the output and check it names the model you chose."
+  ],
+  "where": "Run agi image --list-models in a terminal, then agi image \"a red bicycle\" --model <name>. In the app: /image --model <name> <prompt>"
+ },
+ "S44.07": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Aspect ratio as width:height, e.g. 16:9."
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Put --aspect 16:9, --quality hd, --transparent, --model or -n before the prompt"
+   }
+  ],
+  "needs": "a Managed Cloud account",
+  "note": "--aspect and --size cannot be used together.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi image --aspect 16:9 \"a red bicycle\".",
+   "Open the saved file and check its shape is wide, 16 by 9.",
+   "Run the same with a ratio the model does not list in agi image --list-models. Read the error, which says the model does not make that ratio and lists what it supports.",
+   "Compare with Expected: the ratio should come from the ratios the model supports."
+  ],
+  "where": "Run agi image --aspect 16:9 \"a red bicycle\" in a terminal. In the app: /image --aspect 16:9 <prompt>"
+ },
+ "S44.08": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Image size, e.g. 256x256. The account decides the default."
+   }
+  ],
+  "needs": "a Managed Cloud account",
+  "note": "The /image help text in the app does not list --size, though the app parser accepts it. The Code line's line numbers have moved; the flag is still in apps/cli/src/lib.rs and apps/cli/src/cloud/image.rs.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi image --size 256x256 \"a red bicycle\".",
+   "Open the saved file and check its pixel size.",
+   "Read the AI-generated with line, which shows the size.",
+   "Compare with Expected: the size should be the one picked."
+  ],
+  "where": "Run agi image --size 256x256 \"a red bicycle\" in a terminal"
+ },
+ "S44.09": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Rendering quality the hosted route accepts (standard or hd)."
+   }
+  ],
+  "needs": "a Managed Cloud account",
+  "note": "Expected says standard/HD, but the code accepts only the lowercase words standard and hd. HD in capitals is refused with a message.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi image --quality hd \"a red bicycle\".",
+   "Read the AI-generated with line and check it says hd quality.",
+   "Run agi image --quality standard \"a red bicycle\" and check it says standard quality.",
+   "Compare with Expected: the quality should be the level picked."
+  ],
+  "where": "Run agi image --quality hd \"a red bicycle\" in a terminal. In the app: /image --quality hd <prompt>"
+ },
+ "S44.10": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "How many images to generate."
+   }
+  ],
+  "needs": "a Managed Cloud account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Run agi image -n 3 \"a red bicycle\".",
+   "Read the printed file paths and count them.",
+   "If you ask for more than the model allows, read the error that says the model makes at most that many images per request.",
+   "Compare with Expected: every image asked for should be listed."
+  ],
+  "where": "Run agi image -n 3 \"a red bicycle\" in a terminal. In the app: /image -n 3 <prompt>"
+ },
+ "S44.11": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Draw on a transparent background."
+   }
+  ],
+  "needs": "a Managed Cloud account; an image viewer that shows transparency",
+  "note": "--transparent=false turns off a saved default.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi image --transparent \"a red bicycle\".",
+   "Open the saved file in an image viewer and check whether the background is transparent.",
+   "Run with a model that cannot make a transparent background. Read the error that says the model cannot make one."
+  ],
+  "where": "Run agi image --transparent \"a red bicycle\" in a terminal. In the app: /image --transparent <prompt>"
+ },
+ "S44.18": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Esc stops it."
+   },
+   {
+    "file": "apps/cli/src/cloud/image.rs",
+    "text": "Stopped this image."
+   }
+  ],
+  "needs": "a Managed Cloud account; enough time to press Esc before the image finishes",
+  "note": "Whether billing stops is decided by the server and cannot be checked from the CLI code.",
+  "reachable": "yes",
+  "steps": [
+   "Type /image a red bicycle and press Enter.",
+   "While the image is generating, press Esc.",
+   "Look for the message Stopped this image.",
+   "Compare with Expected: the job should stop and the stop should be recorded."
+  ],
+  "where": "In the app, type /image a red bicycle and press Esc while it is generating. In a terminal, press Ctrl-C during agi image"
+ },
+ "S44.19": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/image retry tries a failed or stopped image"
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Run `agi image --retry` to try it again."
+   }
+  ],
+  "needs": "a Managed Cloud account and one failed or stopped image",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Stop an image with Esc, or let one fail.",
+   "Type /image retry and press Enter.",
+   "Look for the same prompt shown again and a new Saved line.",
+   "Compare with Expected: the retry should use the same prompt and settings and not ask you to type them again."
+  ],
+  "where": "Type /image retry in the app, or run agi image --retry in a terminal"
+ },
+ "S44.22": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/image open to view"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/image open views the last"
+   }
+  ],
+  "needs": "a Managed Cloud account and a computer with an image viewer",
+  "note": "The viewer is the system default image app, opened from the file. The code does not draw a full-screen view inside the terminal. If no viewer opens, the message says where the file is.",
+  "reachable": "yes",
+  "steps": [
+   "Generate an image with /image a red bicycle.",
+   "Type /image open and press Enter.",
+   "Look for the message Opened with the file path, and the image in the system viewer.",
+   "Compare with Expected: the image should open full screen."
+  ],
+  "where": "Generate an image, then type /image open in the app"
+ },
+ "S44.23": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/image last shows what the last one used"
+   },
+   {
+    "file": "apps/cli/src/cloud/image.rs",
+    "text": "Prompt:"
+   },
+   {
+    "file": "apps/cli/src/cloud/image.rs",
+    "text": "Settings:"
+   }
+  ],
+  "needs": "a Managed Cloud account and one earlier image on this device",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Generate an image.",
+   "Type /image last and press Enter.",
+   "Look for the Prompt: line and the Settings: line, with the model, ratio, size, quality and count.",
+   "Compare with Expected: the prompt and settings shown should match the image."
+  ],
+  "where": "Type /image last in the app, or run agi image --last in a terminal"
+ },
+ "S44.24": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/image again reuses"
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Reuse the prompt and settings of your last image."
+   }
+  ],
+  "needs": "a Managed Cloud account and one earlier image on this device",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Generate an image with a prompt, for example /image a red bicycle.",
+   "Type /image again and press Enter.",
+   "Look for the Prompt: line showing the same prompt and a new Saved line.",
+   "Compare with Expected: the same prompt should be used again in one action."
+  ],
+  "where": "Type /image again in the app, or run agi image --again in a terminal"
+ },
+ "S44.25": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "A prompt or setting given here replaces that part."
+   }
+  ],
+  "needs": "a Managed Cloud account and one earlier image on this device",
+  "note": "This reuses the settings of the last image, not the saved defaults from --save-defaults.",
+  "reachable": "yes",
+  "steps": [
+   "Generate an image with agi image --aspect 16:9 \"a red bicycle\".",
+   "Run agi image \"a blue car\" --again.",
+   "Read the AI-generated with line and check it still shows 16:9 aspect.",
+   "Compare with Expected: the settings of the earlier image should carry over."
+  ],
+  "where": "Run agi image \"a blue car\" --again in a terminal (or agi image --again). In the app: /image again"
+ },
+ "S44.27": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Browse your Library: generated images and videos, uploaded and generated files."
+   }
+  ],
+  "needs": "a Managed Cloud account",
+  "note": "The save to the account Library is done by the hosted route, not by a control in the CLI. The check is the library listing.",
+  "reachable": "yes",
+  "steps": [
+   "Generate an image with agi image \"a red bicycle\".",
+   "Run agi library --kind image.",
+   "Look for the new image in the list.",
+   "Compare with Expected: the image should be in the Library and still be there later."
+  ],
+  "where": "Generate an image with agi image \"a red bicycle\", then run agi library in a terminal"
+ },
+ "S44.29": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Where to write the image."
+   }
+  ],
+  "needs": "a Managed Cloud account; an image viewer",
+  "note": "There is no separate full-quality download setting. The file is the bytes the hosted route returns, and --quality hd sets the generation quality.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi image \"a red bicycle\" --out ./test-image.png.",
+   "Open the saved file in an image viewer.",
+   "Compare it with the image in the account and with Expected: it should be the full-quality image."
+  ],
+  "where": "Run agi image \"a red bicycle\" --out <folder or file name> in a terminal"
+ },
+ "S44.36": {
+  "labels": [
+   {
+    "file": "apps/cli/src/cloud/image.rs",
+    "text": "AI-generated with"
+   },
+   {
+    "file": "apps/cli/src/cloud/image.rs",
+    "text": "Labelled as AI-generated in the file metadata."
+   }
+  ],
+  "needs": "a Managed Cloud account; an image viewer or a metadata tool to check the file",
+  "note": "The code writes the label into the file metadata and into the CLI output text. No label drawn on the image itself was found. Files in formats the CLI cannot write metadata into get a warning line instead.",
+  "reachable": "yes",
+  "steps": [
+   "Generate an image with agi image \"a red bicycle\".",
+   "Read the line that starts with AI-generated with.",
+   "Look for Labelled as AI-generated in the file metadata.",
+   "Compare with Expected: the label should be visible and in the file metadata."
+  ],
+  "where": "Run agi image \"a red bicycle\" in a terminal, then read the line after the file path"
+ }
+}

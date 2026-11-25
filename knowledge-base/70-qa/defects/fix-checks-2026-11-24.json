@@ -1,0 +1,380 @@
+[
+ {
+  "fix": "A workspace member a project is shared with can chat inside it (member chat in shared project)",
+  "verdict": "works_with_problems",
+  "what_was_seen": "The fix works in a browser. The member opened the shared project and asked \"What is 12 plus 30?\". The answer was \"42 PELICAN\" with no error, and the chat was still in the project after a reload. The same worked at \"Can view\" and at \"Can edit\". The owner did not see the member's chats. Stopping the share closed the project to the member. A personal workspace could not reach it. The rough edges are the move action working only on the second try, the wording of the error shown to a revoked member, and some cosmetic glitches.",
+  "cases": [
+   {
+    "case": "1. Owner creates the project, sets the instruction, shares it with the workspace",
+    "result": "as_expected",
+    "seen": "Created \"vsp shared 20261124T2330Z\" in the team workspace \"Test workspace (team)\". Instruction saved in Project settings (toast \"Project updated\"). Project options > Share offers \"Who can open it\": \"Everyone in the workspace can view\" or \"Only people you invite\". After sharing, the member gets a row with a per-person dropdown: \"Can view\" (the default), \"Can edit\" or \"No access\". The dialog also has \"Add people\" and \"Stop sharing\".",
+    "screenshot": "~/.cache/agi-audit/web-lane/runs/verify/shared-project-chat/15-shared.png"
+   },
+   {
+    "case": "2. Member chats in the shared project, then reloads",
+    "result": "as_expected",
+    "seen": "The project showed in the member's sidebar and on the Projects page. Its page showed a \"Shared with you\" badge and the text \"This project's instructions and files are shared with you. Your chats and memories here stay private to you.\" Sent \"What is 12 plus 30?\" from the project page. The answer was \"42 PELICAN\" with no error. The chat opened as a \"Work session\" titled \"Adding 12 and 30\", and the owner's chat opened the same way. After a reload the chat was still there, and it was listed in the project's Chats tab. This ran at the default \"Can view\".",
+    "screenshot": "~/.cache/agi-audit/web-lane/runs/verify/shared-project-chat/21-member-reload.png"
+   },
+   {
+    "case": "3. Member starts a chat outside the project, then moves it into the project",
+    "result": "as_expected",
+    "seen": "A plain chat answered \"2 + 2 = 4.\" The product offers \"Move to project\" in the sidebar chat menu and in the header \"Conversation options\" menu. The first attempt (opening the submenu with ArrowRight, then a mouse click on the project name) did nothing: the chat stayed in Recents and was not in the project. The second attempt (header menu, ArrowRight, Enter) worked. The chat left Recents and appeared in the project's Chats tab as \"2 Plus 2 Outside Chat\". There was no toast.",
+    "screenshot": "~/.cache/agi-audit/web-lane/runs/verify/shared-project-chat/34-project-with-2.png"
+   },
+   {
+    "case": "4. Owner does not see the member's chats and can still chat in the project",
+    "result": "as_expected",
+    "seen": "While the member had 2 chats in the project, the owner's project page showed \"No chats yet\". The owner's search for \"Outside Chat\" gave \"Found 0 results (0 conversations, 0 messages)\". The owner sent \"What is 20 plus 22?\" in the project and got \"42 PELICAN\". Afterwards the owner's list showed only \"Adding 20 and 22\".",
+    "screenshot": "~/.cache/agi-audit/web-lane/runs/verify/shared-project-chat/37-owner-project-after.png"
+   },
+   {
+    "case": "5. View-only versus edit access, repeat of case 2",
+    "result": "as_expected",
+    "seen": "The product offers \"Can view\", \"Can edit\" and \"No access\". Member set to \"Can edit\" (toast \"Access updated\"): \"What is 12 plus 30? (can edit)\" gave \"42 PELICAN\". Member set explicitly back to \"Can view\": \"What is 12 plus 30? (view only)\" gave \"42 PELICAN\". Both levels allow chatting, with no error.",
+    "screenshot": "~/.cache/agi-audit/web-lane/runs/verify/shared-project-chat/42-member-view-chat.png"
+   },
+   {
+    "case": "6. Owner stops sharing; member reloads and tries to send in the old project chat",
+    "result": "not_as_expected",
+    "seen": "Owner's \"Stop sharing\" showed a confirmation: \"Stop sharing vsp shared 20261124T2330Z? Everyone you shared it with loses access to its instructions and files. You keep the project and can share it again.\" Then the toast \"Project is no longer shared\". The member reloaded the project URL and saw \"Project not found\" / \"This cloud project does not exist, is unavailable to this account, or was deleted.\" The Projects page showed \"No projects yet.\" The access closure works. In the old chat, sending \"And what is 5 plus 5?\" gave \"Response failed\" and \"Error: This project is archived, deleted, or unavailable. Remove the conversation from the project or restore the project before retrying.\" That text appeared three times (message, side panel, red banner with Retry). It is a readable message but misleading for a member, who cannot restore the project, and it carries an \"Error:\" prefix. The member's chats also vanished from the sidebar (\"No conversations yet\") though they still opened by URL. After the owner re-shared, all 4 chats were back in the project list.",
+    "screenshot": "~/.cache/agi-audit/web-lane/runs/verify/shared-project-chat/48-send-click-11s.png"
+   },
+   {
+    "case": "7. Member switches to the personal workspace",
+    "result": "as_expected",
+    "seen": "The workspace menu lists \"Personal (Only you)\" and \"Test workspace (team) member\". In Personal (\"Workspace: Personal\") the Projects page showed \"No projects yet.\" The direct project URL showed \"Project not found\" / \"This cloud project does not exist, is unavailable to this account, or was deleted.\" The project was shared with the workspace at the time.",
+    "screenshot": "~/.cache/agi-audit/web-lane/runs/verify/shared-project-chat/55-personal-direct-url.png"
+   }
+  ],
+  "problems": [
+   {
+    "title": "Move to project by mouse did not apply on the first try",
+    "size": "minor",
+    "repro_steps": [
+     "As the member, send a plain chat outside any project",
+     "Open the sidebar menu for that chat, then Move to project",
+     "Open the submenu with ArrowRight and click the project name",
+     "The chat stays in Recents and is not in the project; no message appears",
+     "The same move via the header Conversation options menu with the Enter key worked. Cause unknown: it may be the headless click, not the product."
+    ],
+    "visible_text": "Chat stays under Recents; no toast"
+   },
+   {
+    "title": "Revoked member's error says to restore the project",
+    "size": "minor",
+    "repro_steps": [
+     "Member has a chat open in a shared project",
+     "Owner presses Stop sharing and confirms",
+     "Member sends a message in that chat"
+    ],
+    "visible_text": "Error: This project is archived, deleted, or unavailable. Remove the conversation from the project or restore the project before retrying."
+   },
+   {
+    "title": "Member's project chats vanish from the sidebar after the share is stopped",
+    "size": "minor",
+    "repro_steps": [
+     "Member chats in a shared project",
+     "Owner stops sharing",
+     "Member reloads: sidebar shows \"No conversations yet\", but the chat still opens by its URL"
+    ],
+    "visible_text": "No conversations yet"
+   },
+   {
+    "title": "Stray text overlaps the Project name field in Project settings",
+    "size": "cosmetic",
+    "repro_steps": [
+     "As the owner open a project, then Project options > Project settings",
+     "The faint text \"folde\" sits on top of the start of the name (reproduced twice)"
+    ],
+    "visible_text": "foldevsp shared 20261124T2330Z"
+   },
+   {
+    "title": "Console 404 on branches request after the member's first project chat",
+    "size": "cosmetic",
+    "repro_steps": [
+     "As the member send the first message from a project page",
+     "Console shows: GET /api/chat/conversations/12207288-0425-42a8-b1ed-57d49538b0a6/branches 404 (an id different from the chat's own id)"
+    ],
+    "visible_text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+   },
+   {
+    "title": "One Enter keypress did not send after the share was stopped",
+    "size": "minor",
+    "repro_steps": [
+     "Member opens an old project chat after the share was stopped, types a message, presses Enter",
+     "Text stays in the box; the Send button then sent it. Seen once, cause unknown."
+    ],
+    "visible_text": "And what is 5 plus 5? (left in the composer)"
+   },
+   {
+    "title": "A plain \"2 plus 2\" chat ran a web search",
+    "size": "cosmetic",
+    "repro_steps": [
+     "As the member send \"vsp-b outside chat: what is 2 plus 2?\" outside a project",
+     "The answer showed \"Searched the web \u00b7 5 sources\" before \"2 + 2 = 4.\""
+    ],
+    "visible_text": "Searched the web \u00b7 5 sources"
+   }
+  ],
+  "not_checked": [
+   "Dark mode and the 390 px phone width were not looked at, so the 'looks right' point was only checked at 1280 px light.",
+   "The \"Add people\" and \"Only people you invite\" routes were not exercised; only the workspace-wide share and the per-person access dropdown were used.",
+   "Per-message check of whether the project's instructions reach a chat that was moved into the project: not done. Only chats started in the project were checked for PELICAN.",
+   "Some early evidence screenshots (05-ws, 06-teamws, 07-projects, 10-opts, 11-settings, 17-member-projects, 19-20 member sends, 30-33, 45-48) were deleted by a cleanup glob at the end of the run; the later numbered screenshots and the two videos remain."
+  ],
+  "evidence_dir": "~/.cache/agi-audit/web-lane/runs/verify/shared-project-chat"
+ },
+ {
+  "fix": "Two scheduled-task fixes. Fix A: a scheduled run gets four minutes instead of 40 seconds. Fix B: deleting a shared schedule, or stopping sharing, kills its public link.",
+  "verdict": "works_with_problems",
+  "what_was_seen": "Fix A could not be checked: every run, manual or scheduled, failed in about 334 ms with the usage-limit message, so none got far enough to hit the time limit. Fix B works. The shared link opened read-only when signed out. After the schedule was deleted, and again after \"Stop sharing\", reloading the link showed \"Shared schedule unavailable\". The stop-sharing schedule stayed in the list.",
+  "cases": [
+   {
+    "case": "A1 long-running run finishes with a real result",
+    "result": "not_checked",
+    "seen": "Created \"vsc long 20261124T2330Z\" (One Time, Auto). Run now at 3:24 PM gave the banner \"Schedule finished with status failed.\" The card showed \"Last run: Your rolling 5-hour usage limit is reached. Wait for earlier usage to leave the window or upgrade for a higher limit.\" History showed failed, 334 ms, manual. Changing the model to (model name) and running again at 3:26 PM failed the same way. The account had used its 50 credits, and /chat showed \"You have used your 50 credits for this 5-hour window. Resets in 3 hr 20 min\". This is a machine/account limit, so the 4-minute budget was never exercised.",
+    "screenshot": "08-runnow.png"
+   },
+   {
+    "case": "A2 same task run a second time by its schedule",
+    "result": "not_checked",
+    "seen": "The timer did start the one-time schedule set for 3:30 PM: history gained a row \"failed, Nov 24, 2026, 3:30 PM\" with the same usage-limit text. The sweep fires, but no finished run came out of it because the credits were gone. The task card then showed \"Completed\" and Paused.",
+    "screenshot": "22-final-list.png"
+   },
+   {
+    "case": "A3 running state during a run, and after reload",
+    "result": "not_checked",
+    "seen": "Runs failed in about 334 ms, so no running state was ever on screen. After reload the history rows showed failed and nothing was stuck."
+   },
+   {
+    "case": "B1 share by link, open signed out",
+    "result": "as_expected",
+    "seen": "More actions > Share opened a dialog: \"Anyone with the link can see this schedule's name, instructions and timing as they are now, and add a copy to their own schedules. Run history, results and connectors stay private, and later edits stay private until you share again.\" After \"Create link\" it showed http://localhost:3000/share/schedules/elEuiQ3-Yq-RHvsOQmLfFdtH. A signed-out window showed \"Shared schedule\", \"vsc share 20261124T2330Z\", \"Runs: Not yet\", \"Instructions: Write a two-sentence note about the benefits of daily walking.\", \"Adding it makes your own copy to review first. It runs on your account.\" and an \"Add to my schedules\" button.",
+    "screenshot": "13-b1-shared-signedout.png"
+   },
+   {
+    "case": "B2 delete dialog wording, then the link signed out",
+    "result": "as_expected",
+    "seen": "Delete dialog: heading \"Delete Schedule?\", body \"Delete \u201cvsc share 20261124T2330Z\u201d, its run history and event triggers. This action cannot be undone.\", buttons Cancel and \"Delete Schedule\". It does not say the public link stops working. Status \"Schedule deleted.\" Reloading the signed-out link showed \"Shared schedule unavailable. This link may have been revoked or entered incorrectly. Ask the sender for a new link.\" with an \"Open chat\" button, and none of the old content.",
+    "screenshot": "16-b2-link-after-delete.png"
+   },
+   {
+    "case": "B3 stop sharing keeps the schedule and kills the link",
+    "result": "as_expected",
+    "seen": "Shared \"vsc share2 20261124T2330Z\" (link .../share/schedules/pdCGWB-QMiFzJK_okgOkVZe6) and it opened signed out. \"Stop sharing\" opened a confirm: \"Stop sharing this schedule?\" with \"The link stops working for everyone who has it. Copies people already made stay theirs. Sharing again creates a new link.\" I reloaded once before confirming and the link still worked, as it should. After confirming and reloading, the signed-out page showed \"Shared schedule unavailable. This link may have been revoked or entered incorrectly. Ask the sender for a new link.\" The schedule stayed in the list as Active, next run Wed 9:00 AM.",
+    "screenshot": "21-b3-link-after-stop.png"
+   }
+  ],
+  "problems": [
+   {
+    "title": "Delete-schedule dialog does not say the public share link will stop working",
+    "size": "minor",
+    "repro_steps": [
+     "Sign in as the Premium account, open Scheduled",
+     "Create a schedule and share it by link (More actions > Share > Create link)",
+     "More actions > Delete"
+    ],
+    "visible_text": "Delete \u201cvsc share 20261124T2330Z\u201d, its run history and event triggers. This action cannot be undone.",
+    "screenshot": "14-b2-delete-dialog.png"
+   },
+   {
+    "title": "Shared schedule page shows no timing, and \"Runs: Not yet\" is an odd label",
+    "size": "minor",
+    "repro_steps": [
+     "Share a one-time schedule by link",
+     "Open the link signed out"
+    ],
+    "visible_text": "Runs / Not yet / Instructions. The share dialog says viewers see the schedule's \"name, instructions and timing\", but no run time or time zone is shown.",
+    "screenshot": "13-b1-shared-signedout.png"
+   },
+   {
+    "title": "Premium account was out of credits, which blocked every run (setup limit, not a product defect)",
+    "size": "major",
+    "repro_steps": [
+     "Sign in as agi-dev-premium+clerk_test@example.com",
+     "Scheduled > More actions > Run now"
+    ],
+    "visible_text": "Your rolling 5-hour usage limit is reached. Wait for earlier usage to leave the window or upgrade for a higher limit.",
+    "screenshot": "08-runnow.png"
+   }
+  ],
+  "evidence_dir": "~/.cache/agi-audit/web-lane/runs/verify/schedules",
+  "not_checked": [
+   "A1: long run finishing with a real result and its timing, because the account's 50 credits for the 5-hour window were used up and runs failed in about 334 ms. Retry after the window resets (about 3 hr 20 min after 3:20 PM CST) or with a fresh Premium account.",
+   "A2: a second finished run from the schedule. The 3:30 PM scheduled run fired from the sweep, but it failed on the same usage limit.",
+   "A3: running state during a run and after reload, because no run lasted long enough to show one.",
+   "Dark/light and phone-width checks of the schedule screens were not done."
+  ]
+ },
+ {
+  "fix": "Slack link page now names the Slack account, requires a ticked box before Connect, and notifies the account owner afterwards.",
+  "verdict": "could_not_check",
+  "what_was_seen": "The new content of the page could not be reached on this machine. The running web server has no Slack app configured: there are no SLACK settings in apps/web/.env.local, and the server's check isSlackAppConfigured() therefore fails. The page's preview request (GET /api/slack/link) returns 503, and the server log says \"AGI in Slack is not available right now\". Settings > Slack app also says \"AGI in Slack is not set up on this service yet.\" So after sign-in the page shows only the intro text, a red \"Service temporarily unavailable\", a disabled \"Connect Slack account\" button and \"Cancel\". The Slack workspace name, the Slack account, the AGI email, the checkbox and the hint never appeared. The same happened for link 2. Only the sign-in return (case 1) and the light/dark and width views (case 7, of this error state only) could be checked. I did not change any configuration. This is a setup limit, not a product failure; the fix itself is unverified.",
+  "cases": [
+   {
+    "case": "1. Signed out, open link 1: sign in, then return to the link page",
+    "result": "as_expected",
+    "seen": "The page does not redirect on its own. It shows the intro, then the red text 'Sign in to the AGI account Slack should answer as. Sign in or create an account.', a disabled 'Connect Slack account' button and 'Cancel'. 'Sign in' leads to /login?redirectTo=/slack/link?token=.... After email plus code 424242 I was returned to /slack/link?token=... (not the home page). The signed-out view does not name the workspace or the Slack account.",
+    "screenshot": "01-signedout.small.png, 04-after-code.small.png"
+   },
+   {
+    "case": "2. Signed in: names the workspace, the Slack account, the AGI email; Connect unusable until the box is ticked, with a hint",
+    "result": "not_checked",
+    "seen": "Not reachable. The page shows only 'Service temporarily unavailable' under the intro text, with a disabled 'Connect Slack account'. There is no workspace name, no Slack account wording, no AGI email, no checkbox and no hint. Cause: the server has no Slack app config, so the preview returns 503.",
+    "screenshot": "04-after-code.small.png"
+   },
+   {
+    "case": "3. Press Connect without ticking (click, and Tab then Enter): nothing is connected",
+    "result": "not_checked",
+    "seen": "There is no checkbox to leave unticked, so this does not test the new rule. Mouse click: Playwright reports the button 'is not enabled'. Keyboard: Connect is reachable by Tab (aria-disabled=true, not disabled), and Enter caused no request and no page change. Nothing was connected, but only because the page is in its unavailable state. No POST to the Slack link API occurred.",
+    "screenshot": "08-enter-on-connect.png"
+   },
+   {
+    "case": "4. Tick the box and press Connect: clear success state; notice to the account owner",
+    "result": "not_checked",
+    "seen": "No checkbox exists and Connect stays disabled, so nothing could be connected. The owner notice could not be tested. Settings > Slack app (opened at /chat#settings/slack) has three sections: 'Waiting for your approval' ('Nothing is waiting for you.'), 'Your Slack accounts' ('No Slack accounts are linked yet.') and 'Slack workspaces you added' ('You have not added the app to a Slack workspace.'). It shows no notice, since nothing was linked.",
+    "screenshot": "10-settings-slack.small.png"
+   },
+   {
+    "case": "5. Open link 1 again: says used or expired",
+    "result": "not_checked",
+    "seen": "Link 1 was never consumed, so there was nothing to reopen. Reopening it gives the same 'Service temporarily unavailable'. The expected 'used or expired' wording (in the code: 'This link has expired or was already used. Send AGI a message in Slack to get a new one.') was never shown."
+   },
+   {
+    "case": "6. Open link 2 and Cancel; connected accounts list in Settings; removal of the case 4 account",
+    "result": "not_checked",
+    "seen": "Link 2 shows the same 503 state ('Service temporarily unavailable', disabled Connect). Pressing Cancel on link 1's page leads to http://localhost:3000/ and nothing is connected. Connected accounts are listed in Settings > Slack app under 'Your Slack accounts', currently empty. Removal could not be checked because case 4 never connected anything."
+   },
+   {
+    "case": "7. Light and dark at widths 1280 and 390",
+    "result": "as_expected",
+    "seen": "Only the unavailable state was seen, not the real consent page. At 1280 and 390, in both light and dark, there is no overlap, cut-off or horizontal scroll. The grey disabled button has a dark label on grey in dark mode, which is low contrast but disabled. The theme toggle works.",
+    "screenshot": "05-dark-1280.small.png, 06-dark-390.small.png, 07-light-390.small.png"
+   }
+  ],
+  "problems": [
+   {
+    "title": "Unavailable state is vague and Connect is still focusable",
+    "size": "minor",
+    "repro_steps": [
+     "Sign in as agi-dev-basic+clerk_test@example.com",
+     "Open a /slack/link?token=... address on a server without Slack configured",
+     "The red text reads 'Service temporarily unavailable', and the server's own message ('AGI in Slack is not available right now') is not shown",
+     "Press Tab until 'Connect Slack account' is focused: it is reachable although aria-disabled=true"
+    ],
+    "visible_text": "Service temporarily unavailable",
+    "screenshot": "04-after-code.small.png"
+   },
+   {
+    "title": "Signed-out view shows a disabled Connect button and Cancel with no workspace or account context",
+    "size": "cosmetic",
+    "repro_steps": [
+     "Signed out, open /slack/link?token=...",
+     "The page shows the intro, 'Sign in to the AGI account Slack should answer as. Sign in or create an account.', a disabled Connect button and Cancel, but no workspace or Slack account name"
+    ],
+    "visible_text": "Sign in to the AGI account Slack should answer as. Sign in or create an account.",
+    "screenshot": "01-signedout.small.png"
+   }
+  ],
+  "not_checked": [
+   "Real Slack display-name wording (no real Slack token; expected)",
+   "Fallback wording 'A Slack account in Acme Dev': the page never reached the consent view because the server has no Slack app config (SLACK_* settings absent; /api/slack/link returns 503)",
+   "The workspace name, Slack account and AGI email on the consent view",
+   "The tick-box rule and the hint",
+   "Connect without ticking (a real test needs the consent view)",
+   "A successful connect and its success state",
+   "The notice to the account owner",
+   "Reuse of a consumed link (link 1 was never consumed, so it was never shown as used or expired)",
+   "Cancel on link 2 with a consent view",
+   "Removal of a connected Slack account (none was connected)"
+  ],
+  "evidence_dir": "~/.cache/agi-audit/web-lane/runs/verify/slack-link"
+ },
+ {
+  "fix": "Idle sign-out now runs only when a person picks a limit; default is \"Never\". Checked in a browser over about 65 minutes with two accounts.",
+  "verdict": "works_with_problems",
+  "what_was_seen": "The core fix works. The default is \"Never\". With 15 minutes chosen, A was signed out at about 15 minutes of idleness, twice. With the default, B stayed signed in at 30 and 62 minutes with no sign-out and no warning. Three expected pieces are missing or unverified. No \"you will be signed out soon\" warning appeared at any point in either 15-minute cycle. The sign-out landed on the marketing home page \"/\", not a sign-in page, and neither page says why. B's message at 62 minutes was not answered because the account had hit its usage limit, so the answer part of Case 5 is unchecked.",
+  "cases": [
+   {
+    "case": "Case 1 (vid-a): default shown and list of choices",
+    "result": "as_expected",
+    "seen": "Settings > Security > Security Settings > label \"Sign out after inactivity\" shows \"Never\". Choices: Never, 15 minutes, 30 minutes, 1 hour, 2 hours, 4 hours, 8 hours, 24 hours. Helper text: \"Signs you out of this browser after this long without use. Never keeps you signed in until you sign out.\"",
+    "screenshot": "~/.cache/agi-audit/web-lane/runs/verify/idle-sign-out/05-a-options.small.png"
+   },
+   {
+    "case": "Case 2 (vid-a): choose 15 minutes, save, reload",
+    "result": "as_expected",
+    "seen": "Chose \"15 minutes\" and pressed \"Save Security Settings\". After a reload the control still says \"15 minutes\". It also still said 15 minutes after signing in again. Minor: no confirmation text or toast was seen about 1 second after Save; the button only greyed out.",
+    "screenshot": "~/.cache/agi-audit/web-lane/runs/verify/idle-sign-out/07-a-after-reload.small.png"
+   },
+   {
+    "case": "Case 3 (vid-a): warning at about 13.5 minutes",
+    "result": "not_as_expected",
+    "seen": "Last touch 15:25:25. Screenshots at 13m31s, 14m00s and 14m35s show the plain chat page (\"Good afternoon, Test\") with no warning and no stay-signed-in control. Page text also contained no warning. I repeated the cycle (last touch 15:43:19) and polled every 18s from 7 to 15 minutes. No warning appeared at any poll.",
+    "screenshot": "~/.cache/agi-audit/web-lane/runs/verify/idle-sign-out/09-a-1355min.small.png"
+   },
+   {
+    "case": "Case 3 (vid-a): signed out at about 16 minutes, on a sign-in page that says why",
+    "result": "not_as_expected",
+    "seen": "The sign-out happened at about 15 minutes. Cycle 1: between 14m35s and 15m10s. Cycle 2: between 14m50s and 15m07s. The page changed to the marketing home \"/\" (nav with \"Sign in\" and \"Try chat\"), not a sign-in page. Nothing on it says the person was signed out for inactivity. Pressing \"Sign in\" gave /login (\"Log in or sign up\") with no reason either. Signing in again with the email code worked and landed on /chat.",
+    "screenshot": "~/.cache/agi-audit/web-lane/runs/verify/idle-sign-out/11-a-signin-page.small.png"
+   },
+   {
+    "case": "Case 4 (vid-a): set back to Never and confirm it saves",
+    "result": "as_expected",
+    "seen": "Chose \"Never\" and saved. After a reload the control says \"Never\". Done twice, once after each cycle.",
+    "screenshot": "~/.cache/agi-audit/web-lane/runs/verify/idle-sign-out/13-a-never-saved.small.png"
+   },
+   {
+    "case": "Case 5 (vid-b): still signed in at 30 and 62 minutes, no warning, message answered",
+    "result": "not_as_expected",
+    "seen": "Signed in at 30 minutes (15:57:15) and 62 minutes (16:28:58): still on /chat as Test Premium with no warning or sign-out. I sent \"vid-b: what is 7 plus 8? Reply with the number only.\" and it was not answered. The banner read \"Your rolling 5-hour usage limit is reached. Wait for earlier usage to leave the window or upgrade for a higher limit. Resets in 2 hr 14 min.\" After a reload it read \"You have used your 50 credits for this 5-hour window\". The usage bar had shown 100% since sign-in at about 15:27. The session was still valid after the reload. The no-sign-out and no-warning part passed; the answered-message part could not be checked because of the usage limit.",
+    "screenshot": "~/.cache/agi-audit/web-lane/runs/verify/idle-sign-out/21-b-62min.small.png"
+   }
+  ],
+  "problems": [
+   {
+    "title": "No warning before an idle sign-out",
+    "size": "major",
+    "repro_steps": [
+     "Sign in as agi-dev-ultra+clerk_test@example.com.",
+     "Settings > Security > Sign out after inactivity: choose 15 minutes and press Save Security Settings; reload to confirm.",
+     "Close Settings with Escape and do not touch the tab.",
+     "Look at the screen at 13 to 15 minutes: no warning and no stay-signed-in control appears.",
+     "At about 15 minutes the person is signed out with no earlier notice."
+    ],
+    "screenshot": "~/.cache/agi-audit/web-lane/runs/verify/idle-sign-out/10-a-poll2.small.png",
+    "visible_text": "None. The screen shows only the normal chat home (\"Good afternoon, Test\") until the sign-out."
+   },
+   {
+    "title": "Idle sign-out lands on the marketing home and never says why",
+    "size": "major",
+    "repro_steps": [
+     "Same setup as above: 15 minutes selected, tab left untouched.",
+     "After about 15 minutes the tab shows the marketing home \"/\" with a \"Sign in\" link.",
+     "Press \"Sign in\": /login shows \"Log in or sign up\" with no message about inactivity."
+    ],
+    "screenshot": "~/.cache/agi-audit/web-lane/runs/verify/idle-sign-out/11-a-signin-page.small.png",
+    "visible_text": "Home page nav: Products, Solutions, Resources, Pricing, Contact sales, Sign in, Try chat. Sign-in page: \"Log in or sign up\". Neither mentions inactivity."
+   },
+   {
+    "title": "No visible confirmation after saving Security Settings",
+    "size": "cosmetic",
+    "repro_steps": [
+     "Settings > Security > Security Settings: change \"Sign out after inactivity\" to 15 minutes.",
+     "Press \"Save Security Settings\".",
+     "About 1 second later no toast or text confirms the save. The button only turns grey. The value did persist after a reload."
+    ],
+    "screenshot": "~/.cache/agi-audit/web-lane/runs/verify/idle-sign-out/06-a-saved.small.png",
+    "visible_text": "No confirmation text. The button label stays \"Save Security Settings\" and is greyed."
+   }
+  ],
+  "not_checked": [
+   "Case 5 answered message: vid-b (Premium) was at 100% of its 5-hour usage and the send was blocked by the limit banner, so whether a message is answered after 62 idle minutes was not checked. This is a setup limit (shared test account usage), not a sign-out.",
+   "A warning that may be shown only to a visible or foreground tab: the headless browser has no real focus, so I cannot rule this out. No warning appeared in the screenshots or page text at about 7 to 15 minutes in two cycles.",
+   "Other idle choices (30 minutes and longer) were not exercised; only 15 minutes and Never."
+  ],
+  "evidence_dir": "~/.cache/agi-audit/web-lane/runs/verify/idle-sign-out"
+ }
+]

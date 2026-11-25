@@ -1,0 +1,603 @@
+{
+ "S40.01": {
+  "labels": [
+   {
+    "file": "apps/web/shared/components/layout/AccountFooter.tsx",
+    "text": "Settings"
+   },
+   {
+    "file": "apps/web/features/settings/sections/PersonalizationSection.tsx",
+    "text": "Personalization"
+   },
+   {
+    "file": "apps/web/features/settings/sections/PersonalizationSection.tsx",
+    "text": "What should AGI call you?"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The server prompt says to use the preferred name sparingly and never to open a reply (apps/web/lib/server/user-identity.ts:184), so the name may not appear in every reply. The Settings menu item text is confirmed in AccountFooter.tsx; the trigger that opens that menu was not confirmed in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, open the account menu and choose Settings, then click Personalization.",
+   "Scroll to About you and click the field under What should AGI call you?.",
+   "Type a nickname or first name you choose (the field holds up to 60 characters).",
+   "Wait for the Saved text under the Personalization heading.",
+   "Open a new chat, send a short greeting, and check whether the reply uses the name."
+  ],
+  "where": "Settings > Personalization > About you > What should AGI call you?"
+ },
+ "S40.02": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/PersonalizationSection.tsx",
+    "text": "More about you"
+   },
+   {
+    "file": "apps/web/features/settings/sections/PersonalizationSection.tsx",
+    "text": "Personalization"
+   },
+   {
+    "file": "apps/web/shared/components/layout/AccountFooter.tsx",
+    "text": "Settings"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then click Personalization.",
+   "In About you, click the box under More about you and type a background detail, such as a hobby or a field you work in.",
+   "Wait for the Saved text under the Personalization heading.",
+   "Open a new chat and ask a question where that background would matter.",
+   "Compare the reply with Expected. The box holds up to 1,500 characters."
+  ],
+  "where": "Settings > Personalization > About you > More about you"
+ },
+ "S40.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/PersonalizationSection.tsx",
+    "text": "What best describes your work?"
+   },
+   {
+    "file": "apps/web/features/settings/sections/PersonalizationSection.tsx",
+    "text": "Personalization"
+   },
+   {
+    "file": "apps/web/shared/components/layout/AccountFooter.tsx",
+    "text": "Settings"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The role list comes from apps/web/features/settings/constants/work-descriptions.ts, which was not opened in detail.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then click Personalization.",
+   "In About you, open the list under What best describes your work? and pick a role.",
+   "Wait for the Saved text under the Personalization heading.",
+   "Open a new chat and ask for help with a task that fits the role you picked.",
+   "Compare the reply with Expected."
+  ],
+  "where": "Settings > Personalization > About you > What best describes your work?"
+ },
+ "S40.05": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/PersonalizationSection.tsx",
+    "text": "Response style"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Style"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/StyleSelector.tsx",
+    "text": "Explanatory"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The composer Style button has the same five presets and works per conversation (see S40.19).",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then click Personalization.",
+   "Open the list under Response style and pick Explanatory.",
+   "Wait for the Saved text under the Personalization heading.",
+   "Open a chat and click the Style button in the composer to confirm it shows the same choice.",
+   "Send a question and compare the reply with Expected."
+  ],
+  "where": "Settings > Personalization > Response style"
+ },
+ "S40.06": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/PersonalizationSection.tsx",
+    "text": "Response length"
+   },
+   {
+    "file": "apps/web/features/settings/sections/PersonalizationSection.tsx",
+    "text": "Shorter"
+   },
+   {
+    "file": "apps/web/features/settings/sections/PersonalizationSection.tsx",
+    "text": "Personalization"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The composer Style menu also has a Response Length row with Brief, Default and Thorough (apps/web/features/chat/components/Composer/StyleSelector.tsx).",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then click Personalization.",
+   "Open the list under Response length and pick Shorter.",
+   "Wait for the Saved text under the Personalization heading.",
+   "Open a new chat, ask a question that has a long answer, and compare its length with Expected."
+  ],
+  "where": "Settings > Personalization > Response length"
+ },
+ "S40.07": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/PersonalizationSection.tsx",
+    "text": "Response style"
+   },
+   {
+    "file": "apps/web/features/settings/sections/PersonalizationSection.tsx",
+    "text": "Formal"
+   },
+   {
+    "file": "apps/web/features/settings/sections/PersonalizationSection.tsx",
+    "text": "Personalization"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "No separate formality control was found. The closest is the Formal preset (described as Formal register in apps/web/features/chat/components/Composer/StyleSelector.tsx:35), so there is no less-formal setting other than Default.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then click Personalization.",
+   "Open the list under Response style and pick Formal.",
+   "Wait for the Saved text under the Personalization heading.",
+   "Open a new chat, send a casual question, and compare the register of the reply with Expected."
+  ],
+  "where": "Settings > Personalization > Response style > Formal"
+ },
+ "S40.08": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/PersonalizationSection.tsx",
+    "text": "Response style"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/StyleSelector.tsx",
+    "text": "Learning"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/StyleSelector.tsx",
+    "text": "Concise"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The named presets are Default, Concise, Explanatory, Learning and Formal. Warmth, Enthusiasm, Headers and lists and Emoji are separate settings (S40.09 to S40.12).",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then click Personalization.",
+   "Open the list under Response style and pick Learning.",
+   "Wait for the Saved text under the Personalization heading.",
+   "Open a new chat, send a question, and compare the reply with Expected.",
+   "Change to Concise and send the same question, then compare again."
+  ],
+  "where": "Settings > Personalization > Response style"
+ },
+ "S40.09": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/PersonalizationSection.tsx",
+    "text": "Characteristics"
+   },
+   {
+    "file": "packages/contracts/types/src/response-style-preferences.ts",
+    "text": "Warmth"
+   },
+   {
+    "file": "packages/contracts/types/src/response-style-preferences.ts",
+    "text": "Less"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The trait options are Less, Default and More.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then click Personalization.",
+   "Scroll to Characteristics and open the list under Warmth.",
+   "Pick More, then wait for the Saved text under the Personalization heading.",
+   "Open a new chat, send a question, and compare the warmth of the reply with Expected.",
+   "Pick Less, send the same question, and compare again."
+  ],
+  "where": "Settings > Personalization > Characteristics > Warmth"
+ },
+ "S40.10": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/PersonalizationSection.tsx",
+    "text": "Characteristics"
+   },
+   {
+    "file": "packages/contracts/types/src/response-style-preferences.ts",
+    "text": "Enthusiasm"
+   },
+   {
+    "file": "packages/contracts/types/src/response-style-preferences.ts",
+    "text": "Less"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then click Personalization.",
+   "Scroll to Characteristics and open the list under Enthusiasm.",
+   "Pick Less, then wait for the Saved text under the Personalization heading.",
+   "Open a new chat, send a question, and compare the enthusiasm of the reply with Expected.",
+   "Pick More, send the same question, and compare again."
+  ],
+  "where": "Settings > Personalization > Characteristics > Enthusiasm"
+ },
+ "S40.11": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/PersonalizationSection.tsx",
+    "text": "Preferred formatting"
+   },
+   {
+    "file": "apps/web/features/settings/sections/PersonalizationSection.tsx",
+    "text": "Prose"
+   },
+   {
+    "file": "packages/contracts/types/src/response-style-preferences.ts",
+    "text": "Headers and lists"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "Two controls cover this: Preferred formatting (Not set, Prose, Bullet lists, Headings and bullets, Tables and code) and the Headers and lists trait.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then click Personalization.",
+   "Open the list under Preferred formatting and pick Prose.",
+   "Wait for the Saved text under the Personalization heading.",
+   "Open a new chat, ask a question that could have a list, and check whether the reply is prose or uses lists.",
+   "Compare with Expected. Headers and lists can also be turned Less or More under Characteristics."
+  ],
+  "where": "Settings > Personalization > Preferred formatting"
+ },
+ "S40.12": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/PersonalizationSection.tsx",
+    "text": "Characteristics"
+   },
+   {
+    "file": "packages/contracts/types/src/response-style-preferences.ts",
+    "text": "Emoji"
+   },
+   {
+    "file": "packages/contracts/types/src/response-style-preferences.ts",
+    "text": "More"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then click Personalization.",
+   "Scroll to Characteristics and open the list under Emoji.",
+   "Pick Less, then wait for the Saved text under the Personalization heading.",
+   "Open a new chat, send a question that invites emoji, and check whether the reply uses any.",
+   "Pick More, send the same question, and compare with Expected."
+  ],
+  "where": "Settings > Personalization > Characteristics > Emoji"
+ },
+ "S40.13": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/PersonalizationSection.tsx",
+    "text": "Technical level"
+   },
+   {
+    "file": "apps/web/features/settings/sections/PersonalizationSection.tsx",
+    "text": "Beginner"
+   },
+   {
+    "file": "apps/web/features/settings/sections/PersonalizationSection.tsx",
+    "text": "Expert"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then click Personalization.",
+   "Open the list under Technical level and pick Beginner.",
+   "Wait for the Saved text under the Personalization heading.",
+   "Open a new chat, ask a technical question, and compare the depth of the reply with Expected.",
+   "Pick Expert, ask the same question again, and compare."
+  ],
+  "where": "Settings > Personalization > Technical level"
+ },
+ "S40.14": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/PersonalizationSection.tsx",
+    "text": "Response language"
+   },
+   {
+    "file": "apps/web/features/settings/sections/PersonalizationSection.tsx",
+    "text": "Match my message"
+   },
+   {
+    "file": "apps/web/features/settings/sections/PersonalizationSection.tsx",
+    "text": "Personalization"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "This is separate from Display Language under Settings > General (apps/web/features/settings/sections/GeneralSection.tsx).",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then click Personalization.",
+   "Open the list under Response language and pick a language other than Match my message, such as French.",
+   "Wait for the Saved text under the Personalization heading.",
+   "Open a new chat, write a message in English, and check which language the reply uses.",
+   "Compare with Expected."
+  ],
+  "where": "Settings > Personalization > Response language"
+ },
+ "S40.16": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/PersonalizationSection.tsx",
+    "text": "Instructions for AGI"
+   },
+   {
+    "file": "apps/web/features/settings/sections/PersonalizationSection.tsx",
+    "text": "Personalization"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The switch has no visible text; its accessible name is Apply instructions for AGI in the same file. When off, the hint reads Off. Your instructions are kept and not sent to the model.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then click Personalization.",
+   "Click the box under Instructions for AGI and type a standing rule, such as always end with a one-line summary.",
+   "Wait for the Saved text under the Personalization heading.",
+   "Open a new chat, send a question, and check that the reply follows the rule.",
+   "Turn off the switch beside Instructions for AGI, open a new chat, send the same question, and check the rule is no longer followed while the text stays in the box."
+  ],
+  "where": "Settings > Personalization > Instructions for AGI"
+ },
+ "S40.17": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Project settings"
+   },
+   {
+    "file": "apps/web/features/projects/components/ProjectSettingsDialog.tsx",
+    "text": "Instructions"
+   }
+  ],
+  "needs": "a project you own",
+  "note": "The row menu label comes from packages/ui/ui/src/sidebar/Sidebar.tsx; the trigger that opens it was not separately confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "In the left sidebar, open the menu on a project row and click Project settings.",
+   "In the Instructions box, type a rule for that project, such as answer in short bullets.",
+   "Click Save.",
+   "Open a chat inside that project, send a question, and check the reply follows the rule.",
+   "Open a chat in a different project and check it does not follow the same rule."
+  ],
+  "where": "Sidebar > your project's row menu > Project settings > Instructions"
+ },
+ "S40.19": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Style"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/StyleSelector.tsx",
+    "text": "Concise"
+   }
+  ],
+  "needs": "a chat with messages",
+  "note": "The composer choice is stored per conversation in apps/web/features/chat/stores/style-store.ts; the Personalization default is a separate setting.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat that already has messages and click the Style button in the composer.",
+   "Click Concise and send a message.",
+   "Compare the reply with Expected.",
+   "Open a second chat and check its Style button still shows its own choice.",
+   "Open Settings > Personalization > Response style and check the default there did not change."
+  ],
+  "where": "Style > Concise (composer, in an open chat)"
+ },
+ "S40.20": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Style"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/StyleSelector.tsx",
+    "text": "Create Custom Style"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/StyleSelector.tsx",
+    "text": "Writing sample"
+   }
+  ],
+  "needs": "a writing sample of your own",
+  "note": "The sample box exists only in the composer custom style form, not in Settings. The instruction is auto-filled only when it is empty and the sample is over 20 characters.",
+  "reachable": "yes",
+  "steps": [
+   "Click the Style button in the composer, then click Create Custom Style.",
+   "Type a name, paste two or three sentences of your own writing into Writing sample, and check the Style instruction box fills in.",
+   "Click Save.",
+   "Send a message in that chat and compare the reply's tone with your sample.",
+   "Edit the style and check the sample is still there."
+  ],
+  "where": "Style > Create Custom Style > Writing sample"
+ },
+ "S40.23": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/PersonalizationSection.tsx",
+    "text": "Reset response style"
+   },
+   {
+    "file": "apps/web/features/settings/sections/PersonalizationSection.tsx",
+    "text": "Characteristics"
+   },
+   {
+    "file": "apps/web/features/settings/sections/PersonalizationSection.tsx",
+    "text": "Personalization"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The reset also clears the composer Style choice and per-conversation picks (apps/web/features/chat/stores/style-store.ts:225). It does not change custom styles or the instructions box.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then click Personalization.",
+   "Change Response style to Concise and set one Characteristics trait to More.",
+   "Click Reset response style.",
+   "Check the toast text Response style is back to the defaults. and that Response style and the traits show Default.",
+   "Check that About you and Instructions for AGI kept their text."
+  ],
+  "where": "Settings > Personalization > Reset response style"
+ },
+ "S40.24": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Style"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/StyleSelector.tsx",
+    "text": "Explanatory"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/StyleSelector.tsx",
+    "text": "Reasoning and context"
+   }
+  ],
+  "needs": "a chat",
+  "note": "The same preset is also at Settings > Personalization > Response style.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat and click the Style button in the composer.",
+   "Click Explanatory and send a question.",
+   "Compare the reply with Expected, looking for reasoning and context."
+  ],
+  "where": "Style > Explanatory (composer, in an open chat)"
+ },
+ "S40.25": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Style"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/StyleSelector.tsx",
+    "text": "Learning"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/StyleSelector.tsx",
+    "text": "Step by step, with check-ins"
+   }
+  ],
+  "needs": "a chat",
+  "note": "The learning guidance is sent to the model from apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts; whether replies follow it was not judged.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat and click the Style button in the composer.",
+   "Click Learning, which is described as Step by step, with check-ins, and send a question.",
+   "Compare the reply with Expected: teaching, quizzing and step-by-step structure."
+  ],
+  "where": "Style > Learning (composer, in an open chat)"
+ },
+ "S40.26": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Style"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/StyleSelector.tsx",
+    "text": "Concise"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/StyleSelector.tsx",
+    "text": "Short and direct"
+   }
+  ],
+  "needs": "a chat",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat and click the Style button in the composer.",
+   "Click Concise and send a question that normally gets a long answer.",
+   "Compare the reply with Expected: it should be short and direct."
+  ],
+  "where": "Style > Concise (composer, in an open chat)"
+ },
+ "S40.27": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/StyleSelector.tsx",
+    "text": "Create Custom Style"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/StyleSelector.tsx",
+    "text": "Save"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/StyleSelector.tsx",
+    "text": "Delete style"
+   }
+  ],
+  "needs": "a chat",
+  "note": "Deleting asks first, per the confirmation text, and removes the style on every device.",
+  "reachable": "yes",
+  "steps": [
+   "Click the Style button in the composer, then click Create Custom Style.",
+   "Type a Name, a Style instruction such as Answer in two sentences, and click Save.",
+   "Check the new style is listed and selected. Click the pencil icon to edit it, change the name, and click Save changes.",
+   "Click the trash icon, then Delete style in the confirmation to delete it.",
+   "Check it is gone from the list and that the dialog warned it cannot be recovered."
+  ],
+  "where": "Style > Create Custom Style"
+ },
+ "S40.30": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Project settings"
+   },
+   {
+    "file": "apps/web/features/projects/components/ProjectSettingsDialog.tsx",
+    "text": "Personalization"
+   },
+   {
+    "file": "apps/web/features/projects/components/ProjectSettingsDialog.tsx",
+    "text": "Use your profile and instructions for AGI"
+   }
+  ],
+  "needs": "a project you own and a saved Instructions for AGI",
+  "note": "The box is ticked by default. The server choice is in apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts.",
+  "reachable": "yes",
+  "steps": [
+   "In the left sidebar, open the menu on a project row and click Project settings.",
+   "Under Personalization, untick Use your profile and instructions for AGI and read the line beneath it.",
+   "Click Save.",
+   "Open a chat in that project and send a question, then compare with Expected.",
+   "Open a chat in another project that still has the box ticked and compare."
+  ],
+  "where": "Sidebar > your project's row menu > Project settings > Personalization"
+ }
+}

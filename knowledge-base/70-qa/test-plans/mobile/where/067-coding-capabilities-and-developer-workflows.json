@@ -1,0 +1,669 @@
+{
+ "S67.01": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/pairing.ts",
+    "text": "AGI Code"
+   },
+   {
+    "file": "apps/mobile/src/features/cloud-code/CloudCodeSessionsScreen.tsx",
+    "text": "New session"
+   },
+   {
+    "file": "packages/contracts/types/src/cloud-code.ts",
+    "text": "Describe a task or ask a question"
+   }
+  ],
+  "needs": "a plan that includes managed environments, a GitHub account with a connected repository",
+  "note": "Free-form chat with the agent; there is no separate control for this feature.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu and tap AGI Code.",
+   "Tap New session, choose the repository under Where it runs, and make sure a folder is picked.",
+   "In the box Describe a task or ask a question, type: Explain this repository's structure: main parts, entry points, and how they fit.",
+   "Tap send and wait for the reply to finish.",
+   "Compare the reply with Expected: it should name main parts, entry points and how they connect."
+  ],
+  "where": "AGI Code > New session > Describe a task or ask a question"
+ },
+ "S67.02": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/pairing.ts",
+    "text": "AGI Code"
+   },
+   {
+    "file": "apps/mobile/src/features/cloud-code/CloudCodeSessionsScreen.tsx",
+    "text": "New session"
+   },
+   {
+    "file": "packages/contracts/types/src/cloud-code.ts",
+    "text": "Describe a task or ask a question"
+   }
+  ],
+  "needs": "a plan that includes managed environments, a GitHub account with a connected repository",
+  "note": "Free-form chat with the agent; no dedicated control. I did not confirm that replies always cite file and line.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu, tap AGI Code, then tap New session and pick the repository.",
+   "In Describe a task or ask a question, type: Where is the function that starts a session implemented? Give the file and line.",
+   "Tap send and wait for the reply.",
+   "Compare with Expected: the reply should cite a file and line number."
+  ],
+  "where": "AGI Code > New session > Describe a task or ask a question"
+ },
+ "S67.03": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/pairing.ts",
+    "text": "AGI Code"
+   },
+   {
+    "file": "apps/mobile/src/features/cloud-code/CloudCodeSessionsScreen.tsx",
+    "text": "New session"
+   },
+   {
+    "file": "packages/contracts/types/src/cloud-code.ts",
+    "text": "Describe a task or ask a question"
+   }
+  ],
+  "needs": "a plan that includes managed environments, a GitHub account with a connected repository",
+  "note": "Free-form chat with the agent; no dedicated control.",
+  "reachable": "yes",
+  "steps": [
+   "Open AGI Code, tap New session, and pick the repository.",
+   "In Describe a task or ask a question, type: Find every place that uses the name of a chosen function or type, across the repository.",
+   "Tap send and wait for the reply.",
+   "Compare with Expected: the reply should list references from across the repository."
+  ],
+  "where": "AGI Code > New session > Describe a task or ask a question"
+ },
+ "S67.04": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/pairing.ts",
+    "text": "AGI Code"
+   },
+   {
+    "file": "apps/mobile/src/features/cloud-code/CloudCodeSessionsScreen.tsx",
+    "text": "New session"
+   },
+   {
+    "file": "packages/contracts/types/src/cloud-code.ts",
+    "text": "Describe a task or ask a question"
+   }
+  ],
+  "needs": "a plan that includes managed environments, a GitHub account with a connected repository",
+  "note": "Free-form chat with the agent; no dedicated control.",
+  "reachable": "yes",
+  "steps": [
+   "Open AGI Code, tap New session, and pick the repository.",
+   "In Describe a task or ask a question, type: Trace how a request flows from its entry point to the place where it takes effect.",
+   "Tap send and wait for the reply.",
+   "Compare with Expected: the reply should follow the call path step by step."
+  ],
+  "where": "AGI Code > New session > Describe a task or ask a question"
+ },
+ "S67.05": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/pairing.ts",
+    "text": "AGI Code"
+   },
+   {
+    "file": "apps/mobile/src/features/cloud-code/CloudCodeSessionsScreen.tsx",
+    "text": "New session"
+   },
+   {
+    "file": "packages/contracts/types/src/cloud-code.ts",
+    "text": "Describe a task or ask a question"
+   }
+  ],
+  "needs": "a plan that includes managed environments, a GitHub account with a connected repository",
+  "note": "Free-form chat with the agent; no dedicated control.",
+  "reachable": "yes",
+  "steps": [
+   "Open AGI Code, tap New session, and pick the repository.",
+   "In Describe a task or ask a question, type a free question about the repository, for example: Which package holds the login code?",
+   "Tap send and wait for the reply.",
+   "Compare with Expected: the answer should come from reading the repository files."
+  ],
+  "where": "AGI Code > New session > Describe a task or ask a question"
+ },
+ "S67.06": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/pairing.ts",
+    "text": "AGI Code"
+   },
+   {
+    "file": "packages/contracts/types/src/cloud-code.ts",
+    "text": "Describe a task or ask a question"
+   },
+   {
+    "file": "apps/mobile/src/features/cloud-code/presentation.ts",
+    "text": "Changes"
+   }
+  ],
+  "needs": "a plan that includes managed environments, a GitHub account with a connected repository",
+  "note": "The agent works in a cloud environment; the phone only sends the request and shows the result.",
+  "reachable": "yes",
+  "steps": [
+   "Open AGI Code, tap New session, and pick the repository.",
+   "In Describe a task or ask a question, type the feature request, for example: Add a copy button to the settings page.",
+   "Tap send and wait until the turn finishes.",
+   "Tap the branch icon labelled Changes in the top bar to see which files were created or edited.",
+   "Compare with Expected: new or edited files should appear in Changes."
+  ],
+  "where": "AGI Code > New session > Describe a task or ask a question"
+ },
+ "S67.07": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/pairing.ts",
+    "text": "AGI Code"
+   },
+   {
+    "file": "packages/contracts/types/src/cloud-code.ts",
+    "text": "Describe a task or ask a question"
+   },
+   {
+    "file": "apps/mobile/src/features/cloud-code/presentation.ts",
+    "text": "Changes"
+   }
+  ],
+  "needs": "a plan that includes managed environments, a GitHub account with a connected repository",
+  "note": "Free-form chat with the agent; no dedicated control.",
+  "reachable": "yes",
+  "steps": [
+   "Open AGI Code, tap New session, and pick the repository.",
+   "In Describe a task or ask a question, describe the defect and the steps that show it.",
+   "Tap send and wait until the turn finishes.",
+   "Tap Changes in the top bar to see the edited files.",
+   "Compare with Expected: the cause should be named and the code changed to fix it."
+  ],
+  "where": "AGI Code > New session > Describe a task or ask a question"
+ },
+ "S67.08": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/pairing.ts",
+    "text": "AGI Code"
+   },
+   {
+    "file": "packages/contracts/types/src/cloud-code.ts",
+    "text": "Describe a task or ask a question"
+   },
+   {
+    "file": "apps/mobile/src/features/cloud-code/presentation.ts",
+    "text": "Changes"
+   }
+  ],
+  "needs": "a plan that includes managed environments, a GitHub account with a connected repository",
+  "note": "Free-form chat with the agent; no dedicated control.",
+  "reachable": "yes",
+  "steps": [
+   "Open AGI Code, tap New session, and pick the repository.",
+   "In Describe a task or ask a question, type a refactor request, for example: Move the shared date helper into one module and update its callers, with no change in behaviour.",
+   "Tap send and wait until the turn finishes.",
+   "Tap Changes in the top bar and check that several files changed.",
+   "Compare with Expected: the files were restructured and the behaviour stays the same."
+  ],
+  "where": "AGI Code > New session > Describe a task or ask a question"
+ },
+ "S67.09": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/pairing.ts",
+    "text": "AGI Code"
+   },
+   {
+    "file": "packages/contracts/types/src/cloud-code.ts",
+    "text": "Describe a task or ask a question"
+   },
+   {
+    "file": "apps/mobile/src/features/cloud-code/presentation.ts",
+    "text": "Changes"
+   }
+  ],
+  "needs": "a plan that includes managed environments, a GitHub account with a connected repository",
+  "note": "Free-form chat with the agent; no dedicated control.",
+  "reachable": "yes",
+  "steps": [
+   "Open AGI Code, tap New session, and pick the repository.",
+   "In Describe a task or ask a question, type: Write tests for the function in a chosen file.",
+   "Tap send and wait until the turn finishes.",
+   "Tap Changes in the top bar to see the new test file.",
+   "Compare with Expected: a new test file or new test cases should appear."
+  ],
+  "where": "AGI Code > New session > Describe a task or ask a question"
+ },
+ "S67.10": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/cloud-code/presentation.ts",
+    "text": "Changes"
+   },
+   {
+    "file": "apps/mobile/src/features/cloud-code/presentation.ts",
+    "text": "Commands"
+   },
+   {
+    "file": "apps/mobile/src/features/cloud-code/presentation.ts",
+    "text": "Run a command"
+   }
+  ],
+  "needs": "a cloud session with a repository and a plan that includes managed environments",
+  "note": "The phone runs a command directly; asking the agent in chat to run the tests is the other route.",
+  "reachable": "yes",
+  "steps": [
+   "Open AGI Code and tap an existing cloud session with a repository.",
+   "Tap the branch icon in the top bar (labelled Changes).",
+   "Scroll down to the Commands section.",
+   "Type the repository's test command in Run a command, then tap Run.",
+   "Compare with Expected: the output should show the test result."
+  ],
+  "where": "AGI Code > open a cloud session > Changes > Commands > Run a command"
+ },
+ "S67.11": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/cloud-code/presentation.ts",
+    "text": "Changes"
+   },
+   {
+    "file": "packages/contracts/types/src/cloud-code.ts",
+    "text": "Describe a task or ask a question"
+   }
+  ],
+  "needs": "a cloud session with a repository and a plan that includes managed environments",
+  "note": "Free-form chat with the agent; no dedicated control.",
+  "reachable": "yes",
+  "steps": [
+   "Run the tests as in S67.10 (Changes > Commands > Run a command) so that a failure is shown.",
+   "Open the cloud session's composer, Describe a task or ask a question.",
+   "Type: Explain why the last test run failed and fix the cause.",
+   "Tap send and wait until the turn finishes.",
+   "Compare with Expected: the reply should explain the failure and the fix should appear in Changes."
+  ],
+  "where": "AGI Code > open a cloud session > Describe a task or ask a question"
+ },
+ "S67.12": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/cloud-code/presentation.ts",
+    "text": "Changes"
+   },
+   {
+    "file": "apps/mobile/src/features/cloud-code/presentation.ts",
+    "text": "Commands"
+   },
+   {
+    "file": "apps/mobile/src/features/cloud-code/presentation.ts",
+    "text": "Run a command"
+   }
+  ],
+  "needs": "a cloud session with a repository and a plan that includes managed environments",
+  "note": "A person can also ask the agent in chat to run the type checker.",
+  "reachable": "yes",
+  "steps": [
+   "Open a cloud session with a repository and tap the branch icon in the top bar (Changes).",
+   "Scroll to the Commands section.",
+   "Type the repository's type-check command in Run a command, then tap Run.",
+   "Compare with Expected: type errors, if any, should be reported in the output."
+  ],
+  "where": "AGI Code > open a cloud session > Changes > Commands > Run a command"
+ },
+ "S67.13": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/cloud-code/presentation.ts",
+    "text": "Changes"
+   },
+   {
+    "file": "apps/mobile/src/features/cloud-code/presentation.ts",
+    "text": "Commands"
+   },
+   {
+    "file": "apps/mobile/src/features/cloud-code/presentation.ts",
+    "text": "Run a command"
+   }
+  ],
+  "needs": "a cloud session with a repository and a plan that includes managed environments",
+  "note": "A person can also ask the agent in chat to run the linter.",
+  "reachable": "yes",
+  "steps": [
+   "Open a cloud session with a repository and tap the branch icon in the top bar (Changes).",
+   "Scroll to the Commands section.",
+   "Type the repository's lint command in Run a command, then tap Run.",
+   "Compare with Expected: lint findings should be listed in the output."
+  ],
+  "where": "AGI Code > open a cloud session > Changes > Commands > Run a command"
+ },
+ "S67.14": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/cloud-code/presentation.ts",
+    "text": "Changes"
+   },
+   {
+    "file": "apps/mobile/src/features/cloud-code/presentation.ts",
+    "text": "Commands"
+   },
+   {
+    "file": "apps/mobile/src/features/cloud-code/presentation.ts",
+    "text": "Run a command"
+   }
+  ],
+  "needs": "a cloud session with a repository and a plan that includes managed environments",
+  "note": "A person can also ask the agent in chat to build the app.",
+  "reachable": "yes",
+  "steps": [
+   "Open a cloud session with a repository and tap the branch icon in the top bar (Changes).",
+   "Scroll to the Commands section.",
+   "Type the repository's build command in Run a command, then tap Run.",
+   "Compare with Expected: the build output should report success or the errors."
+  ],
+  "where": "AGI Code > open a cloud session > Changes > Commands > Run a command"
+ },
+ "S67.16": {
+  "labels": [],
+  "needs": "none",
+  "note": "Searched apps/mobile for browser control in cloud-code, companion and settings/code: found only opening a pull request link in an in-app browser, no way to navigate, click or screenshot a running app.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S67.20": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/cloud-code/presentation.ts",
+    "text": "Changes"
+   },
+   {
+    "file": "packages/contracts/types/src/cloud-code.ts",
+    "text": "Describe a task or ask a question"
+   }
+  ],
+  "needs": "a cloud session with changes and a plan that includes managed environments",
+  "note": "Review is done by the agent in chat; the phone has no separate review button. Pull request review status shown in Changes is a different thing.",
+  "reachable": "yes",
+  "steps": [
+   "Open a cloud session that has changes and tap the branch icon in the top bar (Changes) to read the diff.",
+   "Close Changes, then in Describe a task or ask a question type: Review the current changes and list issues with file and line.",
+   "Tap send and wait for the reply.",
+   "Compare with Expected: each issue should cite a file and line."
+  ],
+  "where": "AGI Code > open a cloud session > Changes, then Describe a task or ask a question"
+ },
+ "S67.22": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/cloud-code.ts",
+    "text": "Describe a task or ask a question"
+   }
+  ],
+  "needs": "a cloud session with a repository and a plan that includes managed environments",
+  "note": "No separate security-scan control. The Scan screen in the app is for reading text, not code.",
+  "reachable": "yes",
+  "steps": [
+   "Open a cloud session with a repository.",
+   "In Describe a task or ask a question, type: Scan the code for security problems and list each one with its location.",
+   "Tap send and wait for the reply.",
+   "Compare with Expected: each security problem should be reported with a location."
+  ],
+  "where": "AGI Code > open a cloud session > Describe a task or ask a question"
+ },
+ "S67.23": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/cloud-code.ts",
+    "text": "Describe a task or ask a question"
+   }
+  ],
+  "needs": "a cloud session that already has a review or scan reply",
+  "note": "Free-form chat with the agent; no dedicated control.",
+  "reachable": "yes",
+  "steps": [
+   "After a review or scan reply, read the reply in the transcript.",
+   "If findings need more detail, type in Describe a task or ask a question: Explain each finding in plain language with its location.",
+   "Tap send and wait for the reply.",
+   "Compare with Expected: each finding should have a plain explanation and a location."
+  ],
+  "where": "AGI Code > open a cloud session > Describe a task or ask a question"
+ },
+ "S67.24": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/cloud-code/presentation.ts",
+    "text": "Task options and usage"
+   },
+   {
+    "file": "apps/mobile/src/features/cloud-code/presentation.ts",
+    "text": "Mode"
+   },
+   {
+    "file": "apps/mobile/src/features/cloud-code/presentation.ts",
+    "text": "Plan"
+   }
+  ],
+  "needs": "a cloud session where the phone sets the mode, and a plan that includes managed environments",
+  "note": "Mode is shown only when the environment has no own agent (turnControls = runtimeId null); otherwise the sheet says This environment runs its own agent and manages its mode. The proposal is a chat reply, not a patch with its own review step.",
+  "reachable": "yes",
+  "steps": [
+   "Open a cloud session and tap Task options and usage in the composer.",
+   "Under Mode, tap Plan (it says it reads the code and proposes changes without making any).",
+   "Close the options, type a change request in Describe a task or ask a question, and tap send.",
+   "Tap the branch icon in the top bar (Changes) to see the proposed diff.",
+   "Compare with Expected: the proposal should be shown before or without any file being changed."
+  ],
+  "where": "AGI Code > open a cloud session > Task options and usage > Mode > Plan"
+ },
+ "S67.25": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/cloud-code/presentation.ts",
+    "text": "Changes"
+   },
+   {
+    "file": "apps/mobile/src/features/cloud-code/presentation.ts",
+    "text": "Include in the commit:"
+   },
+   {
+    "file": "apps/mobile/src/features/cloud-code/presentation.ts",
+    "text": "Commit and push"
+   }
+  ],
+  "needs": "a cloud session with a repository and changed files",
+  "note": "The phone selects files to commit; it does not accept or reject individual agent patches before the agent edits.",
+  "reachable": "yes",
+  "steps": [
+   "Open a cloud session that has changed files and tap the branch icon in the top bar (Changes).",
+   "Untick the files you do not want under Include in the commit:, leaving only the ones you choose.",
+   "Type a message in Commit message and tap Commit and push.",
+   "Compare with Expected: only the ticked files are committed and the sheet says Commits X of Y changed files."
+  ],
+  "where": "AGI Code > open a cloud session > Changes > Include in the commit: > Commit and push"
+ },
+ "S67.26": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/cloud-code.ts",
+    "text": "Describe a task or ask a question"
+   },
+   {
+    "file": "apps/mobile/src/features/cloud-code/presentation.ts",
+    "text": "Changes"
+   }
+  ],
+  "needs": "a plan that includes managed environments, a GitHub account with a connected repository",
+  "note": "Free-form chat with the agent; no dedicated control.",
+  "reachable": "yes",
+  "steps": [
+   "Open AGI Code, tap New session, and pick the repository.",
+   "In Describe a task or ask a question, type: Write or update the README for this project from the code.",
+   "Tap send and wait until the turn finishes.",
+   "Tap Changes in the top bar to see the updated documentation file.",
+   "Compare with Expected: the README or doc comments should be written or updated."
+  ],
+  "where": "AGI Code > New session > Describe a task or ask a question"
+ },
+ "S67.27": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/cloud-code.ts",
+    "text": "Describe a task or ask a question"
+   },
+   {
+    "file": "apps/mobile/src/features/cloud-code/presentation.ts",
+    "text": "Changes"
+   }
+  ],
+  "needs": "a plan that includes managed environments, a GitHub account with a connected repository",
+  "note": "Free-form chat with the agent; no migration-specific control.",
+  "reachable": "yes",
+  "steps": [
+   "Open AGI Code, tap New session, and pick the repository.",
+   "In Describe a task or ask a question, type the migration request, for example: Rename this field in every file that uses it and update the schema.",
+   "Tap send and wait until the turn finishes.",
+   "Tap Changes in the top bar and check that files across the repository changed.",
+   "Compare with Expected: the migration should touch every affected file."
+  ],
+  "where": "AGI Code > New session > Describe a task or ask a question"
+ },
+ "S67.28": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/cloud-code.ts",
+    "text": "Describe a task or ask a question"
+   },
+   {
+    "file": "apps/mobile/src/features/cloud-code/presentation.ts",
+    "text": "Changes"
+   }
+  ],
+  "needs": "a plan that includes managed environments, a GitHub account with a connected repository",
+  "note": "Free-form chat with the agent; no dependency-specific control.",
+  "reachable": "yes",
+  "steps": [
+   "Open AGI Code, tap New session, and pick the repository.",
+   "In Describe a task or ask a question, type: Upgrade the dependencies named in the package manifest and fix any code that breaks.",
+   "Tap send and wait until the turn finishes.",
+   "Tap Changes in the top bar and check the manifest and lock file changes.",
+   "Compare with Expected: the dependency versions and affected code should have been updated."
+  ],
+  "where": "AGI Code > New session > Describe a task or ask a question"
+ },
+ "S67.29": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/cloud-code/presentation.ts",
+    "text": "Changes"
+   },
+   {
+    "file": "apps/mobile/src/features/cloud-code/presentation.ts",
+    "text": "Commit message"
+   },
+   {
+    "file": "apps/mobile/src/features/cloud-code/presentation.ts",
+    "text": "Commit and push"
+   }
+  ],
+  "needs": "a cloud session with a repository and changed files",
+  "note": "The phone commits and pushes the session's changes with the message typed; the agent itself can also commit in chat.",
+  "reachable": "yes",
+  "steps": [
+   "Open a cloud session that has changes and tap the branch icon in the top bar (Changes).",
+   "Make sure the files you want are ticked under Include in the commit:.",
+   "Type a message in Commit message.",
+   "Tap Commit and push.",
+   "Compare with Expected: the commit appears and the notice Pushed to the repository. is shown."
+  ],
+  "where": "AGI Code > open a cloud session > Changes > Commit message > Commit and push"
+ },
+ "S67.30": {
+  "labels": [],
+  "needs": "a cloud session with a repository",
+  "note": "Agent-side. The phone shows the working branch name (cloudCodeWorkspaceLabel in apps/mobile/src/features/cloud-code/presentation.ts) and lets you pick a start branch in New session (Branch heading), but I found no control to ask for a new branch and could not confirm where an agent-created branch is shown.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S67.31": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/pairing.ts",
+    "text": "AGI Code"
+   },
+   {
+    "file": "apps/mobile/src/features/cloud-code/presentation.ts",
+    "text": "Changes"
+   },
+   {
+    "file": "apps/mobile/src/features/cloud-code/presentation.ts",
+    "text": "Create pull request"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account, and an open AGI Code session with a repository and working branch",
+  "note": "The button is disabled with a message when the session has no repository or branch or is closed or archived, and it is replaced by the pull request link once one exists.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu and tap AGI Code. The sessions list opens.",
+   "Tap a session that has a repository and a working branch and is not closed or archived.",
+   "Tap the branch icon at the top right of the session. The sheet titled Changes opens.",
+   "Scroll to the Create pull request button and tap it once. Nothing asks you to confirm first.",
+   "Look for a pull request link and checks status in the same sheet, and for the link in the session header, then compare with Expected: a pull request should exist on the code host."
+  ],
+  "where": "Side menu > AGI Code > open a session > Changes (branch icon, top right) > Create pull request"
+ },
+ "S67.36": {
+  "labels": [],
+  "needs": "none",
+  "note": "No turn, step or time bound control was found in apps/mobile (searched for max steps, turn limit, budget, maxTurns and time bound in src/features/cloud-code and src/features/companion/components). A goal is sent from the AGI Code session composer and can be stopped with the Stop the task control (packages/contracts/types/src/cloud-code.ts), but no bound is set on the phone.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S67.37": {
+  "labels": [],
+  "needs": "none",
+  "note": "No repository-specific memory was found in apps/mobile. Searched for memory in src/features/cloud-code, src/features/companion, src/features/settings/code, src/features/skills and src/features/plugins, and found nothing.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S67.38": {
+  "labels": [],
+  "needs": "none",
+  "note": "No reference to AGENTS.md or CLAUDE.md, or to loading repository instruction files, was found in apps/mobile (searched the whole app folder for AGENTS, CLAUDE.md and instruction).",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S67.39": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Cloud"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Customize"
+   },
+   {
+    "file": "apps/mobile/src/features/customize/CustomizeScreen.tsx",
+    "text": "Skills"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account; the Customize row only appears when the skills feature is switched on",
+  "note": "No skill or plugin toggle appears inside AGI Code sessions in apps/mobile, so the check that the agent uses project skills during a session could not be confirmed from the phone.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and find the Cloud section.",
+   "Tap Customize, then tap Skills (or Plugins).",
+   "Find a skill and tap Install or Uninstall to change whether it is added.",
+   "Look at the added or not-added state shown on the skill row and detail screen, and compare with Expected: the user can see and toggle skills."
+  ],
+  "where": "Settings > Cloud > Customize > Skills (or Plugins)"
+ }
+}

@@ -1,0 +1,499 @@
+{
+ "S88.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/MemorySection.tsx",
+    "text": "How memory works"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The Memory section name in the settings menu was not checked; the link itself is in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and go to the Memory section.",
+   "Find the link \"How memory works\" under the memory description.",
+   "Click \"How memory works\".",
+   "Check that a help article about memory opens and matches the Memory screen."
+  ],
+  "where": "Settings > Memory > \"How memory works\" link"
+ },
+ "S88.02": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/HelpSection.tsx",
+    "text": "Help center"
+   },
+   {
+    "file": "apps/web/app/help/page.tsx",
+    "text": "Search every help article, or browse the help centre by collection."
+   }
+  ],
+  "needs": "none",
+  "note": "The search box placeholder text was not found as a literal in the files read.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and go to Help.",
+   "Click \"Help center\" (it opens in a new tab).",
+   "Type a word into the search box on the Help center page and press Enter.",
+   "Check that matching articles appear with snippets and links, then click one and check it opens."
+  ],
+  "where": "Settings > Help > \"Help center\""
+ },
+ "S88.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/HelpSection.tsx",
+    "text": "Contact support"
+   },
+   {
+    "file": "apps/web/features/support/components/SupportTicketsPanel.tsx",
+    "text": "Send reply"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "Only the path to the form was checked; the form itself was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and go to Help.",
+   "Look at the support tickets panel at the top of the Help section.",
+   "Click \"Contact support\" (opens in a new tab).",
+   "Check that the support page opens where you can describe a problem; check that replies to a ticket appear with a \"Send reply\" form."
+  ],
+  "where": "Settings > Help > \"Contact support\""
+ },
+ "S88.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/HelpSection.tsx",
+    "text": "Report a bug"
+   }
+  ],
+  "needs": "none",
+  "note": "The exact wording of the bug form fields was not found; diagnostics collection is in apps/web/lib/support/diagnostics/collect.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and go to Help.",
+   "Click \"Report a bug\" (opens in a new tab at the support page, bugs section).",
+   "Describe a problem in the bug part of the support page.",
+   "Check that the page mentions build and platform details being sent with the report."
+  ],
+  "where": "Settings > Help > \"Report a bug\""
+ },
+ "S88.05": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFeedbackDialog.tsx",
+    "text": "Send feedback"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "Where the general Feedback button sits was not traced exactly. The plan marks this item as unfinished on mount.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat.",
+   "Click the \"Feedback\" button near the composer.",
+   "Leave the Feedback type on the general option and type a note.",
+   "Click \"Send feedback\" and check that a confirmation appears."
+  ],
+  "where": "Feedback > Feedback type > \"Send feedback\" (in the chat composer)"
+ },
+ "S88.06": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFeedbackDialog.tsx",
+    "text": "Feature request"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFeedbackDialog.tsx",
+    "text": "Feedback type"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "Same trigger as S88.05; the plan marks this item as unfinished on mount.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat.",
+   "Click the \"Feedback\" button near the composer.",
+   "Under \"Feedback type\", choose \"Feature request\".",
+   "Type a request and click \"Send feedback\"; check that a confirmation appears."
+  ],
+  "where": "Feedback > Feedback type > \"Feature request\" > \"Send feedback\" (in the chat composer)"
+ },
+ "S88.07": {
+  "labels": [
+   {
+    "file": "apps/web/features/support/components/SupportTicketsPanel.tsx",
+    "text": "Review diagnostics"
+   },
+   {
+    "file": "apps/web/features/support/components/SupportTicketsPanel.tsx",
+    "text": "Download diagnostics"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "Sharing with support is done through the ticket form in the same panel; the send control was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and go to Help.",
+   "Keep the box \"Attach diagnostics: your build, platform and the last few errors this browser recorded.\" ticked, or untick it.",
+   "Click \"Review diagnostics\" and read the summary in the box labelled \"Diagnostics that would be attached\".",
+   "Click \"Download diagnostics\" and check the file contents match the summary."
+  ],
+  "where": "Settings > Help > \"Review diagnostics\" > \"Download diagnostics\""
+ },
+ "S88.08": {
+  "labels": [],
+  "needs": "a way to make a reply fail",
+  "note": "The reference wording is built by withTurnErrorReference in apps/web/features/chat/lib/turn-error-notice.ts; its exact visible text was not found as a literal.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat and send a message in a way that makes the reply fail (for example with the network turned off).",
+   "Read the error notice under the reply.",
+   "Look for the reference id in the notice text.",
+   "Compare it with the reference shown in the message details."
+  ],
+  "where": "Chat > a reply that fails > the error notice under the reply"
+ },
+ "S88.10": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/HelpSection.tsx",
+    "text": "System status"
+   },
+   {
+    "file": "apps/web/app/status/page.tsx",
+    "text": "Status: hosted dependency and route checks"
+   }
+  ],
+  "needs": "none",
+  "note": "The composer footer status feed (apps/web/features/chat/components/Composer/ComposerFooter.tsx) has no visible wording that was checked.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and go to Help.",
+   "Click \"System status\" (opens the status page in a new tab).",
+   "Read the page title \"Status: hosted dependency and route checks\" and the current status rows.",
+   "Compare the rows with what the app shows in the composer footer."
+  ],
+  "where": "Settings > Help > \"System status\""
+ },
+ "S88.11": {
+  "labels": [],
+  "needs": "an active incident notice (set by the team)",
+  "note": "Notices come from the service notices feed (apps/web/lib/server/service-notices.ts); the visible wording comes from data, not fixed text.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Sign in while an incident notice is active and look at the top of the app.",
+   "Check that the notice card shows the problem and its status."
+  ],
+  "where": "A notice card near the top of the app while an incident is active"
+ },
+ "S88.12": {
+  "labels": [],
+  "needs": "a scheduled maintenance notice (set by the team)",
+  "note": "Maintenance notices use a clock icon (apps/web/shared/components/ServiceNotices.tsx); the wording comes from data.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Sign in while a maintenance notice is scheduled and look at the top of the app.",
+   "Check that the maintenance notice shows the planned time."
+  ],
+  "where": "A notice card in the app before and during planned maintenance"
+ },
+ "S88.13": {
+  "labels": [
+   {
+    "file": "apps/web/shared/components/ReleaseNotice.tsx",
+    "text": "What's new:"
+   }
+  ],
+  "needs": "a new release in the release feed",
+  "note": "The banner shows only when a release has not been seen in this browser.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in after a new release is published, or clear the saved last-seen release value in the browser to test again.",
+   "Read the banner \"What's new:\" followed by the headline.",
+   "Click the banner link and check it opens the release notes for that release.",
+   "Click the dismiss control and check the banner goes away."
+  ],
+  "where": "A banner at the top of the app that starts with \"What's new:\" after an update"
+ },
+ "S88.14": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/UnavailableModelNotice.tsx",
+    "text": "is no longer available"
+   }
+  ],
+  "needs": "a model marked as retiring or retired in the catalogue",
+  "note": "The model picker row wording is built from data (\"Leaving\" plus the model short name), so it depends on the catalogue state.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat that uses a model marked as retiring.",
+   "Look at the model picker in the composer footer for the row that reads \"Leaving\" the model name.",
+   "Look at the notice that says the model \"is no longer available\" and says which model replaces it.",
+   "Click the dismiss control on the notice and check it closes."
+  ],
+  "where": "Composer footer > model picker: a row that reads \"Leaving\" a model, or a notice that says \"is no longer available\""
+ },
+ "S88.15": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/components/ImportMemoryDialog.tsx",
+    "text": "ChatGPT"
+   }
+  ],
+  "needs": "a .txt or .json file to upload",
+  "note": "The button that opens the import dialog was not found as a literal; the dialog itself is in apps/web/features/settings/components/ImportMemoryDialog.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and go to Memory.",
+   "Open the memory import dialog.",
+   "Choose a source such as \"ChatGPT\", then choose a .txt or .json file.",
+   "Check the preview step lists what will be imported before you confirm the import."
+  ],
+  "where": "Settings > Memory > import dialog (choose a source, pick a file, then preview)"
+ },
+ "S88.16": {
+  "labels": [
+   {
+    "file": "apps/web/app/privacy/requests/page.tsx",
+    "text": "Exercise your rights."
+   },
+   {
+    "file": "apps/web/app/privacy/requests/YourRightsRequests.tsx",
+    "text": "Your requests"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The link text on the Privacy page was not found; the request form was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and go to Privacy.",
+   "Find the link to rights requests and click it.",
+   "On the \"Exercise your rights.\" page, read the \"Your requests\" list if you have any.",
+   "Check each listed request shows its reference, type (Access, Correction or Erasure) and status."
+  ],
+  "where": "Settings > Privacy > rights-request link > \"Exercise your rights.\" page"
+ },
+ "S88.17": {
+  "labels": [
+   {
+    "file": "apps/web/shared/lib/cookie-consent.ts",
+    "text": "Cookie preferences"
+   }
+  ],
+  "needs": "none",
+  "note": "The save button's visible text was not found; network-level enforcement is not checked here.",
+  "reachable": "yes",
+  "steps": [
+   "Open \"Cookie preferences\" from the cookies page or the cookie banner.",
+   "Turn analytics off and keep necessary cookies on, then save.",
+   "Reload the page and open \"Cookie preferences\" again.",
+   "Check analytics is still off and necessary is still locked on, and no banner returns."
+  ],
+  "where": "\"Cookie preferences\" (cookie preference centre, opened from the cookies page or the cookie banner)"
+ },
+ "S88.18": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Report this response"
+   }
+  ],
+  "needs": "a chat reply",
+  "note": "The success text is in the same file as the code, around line 1189.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat with a reply.",
+   "Find \"Report this response\" on the reply.",
+   "Click it and check the message \"Reported. Thank you: our trust and safety team will review it.\" appears.",
+   "Check the report button shows it was sent and cannot be sent again."
+  ],
+  "where": "Under a chat reply: \"Report this response\""
+ },
+ "S88.19": {
+  "labels": [
+   {
+    "file": "apps/web/app/copyright/report/CopyrightNoticeForm.tsx",
+    "text": "What you are reporting"
+   }
+  ],
+  "needs": "none (a link to the form was not found in the app)",
+  "note": "No in-app link to the copyright form was found; the form is reached by its address only.",
+  "reachable": "yes",
+  "steps": [
+   "Open /copyright/report in a browser.",
+   "Read the legend \"What you are reporting\" and choose the type of report.",
+   "Fill in the reporter fields and submit.",
+   "Check the result shows \"recorded\" with a reference number."
+  ],
+  "where": "Browser address bar: /copyright/report (copyright report form)"
+ },
+ "S88.20": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFeedbackDialog.tsx",
+    "text": "Report issue"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFeedbackDialog.tsx",
+    "text": "Submit report"
+   }
+  ],
+  "needs": "a refused reply (needs a safety refusal from the provider)",
+  "note": "The refusal notice text was not found as a literal; it is shown from ChatMessageList.tsx when a refusal finishes.",
+  "reachable": "yes",
+  "steps": [
+   "Get a chat reply that the provider refuses for safety reasons.",
+   "Find the notice under the refused reply and click \"Report issue\".",
+   "Describe the refusal and click \"Submit report\".",
+   "Check a confirmation appears."
+  ],
+  "where": "Under a refused chat reply: \"Report issue\" > \"Submit report\""
+ },
+ "S88.21": {
+  "labels": [
+   {
+    "file": "apps/web/features/auth/SuspensionAppeal.tsx",
+    "text": "Submit appeal"
+   },
+   {
+    "file": "apps/web/features/auth/SuspensionAppeal.tsx",
+    "text": "Why should the suspension be lifted?"
+   }
+  ],
+  "needs": "a suspended account (or the appeal page)",
+  "note": "Only the appeal path was traced; the suspension reason text is not a fixed literal.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to a suspended account, or open the appeal page at /appeal.",
+   "Read the account access notice that explains the suspension.",
+   "Type a reason under \"Why should the suspension be lifted?\" and click \"Submit appeal\".",
+   "Check the appeal thread shows your appeal and the note \"A person reviews every appeal.\""
+  ],
+  "where": "Sign-in screen for a suspended account: \"Submit appeal\" (or \"Why should the suspension be lifted?\")"
+ },
+ "S88.22": {
+  "labels": [
+   {
+    "file": "apps/web/app/security/page.tsx",
+    "text": "Reporting a vulnerability."
+   }
+  ],
+  "needs": "none",
+  "note": "The security.txt route is in apps/web/app/.well-known/security.txt/route.ts; no in-app link was checked.",
+  "reachable": "yes",
+  "steps": [
+   "Open /security in a browser.",
+   "Scroll to the section \"Reporting a vulnerability.\".",
+   "Read the reporting instructions and the contact the page names.",
+   "Check /.well-known/security.txt also opens and lists a contact."
+  ],
+  "where": "Browser address bar: /security (section \"Reporting a vulnerability.\")"
+ },
+ "S88.23": {
+  "labels": [
+   {
+    "file": "apps/web/app/accessibility/page.tsx",
+    "text": "Report a barrier."
+   }
+  ],
+  "needs": "none",
+  "note": "No in-app link to the accessibility page was found; the support panel has accessibility text at SupportTicketsPanel.tsx line 583 that was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open /accessibility in a browser.",
+   "Scroll to the section \"Report a barrier.\".",
+   "Read how to report an accessibility barrier and the channel it names.",
+   "Check the channel can be used without a mouse (keyboard and screen reader)."
+  ],
+  "where": "Browser address bar: /accessibility (section \"Report a barrier.\")"
+ },
+ "S88.24": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/HelpSection.tsx",
+    "text": "Legal"
+   },
+   {
+    "file": "apps/web/shared/components/legal/PolicyVersionsLink.tsx",
+    "text": "Previous versions"
+   }
+  ],
+  "needs": "none",
+  "note": "The version history page is apps/web/app/legal/archive/[policy]/page.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and go to Help.",
+   "Click \"Legal\" (it opens the legal page in a new tab).",
+   "Open a policy and find the \"Previous versions\" link under its date.",
+   "Click it and check earlier dated versions of the policy and what changed are listed."
+  ],
+  "where": "Settings > Help > \"Legal\" > \"Previous versions\""
+ },
+ "S88.25": {
+  "labels": [
+   {
+    "file": "apps/web/app/subprocessors/page.tsx",
+    "text": "Subprocessors."
+   }
+  ],
+  "needs": "none",
+  "note": "No in-app link to the subprocessors page was found in the Help section.",
+  "reachable": "yes",
+  "steps": [
+   "Open /subprocessors in a browser.",
+   "Read the page title \"Subprocessors.\" and the \"Last updated:\" line.",
+   "Read the list of subprocessors.",
+   "Check the change log link (to /changelog) is present."
+  ],
+  "where": "Browser address bar: /subprocessors (title \"Subprocessors.\")"
+ },
+ "S88.26": {
+  "labels": [
+   {
+    "file": "apps/web/app/trust/page.tsx",
+    "text": "Claims with dates, and the ones we cannot make."
+   },
+   {
+    "file": "apps/web/app/trust/page.tsx",
+    "text": "Audit reports"
+   }
+  ],
+  "needs": "none",
+  "note": "Partial: the plan says the owner has not yet commissioned SOC 2, ISO 27001 or a penetration test, so there are no reports to review. No in-app link to /trust was found.",
+  "reachable": "yes",
+  "steps": [
+   "Open /trust in a browser.",
+   "Read the heading and the section \"Audit reports\".",
+   "Read the \"SOC 2\" and \"ISO 27001\" rows, which say no report is held.",
+   "Compare with Expected: the page states no reports or certificates are published yet."
+  ],
+  "where": "Browser address bar: /trust (heading \"Claims with dates, and the ones we cannot make.\")"
+ },
+ "S88.27": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Settings"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Help"
+   },
+   {
+    "file": "apps/web/features/settings/sections/HelpSection.tsx",
+    "text": "Legal"
+   }
+  ],
+  "needs": "none",
+  "note": "Expected says notices appear automatically for users in a jurisdiction; the code has no location check. The India and EU pages are fixed pages reached by link, and the plan's Where line 'not written yet' is out of date. I did not trace the route from the first screen into Settings, and I found no region-block notice in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, open Settings, and choose the Help tab.",
+   "Click the Legal item (it opens the /legal page).",
+   "Find and click the India: DPDP notice link. Check that the page titled Notice to Data Principals in India. loads and shows the DPDP Act, 2023 notice.",
+   "Go back to Legal and click EU representative. Check that the page says no representative is currently appointed under Article 27 GDPR, with the date-stamped status text and where to send privacy requests."
+  ],
+  "where": "Settings > Help > Legal > India: DPDP notice (the EU representative page is reached the same way through the Legal page, or from the footer Legal list)"
+ }
+}

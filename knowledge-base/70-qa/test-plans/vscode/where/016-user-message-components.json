@@ -1,0 +1,182 @@
+{
+ "S16.01": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "You said:"
+   }
+  ],
+  "needs": "none",
+  "note": "Expected asks for a visible avatar or name; the code shows the author only by bubble alignment and style, with the name visually hidden.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI chat panel in the VS Code sidebar.",
+   "Type \"Hello\" in the message box and press Enter.",
+   "Look at your message: it is a bubble on the right, with a dashed border while it is sending.",
+   "Compare with Expected: the author is shown by alignment and bubble style, but no visible name or avatar appears; the name is only announced to screen readers."
+  ],
+  "where": "Chat panel > send any message > look at the right-aligned bubble. There is no visible name or avatar; the author label \"You said:\" is screen-reader text only (webviewContent.ts 5771)."
+ },
+ "S16.02": {
+  "labels": [],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI chat panel.",
+   "Type \"Hello, list the files here\" in the message box.",
+   "Press Enter.",
+   "Look at the right-aligned bubble: the same text should appear exactly as typed."
+  ],
+  "where": "Chat panel > type a message and press Enter > the bubble shows your text."
+ },
+ "S16.03": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Attach or use tools"
+   }
+  ],
+  "needs": "a file to upload",
+  "note": "The exact menu item for picking a file was not confirmed from the + menu; the code has \"Attach workspace files\" and \"Attach file\u2026\" text in different places.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI chat panel.",
+   "Click the + button (\"Attach or use tools\") above the message box and attach a file or image.",
+   "Check that the file chip shows in the strip above the message box.",
+   "Type a message and press Enter.",
+   "Look under your bubble: the file is listed as a chip named after the file (with an icon). Compare with Expected."
+  ],
+  "where": "Chat panel > + (Attach or use tools) > attach a file, then send > chips appear under your bubble."
+ },
+ "S16.04": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Browse the web"
+   }
+  ],
+  "needs": "none",
+  "note": "Quoted text, page and @mention chips were not traced to a control in this pass; only the Browse the web chip and editor context strip were confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI chat panel.",
+   "Click the + button (\"Attach or use tools\") and turn on \"Browse the web\".",
+   "Type a message and press Enter.",
+   "Look under your bubble: a \"Browse the web\" chip appears, and a Context (count) toggle lists the non-file context when it was sent."
+  ],
+  "where": "Chat panel > + (Attach or use tools) > turn on Browse the web > send > the sent message shows a Context chip list."
+ },
+ "S16.09": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Resend"
+   }
+  ],
+  "needs": "none",
+  "note": "The button is icon-only; its word \"Resend\" is the tooltip and accessible name.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI chat panel and send a message, then wait for the reply.",
+   "Move the pointer over your message bubble so the action icons appear under it.",
+   "Hover the redo-arrow icon to see the tooltip \"Resend\", then click it.",
+   "Look at the transcript: a new reply comes back for the same unchanged text, with a new message entry."
+  ],
+  "where": "Chat panel > hover over your sent message > click the Resend icon (redo arrow) on the message."
+ },
+ "S16.10": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Branch"
+   }
+  ],
+  "needs": "a conversation with at least two turns",
+  "note": "Code shows a new session with the message placed in the composer for editing, not a sent copy of the thread; the exact thread contents were not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI chat panel and send two or more messages with replies.",
+   "Move the pointer over an earlier message bubble and hover the fork icon to see the tooltip \"Branch\".",
+   "Click it.",
+   "Look at the result: a new session opens with the message ready to edit in the message box; the first message starts a fresh conversation."
+  ],
+  "where": "Chat panel > hover over your sent message > click the Branch icon (fork icon) on the message."
+ },
+ "S16.14": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Sending"
+   }
+  ],
+  "needs": "none",
+  "note": "The state may last under a second on a fast connection, so the tester may need a slow network or a long wait to see it.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI chat panel.",
+   "Type a message and press Enter.",
+   "Look immediately under your bubble for the caption \"Sending\".",
+   "Compare with Expected: the caption should change once the service accepts the message."
+  ],
+  "where": "Chat panel > send a message > look under your bubble for \"Sending\" until the service accepts it."
+ },
+ "S16.15": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Not sent"
+   }
+  ],
+  "needs": "a way to make a send fail",
+  "note": "The code does not say which action causes the failure; the tester needs a method for it.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI chat panel.",
+   "Cause a failed send, such as losing the network or signing out, then type a message and press Enter.",
+   "Look under the bubble for \"Not sent\" in the error colour.",
+   "Look below the transcript for the error block with a \"Retry\" button."
+  ],
+  "where": "Chat panel > send a message that fails > look under your bubble for \"Not sent\" and the red error block."
+ },
+ "S16.16": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Retry"
+   }
+  ],
+  "needs": "a way to make a send fail, and an attachment for the attachment check",
+  "note": "The Retry button appears only when the error is marked retryable; attachment re-sending was not confirmed from the code.",
+  "reachable": "yes",
+  "steps": [
+   "Make a send fail as in S16.15.",
+   "Click the \"Retry\" button in the error block under the transcript.",
+   "Look: the error block disappears and the same text is sent again with a new reply.",
+   "Compare with Expected: the failure should be replaced by the new outcome; check the attachments are still listed on the message."
+  ],
+  "where": "Chat panel > after a failed send, click \"Retry\" in the error block."
+ },
+ "S16.17": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Queued"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Cancel"
+   }
+  ],
+  "needs": "none",
+  "note": "The follow-up behaviour (Queue or Steer) is a setting; the Steer path shows \"Steered\" instead of waiting.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI chat panel and send a long request so a reply starts streaming.",
+   "While the reply is still running, type a second message and press Enter (the button beside Stop reads \"Queue\" or \"Steer\").",
+   "Look under the new bubble for \"Queued\" with Edit and Cancel icons.",
+   "Wait for the first reply to finish: the \"Queued\" caption should clear and the message should go out."
+  ],
+  "where": "Chat panel > send a message while a reply is still running > look under the new bubble for \"Queued\"."
+ }
+}

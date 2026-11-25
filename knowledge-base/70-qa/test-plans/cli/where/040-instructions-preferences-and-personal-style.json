@@ -1,0 +1,498 @@
+{
+ "S40.01": {
+  "labels": [
+   {
+    "file": "apps/cli/src/cloud/personalization.rs",
+    "text": "/personalize"
+   },
+   {
+    "file": "apps/cli/src/cloud/personalization.rs",
+    "text": "What to call you"
+   }
+  ],
+  "needs": "a signed-in AGI account in Cloud mode",
+  "note": "The CLI only saves the value; that replies use it is applied on the server and cannot be checked from CLI code.",
+  "reachable": "yes",
+  "steps": [
+   "Check that the chat is signed in and in Cloud mode; if it is not, type /model and switch to Cloud mode.",
+   "Type /personalize set name Sam (any name up to 60 characters).",
+   "Type /personalize show and check that the line labelled What to call you shows the name.",
+   "Ask a question and check whether the reply uses that name, then compare with Expected."
+  ],
+  "where": "Type /personalize set name <value> in the chat, then /personalize show"
+ },
+ "S40.02": {
+  "labels": [
+   {
+    "file": "apps/cli/src/cloud/personalization.rs",
+    "text": "About you"
+   },
+   {
+    "file": "apps/cli/src/cloud/personalization.rs",
+    "text": "/personalize"
+   }
+  ],
+  "needs": "a signed-in AGI account in Cloud mode",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Check that the chat is signed in and in Cloud mode.",
+   "Type /personalize set about I run a small bakery that sells online. (up to 1500 characters).",
+   "Type /personalize show and check that the line labelled About you shows the text.",
+   "Ask a question that depends on the background, such as what to name a new product, and compare the reply with Expected."
+  ],
+  "where": "Type /personalize set about <text> in the chat, then /personalize show"
+ },
+ "S40.03": {
+  "labels": [
+   {
+    "file": "apps/cli/src/cloud/personalization.rs",
+    "text": "Your work or role"
+   },
+   {
+    "file": "apps/cli/src/cloud/personalization.rs",
+    "text": "/personalize"
+   }
+  ],
+  "needs": "a signed-in AGI account in Cloud mode",
+  "note": "Tailoring of the reply happens on the server, not in CLI code.",
+  "reachable": "yes",
+  "steps": [
+   "Check that the chat is signed in and in Cloud mode.",
+   "Type /personalize set work high school chemistry teacher (up to 120 characters).",
+   "Type /personalize show and check that the line labelled Your work or role shows the text.",
+   "Ask for help with a task from that job and check whether the reply is tailored to it."
+  ],
+  "where": "Type /personalize set work <text> in the chat, then /personalize show"
+ },
+ "S40.05": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "Available styles:"
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "/output-style"
+   }
+  ],
+  "needs": "none",
+  "note": "This is the CLI output style, separate from the account Response style in S40.07.",
+  "reachable": "yes",
+  "steps": [
+   "Type /output-style and read the Available styles: list; the active one has a * beside it.",
+   "Type /output-style concise.",
+   "Ask a question such as How do I reverse a list in Python? and check the reply follows the chosen style.",
+   "Type /output-style again and check the active style is the one you picked."
+  ],
+  "where": "Type /output-style in the chat to list the styles, then /output-style <name> to pick one"
+ },
+ "S40.07": {
+  "labels": [
+   {
+    "file": "apps/cli/src/cloud/personalization.rs",
+    "text": "Response style"
+   },
+   {
+    "file": "apps/cli/src/cloud/personalization.rs",
+    "text": "/personalize"
+   }
+  ],
+  "needs": "a signed-in AGI account in Cloud mode",
+  "note": "formal is one value of the Response style field, the only formality setting found in the code, and it applies to Cloud turns.",
+  "reachable": "yes",
+  "steps": [
+   "Check that the chat is signed in and in Cloud mode.",
+   "Type /personalize set style formal.",
+   "Type /personalize show and check that the line labelled Response style shows formal.",
+   "Ask a question and check whether the reply uses a more formal register, then compare with Expected."
+  ],
+  "where": "Type /personalize set style formal in the chat, then /personalize show"
+ },
+ "S40.08": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "Available styles:"
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "/output-style"
+   }
+  ],
+  "needs": "none",
+  "note": "The named presets are the output styles; no separate tone-preset list was found.",
+  "reachable": "yes",
+  "steps": [
+   "Type /output-style and read the list: default, proactive, concise, explanatory, learning and study.",
+   "Type /output-style study.",
+   "Ask a question and check that one preset governs the reply.",
+   "Type /output-style default to go back, and compare with Expected."
+  ],
+  "where": "Type /output-style in the chat, then /output-style <name>"
+ },
+ "S40.09": {
+  "labels": [
+   {
+    "file": "apps/cli/src/cloud/personalization.rs",
+    "text": "Warmth"
+   },
+   {
+    "file": "apps/cli/src/cloud/personalization.rs",
+    "text": "/personalize"
+   }
+  ],
+  "needs": "a signed-in AGI account in Cloud mode",
+  "note": "The tone change is applied on the server, not in CLI code.",
+  "reachable": "yes",
+  "steps": [
+   "Check that the chat is signed in and in Cloud mode.",
+   "Type /personalize set warmth more.",
+   "Type /personalize show and check that the line labelled Warmth shows more.",
+   "Ask a question and check whether the reply is warmer; then type /personalize set warmth less and ask again to compare."
+  ],
+  "where": "Type /personalize set warmth more in the chat, then /personalize show"
+ },
+ "S40.10": {
+  "labels": [
+   {
+    "file": "apps/cli/src/cloud/personalization.rs",
+    "text": "Enthusiasm"
+   },
+   {
+    "file": "apps/cli/src/cloud/personalization.rs",
+    "text": "/personalize"
+   }
+  ],
+  "needs": "a signed-in AGI account in Cloud mode",
+  "note": "The reply change is applied on the server, not in CLI code.",
+  "reachable": "yes",
+  "steps": [
+   "Check that the chat is signed in and in Cloud mode.",
+   "Type /personalize set enthusiasm less.",
+   "Type /personalize show and check that the line labelled Enthusiasm shows less.",
+   "Ask a question and check whether the reply is less enthusiastic, then compare with Expected."
+  ],
+  "where": "Type /personalize set enthusiasm less in the chat, then /personalize show"
+ },
+ "S40.11": {
+  "labels": [
+   {
+    "file": "apps/cli/src/cloud/personalization.rs",
+    "text": "Headings and lists"
+   },
+   {
+    "file": "apps/cli/src/cloud/personalization.rs",
+    "text": "Formatting"
+   }
+  ],
+  "needs": "a signed-in AGI account in Cloud mode",
+  "note": "Two fields cover this: the Formatting choice and the Headings and lists slider.",
+  "reachable": "yes",
+  "steps": [
+   "Check that the chat is signed in and in Cloud mode.",
+   "Type /personalize set formatting prose.",
+   "Type /personalize show and check that the line labelled Formatting shows prose.",
+   "Ask a question that has several parts and check whether the reply uses prose instead of headings and lists, then compare with Expected."
+  ],
+  "where": "Type /personalize set headings less in the chat, or /personalize set formatting prose, then /personalize show"
+ },
+ "S40.12": {
+  "labels": [
+   {
+    "file": "apps/cli/src/cloud/personalization.rs",
+    "text": "Emoji"
+   },
+   {
+    "file": "apps/cli/src/cloud/personalization.rs",
+    "text": "/personalize"
+   }
+  ],
+  "needs": "a signed-in AGI account in Cloud mode",
+  "note": "The reply change is applied on the server, not in CLI code.",
+  "reachable": "yes",
+  "steps": [
+   "Check that the chat is signed in and in Cloud mode.",
+   "Type /personalize set emoji less.",
+   "Type /personalize show and check that the line labelled Emoji shows less.",
+   "Ask a question and check whether the reply has fewer or no emoji, then compare with Expected."
+  ],
+  "where": "Type /personalize set emoji less in the chat, then /personalize show"
+ },
+ "S40.13": {
+  "labels": [
+   {
+    "file": "apps/cli/src/cloud/personalization.rs",
+    "text": "Technical level"
+   },
+   {
+    "file": "apps/cli/src/cloud/personalization.rs",
+    "text": "/personalize"
+   }
+  ],
+  "needs": "a signed-in AGI account in Cloud mode",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Check that the chat is signed in and in Cloud mode.",
+   "Type /personalize set technical beginner.",
+   "Type /personalize show and check that the line labelled Technical level shows beginner.",
+   "Ask a technical question and check whether the reply is simpler, then compare with Expected."
+  ],
+  "where": "Type /personalize set technical beginner in the chat, then /personalize show"
+ },
+ "S40.14": {
+  "labels": [
+   {
+    "file": "apps/cli/src/cloud/personalization.rs",
+    "text": "Reply language"
+   },
+   {
+    "file": "apps/cli/src/cloud/personalization.rs",
+    "text": "/personalize"
+   }
+  ],
+  "needs": "a signed-in AGI account in Cloud mode",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Check that the chat is signed in and in Cloud mode.",
+   "Type /personalize set language fr.",
+   "Type /personalize show and check that the line labelled Reply language shows fr.",
+   "Ask a question in English and check whether the reply is written in French, then compare with Expected.",
+   "Type /personalize set language auto to go back."
+  ],
+  "where": "Type /personalize set language fr in the chat, then /personalize show"
+ },
+ "S40.16": {
+  "labels": [
+   {
+    "file": "apps/cli/src/repl/registry.rs",
+    "text": "Usage: /memory add [global|project|local] <text>"
+   },
+   {
+    "file": "apps/cli/src/repl/registry.rs",
+    "text": "Memory Hierarchy:"
+   },
+   {
+    "file": "apps/cli/src/cloud/personalization.rs",
+    "text": "Custom instructions:"
+   }
+  ],
+  "needs": "none for the file instructions; a signed-in account for the web custom instructions",
+  "note": "No on/off switch for memory instruction files was found in the code; the web custom-instructions page is outside apps/cli, so its toggle is unverified.",
+  "reachable": "yes",
+  "steps": [
+   "Type /memory add global Always answer in short bullet points.",
+   "Type /memory and check that the [global] entry under Memory Hierarchy: is found and shows a preview of the text.",
+   "Start a new chat, ask a question, and check the reply follows the instruction.",
+   "Look for a control that switches the instruction off without deleting it; none was found in the CLI, so compare with Expected and note the result."
+  ],
+  "where": "Type /memory add global <text> in the chat; standing account custom instructions are set on the web under Settings > General, which /personalize show prints as a link"
+ },
+ "S40.17": {
+  "labels": [
+   {
+    "file": "apps/cli/src/repl/registry.rs",
+    "text": "Usage: /memory add [global|project|local] <text>"
+   },
+   {
+    "file": "apps/cli/src/repl/registry.rs",
+    "text": "Memory Hierarchy:"
+   }
+  ],
+  "needs": "a project folder with a git repository or project file",
+  "note": "Project instructions are the CLAUDE.md file at the project root; in the full-screen view /memory edit is refused, so use /memory add.",
+  "reachable": "yes",
+  "steps": [
+   "Open a terminal in the project folder and start agi there.",
+   "Type /memory add project Use metric units.",
+   "Type /memory and check that the [project] entry is found with its path.",
+   "Start a new chat in the same folder, ask a question that involves units, and check the reply follows the instruction."
+  ],
+  "where": "In the project folder, type /memory add project <text> in the chat"
+ },
+ "S40.18": {
+  "labels": [
+   {
+    "file": "apps/cli/src/agents.rs",
+    "text": "/agents create <name>"
+   },
+   {
+    "file": "apps/cli/src/agents.rs",
+    "text": "show metadata and prompt body"
+   }
+  ],
+  "needs": "none",
+  "note": "The quick-apply step /agents <name> was verified in the full-screen UI code only.",
+  "reachable": "yes",
+  "steps": [
+   "Type /agents create reviewer (add --global for all projects).",
+   "Type /agents path reviewer and open the file it names in a text editor.",
+   "Write the instructions in the body of the file below the header lines, and save.",
+   "Type /agents show reviewer and check the prompt body shows your instructions.",
+   "Type /agents reviewer to apply it to this session, ask a question, and compare with Expected."
+  ],
+  "where": "Type /agents create <name> in the chat, then /agents path <name> to find the file to write the instructions in"
+ },
+ "S40.19": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "for this session only; your saved default is unchanged."
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "/output-style"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Type /output-style and note the active style and the saved default.",
+   "Type /output-style learning --session.",
+   "Ask a question and check the reply follows the session-only style.",
+   "Start a new chat or type /output-style and check the saved default has not changed."
+  ],
+  "where": "Type /output-style <name> --session in the chat"
+ },
+ "S40.23": {
+  "labels": [],
+  "needs": "none",
+  "note": "No single action that resets all style preferences was found; the nearest are /output-style default (back to the built-in default style) and /personalize clear <field> for one field at a time. Searched apps/cli for reset and clear actions.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S40.24": {
+  "labels": [
+   {
+    "file": "apps/cli/src/output_styles.rs",
+    "text": "Educational. Adds insight blocks explaining each non-trivial choice."
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "/output-style"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Type /output-style explanatory.",
+   "Ask a question such as Why does Python use indentation?",
+   "Check the reply explains its reasoning and adds insight blocks, then compare with Expected."
+  ],
+  "where": "Type /output-style explanatory in the chat"
+ },
+ "S40.25": {
+  "labels": [
+   {
+    "file": "apps/cli/src/output_styles.rs",
+    "text": "Interactive. Completes changes and adds one optional learning exercise."
+   },
+   {
+    "file": "apps/cli/src/output_styles.rs",
+    "text": "Teaches step by step with questions instead of finished answers."
+   }
+  ],
+  "needs": "none",
+  "note": "The learning style's own description is one optional exercise, not quizzing; the study style matches the step-by-step teaching in Expected more closely.",
+  "reachable": "yes",
+  "steps": [
+   "Type /output-style learning.",
+   "Ask a question about a coding task and check the reply adds one optional learning exercise.",
+   "Type /output-style study and ask the same question to compare the step-by-step teaching style.",
+   "Compare what you see with Expected."
+  ],
+  "where": "Type /output-style learning in the chat"
+ },
+ "S40.26": {
+  "labels": [
+   {
+    "file": "apps/cli/src/output_styles.rs",
+    "text": "Leads with the result; no preamble, narration or recap."
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "/output-style"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Type /output-style concise.",
+   "Ask a question that could have a long answer, such as How do I install git on a Mac?",
+   "Check the reply leads with the result with no preamble or recap, then compare with Expected."
+  ],
+  "where": "Type /output-style concise in the chat"
+ },
+ "S40.27": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/output-style new <name> <instructions>"
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "Created output style"
+   }
+  ],
+  "needs": "none",
+  "note": "Delete removes the style file directly in the code with no Trash step, and editing is done in the file itself, not in the chat.",
+  "reachable": "yes",
+  "steps": [
+   "Type /output-style new brief-notes Keep every answer under three sentences.",
+   "Type /output-style and check brief-notes is listed; the creation message gives the file path to edit.",
+   "Type /output-style brief-notes, ask a question, and check the reply follows it.",
+   "Type /output-style delete brief-notes and check the message says Deleted output style brief-notes."
+  ],
+  "where": "Type /output-style new <name> <instructions> in the chat"
+ },
+ "S40.28": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "In effect for this session:"
+   },
+   {
+    "file": "apps/cli/src/repl/registry.rs",
+    "text": "Memory Hierarchy:"
+   }
+  ],
+  "needs": "none",
+  "note": "In the full-screen view /output-style only shows the Active list and not the In effect block; that block comes from the plain REPL path.",
+  "reachable": "yes",
+  "steps": [
+   "Type /output-style with no name.",
+   "Check the In effect for this session: block shows the output style and where it comes from, and the Instructions lines list the memory files found.",
+   "Type /memory and check the Memory Hierarchy: list shows which instruction files are found.",
+   "Compare with Expected."
+  ],
+  "where": "Type /output-style in the chat (no name), then /memory"
+ },
+ "S40.29": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Migrate settings from another coding CLI. Defaults to Claude Code."
+   },
+   {
+    "file": "apps/cli/src/ecosystem.rs",
+    "text": "Claude Code migration complete"
+   }
+  ],
+  "needs": "Claude Code settings on this Mac",
+  "note": "The in-chat /import and /migrate commands move old conversation history, not preferences.",
+  "reachable": "yes",
+  "steps": [
+   "In a terminal (not in the chat), type agi migrate --dry-run.",
+   "Read the Claude Code migration dry run report, including the Source line and the MCP line.",
+   "Type agi migrate to import for real.",
+   "Check the report says Claude Code migration complete and that the imported items appear."
+  ],
+  "where": "In a terminal outside the chat, run agi migrate --dry-run, then agi migrate"
+ }
+}

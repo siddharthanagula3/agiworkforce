@@ -1,0 +1,403 @@
+{
+ "S12.01": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/v3.json",
+    "text": "New chat"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to the web app.",
+   "Click \"New chat\" in the sidebar (or the same action in the collapsed sidebar rail).",
+   "Look at the conversation area: it should show no earlier messages.",
+   "Look at the composer at the bottom: it should be ready to type in, with the default model shown."
+  ],
+  "where": "Sidebar > New chat"
+ },
+ "S12.02": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Good morning"
+   },
+   {
+    "file": "apps/web/features/settings/sections/PersonalizationSection.tsx",
+    "text": "What should AGI call you?"
+   }
+  ],
+  "needs": "an account with a name set",
+  "note": "The greeting variant is chosen by date and hour (packages/platform/utils/src/greeting.ts), so the exact wording can differ between tries.",
+  "reachable": "yes",
+  "steps": [
+   "Make sure your name is set: Settings > Personalization > \"What should AGI call you?\" (type a name and save).",
+   "Click \"Sidebar > New chat\".",
+   "Read the greeting above the composer.",
+   "Compare: it should say a time-of-day greeting with your name, for example \"Good morning, <name>\" (the wording depends on the time of day and the date)."
+  ],
+  "where": "Sidebar > New chat"
+ },
+ "S12.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/PersonalizationSection.tsx",
+    "text": "What should AGI call you?"
+   },
+   {
+    "file": "apps/web/features/settings/sections/PersonalizationSection.tsx",
+    "text": "Leave empty to skip names."
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/settings.json",
+    "text": "Personalization"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The save control's exact label was not confirmed in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and choose \"Personalization\".",
+   "Clear the field \"What should AGI call you?\" (its hint says \"Leave empty to skip names.\") and save.",
+   "Click \"Sidebar > New chat\".",
+   "Compare: the greeting should have no name and no personal details in it."
+  ],
+  "where": "Settings > Personalization > \"What should AGI call you?\""
+ },
+ "S12.04": {
+  "labels": [],
+  "needs": "none",
+  "note": "No suggested-prompt control was found on the new-chat screen. The only clickable starter prompts found are \"Start with one of these\" in the first-run wizard (apps/web/features/onboarding/components/StarterPrompts.tsx), which send a chosen prompt to chat.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S12.05": {
+  "labels": [],
+  "needs": "none",
+  "note": "No task-category shortcut row (write, research, image) was found on the new-chat screen. The use-case choices in the first-run wizard (apps/web/features/onboarding/lib/use-cases.ts) are a different feature. Searched the chat, onboarding and sidebar folders for the words.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S12.06": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/sidebar/Sidebar.tsx",
+    "text": "Projects"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Show more"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/v3.json",
+    "text": "New chat in project"
+   }
+  ],
+  "needs": "at least one project",
+  "note": "The project shortcuts are in the sidebar, not on the new-chat screen itself.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and look at the \"Projects\" section in the sidebar.",
+   "Click a project name to open it, or click \"Show more\" if more projects are listed.",
+   "Hover a project and use its \"New chat in project\" action to start a chat in that project.",
+   "Compare: the recent projects should be listed there, and the action should open the project or start a chat in it."
+  ],
+  "where": "Sidebar > Projects"
+ },
+ "S12.07": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Add from library"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFilesMenu.tsx",
+    "text": "No files in your library yet."
+   }
+  ],
+  "needs": "a file in your library",
+  "note": "The library list is not labelled as recent; the code does not confirm it is ordered by recent use.",
+  "reachable": "yes",
+  "steps": [
+   "On the new-chat screen, click the \"+\" button (labelled \"More composer options\").",
+   "Click \"Add from library\" to expand the list.",
+   "Click a file in the list to attach it.",
+   "Compare: the list should show library files, and the attached file should appear in the composer."
+  ],
+  "where": "More composer options (+) > Add from library"
+ },
+ "S12.08": {
+  "labels": [],
+  "needs": "none",
+  "note": "Not applicable: S12.08 is not in the plan file (the file goes from S12.07 to S12.09).",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S12.09": {
+  "labels": [],
+  "needs": "none",
+  "note": "Searched apps/web/features and packages/ui/ui/src for recommended connector or app suggestions and found none. The ledger gives no code location.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S12.10": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/lib/slashCommands.ts",
+    "text": "/search"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/lib/slashCommands.ts",
+    "text": "Search the web"
+   }
+  ],
+  "needs": "none",
+  "note": "Web search is also described in the code as ambient, so no separate on/off toggle was found.",
+  "reachable": "yes",
+  "steps": [
+   "On the new-chat screen, click the composer and type \"/\".",
+   "Choose \"/search\" (described as \"Search the web\").",
+   "Type a question and send it.",
+   "Compare: the reply should use a web search for that message."
+  ],
+  "where": "Composer > type / > /search"
+ },
+ "S12.11": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Deep Research"
+   }
+  ],
+  "needs": "none",
+  "note": "The row can be disabled for some models (researchDisabled in ChatComposerNew.tsx).",
+  "reachable": "yes",
+  "steps": [
+   "On the new-chat screen, click the \"+\" button (labelled \"More composer options\").",
+   "Switch on \"Deep Research\".",
+   "Type a question and send it.",
+   "Compare: the reply should run as deep research, with research progress shown."
+  ],
+  "where": "More composer options (+) > Deep Research"
+ },
+ "S12.12": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Create image"
+   }
+  ],
+  "needs": "an account that can generate images",
+  "note": "The row only appears when the host can generate images. A \"/image\" slash command also exists (packages/ui/unified-chat/src/lib/slashCommands.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Click the \"+\" button (labelled \"More composer options\") on the new-chat screen.",
+   "Click \"Create image\".",
+   "Type a picture description and send it.",
+   "Compare: the send should generate an image in the reply."
+  ],
+  "where": "More composer options (+) > Create image"
+ },
+ "S12.13": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Create video"
+   }
+  ],
+  "needs": "an account that can generate video",
+  "note": "The row only appears when the host can generate video.",
+  "reachable": "yes",
+  "steps": [
+   "Click the \"+\" button (labelled \"More composer options\") on the new-chat screen.",
+   "Click \"Create video\".",
+   "Type a description and send it.",
+   "Compare: the send should start a video generation."
+  ],
+  "where": "More composer options (+) > Create video"
+ },
+ "S12.14": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/VoiceEntryButton.tsx",
+    "text": "Start voice mode"
+   }
+  ],
+  "needs": "a microphone",
+  "note": "The button only shows when the field is empty and the account can use voice.",
+  "reachable": "yes",
+  "steps": [
+   "On the new-chat screen, leave the composer empty.",
+   "Find the voice button at the right end of the composer (its label is \"Start voice mode\").",
+   "Click it.",
+   "Compare: the app should enter a spoken (voice-mode) conversation."
+  ],
+  "where": "Composer > \"Start voice mode\" button (at the right end of the empty composer)"
+ },
+ "S12.15": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Work"
+   }
+  ],
+  "needs": "an account that can use Work",
+  "note": "The switch shows only when the project picker is shown and the account can use Work. Settings > General \"New chats start in\" also sets the default (Chat or Work).",
+  "reachable": "yes",
+  "steps": [
+   "On the new-chat screen, click \"Work\" in the Chat | Work switch above the composer.",
+   "Type a task and send it.",
+   "Compare: the chat should run as an agentic (multi-step, tool-using) task."
+  ],
+  "where": "Composer > Chat | Work switch > Work"
+ },
+ "S12.16": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Code"
+   }
+  ],
+  "needs": "none",
+  "note": "The Code entry is hidden when the \"code\" feature is disabled for the account.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and click \"Code\" in the sidebar.",
+   "Look for the coding screen (the page at /code).",
+   "Compare: it should offer a coding session tied to a repository or workspace."
+  ],
+  "where": "Sidebar > Code"
+ },
+ "S12.17": {
+  "labels": [
+   {
+    "file": "apps/web/lib/temporary-chat-policy.ts",
+    "text": "Temporary chat"
+   }
+  ],
+  "needs": "none",
+  "note": "The row only appears when showTemporaryChat is true, which depends on the project and account.",
+  "reachable": "yes",
+  "steps": [
+   "On the new-chat screen, click the \"+\" button (labelled \"More composer options\").",
+   "Click \"Temporary chat\".",
+   "Type a message and send it.",
+   "Compare: the chat should not appear in the sidebar history afterwards."
+  ],
+  "where": "More composer options (+) > Temporary chat"
+ },
+ "S12.18": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/models.json",
+    "text": "Auto (Recommended)"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "On the new-chat screen, read the composer footer before sending.",
+   "Note the model shown on the model button (by default \"Auto (Recommended)\").",
+   "Click it to open the model list.",
+   "Compare: the shown model should be the one the next message uses."
+  ],
+  "where": "Composer footer > model button (\"Auto (Recommended)\")"
+ },
+ "S12.19": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Workspace: {{name}}"
+   },
+   {
+    "file": "packages/ui/i18n/locales/es/common.json",
+    "text": "Personal"
+   }
+  ],
+  "needs": "an account that is a member of an organization",
+  "note": "The line is hidden when the account has no organization workspace. The English value for the personal workspace was not found in en/common.json; the code default is \"Personal\" (apps/web/features/chat/components/GreetingBanner/NewChatWorkspace.tsx). Label 2 is the Spanish file, so its path is not the English source.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to an account that belongs to an organization.",
+   "Click \"New chat\" in the sidebar.",
+   "Read the line under the greeting: it shows a building icon and \"Workspace: <name>\" for an organization, or \"Personal\" when the personal workspace is active.",
+   "Compare with the workspace the chat will be saved into."
+  ],
+  "where": "New chat > line under the greeting \"Workspace: <name>\""
+ },
+ "S12.20": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Project or folder"
+   }
+  ],
+  "needs": "at least one project",
+  "note": "The picker is provided only by hosts that pass a project picker to the composer.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"New chat\" in the sidebar.",
+   "Click the project picker in the composer (it shows \"Project or folder\" when Work is available, otherwise \"Project\").",
+   "Pick a project from the list.",
+   "Send a message and compare: the new chat should be created in that project."
+  ],
+  "where": "New chat > composer project picker (\"Project or folder\")"
+ },
+ "S12.21": {
+  "labels": [],
+  "needs": "none",
+  "note": "No mode explanation or example text was found in the composer or chat folders. The ledger says live-web.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S12.22": {
+  "labels": [
+   {
+    "file": "apps/web/features/onboarding/components/OnboardingWizard.tsx",
+    "text": "What should we call you?"
+   },
+   {
+    "file": "apps/web/features/onboarding/components/OnboardingWizard.tsx",
+    "text": "How this works"
+   }
+  ],
+  "needs": "a new account that has not finished onboarding",
+  "note": "Once onboarding is complete, /welcome redirects to /chat.",
+  "reachable": "yes",
+  "steps": [
+   "Create a new account and finish sign-in.",
+   "On the welcome page, read \"What should we call you?\" and click \"Continue\".",
+   "On \"What do you want to do first?\", look for the \"How this works\" section.",
+   "Click \"Finish\" or a starter prompt, then compare: the short introduction should cover the key features."
+  ],
+  "where": "After sign-up > welcome page (/welcome)"
+ },
+ "S12.23": {
+  "labels": [],
+  "needs": "none",
+  "note": "The draft is stored in apps/web/features/chat/components/Composer/composer-draft-storage.ts; a draft-conflict toast can appear.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "On the new-chat screen, type text in the composer but do not send it.",
+   "Go to another page in the app, or reload the page.",
+   "Return to the new chat.",
+   "Compare: the typed text should be back in the composer."
+  ],
+  "where": ""
+ },
+ "S12.24": {
+  "labels": [],
+  "needs": "a signed-out browser",
+  "note": "Guest chat is behind the 'guest.chat' switch (apps/web/lib/guest-chat/config.ts), which the owner has left off. The guest-limit copy (\"Without an account you can send ... messages a day.\") is in packages/ui/i18n/locales/en/chat.json but no consumer was found in apps/web. No sign-in prompt for guests was found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ }
+}

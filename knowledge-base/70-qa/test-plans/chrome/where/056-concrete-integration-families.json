@@ -1,0 +1,908 @@
+{
+ "S56.01": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Gmail"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connect"
+   }
+  ],
+  "needs": "an outside account (Google)",
+  "note": "The plan says Gmail works only after the operator adds the Gmail CONNECTOR_OAUTH_PROVIDERS_JSON entry and client pair.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Connectors.",
+   "Click Connect on the Gmail card and approve the Google sign-in.",
+   "Open the Chrome side panel and ask it to find emails from a named sender or about a subject.",
+   "Check that matching messages are listed, as Expected says."
+  ],
+  "where": "Settings > Connectors > Gmail > Connect, then ask in the side panel chat"
+ },
+ "S56.02": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Gmail"
+   }
+  ],
+  "needs": "an outside account (Google)",
+  "note": "Same operator gating as S56.01.",
+  "reachable": "yes",
+  "steps": [
+   "Connect Gmail under Settings, then Connectors, as in S56.01.",
+   "In the side panel, ask for the full content of one named email or thread.",
+   "Check that the full body of that email is shown, as Expected says."
+  ],
+  "where": "Settings > Connectors > Gmail > Connect, then ask in the side panel chat"
+ },
+ "S56.03": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Gmail"
+   }
+  ],
+  "needs": "an outside account (Google)",
+  "note": "The plan says create_draft needs the Gmail operator descriptor and client pair.",
+  "reachable": "yes",
+  "steps": [
+   "Connect Gmail under Settings, then Connectors.",
+   "In the side panel, ask for a draft reply to a named email, or a new draft to a named address.",
+   "Check the step shown for the draft call, then look for the draft in Gmail Drafts in the browser."
+  ],
+  "where": "Settings > Connectors > Gmail > Connect, then ask in the side panel chat"
+ },
+ "S56.04": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Gmail"
+   }
+  ],
+  "needs": "an outside account (Google)",
+  "note": "The plan says send_draft is not reversible and asks under every policy, and needs the operator descriptor.",
+  "reachable": "yes",
+  "steps": [
+   "Connect Gmail under Settings, then Connectors.",
+   "In the side panel, ask to send a drafted email to a named recipient.",
+   "Check that a confirmation names the recipients before anything is sent, then confirm and check the reply."
+  ],
+  "where": "Settings > Connectors > Gmail > Connect, then ask in the side panel chat"
+ },
+ "S56.05": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Gmail"
+   }
+  ],
+  "needs": "an outside account (Google) and a file to attach",
+  "note": "The plan says these tools need the Gmail operator descriptor and client pair.",
+  "reachable": "yes",
+  "steps": [
+   "Connect Gmail under Settings, then Connectors.",
+   "In the side panel, ask it to read the attachments of a named email.",
+   "Then ask for a draft with a file attached and check the draft step in Gmail Drafts."
+  ],
+  "where": "Settings > Connectors > Gmail > Connect, then ask in the side panel chat"
+ },
+ "S56.07": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Google Calendar"
+   }
+  ],
+  "needs": "an outside account (Google)",
+  "note": "The plan says Google Calendar works only after the operator adds its CONNECTOR_OAUTH_PROVIDERS_JSON entry.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Connectors.",
+   "Click Connect on the Google Calendar card and approve the Google sign-in.",
+   "In the side panel, ask for events on a named date or containing a word.",
+   "Check that matching events are listed, as Expected says."
+  ],
+  "where": "Settings > Connectors > Google Calendar > Connect, then ask in the side panel chat"
+ },
+ "S56.08": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Google Calendar"
+   }
+  ],
+  "needs": "an outside account (Google)",
+  "note": "Same operator gating as S56.07.",
+  "reachable": "yes",
+  "steps": [
+   "Connect Google Calendar under Settings, then Connectors.",
+   "In the side panel, ask when a named person or you are free on a named day.",
+   "Check that the reply lists open slots, as Expected says."
+  ],
+  "where": "Settings > Connectors > Google Calendar > Connect, then ask in the side panel chat"
+ },
+ "S56.09": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Google Calendar"
+   }
+  ],
+  "needs": "an outside account (Google)",
+  "note": "Same operator gating as S56.07.",
+  "reachable": "yes",
+  "steps": [
+   "Connect Google Calendar under Settings, then Connectors.",
+   "In the side panel, ask it to create an event with a title, a time and a length.",
+   "Check the confirmation that appears before the event is created, approve it, then open Google Calendar in the browser to see the event."
+  ],
+  "where": "Settings > Connectors > Google Calendar > Connect, then ask in the side panel chat"
+ },
+ "S56.10": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Google Calendar"
+   }
+  ],
+  "needs": "an outside account (Google) and an existing event",
+  "note": "Same operator gating as S56.07.",
+  "reachable": "yes",
+  "steps": [
+   "Connect Google Calendar under Settings, then Connectors.",
+   "In the side panel, ask to move or cancel a named existing event.",
+   "Check the approval step, approve it, then check the event in Google Calendar in the browser."
+  ],
+  "where": "Settings > Connectors > Google Calendar > Connect, then ask in the side panel chat"
+ },
+ "S56.11": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Google Calendar"
+   }
+  ],
+  "needs": "an outside account (Google)",
+  "note": "Same operator gating as S56.07.",
+  "reachable": "yes",
+  "steps": [
+   "Connect Google Calendar under Settings, then Connectors.",
+   "In the side panel, ask it to invite a named person to a meeting, or to accept an invitation.",
+   "Check the approval step names the invitee, approve it, then check the invitation in Google Calendar."
+  ],
+  "where": "Settings > Connectors > Google Calendar > Connect, then ask in the side panel chat"
+ },
+ "S56.12": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Google Contacts"
+   }
+  ],
+  "needs": "an outside account (Google)",
+  "note": "The plan says this needs the People API enabled, the google-contacts CONNECTOR_OAUTH_PROVIDERS_JSON entry and its client pair.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Connectors.",
+   "Click Connect on the Google Contacts card and approve the Google sign-in.",
+   "In the side panel, ask for the email address of a named person in your contacts.",
+   "Check that the matching contact and address are shown, as Expected says."
+  ],
+  "where": "Settings > Connectors > Google Contacts > Connect, then ask in the side panel chat"
+ },
+ "S56.13": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Google Drive"
+   }
+  ],
+  "needs": "an outside account (Google)",
+  "note": "none",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Connectors.",
+   "Click Connect on the Google Drive card and approve the Google sign-in.",
+   "In the side panel, ask it to find files whose name contains a word.",
+   "Check that matching files are listed, as Expected says."
+  ],
+  "where": "Settings > Connectors > Google Drive > Connect, then ask in the side panel chat"
+ },
+ "S56.14": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Box"
+   }
+  ],
+  "needs": "an outside account (Box)",
+  "note": "The code audit points to Box, not Google Drive, for download; Google Drive also lists read_file_content.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Connectors.",
+   "Click Connect on the Box card and approve the Box sign-in.",
+   "In the side panel, ask it to read the content of a named file in Box.",
+   "Check that the file text appears in the reply, as Expected says."
+  ],
+  "where": "Settings > Connectors > Box > Connect, then ask in the side panel chat"
+ },
+ "S56.15": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Google Drive"
+   }
+  ],
+  "needs": "an outside account (Google)",
+  "note": "The plan says this needs the Google Drive operator descriptor and client pair.",
+  "reachable": "yes",
+  "steps": [
+   "Connect Google Drive under Settings, then Connectors.",
+   "In the side panel, ask it to create a new file with a name and some text.",
+   "Approve the step when it asks, then open Google Drive in the browser and look for the new file."
+  ],
+  "where": "Settings > Connectors > Google Drive > Connect, then ask in the side panel chat"
+ },
+ "S56.16": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Box"
+   }
+  ],
+  "needs": "an outside account (Box) and a test file",
+  "note": "none",
+  "reachable": "yes",
+  "steps": [
+   "Connect Box under Settings, then Connectors.",
+   "In the side panel, ask it to change the text of a named file in Box.",
+   "Approve the step, then open the file in Box in the browser and check the change."
+  ],
+  "where": "Settings > Connectors > Box > Connect, then ask in the side panel chat"
+ },
+ "S56.17": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Box"
+   }
+  ],
+  "needs": "an outside account (Box)",
+  "note": "Only folder creation is named in the Box directory entry (create_folder); no sharing tool was found in the code searched.",
+  "reachable": "yes",
+  "steps": [
+   "Connect Box under Settings, then Connectors.",
+   "In the side panel, ask it to create a new folder with a name.",
+   "Check the step shown, then look for the folder in Box in the browser.",
+   "Sharing (links, collaborators) has no tool found in the directory entry; check the reply says so if asked."
+  ],
+  "where": "Settings > Connectors > Box > Connect, then ask in the side panel chat"
+ },
+ "S56.18": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Notion"
+   }
+  ],
+  "needs": "an outside account (Notion)",
+  "note": "The code points to Notion and Confluence, not Google Docs or Word, which are not named in the directory entries found.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Connectors.",
+   "Click Connect on the Notion card and approve the sign-in.",
+   "In the side panel, ask it to change the text of a named Notion page.",
+   "Check the step shown, then open the page in Notion in the browser and compare."
+  ],
+  "where": "Settings > Connectors > Notion > Connect, then ask in the side panel chat"
+ },
+ "S56.19": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connectors"
+   }
+  ],
+  "needs": "an outside account (Google) and a test spreadsheet",
+  "note": "The catalog has a google-sheets entry (apps/web/lib/connectors/catalog.ts) but no visible card name was found in first-party.json, so the card label is not verified.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Connectors.",
+   "Look for the Google Sheets card and click Connect; approve the Google sign-in.",
+   "In the side panel, ask it to read a named range of a sheet, then to change one cell.",
+   "Check the reply and the change in Google Sheets in the browser."
+  ],
+  "where": "Settings > Connectors, then find the Google Sheets card and click Connect"
+ },
+ "S56.20": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Canva"
+   }
+  ],
+  "needs": "an outside account (Canva)",
+  "note": "The code audit points to the Canva catalog entry; Slides or PowerPoint are not named in the directory entries found.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Connectors.",
+   "Click Connect on the Canva card and approve the sign-in.",
+   "In the side panel, ask it to list or change the text of a named Canva design.",
+   "Check the step shown, then open the design in Canva in the browser."
+  ],
+  "where": "Settings > Connectors > Canva > Connect, then ask in the side panel chat"
+ },
+ "S56.21": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Slack"
+   }
+  ],
+  "needs": "an outside account (Slack)",
+  "note": "The plan says the Slack app must be registered with search:read scopes by the owner; Teams has no verified server.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Connectors.",
+   "Click Connect on the Slack card and approve the Slack sign-in.",
+   "In the side panel, ask for messages that contain a word in a named channel.",
+   "Check that matching Slack messages are listed, as Expected says."
+  ],
+  "where": "Settings > Connectors > Slack > Connect, then ask in the side panel chat"
+ },
+ "S56.22": {
+  "labels": [],
+  "needs": "an external service (team chat)",
+  "note": "The ledger gives no code location. One search of apps/web/lib/connectors, apps/web/lib/user-connector-tools.ts and apps/extension/src for a post-to-channel tool found none.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S56.23": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Notion"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Confluence"
+   }
+  ],
+  "needs": "an outside account (Notion)",
+  "note": "Confluence is also a knowledge base in the directory; connect either one.",
+  "reachable": "yes",
+  "steps": [
+   "Connect Notion under Settings, then Connectors.",
+   "In the side panel, ask it to search Notion for a named topic.",
+   "Check that matching Notion pages are listed, as Expected says."
+  ],
+  "where": "Settings > Connectors > Notion > Connect, then ask in the side panel chat"
+ },
+ "S56.24": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Notion"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Confluence"
+   }
+  ],
+  "needs": "an outside account (Notion)",
+  "note": "Confluence is the same kind of workspace; the code lists both.",
+  "reachable": "yes",
+  "steps": [
+   "Connect Notion under Settings, then Connectors.",
+   "In the side panel, ask it to create a new page with a title and text in a named place.",
+   "Check the step shown, then open the new page in Notion in the browser."
+  ],
+  "where": "Settings > Connectors > Notion > Connect, then ask in the side panel chat"
+ },
+ "S56.25": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Jira"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Asana"
+   }
+  ],
+  "needs": "an outside account (Jira)",
+  "note": "Asana is also a task source in the directory entries the code points to.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Connectors.",
+   "Click Connect on the Jira card and approve the Atlassian sign-in.",
+   "In the side panel, ask it to create an issue with a title in a named project; approve when asked.",
+   "Check the new issue in Jira in the browser."
+  ],
+  "where": "Settings > Connectors > Jira > Connect, then ask in the side panel chat"
+ },
+ "S56.26": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Linear"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Asana"
+   }
+  ],
+  "needs": "an outside account (Linear)",
+  "note": "The code points to Asana and Jira entries as well; Linear is one of the connectors listed.",
+  "reachable": "yes",
+  "steps": [
+   "Connect Linear under Settings, then Connectors.",
+   "In the side panel, ask it to change the status of a named issue to a named state.",
+   "Check the step shown, then look at the issue status in Linear in the browser."
+  ],
+  "where": "Settings > Connectors > Linear > Connect, then ask in the side panel chat"
+ },
+ "S56.27": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Asana"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connect"
+   }
+  ],
+  "needs": "an outside account (Asana) and the connector enabled by the owner",
+  "note": "The Asana card is in the directory, but it connects only when the owner has enabled it; the board tool itself was not traced in code.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI Chrome side panel and click the plus button, then click Connectors.",
+   "On the Connectors page, find the Asana card and click Connect.",
+   "Sign in to Asana in the window that opens and approve access.",
+   "Back in the side panel, ask: show the boards in my Asana project.",
+   "Compare the reply with Expected: it should list the project boards from the connected Asana account, shown as steps."
+  ],
+  "where": "Chrome side panel > plus menu > Connectors (opens the web Connectors page) > Asana > Connect"
+ },
+ "S56.28": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "HubSpot"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connect"
+   }
+  ],
+  "needs": "an outside account (HubSpot)",
+  "note": "The card is listed in the directory; availability depends on the owner enabling the connector.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side panel, click the plus button, then click Connectors.",
+   "Find the HubSpot card and click Connect.",
+   "Sign in to HubSpot and approve access.",
+   "In the side panel, ask: find the HubSpot contact for a named person.",
+   "Compare with Expected: the reply should show the account or contact details from HubSpot."
+  ],
+  "where": "Chrome side panel > plus menu > Connectors > HubSpot > Connect"
+ },
+ "S56.29": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "HubSpot"
+   }
+  ],
+  "needs": "a paid account and an outside account (HubSpot)",
+  "note": "The approval step for updates was read from the connector list, not from a traced screen.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side panel, click the plus button, then click Connectors.",
+   "Connect the HubSpot card and sign in.",
+   "In the side panel, ask the assistant to move a named deal to a new stage.",
+   "Expect a confirmation step that names the deal before anything changes; approve or cancel it.",
+   "Compare with Expected: the deal should change only after approval."
+  ],
+  "where": "Chrome side panel > plus menu > Connectors > HubSpot > Connect"
+ },
+ "S56.30": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Intercom"
+   }
+  ],
+  "needs": "an outside account (Intercom)",
+  "note": "The directory lists Intercom tool entries; other help-desk connectors (Zendesk, Freshdesk) are in the catalog but their card names were not found in the directory sources.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side panel, click the plus button, then click Connectors.",
+   "Find the Intercom card and click Connect.",
+   "Sign in to Intercom and approve access.",
+   "In the side panel, ask: find open support tickets about billing.",
+   "Compare with Expected: the reply should list matching tickets from Intercom."
+  ],
+  "where": "Chrome side panel > plus menu > Connectors > Intercom > Connect"
+ },
+ "S56.31": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Connectors"
+   }
+  ],
+  "needs": "a GitHub account and the owner's GitHub connector setup",
+  "note": "The github connector key exists in apps/web/lib/connectors/catalog.ts, but no visible card name for GitHub was found in apps/web/lib/connectors/directory/sources/first-party.json, so the exact path was not confirmed. The plan says the hosted GitHub server connects only after the owner adds its descriptor.",
+  "reachable": "unsure",
+  "steps": [
+   "Open the Connectors page from the side panel plus menu.",
+   "Look for a GitHub card and click Connect.",
+   "In the side panel, ask: search this repository for the function named X.",
+   "Compare with Expected: matching code results should be shown."
+  ],
+  "where": ""
+ },
+ "S56.32": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Connectors"
+   }
+  ],
+  "needs": "a GitHub account with a repository",
+  "note": "Code shows github and user-connector-tools tools for pull requests (apps/web/lib/user-connector-tools.ts:303, 343), but no visible GitHub card name was found in the directory sources to cite.",
+  "reachable": "unsure",
+  "steps": [
+   "Open the Connectors page from the side panel plus menu.",
+   "Connect GitHub if a card is shown for it.",
+   "In the side panel, ask the assistant to read and review a named pull request.",
+   "Compare with Expected: the reply should show the PR content, and any review comment should be sent only after approval."
+  ],
+  "where": ""
+ },
+ "S56.33": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Connectors"
+   }
+  ],
+  "needs": "a connected CI account and repository",
+  "note": "The plan says the GitHub Actions toolset works only after the owner adds the GitHub descriptor and client; no visible card name was found in code.",
+  "reachable": "unsure",
+  "steps": [
+   "Open the Connectors page from the side panel plus menu.",
+   "Connect the CI provider if a card is shown for it.",
+   "In the side panel, ask: what is the status of the latest workflow run on this repository?",
+   "Compare with Expected: the status and, when asked, the build log should be shown."
+  ],
+  "where": ""
+ },
+ "S56.34": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Figma"
+   }
+  ],
+  "needs": "an outside account (Figma)",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open the side panel, click the plus button, then click Connectors.",
+   "Find the Figma card and click Connect.",
+   "Sign in to Figma and approve access.",
+   "In the side panel, ask: list the frames in a named Figma file.",
+   "Compare with Expected: the frames and components of the file should be listed."
+  ],
+  "where": "Chrome side panel > plus menu > Connectors > Figma > Connect"
+ },
+ "S56.35": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Figma"
+   }
+  ],
+  "needs": "an outside account (Figma) and a Figma file with a component",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open the side panel, click the plus button, then click Connectors.",
+   "Connect the Figma card and sign in.",
+   "In the side panel, ask: give me the code references for the selected component in a named Figma file.",
+   "Compare with Expected: code context and dev resources should be listed."
+  ],
+  "where": "Chrome side panel > plus menu > Connectors > Figma > Connect"
+ },
+ "S56.36": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Neon"
+   }
+  ],
+  "needs": "a connected Neon database",
+  "note": "Supabase is also listed in the same directory file as a database connector.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side panel, click the plus button, then click Connectors.",
+   "Find the Neon card and click Connect.",
+   "Enter or approve the database access the card asks for.",
+   "In the side panel, ask: how many rows are in a named table?",
+   "Compare with Expected: the query result from the connected database should be shown."
+  ],
+  "where": "Chrome side panel > plus menu > Connectors > Neon > Connect"
+ },
+ "S56.37": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/account-url-connectors.ts",
+    "text": "Snowflake"
+   },
+   {
+    "file": "apps/web/lib/connectors/account-url-connectors.ts",
+    "text": "Databricks"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Connectors"
+   }
+  ],
+  "needs": "a Snowflake or Databricks account and an OAuth client or access token",
+  "note": "The plan says a run against a real Snowflake and Databricks account is still owed, so the sign-in path is unverified.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Connectors page from the side panel plus menu.",
+   "Click the Snowflake card, which opens the custom connector form.",
+   "Enter the account MCP URL and OAuth client or access token the form asks for, then save.",
+   "In the side panel, ask a question about a table in the warehouse.",
+   "Compare with Expected: the answer should be drawn from the warehouse data."
+  ],
+  "where": "Connectors page (open from the Chrome side panel plus menu > Connectors) > add Snowflake or Databricks by account URL"
+ },
+ "S56.38": {
+  "labels": [],
+  "needs": "an external analytics or BI account",
+  "note": "The plan gives no code location for dashboard creation and no visible card was searched for.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S56.39": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/sources/first-party.json",
+    "text": "Vercel"
+   }
+  ],
+  "needs": "an outside account (Vercel)",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open the side panel, click the plus button, then click Connectors.",
+   "Find the Vercel card and click Connect.",
+   "Sign in to Vercel and approve access.",
+   "In the side panel, ask: list the recent deployments of a named project.",
+   "Compare with Expected: the deployments and their status should be listed."
+  ],
+  "where": "Chrome side panel > plus menu > Connectors > Vercel > Connect"
+ },
+ "S56.40": {
+  "labels": [],
+  "needs": "a licensed research account",
+  "note": "The plan gives no code location for licensed research retrieval; not searched further.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S56.41": {
+  "labels": [],
+  "needs": "an outside shopping account",
+  "note": "The plan gives no code location for shopping or product lookup; not searched further.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S56.42": {
+  "labels": [],
+  "needs": "an outside booking account",
+  "note": "The plan gives no code location for reservations and bookings; not searched further.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S56.43": {
+  "labels": [],
+  "needs": "an outside media service account",
+  "note": "The plan gives no code location for media playback; not searched further.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S56.46": {
+  "labels": [
+   {
+    "file": "apps/web/features/connectors/data/connectors.ts",
+    "text": "Healthcare"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connect"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Connectors"
+   }
+  ],
+  "needs": "a United States location and an outside HealthEx account",
+  "note": "The HealthEx card name was not found in the visible sources; it stays unavailable until the owner enables it, and the plan says the connection is refused outside the United States.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side panel, click the plus button, then click Connectors.",
+   "Choose the Healthcare category on the Connectors page.",
+   "Click Connect on the HealthEx card if it is shown; the card connects only from the United States.",
+   "Sign in at HealthEx within 30 minutes and approve access.",
+   "In the side panel, ask about a recent visit in the connected health record.",
+   "Compare with Expected: the assistant should read the record only after connection and say when it cannot connect."
+  ],
+  "where": "Chrome side panel > plus menu > Connectors > Healthcare (category filter) > HealthEx > Connect"
+ },
+ "S56.47": {
+  "labels": [
+   {
+    "file": "apps/web/lib/connectors/bank-accounts.ts",
+    "text": "Bank accounts"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connect"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Connectors"
+   }
+  ],
+  "needs": "a United States bank account, and Plaid set up by the owner",
+  "note": "Bank accounts stays unavailable until the owner sets up Plaid on the deployment, so a tester may see a not-configured message.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side panel, click the plus button, then click Connectors.",
+   "Find the Bank accounts card and click Connect.",
+   "Complete the Plaid Link flow with a United States bank and sign in.",
+   "In the side panel, ask: what are my account balances?",
+   "Compare with Expected: the balances and recent transactions should match the bank account."
+  ],
+  "where": "Chrome side panel > plus menu > Connectors > Bank accounts > Connect"
+ }
+}

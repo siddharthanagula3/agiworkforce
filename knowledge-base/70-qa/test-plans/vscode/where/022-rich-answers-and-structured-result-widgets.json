@@ -1,0 +1,48 @@
+{
+ "S22.28": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Abort turn"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Approve"
+   },
+   {
+    "file": "packages/contracts/local-runtime/src/developer-session.ts",
+    "text": "Ask"
+   }
+  ],
+  "needs": "A workspace folder open in VS Code, and a signed-in account that can run the agent.",
+  "note": "The approve buttons are built from the word \"Approve\" plus \"once\" or \"for session\" in webviewContent.ts (around line 7034), so the full text \"Approve once\" is not a literal in any file. The exact trigger for the card depends on the agent's mode and the tool asked for; the mode-menu entry point was found only in the QuickPick code (apps/extension-vscode/src/core/commandSetup.ts), not as a confirmed sidebar control.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI chat panel in VS Code and open the mode menu.",
+   "Choose \"Ask\" (the mode that asks before acting).",
+   "In the \"Describe a task\u2026\" box, type a request such as: create a file named notes.txt with one line of text, then press send.",
+   "When the approval card appears, read the summary and detail text of what will happen, then compare with Expected: an approve/deny form is shown.",
+   "Optionally click \"Deny\" or \"Abort turn\" to check the card closes with its outcome message."
+  ],
+  "where": "AGI chat panel > \"Describe a task\u2026\" box: pick \"Ask\" in the mode menu, then send a task that changes a file. When the agent asks, an approval card appears in the chat with \"Approve once\", \"Approve for session\", \"Deny\" and \"Abort turn\" buttons."
+ },
+ "S22.30": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "A signed-in account that can get an answer from the agent.",
+  "note": "The table renderer is apps/extension-vscode/src/webview/render.ts (lines 72-74, aria-label \"Table\" is not visible text). I did not confirm that the sidebar answer view uses this renderer, since webviewContent.ts does not import it, so the table's visible appearance is unverified. The model decides whether it writes a table, so the tester must ask for one.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI chat panel in VS Code.",
+   "In the \"Describe a task\u2026\" box, type: compare three database options in a table with columns for cost, speed and setup, then press send.",
+   "When the answer arrives, look for a grid with a header row and aligned cells.",
+   "Make the table wider than the panel if you can, and check that it scrolls sideways inside its own box rather than moving the whole panel.",
+   "Compare with Expected: the comparison appears as a readable table, not as raw pipe characters."
+  ],
+  "where": "AGI chat panel > \"Describe a task\u2026\" box: ask for a comparison, for example \"compare two options as a table\". A Markdown table in the answer renders as a scrollable table with a region label \"Table\"."
+ }
+}

@@ -1,0 +1,29 @@
+{
+ "S30.28": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/CommandPalette.tsx",
+    "text": "New chat"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/GeneratedFileCard.tsx",
+    "text": "Download"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/GeneratedFileCard.tsx",
+    "text": "Download generated file"
+   }
+  ],
+  "needs": "a Free account or a paid account (plan gating for office file creation not confirmed in code)",
+  "note": "The plan's Code line is stale: the cited quoted code is not in apps/web/lib/services/managed-office-file-service.ts. The PPTX is created by the create_office_file chat tool (apps/web/lib/services/managed-office-file-service.ts, pptxgenjs) and downloaded from the chat file card, not from an Export menu; no Export control was found in apps/desktop or apps/web. The exact prompt wording that triggers the tool and the Free-plan limit were not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Click New chat (or press the command palette and choose New chat) to open an empty conversation.",
+   "Type a request that asks for a PowerPoint presentation with a few slide titles and bullets, then send it.",
+   "Wait for the reply to show a generated file card with a .pptx name.",
+   "Click the Download button on that card (its tooltip-style label is Download generated file).",
+   "Open the downloaded file in PowerPoint, Keynote or Preview and check it is a .pptx deck with the slide text you asked for. Compare with Expected: the user can download the deck as a .pptx file."
+  ],
+  "where": "New chat > ask the assistant for a PowerPoint deck (for example \"Make a 3-slide PowerPoint deck about our release plan\") > on the generated file card under the reply, click Download"
+ }
+}

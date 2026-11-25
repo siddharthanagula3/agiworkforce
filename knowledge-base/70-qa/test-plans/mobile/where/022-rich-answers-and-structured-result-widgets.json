@@ -1,0 +1,344 @@
+{
+ "S22.01": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Web search"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ModeToggle.tsx",
+    "text": "Cloud"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/CitationChip.tsx",
+    "text": "Open page"
+   }
+  ],
+  "needs": "A signed-in account that is allowed web search (the 'Web search' row is hidden otherwise), and a network connection",
+  "note": "In answers the citation is a teal [n] text marker; the pill chip with [n] and a title is used in Deep Research 'Sources' lists (research/ResearchSourcesAppendix.tsx).",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the Chat screen. Make sure the 'Cloud' button in the mode toggle is selected.",
+   "Tap the '+' button (its accessibility label is 'Add to chat'), turn on 'Web search', then close the sheet.",
+   "Ask: 'What are the latest headlines about renewable energy? Cite your sources.'",
+   "When the answer finishes, look for small teal bracket numbers such as [1] in the text.",
+   "Tap one [n] marker. Compare with Expected: the source should be identified (title shown) and openable through 'Open page'."
+  ],
+  "where": "Chat > '+' button > turn on 'Web search' > ask a question > teal [1], [2] markers in the answer"
+ },
+ "S22.02": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/CitationChip.tsx",
+    "text": "Open page"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/CitationChip.tsx",
+    "text": "Cancel"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Web search"
+   }
+  ],
+  "needs": "A signed-in account with web search on, and a network connection",
+  "note": "A phone has no hover, so the preview is a tap that shows a native alert (previewCitation in CitationChip.tsx), not a hover card. Date and snippet appear only when the source has them.",
+  "reachable": "yes",
+  "steps": [
+   "Get an answer with web search on, as in S22.01, with a teal [n] marker in the text.",
+   "Tap the [n] marker.",
+   "Compare with Expected: a popup shows the source title, the site, 'Published' date when known, and a snippet when known.",
+   "Tap 'Cancel' and tap the marker again, then tap 'Open page' and check the source opens."
+  ],
+  "where": "Chat > answer with web search > tap a teal [n] marker > preview alert"
+ },
+ "S22.03": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/CollapsibleSources.tsx",
+    "text": "Sources"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/CollapsibleSources.tsx",
+    "text": "Citations"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/CollapsibleSources.tsx",
+    "text": "More"
+   }
+  ],
+  "needs": "A signed-in account with web search on, and a network connection",
+  "note": "While the answer is still streaming the title reads 'Sources so far'. Search steps also show a 'Searching for' card in the tool timeline (WebSearchToolCard.tsx).",
+  "reachable": "yes",
+  "steps": [
+   "Get an answer with web search on, as in S22.01.",
+   "Tap the 'Sources' pill under the answer (it says 'View N sources').",
+   "Check the sheet: a query line, a 'Citations' heading for cited sources, and a 'More' heading for the rest.",
+   "Check each row shows publisher and date, the title, and a snippet when there is one.",
+   "Tap a row. Compare with Expected: the source opens in the in-app browser."
+  ],
+  "where": "Chat > answer made with web search > tap the 'Sources' pill under the answer"
+ },
+ "S22.08": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ReportChart.tsx",
+    "text": "Show data"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ReportChart.tsx",
+    "text": "Save image"
+   }
+  ],
+  "needs": "None beyond sign-in. The model must return a chart, so ask for one; the app has no button that makes a chart",
+  "note": "Charts come from a chart block in the answer (AssistantSurface.tsx 'chart' fence, or a mermaid xychart/pie block); whether the model returns one is not under the tester's control.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the Chat screen.",
+   "Ask: 'Make a bar chart of monthly sales for January to June: 10, 14, 9, 17, 20, 12.'",
+   "When the chart appears in the answer, press and drag across the bars or line.",
+   "Look at the text line under the chart: it changes to show the value at that point.",
+   "For a pie chart, tap a slice to select it and tap again to clear. Compare with Expected: values show on touch and a legend-style readout appears."
+  ],
+  "where": "Chat > ask for a chart > the chart in the answer"
+ },
+ "S22.09": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ReportChart.tsx",
+    "text": "Show data"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ReportChart.tsx",
+    "text": "Hide data"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ReportChart.tsx",
+    "text": "Save image"
+   }
+  ],
+  "needs": "None beyond sign-in; the answer must contain a chart",
+  "note": "The code has no JSON view and no CSV download for chart data. 'Save image' exports a PNG.",
+  "reachable": "yes",
+  "steps": [
+   "Get a chart in an answer, as in S22.08.",
+   "Tap 'Show data' under the chart. A table of the chart values appears.",
+   "Tap a value in the table and check it can be selected.",
+   "Tap 'Save image' and check a picture of the chart is saved or shared.",
+   "Compare the table values with the chart. Compare with Expected: the data is inspectable and can be saved."
+  ],
+  "where": "Chat > chart in an answer > 'Show data' button under the chart"
+ },
+ "S22.10": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ModeToggle.tsx",
+    "text": "Cloud"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/cards/MapViewer.tsx",
+    "text": "Full screen map"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/MapFenceSurface.tsx",
+    "text": "Map preview is unavailable. Place names are listed."
+   }
+  ],
+  "needs": "A managed Cloud account with map tiles available. This depends on production state and is not verified here",
+  "note": "The map appears only in Cloud mode and only when the answer has located places (a 'map' block). Whether production tiles are configured is not verified in code.",
+  "reachable": "yes",
+  "steps": [
+   "Select 'Cloud' in the mode toggle on the Chat screen.",
+   "Ask: 'Show me the main museums in Paris on a map.'",
+   "Wait for the answer. A map with pins should appear under the text.",
+   "Tap the expand control on the map (its label is 'Full screen map').",
+   "Compare with Expected: the map shows markers. If the map cannot load, the text 'Map preview is unavailable. Place names are listed.' appears instead."
+  ],
+  "where": "Chat (Cloud mode) > ask about places > map in the answer > 'Full screen map' control"
+ },
+ "S22.28": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Allow once"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Always allow"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Deny"
+   }
+  ],
+  "needs": "A Cloud account with a tool or connector that needs approval; the UI does not let the tester choose when it asks",
+  "note": "The card is CloudToolApprovalControls.tsx, shown in AgentActivityTimeline.tsx and ToolCallTimeline.tsx. The code does not show how often a tool asks for approval, so the trigger is unsure.",
+  "reachable": "yes",
+  "steps": [
+   "Select 'Cloud' in the mode toggle and start a task that makes the agent use a tool needing approval.",
+   "When the agent pauses, find the approval card. Check it shows the tool summary and its parameters.",
+   "Read the buttons: 'Allow once', 'Allow for this chat', 'Always allow', 'Deny'.",
+   "Tap 'Deny' (or 'Allow once') and check the card shows the decision.",
+   "For 'Always allow' on a destructive tool, check a confirmation alert with 'Cancel' appears. Compare with Expected: the card states what will happen and offers approve or deny."
+  ],
+  "where": "Chat (Cloud mode) > a task where the agent asks to use a tool > approval card in the activity timeline with 'Allow once', 'Allow for this chat', 'Always allow', 'Deny'"
+ },
+ "S22.30": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/MessageContentRenderer.tsx",
+    "text": "Expand table"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/TableFullScreen.tsx",
+    "text": "Close table"
+   }
+  ],
+  "needs": "None beyond sign-in; the answer must contain a table",
+  "note": "A separate product comparison card exists (cards/ProductComparisonCard.tsx). Column headings sort only when the cell has no link.",
+  "reachable": "yes",
+  "steps": [
+   "Ask: 'Compare three phone plans in a table: price, data, and contract length.'",
+   "Find the table in the answer and check its columns and rows read clearly.",
+   "Tap a column heading to sort the rows.",
+   "Tap the 'Expand table' icon to open the table full screen, then tap 'Close table'.",
+   "Compare with Expected: the answer shows a readable comparison table."
+  ],
+  "where": "Chat > ask for a comparison table > the table in the answer > 'Expand table'"
+ },
+ "S22.31": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/MermaidDiagramBlock.tsx",
+    "text": "Expand diagram"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/MermaidDiagramBlock.tsx",
+    "text": "Show source"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/MermaidDiagramBlock.tsx",
+    "text": "Diagram"
+   }
+  ],
+  "needs": "None beyond sign-in; the answer must contain a mermaid block",
+  "note": "No mind-map code exists by name. A mind map is drawn only as a generic mermaid block, and whether mindmap syntax renders is not verified in code.",
+  "reachable": "yes",
+  "steps": [
+   "Ask: 'Draw a mind map of the parts of a bicycle as a mermaid mindmap.'",
+   "Wait for the answer. A 'Diagram' bar appears under the drawing.",
+   "Tap 'Show source' to see the diagram code, then tap 'Show source' again to hide it.",
+   "Tap the 'Expand diagram' icon to open it full screen.",
+   "Compare with Expected: a drawn mind map with a central topic and branches."
+  ],
+  "where": "Chat > ask for a mind map > the 'Diagram' bar under the drawing > 'Expand diagram' or 'Show source'"
+ },
+ "S22.32": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/MermaidDiagramBlock.tsx",
+    "text": "Expand diagram"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/MermaidDiagramBlock.tsx",
+    "text": "Show source"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/MermaidDiagramBlock.tsx",
+    "text": "Diagram"
+   }
+  ],
+  "needs": "None beyond sign-in; the answer must contain a mermaid block",
+  "note": "Flowcharts use the same generic mermaid path as mind maps; the code does not name flowcharts, so the drawing depends on the Mermaid runtime.",
+  "reachable": "yes",
+  "steps": [
+   "Ask: 'Draw a flowchart of how a support ticket is handled, with decision points, as a mermaid flowchart.'",
+   "Wait for the answer. A 'Diagram' bar appears under the drawing.",
+   "Tap 'Show source' to see the diagram code, then hide it.",
+   "Tap the 'Expand diagram' icon to open it full screen.",
+   "Compare with Expected: a drawn flowchart with boxes and arrows."
+  ],
+  "where": "Chat > ask for a flowchart > the 'Diagram' bar under the drawing > 'Expand diagram' or 'Show source'"
+ },
+ "S22.33": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/markdown/assistantFence.ts",
+    "text": "Complete"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/markdown/assistantFence.ts",
+    "text": "In progress"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/markdown/assistantFence.ts",
+    "text": "Not started"
+   }
+  ],
+  "needs": "None beyond sign-in; the answer must contain a timeline block",
+  "note": "The timeline panel is the 'timeline' answer block (AssistantSurface.tsx). The panel is a list of steps, not a line drawing. A mermaid timeline block takes the generic diagram path instead.",
+  "reachable": "yes",
+  "steps": [
+   "Ask: 'Make a timeline of the steps to launch a small app, with dates and status.'",
+   "Find the 'Timeline' panel in the answer.",
+   "Check the steps are numbered in order, each with a date when given.",
+   "Check each step's status label: 'Complete', 'In progress' or 'Not started'.",
+   "Compare with Expected: the answer shows a drawn timeline of the steps."
+  ],
+  "where": "Chat > ask for a timeline > the 'Timeline' panel in the answer (numbered steps with status labels)"
+ },
+ "S22.36": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/CodeCard.tsx",
+    "text": "Preview HTML"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/CodeCard.tsx",
+    "text": "Preview"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/SafeArtifactPreview.tsx",
+    "text": "Run the preview again"
+   }
+  ],
+  "needs": "None beyond sign-in; the answer must contain an html block",
+  "note": "HTML and React previews run scripts in a sandbox (SafeArtifactPreview.tsx). Links in the preview ask 'Open link?' first.",
+  "reachable": "yes",
+  "steps": [
+   "Ask: 'Make a small interactive HTML demo with a button that counts clicks.'",
+   "When the html code block appears, tap 'Preview HTML'.",
+   "Tap the demo's button inside the preview and check the count changes.",
+   "Tap the 'Source' tab to see the code, then 'Preview' to go back.",
+   "Compare with Expected: the demo runs live inside the preview."
+  ],
+  "where": "Chat > ask for an interactive HTML page > html code card > 'Preview HTML'"
+ },
+ "S22.38": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/InlineArtifactCard.tsx",
+    "text": "Tap to expand"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+    "text": "Preview"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+    "text": "Open in Safari"
+   }
+  ],
+  "needs": "None beyond sign-in; the answer must generate an app or page (the tester cannot force it)",
+  "note": "The publish path needs a published artifact; whether this account can publish is not verified in code.",
+  "reachable": "yes",
+  "steps": [
+   "Ask: 'Build a small web page that shows a to-do list I can add items to.'",
+   "Tap the artifact card in the answer (it says 'Tap to expand').",
+   "In the full-screen view, check the 'Preview' tab shows the live page. Try adding an item.",
+   "Tap 'Source' and then 'Preview' again.",
+   "If the artifact has been published, find its publication link and 'Open in Safari' (iPhone) or 'Open in browser'. Compare with Expected: the app is previewed live and can be opened or expanded."
+  ],
+  "where": "Chat > ask for a small web app > artifact card in the answer > tap it > 'Preview' tab (and 'Open in Safari' when published)"
+ }
+}

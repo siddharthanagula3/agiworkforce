@@ -1,0 +1,629 @@
+{
+ "feature": {
+  "id": "F076-02",
+  "aliases": [
+   "Image understanding",
+   "Vision input",
+   "Multiple-image input",
+   "High-detail image inspection",
+   "Native PDF input",
+   "S76.03",
+   "S76.04",
+   "S76.05",
+   "S76.06",
+   "imageInput",
+   "Vision chip",
+   "Images filter",
+   "Files filter"
+  ],
+  "summary": "Lets a person attach pictures and PDFs to chat. The catalog records which models read pictures and PDFs, how many pictures one request may carry, and which detail levels are accepted. Apps warn early; the server refuses a picture turn for a model that cannot read pictures instead of rerouting.",
+  "purpose": {
+   "what_it_does": "Checks every picture or PDF turn against the chosen model: picture ability, picture count, detail level and native PDF handling. Auto routing sends picture turns to vision models.",
+   "why_it_exists": "Providers reject a request that carries media the model cannot read. Checking against the catalog gives a clear message before money or time is spent.",
+   "who_uses_it": "Anyone attaching photos or PDFs on Web, Desktop, Mobile, CLI, Chrome and VS Code; API developers sending image_url parts.",
+   "problems_solved": [
+    "A picture sent to a text-only model is refused with a clear message.",
+    "Too many pictures are caught before sending.",
+    "A PDF goes native only where the model and route accept it; otherwise it is turned into text.",
+    "A detail value the model does not accept is refused."
+   ],
+   "use_cases": [
+    "A user photographs a receipt and asks a question on Mobile.",
+    "A user attaches a PDF on Web and the model reads it natively.",
+    "A CLI user attaches a screenshot and is told to switch to a vision model.",
+    "A developer sends image_url parts with detail low or high to the API."
+   ]
+  },
+  "user_experience": {
+   "where_to_find_it": [
+    "Web: attach control in the composer (ChatComposerNew.tsx); picker chip 'Vision' on a model card (ModelCatalogue.tsx:100-110).",
+    "Desktop: same as Web via the hosted web app (doc: AGENTS.md section 5); not verified in a desktop file.",
+    "Mobile: the attach sheet; picker filter chips 'Images' and 'Files' (modelFilters.ts:26-35).",
+    "CLI: attach by path in the interactive session; the TUI refuses images on a model without vision (tui_app.rs:850-858, 915-923).",
+    "VS Code: image files in the chat panel become image inputs (ChatStateManager.ts:2212); the model switch warning says 'cannot read images you attach' (modelConstants.ts:352-354).",
+    "Chrome: side panel composer images (side_panel.ts:1161); no client vision check was found.",
+    "API: image_url content parts with optional detail (request-processor.ts:601-616)."
+   ],
+   "prerequisites": [
+    "A model that lists image or pdf input, or Auto.",
+    "Signed in for Cloud; a Free plan promotional model may take images only (model-compatibility.ts:62-85).",
+    "For Local on Web: attachments are refused with a local model (ChatComposerNew.tsx:1589, 5333-5360)."
+   ],
+   "screens_and_controls": [
+    "Web: composer attachment chips; warning panel with buttons 'Use Auto', 'Remove attachments', 'Choose a compatible model' (ChatComposerNew.tsx:5434-5470).",
+    "Mobile: composer attachment previews, an 'unreadable images' notice (ChatInput.tsx:543-547), picker filters Images and Files.",
+    "CLI: staged attachment lines and error text in the TUI.",
+    "API: detail field in image_url."
+   ],
+   "journey": [
+    "Choose a model that reads pictures (or Auto).",
+    "Attach a picture or PDF.",
+    "The app checks type, size and (Mobile, CLI) picture count; Web checks the model's vision flag.",
+    "Send.",
+    "The server refuses a picture turn if the resolved model cannot read pictures or the count or detail is not accepted; otherwise the model answers."
+   ],
+   "feedback_and_outputs": [
+    "Web warning: \"The selected model can't read the attached image. Switch to Auto, choose an image-capable model, or remove the image.\" (ChatComposerNew.tsx:5441-5449)",
+    "Server refusal: 'The selected model cannot read images. Choose a vision-capable model.' code model_no_vision (request-processor.ts:5100-5113).",
+    "Server refusal for count: 'The selected model takes up to N images in one request...' code too_many_images (request-processor.ts:5128-5144).",
+    "Mobile: '<model> can read up to N images in one message. Remove K image(s) to send it.' (attachmentValidation.ts:188-200).",
+    "CLI: '<model> does not accept images; switch to a vision model with /model first' (tui_app.rs:853-858)."
+   ],
+   "settings": [
+    "Web: attachment byte limits come from the plan (ChatComposerNew.tsx:945-951).",
+    "API: image detail per request.",
+    "CLI privacy mode decides whether a PDF stays native (agent/chat.rs:763-766)."
+   ]
+  },
+  "current_implementation": {
+   "working": [
+    "Server refuses images for a model whose vision flag is false, after Auto has resolved the model (request-processor.ts:2865-2874, 5096-5113).",
+    "Picture count limit: the model row wins, else the route's harness limit (apps/web/app/api/llm/v1/chat/completions/lib/media-input.ts:60-66); refusal too_many_images (request-processor.ts:5128-5144).",
+    "Detail values: accepted set from the model row, default auto, low, high; 'auto' always passes (image-detail.ts:18-39); refusal image_detail_unsupported (request-processor.ts:5114-5127).",
+    "Native PDF only when the model lists pdf input and the route accepts the PDF type; pages over the limit fall back to text (media-input.ts:80-100).",
+    "Auto classifies a message with image attachments as multimodal, whose policy requires imageInput (packages/ai/routing/src/classify.ts:163-166; routing-policies.json:611-618).",
+    "Free trial turn with a picture on a model without vision is refused with code free_trial_model_capability (request-processor.ts:4366-4400).",
+    "Web warns before send and offers Auto or a compatible model (ChatComposerNew.tsx:1531-1562, 5434-5500); model switch check reports no_vision (model-compatibility.ts:196-201).",
+    "Mobile checks picture count before send (chatExecutionStore.ts:2455; attachmentValidation.ts:188-200) and shows an unreadable-images notice (ChatInput.tsx:543-547).",
+    "CLI checks picture count (agent/chat.rs:787-830) and refuses images on a model without vision in the TUI (tui_app.rs:850-858).",
+    "Models API publishes image_detail and image_input (models/route.ts:62-112)."
+   ],
+   "incomplete": [
+    "High-detail inspection is API only; no app control sets detail (brief S76.05; request-processor.ts:601-616 shows the API field).",
+    "VS Code and Chrome: no client-side picture count or vision check was found; the server check applies.",
+    "Mobile applies the picture count only on the Cloud path (inside a branch in chatExecutionStore.ts near line 2455); not read in full."
+   ],
+   "disconnected_or_disabled": [
+    "none found in the code"
+   ],
+   "not_available": [
+    "Per-model maximum file, image, audio and video size is not recorded in the registry (brief S76.30: missing on all apps).",
+    "VS Code: nothing is listed in the brief for multiple pictures or native PDF."
+   ]
+  },
+  "required_behaviour": {
+   "established": [
+    {
+     "statement": "The registry records image input per model; the product shows it and refuses or reroutes image turns to models that cannot read images (S76.03).",
+     "source": "doc: knowledge-base/data/area-briefs/076-model-capability-registry.md S76.03"
+    },
+    {
+     "statement": "The registry records how many images a model accepts in one request and requests are checked against it (S76.04).",
+     "source": "doc: knowledge-base/data/area-briefs/076-model-capability-registry.md S76.04"
+    },
+    {
+     "statement": "The registry records which models support high-detail inspection and the product requests high detail where supported (S76.05).",
+     "source": "doc: knowledge-base/data/area-briefs/076-model-capability-registry.md S76.05"
+    },
+    {
+     "statement": "The registry records native PDF input per model and PDFs go natively to models that accept them (S76.06).",
+     "source": "doc: knowledge-base/data/area-briefs/076-model-capability-registry.md S76.06"
+    },
+    {
+     "statement": "Web and desktop, mobile and the CLI must not silently route Local content to cloud; a Local-to-BYOK move is an explicit fork.",
+     "source": "doc: AGENTS.md section 6"
+    }
+   ],
+   "acceptance_criteria": [
+    "Send a picture to an explicitly chosen text-only model through the API: HTTP 400 with code model_no_vision.",
+    "Send more pictures than the limit: HTTP 400 with code too_many_images naming the limit.",
+    "Send detail 'original' to a model that does not list it: HTTP 400 with code image_detail_unsupported; detail 'auto' always passes.",
+    "On Web attach a picture with a text-only model selected: the warning panel appears and Send is blocked until Auto, a compatible model or removal.",
+    "With Auto and a picture attached, the answering model has image input.",
+    "Attach a PDF to a model that lists pdf input: the PDF is sent natively; to one that does not, its text is sent instead.",
+    "On Mobile attach more pictures than the model limit: send is refused with the 'can read up to N images' message."
+   ],
+   "inferred": [
+    "Only API callers can ask for high detail today; apps use auto. [inferred from S76.05 status and the lack of any detail control in the apps read]",
+    "The brief's 'refuses or reroutes' means refuse for an explicit model and reroute under Auto. [inferred]"
+   ],
+   "proposed": [
+    "[proposed] Show the picture limit in the web and VS Code pickers.",
+    "[proposed] Add the same picture-count check to Chrome and VS Code before send.",
+    "[proposed] Record per-model file and image size limits in the registry (S76.30)."
+   ]
+  },
+  "implementation_map": [
+   {
+    "kind": "config",
+    "name": "model rows: imageInput, documentInput",
+    "path": "packages/ai/model-registry/catalog/models.curation.json",
+    "role": "Per-model picture count, detail values, PDF page limits."
+   },
+   {
+    "kind": "config",
+    "name": "harness media input",
+    "path": "packages/ai/model-registry/catalog/harnesses.json",
+    "role": "Per-route mediaInput (maxImagesPerRequest, documentMediaTypes)."
+   },
+   {
+    "kind": "service",
+    "name": "media-input",
+    "path": "apps/web/app/api/llm/v1/chat/completions/lib/media-input.ts",
+    "role": "maxImagesPerRequest, countImageParts, nativeDocumentAdmission."
+   },
+   {
+    "kind": "service",
+    "name": "image-detail",
+    "path": "apps/web/app/api/llm/v1/chat/completions/lib/image-detail.ts",
+    "role": "unsupportedImageDetail and refusal message."
+   },
+   {
+    "kind": "service",
+    "name": "request-processor",
+    "path": "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts",
+    "role": "Vision, count and detail refusals; free trial capability refusal; image_url schema."
+   },
+   {
+    "kind": "service",
+    "name": "chat-attachment-hydration",
+    "path": "apps/web/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration.ts",
+    "role": "Turns stored attachments into model input parts (PDF handling)."
+   },
+   {
+    "kind": "service",
+    "name": "canonical-request",
+    "path": "apps/web/app/api/llm/v1/chat/completions/lib/canonical-request.ts",
+    "role": "Builds the provider-neutral request including documents."
+   },
+   {
+    "kind": "service",
+    "name": "OpenAI translate",
+    "path": "packages/ai/providers/openai/src/translate.ts",
+    "role": "Maps image parts and detail to the provider format (line 58)."
+   },
+   {
+    "kind": "service",
+    "name": "Task classifier",
+    "path": "packages/ai/routing/src/classify.ts",
+    "role": "Marks image attachments as multimodal (lines 163-166)."
+   },
+   {
+    "kind": "component",
+    "name": "ChatComposerNew",
+    "path": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "role": "Web attachment conflict panel and plan byte limits."
+   },
+   {
+    "kind": "service",
+    "name": "model-compatibility",
+    "path": "apps/web/features/chat/components/Composer/model-compatibility.ts",
+    "role": "Pre-switch check including no_vision."
+   },
+   {
+    "kind": "component",
+    "name": "ModelCatalogue",
+    "path": "apps/web/features/chat/components/Composer/ModelCatalogue.tsx",
+    "role": "Vision chip."
+   },
+   {
+    "kind": "service",
+    "name": "attachmentValidation",
+    "path": "apps/mobile/src/features/chat/utils/attachmentValidation.ts",
+    "role": "Mobile file checks, picture count refusal."
+   },
+   {
+    "kind": "store",
+    "name": "chatExecutionStore",
+    "path": "apps/mobile/stores/chat/chatExecutionStore.ts",
+    "role": "Applies picture count refusal before a cloud send (line 2455)."
+   },
+   {
+    "kind": "config",
+    "name": "mobile model filters",
+    "path": "apps/mobile/src/features/model-picker/modelFilters.ts",
+    "role": "Images and Files filters."
+   },
+   {
+    "kind": "component",
+    "name": "mobile ChatInput",
+    "path": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "role": "Unreadable images notice (lines 543-547)."
+   },
+   {
+    "kind": "service",
+    "name": "CLI agent chat",
+    "path": "apps/cli/src/agent/chat.rs",
+    "role": "Native PDF decision and picture count refusal (lines 756-830)."
+   },
+   {
+    "kind": "component",
+    "name": "CLI TUI",
+    "path": "apps/cli/src/tui/tui_app.rs",
+    "role": "Refuses images for non-vision models."
+   },
+   {
+    "kind": "service",
+    "name": "VS Code chat state",
+    "path": "apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts",
+    "role": "Sends image inputs (line 2212)."
+   },
+   {
+    "kind": "service",
+    "name": "VS Code switch warning",
+    "path": "apps/extension-vscode/src/features/model-picker/modelConstants.ts",
+    "role": "describeModelSwitchLosses warns about image loss (lines 347-366)."
+   },
+   {
+    "kind": "endpoint",
+    "name": "POST /api/llm/v1/chat/completions",
+    "path": "apps/web/app/api/llm/v1/chat/completions/route.ts",
+    "role": "Entry that runs request-processor."
+   },
+   {
+    "kind": "endpoint",
+    "name": "GET /api/llm/v1/models",
+    "path": "apps/web/app/api/llm/v1/models/route.ts",
+    "role": "Publishes image_detail and image_input."
+   }
+  ],
+  "execution_and_data_flow": {
+   "steps": [
+    {
+     "what_happens": "The person attaches a file; the app checks type, size, plan limits and (Mobile, CLI) picture count; Web checks the vision flag.",
+     "runs_on": "device",
+     "evidence": "ChatComposerNew.tsx:945-951, 1531-1562; attachmentValidation.ts:50-200; agent/chat.rs:787-830"
+    },
+    {
+     "what_happens": "The app sends the turn with image parts or documents to the chat completions endpoint.",
+     "runs_on": "device and our servers",
+     "evidence": "apps/mobile/services/streaming.ts; apps/web/app/api/llm/v1/chat/completions/route.ts"
+    },
+    {
+     "what_happens": "Auto resolves a vision model for image turns (multimodal task).",
+     "runs_on": "our servers",
+     "evidence": "classify.ts:163-166; routing-policies.json:611-618"
+    },
+    {
+     "what_happens": "The server refuses on missing vision, count or detail; otherwise it decides native PDF versus text.",
+     "runs_on": "our servers",
+     "evidence": "request-processor.ts:5096-5144; media-input.ts:80-100"
+    },
+    {
+     "what_happens": "The provider adapter maps image parts and detail to the provider format and the provider answers.",
+     "runs_on": "outside service",
+     "evidence": "packages/ai/providers/openai/src/translate.ts:58"
+    }
+   ],
+   "data": [
+    {
+     "what": "Attachments and image parts",
+     "where_stored": "Sent with the turn; stored attachment records and hydration are handled in chat-attachment-hydration.ts (storage tables not read)",
+     "synced": "unknown",
+     "retained_or_deleted": "unknown; not established from the code read"
+    }
+   ],
+   "models_and_providers": "Image and PDF ability comes from the catalog row; the route's harness sets default limits. Provider adapters translate parts. Own-key (BYOK) and Local paths in the CLI keep PDFs native only when the model flag allows (agent/chat.rs:763-766); in Managed privacy mode the CLI does not keep PDFs native (same lines)."
+  },
+  "access_and_usage": {
+   "account": "Cloud turns need sign-in. Local mobile turns with images need no account for the image check itself.",
+   "permissions": "Picture URLs are checked by an egress policy ('image_url blocked by egress policy', request-processor.ts:606-612).",
+   "subscription": "Attachment byte limits depend on the plan on Web (ChatComposerNew.tsx:949-951) and Mobile (attachmentValidation.ts:34-48). Free promotional models may accept images only or text only (model-compatibility.ts:62-85).",
+   "limits_and_metering": "Picture count per request from model or route (media-input.ts:60-66). PDF pages from model or route (media-input.ts:80-100). Request size cap MAX_CHAT_COMPLETION_REQUEST_BYTES is 2,000,000 (packages/contracts/cloud-contracts/src/tool-call-limits.ts:8).",
+   "flags": "Free-trial capability gate applies when free trial is enabled (request-processor.ts:4366).",
+   "model_compatibility": "Needs the vision flag for pictures and pdf in inputModalities for native PDF.",
+   "provider_restrictions": "Harness documentMediaTypes lists the PDF media type per route; routes without it get text fallback (media-input.ts:80-100).",
+   "local_mode": "Web with a local model: attachments are refused and the person is offered 'Switch to a cloud model' or remove (ChatComposerNew.tsx:1589, 5333-5360). Mobile Local: files up to the device ceiling, no per-message count or byte limit (attachmentValidation.ts:34-40); local model rows show 'Vision' when the on-device model reads pictures (service.ts:147). CLI Local privacy mode: documents are settled locally; not uploaded (agent/chat.rs:3733-3745)."
+  },
+  "states_and_edge_cases": [
+   {
+    "state": "Picture on text-only model, explicit choice",
+    "behaviour": "Refused, not rerouted.",
+    "evidence": "request-processor.ts:5100-5113"
+   },
+   {
+    "state": "Picture under Auto",
+    "behaviour": "Routed to a model with image input.",
+    "evidence": "classify.ts:163-166; routing-policies.json:611-618"
+   },
+   {
+    "state": "Image attached before switching to a text-only model",
+    "behaviour": "Refused rather than dropped.",
+    "evidence": "request-processor.ts:2860-2864 comment"
+   },
+   {
+    "state": "Too many pictures",
+    "behaviour": "400 too_many_images.",
+    "evidence": "request-processor.ts:5128-5144"
+   },
+   {
+    "state": "Unsupported detail",
+    "behaviour": "400 image_detail_unsupported.",
+    "evidence": "image-detail.ts:18-39; request-processor.ts:5114-5127"
+   },
+   {
+    "state": "PDF pages over limit or route lacks PDF",
+    "behaviour": "Falls back to extracted text.",
+    "evidence": "media-input.ts:80-100"
+   },
+   {
+    "state": "HEIC photo on Mobile Cloud",
+    "behaviour": "Rejected with a message to retake with the in-app camera.",
+    "evidence": "attachmentValidation.ts:150-160"
+   },
+   {
+    "state": "Empty file on Mobile",
+    "behaviour": "Rejected as empty.",
+    "evidence": "attachmentValidation.ts:124"
+   },
+   {
+    "state": "Free promotional model with other files",
+    "behaviour": "Warning offers Free Auto or remove.",
+    "evidence": "model-compatibility.ts:62-85; ChatComposerNew.tsx:5434-5445"
+   },
+   {
+    "state": "Offline, timeout on attach",
+    "behaviour": "not handled in the code that was read; unknown.",
+    "evidence": "not established"
+   }
+  ],
+  "verification": {
+   "existing_tests": [
+    {
+     "path": "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.model-compatibility.test.ts",
+     "covers": "Refuses images for a model that cannot read them, lets the turn through when it can, never refuses text-only turns, leaves uncatalogued models alone."
+    },
+    {
+     "path": "apps/web/features/chat/components/Composer/model-compatibility.test.ts",
+     "covers": "Pre-switch compatibility checks (file exists; assertions not read)."
+    },
+    {
+     "path": "apps/mobile/src/features/chat/utils/__tests__/attachmentValidation.imageLimit.test.ts",
+     "covers": "Model override of picture limit before route limit; every override the catalog carries."
+    },
+    {
+     "path": "apps/mobile/src/features/chat/utils/__tests__/attachmentValidation.destination.test.ts",
+     "covers": "Local versus cloud attachment destination rules (file exists; assertions not read)."
+    },
+    {
+     "path": "apps/mobile/__tests__/gguf-vision-chain.test.ts",
+     "covers": "On-device vision model chain (file exists; assertions not read)."
+    },
+    {
+     "path": "apps/web/features/chat/components/Composer/ChatComposerNew.localAttachments.test.tsx",
+     "covers": "Local attachment conflict on Web (file exists; assertions not read)."
+    },
+    {
+     "path": "packages/contracts/cloud-contracts/src/__tests__/managed-media.test.ts",
+     "covers": "Managed media contract (file exists; assertions not read)."
+    }
+   ],
+   "scenarios": [
+    {
+     "name": "Refusal for no vision",
+     "steps": [
+      "POST a chat completion with an image_url part and a text-only model id.",
+      "Read the response."
+     ],
+     "expected": "400, code model_no_vision, message about choosing a vision-capable model."
+    },
+    {
+     "name": "Picture limit",
+     "steps": [
+      "Pick a model with a known maxImagesPerRequest.",
+      "Send limit+1 pictures via API."
+     ],
+     "expected": "400, code too_many_images with the limit in the message."
+    },
+    {
+     "name": "Detail value",
+     "steps": [
+      "Send detail 'original' to a model whose detailValues omit it.",
+      "Then send detail 'auto'."
+     ],
+     "expected": "First: 400 image_detail_unsupported. Second: accepted."
+    },
+    {
+     "name": "Web attachment conflict",
+     "steps": [
+      "On Web localhost select a text-only model.",
+      "Attach a picture."
+     ],
+     "expected": "Warning panel with Use Auto, Remove attachments, Choose a compatible model; Send blocked."
+    },
+    {
+     "name": "Mobile picture count",
+     "steps": [
+      "On Mobile pick a model with a picture limit.",
+      "Attach limit+1 pictures and send."
+     ],
+     "expected": "Send refused with 'can read up to N images in one message'."
+    },
+    {
+     "name": "CLI image on non-vision model",
+     "steps": [
+      "In the CLI TUI select a non-vision model.",
+      "Attach an image file."
+     ],
+     "expected": "Error says the model does not accept images and to use /model."
+    }
+   ],
+   "diagnostics": [
+    "Error codes model_no_vision, too_many_images, image_detail_unsupported, free_trial_model_capability in API responses.",
+    "Log 'Auto model resolved to actual model' (request-processor.ts:5092).",
+    "Mobile state error text set in chatExecutionStore.ts:2455-2462."
+   ]
+  },
+  "gaps": [
+   {
+    "gap": "No app can request high image detail; only the API can.",
+    "affects": "All six apps.",
+    "evidence": "brief S76.05 status; no detail control found in the apps",
+    "work_needed": "Decide the product rule, add a detail choice or default high where supported."
+   },
+   {
+    "gap": "VS Code and Chrome have no client-side vision or picture count check.",
+    "affects": "VS Code, Chrome.",
+    "evidence": "no hit for capabilities.vision in apps/extension/src/side_panel.ts or VS Code attachment code; only cloudAgentClient.ts:101",
+    "work_needed": "Add the shared check before send."
+   },
+   {
+    "gap": "Registry has no per-model maximum file, image, audio or video size.",
+    "affects": "All apps and API.",
+    "evidence": "brief S76.30 (missing on all)",
+    "work_needed": "Add fields to the catalog and check them in every upload path."
+   },
+   {
+    "gap": "The brief's line pointers for the CLI (chat.rs:643, 832; lib.rs:7701) and for request-processor lines are stale; real lines are listed in the map.",
+    "affects": "Engineers.",
+    "evidence": "agent/chat.rs:756-830",
+    "work_needed": "Refresh the brief."
+   }
+  ],
+  "depends_on": [
+   "SYS-model-catalog-and-routing",
+   "SYS-chat-turn-pipeline",
+   "SYS-files-artifacts-and-storage",
+   "SYS-inference-providers",
+   "SYS-local-inference",
+   "SYS-execution-boundaries",
+   "SYS-subscriptions-entitlements-and-usage",
+   "api:POST /api/llm/v1/chat/completions",
+   "api:GET /api/llm/v1/models",
+   "file:apps/web/app/api/llm/v1/chat/completions/lib/media-input.ts",
+   "provider:openai",
+   "surface:web",
+   "surface:mobile",
+   "surface:cli",
+   "surface:vscode",
+   "surface:chrome",
+   "surface:desktop",
+   "mode:cloud",
+   "mode:local",
+   "mode:own-key"
+  ],
+  "relationships": [
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/web/app/api/llm/v1/chat/completions/lib/media-input.ts",
+    "evidence": "media-input.ts:60-100"
+   },
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/web/app/api/llm/v1/chat/completions/lib/image-detail.ts",
+    "evidence": "image-detail.ts:18-39"
+   },
+   {
+    "rel": "exposes_api",
+    "to": "api:POST /api/llm/v1/chat/completions",
+    "evidence": "request-processor.ts:5100-5144"
+   },
+   {
+    "rel": "exposes_api",
+    "to": "api:GET /api/llm/v1/models",
+    "evidence": "models/route.ts:62-112 image_detail, capabilities"
+   },
+   {
+    "rel": "uses_provider",
+    "to": "provider:openai",
+    "evidence": "packages/ai/providers/openai/src/translate.ts:58"
+   },
+   {
+    "rel": "depends_on",
+    "to": "SYS-model-catalog-and-routing",
+    "evidence": "classify.ts:163-166; routing-policies.json:611-618"
+   },
+   {
+    "rel": "governed_by_subscription",
+    "to": "SYS-subscriptions-entitlements-and-usage",
+    "evidence": "ChatComposerNew.tsx:949-951; request-processor.ts:4366-4400"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:mobile",
+    "evidence": "attachmentValidation.ts:188-200"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:cli",
+    "evidence": "agent/chat.rs:787-830; tui_app.rs:850-858"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:web",
+    "evidence": "ChatComposerNew.tsx:5434-5470"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/web/app/api/llm/v1/chat/completions/lib/request-processor.model-compatibility.test.ts",
+    "evidence": "tests refusal of images"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/mobile/src/features/chat/utils/__tests__/attachmentValidation.imageLimit.test.ts",
+    "evidence": "tests picture limit order"
+   },
+   {
+    "rel": "blocked_by",
+    "to": "SYS-local-inference",
+    "evidence": "Web refuses attachments with a local model (ChatComposerNew.tsx:1589, 5333-5360)"
+   }
+  ],
+  "unknowns": [
+   "Where attachments are stored and for how long.",
+   "Whether Chrome and VS Code attachments show a client message on a refusal.",
+   "Desktop behaviour beyond the hosted web app.",
+   "Exact assertions of several listed test files (not read).",
+   "Whether the CLI Managed-mode PDF path converts to text for every model."
+  ]
+ },
+ "corrections": [
+  {
+   "section": "7",
+   "claim": "Free promotional models may accept images only or text only (model-compatibility.ts:62-85)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The behaviour exists, but model-compatibility.ts:55-90 holds only type declarations. The promotional text is at model-compatibility.ts:128. The images-only / text-only copy is at ChatComposerNew.tsx:5434-5445, driven by promotionalAttachmentConflict (1549). Section 2 repeats the bad citation.",
+   "evidence": "apps/web/features/chat/components/Composer/model-compatibility.ts:128; ChatComposerNew.tsx:1549, 5434-5445",
+   "correction": "Cite model-compatibility.ts:128 and ChatComposerNew.tsx:1549, 5434-5445."
+  },
+  {
+   "section": "7",
+   "claim": "CLI Local privacy mode: documents are settled locally; not uploaded (agent/chat.rs:3733-3745)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The cited lines handle a block that already has an asset_id. Managed mode leaves it alone. Other modes replace it with the text '[this file was uploaded to AGI Cloud and is not available in this mode]'. The no-upload rule is at about 3756: can_upload = upload && managed && managed_accepts(...). Managed mode uploads files to AGI Cloud via upload_chat_attachment.",
+   "evidence": "apps/cli/src/agent/chat.rs:3725-3775",
+   "correction": "The CLI uploads documents to AGI Cloud only in Managed privacy mode (chat.rs:3756). In other modes the PDF stays native if the model supports it, or becomes text on the device. A file already uploaded is replaced by a notice outside Managed mode."
+  },
+  {
+   "section": "8",
+   "claim": "HEIC photo on Mobile Cloud rejected (attachmentValidation.ts:150-160); Empty file on Mobile rejected (attachmentValidation.ts:124)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The behaviour is real but the lines are wrong. HEIC is at 112-116, applies when destination === 'cloud' and the MIME is not a chat image type. The empty-file check is at line 100 (fileSize === 0). Lines 120-126 are the supported-document check.",
+   "evidence": "attachmentValidation.ts:100, 112-116",
+   "correction": "Cite attachmentValidation.ts:112-116 for HEIC and :100 for an empty file."
+  },
+  {
+   "section": "3/6",
+   "claim": "Auto classifies image attachments as multimodal, whose policy requires imageInput (classify.ts:163-166; routing-policies.json:611-618)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "classify.ts:163-166 returns multimodal for image/ or video/ attachments. The file is packages/ai/model-registry/catalog/routing-policies.json. Lines 611-618 show the end of screen_automation (it requires imageInput) and the opening of the vision policy. I did not read the vision policy's requirements past line 620.",
+   "evidence": "packages/ai/routing/src/classify.ts:163-166; packages/ai/model-registry/catalog/routing-policies.json:606-620",
+   "correction": "Give the full path and the vision policy block lines. Image and video attachments both classify as multimodal."
+  }
+ ],
+ "missing_facts": [
+  "CLI Managed privacy mode uploads PDFs and other files to AGI Cloud (can_upload = upload && managed && managed_accepts, then upload_chat_attachment). Documents leave the device in that mode. The page only says native PDF is not kept. apps/cli/src/agent/chat.rs:3756-3775.",
+  "The server vision refusal is skipped for uncatalogued models (turnCarriesImagesTheModelCannotRead returns false when caps are undefined). The count check is skipped when the limit is null. The page's 'refuses a picture turn for a model that cannot read pictures' overstates this. request-processor.ts:2865-2870, 5128-5129.",
+  "The free-trial gate runs for free-region fallback and promotion turns as well as free-trial requests, and it applies before the general vision check. request-processor.ts:3680-3686, 4366-4400."
+ ]
+}

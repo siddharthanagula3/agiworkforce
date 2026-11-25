@@ -1,0 +1,202 @@
+{
+ "S81.07": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Upgrade plan"
+   },
+   {
+    "file": "apps/web/app/upgrade/UpgradeChooser.tsx",
+    "text": "Recommended"
+   }
+  ],
+  "needs": "a Free account",
+  "note": "No literal '1x' is written anywhere. The baseline is named in a computed sentence ('N x more usage than <plan>'), and it is shown only when a next tier exists. Code plan names are Basic, Premium, Max and Ultra, not 5x/15x. Max and Ultra compare to Premium, and Premium compares to Basic (managed-usage-limits.ts). The exact numbers were not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to the web app on a Free account and open Settings, then Billing.",
+   "Click Upgrade plan. The Upgrade page opens.",
+   "Read the Recommended card and the line under its price, for example 'N x more usage than Premium'.",
+   "Check that the line names a baseline plan (Basic, Premium or Max) to compare against. Compare with Expected, which asks that pricing says what the baseline is and its allowance."
+  ],
+  "where": "Settings > Billing > Upgrade plan (on a Free account; a paid account shows Adjust plan). The sentence sits under the Recommended card on the Upgrade page."
+ },
+ "S81.08": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/usage-vocabulary.ts",
+    "text": "Current session"
+   },
+   {
+    "file": "packages/contracts/types/src/usage-vocabulary.ts",
+    "text": "This week"
+   },
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Upgrade plan"
+   }
+  ],
+  "needs": "a Free account",
+  "note": "The sentence names session and weekly only when the factors differ. When all windows share one factor, it reads 'N x more usage than <plan>' and names no window (managed-usage-limits.ts). The monthly window is not named in the sentence.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in on a Free account, open Settings, then Billing, then click Upgrade plan.",
+   "Under the Recommended card, read the multiplier sentence.",
+   "Check whether it names 'per session' and 'weekly' windows. Those are the allowance windows the multiplier scales.",
+   "Open Settings > Usage and compare the window names there: Current session and This week. Compare with Expected, which asks that the copy names the allowance being multiplied."
+  ],
+  "where": "Settings > Billing > Upgrade plan, then the line under the Recommended card. Usage windows are at Settings > Usage."
+ },
+ "S81.09": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "More"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Upgrade plan"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/pricing.json",
+    "text": "Compare plans"
+   }
+  ],
+  "needs": "a Free account",
+  "note": "The server-side enforcement of each gate is not visible in the UI and was not checked. The comparison table lives in the web pricing page at apps/web/app/pricing/page.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "In the Chrome side panel, sign in and click the More button at the top right.",
+   "Click Upgrade plan. The pricing page opens in a new tab.",
+   "Scroll to the Compare plans heading and read the rows that differ between plans.",
+   "Compare the rows with the gated items in the side panel. For example, a gated effort option shows 'Available on <plan> and higher plans'. Compare with Expected, which asks that the differences are listed."
+  ],
+  "where": "More (menu button) > Upgrade plan. It opens the web pricing page; scroll to Compare plans."
+ },
+ "S81.14": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Effort"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Available on $PLAN$ and higher plans"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Default"
+   }
+  ],
+  "needs": "a Free account (to see gated options) and a paid account (to see unlocked ones)",
+  "note": "Server-side clamping of requests is not visible in the UI and was not checked. Locked manual models use the aria text '$MODEL$, available on $PLAN$. Opens plans in a new tab.'",
+  "reachable": "yes",
+  "steps": [
+   "In the Chrome side panel, sign in and open a chat.",
+   "Click the model button in the composer. The model menu opens.",
+   "Look for the Effort heading and its options. Options not on the plan show a plan badge and the text 'Available on <plan> and higher plans'.",
+   "Pick a model that the plan does not allow, or try to pick an unlocked option. Compare with Expected, which asks that gated options show and the request is clamped to the plan."
+  ],
+  "where": "Chat composer > model button (shows the model name and an effort badge) > Effort section of the menu."
+ },
+ "S81.18": {
+  "labels": [
+   {
+    "file": "apps/web/features/billing/components/BillingPlanNotices.tsx",
+    "text": "Your {days}-day free trial of {plan}"
+   },
+   {
+    "file": "apps/web/features/billing/components/BillingPlanNotices.tsx",
+    "text": "ends on"
+   }
+  ],
+  "needs": "a trial account (the app does not show how a trial is started; not verified)",
+  "note": "The expiry runs server-side through a cron route (apps/web/app/api/cron/expire-code-trials/route.ts). Its visible result is the plan moving to Free. How a trial gets granted is not visible in UI code.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to the web app on an account that is currently trialing and open Settings, then Billing.",
+   "Read the trial notice: 'Your N-day free trial of <plan>' and 'ends on <date>'.",
+   "Check the notice says the trial will not become a paid plan and that the account moves to Free after it ends.",
+   "After the end date (or on a test account with an ended trial), open Settings > Billing again and confirm the plan shows Free. Compare with Expected."
+  ],
+  "where": "Settings > Billing, on an account that is on a trial. The trial notice shows at the top of the plan section."
+ },
+ "S81.25": {
+  "labels": [
+   {
+    "file": "apps/web/features/billing/components/BillingPlanNotices.tsx",
+    "text": "Update payment method"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Manage billing"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Update billing to restore Managed Cloud chat."
+   }
+  ],
+  "needs": "a paid account with a failed renewal (past_due), for example a Stripe test account",
+  "note": "The code defines no grace period: paid features stop at the first failed renewal (BillingPlanNotices.tsx). The side panel message does not say what access remains; the web notice does. Only the web notice describes the rule.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with a paid account whose last renewal failed (a past-due test account), open Settings, then Billing.",
+   "Read the notice: 'Your last <plan> payment didn't go through, so the plan is past due.'",
+   "Read the next paragraph about no grace period and what stays. Click Update payment method to see the fix path.",
+   "In the Chrome side panel, check the composer message 'Update billing to restore Managed Cloud chat.' with a Manage billing button. Compare with Expected, which asks for a defined grace rule and a message on what access remains."
+  ],
+  "where": "Settings > Billing on a paid account whose renewal failed. In the side panel, the composer shows the same account state."
+ },
+ "S81.27": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "More"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Usage"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/settings.json",
+    "text": "Billing"
+   }
+  ],
+  "needs": "a paid account, and the same account signed in on the web app",
+  "note": "Per-surface enforcement happens on the server and is not visible. Only the Chrome extension and web app were checked here, not mobile or desktop. The Usage row is shown only for non-Free plans (side_panel.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to the Chrome side panel with account X and open More.",
+   "Read the plan name under the account name at the top of the menu.",
+   "On a paid account, also read the Usage row and its percentage. Free accounts do not show it.",
+   "Sign in to the web app with the same account X, open Settings > Billing and Settings > Usage, and compare the plan name and usage with the side panel. Compare with Expected, which asks that both surfaces show the same plan."
+  ],
+  "where": "Chrome side panel > More (menu button) > account header (plan name). Compare with the web app at Settings > Billing."
+ },
+ "S81.28": {
+  "labels": [
+   {
+    "file": "apps/web/app/upgrade/UpgradeChooser.tsx",
+    "text": "What changes"
+   },
+   {
+    "file": "apps/web/app/upgrade/UpgradeChooser.tsx",
+    "text": "Recommended"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Available on $PLAN$ and higher plans"
+   }
+  ],
+  "needs": "a Free account (a top plan has no next tier, so no Recommended card)",
+  "note": "The 'What changes' list only appears when the next plan adds features the current plan lacks. Which plan explains which feature is computed from plan features, not checked per plan.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to the web app on a Free account, open Settings, then Billing, and click Upgrade plan.",
+   "Read the Recommended card. Under 'What changes', check the features the next plan adds over the current one.",
+   "In the Chrome side panel, open a model or effort option that is locked. Read 'Available on <plan> and higher plans' or the locked-model text naming the plan.",
+   "Compare with Expected: each plan explains what it adds, and a blocked feature names the plan it needs."
+  ],
+  "where": "Settings > Billing > Upgrade plan on a Free or lower plan account. The Recommended card lists what changes. Blocked items in the side panel name the plan needed."
+ }
+}

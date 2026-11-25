@@ -1,0 +1,453 @@
+{
+ "S13.01": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "How can I help you today?"
+   },
+   {
+    "file": "apps/extension/src/side_panel.ts",
+    "text": "Send message"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI side panel and sign in.",
+   "Click the message box that shows \"How can I help you today?\".",
+   "Type a plain sentence.",
+   "Press Enter, or click the send button (arrow icon, tooltip \"Send\").",
+   "Look for the sent message in the chat and compare with Expected."
+  ],
+  "where": "Side panel (after sign-in) > message box \"How can I help you today?\" > type text > press Enter or click the \"Send message\" button"
+ },
+ "S13.02": {
+  "labels": [
+   {
+    "file": "apps/extension/src/side_panel.ts",
+    "text": "Send (Enter, Shift+Enter for a new line)"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "How can I help you today?"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click the message box.",
+   "Type a first line, press Shift+Enter, type a second line.",
+   "Confirm the box still holds both lines and nothing was sent.",
+   "Press Enter to send.",
+   "Look at the sent message and check the line break is kept."
+  ],
+  "where": "Side panel > message box \"How can I help you today?\" > Shift+Enter for a new line"
+ },
+ "S13.03": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "How can I help you today?"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The cap is a CSS max-height of 120px on the composer input in apps/extension/src/side_panel.ts; no script resize code was found, so the growth rule is CSS-only and was not run.",
+  "reachable": "yes",
+  "steps": [
+   "Click the message box.",
+   "Type or paste many lines of text, pressing Shift+Enter between them.",
+   "Watch the box height as lines are added.",
+   "Keep adding lines until the box stops growing and a scroll bar appears inside it.",
+   "Compare with Expected: grows, then scrolls at a cap."
+  ],
+  "where": "Side panel > message box \"How can I help you today?\" > keep typing"
+ },
+ "S13.06": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Send"
+   },
+   {
+    "file": "apps/extension/src/side_panel.ts",
+    "text": "Send message"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "When sending is blocked the button is disabled, but the code sets no reason text on it; any reason shown elsewhere was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Click the message box and type text.",
+   "Look for the send button (arrow icon) at the right; it appears once text is typed.",
+   "Click it and watch the message go into the chat.",
+   "Clear the box and look at the send button; it hides when empty and no file is attached.",
+   "Compare with Expected: visible send button submits; blocked state is disabled."
+  ],
+  "where": "Side panel > message box > \"Send message\" button (arrow icon at the right of the box)"
+ },
+ "S13.07": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Stop response"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Stop generating"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "While stopping, the button shows \"Stopping\u2026\" and is disabled; whether the partial reply is kept was not traced in this pass.",
+  "reachable": "yes",
+  "steps": [
+   "Send any message that gets a long reply.",
+   "While the reply is still streaming, look at the button at the right of the box (square icon).",
+   "Click it.",
+   "Watch the reply stop and check the text produced so far stays in the chat."
+  ],
+  "where": "Side panel > message box > send button becomes \"Stop response\" while a reply is generating"
+ },
+ "S13.09": {
+  "labels": [
+   {
+    "file": "apps/extension/src/side_panel.ts",
+    "text": "Send (Enter, Shift+Enter for a new line)"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click the message box.",
+   "Type some text.",
+   "Press Shift+Enter.",
+   "Check a new line appears and nothing is sent.",
+   "Compare with Expected: newline without sending."
+  ],
+  "where": "Side panel > message box > Shift+Enter"
+ },
+ "S13.10": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "How can I help you today?"
+   }
+  ],
+  "needs": "none",
+  "note": "Undo is the browser's own text undo; the code inserts dictated and pasted text with execCommand so it stays in the undo history.",
+  "reachable": "yes",
+  "steps": [
+   "Click the message box and type a word.",
+   "Type a second word.",
+   "Press Cmd+Z and watch the last edit go.",
+   "Press Shift+Cmd+Z and watch it come back.",
+   "Compare with Expected: undo and redo revert and reapply edits."
+  ],
+  "where": "Side panel > message box \"How can I help you today?\" > Cmd+Z and Shift+Cmd+Z"
+ },
+ "S13.11": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "How can I help you today?"
+   }
+  ],
+  "needs": "a copied image or file for the second half",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Copy some plain text from another page and click the message box.",
+   "Press Cmd+V and check the text appears in the box.",
+   "Copy an image or a file and press Cmd+V in the message box.",
+   "Look for an attachment chip above the box.",
+   "Compare with Expected: text is inserted and files or images become attachments."
+  ],
+  "where": "Side panel > message box \"How can I help you today?\" > Cmd+V"
+ },
+ "S13.12": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "How can I help you today?"
+   }
+  ],
+  "needs": "a web page with formatted text to copy",
+  "note": "The code only intercepts pasted files; formatted text is left to the browser's plain-text textarea, so no extra cleaning code was found.",
+  "reachable": "yes",
+  "steps": [
+   "Copy formatted text (bold, colours, links) from a web page.",
+   "Click the message box and press Cmd+V.",
+   "Look at the text: it should show as plain text with no styling.",
+   "Compare with Expected: clean plain text."
+  ],
+  "where": "Side panel > message box \"How can I help you today?\" > Cmd+V"
+ },
+ "S13.16": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "How can I help you today?"
+   }
+  ],
+  "needs": "none",
+  "note": "Marked unfinished in the plan: text is kept for the current browser session only, so restart and other devices are not covered.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Type a sentence in the message box but do not send it.",
+   "Close the side panel and open it again.",
+   "Look at the message box.",
+   "Compare with Expected: the unsent text is still there."
+  ],
+  "where": "Message box \"How can I help you today?\", seen after closing and reopening the side panel"
+ },
+ "S13.17": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Restored your unsent text."
+   }
+  ],
+  "needs": "none",
+  "note": "Plan says Chrome restart and authenticated side-panel acceptance are still open.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Type unsent text in the message box.",
+   "Reload or close and reopen the side panel.",
+   "Look for the notice \"Restored your unsent text.\" and the text in the box.",
+   "Compare with Expected: text is put back with a notice."
+  ],
+  "where": "Message box, with the notice \"Restored your unsent text.\" after reopening the side panel"
+ },
+ "S13.18": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Recent chats"
+   }
+  ],
+  "needs": "a signed-in account with two chats",
+  "note": "Plan says authenticated history navigation in the side panel is still unverified.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "In chat A, type unsent text and do not send.",
+   "Open \"Recent chats\" and open chat B.",
+   "Check the message box in chat B is empty.",
+   "Go back to chat A and check its unsent text is still there.",
+   "Compare with Expected: drafts are separate per chat."
+  ],
+  "where": "Side panel, when switching between chats via \"Recent chats\""
+ },
+ "S13.21": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "More"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Shortcuts"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Create shortcut"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "Choosing from the slash list inserts only the command and a space; the saved prompt is expanded when the message is sent, so it is not shown in the box.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side panel and click \"More\".",
+   "Click \"Shortcuts\" (opens the options page) and click \"Create shortcut\"; enter a name and a prompt with the input placeholder.",
+   "Back in the side panel, click the message box and type \"/\" then the shortcut name.",
+   "Choose the shortcut from the list, type your own text after it, and send.",
+   "Compare with Expected: template is inserted and filled with your text."
+  ],
+  "where": "More > Shortcuts > Create shortcut (saved prompt), then side panel message box \"How can I help you today?\" > type \"/\" and choose the shortcut"
+ },
+ "S13.22": {
+  "labels": [
+   {
+    "file": "apps/extension/src/features/side-panel/pageCommands.ts",
+    "text": "/summarize"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "How can I help you today?"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click the message box and type \"/\".",
+   "Look for the list of commands, each with a name and a short hint.",
+   "Type \"/su\" and check the list filters to \"/summarize\".",
+   "Press ArrowDown and Enter, or click an item.",
+   "Compare with Expected: filtered list, chosen by keyboard or pointer."
+  ],
+  "where": "Side panel > message box \"How can I help you today?\" > type \"/\""
+ },
+ "S13.25": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Tabs and projects"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Projects"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Start the chat in this project"
+   }
+  ],
+  "needs": "a signed-in account with at least one project",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and make sure you have at least one project.",
+   "Click the message box and type \"@\".",
+   "Look for the \"Tabs and projects\" menu with the \"Projects\" heading.",
+   "Click a project under \"Projects\" (sub-line \"Start the chat in this project\").",
+   "Look for the \"Project \u00b7 NAME\" chip above the box and compare with Expected."
+  ],
+  "where": "Side panel > message box \"How can I help you today?\" > type \"@\" > \"Tabs and projects\" menu > \"Projects\" > \"Start the chat in this project\""
+ },
+ "S13.29": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Tabs and projects"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Tabs"
+   }
+  ],
+  "needs": "two or more open browser tabs",
+  "note": "Mention is refused right after a reply or at the tab limit, with a notice.",
+  "reachable": "yes",
+  "steps": [
+   "Open two or more browser tabs with web pages.",
+   "In the side panel, click the message box and type \"@\".",
+   "Look for the \"Tabs\" heading in the \"Tabs and projects\" menu.",
+   "Click one tab name.",
+   "Look for the attached page chip above the box and compare with Expected."
+  ],
+  "where": "Side panel > message box \"How can I help you today?\" > type \"@\" > \"Tabs and projects\" menu > \"Tabs\" group"
+ },
+ "S13.31": {
+  "labels": [
+   {
+    "file": "apps/extension/src/side_panel.ts",
+    "text": "Add attachment"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Add the browser page"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Remove $PAGE$"
+   }
+  ],
+  "needs": "a web page open in the browser",
+  "note": "Project and skill chips are also shown in the composer area; not traced beyond the page chip.",
+  "reachable": "yes",
+  "steps": [
+   "Open a web page in the browser tab.",
+   "In the side panel, click the \"+\" button labelled \"Add attachment\".",
+   "Click \"Add the browser page\".",
+   "Look above the message box for a chip for that page; it shows \"capturing\u2026\" then the page name.",
+   "Click the chip's remove control (\"Remove\" plus the page name) and check it disappears."
+  ],
+  "where": "Side panel > \"Add attachment\" (+) button > \"Add the browser page\""
+ },
+ "S13.32": {
+  "labels": [],
+  "needs": "none",
+  "note": "The cited side_panel.ts:6563 no longer holds this. Searched apps/extension for connector or source chips (\"resources\", \"connectorResource\", \"spConnector\" chip keys, \"attachment-chip\" kinds); only the \"Connectors\" item in the + menu and the answer-sources list (\"Sources used for this answer\") were found, not a pre-send source chip.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S13.35": {
+  "labels": [
+   {
+    "file": "apps/extension/src/side_panel.ts",
+    "text": "Add attachment"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Upload from device"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Attach tabs"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "Some items (for example Connectors, Create a video, Skills) are shown or disabled by account and state; the full list was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side panel and click the \"+\" button next to the message box.",
+   "Look at the \"Attachment options\" menu list.",
+   "Check for \"Upload from device\" and \"Attach tabs\" among the items.",
+   "Compare with Expected: the menu lists the ways to add files, media and context."
+  ],
+  "where": "Side panel > message box > \"+\" button (\"Add attachment\") > menu \"Attachment options\""
+ },
+ "S13.36": {
+  "labels": [
+   {
+    "file": "apps/extension/src/side_panel.ts",
+    "text": "Voice input"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Before you dictate"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Continue"
+   }
+  ],
+  "needs": "a microphone and Chrome microphone permission",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click the microphone button next to the message box.",
+   "Read the \"Before you dictate\" notice and click \"Continue\".",
+   "Allow the microphone in Chrome when asked.",
+   "Speak; the words should appear in the message box.",
+   "Check the text is not sent until you press Enter or the send button."
+  ],
+  "where": "Side panel > message box > microphone button \"Voice input\" > \"Before you dictate\" > Continue"
+ },
+ "S13.40": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Reply to send it after this answer"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Queued"
+   }
+  ],
+  "needs": "a signed-in account and a reply that is still generating",
+  "note": "Code queues the message and sends it after the current answer finishes; it does not steer the running task, which differs from Expected.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message that gets a long reply.",
+   "While it streams, click the message box and type a guidance message.",
+   "Press Enter.",
+   "Look for the \"Queued\" item above the box with Edit and Cancel.",
+   "Compare with Expected: guidance steers the running task without stopping it."
+  ],
+  "where": "Side panel > message box while a reply is generating (placeholder \"Reply to send it after this answer\") > Enter"
+ }
+}

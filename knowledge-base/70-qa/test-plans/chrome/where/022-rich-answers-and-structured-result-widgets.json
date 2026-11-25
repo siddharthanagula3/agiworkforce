@@ -1,0 +1,100 @@
+{
+ "S22.01": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "$SITE$ +$COUNT$"
+   }
+  ],
+  "needs": "a web-grounded answer (the answer must come with sources; the chip only appears when the answer cites them)",
+  "note": "The chip text is the site host from the source data, so it is not a fixed label; the \"+N\" form uses the spCitationMore string. Whether a real answer returns cited sources depends on the server, which the code does not show.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side panel and ask a question that needs current web information, for example a news or price question.",
+   "Wait for the answer to finish streaming, then look inside the answer text for small chips where the source markers such as [1] would be.",
+   "Each chip shows the site host, or the host plus \"+N\" when sources are grouped. Click a chip with the mouse.",
+   "Compare: the source page should open in a new browser tab."
+  ],
+  "where": "Side panel > ask a question that needs web sources > read the answer text for small chips that show a site name (for example a host name with \"+N\" when several sources group)"
+ },
+ "S22.02": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "$SITE$ +$COUNT$"
+   }
+  ],
+  "needs": "a web-grounded answer with sources (a Mac trackpad or mouse is enough)",
+  "note": "The preview card has no fixed visible heading; its text comes from the source data. On desktop it opens on hover or keyboard focus, and touch opens it on the first tap.",
+  "reachable": "yes",
+  "steps": [
+   "Use an answer that shows citation chips, as in S22.01.",
+   "Move the mouse pointer onto one chip and hold it there without clicking.",
+   "A card opens above or beside the chip, showing the source title, site host, and when present a snippet and a date.",
+   "Compare: the card should appear before any click, and a click on the chip should then open the source in a new tab."
+  ],
+  "where": "Side panel > the same web-grounded answer > move the mouse onto a citation chip (on a touch screen, tap it once)"
+ },
+ "S22.03": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "$COUNT$ sources"
+   }
+  ],
+  "needs": "a web-grounded answer with sources",
+  "note": "The footer list is for the answer's sources. Expanded agent steps show a separate list of titles with no snippet (under \"Sources for $QUERY$\" or similar); the code does not show the exact visible heading there.",
+  "reachable": "yes",
+  "steps": [
+   "Ask a question that needs web sources and wait for the answer to finish.",
+   "Below the answer, find the line with the source count and click it to expand it.",
+   "The expanded list shows each source with its site host, title, and when present a snippet and date.",
+   "Click one source title; the page should open in a new browser tab."
+  ],
+  "where": "Side panel > the answer's sources line at the bottom of an answer (a line that reads like \"3 sources\")"
+ },
+ "S22.10": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "The map could not be loaded. You can still open these places in Maps."
+   }
+  ],
+  "needs": "a location question, and the map tiles must be configured for the app (the code stops with the unavailable message when they are not)",
+  "note": "Whether the map shows markers depends on the server sending a map-search card; the code only draws it when the server sends one, and it does not show whether tiles are configured in a given build. Pan and zoom controls were not verified in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Ask a location question such as a city or place name that the app can map.",
+   "Wait for the answer; a map search card appears under the answer text with its title and the place query.",
+   "Look for a map drawn under the title, with a marker for each place, and a list of the places below it.",
+   "Try to pan or zoom; if the map cannot load, the card shows the text \"The map could not be loaded. You can still open these places in Maps.\" instead."
+  ],
+  "where": "Side panel > ask a location question (for example a place name) so the answer returns a map search card > the card shows a map with place markers under its title and a numbered list of places"
+ },
+ "S22.28": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Your approval is required before this tool can run."
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Approve"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Decline"
+   }
+  ],
+  "needs": "an agent run that pauses for approval (a tool that needs consent); a Free or paid account may matter, not verified in the code",
+  "note": "The approval block shows the \"what will happen\" details from the tool's inputs, and the \"Allow for this chat\" button is hidden for high-risk tools. The code does not show how the agent run is started from the first screen, so the start path is not confirmed. The old code reference bubbles.ts:493 no longer matches; the approval code is at apps/extension/src/features/side-panel/bubbles.ts:954 to 1040.",
+  "reachable": "yes",
+  "steps": [
+   "Start an agent task that will use a tool needing permission, for example one that changes something on the page.",
+   "When the run pauses, find the step row in the agent activity and click it to expand the details.",
+   "Read the approval block: it says \"Your approval is required before this tool can run.\" (with a risk level in front when the tool has one) and lists what will happen.",
+   "Compare: Approve and Decline must both be visible, and a note field \"Add guidance to steer the run (optional)\" appears. Choose one and check the block changes to \"Approved \u00b7 decision recorded\" or \"Declined \u00b7 decision recorded\"."
+  ],
+  "where": "Side panel > start an agent task that uses a tool needing approval > the step row in the agent activity > expand the step > the approval block with the buttons Approve, Allow for this chat and Decline"
+ }
+}

@@ -1,0 +1,368 @@
+{
+ "S9.01": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Workspace files and symbols"
+   }
+  ],
+  "needs": "a workspace folder open in VS Code",
+  "note": "The @ picker lists files, folders and symbols; projects, models and skills are not listed in this picker in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, open the AGI Code sidebar and click the \"Describe a task\u2026\" box.",
+   "Type @ followed by part of a file name, for example @app.",
+   "Look for a list labelled \"Workspace files and symbols\" under the box, and check that it narrows as you type more letters.",
+   "Clear the text and type a different query; the list should change to match.",
+   "Note: the code searches workspace files, folders and symbols. It did not show projects, models or skills in this picker."
+  ],
+  "where": "AGI Code sidebar > click the \"Describe a task\u2026\" box > type @ and a few letters of a file or symbol name"
+ },
+ "S9.02": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Model"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Select model"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Select Model"
+   }
+  ],
+  "needs": "none",
+  "note": "If no model is listed the popover shows \"No models available\".",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI Code sidebar and find the model button under the chat box; it shows \"Auto\" at first.",
+   "Click it to open the \"Select model\" list grouped by model family.",
+   "Pick a different model.",
+   "Check that the button now shows the model you picked and that the next reply uses it.",
+   "Alternative: open the Command Palette and run \"Code: Select Model\", then pick a model."
+  ],
+  "where": "AGI Code sidebar > model button under the chat box (title \"Model\", shows \"Auto\" by default) > pick a model in the \"Select model\" list"
+ },
+ "S9.06": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Show Projects"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/projects/projectActions.ts",
+    "text": "Use in this chat"
+   }
+  ],
+  "needs": "a cloud account with at least one project",
+  "note": "The last step (the chat actually runs in the project) was not traced in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Command Palette and run \"Code: Show Projects\".",
+   "Pick one of your projects from the list.",
+   "In the project detail list, choose \"Use in this chat\".",
+   "Open the same project again and check that its row now says \"Used in this chat\" with a check mark.",
+   "Send a message in the chat and check that the project is applied to it."
+  ],
+  "where": "Command Palette > \"Code: Show Projects\" > pick a project > \"Use in this chat\""
+ },
+ "S9.07": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/platform/workspaceFolders.ts",
+    "text": "Select a workspace folder for this operation"
+   }
+  ],
+  "needs": "two folders open in one VS Code window",
+  "note": "The code shows a folder list only. No field for typing a repository URL or path was found for this choice. The exact command that opens this list was not identified.",
+  "reachable": "yes",
+  "steps": [
+   "Open two folders in one VS Code window (File > Open Folder twice, or add a folder to the workspace).",
+   "Close every editor tab so no file is active.",
+   "Run an AGI Code command that works on a folder.",
+   "Look for the list titled \"Select a workspace folder for this operation\" and pick a folder; the folder path is shown beside each name.",
+   "Check that the command runs in the folder you picked."
+  ],
+  "where": "Two or more folders open in one VS Code window with no file open > an AGI Code action that needs a folder > list \"Select a workspace folder for this operation\""
+ },
+ "S9.10": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Approval needed"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Abort turn"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Permissions"
+   }
+  ],
+  "needs": "a task that asks for approval (shell commands ask first in the mode described in the Mode list)",
+  "note": "The card's buttons are built from the words Approve and Deny in packages/contracts/types/src/tool-approval-policy.ts, so the exact button text may read \"Approve once\" or \"Approve for session\".",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI Code sidebar and send a task that runs a shell command, such as listing files.",
+   "When the \"Approval needed\" card appears, read the action it names.",
+   "Compare the choices offered (once, for session, deny) and note what each one covers.",
+   "Choose one and check that the run continues or stops as chosen.",
+   "Open the Command Palette, run \"Code: Permissions\" and check the \"Add a rule\" entry, which lets you pick allow, ask first or block for a site, tool or command."
+  ],
+  "where": "AGI Code sidebar > chat asks to run a shell command (approval card \"Approval needed\") > choose Approve or Deny; or Command Palette > \"Code: Permissions\" > \"Add a rule\""
+ },
+ "S9.19": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Activity"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "{count} actions"
+   }
+  ],
+  "needs": "a sign-in or setup that lets AGI run tools",
+  "note": "The time is shown only when the run reports it.",
+  "reachable": "yes",
+  "steps": [
+   "Send a task that makes AGI read or change files so tools run.",
+   "Find the \"Activity\" summary under the reply, which shows a count such as \"3 actions\".",
+   "Click it to open the list of steps.",
+   "Check that the steps are in the order they ran, each with its state (running, done or error).",
+   "Check that finished steps show a time such as \"\u00b7 1.2s\" after their name."
+  ],
+  "where": "AGI Code sidebar > send a task that uses tools > \"Activity\" summary under the reply > click it to open the list of tool steps"
+ },
+ "S9.21": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Show Cloud Tasks"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/index.ts",
+    "text": "Cloud tasks"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/cloud-tasks/cloudTasksTree.ts",
+    "text": "Working"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account with at least one cloud task",
+  "note": "The code shows a grouped list with headings, not a board with a column per status.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Command Palette and run \"Code: Show Cloud Tasks\".",
+   "Look at the list titled with \"Cloud tasks\"; tasks are grouped under the headings \"Needs you\", \"Working\", \"Ready for review\", \"Done\" and \"Stopped\".",
+   "Compare the groups with the task states shown in each row.",
+   "Start or wait for a cloud task in another state and check that it moves to the matching group."
+  ],
+  "where": "Command Palette > \"Code: Show Cloud Tasks\""
+ },
+ "S9.22": {
+  "labels": [],
+  "needs": "none",
+  "note": "Searched apps/extension-vscode/src for \"Step N of\", \"Step \" with a value, \"stepper\", \"step-dot\", \"steps-indicator\" and \"wizard\". No step indicator or stepper was found; the only related item is onboarding inline actions in the sidebar CSS.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S9.24": {
+  "labels": [],
+  "needs": "none",
+  "note": "The code opens results beside the current editor (showLlmResultInNewTab in apps/extension-vscode/src/platform/applyEdit.ts), but no app control to resize that split was found; the resize is VS Code's own editor divider. Not confirmed that the pane pairing matches Expected.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S9.25": {
+  "labels": [],
+  "needs": "none",
+  "note": "Searched apps/extension-vscode for docking, left, right, bottom, floating and layout code. The app registers one sidebar view (apps/extension-vscode/package.json, views agi-workforce.sidebar); moving it is done by VS Code, and no layout-saving code was found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S9.27": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Apply"
+   },
+   {
+    "file": "apps/extension-vscode/src/providers/diffDecorationProvider.ts",
+    "text": "Accept"
+   }
+  ],
+  "needs": "a file open in the editor and a reply with a code block",
+  "note": "Only the \"Apply\" path was traced to the diff provider; other ways of proposing a change were not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Open a file in the editor and ask AGI in the sidebar to change it, so a reply includes a code block.",
+   "Click the \"Apply\" button on that code block.",
+   "Wait for the change to appear in the open file, with removed lines shaded red and added lines marked \"+\" in the gutter.",
+   "Read the line above the change, which starts with \"Changes:\" and names the file.",
+   "Compare with Expected: the lines are readable before you click \"Accept\" or \"Reject\"."
+  ],
+  "where": "AGI Code sidebar > a reply with a code block > \"Apply\" button on the block > the editor shows the proposed change with \"Accept\" and \"Reject\" links above it"
+ },
+ "S9.29": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/core/commandSetup.ts",
+    "text": "Cloud usage"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "AGI Managed Cloud plan usage"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Account & Usage"
+   }
+  ],
+  "needs": "a paid AGI Cloud plan (Free accounts do not get this meter in the code path checked)",
+  "note": "The position of the usage bar in the sidebar was not confirmed; the bar is only shown when the account has usage data.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Command Palette and run \"Code: Account & Usage\".",
+   "Find the \"Cloud quota\" section and the row that starts \"Cloud usage:\" with the percent used and \"Plan:\" beside it.",
+   "Open the AGI Code sidebar and find the usage bar labelled \"AGI Managed Cloud plan usage\" (with \"Usage\" to show details if it is collapsed).",
+   "Check the percent, the reset text in the bar (or \"No reset pending\") and that the bar matches the palette row.",
+   "Optional: with VoiceOver on, focus the bar and check that it reads the percent."
+  ],
+  "where": "Command Palette > \"Code: Account & Usage\" > \"Cloud usage: N% used\" row; the sidebar usage bar is labelled \"AGI Managed Cloud plan usage\""
+ },
+ "S9.30": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/core/commandSetup.ts",
+    "text": "Add credits"
+   },
+   {
+    "file": "apps/extension-vscode/src/core/commandSetup.ts",
+    "text": "Buy credits in Settings > Billing on Web"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Managed Cloud usage limits"
+   }
+  ],
+  "needs": "a paid account that has a credit balance",
+  "note": "The palette row does not show the balance itself; the balance is in the sidebar usage list, which needs the usage bar to be expanded.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Command Palette and run \"Code: Account & Usage\".",
+   "Look for the row \"Add credits\" with the description \"Buy credits in Settings > Billing on Web\".",
+   "Check the sidebar usage list titled \"Managed Cloud usage limits\" for the credit row with its balance and an \"Add credits\" button.",
+   "Choose \"Add credits\" and check that the web billing page opens.",
+   "Compare the balance shown with Expected: the balance and the add-credits action sit together."
+  ],
+  "where": "Command Palette > \"Code: Account & Usage\" > \"Add credits\" (shown only when the account has a credit balance)"
+ },
+ "S9.31": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Permissions"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/capabilityManagement.ts",
+    "text": "Rules for every session"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/capabilityManagement.ts",
+    "text": "Trusted folders"
+   }
+  ],
+  "needs": "none",
+  "note": "Trusted folders appear only when the CLI offers trust settings; \"Turned off\" tools appear only when some are off.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Command Palette and run \"Code: Permissions\".",
+   "Read the list: \"This session\" shows the mode and tools; \"Rules for every session\" lists saved rules; \"Trusted folders\" lists trusted folders.",
+   "Compare the list with what the assistant may do: check the mode label and any \"Turned off\" tools.",
+   "Pick \"Add a rule\" and look at the choices offered (allow, ask first, block) without saving, then cancel."
+  ],
+  "where": "Command Palette > \"Code: Permissions\""
+ },
+ "S9.32": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Approval needed"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Abort turn"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Deny"
+   }
+  ],
+  "needs": "a task that triggers an approval (a shell command)",
+  "note": "The approve button text is built from \"Approve\" in packages/contracts/types/src/tool-approval-policy.ts, so the exact wording may be \"Approve once\" or \"Approve for session\".",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI Code sidebar and send a task that asks AGI to run a shell command.",
+   "When the \"Approval needed\" card appears, read the action named in the card.",
+   "Click one of the approve buttons (once or for the session) and check that the card shows an approved state and the run continues.",
+   "Send another such task, click \"Deny\" (or type guidance in the box and press Enter) and check that the run stops or changes course.",
+   "\"Abort turn\" stops the whole reply; check that it ends the run."
+  ],
+  "where": "AGI Code sidebar > send a task that needs an action approved > \"Approval needed\" card with Approve and Deny buttons"
+ },
+ "S9.35": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Show Cloud Tasks"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/cloud-tasks/cloudTasksTree.ts",
+    "text": "Working"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account with a running cloud task",
+  "note": "The list refreshes every 15 seconds in the code; the steps-done text and latest action were not traced to a visible line in the detail view.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Command Palette and run \"Code: Show Cloud Tasks\".",
+   "Under the \"Working\" group, pick a task that is running.",
+   "Read its state and description, and open its detail with the task's title.",
+   "Wait about 15 seconds and check that the state or progress has changed when it has changed in the cloud."
+  ],
+  "where": "Command Palette > \"Code: Show Cloud Tasks\" > group \"Working\" > pick a running task"
+ },
+ "S9.38": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Commands"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Filter actions\u2026"
+   }
+  ],
+  "needs": "none",
+  "note": "No keyboard shortcut that opens this list was found in package.json. Typing / in the chat box opens a menu without the filter box. Cmd or Ctrl+Shift+P opens VS Code's own palette, not this one.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI Code sidebar and click the \"/\" button beside the chat box.",
+   "Check that the list opens with a \"Filter actions\u2026\" box focused.",
+   "Type part of a command name, for example \"model\", and check that the list narrows.",
+   "Press Enter on the highlighted item and check that it runs."
+  ],
+  "where": "AGI Code sidebar > click the \"/\" button (title \"Commands\") > type in the \"Filter actions\u2026\" box > press Enter on a choice"
+ }
+}

@@ -1,0 +1,322 @@
+{
+ "S34.02": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/shared/components/DrawerButton.tsx",
+    "text": "Open navigation drawer"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/ChatsListScreen.tsx",
+    "text": "Search"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Search"
+   }
+  ],
+  "needs": "a Free account or a paid account with at least two saved chats that contain a shared word",
+  "note": "Chat search runs on the search route (app/(app)/search.tsx), which renders ChatsListScreen in search-only mode.",
+  "reachable": "yes",
+  "steps": [
+   "Tap the button labelled \"Open navigation drawer\".",
+   "Tap the search icon labelled \"Search\" at the top of the menu.",
+   "Type a word from the title or text of an older chat into the box labelled \"Search\".",
+   "Look for chats whose title or message text contains that word. Tap one and check that it opens that chat. Compare with Expected."
+  ],
+  "where": "Open navigation drawer > Search (icon at the top of the menu) > type in the Search box"
+ },
+ "S34.03": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Projects"
+   },
+   {
+    "file": "apps/mobile/app/(app)/(tabs)/projects.tsx",
+    "text": "Search projects"
+   }
+  ],
+  "needs": "a Cloud account with at least one project that has a description",
+  "note": "The search box is hidden when the Shared filter is chosen; the filter choice appears only in Cloud mode.",
+  "reachable": "yes",
+  "steps": [
+   "Tap \"Open navigation drawer\".",
+   "Tap \"Projects\".",
+   "Type part of a project's name into the box labelled \"Search projects\" and check that the project appears.",
+   "Clear the box, type a word from a project's description, and check that the project appears. Tap it to open it and compare with Expected."
+  ],
+  "where": "Open navigation drawer > Projects > type in the Search projects box"
+ },
+ "S34.04": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Library"
+   },
+   {
+    "file": "apps/mobile/src/features/library/index.tsx",
+    "text": "Search library"
+   }
+  ],
+  "needs": "a Library with at least two saved files or images with different names",
+  "note": "The Library search box is the only search control found for these items; the search text is applied after a short debounce.",
+  "reachable": "yes",
+  "steps": [
+   "Tap \"Open navigation drawer\".",
+   "Tap \"Library\".",
+   "Type part of a file name or image prompt into the box labelled \"Search library\".",
+   "Check that only matching items stay in the list. Type text that matches nothing and check the empty state. Compare with Expected."
+  ],
+  "where": "Open navigation drawer > Library > Search library"
+ },
+ "S34.05": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/library/index.tsx",
+    "text": "Artifacts"
+   },
+   {
+    "file": "apps/mobile/src/features/library/index.tsx",
+    "text": "Search library"
+   }
+  ],
+  "needs": "at least one saved artifact (for example a code file or a chart made in chat)",
+  "note": "The separate Artifacts gallery route (app/(app)/artifacts) has no search box in the code; artifact search is in the Library.",
+  "reachable": "yes",
+  "steps": [
+   "Tap \"Open navigation drawer\", then \"Library\".",
+   "Tap the filter chip \"Artifacts\".",
+   "Type part of an artifact's title or content into the box labelled \"Search library\".",
+   "Check that matching artifacts stay in the list. Tap one to open it and compare with Expected."
+  ],
+  "where": "Open navigation drawer > Library > Artifacts (filter chip) > Search library"
+ },
+ "S34.06": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Settings"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   }
+  ],
+  "needs": "a Cloud account and an outside account for the work source (for example Google)",
+  "note": "The connector names (Drive, Slack, Notion) were not checked against the code; the connector list is in the Connectors screen.",
+  "reachable": "yes",
+  "steps": [
+   "Tap \"Open navigation drawer\", then \"Settings\", then \"Connectors\".",
+   "Pick a connector, sign in, and wait until it shows \"Connected\".",
+   "Open a chat, tap \"Add to chat\", then tap \"Connectors\" and turn on the connected source.",
+   "Ask a question whose answer is in that source. Check that the answer uses it and lists it among the sources. Compare with Expected."
+  ],
+  "where": "Settings > Connectors (connect a source), then Add to chat > Connectors (turn it on in a chat)"
+ },
+ "S34.07": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Web search"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/WebSearchToolCard.tsx",
+    "text": "Searching for"
+   }
+  ],
+  "needs": "a Cloud account whose plan allows web search, on a model that supports it",
+  "note": "The Web search row in the sheet appears only in Cloud mode when the plan and model allow it.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat and tap \"Add to chat\".",
+   "Turn on the row \"Web search\".",
+   "Ask a question about recent news or a current fact.",
+   "Look for \"Searching for\" under the question, then an answer with citations. Compare with Expected."
+  ],
+  "where": "Add to chat > Web search (turn on), then ask a question in the chat; or Settings > Capabilities > AGI Cloud > Web search"
+ },
+ "S34.19": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/projects/components/ProjectSourcesButton.tsx",
+    "text": "Open project sources"
+   },
+   {
+    "file": "apps/mobile/src/features/projects/components/ProjectSourcesTab.tsx",
+    "text": "Add sources"
+   },
+   {
+    "file": "apps/mobile/src/features/projects/components/ProjectSourcesButton.tsx",
+    "text": "The files this project\u2019s chats can read."
+   }
+  ],
+  "needs": "a Cloud account, a project, and one file to upload",
+  "note": "No mobile control was found that limits chats to only one collection; the search over sources runs on the server (apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Tap \"Open navigation drawer\", then \"Projects\", then open a project.",
+   "Tap the button labelled \"Open project sources\".",
+   "Tap \"Add sources\" and add a file or text.",
+   "Open a new chat inside the same project and ask about the added content. Check that the answer uses it. Compare with Expected."
+  ],
+  "where": "Open navigation drawer > Projects > open a project > Open project sources (folder icon) > Add sources"
+ },
+ "S34.23": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/WebSearchToolCard.tsx",
+    "text": "Searching for"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/CollapsibleSources.tsx",
+    "text": "Sources"
+   }
+  ],
+  "needs": "a Cloud account with Web search on",
+  "note": "Whether a snippet line appears depends on the provider data; the code reads a snippet when one is returned.",
+  "reachable": "yes",
+  "steps": [
+   "Send a question that needs current web information with Web search on.",
+   "Watch the line \"Searching for\" under the question.",
+   "Look at each result card: it shows the page title, the site name and, when known, the date.",
+   "Compare the card text with what you see when you tap the card (S34.27). Compare with Expected."
+  ],
+  "where": "Chat with Web search on (see S34.07), then look under the answer at the \"Searching for\" line and the result cards"
+ },
+ "S34.24": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/CollapsibleSources.tsx",
+    "text": "Sources"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/CollapsibleSources.tsx",
+    "text": "Citations"
+   }
+  ],
+  "needs": "a Cloud account with Web search on",
+  "note": "none",
+  "reachable": "yes",
+  "steps": [
+   "Send a question that uses web search and wait for the answer.",
+   "Tap the pill labelled \"Sources\" under the answer (it can show a count of sources).",
+   "Check that each source is a card with the page title, the site name and a link.",
+   "Tap a card to see that it opens the page. Compare with Expected."
+  ],
+  "where": "Chat with Web search on (see S34.07) > tap the \"Sources\" pill under the answer"
+ },
+ "S34.25": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/CitationChip.tsx",
+    "text": "Open page"
+   }
+  ],
+  "needs": "a chat answer with citations (Web search on)",
+  "note": "The phone has no hover; the tap is the only preview action. The snippet shows only when the source has one.",
+  "reachable": "yes",
+  "steps": [
+   "Open an answer that shows citation chips (small numbered links) in the text.",
+   "Tap one chip.",
+   "Check that a box opens with the source title, the site, and a snippet of text, with the buttons \"Cancel\" and \"Open page\".",
+   "Tap \"Cancel\" and check that you are still on the same answer. Compare with Expected."
+  ],
+  "where": "Chat with an answer that has citations > tap a numbered citation chip in the answer"
+ },
+ "S34.26": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/CollapsibleSources.tsx",
+    "text": "Sources"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/CollapsibleSources.tsx",
+    "text": "Citations"
+   }
+  ],
+  "needs": "a chat answer with at least four sources (Web search on)",
+  "note": "The code splits sources into cited and other sources; a separate \"used\" versus \"consulted\" label was not found.",
+  "reachable": "yes",
+  "steps": [
+   "Tap the \"Sources\" pill under an answer that has several sources.",
+   "Check that the full list opens in a sheet, with the heading \"Sources\" and, when cited, a section headed \"Citations\" and one headed \"More\".",
+   "Scroll to the bottom of the list and check that every source is there.",
+   "Close the sheet with \"Close\" and compare with Expected."
+  ],
+  "where": "Chat with sources > tap the \"Sources\" pill under the answer; the full list opens with the heading \"Sources\" (or \"Sources so far\" while the answer is still running)"
+ },
+ "S34.27": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/CitationChip.tsx",
+    "text": "Open page"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/CollapsibleSources.tsx",
+    "text": "Sources"
+   }
+  ],
+  "needs": "a chat answer with sources (Web search on)",
+  "note": "A source with no http link cannot be opened and is shown as plain text.",
+  "reachable": "yes",
+  "steps": [
+   "Open the \"Sources\" list under an answer.",
+   "Tap one source row or card.",
+   "Check that the page opens in the in-app browser with the title and address of that source.",
+   "Go back to the chat and check that the answer is still there. Compare with Expected."
+  ],
+  "where": "Chat with sources > tap a source card in the \"Sources\" list, or tap a citation chip then \"Open page\""
+ },
+ "S34.31": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/CollapsibleSources.tsx",
+    "text": "Sources"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/WebSearchToolCard.tsx",
+    "text": "Searching for"
+   }
+  ],
+  "needs": "a Cloud account with Web search on",
+  "note": "Only a publication date is shown (from page_age); a retrieval date was not found in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Ask a question that uses web search and tap the \"Sources\" pill.",
+   "Look under the site name of each source card for a date.",
+   "Compare the dates with the page dates you see when you open the source.",
+   "Check that a source with no date shows no date line. Compare with Expected."
+  ],
+  "where": "Chat with Web search on > tap the \"Sources\" pill under the answer; the date sits under each card's site name"
+ },
+ "S34.32": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/WebSearchToolCard.tsx",
+    "text": "No results for"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/messageTurnNotices.ts",
+    "text": "Retry"
+   }
+  ],
+  "needs": "a Cloud account with Web search on; a query with no results (a provider outage is hard to trigger)",
+  "note": "A provider being unavailable is reported through the same notices; a separate unavailable text was not found in the mobile code.",
+  "reachable": "yes",
+  "steps": [
+   "Ask a question that web search cannot answer, such as a made-up name.",
+   "Look at the search line: it shows \"No results for\" followed by your query.",
+   "Look under the answer for the notice \"Web search didn't return results for this turn\" with a \"Retry\" button.",
+   "If the search fails, check for \"The search failed. Try sending the message again.\" Compare with Expected."
+  ],
+  "where": "Chat with Web search on > ask a question that finds nothing, or where the search fails; read the line under the search and the notice under the answer"
+ }
+}

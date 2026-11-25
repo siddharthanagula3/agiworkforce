@@ -1,0 +1,423 @@
+{
+ "S18.01": {
+  "labels": [],
+  "needs": "a Free account or a paid account",
+  "note": "Title is set on the server in persist-message.ts; the chat header title button has aria-label 'Conversation options' (ConversationTitleMenu.tsx). No visible control was found.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Start a new chat, send one message, and wait for the reply.",
+   "Look at the chat header title and the sidebar row for this conversation.",
+   "Check that the title is a short name based on the message, not 'New chat' or blank."
+  ],
+  "where": ""
+ },
+ "S18.02": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/ConversationTitleMenu.tsx",
+    "text": "Rename"
+   },
+   {
+    "file": "apps/web/features/chat/components/ConversationTitleMenu.tsx",
+    "text": "Conversation options"
+   }
+  ],
+  "needs": "none",
+  "note": "The sidebar row menu also has Rename (packages/ui/ui/src/sidebar/SessionItem.tsx). Escape cancels the rename.",
+  "reachable": "yes",
+  "steps": [
+   "Open a conversation that already has a title.",
+   "Click the title at the top of the chat.",
+   "Choose Rename, type a new name, and press Enter.",
+   "Reload the page and check the new name is still shown in the header and sidebar."
+  ],
+  "where": "Chat header > conversation title (button named 'Conversation options') > Rename"
+ },
+ "S18.03": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/sidebar/SessionItem.tsx",
+    "text": "Pin"
+   },
+   {
+    "file": "packages/ui/ui/src/sidebar/SessionItem.tsx",
+    "text": "Unpin"
+   }
+  ],
+  "needs": "none",
+  "note": "The row menu is not shown in the 'simple' sidebar mode (SessionItem.tsx checks !simple).",
+  "reachable": "yes",
+  "steps": [
+   "Hover a conversation row in the sidebar and click its More options button.",
+   "Click Pin.",
+   "Check the conversation moves to the top of the list.",
+   "Open its More options again and click Unpin.",
+   "Check it returns to its normal place."
+  ],
+  "where": "Sidebar > conversation row > More options for [conversation name] > Pin (then Unpin)"
+ },
+ "S18.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/ConversationTitleMenu.tsx",
+    "text": "Archive"
+   },
+   {
+    "file": "packages/ui/ui/src/sidebar/Sidebar.tsx",
+    "text": "Archived ({{count}})"
+   }
+  ],
+  "needs": "none",
+  "note": "The restore item from the sidebar row menu is shown as an icon (ArchiveRestore) in SessionItem.tsx; its text was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open a conversation, click its title, and choose Archive.",
+   "Check it disappears from the main sidebar list.",
+   "Open the sidebar filter labelled Archived (count) and find the conversation.",
+   "Open its menu and choose Unarchive, then check it is back in the main list."
+  ],
+  "where": "Chat header > conversation title (Conversation options) > Archive; restore from Sidebar > Archived ({count}) > the conversation > Unarchive"
+ },
+ "S18.05": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/ConversationTitleMenu.tsx",
+    "text": "Delete"
+   }
+  ],
+  "needs": "a test conversation you can delete",
+  "note": "The menu item calls onDelete directly; the confirmation step was not found in the menu file, so check the handler before judging it. Sidebar row menu also has Delete (SessionItem.tsx).",
+  "reachable": "yes",
+  "steps": [
+   "Open a test conversation and click its title.",
+   "Choose Delete.",
+   "Check whether a confirmation appears before anything is removed.",
+   "Confirm, then check the conversation is gone from the sidebar and the Archived list."
+  ],
+  "where": "Chat header > conversation title (Conversation options) > Delete"
+ },
+ "S18.06": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/ConversationTitleMenu.tsx",
+    "text": "Duplicate as branch"
+   }
+  ],
+  "needs": "none",
+  "note": "The visible word is 'Duplicate as branch', not 'Duplicate'. The item shows only when the fork handler is passed (onFork).",
+  "reachable": "yes",
+  "steps": [
+   "Open a conversation with several messages.",
+   "Click its title and choose Duplicate as branch.",
+   "Check a new conversation opens with the same messages.",
+   "Send a message in one conversation and check the other does not change."
+  ],
+  "where": "Chat header > conversation title (Conversation options) > Duplicate as branch"
+ },
+ "S18.07": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/ConversationTitleMenu.tsx",
+    "text": "Move to project"
+   }
+  ],
+  "needs": "a project already created",
+  "note": "The menu item only appears when projects exist. The sidebar row menu also has Move to project (SessionItem.tsx).",
+  "reachable": "yes",
+  "steps": [
+   "Make sure at least one project exists.",
+   "Open a conversation that is not in a project and click its title.",
+   "Choose Move to project and pick a project name.",
+   "Open the project and check the conversation is listed there."
+  ],
+  "where": "Chat header > conversation title (Conversation options) > Move to project (shows Change project when already in a project)"
+ },
+ "S18.09": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Work"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Chat"
+   }
+  ],
+  "needs": "an account that can use Work mode",
+  "note": "The buttons are disabled while a reply is running. Switching to Chat clears the project and working folder (ChatComposerNew.tsx).",
+  "reachable": "yes",
+  "steps": [
+   "Open a conversation in Chat mode, or start a new chat.",
+   "Click Work in the composer mode buttons and check it becomes pressed.",
+   "Send a task and check the Work session panel opens for later turns.",
+   "Click Chat and check the mode switches back."
+  ],
+  "where": "Composer > Work or Chat mode buttons (Work is shown when the account can use Work mode)"
+ },
+ "S18.10": {
+  "labels": [
+   {
+    "file": "apps/web/lib/temporary-chat-policy.ts",
+    "text": "Use incognito"
+   },
+   {
+    "file": "apps/web/lib/temporary-chat-policy.ts",
+    "text": "Stays out of your history, search, memory and Library."
+   }
+  ],
+  "needs": "none",
+  "note": "The trigger is named only by its aria-label 'More composer options'. The temporary rows show only when showTemporaryChat is set.",
+  "reachable": "yes",
+  "steps": [
+   "Open a conversation and click More composer options.",
+   "Read the line under the temporary chat row: 'Stays out of your history, search, memory and Library.'",
+   "Click Use incognito and check the row changes to Exit incognito.",
+   "Check the chat is marked temporary, and send a message to see it is kept out of history."
+  ],
+  "where": "Composer > More composer options (plus button) > Use incognito (shows Exit incognito when on)"
+ },
+ "S18.11": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageSearch.tsx",
+    "text": "Search messages..."
+   }
+  ],
+  "needs": "a conversation with repeated words",
+  "note": "The shortcut is Command+F on Mac (metaKey); it is set in ChatMessageList.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Open a conversation with several messages.",
+   "Press Command+F.",
+   "Type a word that appears in the conversation.",
+   "Check the matching messages are highlighted and the search box stays open. Press Escape to close it."
+  ],
+  "where": "Open a conversation > press Command+F > Search messages box"
+ },
+ "S18.12": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageSearch.tsx",
+    "text": "Go to next match"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/MessageSearch.tsx",
+    "text": "Go to previous match"
+   }
+  ],
+  "needs": "a conversation with several matches for one word",
+  "note": "These are icon buttons with aria-labels; the visible text is not shown.",
+  "reachable": "yes",
+  "steps": [
+   "Open search with Command+F and type a word with several matches.",
+   "Click Go to next match and check the transcript scrolls to the next match.",
+   "Click Go to previous match and check it goes back.",
+   "Compare the position with the match count shown in the search bar."
+  ],
+  "where": "Open a conversation > Command+F > type a word > Go to next match / Go to previous match buttons"
+ },
+ "S18.15": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/ChatMessageList.tsx",
+    "text": "Scroll to bottom"
+   }
+  ],
+  "needs": "a conversation long enough to scroll",
+  "note": "It is an icon button with an aria-label; no visible text.",
+  "reachable": "yes",
+  "steps": [
+   "Open a conversation with many messages.",
+   "Scroll up to an older message.",
+   "Click the Scroll to bottom button that appears.",
+   "Check the view jumps to the latest message."
+  ],
+  "where": "Open a long conversation > scroll up > Scroll to bottom button"
+ },
+ "S18.17": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/BranchNavigator.tsx",
+    "text": "Previous branch"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/BranchNavigator.tsx",
+    "text": "Next branch"
+   }
+  ],
+  "needs": "a conversation that already has branches",
+  "note": "How a user creates a branch (onBranch in MessageBubble.tsx) has no visible label found yet.",
+  "reachable": "yes",
+  "steps": [
+   "Open a conversation that has branches.",
+   "Find a message with the branch control under it.",
+   "Click Next branch, then Previous branch.",
+   "Check the n/total count and the shown messages change to match the branch."
+  ],
+  "where": "Chat transcript > a message with branches > Previous branch / Next branch arrows with the n/total count"
+ },
+ "S18.18": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/ConversationTitleMenu.tsx",
+    "text": "Export\u2026"
+   }
+  ],
+  "needs": "none",
+  "note": "The format choices (Markdown, PDF, JSON) were not found in the menu file; check the export handler in WebChatPage.tsx before judging them.",
+  "reachable": "yes",
+  "steps": [
+   "Open a conversation with several messages.",
+   "Click its title and choose Export\u2026.",
+   "Choose the format in the export step and save or download the file.",
+   "Open the file and check all messages, the title and the timestamps are there."
+  ],
+  "where": "Chat header > conversation title (Conversation options) > Export\u2026"
+ },
+ "S18.19": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Share conversation"
+   },
+   {
+    "file": "apps/web/features/chat/components/ConversationTitleMenu.tsx",
+    "text": "Share\u2026"
+   }
+  ],
+  "needs": "a test conversation and an account allowed to share",
+  "note": "Creating a link makes a public URL; only do it on a test conversation.",
+  "reachable": "yes",
+  "steps": [
+   "Open a conversation that has messages.",
+   "Click Share conversation.",
+   "Read the read-only snapshot note and the access and expiry choices (1, 7 or 30 days).",
+   "Create a link only with a test conversation, then check the link appears."
+  ],
+  "where": "Chat header > Share conversation button (or Conversation options > Share\u2026)"
+ },
+ "S18.20": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/share/ShareConversationDialog.tsx",
+    "text": "Revoke share"
+   },
+   {
+    "file": "apps/web/features/chat/components/share/ShareConversationDialog.tsx",
+    "text": "Revoke every link"
+   }
+  ],
+  "needs": "a live link you created",
+  "note": "Revoked links cannot be restored, and the dialog says a new link can still be created.",
+  "reachable": "yes",
+  "steps": [
+   "Open Share conversation on a conversation that has a live link.",
+   "Find the link in the Conversation link field.",
+   "Click Revoke share or Revoke every link and read the confirmation.",
+   "Confirm, then open the link in a private window and check it no longer works."
+  ],
+  "where": "Chat header > Share conversation > Revoke share (or Revoke every link)"
+ },
+ "S18.21": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/lib/agi-work.ts",
+    "text": "Chat details"
+   },
+   {
+    "file": "apps/web/features/chat/components/work-session/WorkSessionPanel.tsx",
+    "text": "Details"
+   }
+  ],
+  "needs": "none",
+  "note": "The exact rows in the Details section were not confirmed in the code read.",
+  "reachable": "yes",
+  "steps": [
+   "Open a conversation and open the chat details panel with the Open Chat details control.",
+   "Find the Details section.",
+   "Compare the shown rows with the expected: created and updated time, model, message count, id and project."
+  ],
+  "where": "Chat header or Work session panel > Open Chat details (or Close Chat details) > Details"
+ },
+ "S18.22": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/lib/agi-work.ts",
+    "text": "Context"
+   },
+   {
+    "file": "apps/web/features/chat/lib/agi-work.ts",
+    "text": "Sources"
+   }
+  ],
+  "needs": "a Work conversation with a run",
+  "note": "Instructions, memory and token budget were not found in these dock sections; only tools and files were confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "In an AGI Work conversation, open the session dock.",
+   "Find the Context section and read the tools and files it lists.",
+   "Find the Sources section and check its entries.",
+   "Compare with Expected: files, instructions, memory and token budget."
+  ],
+  "where": "Open the session dock (Open ... session dock) > Context, Sources sections"
+ },
+ "S18.25": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Deep Research"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Web search"
+   }
+  ],
+  "needs": "none",
+  "note": "Toggles are stored per conversation (composerTogglesByConversation in WebChatPage.tsx); the Web search toggle's own row was not found in the plus menu.",
+  "reachable": "yes",
+  "steps": [
+   "Open a conversation and set Deep Research or Web search on from the composer.",
+   "Send a message and read the reply.",
+   "Send a second message and check the same tool is still on in this conversation.",
+   "Open another conversation and check its tools are separate."
+  ],
+  "where": "Composer > More composer options > Deep Research (and the Web search and Run code toggles)"
+ },
+ "S18.26": {
+  "labels": [],
+  "needs": "a connected account",
+  "note": "A 'Connectors' row exists in ComposerPlusMenu.tsx but renders as a coming-soon item (line 1776); the per-conversation disabledConnectorIds is passed at WebChatPage.tsx near line 2763, with no visible picker found. Searched for the conversation connector picker in apps/web/features/chat and found none.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S18.27": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/lib/agi-work.ts",
+    "text": "Progress"
+   }
+  ],
+  "needs": "a Work conversation with an active run",
+  "note": "The task list code at WorkSessionPanel.tsx line 295 was not verified in this read.",
+  "reachable": "yes",
+  "steps": [
+   "Start a Work task from a conversation.",
+   "Open the session dock.",
+   "Find the Progress section and check the task's status matches what the run shows."
+  ],
+  "where": "Open the session dock (Open ... session dock) > Progress"
+ },
+ "S18.28": {
+  "labels": [],
+  "needs": "a second browser or device signed in to the same account",
+  "note": "Cross-device sync is the server's job (persist-message.ts), shown in the sidebar (SessionItem.tsx); no separate control found.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Sign in to the same account in a second browser or device.",
+   "Open the sidebar there and find the conversation started on the first device.",
+   "Send a message from the second device and check it appears on the first after a reload."
+  ],
+  "where": ""
+ }
+}
