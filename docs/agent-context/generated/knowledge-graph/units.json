@@ -2757,6 +2757,29 @@
       }
     },
     {
+      "path": "knowledge-base",
+      "name": "knowledge-base",
+      "kind": "directory",
+      "purpose": null,
+      "owner": null,
+      "trustBoundary": null,
+      "status": null,
+      "entry": [],
+      "agentsDoc": "AGENTS.md",
+      "checks": [],
+      "dependsOn": [],
+      "dependents": [],
+      "lanes": [],
+      "files": 2804,
+      "roles": {
+        "asset": 2,
+        "config": 553,
+        "doc": 2169,
+        "other": 42,
+        "source": 38
+      }
+    },
+    {
       "path": "packages",
       "name": "packages",
       "kind": "directory",

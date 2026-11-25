@@ -2190,7 +2190,9 @@
       "apps/cli/src/cloud/marketplaces.rs",
       "apps/cli/src/mcp/registry.rs",
       "apps/cli/src/path_security/file_authority.rs",
-      "crates/agiworkforce-agent-core/src/lib.rs"
+      "crates/agiworkforce-agent-core/src/lib.rs",
+      "knowledge-base/70-qa/results/basics/fixtures/code-bench/sum.py",
+      "knowledge-base/tools/04_build_indexes.py"
     ],
     "ADD_ACCOUNT_PARAM": [
       "apps/mobile/src/features/auth/services/accountAddition.ts"
@@ -7825,6 +7827,12 @@
     ],
     "area": [
       "apps/desktop/src-tauri/src/automation/computer_use/zoom.rs"
+    ],
+    "area_slug": [
+      "knowledge-base/tools/kb_lib.py"
+    ],
+    "area_title": [
+      "knowledge-base/tools/kb_lib.py"
     ],
     "areDurableCodeTurnsEnabled": [
       "apps/web/lib/workflows/start-cloud-code-turn-workflow.ts"
@@ -15446,6 +15454,9 @@
     "BulkResetPreview": [
       "apps/web/features/admin/services/operator-metrics.ts"
     ],
+    "bullets": [
+      "knowledge-base/tools/02_render_features.py"
+    ],
     "bump_strike": [
       "crates/agiworkforce-agent-core/src/runaway.rs"
     ],
@@ -17484,6 +17495,9 @@
     "CELL_STATES": [
       "scripts/check-surface-feature-matrix.mjs"
     ],
+    "cell_status": [
+      "knowledge-base/tools/kb_lib.py"
+    ],
     "CellFormatTable": [
       "packages/ui/unified-chat/src/lib/workbook-cell-formats.ts"
     ],
@@ -19128,6 +19142,9 @@
     ],
     "check_env_deps": [
       "apps/cli/src/skills.rs"
+    ],
+    "check_evidence": [
+      "knowledge-base/70-qa/tools/build_plans.py"
     ],
     "check_file": [
       "apps/cli/src/permissions.rs"
@@ -46310,6 +46327,9 @@
     "EcosystemContext": [
       "apps/cli/src/ecosystem.rs"
     ],
+    "edge": [
+      "knowledge-base/tools/04_build_indexes.py"
+    ],
     "EDGE_COPY": [
       "apps/mobile/src/features/edge-cases/components/copy.ts"
     ],
@@ -50166,7 +50186,8 @@
       "apps/mobile/src/features/chat/hooks/useWorkUsageLimit.ts"
     ],
     "exists": [
-      "apps/desktop/src-tauri/src/core/mcp/extensions/repository.rs"
+      "apps/desktop/src-tauri/src/core/mcp/extensions/repository.rs",
+      "knowledge-base/tools/kb_lib.py"
     ],
     "exit_class": [
       "apps/cli/src/errors.rs"
@@ -51550,6 +51571,9 @@
     ],
     "feature_enabled": [
       "apps/cli/src/cloud/workspace_policy.rs"
+    ],
+    "feature_file": [
+      "knowledge-base/tools/02_render_features.py"
     ],
     "FEATURE_FLAG_ENV_VARS": [
       "apps/web/lib/feature-flags/flag-config.ts"
@@ -55579,6 +55603,9 @@
     "FoundPageElement": [
       "apps/extension/src/features/content/pageElements.ts"
     ],
+    "fpage": [
+      "knowledge-base/tools/04_build_indexes.py"
+    ],
     "frame_cap": [
       "crates/agiworkforce-mcp/src/config.rs"
     ],
@@ -56855,6 +56882,9 @@
     "front_app_state": [
       "apps/desktop/src-tauri/src/automation/computer_use/mod.rs",
       "apps/desktop/src-tauri/src/automation/computer_use/targeted_input.rs"
+    ],
+    "front_matter": [
+      "knowledge-base/tools/kb_lib.py"
     ],
     "FrontAppChanged": [
       "apps/desktop/src-tauri/src/automation/computer_use/targeted_input.rs"
@@ -60806,6 +60836,8 @@
       "apps/cli/src/platform/runtime/mod.rs",
       "apps/desktop/src-tauri/src/sys/commands/mod.rs",
       "crates/agiworkforce-worktree/src/git.rs",
+      "knowledge-base/70-qa/tools/build_plans.py",
+      "knowledge-base/tools/kb_lib.py",
       "scripts/run-semgrep.py"
     ],
     "Git": [
@@ -73391,6 +73423,9 @@
       "packages/ui/ui/src/primitives/index.ts",
       "packages/ui/ui/src/primitives/Label.tsx"
     ],
+    "label_check": [
+      "knowledge-base/70-qa/tools/build_plans.py"
+    ],
     "labelBound": [
       "apps/web/lib/observability/cardinality.ts"
     ],
@@ -73899,6 +73934,9 @@
       "tools/evals/scripts/measurement-integrity.mjs",
       "tools/evals/scripts/prompt-coverage.d.mts",
       "tools/evals/scripts/prompt-coverage.mjs"
+    ],
+    "ledger_items": [
+      "knowledge-base/tools/kb_lib.py"
     ],
     "LEDGER_REPLAY_SCENARIOS": [
       "apps/web/lib/services/__tests__/billing-ledger-replay-scenarios.ts"
@@ -74651,7 +74689,8 @@
       "packages/ui/unified-chat/src/components/markdown/__fixtures__/markdownStreamCorpus.ts"
     ],
     "link": [
-      "apps/cli/src/terminal_style.rs"
+      "apps/cli/src/terminal_style.rs",
+      "knowledge-base/70-qa/tools/import_existing.py"
     ],
     "link_artifacts_to_message_in_db": [
       "apps/desktop/src-tauri/src/core/artifacts/persistence.rs"
@@ -76050,6 +76089,9 @@
     "LIVE_PREVIEW_ARTIFACT_TYPES": [
       "apps/web/features/chat/components/artifacts/artifact-render.ts"
     ],
+    "live_result": [
+      "knowledge-base/tools/kb_lib.py"
+    ],
     "LIVE_SESSION_BLOCK_MINUTES": [
       "scripts/research/unit-economics-2026-09-05.mjs"
     ],
@@ -76070,6 +76112,9 @@
     ],
     "LIVE_STORAGE_UNAVAILABLE": [
       "apps/web/app/chat/live-artifacts/useLiveArtifactRuntime.ts"
+    ],
+    "live_text": [
+      "knowledge-base/70-qa/tools/build_plans.py"
     ],
     "LIVE_VOICE_BACKEND_COST_SOURCE": [
       "apps/web/lib/voice/live-voice-backend-cost.ts"
@@ -76914,6 +76959,9 @@
     "load_projects": [
       "apps/desktop/gpui/src/ui/projects.rs"
     ],
+    "load_raw": [
+      "knowledge-base/tools/kb_lib.py"
+    ],
     "load_rules": [
       "apps/cli/src/memory.rs"
     ],
@@ -76940,6 +76988,9 @@
     ],
     "load_triggers": [
       "apps/cli/src/features/hooks/hooks.rs"
+    ],
+    "load_where": [
+      "knowledge-base/70-qa/tools/build_plans.py"
     ],
     "load_without_project": [
       "apps/cli/src/config.rs"
@@ -87590,6 +87641,28 @@
     "MeSubscriptionSourceSchema": [
       "packages/contracts/cloud-contracts/src/me.ts"
     ],
+    "meta": [
+      "knowledge-base/tools/workflows/apply-review.js",
+      "knowledge-base/tools/workflows/area-pages-retry.js",
+      "knowledge-base/tools/workflows/competitors.js",
+      "knowledge-base/tools/workflows/docs-corrections.js",
+      "knowledge-base/tools/workflows/feature-guide.js",
+      "knowledge-base/tools/workflows/features-1.js",
+      "knowledge-base/tools/workflows/features-2.js",
+      "knowledge-base/tools/workflows/features-3.js",
+      "knowledge-base/tools/workflows/features-4.js",
+      "knowledge-base/tools/workflows/features-pilot.js",
+      "knowledge-base/tools/workflows/final-verify.js",
+      "knowledge-base/tools/workflows/foundations.js",
+      "knowledge-base/tools/workflows/paths-chrome.js",
+      "knowledge-base/tools/workflows/paths-cli.js",
+      "knowledge-base/tools/workflows/paths-desktop.js",
+      "knowledge-base/tools/workflows/paths-mobile.js",
+      "knowledge-base/tools/workflows/paths-vscode.js",
+      "knowledge-base/tools/workflows/paths-web.js",
+      "knowledge-base/tools/workflows/review.js",
+      "knowledge-base/tools/workflows/status-from-pages.js"
+    ],
     "meta_analyzer": [
       "tools/skill-vetting/src/skillspector/nodes/meta_analyzer.py"
     ],
@@ -91490,6 +91563,7 @@
       "apps/desktop/src-tauri/src/core/llm/prompt_policy.rs"
     ],
     "node": [
+      "knowledge-base/tools/04_build_indexes.py",
       "tools/skill-vetting/src/skillspector/nodes/analyzers/behavioral_ast.py",
       "tools/skill-vetting/src/skillspector/nodes/analyzers/behavioral_taint_tracking.py",
       "tools/skill-vetting/src/skillspector/nodes/analyzers/mcp_least_privilege.py",
@@ -93006,6 +93080,9 @@
     "number_lines": [
       "tools/skill-vetting/src/skillspector/llm_analyzer_base.py"
     ],
+    "numbered": [
+      "knowledge-base/tools/02_render_features.py"
+    ],
     "NumberFormat": [
       "packages/ui/unified-chat/src/lib/workbook-number-formats.ts"
     ],
@@ -94030,6 +94107,9 @@
     ],
     "ONE_CLICK_UNSUBSCRIBE_POST": [
       "apps/web/lib/services/billing-notice-service.ts"
+    ],
+    "one_line": [
+      "knowledge-base/tools/kb_lib.py"
     ],
     "ONE_TIME_SITE_GRANT_MAX_MS": [
       "apps/extension/src/features/computer-use/oneTimeSiteGrants.ts"
@@ -97127,6 +97207,9 @@
     "ParamHeader": [
       "crates/agiworkforce-mcp/src/param_headers.rs"
     ],
+    "ParcelTotalsTest": [
+      "knowledge-base/70-qa/results/basics/fixtures/code-bench/test_sum.py"
+    ],
     "parent": [
       "crates/agiworkforce-utils-absolute-path/src/lib.rs"
     ],
@@ -99171,6 +99254,9 @@
     ],
     "PATH_LINK_CLASS": [
       "apps/extension-vscode/src/webview/render.ts"
+    ],
+    "path_of": [
+      "knowledge-base/tools/kb_lib.py"
     ],
     "path_security": [
       "apps/cli/src/lib.rs"
@@ -110029,6 +110115,9 @@
     "read_conflict_stages": [
       "apps/cli/src/merge_conflicts.rs"
     ],
+    "read_csv": [
+      "knowledge-base/tools/kb_lib.py"
+    ],
     "read_document": [
       "apps/desktop/src-tauri/src/features/document/mod.rs"
     ],
@@ -116484,6 +116573,9 @@
     "render_approvals": [
       "apps/cli/src/cloud/code_sessions.rs"
     ],
+    "render_area": [
+      "knowledge-base/tools/02_render_features.py"
+    ],
     "render_attachment_recovery": [
       "apps/desktop/gpui/src/ui/attachment_recovery.rs"
     ],
@@ -116571,6 +116663,9 @@
     ],
     "render_fallback": [
       "apps/cli/src/claude_parity.rs"
+    ],
+    "render_feature": [
+      "knowledge-base/tools/02_render_features.py"
     ],
     "render_file_recovery": [
       "apps/desktop/gpui/src/ui/file_recovery.rs"
@@ -117630,6 +117725,9 @@
     ],
     "republishSiteVersion": [
       "apps/mobile/src/features/sites/service.ts"
+    ],
+    "req_source": [
+      "knowledge-base/tools/02_render_features.py"
     ],
     "requery_default_colors": [
       "apps/cli/src/tui/terminal_palette.rs"
@@ -123223,6 +123321,9 @@
     ],
     "RolePickerModal": [
       "apps/mobile/src/features/team/RolePickerModal.tsx"
+    ],
+    "roll_up": [
+      "knowledge-base/tools/kb_lib.py"
     ],
     "rollback": [
       "apps/desktop/src-tauri/src/core/artifacts/store.rs"
@@ -132990,6 +133091,9 @@
       "apps/cli/src/repo/mod.rs",
       "apps/cli/src/repo/setup.rs"
     ],
+    "setup_page": [
+      "knowledge-base/70-qa/tools/apply_paths.py"
+    ],
     "setup_script": [
       "apps/cli/src/app_server/review.rs",
       "crates/agiworkforce-worktree/src/managed.rs"
@@ -136813,10 +136917,12 @@
       "packages/client/client-runtime/src/index.ts"
     ],
     "slug": [
-      "apps/cli/src/tui/widgets/theme_picker.rs"
+      "apps/cli/src/tui/widgets/theme_picker.rs",
+      "knowledge-base/70-qa/tools/build_plans.py"
     ],
     "slugify": [
-      "apps/web/features/plugins/server/directory/entries.ts"
+      "apps/web/features/plugins/server/directory/entries.ts",
+      "knowledge-base/tools/kb_lib.py"
     ],
     "slugifyHeading": [
       "packages/ui/unified-chat/src/lib/markdown-headings.ts"
@@ -137742,6 +137848,9 @@
     ],
     "SquarePen": [
       "packages/ui/icons/src/glyphs/Actions.tsx"
+    ],
+    "squash": [
+      "knowledge-base/70-qa/tools/build_plans.py"
     ],
     "sse": [
       "apps/cli/src/mcp/mod.rs",
@@ -138787,6 +138896,9 @@
     ],
     "STATUS_STEPS_METADATA_KEY": [
       "apps/mobile/stores/chat/toolTimelineMetadata.ts"
+    ],
+    "status_table": [
+      "knowledge-base/tools/02_render_features.py"
     ],
     "STATUS_VOCABULARY": [
       "scripts/check-identity-account-revocation.mjs"
@@ -144453,6 +144565,9 @@
     "TEXT_LIMIT_BASELINE": [
       "scripts/check-file-reference-canonical.mjs"
     ],
+    "text_of": [
+      "knowledge-base/70-qa/tools/build_plans.py"
+    ],
     "TEXT_POLICY": [
       "scripts/check-document-classes.mjs"
     ],
@@ -149395,6 +149510,9 @@
     "type_text": [
       "apps/desktop/src-tauri/src/automation/browser/dom_operations.rs"
     ],
+    "typed": [
+      "knowledge-base/tools/04_build_indexes.py"
+    ],
     "TypedReactFlowEdge": [
       "packages/contracts/types/src/tauri.ts"
     ],
@@ -151678,6 +151796,9 @@
     ],
     "URL_FETCH_TOOL_PROMPT_ID": [
       "apps/web/lib/url-fetch/url-fetch-tool.ts"
+    ],
+    "url_ok": [
+      "knowledge-base/tools/03_render_pages.py"
     ],
     "UrlContextItem": [
       "packages/contracts/types/src/context.ts"
@@ -158229,6 +158350,9 @@
     "whenMmkvReady": [
       "apps/mobile/lib/mmkv.ts"
     ],
+    "where_lines": [
+      "knowledge-base/70-qa/tools/build_plans.py"
+    ],
     "whisper_descriptors": [
       "apps/desktop/src-tauri/src/features/speech/artifact_registry.rs"
     ],
@@ -161119,7 +161243,8 @@
       "apps/cli/src/app_server/workspace_recovery.rs",
       "apps/cli/src/app_server/workspace_terminal.rs",
       "apps/desktop/src-tauri/src/features/terminal/pty.rs",
-      "crates/agiworkforce-protocol/src/code_drafts.rs"
+      "crates/agiworkforce-protocol/src/code_drafts.rs",
+      "knowledge-base/tools/kb_lib.py"
     ],
     "write_account_skills": [
       "apps/cli/src/cloud/skills.rs"
@@ -161554,6 +161679,9 @@
     ],
     "xySeriesLabel": [
       "apps/mobile/src/features/chat/utils/mermaidChart.ts"
+    ],
+    "yaml_value": [
+      "knowledge-base/tools/kb_lib.py"
     ],
     "yesterdayWindow": [
       "apps/web/app/api/cron/reconcile-provider-costs/lib/provider-cost-reports.ts"
