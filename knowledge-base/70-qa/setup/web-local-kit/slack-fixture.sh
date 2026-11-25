@@ -6,7 +6,7 @@
 set -eu
 ENVF=${AGI_CHECKOUT:-$HOME/Desktop/agiworkforce}/apps/web/.env.local
 URL=$(grep -E '^DATABASE_URL=' "$ENVF" | tail -1 | cut -d= -f2- | tr -d '"')
-case "$URL" in *@127.0.0.1:5432/*) ;; *) echo "refusing: not the local database"; exit 2;; esac
+if [[ "$URL" != *@127.0.0.1:5432/* ]]; then echo "refusing: not the local database"; exit 2; fi
 LABEL=$(echo "${1:-A}" | tr -cd 'A-Z0-9' | cut -c1-6)
 TOKEN=$(openssl rand -base64 32 | tr '+/' '-_' | tr -d '=')
 HASH=$(printf '%s' "$TOKEN" | shasum -a 256 | cut -d' ' -f1)

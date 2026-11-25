@@ -5,9 +5,9 @@
 set -u
 ENVF=${AGI_CHECKOUT:-$HOME/Desktop/agiworkforce}/apps/web/.env.local
 KEY=$(grep -E '^CLERK_SECRET_KEY=' "$ENVF" | tail -1 | cut -d= -f2- | tr -d '"')
-case "$KEY" in sk_test_*) ;; *) echo "refusing: not a development key"; exit 2;; esac
+if [[ "$KEY" != sk_test_* ]]; then echo "refusing: not a development key"; exit 2; fi
 EMAIL="$1"
-case "$EMAIL" in *+clerk_test@example.com) ;; *) echo "refusing: not a test email"; exit 2;; esac
+if [[ "$EMAIL" != *+clerk_test@example.com ]]; then echo "refusing: not a test email"; exit 2; fi
 code=$(curl -s -o /tmp/agi-web-lane-clerk.json -w '%{http_code}' -X POST https://api.clerk.com/v1/users \
   -H "Authorization: Bearer $KEY" -H 'Content-Type: application/json' \
   --data "{\"email_address\":[\"$EMAIL\"],\"skip_password_requirement\":true,\"skip_password_checks\":true}")
