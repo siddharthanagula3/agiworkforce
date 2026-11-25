@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-10-23
+Last updated: 2026-11-24
 
 This folder is the tool-neutral map for coding agents. Codex, Claude Code, Cursor, VS Code agents, opencode, and future agents should read this before deep exploration.
 
@@ -41,4 +41,4 @@ This folder is the tool-neutral map for coding agents. Codex, Claude Code, Curso
 - Keep root context lean; put local conventions in path-scoped `AGENTS.md` files and owner READMEs.
 - Extract repeated operational mechanics into service functions only when reuse or risk justifies it; keep product policy in actions, routes, and command handlers.
 - Run `pnpm check:hooks` after editing Husky hooks, commit rules, package scripts, or repo-operability checks.
-- Run `pnpm check:llm-operability` after editing report retention, CI, CODEOWNERS, structure, ownership, or agent-context rules.
+- Run `pnpm check:llm-operability` after editing report retention, CI, CODEOWNERS, structure, ownership, or agent-context rules. The chain does not run `check:trust-boundaries`, `check:rust-egress-boundary`, `check:hardcoded-arrays` or the skills-lock check; CI runs them.

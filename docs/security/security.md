@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead, with Legal/compliance co-owning section 1
-Last updated: 2026-11-13
+Last updated: 2026-11-24
 Rotation cadence: every 12 months per key, plus immediately on suspected exposure
 
 The single security document for this repository. Four live policies live here as
@@ -764,7 +764,7 @@ Accepted by: Platform lead
 Reviewed: 2026-08-17
 Next review: with the 2027-08-17 rotation
 
-All four keys live only as deployment environment variables. There is no KMS,
+All three keys live only as deployment environment variables. There is no KMS,
 no hardware-backed custody, and no escrow copy outside the deployment provider.
 
 What this costs, precisely: a database restore taken before a rotation is
@@ -867,7 +867,7 @@ the baseline and the guard refuses their return.
    psql "$NEON_DATABASE_URL" -f apps/web/db/neon/0104_key_version.sql
    ```
 
-3. **No maintenance window is required for any of the four keys.** Every
+3. **No maintenance window is required for any of the three keys.** Every
    reader, `TOTP_ENCRYPTION_KEY` included, is ring-aware: deploy the ring
    (step 4) and traffic keeps working while the sweep runs. Skip to step 4.
 

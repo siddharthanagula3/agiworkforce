@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-11-15
+Last updated: 2026-11-24
 
 ## Monorepo Shape
 
@@ -155,8 +155,8 @@ A chat file of 25 MiB or less (`maxBytes` in
 inline into the turn, as every compiled client expects. A larger file, up to
 `largeFiles.maxBytes` (500 MiB), takes a separate path built for the web and
 the shared upload client. On 2026-11-15 `CHAT_LARGE_FILES_ENABLED` is unset
-everywhere, migration 0422 is unapplied (`appliedThrough` 421) and no scanner
-speaks protocol 2, so no client is offered a large file. The phone keeps 25 MiB in mobile 0.0.1.
+everywhere and no scanner speaks protocol 2, so no client is offered a large
+file. Migration 0422 is applied (`appliedThrough` 425, recorded 2026-11-21). The phone keeps 25 MiB in mobile 0.0.1.
 
 **Who is offered it.** `readChatLargeFileReadiness`
 (`apps/web/lib/server/chat-file-intake/readiness.ts`) answers ready only when

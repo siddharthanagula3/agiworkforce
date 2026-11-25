@@ -2,15 +2,17 @@
 
 Status: Current
 Owner: Security
-Last updated: 2026-11-15
+Last updated: 2026-11-24
 
 Every route that materialises bytes a user uploads runs the same scanner, and
 `scripts/check-upload-inspection-coverage.mjs` enumerates them from the route
-tree so a new one cannot skip it. The two paths that store files scan where the
-object becomes usable:
+tree so a new one cannot skip it. The three paths that store files scan where
+the object becomes usable:
 
 - `POST /api/uploads/chat-attachment/complete` for chat attachments
 - `apps/web/lib/server/project-knowledge-extraction.ts` for project sources
+- `apps/web/lib/server/chat-file-intake/steps.ts` for large chat files, which
+  calls `inspectUploadHead` and `submitSourceScan`
 
 Both write to the private object bucket, which
 `isPrivateObjectStorageConfigured` keeps distinct from the public one, so an
@@ -108,8 +110,9 @@ contract; the parts that decide an upload are:
 
 For large chat files (`docs/specs/large-file-uploads/spec.md`) the scanner
 also answers `POST /v2/scans`: it takes a presigned GET URL for one staged
-object and answers a job to poll, so no function carries the bytes. No web code
-calls it yet. The scanner's README holds the contract. What decides safety:
+object and answers a job to poll, so no function carries the bytes. The web
+calls it from `apps/web/lib/security/source-scan-client.ts`. The scanner's
+README holds the contract. What decides safety:
 
 - It is off unless `UPLOAD_SCAN_SOURCE_HOSTS` is set; until then every `/v2`
   path answers 404, the web's readiness probe reads that as protocol 1, and

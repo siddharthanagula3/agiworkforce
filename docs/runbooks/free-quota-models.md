@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-11-11
+Last updated: 2026-11-24
 
 A free quota model is a QwenCloud model served from the promotional free quota
 on the company's QwenCloud account. Free plan accounts reach one in two ways:
@@ -893,7 +893,8 @@ reconstructed changes.
 - The terms review, the console check, each offering's allowance and expiry, the
   billing signal and the provider holds apply to every request exactly as to
   chat.
-- Plans with the capability are not counted or capped per day. The ceiling on
+- Plans with the capability are not counted or capped per day; video seconds
+  are capped monthly by tier policy (`videoSecondsPerMonth`). The ceiling on
   spend is each offering's shared allowance
   (`quotaExperimentPolicy.allowanceUsablePercent`): reaching it ends the
   offering and costs nothing.
@@ -920,7 +921,7 @@ reconstructed changes.
   (`freeQuotaMediaUseOrder`), so capacity that is about to expire goes first.
 - Web lists limited media with its current offer terms as well as included-plan
   offerings. Mobile restores the eligible no-attachment image fallback; its video
-  UI remains paid-only despite media-capable transport. Web's captured-session
+  is off in v1 (`videoGen: false`). Web's captured-session
   typed-image lookup guards forwarding after that lookup, not all later main-send
   awaits. Mobile focus generation rejects blur/refocus continuations, but equal
   model/project/media values after an ABA change are not a cancellation fence.

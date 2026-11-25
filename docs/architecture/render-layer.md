@@ -81,7 +81,7 @@ model output
         │
         ▼
   commit → upsertArtifact({...stored, content, createdAt: new Date()})
-           packages/platform/artifacts/src/artifact-store.ts:96 (version = existing.version + 1)
+           packages/platform/artifacts/src/artifact-store.ts:107 (version = existing.version + 1)
         │
         ▼
   next turn context: revisionRef { partId, revision, contentHash } + full current text
@@ -680,7 +680,7 @@ function commit(state: EditControllerState): void {
   if (state.text === state.committedText) return; // no-op, no revision
   const stored = artifactStore.getArtifact(state.partId);
   upsertArtifact({ ...stored, content: state.text, createdAt: new Date() });
-  // → artifact-store.ts:96 assigns version = existing.version + 1  [REPO]
+  // → artifact-store.ts:107 assigns version = existing.version + 1  [REPO]
 }
 ```
 
@@ -899,7 +899,7 @@ export interface PartRevision {
 }
 ```
 
-**Does an edit rewrite history or append a revision? It appends.** `[INF, our decision]` Concretely, this already works: `upsertArtifact` with different content on the same id sets `version: existing.version + 1` and pushes onto `versionsById[id]` `[REPO artifact-store.ts:96, :102-105]`; identical content updates in place and appends nothing `[REPO :85-90]`. The original model output remains addressable as revision 0 forever.
+**Does an edit rewrite history or append a revision? It appends.** `[INF, our decision]` Concretely, this already works: `upsertArtifact` with different content on the same id sets `version: existing.version + 1` and pushes onto `versionsById[id]` `[REPO artifact-store.ts:107, :113-116]`; identical content updates in place and appends nothing `[REPO :85-90]`. The original model output remains addressable as revision 0 forever.
 
 Restore is also append-only: `restoreArtifactVersion(id, index)` reads the target version and `upsertArtifact`s its content as a **new** version rather than truncating forward history `[REPO apps/web/features/chat/stores/artifacts-store.ts:493-503]`. That is git-revert semantics, and it is the correct default, restoring never destroys the revisions you are restoring past. Anthropic's docs do not state which semantics their version selector uses `[VENDOR: gap]`; we state ours.
 

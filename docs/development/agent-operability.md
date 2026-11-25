@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-11-11
+Last updated: 2026-11-24
 
 ## Goal
 
@@ -60,7 +60,7 @@ The repo must be easy for humans and LLM coding agents to navigate, split, audit
 
 - `commit-msg` enforces Conventional Commits through commitlint.
 - `pre-commit` runs lint-staged plus fast repo structure checks.
-- `pre-push` runs `pnpm check:llm-operability` and whitespace checks unless explicitly skipped with `SKIP_PRE_PUSH=1`.
+- `pre-push` runs `pnpm check:llm-operability` in a clean detached worktree, then turbo lint and typecheck for affected packages, then `git diff --check`, unless explicitly skipped with `SKIP_PRE_PUSH=1`. `AGI_PREPUSH_ON_TREE=1` runs the same steps on the working tree.
 - `pnpm check:hooks` must pass after any hook, commitlint, package-script, or repo-operability change.
 
 ## A+ Criteria

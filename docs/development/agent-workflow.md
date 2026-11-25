@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-09-19
+Last updated: 2026-11-24
 Purpose: define how AGI Workforce should be built in a future where humans direct and review work while coding agents perform most exploration, implementation, refactoring, verification, and PR preparation.
 
 ## Operating Assumption
@@ -89,6 +89,12 @@ Rules:
 2. Shared contract checks if packages, schemas, crates, or provider adapters changed.
 3. `pnpm check:llm-operability` when docs, repo structure, agent context, generated artifacts, or boundaries changed.
 4. Full app/surface tests only when the blast radius justifies the cost.
+
+Run local builds, full suites, `tsc`, cargo and dev servers one at a time through `scripts/dev/heavy-job.sh`, and scoped tests or lint through `scripts/dev/light-job.sh`.
+
+The guard chain (`scripts/run-guard-chain.mjs`) runs every guard and lists each failure at its end. A guard that fails beside others counts as green only if it then passes when re-run alone, so diagnose with the individual guard.
+
+`git push` runs `.husky/pre-push`, which checks a clean worktree of `HEAD` through `scripts/prepush-clean-worktree.sh`, so stage and commit before relying on a local green run.
 
 ## Workspace Task Graph
 

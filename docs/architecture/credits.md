@@ -26,6 +26,8 @@ allowance costs at most half its monthly price.
 
 ## Plan allowances
 
+The 5-hour and weekly figures are rolling sums over the trailing 5 and 168 hours, not fixed periods.
+
 | plan         | 5-hour   | weekly   | monthly           |
 | ------------ | -------- | -------- | ----------------- |
 | Free         | 200      | 1,500    | 2,000             |
@@ -70,7 +72,7 @@ in force. Free accounts see neither.
 
 ## Top-ups
 
-Sold on the web only, at 50 credits per $1 of pack size: $20 (no discount),
+Bought through Stripe, for Stripe-, Apple- and Google-billed paid plans, at 50 credits per $1 of pack size: $20 (no discount),
 $50 (5% off), $100 (10% off), $250 (20% off) and $1,000 (30% off), or any whole
 dollar amount from $20 to $1,000 at its bracket's discount. Auto-reload takes
 a further 5% off. A purchase is at most $1,000 and a user's top-ups at most

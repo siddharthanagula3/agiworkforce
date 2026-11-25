@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-11-11
+Last updated: 2026-11-24
 
 What is deployable, in what order, from what artifact, with what credential, and
 what happens when a release is wrong. The policy behind the web gate is
@@ -35,14 +35,14 @@ while that workflow is disabled.
 | ------------------ | ----------------------------------------------------------------------- | ------------------------------------------ | -------------------------------------------------------------- |
 | Web application    | `.github/workflows/deploy-production.yml` (disabled; deployed manually) | Green CI on `main` when enabled            | A Vercel deployment of one commit                              |
 | Artifact sandbox   | The same workflow, as a separate surface                                | Green CI on `main`                         | A second Vercel deployment                                     |
-| Staging web        | `.github/workflows/deploy-staging.yml` (disabled)                       | Green CI on `main`                         | The same artifact, promoted first                              |
+| Staging web        | `.github/workflows/deploy-staging.yml` (disabled)                       | Green CI on `main`                         | A preview-environment build of the same commit, deployed first |
 | CLI                | `.github/workflows/release-cli.yml`                                     | Tag `v-cli-*`                              | Signed release archives                                        |
 | Public Desktop     | `.github/workflows/release-desktop-cloud.yml`                           | Tag `v-cloud-desktop-*` or manual dispatch | Signed/notarized Electron macOS installers and update archives |
 | Retained Tauri     | `.github/workflows/release-desktop.yml` (disabled)                      | Tag `v-desktop-*`                          | Signed Tauri bundles; retained internal scope                  |
 | Mobile             | `.github/workflows/release-mobile.yml`                                  | Tag `v-mobile-*`                           | Store builds through Expo                                      |
 | VS Code extension  | `.github/workflows/release-vscode-extension.yml`                        | Tag `v-vscode-*`                           | A vsix                                                         |
 | Chrome extension   | `.github/workflows/release-chrome-extension.yml`                        | Tag `v-ext-*`                              | A packaged extension                                           |
-| Signaling server   | `.github/workflows/deploy-signaling-server.yml`                         | Its own workflow                           | A Fly.io deployment                                            |
+| Signaling server   | `.github/workflows/deploy-signaling-server.yml`                         | Green CI on `main`; Fly only by manual run | A Railway deployment (Fly.io on manual dispatch)               |
 | Background workers | Deployed with the web application                                       | Green CI on `main`                         | Cron routes inside the one Next.js service                     |
 
 The public Electron shell uses the hosted Web renderer by default. Its signed
@@ -78,8 +78,10 @@ contract, or a version with no changelog entry.
 Staging is not decorative. `deploy-staging.yml` takes the same commit under the
 same exact-SHA CI gate, applies the pending migrations to a persistent staging
 database, probes the staging origin, and publishes a `staging-web` commit
-status. `deploy-production.yml` waits for that status, so an artifact reaches
-production only after the identical artifact served staging. Staging has no
+status. `deploy-production.yml` waits for that status, so a commit reaches
+production only after the same commit served staging. Staging builds with the
+Vercel preview environment and production builds its own artifact. While both
+workflows are disabled, this ordering is not what production takes today. Staging has no
 affected-surface filter, because a staging deploy a scope filter skipped would
 be a commit production could never promote.
 

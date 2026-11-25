@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Web surface maintainers
-Last updated: 2026-11-11
+Last updated: 2026-11-24
 
 The public HTTP contract: which endpoints exist, which credential each one takes,
 and what a caller is guaranteed. The marketing page for the same surface is
@@ -75,8 +75,9 @@ A streamed request may negotiate `caller_tool_handoff_version`. The server retai
 
 Durable runs are addressable in their own right under
 `/api/llm/v1/chat/completions/runs`, which lists them, and
-`/api/llm/v1/chat/completions/runs/{runId}`, which reads one and carries
-`pause`, `resume`, `steer` and `archive` beneath it.
+`/api/llm/v1/chat/completions/runs/{runId}`, which reads or cancels one and
+carries `pause`, `resume`, `resume/stream`, `steer`, `steer/{steerId}` (withdraw
+a steer) and `archive` beneath it.
 
 ## What every route guarantees
 

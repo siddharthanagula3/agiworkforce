@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-11-19
+Last updated: 2026-11-24
 
 This is the long-form product requirements document for AGI and AGI Workforce.
 It is the durable product spec for humans and coding agents when the compact
@@ -1102,8 +1102,8 @@ Website v1 should include:
 - Blog/changelog or launch notes if useful.
 - Account shell when needed for Cloud sign-in.
 
-Website must not launch a full Cloud chat product before the Cloud controls are
-proven.
+Website Cloud chat is open to signed-in users on Managed Free (public alpha);
+paid plan acquisition remains waitlist/access-code gated.
 
 ## 12. Desktop Requirements
 

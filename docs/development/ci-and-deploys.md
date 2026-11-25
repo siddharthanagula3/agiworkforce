@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform/release
-Last updated: 2026-11-17
+Last updated: 2026-11-24
 
 ## Current state
 
@@ -58,9 +58,9 @@ the migration runner rejects pending or drifted migrations. A coordinated source
 dependency in `scripts/config/migration-dependency-allowlist.json` never updates
 the production high-water mark or waives this deployment gate.
 
-The recovery-batch store requires migration 0394. The release operator must review
-and apply the pending migration chain before releasing that code. Migration 0394
-invalidates unacknowledged pending recovery-code batches; existing enrolled
+The recovery-batch store requires migration 0394, which is already applied in
+production (the applied watermark in `scripts/config/production-migrations-applied.json`
+is 425). Migration 0394 invalidates unacknowledged pending recovery-code batches; existing enrolled
 recovery keys survive. A publication carrying `Deployment: hold` leaves the
 production database and serving artifact unchanged while normal CI still runs.
 

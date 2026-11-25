@@ -2,7 +2,7 @@
 
 Status: Current
 Owner role: CLI lead
-Last updated: 2026-11-11
+Last updated: 2026-11-24
 Kind: app
 Criticality: high
 

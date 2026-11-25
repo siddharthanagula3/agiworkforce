@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-11-11
+Last updated: 2026-11-24
 
 Until 2026-08-09 nothing in this repository could reach a human when production
 broke. `/api/health` was correct and public, and no scheduled job, uptime
@@ -15,7 +15,7 @@ detection gaps that are still open.
 | Detector                              | Where                                                      | Cadence                | Reaches a human?                                                                            |
 | ------------------------------------- | ---------------------------------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------- |
 | `/api/cron/health-probe`              | `apps/web/app/api/cron/health-probe/route.ts`              | every 10 minutes       | yes, through the dispatcher below                                                           |
-| `/api/cron/evaluate-slo-burn`         | `apps/web/app/api/cron/evaluate-slo-burn/route.ts`         | :05 and :35 every hour | yes, when an error budget is burning                                                        |
+| `/api/cron/evaluate-slo-burn`         | `apps/web/app/api/cron/evaluate-slo-burn/route.ts`         | :05 and :35 every hour | yes, when an error budget is burning or a cost or latency anomaly appears                   |
 | `/api/cron/page-security-anomalies`   | `apps/web/app/api/cron/page-security-anomalies/route.ts`   | every 30 minutes       | yes, on a triggered security alert                                                          |
 | `/api/cron/reconcile-credits`         | `apps/web/app/api/cron/reconcile-credits/route.ts`         | daily, 00:07 UTC       | yes, by email, only on terminal settlements                                                 |
 | `/api/cron/remind-free-quota-renewal` | `apps/web/app/api/cron/remind-free-quota-renewal/route.ts` | hourly at :05          | yes, by email and pager, when a free quota gate is about to lapse, has lapsed or is missing |
@@ -38,7 +38,7 @@ evaluator stays silent are in `apps/web/lib/server/slo/attainment.ts`.
 
 `apps/web/lib/server/incident/dispatch.ts` is the one place an incident reaches
 people. Every detector above hands it a key, a severity, a subject and a body,
-and it does three things with them.
+and it does three things with them, then a fourth when none of them lands.
 
 1. **Email** to whoever the rotation says holds the pager, through the Resend
    transport (`apps/web/lib/support/handoff/resend-client.ts`). With no rotation
@@ -49,11 +49,14 @@ and it does three things with them.
 3. **Incident channel** webhook, when `INCIDENT_CHANNEL_WEBHOOK_URL` is set, so
    the second responder sees the first one's context rather than a second copy
    of the alert.
+4. **Out-of-band fallback**, tried only when email, pager and incident channel
+   all failed: an out-of-band webhook, plus a status mirror that publishes the
+   incident on the status page. A paged out-of-band alert counts as delivered.
 
 Delivery of the email requires **both** `RESEND_API_KEY` and a valid
-`AGI_SUPPORT_FROM_EMAIL`. When none of the three channels reached anyone the
-dispatcher logs `no human has been told` and the probe returns **HTTP 500**, so
-the failed invocation is visible in the Vercel cron log, the last signal left
+`AGI_SUPPORT_FROM_EMAIL`. When none of the channels, the out-of-band fallback
+included, reached anyone the dispatcher logs `no human has been told` and the
+probe returns **HTTP 500**, so the failed invocation is visible in the Vercel cron log, the last signal left
 once email is gone. Check that log after any deployment that changes
 environment variables.
 

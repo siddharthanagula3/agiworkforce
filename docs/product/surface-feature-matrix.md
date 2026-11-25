@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Cross-surface parity
-Last updated: 2026-09-20
+Last updated: 2026-11-24
 
 Generated from `docs/product/surface-feature-matrix.json` by `scripts/check-surface-feature-matrix.mjs --write`.
 Edit the data file, not this one.
@@ -43,7 +43,7 @@ and this matrix holds more, so there is no declared maturity to show for the res
 
 | Feature | Declared maturity | web | desktop | mobile | cli | vscode | chrome | api |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Chat | general_availability | Unverified | Present | Present | Present | Present | Present | Present |
+| Chat | general_availability | Present | Present | Present | Present | Present | Present | Present |
 | History | general_availability | Present | Present | Present | Present | Present | Present | Present |
 | Projects | general_availability | Present | Present | Present | Present | Present | Present | Present |
 | Files and artifacts | general_availability | Present | Present | Present | Present | Present | Present | Present |
@@ -51,7 +51,7 @@ and this matrix holds more, so there is no declared maturity to show for the res
 | Memory | not in the feature registry | Present | Present | Present | Present | Present | Present | Present |
 | Search | general_availability | Unverified | Unverified | Unverified | Present | Unverified | Unverified | Present |
 | Work | general_availability | Present | Present | Present | Present | Present | Present | Present |
-| Settings | not in the feature registry | Present | Present | Present | Present | Unverified | Unverified | Present |
+| Settings | not in the feature registry | Present | Present | Present | Present | Present | Present | Present |
 | Plan status | not in the feature registry | Present | Unverified | Present | Present | Present | Unverified | Present |
 | Help | not in the feature registry | Present | Unverified | Unverified | Present | Unverified | Absent | Present |
 
@@ -63,8 +63,8 @@ and this matrix holds more, so there is no declared maturity to show for the res
 | Deep Research | general_availability | Present | Present | Present | Absent | Absent | Absent | Present |
 | Study | general_availability | Present | Absent | Absent | Absent | Absent | Absent | Present |
 | Analyze | not in the feature registry | Unverified | Unverified | Unverified | Unverified | Unverified | Unverified | Unverified |
-| Image generation | general_availability | Present | Present | Unverified | Present | Absent | Absent | Present |
-| Video generation | general_availability | Present | Absent | Absent | Absent | Absent | Absent | Present |
+| Image generation | general_availability | Present | Present | Present | Present | Absent | Absent | Present |
+| Video generation | general_availability | Present | Absent | Absent | Absent | Absent | Present | Present |
 | Voice | general_availability | Present | Present | Present | Present | Absent | Present | Present |
 | Camera | not in the feature registry | Unverified | Unverified | Present | Absent | Absent | Absent | Absent |
 | Screen sharing | not in the feature registry | Absent | Present | Absent | Absent | Absent | Unverified | Absent |
@@ -75,9 +75,9 @@ and this matrix holds more, so there is no declared maturity to show for the res
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Connectors | general_availability | Present | Present | Present | Absent | Present | Absent | Present |
 | Skills | general_availability | Present | Present | Present | Present | Absent | Absent | Present |
-| Plugins | beta | Present | Present | Absent | Present | Absent | Absent | Present |
-| MCP | beta | Present | Absent | Absent | Unverified | Unverified | Partial | Present |
-| Tool approvals | general_availability | Present | Present | Present | Unverified | Present | Present | Present |
+| Plugins | beta | Present | Present | Present | Present | Absent | Absent | Present |
+| MCP | beta | Present | Absent | Absent | Present | Unverified | Partial | Present |
+| Tool approvals | general_availability | Present | Present | Present | Present | Present | Present | Present |
 | Connected apps in artifacts | general_availability | Present | Absent | Absent | Absent | Absent | Absent | Present |
 
 ## Developer
@@ -104,7 +104,7 @@ and this matrix holds more, so there is no declared maturity to show for the res
 | Updater | not in the feature registry | Absent | Present | Unverified | Present | Absent | Absent | Present |
 | Scheduled tasks | general_availability | Present | Present | Present | Present | Present | Present | Present |
 | Hooks | beta | Absent | Present | Absent | Present | Unverified | Absent | Absent |
-| Remote control | experimental | Present | Present | Present | Absent | Present | Absent | Present |
+| Remote control | experimental | Present | Present | Present | Present | Present | Absent | Present |
 | Event triggers | beta | Present | Present | Absent | Unverified | Absent | Absent | Present |
 
 ## Enterprise
@@ -151,7 +151,7 @@ this document.
 
 ### Chat
 
-- **web**: unverified. Settled by: apps/web/features/chat/pages/WebChatPage.tsx exists, and nothing under this surface's roots was found importing it or declaring it as a module. The file that mounts it, or a spec that reaches it through the shell, would settle this.
+- **web**: present. `apps/web/features/chat/pages/WebChatPage.tsx`, reached by `apps/web/features/chat/components/WebChatRoot.tsx` (import).
 - **desktop**: present. `apps/desktop/src/features/v3/DesktopShellV3.tsx`, reached by `apps/desktop/src/features/v3/index.ts` (import).
 - **mobile**: present. `apps/mobile/app/(app)/chat/[id].tsx`, reached by `apps/mobile/app/(app)/_layout.tsx` (route).
 - **cli**: present. `apps/cli/src/tui/tui_app.rs`, reached by `apps/cli/src/tui/mod.rs` (module).
@@ -235,8 +235,8 @@ this document.
 - **desktop**: present. `apps/desktop/src/features/settings/SkillsPluginsSettings.tsx`, reached by `apps/desktop/src/features/settings/tabs/Plugins/index.tsx` (import).
 - **mobile**: present. `apps/mobile/app/(app)/settings/index.tsx`, reached by `apps/mobile/app/(app)/_layout.tsx` (route).
 - **cli**: present. `apps/cli/src/config.rs`, reached by `apps/cli/src/lib.rs` (module).
-- **vscode**: unverified. Settled by: apps/extension-vscode/src/features/settings is a directory, not an entry point. A file in it that the surface's shell imports or routes to would settle this, naming both.
-- **chrome**: unverified. Settled by: apps/extension/src/options.ts exists, and nothing under this surface's roots was found importing it or declaring it as a module. The file that mounts it, or a spec that reaches it through the shell, would settle this.
+- **vscode**: present. `apps/extension-vscode/src/features/settings/SettingsPanel.ts`, reached by `apps/extension-vscode/src/core/commandSetup.ts` (import).
+- **chrome**: present. `apps/extension/src/options.ts`, reached by `apps/extension/vite.config.ts` (import).
 - **api**: present. `apps/web/app/api/settings/preferences/route.ts`, reached by `apps/web/app/layout.tsx` (route).
 
 ### Plan status
@@ -303,7 +303,7 @@ this document.
 
 - **web**: present. `apps/web/features/chat/lib/imageGenerationOptions.ts`, reached by `apps/web/features/chat/pages/WebChatPage.tsx` (import).
 - **desktop**: present. `apps/desktop/src-tauri/src/core/llm/tool_executor/media_tools.rs`, reached by `apps/desktop/src-tauri/src/core/llm/tool_executor/mod.rs` (module).
-- **mobile**: unverified. Settled by: A mobile composer path that requests an image. Nothing under apps/mobile was found naming the image work mode.
+- **mobile**: present. `apps/mobile/src/features/image/services/imagegen.ts`, reached by `apps/mobile/src/features/artifacts/index.tsx` (import).
 - **cli**: present. `apps/cli/src/cloud/image.rs`, reached by `apps/cli/src/cloud/mod.rs` (module).
 - **vscode**: absent. Nothing under apps/extension-vscode/src requests an image.
 - **chrome**: absent. Nothing under apps/extension/src requests an image.
@@ -316,7 +316,7 @@ this document.
 - **mobile**: absent. Nothing under apps/mobile requests a video.
 - **cli**: absent. Nothing under apps/cli/src requests a video.
 - **vscode**: absent. Nothing under apps/extension-vscode/src requests a video.
-- **chrome**: absent. Nothing under apps/extension/src requests a video.
+- **chrome**: present. `apps/extension/src/features/cloud-bridge/videoGenerationClient.ts`, reached by `apps/extension/src/side_panel.ts` (import).
 - **api**: present. `apps/web/app/api/media/video/generate/route.ts`, reached by `apps/web/app/layout.tsx` (route).
 
 ### Voice
@@ -373,7 +373,7 @@ this document.
 
 - **web**: present. `apps/web/lib/services/plugin-lifecycle.ts`, reached by `apps/web/app/plugins/[id]/page.tsx` (import).
 - **desktop**: present. `apps/desktop/src/features/settings/cloud/CloudPluginsSection.tsx`, reached by `apps/desktop/src/features/settings/DesktopCloudSettingsModal.tsx` (import).
-- **mobile**: absent. The capability table records canUsePlugins false for mobile and nothing under apps/mobile installs a plugin.
+- **mobile**: present. `apps/mobile/app/(app)/plugins/index.tsx`, reached by `apps/mobile/app/(app)/_layout.tsx` (route).
 - **cli**: present. `apps/cli/src/features/plugins/plugins.rs`, reached by `apps/cli/src/features/plugins/mod.rs` (module).
 - **vscode**: absent. Nothing under apps/extension-vscode/src installs a plugin.
 - **chrome**: absent. Nothing under apps/extension/src installs a plugin.
@@ -384,7 +384,7 @@ this document.
 - **web**: present. `apps/web/lib/mcp-tool-executor.ts`, reached by `apps/web/lib/user-connector-tools.ts` (import).
 - **desktop**: absent. The public Electron desktop reports localMcp false and uses the hosted connector service.
 - **mobile**: absent. The capability table records canUseLocalMcp false for mobile and nothing under apps/mobile dials an MCP server.
-- **cli**: unverified. Settled by: apps/cli/src/mcp/mod.rs exists, and nothing under this surface's roots was found importing it or declaring it as a module. The file that mounts it, or a spec that reaches it through the shell, would settle this.
+- **cli**: present. `apps/cli/src/mcp/mod.rs`, reached by `apps/cli/src/lib.rs` (module).
 - **vscode**: unverified. Settled by: An editor path that dials an MCP server of its own. apps/extension-vscode/src/integrations/localRuntimeClient.ts reaches the CLI runtime, which owns the MCP connection; whether the editor is a client in its own right is not decidable from the tree.
 - **chrome**: partial. `apps/extension/src/webmcp.ts`, reached by `apps/extension/src/content.ts` (import). Missing: the server connection lifecycle. apps/extension/src/webmcp.ts exposes the open page to a model as tools; nothing under apps/extension/src dials, authorizes or lists an MCP server, which is what the other surfaces mean by MCP.
 - **api**: present. `apps/web/app/api/settings/organization/mcp/route.ts`, reached by `apps/web/app/layout.tsx` (route).
@@ -394,7 +394,7 @@ this document.
 - **web**: present. `apps/web/features/chat/components/approvals/ApprovalInbox.tsx`, reached by `apps/web/features/chat/pages/WebChatPage.tsx` (import).
 - **desktop**: present. `apps/desktop/src/services/approvalResolution.ts`, reached by `apps/desktop/src/services/coworkDispatch.ts` (import).
 - **mobile**: present. `apps/mobile/app/(app)/settings/auto-approve.tsx`, reached by `apps/mobile/app/(app)/_layout.tsx` (route).
-- **cli**: unverified. Settled by: apps/cli/src/safety/approval.rs exists, and nothing under this surface's roots was found importing it or declaring it as a module. The file that mounts it, or a spec that reaches it through the shell, would settle this.
+- **cli**: present. `apps/cli/src/safety/approval.rs`, reached by `apps/cli/src/safety/mod.rs` (module).
 - **vscode**: present. `apps/extension-vscode/src/features/permissions/approvalScope.ts`, reached by `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts` (import).
 - **chrome**: present. `apps/extension/src/features/computer-use/approvalPolicy.ts`, reached by `apps/extension/src/background.ts` (import).
 - **api**: present. `apps/web/app/api/llm/v1/chat/completions/lib/tool-approval-policy.ts`, reached by `apps/web/app/api/settings/preferences/route.ts` (import).
@@ -564,7 +564,7 @@ this document.
 - **web**: present. `apps/web/features/desktop-host/components/RemoteControlSection.tsx`, reached by `apps/web/features/desktop-host/index.ts` (import).
 - **desktop**: present. `apps/desktop/electron/remote/remoteControlService.ts`, reached by `apps/desktop/electron/runtime/dispatcher.ts` (import).
 - **mobile**: present. `apps/mobile/app/(app)/companion/index.tsx`, reached by `apps/mobile/app/(app)/_layout.tsx` (route).
-- **cli**: absent. Nothing under apps/cli/src is a remote-control host or client.
+- **cli**: present. `apps/cli/src/remote_control/host.rs`, reached by `apps/cli/src/remote_control/mod.rs` (module).
 - **vscode**: present. `apps/extension-vscode/src/features/remote-control/remoteControlService.ts`, reached by `apps/extension-vscode/src/features/remote-control/index.ts` (import).
 - **chrome**: absent. Nothing under apps/extension/src is a remote-control host or client.
 - **api**: present. `apps/web/app/api/devices/heartbeat/route.ts`, reached by `apps/web/app/layout.tsx` (route).
