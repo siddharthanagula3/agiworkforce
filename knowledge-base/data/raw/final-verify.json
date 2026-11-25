@@ -163,7 +163,7 @@
           {
             "edit": "'a commit reaches production only after the same commit served staging'; 'Staging builds with the Vercel preview environment and production builds its own artifact'",
             "verdict": "holds",
-            "evidence": "deploy-production.yml: staging-gate (line 188) waits for the staging-web commit status on HEAD_SHA, and the production job needs staging-gate (line 267). Staging uses --environment=preview with 'vercel build'. Production uses --environment=production (line 335) and 'vercel build --prod' (line 392) with its own deploy. The artifacts are separate builds."
+            "evidence": "deploy-production.yml: staging-gate (line 188) waits for the staging-web commit status on HEAD_SHA, and the production job needs staging-gate (line 267). Staging uses --environment=preview with 'vercel build'. Production uses --environment=production (line 335) and 'vercel build the production flag' (line 392) with its own deploy. The artifacts are separate builds."
           },
           {
             "edit": "'While both workflows are disabled, this ordering is not what production takes today.'",

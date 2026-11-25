@@ -35,6 +35,8 @@ const REPOSITORY_PATH = new RegExp(
 const NOT_ONE_PATH = /[*{}]|\.\.\./;
 const SAYS_IT_IS_GONE =
   /\b(?:ported|moved|migrated|extracted|replaces?|replaced|formerly|previously|superseded|supersedes|lifted|copied|deleted|removed|retired|renamed|was\s+at|used\s+to|no\s+longer|instead\s+of)\b/i;
+const PRODUCTION_FLAG = /the production flag\b/g;
+const DEPLOY_COMMANDS = /\b(flyctl|railway)\s+(deploy|up)\b/g;
 const SKIPPED_NAMES = new Set(['.DS_Store', '__pycache__', 'node_modules']);
 const decoder = new TextDecoder('utf-8', { fatal: true });
 const anchoredFamilyPatterns = RETIRED_MODEL_FAMILY_PATTERNS.map(({ pattern }) => ({
@@ -186,7 +188,11 @@ for (const file of files) {
   const scrubbed = withoutModelNames(original, tokens);
   const relativeFile = path.relative(REPO, file).split(path.sep).join('/');
   const cleaned = withoutLongDashes(
-    scrubbed.text.replace(HOME_DIRECTORY, '~').replace(URL_CREDENTIALS, '$1'),
+    scrubbed.text
+      .replace(HOME_DIRECTORY, '~')
+      .replace(URL_CREDENTIALS, '$1')
+      .replace(PRODUCTION_FLAG, 'the production flag')
+      .replace(DEPLOY_COMMANDS, '$1 ($2)'),
   );
   const final = withCleanWhitespace(
     file.endsWith('.md') ? withUnresolvedPathsMarked(cleaned, relativeFile, pathIndex) : cleaned,
