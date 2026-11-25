@@ -9,15 +9,18 @@ const mocks = vi.hoisted(() => ({
   fail: vi.fn(),
 }));
 
+type ImageGenerationJobsModule = typeof import('@/lib/server/image-generation-jobs');
+type ImageGenerationProviderModule = typeof import('./image-generation-provider');
+
 vi.mock('@/lib/server/image-generation-jobs', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/image-generation-jobs')>()),
+  ...(await importOriginal<ImageGenerationJobsModule>()),
   claimImageGenerationJobAttempt: (...args: unknown[]) => mocks.claim(...args),
   getImageGenerationJob: (...args: unknown[]) => mocks.getJob(...args),
   failImageGenerationJob: (...args: unknown[]) => mocks.fail(...args),
 }));
 
 vi.mock('./image-generation-provider', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('./image-generation-provider')>()),
+  ...(await importOriginal<ImageGenerationProviderModule>()),
   generateImages: (...args: unknown[]) => mocks.generate(...args),
 }));
 
